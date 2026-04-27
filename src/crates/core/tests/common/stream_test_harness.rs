@@ -33,6 +33,7 @@ pub struct StreamFixtureRunOptions {
     pub server_options: FixtureSseServerOptions,
     pub openai_inline_think_in_text: bool,
     pub anthropic_inline_think_in_text: bool,
+    pub log_raw_sse: bool,
 }
 
 impl Default for StreamFixtureRunOptions {
@@ -41,6 +42,7 @@ impl Default for StreamFixtureRunOptions {
             server_options: FixtureSseServerOptions::default(),
             openai_inline_think_in_text: false,
             anthropic_inline_think_in_text: false,
+            log_raw_sse: false,
         }
     }
 }
@@ -79,6 +81,23 @@ pub async fn run_stream_fixture_with_options(
 
     let (tx_event, rx_event) = mpsc::unbounded_channel::<Result<UnifiedResponse, anyhow::Error>>();
     let (tx_raw_sse, rx_raw_sse) = mpsc::unbounded_channel::<String>();
+    let raw_sse_rx_for_processor = if options.log_raw_sse {
+        let (tx_raw_sse_for_processor, rx_raw_sse_for_processor) =
+            mpsc::unbounded_channel::<String>();
+        let mut rx_raw_sse = rx_raw_sse;
+        let fixture_label = fixture_relative_path.to_string();
+        tokio::spawn(async move {
+            while let Some(raw_sse) = rx_raw_sse.recv().await {
+                println!("[stream-fixture raw sse][{}] {}", fixture_label, raw_sse);
+                if tx_raw_sse_for_processor.send(raw_sse).is_err() {
+                    break;
+                }
+            }
+        });
+        Some(rx_raw_sse_for_processor)
+    } else {
+        Some(rx_raw_sse)
+    };
 
     match provider {
         StreamFixtureProvider::OpenAi => {
@@ -126,7 +145,7 @@ pub async fn run_stream_fixture_with_options(
         .process_stream(
             unified_stream,
             None,
-            Some(rx_raw_sse),
+            raw_sse_rx_for_processor,
             "session_fixture".to_string(),
             "turn_fixture".to_string(),
             "round_fixture".to_string(),

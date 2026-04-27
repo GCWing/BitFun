@@ -25,3 +25,4 @@ data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":207,"mode
 data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":208,"model":"gpt-test","choices":[{"index":0,"delta":{"tool_calls":[{"index":2,"id":"call_3","type":"function","function":{"arguments":"}}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":5,"completion_tokens":7,"total_tokens":12}}
 
 data: [DONE]
+

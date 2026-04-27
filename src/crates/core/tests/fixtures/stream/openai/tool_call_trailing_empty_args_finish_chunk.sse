@@ -11,3 +11,4 @@ data: {"id":"chatcmpl_tail_001","object":"chat.completion.chunk","created":17331
 data: {"id":"chatcmpl_tail_001","object":"chat.completion.chunk","created":1733162246,"model":"meta/llama-3.1-8b-instruct:fp8","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":""}}]},"finish_reason":"tool_calls","stop_reason":128008}],"usage":{"prompt_tokens":226,"completion_tokens":20,"total_tokens":246}}
 
 data: [DONE]
+
