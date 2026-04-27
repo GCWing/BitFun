@@ -151,7 +151,8 @@
     "default": {
       "name": "Code Review Team",
       "summary": "A deep-review code team with locked logic, performance, security, architecture, and quality-gate roles.",
-      "members": "{{count}} members"
+      "members": "{{count}} members",
+      "tags": ["Quality", "Performance", "Architecture"]
     },
     "detail": {
       "open": "Open team",

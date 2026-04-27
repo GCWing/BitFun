@@ -545,11 +545,10 @@ const AgentsHomeView: React.FC = () => {
                 roleName={t('reviewTeams.detail.localOnly', {
                   defaultValue: 'Code review',
                 })}
-                tagNames={[
-                  t('reviewTeams.members.judge.role', { defaultValue: 'Quality' }),
-                  t('reviewTeams.members.performance.role', { defaultValue: 'Performance' }),
-                  t('reviewTeams.members.architecture.role', { defaultValue: 'Architecture' }),
-                ]}
+                tagNames={t('reviewTeams.default.tags', {
+                  returnObjects: true,
+                  defaultValue: ['Quality', 'Performance', 'Architecture'],
+                }) as string[]}
                 onOpen={openReviewTeam}
               />
             </GalleryGrid>

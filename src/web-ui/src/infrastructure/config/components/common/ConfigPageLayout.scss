@@ -100,7 +100,7 @@
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: var(--size-radius-md, 10px);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .bitfun-config-page-row {

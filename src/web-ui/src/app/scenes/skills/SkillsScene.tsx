@@ -8,6 +8,7 @@ import {
   Package,
   Plus,
   Puzzle,
+  ShieldAlert,
   Sparkles,
   Store,
   Trash2,
@@ -375,7 +376,10 @@ const SkillsScene: React.FC = () => {
               {!installed.loading && !installed.error && pagedInstalledSkills.map((skill, index) => (
               <div
                 key={skill.key}
-                className="skills-split__installed-row"
+                className={[
+                  'skills-split__installed-row',
+                  skill.isShadowed && 'is-shadowed',
+                ].filter(Boolean).join(' ')}
                 style={{ '--row-index': index } as React.CSSProperties}
                 onClick={() => setSelectedDetail({ type: 'installed', skill })}
                 role="button"
@@ -402,6 +406,14 @@ const SkillsScene: React.FC = () => {
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                 >
+                  {skill.isShadowed && (
+                    <Badge variant="warning">
+                      <span title={t('list.item.shadowedTooltip')}>
+                        <ShieldAlert size={11} />
+                        {t('list.item.shadowed')}
+                      </span>
+                    </Badge>
+                  )}
                   <Badge variant={skill.level === 'user' ? 'info' : 'purple'}>
                     {skill.level === 'user' ? t('list.item.user') : t('list.item.project')}
                   </Badge>
@@ -464,9 +476,19 @@ const SkillsScene: React.FC = () => {
         )}
         title={selectedInstalledSkill?.name ?? selectedMarketSkill?.name ?? ''}
         badges={selectedInstalledSkill ? (
-          <Badge variant={selectedInstalledSkill.level === 'user' ? 'info' : 'purple'}>
-            {selectedInstalledSkill.level === 'user' ? t('list.item.user') : t('list.item.project')}
-          </Badge>
+          <>
+            {selectedInstalledSkill.isShadowed && (
+              <Badge variant="warning">
+                <span title={t('list.item.shadowedTooltip')}>
+                  <ShieldAlert size={11} />
+                  {t('list.item.shadowed')}
+                </span>
+              </Badge>
+            )}
+            <Badge variant={selectedInstalledSkill.level === 'user' ? 'info' : 'purple'}>
+              {selectedInstalledSkill.level === 'user' ? t('list.item.user') : t('list.item.project')}
+            </Badge>
+          </>
         ) : selectedMarketSkill && installedSkillNames.has(selectedMarketSkill.name) ? (
           <Badge variant="success">
             <CheckCircle2 size={11} />
@@ -511,21 +533,31 @@ const SkillsScene: React.FC = () => {
         ) : null}
       >
         {selectedInstalledSkill ? (
-          <div className="bitfun-skills-scene__detail-row">
-            <span className="bitfun-skills-scene__detail-label">{t('list.item.pathLabel')}</span>
-            {canRevealSkillPath ? (
-              <button
-                type="button"
-                className="bitfun-skills-scene__detail-path-btn"
-                title={t('list.item.openPathInExplorer')}
-                onClick={() => void handleRevealSkillPath(selectedInstalledSkill.path)}
-              >
-                {selectedInstalledSkill.path}
-              </button>
-            ) : (
-              <code className="bitfun-skills-scene__detail-value">{selectedInstalledSkill.path}</code>
+          <>
+            {selectedInstalledSkill.isShadowed && (
+              <div className="bitfun-skills-scene__detail-row">
+                <span className="bitfun-skills-scene__detail-label">{t('list.item.shadowedLabel')}</span>
+                <span className="bitfun-skills-scene__detail-value">
+                  {t('list.item.shadowedDetail', { key: selectedInstalledSkill.shadowedByKey ?? '' })}
+                </span>
+              </div>
             )}
-          </div>
+            <div className="bitfun-skills-scene__detail-row">
+              <span className="bitfun-skills-scene__detail-label">{t('list.item.pathLabel')}</span>
+              {canRevealSkillPath ? (
+                <button
+                  type="button"
+                  className="bitfun-skills-scene__detail-path-btn"
+                  title={t('list.item.openPathInExplorer')}
+                  onClick={() => void handleRevealSkillPath(selectedInstalledSkill.path)}
+                >
+                  {selectedInstalledSkill.path}
+                </button>
+              ) : (
+                <code className="bitfun-skills-scene__detail-value">{selectedInstalledSkill.path}</code>
+              )}
+            </div>
+          </>
         ) : null}
 
         {selectedMarketSkill?.source ? (

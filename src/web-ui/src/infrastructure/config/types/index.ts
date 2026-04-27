@@ -211,6 +211,10 @@ export interface SkillInfo {
   dirName: string;
   isBuiltin: boolean;
   groupKey?: string | null;
+  /** True when this skill is shadowed by a higher-priority skill with the same name. */
+  isShadowed?: boolean;
+  /** Key of the skill that shadows this one (if any). */
+  shadowedByKey?: string | null;
 }
 
 export interface ModeSkillInfo extends SkillInfo {
