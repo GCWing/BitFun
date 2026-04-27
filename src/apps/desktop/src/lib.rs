@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 //! BitFun Desktop - Tauri-based desktop application with TransportAdapter architecture
 
-pub mod api;
+// pub mod api;
 pub mod computer_use;
 pub mod logging;
 pub mod macos_menubar;
