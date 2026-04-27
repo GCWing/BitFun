@@ -92,7 +92,6 @@ jobs:
         run: cargo check --workspace --exclude bitfun-cli
 
       - name: Run core Rust tests
-        if: runner.os == 'Linux'
         run: cargo test --locked -p bitfun-core
 
   # ── Frontend: build ────────────────────────────────────────────────
