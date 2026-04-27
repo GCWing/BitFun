@@ -304,10 +304,10 @@
       "frontend": {
         "funName": "前端审核员",
         "role": "前端审核员",
-        "description": "检查国际化同步、React 性能模式、无障碍访问和前后端契约一致性的 UI 专家。",
+        "description": "检查国际化同步、前端性能模式、无障碍访问和前后端契约一致性的 UI 专家。",
         "responsibilities": [
           "验证所有语言区域的国际化键完整性。",
-          "检查 React 性能模式（记忆化、虚拟化、effect 依赖）。",
+          "检查前端性能模式（记忆化、虚拟化、effect/reactivity 依赖）。",
           "标记无障碍访问违规和前后端 API 契约偏差。"
         ]
       }

@@ -15,11 +15,12 @@ pub const REVIEWER_PERFORMANCE_AGENT_TYPE: &str = "ReviewPerformance";
 pub const REVIEWER_SECURITY_AGENT_TYPE: &str = "ReviewSecurity";
 pub const REVIEWER_ARCHITECTURE_AGENT_TYPE: &str = "ReviewArchitecture";
 pub const REVIEWER_FRONTEND_AGENT_TYPE: &str = "ReviewFrontend";
-pub const CORE_REVIEWER_AGENT_TYPES: [&str; 4] = [
+pub const CORE_REVIEWER_AGENT_TYPES: [&str; 5] = [
     REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
     REVIEWER_PERFORMANCE_AGENT_TYPE,
     REVIEWER_SECURITY_AGENT_TYPE,
     REVIEWER_ARCHITECTURE_AGENT_TYPE,
+    REVIEWER_FRONTEND_AGENT_TYPE,
 ];
 const DEFAULT_REVIEW_TEAM_CONFIG_PATH: &str = "ai.review_teams.default";
 
@@ -715,13 +716,13 @@ mod tests {
         })));
         let tracker = DeepReviewBudgetTracker::default();
 
-        // Default policy: 4 core reviewers * 2 max instances = 8 reviewer calls allowed
-        for _ in 0..8 {
+        // Default policy: 5 core reviewers * 2 max instances = 10 reviewer calls allowed
+        for _ in 0..10 {
             tracker
                 .record_task("turn-1", &policy, DeepReviewSubagentRole::Reviewer)
                 .unwrap();
         }
-        // 9th reviewer call should be rejected
+        // 11th reviewer call should be rejected
         assert!(tracker
             .record_task("turn-1", &policy, DeepReviewSubagentRole::Reviewer)
             .is_err());

@@ -151,8 +151,8 @@ Role-specific strategy amplification (append to the reviewer Task prompt when th
 - **ReviewArchitecture** + `normal`: "Check the diff's imports plus one level of dependency direction. Verify API contract consistency."
 - **ReviewArchitecture** + `deep`: "Map the full dependency graph for changed modules. Check for structural anti-patterns, circular dependencies, and cross-cutting concerns."
 - **ReviewFrontend** + `quick`: "Only check i18n key completeness and direct platform boundary violations in changed frontend files."
-- **ReviewFrontend** + `normal`: "Check i18n, React performance patterns, and accessibility in changed components. Verify frontend-backend API contract alignment."
-- **ReviewFrontend** + `deep`: "Thorough React analysis: effect dependencies, memoization, virtualization. Full accessibility audit. State management pattern review. Cross-layer contract verification."
+- **ReviewFrontend** + `normal`: "Check i18n, frontend performance patterns, and accessibility in changed components. Verify frontend-backend API contract alignment."
+- **ReviewFrontend** + `deep`: "Thorough frontend framework analysis: effect/reactivity dependencies, memoization, virtualization. Full accessibility audit. State management pattern review. Cross-layer contract verification."
 
 ### Phase 3: Quality gate
 

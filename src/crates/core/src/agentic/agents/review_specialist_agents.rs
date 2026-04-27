@@ -45,7 +45,7 @@ define_readonly_subagent!(
     FrontendReviewerAgent,
     REVIEWER_FRONTEND_AGENT_TYPE,
     "Frontend Reviewer",
-    r#"Independent read-only reviewer focused on frontend-specific issues such as i18n key synchronization, React performance patterns, accessibility, state management, frontend-backend API contract alignment, and platform boundary compliance in the review target."#,
+    r#"Independent read-only reviewer focused on frontend-specific issues such as i18n key synchronization, frontend performance patterns (e.g., memoization, virtualization, effect/reactivity dependencies), accessibility, state management, frontend-backend API contract alignment, and platform boundary compliance in the review target."#,
     "review_frontend_agent",
     &["Read", "Grep", "Glob", "LS", "GetFileDiff", "Git"]
 );

@@ -304,10 +304,10 @@
       "frontend": {
         "funName": "前端審核員",
         "role": "前端審核員",
-        "description": "檢查國際化同步、React 效能模式、無障礙訪問和前後端契約一致性的 UI 專家。",
+        "description": "檢查國際化同步、前端效能模式、無障礙訪問和前後端契約一致性的 UI 專家。",
         "responsibilities": [
           "驗證所有語言區域的國際化鍵完整性。",
-          "檢查 React 效能模式（記憶化、虛擬化、effect 依賴）。",
+          "檢查前端效能模式（記憶化、虛擬化、effect/reactivity 依賴）。",
           "標記無障礙訪問違規和前後端 API 契約偏差。"
         ]
       }

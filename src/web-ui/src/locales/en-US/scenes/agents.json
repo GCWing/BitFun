@@ -304,10 +304,10 @@
       "frontend": {
         "funName": "Frontend Reviewer",
         "role": "Frontend Reviewer",
-        "description": "A UI specialist that checks i18n synchronization, React performance patterns, accessibility, and frontend-backend contract alignment.",
+        "description": "A UI specialist that checks i18n synchronization, frontend performance patterns, accessibility, and frontend-backend contract alignment.",
         "responsibilities": [
           "Verify i18n key completeness across all locales.",
-          "Check React performance patterns (memoization, virtualization, effect dependencies).",
+          "Check frontend performance patterns (memoization, virtualization, effect/reactivity dependencies).",
           "Flag accessibility violations and frontend-backend API contract drift."
         ]
       }
