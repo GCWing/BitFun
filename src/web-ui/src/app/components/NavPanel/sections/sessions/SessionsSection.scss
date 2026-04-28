@@ -209,14 +209,14 @@
     align-items: center;
     height: 12px;
     padding: 0 4px;
-    border: 1px solid color-mix(in srgb, var(--border-subtle) 85%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-accent-400, #8b5cf6) 34%, var(--border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--element-bg-soft) 42%, transparent);
-    color: var(--color-text-muted);
+    background: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 13%, var(--element-bg-soft));
+    color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 62%, var(--color-text-primary));
     font-size: var(--font-size-xxs);
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: 0.02em;
-    opacity: 0.78;
+    opacity: 0.96;
     overflow: visible;
     white-space: nowrap;
   }
@@ -228,12 +228,12 @@
     gap: 3px;
     height: 14px;
     padding: 0 5px;
-    border: 1px solid color-mix(in srgb, var(--color-accent-400, #8b5cf6) 28%, var(--border-subtle));
+    border: 1px solid color-mix(in srgb, var(--color-accent-400, #8b5cf6) 44%, var(--border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 10%, transparent);
-    color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 72%, var(--color-text-primary));
+    background: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 18%, var(--element-bg-soft));
+    color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 82%, var(--color-text-primary));
     font-size: var(--font-size-xxs);
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: 0.02em;
     white-space: nowrap;
 

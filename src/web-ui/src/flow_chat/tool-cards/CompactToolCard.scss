@@ -18,8 +18,8 @@
 }
 
 /* Tool item wrapper around .compact-tool-card-wrapper (see ModelRoundItem / FlowItemRenderer).
- * Canonical 0.6rem (~9.6px) bottom margin matches `.flow-text-block` and
- * `.flow-thinking-item`, giving every flow item the same visual gap to its sibling.
+ * Compact tool rows are slightly tighter than text and thinking blocks, keeping
+ * repeated tool runs scannable without taking over the chat stream.
  * The explicit `line-height` pins the wrapper's strut so WebKit (Tauri/macOS) doesn't
  * inherit a different line-height from ancestors. */
 .flowchat-flow-item,

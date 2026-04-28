@@ -946,6 +946,9 @@ $badge-info-text: $color-info;
   --flowchat-font-size-3xl: var(--font-size-3xl);
   --flowchat-font-size-4xl: var(--font-size-4xl);
   --flowchat-font-size-5xl: var(--font-size-5xl);
+  --flowchat-flow-item-gap: 0.45rem;
+  --flowchat-turn-gap: 0.4rem;
+  --flowchat-text-line-height: 1.62;
 
   /* Left nav: one baseline step below flow-chat scale (overwritten by FontPreferenceService). */
   --nav-font-size-xxs: var(--font-size-xxs);

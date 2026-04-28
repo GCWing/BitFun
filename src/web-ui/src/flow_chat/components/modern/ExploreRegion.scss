@@ -13,8 +13,8 @@
 // ==================== Non-collapsible (streaming / no auto-collapse yet) ====================
 
 .explore-region--expanded:not(.explore-region--collapsible) {
-  margin-top: 4px;
-  margin-bottom: 4px;
+  margin-top: 3px;
+  margin-bottom: 3px;
 
   .explore-region__content {
     position: relative;
@@ -56,7 +56,7 @@
 // ==================== Collapsible (header + animated content) ====================
 
 .explore-region--collapsible {
-  margin: 0 0 0.6rem 0;
+  margin: 0 0 var(--flowchat-flow-item-gap, 0.45rem) 0;
   font-size: var(--flowchat-font-size-base);
   line-height: 1.65;
 

@@ -1314,6 +1314,7 @@ export class FlowChatStore {
   }
 
   public clearSessionUnreadCompletion(sessionId: string): void {
+    let didClear = false;
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session || !session.hasUnreadCompletion) return prev;
@@ -1326,9 +1327,12 @@ export class FlowChatStore {
       const newSessions = new Map(prev.sessions);
       newSessions.set(sessionId, updatedSession);
 
+      didClear = true;
       return { ...prev, sessions: newSessions };
     });
-    this.onPersistUnreadCompletion?.(sessionId, undefined);
+    if (didClear) {
+      this.onPersistUnreadCompletion?.(sessionId, undefined);
+    }
   }
 
   public setSessionNeedsAttention(
@@ -1353,6 +1357,7 @@ export class FlowChatStore {
   }
 
   public clearSessionNeedsAttention(sessionId: string): void {
+    let didClear = false;
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session || !session.needsUserAttention) return prev;
@@ -1365,9 +1370,12 @@ export class FlowChatStore {
       const newSessions = new Map(prev.sessions);
       newSessions.set(sessionId, updatedSession);
 
+      didClear = true;
       return { ...prev, sessions: newSessions };
     });
-    this.onPersistUnreadCompletion?.(sessionId, undefined);
+    if (didClear) {
+      this.onPersistUnreadCompletion?.(sessionId, undefined);
+    }
   }
 
   public async updateSessionTitle(

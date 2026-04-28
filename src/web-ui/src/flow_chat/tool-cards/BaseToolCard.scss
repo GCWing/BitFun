@@ -187,8 +187,8 @@
 /* ========== Expanded content area ========== */
 .base-tool-card-expanded {
   /* Full-bleed dividers in children use these (header pad-x is 0; do not conflate). */
-  --tool-card-expanded-pad-x: 10px;
-  --tool-card-expanded-pad-y: 10px;
+  --tool-card-expanded-pad-x: 9px;
+  --tool-card-expanded-pad-y: 8px;
   padding: var(--tool-card-expanded-pad-y) var(--tool-card-expanded-pad-x);
   background: transparent;
   position: relative;
@@ -198,8 +198,8 @@
 
 /* ========== Error details area ========== */
 .base-tool-card-error {
-  margin-top: 8px;
-  padding: 8px 12px 8px 22px;
+  margin-top: 6px;
+  padding: 7px 10px 7px 20px;
   margin-left: 6px;
   background: none !important;
   border: none !important;

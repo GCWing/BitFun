@@ -18,16 +18,15 @@
  *   inline` so no inline-flex baseline can pull the line box taller. */
 .flow-thinking-item {
   padding: 0;
-  /* Canonical 0.6rem (~9.6px) bottom margin matches `.flow-text-block` and the tool
-   * wrappers — every flow item shares the exact same visual gap to its sibling. */
-  margin: 0 0 0.6rem 0;
+  /* Match `.flow-text-block` and the tool wrappers so flow items share one visual gap. */
+  margin: 0 0 var(--flowchat-flow-item-gap, 0.45rem) 0;
   background: transparent;
   /* Transparent border to match the box-sizing of bordered cards so that thinking
    * items and card content share the same left edge. */
   border: 1px solid transparent;
   box-sizing: border-box;
   font-size: var(--flowchat-font-size-base);
-  line-height: 1.65;
+  line-height: var(--flowchat-text-line-height, 1.62);
   transition: padding 0.2s ease;
 }
 
@@ -40,7 +39,7 @@
   cursor: pointer;
   background: transparent;
   font-size: var(--flowchat-font-size-base);
-  line-height: 1.65;
+  line-height: var(--flowchat-text-line-height, 1.62);
 
   &:hover {
     .thinking-label {
@@ -67,7 +66,7 @@
     font-weight: normal;
     color: var(--text-tertiary, #6b7280);
     opacity: 0.8;
-    line-height: 1.65;
+    line-height: var(--flowchat-text-line-height, 1.62);
   }
 }
 
@@ -93,13 +92,13 @@
 
 .thinking-content {
   font-size: var(--flowchat-font-size-base);
-  line-height: 1.65;
+  line-height: var(--flowchat-text-line-height, 1.62);
   /* Match FlowChat body text (sans); mono stack + generic monospace yields Songti-like CJK on Windows. */
   font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
     sans-serif);
   word-break: break-word;
   color: var(--tool-card-text-muted);
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -195,13 +194,14 @@
   --markdown-font-mono: var(--tool-card-font-mono);
   --markdown-font-heading: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI',
     'Microsoft YaHei', sans-serif);
-  /* Match flow-text-block: comfortable block gap, smaller list-item gap. */
-  --markdown-block-gap: 0.7em;
+  /* Match flow-text-block: compact block gap, smaller list-item gap. */
+  --markdown-block-gap: 0.5em;
+  --markdown-paragraph-gap: 0.25em;
 
   font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
     sans-serif);
   font-size: var(--flowchat-font-size-base);
-  line-height: 1.65;
+  line-height: var(--flowchat-text-line-height, 1.62);
   color: var(--tool-card-text-muted);
   animation: none;
 
@@ -212,7 +212,7 @@
     font-weight: 600;
     color: var(--tool-card-text-secondary);
     font-size: var(--flowchat-font-size-base) !important;
-    line-height: 1.65 !important;
+    line-height: var(--flowchat-text-line-height, 1.62) !important;
     letter-spacing: normal;
     border: none;
     padding: 0;
@@ -223,13 +223,40 @@
   ul,
   li {
     font-size: var(--flowchat-font-size-base);
-    line-height: 1.65;
+    line-height: var(--flowchat-text-line-height, 1.62);
     color: var(--tool-card-text-muted);
+  }
+
+  p,
+  ol,
+  ul {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  > * + * {
+    margin-top: var(--markdown-block-gap);
+  }
+
+  p + p,
+  p + h1,
+  p + h2,
+  p + h3,
+  p + h4,
+  p + h5,
+  p + h6,
+  h1 + p,
+  h2 + p,
+  h3 + p,
+  h4 + p,
+  h5 + p,
+  h6 + p {
+    margin-top: var(--markdown-paragraph-gap);
   }
 
   /* List item gap (smaller than block gap, but visible). */
   li + li {
-    margin-top: 0.45em;
+    margin-top: 0.35em;
   }
 
   /* Tight rhythm WITHIN a list item. */

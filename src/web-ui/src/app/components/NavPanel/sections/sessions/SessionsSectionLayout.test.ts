@@ -81,6 +81,11 @@ describe('SessionsSection layout styles', () => {
     expect(labelBlock).toContain('text-overflow: ellipsis;');
     expect(btwBadgeBlock).toContain('white-space: nowrap;');
     expect(btwBadgeBlock).toContain('overflow: visible;');
+    expect(btwBadgeBlock).toContain('color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 62%, var(--color-text-primary));');
+    expect(btwBadgeBlock).toContain('font-weight: 600;');
+    expect(btwBadgeBlock).toContain('opacity: 0.96;');
     expect(reviewBadgeBlock).toContain('white-space: nowrap;');
+    expect(reviewBadgeBlock).toContain('color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 82%, var(--color-text-primary));');
+    expect(reviewBadgeBlock).toContain('font-weight: 600;');
   });
 });
