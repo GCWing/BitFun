@@ -2,35 +2,43 @@
 
 <div align="center">
 
-![BitFun](./png/BitFun_title.png)
+![Sparo OS](./png/Sparo_title_light.png)
 
 </div>
 <div align="center">
 
-[![GitHub release](https://img.shields.io/github/v/release/GCWing/BitFun?style=flat-square&color=blue)](https://github.com/GCWing/BitFun/releases)
-[![Website](https://img.shields.io/badge/Website-openbitfun.com-6f42c1?style=flat-square)](https://openbitfun.com/)
+[![Version](https://img.shields.io/badge/version-v0.1.0-blue?style=flat-square)](https://github.com/GCWing/BitFun/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/GCWing/BitFun/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/GCWing/BitFun/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/GCWing/BitFun/blob/main/LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)](https://github.com/GCWing/BitFun)
+[![Built with Tauri](https://img.shields.io/badge/Built%20with-Tauri-24c8db?style=flat-square)](https://tauri.app/)
 
 </div>
 
 ---
 
+<div align="center">
+  <img src="./png/live-app-demo.gif" alt="Live App Demo — one sentence generates an interactive app" width="800" style="max-width:100%;border-radius:8px;">
+  <p><em>One sentence → a working interactive app. This is Live App.</em></p>
+</div>
+
+---
+
+> The core kernel of this project comes from [GCWing/BitFun](https://github.com/GCWing/BitFun).
+
 ## Introduction
 
-BitFun is an Agentic OS built for the AI era. It hosts the scheduling and continuous runtime of all kinds of **intelligent applications**, with **desktop support across Windows, macOS, and Linux**.
+Sparo OS is an Agentic OS built for the AI era. It hosts the scheduling and continuous runtime of all kinds of **intelligent applications**, with **desktop support across Windows, macOS, and Linux**.
 
 You do not need to care about underlying structures such as sessions, workspaces, or context, so what you see is just a single conversation box, with almost zero barrier to getting started. It can help you write code, do design work, collaborate on office tasks, and operate your computer...
 
-You only need to state what you want. Whether you start directly from the **desktop app** or direct it remotely through your **phone or bots**, **BitFun organizes tasks, carries context forward, and keeps AI working continuously in the background, gradually adapting to your personal workflow**.
-
-![first_screen_screenshot](./png/first_screen_screenshot.png)
+You only need to state what you want. Whether you start directly from the **desktop app** or direct it remotely through your **phone or bots**, **Sparo OS organizes tasks, carries context forward, and keeps AI working continuously in the background, gradually adapting to your personal workflow**.
 
 ---
 
 ## Design Philosophy
 
-BitFun is organized around **Agentic OS + Intelligent Apps**:
+Sparo OS is organized around **Agentic OS + Intelligent Apps**:
 
 - **Agentic OS**: the unified operation layer that carries tasks, workspaces, sessions, toolchains, and remote entry points, turning AI from one-off replies into a continuously running work system.
 - **Intelligent Apps (Agent App / Live App / Bridge App)**: first-class application forms that carry different capability shapes. They can be Agent apps with autonomous reasoning and execution, dynamically generated Live Apps that keep evolving, or Bridge Apps that work together with traditional GUI software.
@@ -39,7 +47,7 @@ BitFun is organized around **Agentic OS + Intelligent Apps**:
 
 ## Intelligent Apps
 
-BitFun's intelligent apps are first-class citizens of Agentic OS, all accessible and manageable from the unified **Apps** hub:
+Sparo OS's intelligent apps are first-class citizens of Agentic OS, all accessible and manageable from the unified **Apps** hub:
 
 
 | Category       | Positioning                                    | Description                                                                                                                                                                                               |
@@ -80,9 +88,7 @@ Built with Tauri, the project supports Windows, macOS, and Linux, while also sup
 
 ### Download and use
 
-Download the latest desktop installer from [Releases](https://github.com/GCWing/BitFun/releases). After installation, configure your model and start using BitFun.
-
----
+Download the latest desktop installer from [Releases](https://github.com/GCWing/BitFun/releases). After installation, configure your model and start using it.
 
 ### Build from source
 
@@ -126,7 +132,7 @@ We welcome great ideas and code, and we are highly open to AI-generated code.
 ## Disclaimer
 
 1. This project is a spare-time exploration and research effort toward next-generation human-machine collaboration, and is not a commercial profit-making project.
-2. More than 97% of this project was built with Vibe Coding. Code issues and suggestions are welcome, and AI-assisted refactoring and optimization are encouraged.
+2. More than 99% of this project was built with Vibe Coding. Code issues and suggestions are welcome, and AI-assisted refactoring and optimization are encouraged.
 3. This project depends on and references many open-source projects. Thanks to all open-source authors. **If your rights are affected, please contact us and we will address it.**
 
 ---
