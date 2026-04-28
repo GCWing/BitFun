@@ -531,6 +531,8 @@ $_section-header-height: 24px;
 
   &__sections {
     flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
     overflow-y: auto;
     overflow-x: hidden;
     // No padding-top: separation from top-actions is only .bitfun-nav-panel__top-actions padding-bottom.

@@ -145,6 +145,7 @@ fn acp_tool_call_events(tool_call: ToolCall) -> Vec<AcpClientStreamEvent> {
         tool_id: tool_id.clone(),
         tool_name: tool_name.clone(),
         params,
+        timeout_seconds: None,
     })];
 
     match tool_call.status {
@@ -221,6 +222,7 @@ fn acp_tool_call_update_event(update: ToolCallUpdate) -> Option<AcpClientStreamE
                 tool_id,
                 tool_name,
                 params,
+                timeout_seconds: None,
             }))
         }
         None => update.fields.raw_input.map(|params| {
@@ -229,6 +231,7 @@ fn acp_tool_call_update_event(update: ToolCallUpdate) -> Option<AcpClientStreamE
                 tool_id,
                 tool_name,
                 params,
+                timeout_seconds: None,
             })
         }),
     }
@@ -291,6 +294,7 @@ mod tests {
             tool_id: id.to_string(),
             tool_name: "Bash".to_string(),
             params: json!({ "command": "echo ok" }),
+            timeout_seconds: None,
         })
     }
 

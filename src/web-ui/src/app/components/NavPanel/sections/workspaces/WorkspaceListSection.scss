@@ -5,6 +5,9 @@
   &__workspace-list {
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     gap: 0;
     min-width: 0;
     max-width: 100%;
@@ -20,6 +23,9 @@
   &__workspace-group {
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     gap: $size-gap-1;
     min-width: 0;
     max-width: 100%;
@@ -79,6 +85,10 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     gap: 2px;
     min-width: 0;
     max-width: 100%;
@@ -167,6 +177,7 @@
     min-width: 0;
     max-width: 100%;
     min-height: 30px;
+    overflow: hidden;
     border-radius: 6px;
     color: var(--color-text-primary);
     background: var(--color-bg-primary);
@@ -946,6 +957,11 @@
   }
 
   &__workspace-item-sessions {
+    position: relative;
+    z-index: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
     transition: opacity $motion-fast $easing-standard;
     opacity: 1;
 
@@ -973,6 +989,9 @@
     border-radius: $size-radius-base;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     gap: 0;
 
     &.is-drag-active {
@@ -1003,6 +1022,10 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     gap: 2px;
     min-width: 0;
     max-width: 100%;
@@ -1259,6 +1282,11 @@
   }
 
   &__assistant-item-sessions {
+    position: relative;
+    z-index: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
     transition: opacity $motion-fast $easing-standard;
     opacity: 1;
 
