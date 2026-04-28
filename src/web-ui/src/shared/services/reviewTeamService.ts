@@ -11,8 +11,8 @@ export const DEFAULT_REVIEW_TEAM_MODEL = 'fast';
 export const DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL = 'normal' as const;
 export const DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL = 'inherit' as const;
 export const DEFAULT_REVIEW_TEAM_EXECUTION_POLICY = {
-  reviewerTimeoutSeconds: 300,
-  judgeTimeoutSeconds: 240,
+  reviewerTimeoutSeconds: 600,
+  judgeTimeoutSeconds: 600,
   reviewerFileSplitThreshold: 20,
   maxSameRoleInstances: 3,
 } as const;
