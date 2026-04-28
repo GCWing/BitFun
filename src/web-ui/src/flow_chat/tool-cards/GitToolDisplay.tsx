@@ -8,6 +8,8 @@ import { GitBranch, Check, X, AlertTriangle } from 'lucide-react';
 import { CubeLoading, IconButton } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
+import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
+import { ToolCommandPreview } from './ToolCommandPreview';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import './GitToolDisplay.scss';
@@ -32,33 +34,6 @@ interface GitToolResultData {
   operation?: string;
   timestamp?: string;
 }
-
-// Git operation colors; labels are translated at runtime.
-const GIT_OPERATION_COLORS: Record<string, string> = {
-  status: '#3b82f6',
-  diff: '#8b5cf6',
-  log: '#06b6d4',
-  add: '#22c55e',
-  commit: '#f59e0b',
-  branch: '#ec4899',
-  checkout: '#a855f7',
-  switch: '#a855f7',
-  pull: '#14b8a6',
-  push: '#f97316',
-  fetch: '#6366f1',
-  merge: '#ef4444',
-  rebase: '#dc2626',
-  stash: '#84cc16',
-  reset: '#f43f5e',
-  restore: '#10b981',
-  show: '#64748b',
-  tag: '#eab308',
-  remote: '#0ea5e9',
-  clone: '#7c3aed',
-  init: '#059669',
-  blame: '#94a3b8',
-  'cherry-pick': '#fb923c',
-};
 
 export const GitToolDisplay: React.FC<ToolCardProps> = ({
   toolItem,
@@ -104,16 +79,6 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
   const inputData = getInputData();
   const resultData = getResultData();
 
-  const getOperationInfo = () => {
-    const operation = inputData?.operation || resultData?.operation || 'unknown';
-    const color = GIT_OPERATION_COLORS[operation] || '#6b7280';
-    const labelKey = `toolCards.git.${operation}`;
-    const label = t(labelKey, { defaultValue: operation });
-    return { label, color };
-  };
-
-  const operationInfo = getOperationInfo();
-
   const getCommandDisplay = () => {
     if (resultData?.command) return resultData.command;
     if (!inputData?.operation) return 'git';
@@ -143,6 +108,7 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
 
   const outputSummary = getOutputSummary();
   const hasOutput = resultData && (resultData.stdout || resultData.stderr);
+  const commandText = getCommandDisplay();
   
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
 
@@ -153,6 +119,8 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
   const toggleExpanded = useCallback(() => {
     applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
   }, [applyExpandedState, isExpanded]);
+
+  const getCopyCommandText = useCallback(() => commandText, [commandText]);
 
   const getErrorMessage = () => {
     if (toolResult && 'error' in toolResult) {
@@ -166,7 +134,7 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
 
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest('.git-action-buttons')) {
+    if (target.closest('.tool-card-header-actions, .git-action-buttons')) {
       return;
     }
     
@@ -188,27 +156,46 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
   const renderHeader = () => (
     <CompactToolCardHeader
       icon={<GitBranch size={16} className="git-card-icon" />}
-      action={isFailed ? t('toolCards.git.commandFailed') : `${t('toolCards.git.title')}:`}
+      showDivider
+      action={isFailed ? t('toolCards.git.commandFailed') : undefined}
       content={
         <span className="git-tool-info">
-          <span className="operation-tag">
-            {operationInfo.label}
-          </span>
-          <span className="command-text">{getCommandDisplay()}</span>
+          <ToolCommandPreview
+            command={commandText}
+            emptyText={t('toolCards.terminal.noCommand')}
+            className="git-command-preview tool-command-preview--compact"
+          />
         </span>
       }
       extra={
-        <>
+        <span className="git-header-extra">
           {!isFailed && outputSummary && status === 'completed' && (
             <span className="output-summary">
               {outputSummary}
             </span>
           )}
 
-          {requiresConfirmation && !userConfirmed && status !== 'completed' && (
-            <div className="git-action-buttons" onClick={(e) => e.stopPropagation()}>
+          {isFailed && (
+            <span className="error-indicator">
+              <span className="error-text">{t('toolCards.git.failed')}</span>
+            </span>
+          )}
+
+          <ToolCardHeaderActions className="git-action-buttons">
+            <ToolCardCopyAction
+              className="git-copy-btn"
+              getText={getCopyCommandText}
+              tooltip={t('toolCards.git.copyCommand', { defaultValue: 'Copy git command' })}
+              copiedTooltip={t('toolCards.git.commandCopied', { defaultValue: 'Git command copied' })}
+              successMessage={t('toolCards.git.commandCopied', { defaultValue: 'Git command copied' })}
+              failureMessage={t('toolCards.git.copyCommandFailed', { defaultValue: 'Failed to copy git command' })}
+              ariaLabel={t('toolCards.git.copyCommand', { defaultValue: 'Copy git command' })}
+            />
+
+            {requiresConfirmation && !userConfirmed && status !== 'completed' && (
+              <>
               <IconButton
-                className="git-icon-button git-confirm-btn"
+                className="tool-card-header-action git-confirm-btn"
                 variant="success"
                 size="xs"
                 onClick={(e) => {
@@ -218,10 +205,10 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
                 disabled={status === 'streaming'}
                 tooltip={t('toolCards.git.confirmExecute')}
               >
-                <Check size={14} />
+                <Check size={12} />
               </IconButton>
               <IconButton
-                className="git-icon-button git-reject-btn"
+                className="tool-card-header-action git-reject-btn"
                 variant="danger"
                 size="xs"
                 onClick={(e) => {
@@ -231,17 +218,12 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
                 disabled={status === 'streaming'}
                 tooltip={t('toolCards.git.cancel')}
               >
-                <X size={14} />
+                <X size={12} />
               </IconButton>
-            </div>
-          )}
-
-          {isFailed && (
-            <div className="error-indicator">
-              <span className="error-text">{t('toolCards.git.failed')}</span>
-            </div>
-          )}
-        </>
+              </>
+            )}
+          </ToolCardHeaderActions>
+        </span>
       }
       rightStatusIcon={renderStatusIcon()}
     />
@@ -344,7 +326,7 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
         status={status}
         isExpanded={isExpanded}
         onClick={handleCardClick}
-        className="git-tool-display"
+        className="git-tool-display compact-tool-card-wrapper--dense-command"
         clickable
         header={renderHeader()}
         expandedContent={expandedContent}

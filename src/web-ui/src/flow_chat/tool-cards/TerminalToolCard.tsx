@@ -16,18 +16,18 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { Terminal, Play, X, ExternalLink, Square, Copy, Check } from 'lucide-react';
+import { Terminal, Play, X, ExternalLink, Square } from 'lucide-react';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { CubeLoading, IconButton, Tooltip } from '../../component-library';
+import { CubeLoading, IconButton } from '../../component-library';
 import { TerminalOutputRenderer } from '@/tools/terminal/components';
 import { createLogger } from '@/shared/utils/logger';
-import { copyTextToClipboard } from '@/shared/utils/textSelection';
-import { notificationService } from '@/shared/notification-system';
 import { useToolCardHeightContract, type ToolCardCollapseReason } from './useToolCardHeightContract';
 import { getTerminalViewState, type TerminalViewState } from './terminalToolCardState';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
+import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
+import { ToolCommandPreview } from './ToolCommandPreview';
 import './TerminalToolCard.scss';
 
 const log = createLogger('TerminalToolCard');
@@ -289,17 +289,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
 
   const [interruptRequested, setInterruptRequested] = useState(false);
   const [isCommandTruncated, setIsCommandTruncated] = useState(false);
-  const [isCommandCopied, setIsCommandCopied] = useState(false);
-  const copyResetTimerRef = useRef<number | null>(null);
   const commandRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (copyResetTimerRef.current !== null) {
-        window.clearTimeout(copyResetTimerRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (status !== 'running') {
@@ -362,6 +352,10 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
 
   const showConfirmButtons = status === 'pending_confirmation';
   const canExecuteCommand = Boolean(command?.trim());
+  const getCopyCommandText = useCallback(
+    () => (typeof command === 'string' ? command : ''),
+    [command],
+  );
 
   const viewState = useMemo(() => {
     return getTerminalViewState({
@@ -432,34 +426,9 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     createTerminalTab(terminalSessionId, terminalName);
   }, [terminalSessionId]);
 
-  const handleCopyCommand = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const commandText = typeof command === 'string' ? command : '';
-    if (!commandText.trim()) {
-      return;
-    }
-
-    const copied = await copyTextToClipboard(commandText);
-    if (!copied) {
-      notificationService.error(t('toolCards.terminal.copyCommandFailed'));
-      return;
-    }
-
-    setIsCommandCopied(true);
-    notificationService.success(t('toolCards.terminal.commandCopied'), { duration: 1600 });
-
-    if (copyResetTimerRef.current !== null) {
-      window.clearTimeout(copyResetTimerRef.current);
-    }
-    copyResetTimerRef.current = window.setTimeout(() => {
-      setIsCommandCopied(false);
-      copyResetTimerRef.current = null;
-    }, 1600);
-  }, [command, t]);
-
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest('.terminal-action-btn, .terminal-confirm-actions')) {
+    if (target.closest('.tool-card-header-actions, .terminal-action-btn, .terminal-confirm-actions')) {
       return;
     }
 
@@ -493,16 +462,16 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   };
 
   const renderCopyCommandButton = () => (
-    <IconButton
-      className={`terminal-action-btn copy-command-btn${isCommandCopied ? ' copied' : ''}`}
-      variant="ghost"
-      size="xs"
-      onClick={handleCopyCommand}
+    <ToolCardCopyAction
+      className="terminal-action-btn copy-command-btn"
+      getText={getCopyCommandText}
       disabled={!canExecuteCommand}
-      tooltip={t(isCommandCopied ? 'toolCards.terminal.commandCopied' : 'toolCards.terminal.copyCommand')}
-    >
-      {isCommandCopied ? <Check size={12} /> : <Copy size={12} />}
-    </IconButton>
+      tooltip={t('toolCards.terminal.copyCommand')}
+      copiedTooltip={t('toolCards.terminal.commandCopied')}
+      successMessage={t('toolCards.terminal.commandCopied')}
+      failureMessage={t('toolCards.terminal.copyCommandFailed')}
+      ariaLabel={t('toolCards.terminal.copyCommand')}
+    />
   );
 
   const renderTimeoutIndicator = () => (
@@ -538,7 +507,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   };
 
   const renderHeaderActions = (includeInterrupt: boolean) => (
-    <span className="terminal-header-actions">
+    <ToolCardHeaderActions className="terminal-header-actions">
       {renderCopyCommandButton()}
       {renderOpenInPanelButton()}
 
@@ -581,7 +550,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
           <Square size={12} fill="currentColor" />
         </IconButton>
       )}
-    </span>
+    </ToolCardHeaderActions>
   );
 
   const renderHeaderExtra = (includeInterrupt: boolean) => (
@@ -593,36 +562,23 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   );
 
   const renderCommandContent = (variant: 'default' | 'compact' = 'default') => {
-    const commandContent = (
-      <>
-        {command
-          || <span className="command-empty">{t(showConfirmButtons ? 'toolCards.terminal.commandEmpty' : 'toolCards.terminal.noCommand')}</span>}
-      </>
-    );
-    const commandNode = variant === 'compact' ? (
-      <span ref={commandRef} className="terminal-command-compact">
-        {commandContent}
-      </span>
-    ) : (
-      <code ref={commandRef} className="terminal-command">
-        {commandContent}
-      </code>
-    );
+    const commandText = typeof command === 'string' ? command : '';
+    const emptyText = t(showConfirmButtons ? 'toolCards.terminal.commandEmpty' : 'toolCards.terminal.noCommand');
 
-    if (command && isCommandTruncated) {
-      return (
-        <Tooltip
-          content={<div className="terminal-command-tooltip-content">{command}</div>}
-          placement="bottom"
-          className="terminal-command-tooltip"
-          interactive
-        >
-          {commandNode}
-        </Tooltip>
-      );
-    }
-
-    return commandNode;
+    return (
+      <ToolCommandPreview
+        ref={commandRef}
+        as={variant === 'compact' ? 'span' : 'code'}
+        command={commandText}
+        emptyText={emptyText}
+        className={
+          variant === 'compact'
+            ? 'terminal-command-compact tool-command-preview--compact'
+            : 'terminal-command'
+        }
+        tooltipContent={commandText && isCommandTruncated ? commandText : undefined}
+      />
+    );
   };
 
   const renderHeader = () => (
@@ -670,7 +626,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
           status={status}
           isExpanded={false}
           onClick={handleCardClick}
-          className="terminal-tool-card terminal-tool-card--compact-collapsed"
+          className="terminal-tool-card terminal-tool-card--compact-collapsed compact-tool-card-wrapper--dense-command"
           clickable
           header={renderCompactHeader()}
         />

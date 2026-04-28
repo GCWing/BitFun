@@ -16,57 +16,6 @@
 }
 
 .compact-tool-card-wrapper.terminal-tool-card--compact-collapsed {
-  width: 100%;
-
-  .compact-tool-card {
-    width: 100%;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .tool-card-icon-slot {
-    align-self: center;
-    width: 20px;
-    margin-right: 1px;
-  }
-
-  .tool-card-icon-marks {
-    width: 20px;
-    height: 20px;
-  }
-
-  .terminal-card-icon {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-  }
-
-  .tool-card-icon.tool-identifier-icon.tool-card-icon-main .terminal-card-icon {
-    width: 14px;
-    height: 14px;
-  }
-
-  .compact-card-action {
-    font-size: var(--flowchat-font-size-xs);
-    line-height: 1.45;
-    font-weight: normal;
-  }
-
-  .compact-card-content {
-    font-size: var(--flowchat-font-size-xs);
-    line-height: 1.45;
-  }
-
-  .compact-card-extra {
-    font-size: var(--flowchat-font-size-xs);
-    line-height: 1.45;
-  }
-
-  .compact-card-right-status-icon {
-    min-height: calc(var(--flowchat-font-size-xs) * 1.45);
-    justify-content: flex-start;
-  }
-
   .terminal-header-extra {
     gap: 4px;
   }
@@ -79,41 +28,6 @@
   .terminal-header-duration .duration-text svg {
     width: 11px;
     height: 11px;
-  }
-
-  .terminal-header-actions {
-    gap: 1px;
-  }
-
-  .terminal-action-btn {
-    width: 16px;
-    height: 16px;
-
-    svg {
-      width: 11px;
-      height: 11px;
-    }
-  }
-
-  /* Collapsed-only command preview. Intentionally does NOT inherit `.terminal-command`
-   * (which forces 12px monospace + inline-block) so the text shares the exact same
-   * font-size/line-height/baseline as the sibling action span. */
-  .terminal-command-compact {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--flowchat-font-size-xs);
-    line-height: 1.45;
-    font-weight: normal;
-    color: var(--color-text-muted);
-    font-family: var(--tool-card-font-mono);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    .command-empty {
-      color: #e06c75;
-      font-style: italic;
-    }
   }
 }
 

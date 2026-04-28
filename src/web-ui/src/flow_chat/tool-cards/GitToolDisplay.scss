@@ -15,12 +15,31 @@
 }
 
 /* Entire compact card shows pointer (card toggles expand); children must not force default cursor. */
-.compact-tool-card.git-tool-display {
+.compact-tool-card-wrapper.git-tool-display .compact-tool-card {
   cursor: pointer;
 }
 
+.compact-tool-card-wrapper.git-tool-display.compact-tool-card-wrapper--dense-command {
+  .tool-card-icon-slot {
+    width: 24px;
+    margin-right: 7px;
+  }
+
+  .tool-card-icon-slot::after {
+    top: 1px;
+    bottom: 1px;
+    border-color: var(--border-subtle);
+  }
+
+  .tool-card-icon-marks {
+    width: 20px;
+    height: 20px;
+  }
+}
+
 /* Footer bar: full width + background to bottom inner edge of expanded content (matches .compact-tool-card-expanded padding). */
-.compact-tool-card.git-tool-display .git-result-footer {
+.base-tool-card-wrapper.git-tool-display .git-result-footer,
+.compact-tool-card-wrapper.git-tool-display .git-result-footer {
   margin-left: -8px;
   margin-right: -8px;
   margin-bottom: -8px;
@@ -29,7 +48,7 @@
 }
 
 /* ========== Fix scrollbar visibility on card hover ========== */
-.compact-tool-card.git-tool-display:hover {
+.git-tool-display:hover {
   .git-result-output {
     &::-webkit-scrollbar-thumb {
       background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12));
@@ -56,31 +75,20 @@
   .git-tool-info {
     display: flex;
     align-items: center;
-    gap: 8px;
     flex-wrap: nowrap;
     min-width: 0;
     flex: 1;
+  }
 
-    .operation-tag {
-      display: inline-flex;
-      align-items: center;
-      font-size: 12px;
-      font-weight: 500;
-      flex-shrink: 0;
-      white-space: nowrap;
-      color: var(--color-text-primary);
-    }
+  .git-command-preview {
+    color: var(--color-text-muted);
+  }
 
-    .command-text {
-      font-family: var(--tool-card-font-mono);
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--tool-card-text-primary);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      min-width: 0;
-    }
+  .git-header-extra {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
   }
 
   .output-summary {
@@ -262,33 +270,6 @@
 
   .icon-warning {
     color: rgba(234, 179, 8, 0.9);
-  }
-
-  .git-action-buttons {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .git-icon-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.2s ease;
-    
-    &:disabled {
-      opacity: 0.4;
-      cursor: default;
-    }
-
-    svg {
-      display: block;
-    }
   }
 
   .git-confirm-btn {

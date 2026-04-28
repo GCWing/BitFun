@@ -17,6 +17,67 @@
   line-height: 1.65;
 }
 
+.compact-tool-card-wrapper--dense-command {
+  width: 100%;
+
+  .compact-tool-card {
+    width: 100%;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .tool-card-icon-slot {
+    align-self: center;
+    width: 20px;
+    margin-right: 1px;
+  }
+
+  .tool-card-icon-marks {
+    width: 20px;
+    height: 20px;
+  }
+
+  .tool-card-icon.tool-identifier-icon.tool-card-icon-main svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .compact-card-action {
+    font-size: var(--flowchat-font-size-xs);
+    line-height: 1.45;
+    font-weight: normal;
+  }
+
+  .compact-card-content {
+    font-size: var(--flowchat-font-size-xs);
+    line-height: 1.45;
+  }
+
+  .compact-card-extra {
+    font-size: var(--flowchat-font-size-xs);
+    line-height: 1.45;
+  }
+
+  .compact-card-right-status-icon {
+    min-height: calc(var(--flowchat-font-size-xs) * 1.45);
+    justify-content: flex-start;
+  }
+
+  .tool-card-header-actions {
+    gap: 1px;
+  }
+
+  .tool-card-header-action.icon-btn--xs {
+    width: 16px;
+    height: 16px;
+
+    svg {
+      width: 11px;
+      height: 11px;
+    }
+  }
+}
+
 /* Tool item wrapper around .compact-tool-card-wrapper (see ModelRoundItem / FlowItemRenderer).
  * Compact tool rows are slightly tighter than text and thinking blocks, keeping
  * repeated tool runs scannable without taking over the chat stream.
