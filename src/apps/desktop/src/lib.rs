@@ -24,6 +24,11 @@ use tauri::Manager;
 // Re-export API
 pub use api::*;
 
+use crate::ohos::ohos_file_system::open_oh_file_dialog;
+use crate::ohos::window::{
+    close_window,handle_max_window,handle_min_window,handle_restore_window,window_is_maximized,
+    window_is_minimized, window_start_dragging
+};
 use api::ai_rules_api::*;
 use api::clipboard_file_api::*;
 use api::commands::*;
@@ -46,6 +51,8 @@ use api::storage_commands::*;
 use api::subagent_api::*;
 use api::system_api::*;
 use api::tool_api::*;
+use std::ffi::CString;
+use std::ptr;
 
 /// Agentic Coordinator state
 #[derive(Clone)]
@@ -782,6 +789,16 @@ pub async fn _run() {
             api::announcement_api::never_show_announcement,
             api::announcement_api::trigger_announcement,
             api::announcement_api::get_announcement_tips,
+            // ohos adater
+            open_oh_file_dialog,
+            handle_min_window,
+            handle_max_window,
+            handle_restore_window,
+            window_is_maximized,
+            window_is_minimized,
+            window_start_dragging,
+            close_window,
+
         ])
         .run(tauri::generate_context!());
     if let Err(e) = run_result {

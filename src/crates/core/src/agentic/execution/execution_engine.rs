@@ -1762,6 +1762,7 @@ impl ExecutionEngine {
         // Use get_all_registered_tools to get all tools including MCP tools
         let all_tools = get_all_registered_tools().await;
 
+
         // Filter tools: 1) Check if enabled 2) Check if mode allows
         let mut tool_definitions = Vec::new();
         let mut tool_opts_custom = HashMap::new();
@@ -1787,7 +1788,6 @@ impl ExecutionEngine {
             }
 
             let tool_name = tool.name().to_string();
-            if mode_allowed_tools.contains(&tool_name) {
                 let description = tool
                     .description_with_context(Some(&description_context))
                     .await
@@ -1802,7 +1802,7 @@ impl ExecutionEngine {
                     description,
                     parameters,
                 });
-            }
+
         }
 
         // Order tools for the model API: terminal → file-ish tools → **`ControlHub`**

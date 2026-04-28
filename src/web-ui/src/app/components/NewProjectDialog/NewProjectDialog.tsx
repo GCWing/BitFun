@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
 import { Modal, Button, Input } from '@/component-library';
 import './NewProjectDialog.scss';
+import {workspaceAPI} from "@/infrastructure";
 
 const log = createLogger('NewProjectDialog');
 
@@ -49,7 +50,8 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
   // Open directory picker dialog
   const handleSelectParentPath = useCallback(async () => {
     try {
-      let selected = "/data/storage/el2/base/files";
+      const selected = await workspaceAPI.open_oh_file_dialog();
+
       if (selected && typeof selected === 'string') {
         setParentPath(selected);
         setError('');

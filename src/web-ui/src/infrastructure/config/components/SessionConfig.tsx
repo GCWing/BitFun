@@ -26,7 +26,7 @@ import {
   DEFAULT_LANGUAGE_TEMPLATES,
 } from '../types';
 import { ModelSelectionRadio } from './ModelSelectionRadio';
-import { open } from '@tauri-apps/plugin-dialog';
+import {workspaceAPI} from "@/infrastructure";
 import { createLogger } from '@/shared/utils/logger';
 import './AIFeaturesConfig.scss';
 import './DebugConfig.scss';
@@ -469,11 +469,7 @@ const SessionConfig: React.FC = () => {
 
   const handleSelectLogPath = async () => {
     try {
-      const selected = await open({
-        multiple: false,
-        directory: false,
-        filters: [{ name: tDebug('fileDialog.logFile'), extensions: ['log', 'txt', 'ndjson'] }],
-      });
+      const selected = await workspaceAPI.open_oh_file_dialog();
       if (selected) {
         updateDebugConfig({ log_path: selected });
         notificationService.success(tDebug('messages.logPathUpdated'), { duration: 2000 });

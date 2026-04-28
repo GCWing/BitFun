@@ -2,22 +2,14 @@
  * Native file picker for SSH private keys; default folder is ~/.ssh (via Tauri homeDir + join).
  */
 
-import { open } from '@tauri-apps/plugin-dialog';
-import { homeDir, join } from '@tauri-apps/api/path';
+import {workspaceAPI} from "@/infrastructure";
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('pickSshPrivateKeyPath');
 
-export async function pickSshPrivateKeyPath(options: { title?: string } = {}): Promise<string | null> {
+export async function pickSshPrivateKeyPath(_options: { title?: string } = {}): Promise<string | null> {
   try {
-    const home = await homeDir();
-    const defaultPath = await join(home, '.ssh');
-    const selected = await open({
-      multiple: false,
-      directory: false,
-      defaultPath,
-      title: options.title,
-    });
+    const selected = await workspaceAPI.open_oh_file_dialog();
     return selected ?? null;
   } catch (e) {
     log.error('SSH private key file picker failed', e);

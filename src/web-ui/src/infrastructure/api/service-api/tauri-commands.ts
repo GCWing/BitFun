@@ -64,7 +64,9 @@ export interface ImportConfigRequest {
   configData: any;
 }
 
-
+export interface OpenOhosPath {
+  path: string;
+}
 
 export interface GetModelInfoRequest {
   modelId: string;

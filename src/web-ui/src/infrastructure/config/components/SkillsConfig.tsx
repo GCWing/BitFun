@@ -8,9 +8,9 @@ import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext'
 import { useNotification } from '@/shared/notification-system';
 import { configAPI } from '../../api/service-api/ConfigAPI';
 import type { SkillInfo, SkillLevel, SkillMarketItem, SkillValidationResult } from '../types';
-import { open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import './SkillsConfig.scss';
+import {workspaceAPI} from "@/infrastructure";
 
 const log = createLogger('SkillsConfig');
 
@@ -176,7 +176,7 @@ const SkillsConfig: React.FC = () => {
 
   const handleBrowse = async () => {
     try {
-      const selected = await open({ directory: true, multiple: false, title: t('form.path.label') });
+      const selected = await workspaceAPI.open_oh_file_dialog();
       if (selected) setFormPath(selected as string);
     } catch (err) {
       log.error('Failed to open file dialog', err);

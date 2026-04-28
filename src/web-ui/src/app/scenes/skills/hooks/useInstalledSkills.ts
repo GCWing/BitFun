@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
-import { configAPI } from '@/infrastructure/api';
+import { configAPI,workspaceAPI } from '@/infrastructure/api';
 import type { SkillInfo, SkillLevel, SkillValidationResult } from '@/infrastructure/config/types';
 import { useWorkspaceManagerSync } from '@/infrastructure/hooks/useWorkspaceManagerSync';
 import { useNotification } from '@/shared/notification-system';
@@ -90,11 +89,7 @@ export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSk
 
   const handleBrowse = useCallback(async () => {
     try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: t('form.path.label'),
-      });
+      const selected = await workspaceAPI.open_oh_file_dialog();
       if (selected) {
         setFormPath(selected as string);
       }

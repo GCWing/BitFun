@@ -9,14 +9,13 @@
  */
 
 import React, { useState, useCallback, useEffect, useMemo, useRef, useContext } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { useWindowControls } from '../hooks/useWindowControls';
 import { useAssistantBootstrap } from '../hooks/useAssistantBootstrap';
 import { useApp } from '../hooks/useApp';
 import { useSceneStore } from '../stores/sceneStore';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
-import { configManager } from '@/infrastructure/config';
+import { configManager,workspaceAPI } from '@/infrastructure';
 import { sessionStorageAdapter } from '@/shared';
 
 type TransitionDirection = 'entering' | 'returning' | null;
@@ -118,11 +117,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const [showWorkspaceStatus, setShowWorkspaceStatus] = useState(false);
   const handleOpenProject = useCallback(async () => {
     try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: t('header.selectProjectDirectory'),
-      });
+      const selected = await workspaceAPI.open_oh_file_dialog();
 
       if (selected && typeof selected === 'string') {
         await openWorkspace(selected);
@@ -169,10 +164,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     void (async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
-        const { open } = await import('@tauri-apps/plugin-dialog');
         unlistenFns.push(await listen('bitfun_menu_open_project', async () => {
           try {
-            const selected = await open({ directory: true, multiple: false }) as string;
+            const selected = await workspaceAPI.open_oh_file_dialog();
             if (selected) await openWorkspace(selected);
           } catch {}
         }));

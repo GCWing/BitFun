@@ -12,6 +12,8 @@ crate-type = ["rlib"]
 [dependencies]
 # Inherit shared dependencies from workspace
 tokio = { workspace = true }
+napi-ohos ={workspace = true}
+napi-derive-ohos = {workspace = true}
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 async-trait = { workspace = true }
@@ -127,7 +129,8 @@ bitfun-transport = { path = "../transport" }
 
 # Tauri dependency (optional, enabled only when needed)
 tauri = { workspace = true }
-
+lazy_static = "1.5.0"
+parking_lot = "0.12.5"
 # Non-Windows: vendored OpenSSL for libgit2 (no system install).
 [target.'cfg(not(windows))'.dependencies]
 git2 = { workspace = true, features = ["vendored-openssl"] }

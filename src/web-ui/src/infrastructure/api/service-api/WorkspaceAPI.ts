@@ -786,11 +786,74 @@ export class WorkspaceAPI {
     }
   }
 
-   
+  async open_oh_file_dialog(): Promise<string> {
+    try {
+      return await api.invoke("open_oh_file_dialog")
+    }catch (error){
+      throw createTauriCommandError('open_oh_file_dialog',error)
+    }
+  }
+
+  async window_is_minimized(): Promise<string> {
+    try {
+      return await api.invoke("window_is_minimized")
+    }catch (error){
+      throw createTauriCommandError('window_is_minimized',error)
+    }
+  }
+
+  async window_start_dragging(): Promise<string> {
+    try {
+      return await api.invoke("window_start_dragging")
+    }catch (error){
+      throw createTauriCommandError('window_start_dragging',error)
+    }
+  }
+
+  async close_window(): Promise<string> {
+    try {
+      return await api.invoke("close_window")
+    }catch (error){
+      throw createTauriCommandError('close_window',error)
+    }
+  }
+
+  async window_is_maximized(): Promise<string> {
+    try {
+      return await api.invoke("window_is_maximized")
+    }catch (error){
+      throw createTauriCommandError('window_is_maximized',error)
+    }
+  }
+
+  async handle_min_window(): Promise<string> {
+    try {
+      return await api.invoke("handle_min_window")
+    }catch (error){
+      throw createTauriCommandError('handle_min_window',error)
+    }
+  }
+
+  async handle_max_window(): Promise<string> {
+    try {
+      return await api.invoke("handle_max_window")
+    }catch (error){
+      throw createTauriCommandError('handle_max_window',error)
+    }
+  }
+
+  async handle_restore_window(): Promise<string> {
+    try {
+      return await api.invoke("handle_restore_window")
+    }catch (error){
+      throw createTauriCommandError('handle_restore_window',error)
+    }
+  }
+
   async revealInExplorer(path: string): Promise<void> {
     try {
       await api.invoke('reveal_in_explorer', { 
-        request: { path } 
+        request: { path }
       });
     } catch (error) {
       throw createTauriCommandError('reveal_in_explorer', error, { path });

@@ -23,6 +23,7 @@ import {
   Download,
 } from 'lucide-react';
 import './RemoteFileBrowser.scss';
+import {workspaceAPI} from "@/infrastructure";
 
 interface RemoteFileBrowserProps {
   connectionId: string;
@@ -311,12 +312,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
       setError(t('ssh.remote.transferNeedsDesktop'));
       return;
     }
-    const { open } = await import('@tauri-apps/plugin-dialog');
-    const selected = await open({
-      title: t('ssh.remote.uploadDialogTitle'),
-      multiple: true,
-      directory: false,
-    });
+    const selected = await workspaceAPI.open_oh_file_dialog();
     if (selected === null) return;
     const paths = Array.isArray(selected) ? selected : [selected];
     if (paths.length === 0) return;

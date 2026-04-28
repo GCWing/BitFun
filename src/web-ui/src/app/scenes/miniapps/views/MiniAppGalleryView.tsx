@@ -9,7 +9,6 @@ import {
   Tag,
   Trash2,
 } from 'lucide-react';
-import { open } from '@tauri-apps/plugin-dialog';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import MiniAppCard from '../components/MiniAppCard';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -33,6 +32,7 @@ import { useMiniAppStore } from '../miniAppStore';
 import { useI18n } from '@/infrastructure/i18n';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
 import './MiniAppGalleryView.scss';
+import {workspaceAPI} from "@/infrastructure";
 
 const log = createLogger('MiniAppGalleryView');
 
@@ -167,12 +167,7 @@ const MiniAppGalleryView: React.FC = () => {
 
   const handleAddFromFolder = async () => {
     try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: t('selectFolderTitle'),
-      });
-      const path = Array.isArray(selected) ? selected[0] : selected;
+      const path = await workspaceAPI.open_oh_file_dialog();
       if (!path) return;
 
       setLoading(true);
