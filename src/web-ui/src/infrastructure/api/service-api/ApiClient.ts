@@ -25,6 +25,10 @@ const SENSITIVE_KEY_PATTERNS = [
   'password',
   'authorization'
 ];
+const MAX_LOG_STRING_LENGTH = 500;
+const MAX_LOG_ARRAY_ITEMS = 10;
+const MAX_LOG_OBJECT_KEYS = 30;
+const MAX_LOG_DEPTH = 4;
 
 function isSensitiveKey(key: string): boolean {
   const normalized = key.toLowerCase();
@@ -41,18 +45,46 @@ function maskSensitiveValue(value: unknown): string {
   return `${value.slice(0, 4)}***${value.slice(-4)}`;
 }
 
-function sanitizeForLog(value: unknown, parentKey?: string): unknown {
+function sanitizeForLog(value: unknown, parentKey?: string, depth = 0): unknown {
   if (value === null || value === undefined) {
     return value;
   }
 
+  if (parentKey && isSensitiveKey(parentKey)) {
+    return maskSensitiveValue(value);
+  }
+
+  if (depth >= MAX_LOG_DEPTH) {
+    if (Array.isArray(value)) {
+      return { type: 'array', length: value.length };
+    }
+    if (typeof value === 'object') {
+      return { type: 'object' };
+    }
+  }
+
   if (Array.isArray(value)) {
-    return value.map(item => sanitizeForLog(item, parentKey));
+    const items = value
+      .slice(0, MAX_LOG_ARRAY_ITEMS)
+      .map(item => sanitizeForLog(item, parentKey, depth + 1));
+    if (value.length > MAX_LOG_ARRAY_ITEMS) {
+      return {
+        type: 'array',
+        length: value.length,
+        items,
+        omittedItems: value.length - MAX_LOG_ARRAY_ITEMS
+      };
+    }
+    return items;
   }
 
   if (typeof value !== 'object') {
-    if (parentKey && isSensitiveKey(parentKey)) {
-      return maskSensitiveValue(value);
+    if (typeof value === 'string' && value.length > MAX_LOG_STRING_LENGTH) {
+      return {
+        type: 'string',
+        length: value.length,
+        preview: value.slice(0, MAX_LOG_STRING_LENGTH)
+      };
     }
     return value;
   }
@@ -60,7 +92,8 @@ function sanitizeForLog(value: unknown, parentKey?: string): unknown {
   const obj = value as Record<string, unknown>;
   const sanitized: Record<string, unknown> = {};
 
-  for (const [key, rawVal] of Object.entries(obj)) {
+  const entries = Object.entries(obj);
+  for (const [key, rawVal] of entries.slice(0, MAX_LOG_OBJECT_KEYS)) {
     if (isSensitiveKey(key)) {
       sanitized[key] = maskSensitiveValue(rawVal);
       continue;
@@ -77,7 +110,11 @@ function sanitizeForLog(value: unknown, parentKey?: string): unknown {
       continue;
     }
 
-    sanitized[key] = sanitizeForLog(rawVal, key);
+    sanitized[key] = sanitizeForLog(rawVal, key, depth + 1);
+  }
+
+  if (entries.length > MAX_LOG_OBJECT_KEYS) {
+    sanitized.__omittedKeys = entries.length - MAX_LOG_OBJECT_KEYS;
   }
 
   return sanitized;

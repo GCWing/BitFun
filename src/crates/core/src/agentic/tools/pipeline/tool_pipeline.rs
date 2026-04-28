@@ -306,6 +306,10 @@ impl ToolPipeline {
         }
 
         info!("Executing tools: count={}", tool_calls.len());
+        let tool_names: Vec<String> = tool_calls
+            .iter()
+            .map(|tool_call| tool_call.tool_name.clone())
+            .collect();
 
         // Determine concurrency safety for each tool call
         let concurrency_flags: Vec<bool> = {
@@ -320,6 +324,7 @@ impl ToolPipeline {
                 })
                 .collect()
         };
+        let concurrency_safe_count = concurrency_flags.iter().filter(|&&flag| flag).count();
 
         // Create tasks for all tool calls
         let mut task_ids = Vec::with_capacity(tool_calls.len());
@@ -330,12 +335,26 @@ impl ToolPipeline {
         }
 
         if !options.allow_parallel {
-            debug!("Parallel execution disabled by options, running all tools sequentially");
+            debug!(
+                "Tool execution plan: total_tools={}, batches=1, concurrency_safe={}, non_concurrency_safe={}, allow_parallel=false, tools={}",
+                task_ids.len(),
+                concurrency_safe_count,
+                task_ids.len().saturating_sub(concurrency_safe_count),
+                tool_names.join(", ")
+            );
             return self.execute_sequential(task_ids).await;
         }
 
         // Partition into batches of consecutive same-safety tool calls
         let batches = Self::partition_tool_batches(&task_ids, &concurrency_flags);
+        debug!(
+            "Tool execution plan: total_tools={}, batches={}, concurrency_safe={}, non_concurrency_safe={}, allow_parallel=true, tools={}",
+            task_ids.len(),
+            batches.len(),
+            concurrency_safe_count,
+            task_ids.len().saturating_sub(concurrency_safe_count),
+            tool_names.join(", ")
+        );
 
         if batches.len() == 1 {
             let batch = &batches[0];
@@ -468,10 +487,12 @@ impl ToolPipeline {
         let tool_name = task.tool_call.tool_name.clone();
         let tool_args = task.tool_call.arguments.clone();
         let tool_is_error = task.tool_call.is_error;
+        let queue_wait_ms = elapsed_ms_since(task.created_at);
+        let mut confirmation_wait_ms = 0;
 
         debug!(
-            "Tool task details: tool_name={}, tool_id={}",
-            tool_name, tool_id
+            "Tool task details: tool_name={}, tool_id={}, queue_wait_ms={}",
+            tool_name, tool_id, queue_wait_ms
         );
 
         if tool_name.is_empty() || tool_is_error {
@@ -619,6 +640,7 @@ impl ToolPipeline {
                 .await;
 
             debug!("Waiting for confirmation: tool_name={}", tool_name);
+            let confirmation_started_at = Instant::now();
 
             let confirmation_result = match task.options.confirmation_timeout_secs {
                 Some(timeout_secs) => {
@@ -637,6 +659,7 @@ impl ToolPipeline {
                     Some(rx.await)
                 }
             };
+            confirmation_wait_ms = elapsed_ms_u64(confirmation_started_at);
 
             match confirmation_result {
                 Some(Ok(ConfirmationResponse::Confirmed)) => {
@@ -695,6 +718,8 @@ impl ToolPipeline {
             self.confirmation_channels.remove(&tool_id);
         }
 
+        let preflight_ms = elapsed_ms_u64(start_time).saturating_sub(confirmation_wait_ms);
+
         if cancellation_token.is_cancelled() {
             self.state_manager
                 .update_state(
@@ -733,9 +758,11 @@ impl ToolPipeline {
                 .await;
         }
 
+        let execution_started_at = Instant::now();
         let result = self
             .execute_with_retry(&task, cancellation_token.clone(), tool)
             .await;
+        let execution_ms = elapsed_ms_u64(execution_started_at);
 
         self.cancellation_tokens.remove(&tool_id);
 
@@ -756,8 +783,14 @@ impl ToolPipeline {
                     .await;
 
                 info!(
-                    "Tool completed: tool_name={}, duration_ms={}",
-                    tool_name, duration_ms
+                    "Tool completed: tool_name={}, duration_ms={}, queue_wait_ms={}, preflight_ms={}, confirmation_wait_ms={}, execution_ms={}, streaming={}",
+                    tool_name,
+                    duration_ms,
+                    queue_wait_ms,
+                    preflight_ms,
+                    confirmation_wait_ms,
+                    execution_ms,
+                    is_streaming
                 );
 
                 Ok(ToolExecutionResult {
@@ -782,8 +815,14 @@ impl ToolPipeline {
                         .await;
 
                     info!(
-                        "Tool cancelled during execution: tool_name={}, reason={}",
-                        tool_name, reason
+                        "Tool cancelled during execution: tool_name={}, reason={}, duration_ms={}, queue_wait_ms={}, preflight_ms={}, confirmation_wait_ms={}, execution_ms={}",
+                        tool_name,
+                        reason,
+                        elapsed_ms_u64(start_time),
+                        queue_wait_ms,
+                        preflight_ms,
+                        confirmation_wait_ms,
+                        execution_ms
                     );
 
                     return Err(e);
@@ -802,7 +841,16 @@ impl ToolPipeline {
                     )
                     .await;
 
-                error!("Tool failed: tool_name={}, error={}", tool_name, error_msg);
+                error!(
+                    "Tool failed: tool_name={}, error={}, duration_ms={}, queue_wait_ms={}, preflight_ms={}, confirmation_wait_ms={}, execution_ms={}",
+                    tool_name,
+                    error_msg,
+                    elapsed_ms_u64(start_time),
+                    queue_wait_ms,
+                    preflight_ms,
+                    confirmation_wait_ms,
+                    execution_ms
+                );
 
                 Err(e)
             }

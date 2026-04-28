@@ -12,12 +12,14 @@ use crate::infrastructure::ai::ai_stream_handlers::UnifiedResponse;
 use crate::infrastructure::ai::tool_call_accumulator::{
     FinalizedToolCall, PendingToolCalls, ToolCallBoundary, ToolCallStreamKey,
 };
+use crate::util::elapsed_ms_u64;
 use crate::util::errors::BitFunError;
 use crate::util::types::ai::GeminiUsage;
 use futures::{Stream, StreamExt};
 use log::{debug, error, trace};
 use serde_json::Value;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::mpsc;
 
 //==============================================================================
@@ -120,6 +122,10 @@ pub struct StreamResult {
     pub provider_metadata: Option<Value>,
     /// Whether this stream produced any user-visible output (text/thinking/tool events)
     pub has_effective_output: bool,
+    /// Milliseconds from stream processing start to the first upstream response item.
+    pub first_chunk_ms: Option<u64>,
+    /// Milliseconds from stream processing start to the first event visible to the UI.
+    pub first_visible_output_ms: Option<u64>,
     /// When set, the stream terminated abnormally but was recovered with partial output.
     /// Contains a human-readable reason (e.g. "Stream processing error: ..." or
     /// "Stream processor watchdog timeout ...").
@@ -163,6 +169,9 @@ struct StreamContext {
     pending_tool_calls: PendingToolCalls,
 
     // Counters and flags
+    stream_started_at: Instant,
+    first_chunk_ms: Option<u64>,
+    first_visible_output_ms: Option<u64>,
     text_chunks_count: usize,
     thinking_chunks_count: usize,
     thinking_completed_sent: bool,
@@ -191,6 +200,9 @@ impl StreamContext {
             usage: None,
             provider_metadata: None,
             pending_tool_calls: PendingToolCalls::default(),
+            stream_started_at: Instant::now(),
+            first_chunk_ms: None,
+            first_visible_output_ms: None,
             text_chunks_count: 0,
             thinking_chunks_count: 0,
             thinking_completed_sent: false,
@@ -208,7 +220,21 @@ impl StreamContext {
             usage: self.usage,
             provider_metadata: self.provider_metadata,
             has_effective_output: self.has_effective_output,
+            first_chunk_ms: self.first_chunk_ms,
+            first_visible_output_ms: self.first_visible_output_ms,
             partial_recovery_reason: self.partial_recovery_reason,
+        }
+    }
+
+    fn mark_first_stream_chunk(&mut self) {
+        if self.first_chunk_ms.is_none() {
+            self.first_chunk_ms = Some(elapsed_ms_u64(self.stream_started_at));
+        }
+    }
+
+    fn mark_first_visible_output(&mut self) {
+        if self.first_visible_output_ms.is_none() {
+            self.first_visible_output_ms = Some(elapsed_ms_u64(self.stream_started_at));
         }
     }
 
@@ -514,6 +540,7 @@ impl StreamProcessor {
 
         if let Some(early_detected) = outcome.early_detected {
             ctx.has_effective_output = true;
+            ctx.mark_first_visible_output();
             debug!("Tool detected: {}", early_detected.tool_name);
             let _ = self
                 .event_queue
@@ -534,6 +561,7 @@ impl StreamProcessor {
 
         if let Some(params_partial) = outcome.params_partial {
             ctx.has_effective_output = true;
+            ctx.mark_first_visible_output();
             let _ = self
                 .event_queue
                 .enqueue(
@@ -556,6 +584,7 @@ impl StreamProcessor {
     /// Handle text chunk
     async fn handle_text_chunk(&self, ctx: &mut StreamContext, text: String) {
         ctx.has_effective_output = true;
+        ctx.mark_first_visible_output();
         ctx.full_text.push_str(&text);
         ctx.text_chunks_count += 1;
 
@@ -581,6 +610,7 @@ impl StreamProcessor {
         // if the stream fails after producing only thinking (no text/tool calls),
         // it is safe to retry because the model will re-think from scratch.
         ctx.full_thinking.push_str(&thinking_content);
+        ctx.mark_first_visible_output();
         ctx.thinking_chunks_count += 1;
 
         // Send thinking chunk event
@@ -603,10 +633,12 @@ impl StreamProcessor {
     /// Print stream processing end log
     fn log_stream_result(&self, ctx: &StreamContext) {
         debug!(
-            "Stream loop ended: text_chunks={}, thinking_chunks={}, tool_calls({}): {}",
+            "Stream loop ended: text_chunks={}, thinking_chunks={}, tool_calls({}), first_chunk_ms={:?}, first_visible_output_ms={:?}: {}",
             ctx.text_chunks_count,
             ctx.thinking_chunks_count,
             ctx.tool_calls.len(),
+            ctx.first_chunk_ms,
+            ctx.first_visible_output_ms,
             ctx.tool_calls
                 .iter()
                 .map(|tc| tc.tool_name.as_str())
@@ -783,6 +815,7 @@ impl StreamProcessor {
                         finish_reason,
                         provider_metadata,
                     } = response;
+                    ctx.mark_first_stream_chunk();
 
                     // Handle thinking_signature
                     if let Some(signature) = thinking_signature {
