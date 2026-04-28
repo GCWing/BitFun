@@ -359,18 +359,17 @@ export class ContextMenuManager {
 
  
 let _instance: ContextMenuManager | null = null;
+export let contextMenuManager: ContextMenuManager | undefined;
 
 export function getContextMenuManager(config?: ContextMenuManagerConfig): ContextMenuManager {
   if (!_instance) {
     _instance = ContextMenuManager.getInstance(config || {
       debug: process.env.NODE_ENV === 'development'
     });
+    contextMenuManager = _instance;
   }
   return _instance;
 }
-
-
-export let contextMenuManager: ContextMenuManager;
 
 export function ensureContextMenuManager(): void {
   if (!contextMenuManager) {

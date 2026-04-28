@@ -308,14 +308,20 @@
     color: var(--tool-card-text-muted);
   }
 
-  a {
-    color: var(--text-tertiary, #6b7280);
+  a,
+  .file-link,
+  .visualization-link,
+  .tab-link {
+    color: var(--flowchat-link-color, #60a5fa);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
 
-  a:hover {
-    color: var(--text-secondary, #9ca3af);
+  a:hover,
+  .file-link:hover,
+  .visualization-link:hover,
+  .tab-link:hover {
+    color: var(--flowchat-link-hover-color, #93c5fd);
   }
 
   ul,

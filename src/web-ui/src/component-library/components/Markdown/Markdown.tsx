@@ -16,9 +16,12 @@ import { visit } from 'unist-util-visit';
 import { useI18n } from '@/infrastructure/i18n';
 import { MermaidBlock } from './MermaidBlock';
 import { ReproductionStepsBlock } from './ReproductionStepsBlock';
+import { Tooltip } from '../Tooltip';
 import { globalAPI, systemAPI, workspaceAPI } from '../../../infrastructure/api';
 import { getPrismLanguageFromAlias } from '@/infrastructure/language-detection';
 import { useTheme } from '@/infrastructure/theme';
+import { contextMenuController } from '@/shared/context-menu-system';
+import { ContextType, type CustomContext, type MenuItem } from '@/shared/context-menu-system/types';
 import { createLogger } from '@/shared/utils/logger';
 import path from 'path-browserify';
 import 'katex/dist/katex.min.css';
@@ -232,6 +235,20 @@ function normalizePath(filePath: string): string {
   return filePath.replace(/\\/g, '/');
 }
 
+function normalizeDisplayPath(filePath: string): string {
+  const normalized = normalizePath(filePath);
+
+  if (/^[A-Za-z]:\//.test(normalized)) {
+    return normalized.replace(/\//g, '\\');
+  }
+
+  if (/^\/[A-Za-z]:\//.test(normalized)) {
+    return normalized.slice(1).replace(/\//g, '\\');
+  }
+
+  return normalized;
+}
+
 function isAbsoluteFilesystemPath(filePath: string): boolean {
   const normalized = normalizePath(filePath);
   if (/^[A-Za-z]:/.test(normalized) || /^\/[A-Za-z]:/.test(normalized)) {
@@ -252,6 +269,16 @@ function resolveBaseRelativePath(targetPath: string, basePath?: string): string 
   }
 
   return path.normalize(path.join(basePath, normalizedTarget));
+}
+
+function resolveDisplayFilePath(targetPath: string, basePath?: string, workspacePath?: string): string {
+  const baseResolved = resolveBaseRelativePath(targetPath, basePath);
+
+  if (!baseResolved || isAbsoluteFilesystemPath(baseResolved) || !workspacePath) {
+    return normalizeDisplayPath(baseResolved);
+  }
+
+  return normalizeDisplayPath(resolveBaseRelativePath(baseResolved, workspacePath));
 }
 
 function isLocalAssetPath(src: string): boolean {
@@ -540,10 +567,30 @@ export const Markdown = React.memo<MarkdownProps>(({
   onReproductionProceed
 }) => {
   const { isLight } = useTheme();
+  const { t } = useI18n('components');
+  const [currentWorkspacePath, setCurrentWorkspacePath] = useState('');
   
   const syntaxTheme = isLight ? vs : vscDarkPlus;
   
   const contentStr = typeof content === 'string' ? content : String(content || '');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void globalAPI.getCurrentWorkspacePath()
+      .then((workspacePath) => {
+        if (!cancelled && workspacePath) {
+          setCurrentWorkspacePath(workspacePath);
+        }
+      })
+      .catch((error) => {
+        log.warn('Failed to resolve workspace path for markdown links', { error });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   
   // Fault-tolerant extraction of <reproduction_steps> content
   const { markdownContent, reproductionSteps } = useMemo(() => {
@@ -607,21 +654,145 @@ export const Markdown = React.memo<MarkdownProps>(({
   }, [onTabOpen]);
 
   const handleRevealInExplorer = useCallback(async (filePath: string) => {
-    let targetPath = filePath;
+    let targetPath = resolveDisplayFilePath(filePath, basePath, currentWorkspacePath);
     try {
-      const workspacePath = await globalAPI.getCurrentWorkspacePath();
-      const isWindowsAbsolutePath = /^[A-Za-z]:[\\/]/.test(filePath);
-      const isUnixAbsolutePath = filePath.startsWith('/');
-
-      if (!isWindowsAbsolutePath && !isUnixAbsolutePath && workspacePath) {
-        targetPath = path.join(workspacePath, filePath);
+      if (!isAbsoluteFilesystemPath(targetPath)) {
+        const workspacePath = await globalAPI.getCurrentWorkspacePath();
+        targetPath = resolveDisplayFilePath(filePath, basePath, workspacePath || currentWorkspacePath);
       }
 
       await workspaceAPI.revealInExplorer(targetPath);
     } catch (error) {
       log.error('Failed to reveal file in explorer', { filePath: targetPath, error });
     }
+  }, [basePath, currentWorkspacePath]);
+
+  const showLinkContextMenu = useCallback((
+    event: React.MouseEvent<HTMLElement>,
+    items: MenuItem[],
+    customType: string,
+    data: Record<string, unknown>
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.nativeEvent.stopImmediatePropagation?.();
+
+    const position = { x: event.clientX, y: event.clientY };
+    const context: CustomContext = {
+      type: ContextType.CUSTOM,
+      customType,
+      data,
+      event: event.nativeEvent,
+      targetElement: event.currentTarget,
+      position,
+      timestamp: Date.now(),
+    };
+
+    void contextMenuController.show(position, items, context);
   }, []);
+
+  const canOpenInBuiltInBrowser = useCallback((targetElement: HTMLElement | null): boolean => {
+    if (typeof window === 'undefined' || !targetElement) {
+      return false;
+    }
+
+    return Boolean(
+      targetElement.closest('.bitfun-session-scene') &&
+      targetElement.closest('.modern-flowchat-container, .flow-chat-container')
+    );
+  }, []);
+
+  const handleCopyLink = useCallback(async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (error) {
+      log.warn('Failed to copy markdown link', { url, error });
+    }
+  }, []);
+
+  const handleOpenExternalLink = useCallback(async (url: string) => {
+    try {
+      await systemAPI.openExternal(url);
+    } catch (error) {
+      log.error('Failed to open external URL', { url, error });
+    }
+  }, []);
+
+  const handleOpenBuiltInBrowserLink = useCallback((url: string) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent('agent-create-tab', {
+      detail: {
+        type: 'browser',
+        title: t('markdown.openInBuiltInBrowser'),
+        data: { url },
+        metadata: {
+          duplicateCheckKey: `browser-panel:${url}`,
+        },
+        checkDuplicate: true,
+        duplicateCheckKey: `browser-panel:${url}`,
+        replaceExisting: false,
+      },
+    }));
+  }, [t]);
+
+  const handleLocalFileContextMenu = useCallback((
+    event: React.MouseEvent<HTMLElement>,
+    filePath: string,
+    displayPath: string
+  ) => {
+    const items: MenuItem[] = [
+      {
+        id: 'markdown-open-in-explorer',
+        label: t('markdown.openInExplorer'),
+        icon: 'FolderOpen',
+        onClick: () => handleRevealInExplorer(displayPath || filePath),
+      },
+    ];
+
+    showLinkContextMenu(event, items, 'markdown-local-file-link', {
+      filePath,
+      displayPath,
+    });
+  }, [handleRevealInExplorer, showLinkContextMenu, t]);
+
+  const handleWebLinkContextMenu = useCallback((event: React.MouseEvent<HTMLElement>, url: string) => {
+    const targetElement = event.currentTarget;
+    const items: MenuItem[] = [
+      {
+        id: 'markdown-open-in-browser',
+        label: t('markdown.openInBrowser'),
+        icon: 'ExternalLink',
+        onClick: () => void handleOpenExternalLink(url),
+      },
+      {
+        id: 'markdown-copy-link',
+        label: t('markdown.copyLink'),
+        icon: 'Copy',
+        onClick: () => void handleCopyLink(url),
+      },
+    ];
+
+    if (canOpenInBuiltInBrowser(targetElement)) {
+      items.splice(1, 0, {
+        id: 'markdown-open-in-built-in-browser',
+        label: t('markdown.openInBuiltInBrowser'),
+        icon: 'PanelRightOpen',
+        onClick: () => handleOpenBuiltInBrowserLink(url),
+      });
+    }
+
+    showLinkContextMenu(event, items, 'markdown-web-link', { url });
+  }, [
+    canOpenInBuiltInBrowser,
+    handleCopyLink,
+    handleOpenBuiltInBrowserLink,
+    handleOpenExternalLink,
+    showLinkContextMenu,
+    t,
+  ]);
   
   const components = useMemo(() => ({
     code({ node: _node, className, children, ...props }: any) {
@@ -728,28 +899,29 @@ export const Markdown = React.memo<MarkdownProps>(({
         }
 
         filePath = resolveBaseRelativePath(filePath, basePath);
+        const displayFilePath = resolveDisplayFilePath(filePath, undefined, currentWorkspacePath);
 
         const fileName = filePath.split(/[\\/]/).pop() || filePath;
 
         const isFolder = filePath.endsWith('/');
         const shouldRevealInExplorer = isComputerLink || !isEditorOpenableFilePath(filePath);
         if (!isFolder) {
-          return (
+          const fileLinkButton = (
             <button
               className="file-link"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 if (shouldRevealInExplorer) {
-                  void handleRevealInExplorer(filePath);
+                  void handleRevealInExplorer(displayFilePath || filePath);
                   return;
                 }
                 handleFileViewRequest(filePath, fileName, lineRange);
               }}
+              onContextMenu={(e) => handleLocalFileContextMenu(e, filePath, displayFilePath)}
               type="button"
               style={{
                 cursor: 'pointer',
-                color: 'inherit',
                 textDecoration: 'underline',
                 background: 'none',
                 border: 'none',
@@ -758,6 +930,16 @@ export const Markdown = React.memo<MarkdownProps>(({
             >
               {children}
             </button>
+          );
+
+          return (
+            <Tooltip
+              content={<span className="markdown-link-path-tooltip">{displayFilePath || filePath}</span>}
+              placement="top"
+              delay={300}
+            >
+              {fileLinkButton}
+            </Tooltip>
           );
         }
       }
@@ -804,7 +986,6 @@ export const Markdown = React.memo<MarkdownProps>(({
             type="button"
             style={{ 
               cursor: 'pointer',
-              color: '#3b82f6',
               textDecoration: 'underline',
               background: 'none',
               border: 'none',
@@ -830,7 +1011,8 @@ export const Markdown = React.memo<MarkdownProps>(({
                 log.error('Failed to open external URL', { url: hrefValue, error });
               }
             }}
-            style={{ cursor: 'pointer', color: '#3b82f6', textDecoration: 'underline' }}
+            onContextMenu={(e) => handleWebLinkContextMenu(e, hrefValue)}
+            style={{ cursor: 'pointer', textDecoration: 'underline' }}
           >
             {children}
           </a>
@@ -852,7 +1034,7 @@ export const Markdown = React.memo<MarkdownProps>(({
           onClick={(e) => {
             e.preventDefault();
           }}
-          style={{ cursor: 'pointer', color: 'inherit' }}
+          style={{ cursor: 'pointer' }}
         >
           {children}
         </a>
@@ -912,11 +1094,14 @@ export const Markdown = React.memo<MarkdownProps>(({
     linkMap,
     handleFileViewRequest,
     handleRevealInExplorer,
+    handleLocalFileContextMenu,
+    handleWebLinkContextMenu,
     handleOpenVisualization,
     handleTabOpen,
     parseLineRange,
     syntaxTheme,
-    isLight
+    isLight,
+    currentWorkspacePath
   ]);
   
   const wrapperClassName = `markdown-renderer ${className} ${isStreaming && contentStr ? 'markdown-renderer--streaming' : ''}`.trim();
