@@ -10,6 +10,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex, Notify};
 
 const EVENT_BROADCAST_BUFFER: usize = 1024;
+const SLOW_EVENT_QUEUE_LATENCY_MS: u128 = 250;
 
 /// Event queue configuration
 #[derive(Debug, Clone)]
@@ -129,12 +130,37 @@ impl EventQueue {
                 batch.push(envelope);
             }
         }
+        let remaining_queue_len = queue.len();
+        drop(queue);
+
+        if let Some((max_age_ms, event_id, priority)) = batch
+            .iter()
+            .filter_map(|envelope| {
+                envelope
+                    .timestamp
+                    .elapsed()
+                    .ok()
+                    .map(|age| (age.as_millis(), envelope.id.as_str(), envelope.priority))
+            })
+            .max_by_key(|(age_ms, _, _)| *age_ms)
+        {
+            if max_age_ms >= SLOW_EVENT_QUEUE_LATENCY_MS {
+                warn!(
+                    "Slow agentic event queue delivery: max_age_ms={}, batch_size={}, remaining_queue_len={}, event_id={}, priority={:?}",
+                    max_age_ms,
+                    batch.len(),
+                    remaining_queue_len,
+                    event_id,
+                    priority
+                );
+            }
+        }
 
         // Update statistics
         if !batch.is_empty() {
             let mut stats = self.stats.lock().await;
             stats.total_processed += batch.len() as u64;
-            stats.pending_events = queue.len();
+            stats.pending_events = remaining_queue_len;
         }
 
         batch
