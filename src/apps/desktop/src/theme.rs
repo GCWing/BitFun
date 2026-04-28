@@ -287,22 +287,5 @@ pub fn create_main_window(app_handle: &tauri::AppHandle) {
 
 #[tauri::command]
 pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
-
-    if let Some(main_window) = app.get_webview_window("main") {
-        main_window.show().map_err(|e| {
-            error!("Failed to show main window: {}", e);
-            format!("Failed to show main window: {}", e)
-        })?;
-
-        main_window.set_focus().map_err(|e| {
-            error!("Failed to focus main window: {}", e);
-            format!("Failed to focus main window: {}", e)
-        })?;
-    } else {
-        error!("Main window not found");
-        return Err("Main window not found".to_string());
-    }
-
     Ok(())
 }

@@ -43,21 +43,9 @@
         "core:window:allow-unmaximize",
         "core:window:allow-unminimize",
         "core:window:allow-set-min-size",
-        "dialog:default",
-        "dialog:allow-open",
-        "dialog:allow-save",
-        "dialog:allow-ask",
-        "dialog:allow-confirm",
-        "dialog:allow-message",
         "opener:default",
         "opener:allow-open-url",
-        {
-            "identifier": "opener:allow-open-path",
-            "allow": [
-                { "path": "$APPDATA/**" },
-                { "path": "$HOME/**" }
-            ]
-        },
+        "opener:allow-open-path",
         "opener:allow-reveal-item-in-dir",
         "fs:default",
         "fs:allow-read-file",
@@ -96,13 +84,6 @@
             "allow": [
                 { "path": "$HOME/**" }
             ]
-        },
-        "notification:default",
-        "notification:allow-notify",
-        "notification:allow-show",
-        "notification:allow-request-permission",
-        "notification:allow-check-permissions",
-        "notification:allow-permission-state",
-        "notification:allow-is-permission-granted"
+        }
     ]
 }

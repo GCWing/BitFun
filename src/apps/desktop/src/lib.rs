@@ -1,20 +1,17 @@
 #![allow(non_snake_case)]
 //! BitFun Desktop - Tauri-based desktop application with TransportAdapter architecture
 
-// pub mod api;
-pub mod computer_use;
+pub mod api;
 pub mod logging;
 pub mod macos_menubar;
 pub mod theme;
 
 use bitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
-use bitfun_core::agentic::tools::computer_use_host::ComputerUseHostRef;
 use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::infrastructure::{get_path_manager_arc, try_get_path_manager_arc};
 use bitfun_core::service::workspace::get_global_workspace_service;
 use bitfun_core::util::{elapsed_ms, TimingCollector};
 use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
-use serde::Deserialize;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -74,7 +71,7 @@ pub struct OhosPlatform {
     pub feature: Vec<String>,
 }
 
-impl Defaut for OhosPlatform {
+impl Default for OhosPlatform {
     fn default() -> Self {
         Self {
             version: "6.0.0".to_string(),
@@ -93,7 +90,7 @@ impl Defaut for OhosPlatform {
 /// Tauri application entry point
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let runtime = tokio::runtime::Builder::new_multi_thread
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(16)
         .enable_all()
         .build()
@@ -186,19 +183,10 @@ pub async fn _run() {
 
     let path_manager = get_path_manager_arc();
 
-    // setup_panic_hook();
-
     let run_result = tauri::Builder::default()
         .plugin(logging::build_log_plugin(log_targets))
         .plugin(tauri_plugin_opener::init())
-        // .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        // .plugin(
-        //     tauri_plugin_autostart::Builder::new()
-        //         .app_name("BitFun")
-        //         .build(),
-        // )
-        // .plugin(tauri_plugin_notification::init())
         .manage(app_state)
         .manage(coordinator_state)
         .manage(scheduler_state)
@@ -381,7 +369,6 @@ pub async fn _run() {
             api::agentic_api::set_subagent_timeout,
             api::agentic_api::delete_session,
             api::agentic_api::restore_session,
-            webdriver_bridge_result,
             api::agentic_api::list_sessions,
             api::agentic_api::confirm_tool_execution,
             api::agentic_api::reject_tool_execution,
@@ -923,49 +910,6 @@ fn init_mcp_servers(app_handle: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         let _ = app_handle;
     });
-}
-
-fn setup_panic_hook() {
-    std::panic::set_hook(Box::new(move |panic_info| {
-        let location = panic_info
-            .location()
-            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
-            .unwrap_or_else(|| "unknown location".to_string());
-
-        let message = panic_info
-            .payload()
-            .downcast_ref::<&str>()
-            .copied()
-            .or_else(|| {
-                panic_info
-                    .payload()
-                    .downcast_ref::<String>()
-                    .map(String::as_str)
-            })
-            .unwrap_or("unknown panic message");
-
-        log::error!("Application panic at {}: {}", location, message);
-
-        // Known wry bug: WKWebView.URL() returns nil after navigating to an
-        // invalid address, causing url_from_webview to panic on unwrap().
-        // This is non-fatal — the webview is still alive — so we log and
-        // continue instead of killing the process.
-        // See: https://github.com/tauri-apps/wry/pull/1554
-        if location.contains("wry") && location.contains("wkwebview") {
-            log::warn!("Suppressed non-fatal wry/wkwebview panic, application continues");
-            return;
-        }
-
-        if message.contains("WSAStartup") || message.contains("10093") || message.contains("hyper")
-        {
-            log::error!("Network-related crash detected, possible solutions:");
-            log::error!("  1) Restart the application");
-            log::error!("  2) Check Windows network service status");
-            log::error!("  3) Run as administrator");
-        }
-
-        std::process::exit(1);
-    }));
 }
 
 fn start_event_loop_with_transport(

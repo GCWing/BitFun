@@ -1,9 +1,6 @@
 //! Tauri commands for Computer use (permissions + settings deep links).
 
 use crate::api::app_state::AppState;
-use crate::computer_use::DesktopComputerUseHost;
-use bitfun_core::agentic::tools::computer_use_host::ComputerUseHost;
-use bitfun_core::service::config::types::AIConfig;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -27,36 +24,12 @@ pub struct ComputerUseOpenSettingsRequest {
 pub async fn computer_use_get_status(
     state: State<'_, AppState>,
 ) -> Result<ComputerUseStatusResponse, String> {
-    let ai: AIConfig = state
-        .config_service
-        .get_config(Some("ai"))
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let host = DesktopComputerUseHost::new();
-    let snap = host
-        .permission_snapshot()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(ComputerUseStatusResponse {
-        computer_use_enabled: ai.computer_use_enabled,
-        accessibility_granted: snap.accessibility_granted,
-        screen_capture_granted: snap.screen_capture_granted,
-        platform_note: snap.platform_note,
-    })
+    Err("computer_use_get_status error".to_string())
 }
 
 #[tauri::command]
 pub async fn computer_use_request_permissions() -> Result<(), String> {
-    let host = DesktopComputerUseHost::new();
-    host.request_accessibility_permission()
-        .await
-        .map_err(|e| e.to_string())?;
-    host.request_screen_capture_permission()
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    Err("computer_use_request_permissions error".to_string())
 }
 
 #[tauri::command]

@@ -3,17 +3,16 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use bitfun_core::agentic::tools::computer_use_host::{
-    clamp_point_crop_half_extent, ActionRecord, AppClickParams, AppInfo, AppSelector,
-    AppStateSnapshot, AppWaitPredicate, ClickTarget, ComputerScreenshot, ComputerUseDisplayInfo,
+    clamp_point_crop_half_extent, ActionRecord, AppSelector,
+    AppStateSnapshot, ClickTarget, ComputerScreenshot, ComputerUseDisplayInfo,
     ComputerUseHost, ComputerUseImageContentRect, ComputerUseImageGlobalBounds,
     ComputerUseImplicitScreenshotCenter, ComputerUseInteractionScreenshotKind,
     ComputerUseInteractionState, ComputerUseLastMutationKind, ComputerUseNavigateQuadrant,
     ComputerUseNavigationRect, ComputerUsePermissionSnapshot, ComputerUseScreenshotParams,
-    ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot, InteractiveActionResult,
-    InteractiveClickParams, InteractiveScrollParams, InteractiveTypeTextParams, InteractiveView,
-    InteractiveViewOpts, LoopDetectionResult, OcrRegionNative, ScreenshotCropCenter,
-    UiElementLocateQuery, UiElementLocateResult, VisualActionResult, VisualClickParams, VisualMark,
-    VisualMarkView, VisualMarkViewOpts, COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE,
+    ComputerUseScreenshotRefinement, ComputerUseSessionSnapshot,
+    LoopDetectionResult, OcrRegionNative, ScreenshotCropCenter,
+    UiElementLocateQuery, UiElementLocateResult, VisualMark,
+    COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE,
     COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -24,11 +23,9 @@ use bitfun_core::agentic::tools::computer_use_optimizer::ComputerUseOptimizer;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, Rgb, RgbImage};
-use log::{debug, info, warn};
+use log::{debug, warn};
 use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg;
-use screenshots::display_info::DisplayInfo;
-use screenshots::Screen;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -1069,8 +1066,8 @@ end tell"#])
         Err(BitFunError::Tool(format!("Unknown mouse button: {}", s)))
     }
 
-    fn map_key(name: &str) -> BitFunResult<Key> {
-        Err(BitFunError::Tool(format!("Unknown key name: {}", s)))
+    fn map_key(name: &str) -> BitFunResult<()> {
+        Err(BitFunError::Tool(format!("Unknown key name: {}", name)))
     }
 
     fn encode_jpeg(rgb: &RgbImage, quality: u8) -> BitFunResult<Vec<u8>> {
@@ -1629,104 +1626,6 @@ end tell"#])
         (0.0, 0.0)
     }
 
-    /// Resolve a screen capture from cache (if still valid and same screen) or capture fresh.
-    ///
-    /// Phase 2 fix: when the model has called `desktop.focus_display`, we
-    /// commit to that screen instead of trusting the mouse pointer. This is
-    /// the explicit fix for the user's original complaint — on multi-monitor
-    /// setups the cursor often lives on a different screen than the one the
-    /// user is reasoning about (e.g. focus is on the laptop screen, mouse
-    /// is parked on the secondary monitor) and the legacy "screen at mouse
-    /// pointer" heuristic captured the wrong display.
-    fn resolve_screenshot_capture(
-        cached: Option<ScreenshotCacheEntry>,
-        mouse_x: f64,
-        mouse_y: f64,
-        preferred_display_id: Option<u32>,
-    ) -> BitFunResult<(image::RgbaImage, Screen)> {
-        let mx = mouse_x.round() as i32;
-        let my = mouse_y.round() as i32;
-        let target_display_id = preferred_display_id
-            .or_else(|| Screen::from_point(mx, my).ok().map(|s| s.display_info.id));
-
-        if let Some(cache) = cached {
-            let screen_id_match = Some(cache.screen.display_info.id) == target_display_id;
-            if cache.capture_time.elapsed() < Duration::from_millis(SCREENSHOT_CACHE_TTL_MS)
-                && screen_id_match
-            {
-                debug!(
-                    "Using cached screenshot (age: {}ms)",
-                    cache.capture_time.elapsed().as_millis()
-                );
-                return Ok((cache.rgba, cache.screen));
-            }
-        }
-
-        let screen = if let Some(id) = preferred_display_id {
-            Self::find_screen_by_id(id)
-                .or_else(|| Screen::from_point(mx, my).ok())
-                .or_else(|| Screen::from_point(0, 0).ok())
-                .ok_or_else(|| {
-                    BitFunError::tool("Screen capture init: no display available".to_string())
-                })?
-        } else {
-            Screen::from_point(mx, my)
-                .or_else(|_| Screen::from_point(0, 0))
-                .map_err(|e| BitFunError::tool(format!("Screen capture init: {}", e)))?
-        };
-        let rgba = screen.capture().map_err(|e| {
-            BitFunError::tool(format!(
-                "Screenshot failed (on macOS grant Screen Recording for BitFun): {}",
-                e
-            ))
-        })?;
-        Ok((rgba, screen))
-    }
-
-    /// Find a [`Screen`] by its display id from the host's enumeration.
-    fn find_screen_by_id(display_id: u32) -> Option<Screen> {
-        Screen::all()
-            .ok()
-            .and_then(|all| all.into_iter().find(|s| s.display_info.id == display_id))
-    }
-
-    /// Snapshot of all attached displays, with `is_active` / `has_pointer`
-    /// flags resolved relative to `preferred_display_id` and the current
-    /// mouse position.
-    fn enumerate_displays(
-        preferred_display_id: Option<u32>,
-        mouse_x: f64,
-        mouse_y: f64,
-    ) -> Vec<ComputerUseDisplayInfo> {
-        let mx = mouse_x.round() as i32;
-        let my = mouse_y.round() as i32;
-        let pointer_display_id = Screen::from_point(mx, my).ok().map(|s| s.display_info.id);
-        let active_id = preferred_display_id.or(pointer_display_id);
-
-        let screens = match Screen::all() {
-            Ok(v) => v,
-            Err(_) => return vec![],
-        };
-        screens
-            .into_iter()
-            .map(|s| {
-                let d = s.display_info;
-                ComputerUseDisplayInfo {
-                    display_id: d.id,
-                    is_primary: d.is_primary,
-                    is_active: Some(d.id) == active_id,
-                    has_pointer: Some(d.id) == pointer_display_id,
-                    origin_x: d.x,
-                    origin_y: d.y,
-                    width_logical: d.width,
-                    height_logical: d.height,
-                    scale_factor: d.scale_factor,
-                    foreground_app: None,
-                }
-            })
-            .collect()
-    }
-
     fn chord_includes_return_or_enter(keys: &[String]) -> bool {
         keys.iter()
             .any(|s| matches!(s.to_lowercase().as_str(), "return" | "enter" | "kp_enter"))
@@ -2239,7 +2138,6 @@ impl ComputerUseHost for DesktopComputerUseHost {
         };
 
         let (mouse_x, mouse_y) = Self::current_mouse_position();
-        let displays = Self::enumerate_displays(preferred_display_id, mouse_x, mouse_y);
         let active_display_id = None;
 
         let (click_ready, screenshot_kind, mut recommended_next_action) =

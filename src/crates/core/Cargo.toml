@@ -126,7 +126,7 @@ bitfun-events = { path = "../events" }
 bitfun-transport = { path = "../transport" }
 
 # Tauri dependency (optional, enabled only when needed)
-tauri = { workspace = true, optional = true }
+tauri = { workspace = true }
 
 # Non-Windows: vendored OpenSSL for libgit2 (no system install).
 [target.'cfg(not(windows))'.dependencies]
@@ -140,5 +140,5 @@ schannel = "0.1"
 
 [features]
 default = ["ssh-remote"]
-tauri-support = ["tauri"]  # Optional tauri support
+tauri-support = []  # Optional tauri support
 ssh-remote = ["russh", "russh-sftp", "russh-keys", "shellexpand", "ssh_config"]  # russh-keys pure-Rust crypto backend (no openssl)

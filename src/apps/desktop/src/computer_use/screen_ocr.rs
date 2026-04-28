@@ -40,11 +40,6 @@ pub fn find_text_matches(
         return windows_backend::find_text_matches(shot, &query);
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        return linux_backend::find_text_matches(shot, &query);
-    }
-
     #[allow(unreachable_code)]
     Err(BitFunError::tool(
         "move_to_text OCR is not supported on this platform.".to_string(),
