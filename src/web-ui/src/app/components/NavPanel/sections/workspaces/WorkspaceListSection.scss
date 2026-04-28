@@ -5,6 +5,9 @@
   &__workspace-list {
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     gap: 0;
     padding: 2px 0 0;
 
@@ -18,6 +21,9 @@
   &__workspace-group {
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     gap: $size-gap-1;
   }
 
@@ -75,6 +81,10 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     gap: 2px;
     padding: 2px $size-gap-1;
     border-radius: $size-radius-base;
@@ -154,7 +164,9 @@
     display: flex;
     align-items: center;
     width: 100%;
+    min-width: 0;
     min-height: 30px;
+    overflow: hidden;
     border-radius: 6px;
     color: var(--color-text-primary);
     background: var(--color-bg-primary);
@@ -237,7 +249,7 @@
     align-items: center;
     gap: 6px;
     min-height: 30px;
-    padding: 0 58px 0 4px;
+    padding: 0 4px;
     border: none;
     border-radius: 0 6px 6px 0;
     background: transparent;
@@ -466,13 +478,12 @@
   }
 
   &__workspace-item-menu {
-    position: absolute;
-    top: 50%;
-    right: 6px;
-    transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
+    flex: 0 0 auto;
     gap: 4px;
+    margin-left: 4px;
+    padding-right: 2px;
     transition: opacity $motion-fast $easing-standard,
                 visibility $motion-fast $easing-standard;
   }
@@ -580,6 +591,11 @@
   }
 
   &__workspace-item-sessions {
+    position: relative;
+    z-index: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
     transition: opacity $motion-fast $easing-standard;
     opacity: 1;
 
@@ -605,6 +621,9 @@
     border-radius: $size-radius-base;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
     gap: 0;
 
     &.is-drag-active {
@@ -635,6 +654,10 @@
     position: relative;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     gap: 2px;
     padding: $size-gap-1;
     border-radius: $size-radius-base;
@@ -673,6 +696,8 @@
     display: flex;
     align-items: center;
     width: 100%;
+    min-width: 0;
+    overflow: hidden;
     border-radius: 6px;
     color: var(--color-text-secondary);
     background: var(--color-bg-primary);
@@ -800,7 +825,7 @@
     align-items: center;
     gap: 6px;
     min-height: 44px;
-    padding: 0 58px 0 6px;
+    padding: 0 6px;
     border: none;
     border-radius: 0 6px 6px 0;
     background: transparent;
@@ -843,13 +868,12 @@
   }
 
   &__assistant-item-menu {
-    position: absolute;
-    top: 50%;
-    right: 6px;
-    transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
+    flex: 0 0 auto;
     gap: 4px;
+    margin-left: 4px;
+    padding-right: 2px;
     transition: opacity $motion-fast $easing-standard,
                 visibility $motion-fast $easing-standard;
   }
@@ -876,6 +900,11 @@
   }
 
   &__assistant-item-sessions {
+    position: relative;
+    z-index: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
     transition: opacity $motion-fast $easing-standard;
     opacity: 1;
 
