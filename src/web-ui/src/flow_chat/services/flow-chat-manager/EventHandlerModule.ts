@@ -69,6 +69,10 @@ import {
   routeToolEventToToolCardInternal
 } from './SubagentModule';
 import { normalizeSubagentParentInfo } from './subagentParentInfo';
+import {
+  clearRuntimeStatus,
+  scheduleModelResponseStatus,
+} from './RuntimeStatusModule';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
@@ -597,6 +601,7 @@ function finalizeTurnCompletionState(
   }
 
   completeActiveTextItems(context, sessionId, turnId);
+  clearRuntimeStatus(context, sessionId, turnId);
 
   const sessionContentBuffer = context.contentBuffers.get(sessionId);
   if (sessionContentBuffer) {
@@ -1090,6 +1095,7 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
   }
 
   if (!subagentParentInfo) {
+    clearRuntimeStatus(context, sessionId, turnId, { roundId });
     touchPendingTurnCompletion(context, sessionId, turnId);
     const currentState = stateMachineManager.getCurrentState(sessionId);
     if (isStreamingExecutionState(currentState)) {
@@ -1235,6 +1241,7 @@ function handleToolEvent(
   }
 
   if (!subagentParentInfo) {
+    clearRuntimeStatus(context, sessionId, turnId);
     touchPendingTurnCompletion(context, sessionId, turnId);
   }
   
@@ -1346,6 +1353,7 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
   };
 
   context.flowChatStore.addModelRound(sessionId, turnId, modelRound);
+  scheduleModelResponseStatus(context, sessionId, turnId, roundId);
   
   immediateSaveDialogTurn(context, sessionId, turnId);
 }
@@ -1682,6 +1690,7 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
   
   log.error('Dialog turn failed', { sessionId, turnId, error, errorDetail });
   clearPendingTurnCompletion(context, sessionId, turnId);
+  clearRuntimeStatus(context, sessionId, turnId);
   
   const store = FlowChatStore.getInstance();
   const session = store.getState().sessions.get(sessionId);
@@ -1801,6 +1810,7 @@ function handleDialogTurnCancelled(
   
   log.info('Dialog turn cancelled', { sessionId, turnId });
   clearPendingTurnCompletion(context, sessionId, turnId);
+  clearRuntimeStatus(context, sessionId, turnId);
   
   const store = FlowChatStore.getInstance();
   const session = store.getState().sessions.get(sessionId);

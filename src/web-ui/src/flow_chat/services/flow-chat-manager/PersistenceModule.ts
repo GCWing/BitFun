@@ -7,8 +7,10 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, DialogTurn } from './types';
 import { buildSessionMetadata } from '../../utils/sessionMetadata';
 import { settleInterruptedDialogTurn } from '../../utils/dialogTurnStability';
+import { isRuntimeStatusItem } from './RuntimeStatusModule';
 
 const log = createLogger('PersistenceModule');
+const COALESCED_IMMEDIATE_SAVE_DELAY_MS = 500;
 
 function isTransientSession(session: { isTransient?: boolean } | undefined): boolean {
   return session?.isTransient === true;
@@ -19,6 +21,27 @@ function requireWorkspacePath(sessionId: string, workspacePath?: string): string
     throw new Error(`Workspace path is required for session: ${sessionId}`);
   }
   return workspacePath;
+}
+
+function getDialogTurn(context: FlowChatContext, sessionId: string, turnId: string): DialogTurn | undefined {
+  return context.flowChatStore
+    .getState()
+    .sessions
+    .get(sessionId)
+    ?.dialogTurns
+    .find(turn => turn.id === turnId);
+}
+
+function isTerminalDialogTurnStatus(status: DialogTurn['status']): boolean {
+  return status === 'completed' || status === 'cancelled' || status === 'error';
+}
+
+function clearSaveTimer(context: FlowChatContext, key: string): void {
+  const existingTimer = context.saveDebouncers.get(key);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    context.saveDebouncers.delete(key);
+  }
 }
 
 async function runSerialDialogTurnSave(
@@ -57,7 +80,12 @@ export function calculateTurnHash(dialogTurn: DialogTurn): string {
   const keyData = JSON.stringify({
     status: dialogTurn.status,
     roundsCount: dialogTurn.modelRounds.length,
-    lastRoundData: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1] || null,
+    lastRoundData: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1]
+      ? {
+          ...dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1],
+          items: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1].items.filter(item => !isRuntimeStatusItem(item)),
+        }
+      : null,
     error: dialogTurn.error,
     endTime: dialogTurn.endTime
   });
@@ -109,17 +137,11 @@ export function immediateSaveDialogTurn(
   skipDuplicateCheck: boolean = false
 ): void {
   const key = `${sessionId}:${turnId}`;
-  
-  const existingTimer = context.saveDebouncers.get(key);
-  if (existingTimer) {
-    clearTimeout(existingTimer);
-    context.saveDebouncers.delete(key);
-  }
+  const dialogTurn = getDialogTurn(context, sessionId, turnId);
   
   if (!skipDuplicateCheck) {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (session) {
-      const dialogTurn = session.dialogTurns.find(turn => turn.id === turnId);
       if (dialogTurn) {
         const currentHash = calculateTurnHash(dialogTurn);
         const lastHash = context.lastSaveHashes.get(key);
@@ -135,10 +157,28 @@ export function immediateSaveDialogTurn(
       }
     }
   }
-  
-  saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
-    log.warn('Immediate save failed', { sessionId, turnId, error });
-  });
+
+  const shouldFlushImmediately =
+    skipDuplicateCheck ||
+    !dialogTurn ||
+    isTerminalDialogTurnStatus(dialogTurn.status);
+
+  if (shouldFlushImmediately) {
+    clearSaveTimer(context, key);
+    saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
+      log.warn('Immediate save failed', { sessionId, turnId, error });
+    });
+    return;
+  }
+
+  clearSaveTimer(context, key);
+  const timer = setTimeout(() => {
+    context.saveDebouncers.delete(key);
+    saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
+      log.warn('Coalesced save failed', { sessionId, turnId, error });
+    });
+  }, COALESCED_IMMEDIATE_SAVE_DELAY_MS);
+  context.saveDebouncers.set(key, timer);
 }
 
 /**
@@ -211,6 +251,7 @@ export async function saveDialogTurnToDisk(
   sessionId: string,
   turnId: string
 ): Promise<void> {
+  clearSaveTimer(context, `${sessionId}:${turnId}`);
   await runSerialDialogTurnSave(context, sessionId, turnId);
 }
 
@@ -358,7 +399,7 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
         timestamp: round.startTime,
         textItems: round.items
           .map((item, index) => ({ item, index }))
-          .filter(({ item }) => item.type === 'text')
+          .filter(({ item }) => item.type === 'text' && !isRuntimeStatusItem(item))
           .map(({ item, index }) => {
             return {
               id: item.id,

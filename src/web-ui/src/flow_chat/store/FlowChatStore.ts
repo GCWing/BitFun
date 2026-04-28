@@ -1507,7 +1507,7 @@ export class FlowChatStore {
         },
         modelRounds: dialogTurn.modelRounds.map((round, roundIndex) => {
           const textItems = round.items
-            .filter(item => item.type === 'text')
+            .filter(item => item.type === 'text' && !(item as any).runtimeStatus)
             .map(item => ({
               id: item.id,
               content: (item as any).content || '',

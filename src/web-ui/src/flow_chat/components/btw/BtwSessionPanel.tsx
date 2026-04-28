@@ -5,6 +5,10 @@ import {CornerUpLeft, Link2, Square, Sparkles} from 'lucide-react';
 import {FlowChatContext} from '../modern/FlowChatContext';
 import {VirtualItemRenderer} from '../modern/VirtualItemRenderer';
 import {ProcessingIndicator} from '../modern/ProcessingIndicator';
+import {
+  shouldReserveProcessingIndicatorSpace,
+  shouldShowProcessingIndicator,
+} from '../modern/processingIndicatorVisibility';
 import {useExploreGroupState} from '../modern/useExploreGroupState';
 import {ScrollToBottomButton} from '@/flow_chat';
 import {flowChatStore} from '../../store/FlowChatStore';
@@ -266,24 +270,19 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   }, [isTurnProcessing]);
 
   const showProcessingIndicator = useMemo(() => {
-    if (!isTurnProcessing) return false;
-    if (!lastItem) return true;
+    return shouldShowProcessingIndicator({
+      isTurnProcessing,
+      lastItem,
+      isContentGrowing,
+    });
+  }, [isTurnProcessing, lastItem, isContentGrowing]);
 
-    if (lastItem.type === 'text' || lastItem.type === 'thinking') {
-      const hasContent = 'content' in lastItem && Boolean((lastItem as any).content);
-      if (hasContent && isContentGrowing) {
-        return false;
-      }
-    }
-
-    if (lastItem.type === 'tool') {
-      const toolStatus = (lastItem as any).status;
-      if (toolStatus === 'running' || toolStatus === 'streaming' || toolStatus === 'preparing') {
-        return false;
-      }
-    }
-
-    return true;
+  const reserveProcessingIndicatorSpace = useMemo(() => {
+    return shouldReserveProcessingIndicatorSpace({
+      isTurnProcessing,
+      lastItem,
+      isContentGrowing,
+    });
   }, [isTurnProcessing, lastItem, isContentGrowing]);
 
   const canStopReviewSession =
@@ -632,7 +631,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
               ))}
               <ProcessingIndicator
                 visible={showProcessingIndicator}
-                reserveSpace={isTurnProcessing}
+                reserveSpace={reserveProcessingIndicatorSpace}
               />
             </>
           )}

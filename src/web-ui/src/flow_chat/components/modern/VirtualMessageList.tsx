@@ -21,6 +21,10 @@ import { useScrollToTurnHeader } from '../../hooks/useScrollToTurnHeader';
 import { useVisibleTaskInfo } from '../../hooks/useVisibleTaskInfo';
 import { StickyTaskIndicator } from '../StickyTaskIndicator';
 import { ProcessingIndicator } from './ProcessingIndicator';
+import {
+  shouldReserveProcessingIndicatorSpace,
+  shouldShowProcessingIndicator,
+} from './processingIndicatorVisibility';
 import { ScrollAnchor } from './ScrollAnchor';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
 import type { FlowChatPinTurnToTopMode } from '../../events/flowchatNavigation';
@@ -1934,32 +1938,24 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   }, [lastItemInfo.isTurnProcessing, isProcessing]);
 
   const showBreathingIndicator = React.useMemo(() => {
-    const { lastItem, isTurnProcessing } = lastItemInfo;
-
-    if (!isTurnProcessing && !isProcessing) return false;
-    if (processingPhase === 'tool_confirming') return false;
-    if (!lastItem) return true;
-
-    if ((lastItem.type === 'text' || lastItem.type === 'thinking')) {
-      const hasContent = 'content' in lastItem && lastItem.content;
-      if (hasContent && isContentGrowing) return false;
-    }
-
-    if (lastItem.type === 'tool') {
-      const toolStatus = lastItem.status;
-      if (toolStatus === 'running' || toolStatus === 'streaming' || toolStatus === 'preparing') {
-        return false;
-      }
-    }
-
-    return isTurnProcessing || isProcessing;
+    return shouldShowProcessingIndicator({
+      isTurnProcessing: lastItemInfo.isTurnProcessing,
+      isSessionProcessing: isProcessing,
+      processingPhase,
+      lastItem: lastItemInfo.lastItem,
+      isContentGrowing,
+    });
   }, [isProcessing, processingPhase, lastItemInfo, isContentGrowing]);
 
   const reserveSpaceForIndicator = React.useMemo(() => {
-    if (!lastItemInfo.isTurnProcessing && !isProcessing) return false;
-    if (processingPhase === 'tool_confirming') return false;
-    return true;
-  }, [lastItemInfo.isTurnProcessing, isProcessing, processingPhase]);
+    return shouldReserveProcessingIndicatorSpace({
+      isTurnProcessing: lastItemInfo.isTurnProcessing,
+      isSessionProcessing: isProcessing,
+      processingPhase,
+      lastItem: lastItemInfo.lastItem,
+      isContentGrowing,
+    });
+  }, [lastItemInfo.isTurnProcessing, lastItemInfo.lastItem, isProcessing, processingPhase, isContentGrowing]);
 
   const footerHeightPx = getFooterHeightPx(getTotalBottomCompensationPx(bottomReservationState));
 

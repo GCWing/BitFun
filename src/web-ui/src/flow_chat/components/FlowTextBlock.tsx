@@ -6,7 +6,9 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MarkdownRenderer } from '@/component-library';
+import { TaskRunningIndicator } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
 import { useTypewriter } from '../hooks/useTypewriter';
@@ -31,6 +33,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   replayStreamingOnMount = true
 }) => {
   const { onFileViewRequest, onTabOpen, onOpenVisualization } = useFlowChatContext();
+  const { t } = useTranslation('flow-chat');
 
   // Normalize content to a string.
   const content = typeof textItem.content === 'string'
@@ -79,6 +82,16 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
     (textItem.status === 'streaming' || textItem.status === 'running') &&
     isContentGrowing;
   const hasContent = content.length > 0;
+
+  if (textItem.runtimeStatus) {
+    const messageKey = textItem.runtimeStatus.messageKey || 'toolCards.terminal.waitingForModelResponse';
+    return (
+      <div className={`flow-text-block flow-text-block--runtime-status ${className}`}>
+        <TaskRunningIndicator size="sm" className="flow-text-block__runtime-status-icon" />
+        <span className="flow-text-block__runtime-status-text">{t(messageKey)}</span>
+      </div>
+    );
+  }
 
   return (
     <div className={`flow-text-block ${className} ${isActivelyStreaming ? 'streaming' : ''}`}>

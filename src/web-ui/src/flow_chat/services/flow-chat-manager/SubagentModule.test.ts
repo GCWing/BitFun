@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DialogTurn, FlowTextItem, FlowToolItem, ModelRound } from '../../types/flow-chat';
 
 vi.mock('./ToolEventModule', () => ({
@@ -57,6 +57,16 @@ const mockStore = vi.hoisted(() => ({
         return;
       }
     }
+  },
+  updateDialogTurn: (
+    sessionId: string,
+    dialogTurnId: string,
+    updater: (turn: DialogTurn) => DialogTurn,
+  ) => {
+    const session = testStoreState.sessions.get(sessionId);
+    const turnIndex = session?.dialogTurns.findIndex((candidate: any) => candidate.id === dialogTurnId) ?? -1;
+    if (!session || turnIndex === -1) return;
+    session.dialogTurns[turnIndex] = updater(session.dialogTurns[turnIndex]);
   },
 }));
 
@@ -138,27 +148,38 @@ function getParentRoundTextItem(itemId: string): FlowTextItem | undefined {
 }
 
 describe('SubagentModule', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    context.runtimeStatusTimers = new Map();
+    context.activeTextItems = new Map();
+  });
+
   afterEach(() => {
+    vi.useRealTimers();
     resetStore();
   });
 
-  it('creates placeholder on model round start then updates from text chunk', () => {
+  it('delays placeholder on model round start then clears it from text chunk', () => {
     seedParentTaskTool();
 
-    const itemId = `subagent-text-${parentToolId}-${subagentSessionId}-${subagentRoundId}`;
+    const itemId = `runtime-status-subagent-${subagentSessionId}`;
 
-    // ModelRoundStarted creates a placeholder immediately.
     routeModelRoundStartedToToolCard(context, parentSessionId, parentToolId, {
       sessionId: subagentSessionId,
       turnId: subagentTurnId,
       roundId: subagentRoundId,
     });
 
+    expect(getParentRoundTextItem(itemId)).toBeUndefined();
+
+    vi.advanceTimersByTime(1000);
     const placeholder = getParentRoundTextItem(itemId);
     expect(placeholder).toBeDefined();
     expect(placeholder?.content).toBe('\u200B');
     expect(placeholder?.status).toBe('streaming');
     expect(placeholder?.isStreaming).toBe(true);
+    expect(placeholder?.runtimeStatus?.phase).toBe('waiting_model');
+    expect(placeholder?.runtimeStatus?.scope).toBe('subagent');
     expect(placeholder?.isSubagentItem).toBe(true);
     expect(placeholder?.parentTaskToolId).toBe(parentToolId);
     expect(placeholder?.subagentSessionId).toBe(subagentSessionId);
@@ -172,10 +193,11 @@ describe('SubagentModule', () => {
       contentType: 'text',
     });
 
-    const item = getParentRoundTextItem(itemId);
+    const item = getParentRoundTextItem(`subagent-text-${parentToolId}-${subagentSessionId}-${subagentRoundId}`);
     expect(item?.content).toBe('Review started.');
     expect(item?.status).toBe('streaming');
     expect(item?.isStreaming).toBe(true);
+    expect(item?.runtimeStatus).toBeUndefined();
     expect(item?.isSubagentItem).toBe(true);
     expect(item?.parentTaskToolId).toBe(parentToolId);
     expect(item?.subagentSessionId).toBe(subagentSessionId);

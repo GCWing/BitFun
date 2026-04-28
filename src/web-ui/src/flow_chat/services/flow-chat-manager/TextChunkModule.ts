@@ -3,6 +3,7 @@
  */
 
 import type { FlowChatContext, FlowTextItem } from './types';
+import { clearRuntimeStatus } from './RuntimeStatusModule';
 /**
  * Process a normal text chunk without notifying the store.
  */
@@ -13,6 +14,8 @@ export function processNormalTextChunkInternal(
   roundId: string,
   text: string
 ): void {
+  clearRuntimeStatus(context, sessionId, turnId, { roundId });
+
   if (!context.contentBuffers.has(sessionId)) {
     context.contentBuffers.set(sessionId, new Map());
   }
@@ -48,6 +51,8 @@ export function processNormalTextChunkInternal(
   } else {
     context.flowChatStore.updateModelRoundItemSilent(sessionId, turnId, textItemId, {
       content: cleanedContent,
+      runtimeStatus: undefined,
+      isMarkdown: true,
       timestamp: Date.now()
     } as any);
   }
@@ -64,6 +69,8 @@ export function processThinkingChunkInternal(
   text: string,
   isThinkingEnd = false
 ): void {
+  clearRuntimeStatus(context, sessionId, turnId, { roundId });
+
   if (!context.contentBuffers.has(sessionId)) {
     context.contentBuffers.set(sessionId, new Map());
   }
@@ -178,6 +185,13 @@ export function cleanupSessionBuffers(context: FlowChatContext, sessionId: strin
   if (activeItems) {
     context.activeTextItems.delete(sessionId);
   }
+
+  for (const [key, timer] of context.runtimeStatusTimers.entries()) {
+    if (key.startsWith(`${sessionId}:`)) {
+      clearTimeout(timer);
+      context.runtimeStatusTimers.delete(key);
+    }
+  }
 }
 
 /**
@@ -193,6 +207,11 @@ export function clearAllBuffers(context: FlowChatContext): void {
 
   context.contentBuffers.clear();
   context.activeTextItems.clear();
+
+  for (const timer of context.runtimeStatusTimers.values()) {
+    clearTimeout(timer);
+  }
+  context.runtimeStatusTimers.clear();
   
   for (const timer of context.saveDebouncers.values()) {
     clearTimeout(timer);

@@ -255,6 +255,25 @@
   
   &.streaming {
   }
+
+  &--runtime-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 1.5rem;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-sm);
+    line-height: 1.4;
+    opacity: 0.86;
+  }
+
+  &__runtime-status-icon {
+    flex: 0 0 auto;
+  }
+
+  &__runtime-status-text {
+    overflow-wrap: anywhere;
+  }
 }
 
 /* Light theme: copy button icon color (scoped to flow chat). */
