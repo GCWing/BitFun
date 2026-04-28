@@ -190,6 +190,13 @@ Usage:
 
         let resolved = context.resolve_tool_path(file_path)?;
         context.enforce_path_operation(ToolPathOperation::Write, &resolved)?;
+        context
+            .record_light_checkpoint(
+                "Write",
+                &resolved.logical_path,
+                vec![resolved.logical_path.clone()],
+            )
+            .await;
 
         let content = input
             .get("content")

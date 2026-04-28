@@ -1,7 +1,11 @@
-use super::{build_structured_compression_summary, CompressionFallbackOptions};
+use super::{
+    build_structured_compression_summary, build_structured_compression_summary_with_contract,
+    CompressionFallbackOptions,
+};
 use crate::agentic::core::{
-    render_system_reminder, render_user_query, CompressedMessageRole, CompressionEntry,
-    CompressionPayload, Message, MessageSemanticKind, ToolCall, ToolResult,
+    render_system_reminder, render_user_query, CompressedMessageRole, CompressionContract,
+    CompressionContractItem, CompressionEntry, CompressionPayload, Message, MessageSemanticKind,
+    ToolCall, ToolResult,
 };
 use serde_json::json;
 
@@ -168,4 +172,59 @@ fn groups_consecutive_assistant_messages_under_single_role_header() {
     assert!(summary_artifact
         .summary_text
         .contains("Updated the styling changes."));
+}
+
+#[test]
+fn renders_contract_facts_even_when_tool_results_are_cleared() {
+    let contract = CompressionContract {
+        touched_files: vec!["src/main.rs".to_string()],
+        verification_commands: vec![CompressionContractItem {
+            target: "cargo test".to_string(),
+            status: "succeeded".to_string(),
+            summary: "Verification command completed.".to_string(),
+            error_kind: None,
+        }],
+        blocking_failures: vec![CompressionContractItem {
+            target: "pnpm run type-check:web".to_string(),
+            status: "failed".to_string(),
+            summary: "Type check failed before compression.".to_string(),
+            error_kind: Some("exit_code:2".to_string()),
+        }],
+        subagent_statuses: vec![CompressionContractItem {
+            target: "ReviewSecurity".to_string(),
+            status: "partial_timeout".to_string(),
+            summary: "Security reviewer timed out after partial output.".to_string(),
+            error_kind: Some("timeout".to_string()),
+        }],
+    };
+
+    let summary_artifact = build_structured_compression_summary_with_contract(
+        vec![vec![Message::tool_result(ToolResult {
+            tool_id: "tool_1".to_string(),
+            tool_name: "Read".to_string(),
+            result: json!({"content": "large output omitted"}),
+            result_for_assistant: Some("large output omitted".to_string()),
+            is_error: false,
+            duration_ms: None,
+            image_attachments: None,
+        })]],
+        &default_options(),
+        Some(contract),
+    );
+
+    assert!(summary_artifact
+        .summary_text
+        .contains("Compaction contract:"));
+    assert!(summary_artifact.summary_text.contains("src/main.rs"));
+    assert!(summary_artifact.summary_text.contains("cargo test"));
+    assert!(summary_artifact
+        .summary_text
+        .contains("pnpm run type-check:web"));
+    assert!(summary_artifact.summary_text.contains("exit_code:2"));
+    assert!(summary_artifact.summary_text.contains("ReviewSecurity"));
+    assert!(summary_artifact.summary_text.contains("partial_timeout"));
+    assert!(matches!(
+        &summary_artifact.payload.entries[0],
+        CompressionEntry::Contract { .. }
+    ));
 }

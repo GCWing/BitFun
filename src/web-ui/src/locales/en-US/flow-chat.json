@@ -482,7 +482,18 @@
     "dontShowAgain": "Do not show this again",
     "cancel": "Cancel",
     "confirm": "Start Deep Review",
-    "estimatedTokens": "Estimated: {{min}} - {{max}} tokens"
+    "estimatedTokens": "Estimated: {{min}} - {{max}} tokens",
+    "runStrategy": "Run strategy: {{strategy}}",
+    "recommendedStrategy": "Recommended strategy: {{strategy}}",
+    "recommendationTitle": "Risk recommendation",
+    "strategyOverrideTitle": "Run strategy",
+    "strategyOverrideBody": "Choose a project-specific strategy for this launch.",
+    "teamDefaultStrategy": "Team default",
+    "strategyLabels": {
+      "quick": "Quick",
+      "normal": "Normal",
+      "deep": "Deep"
+    }
   },
   "flowChatHeader": {
     "turnList": "Turn list",
@@ -1166,8 +1177,31 @@
         "partial": "partial",
         "unknown": "unknown"
       },
+      "runManifest": {
+        "recommendedStrategy": "Recommended strategy",
+        "riskRecommendationTitle": "Risk recommendation"
+      },
       "sectionItemCount": "{{count}} items",
       "remediationPlan": "Remediation Plan",
+      "reliabilityStatus": {
+        "title": "Review status",
+        "context_pressure": {
+          "label": "Context pressure rising",
+          "detail": "{{count}} reviewer calls planned for a large or constrained target."
+        },
+        "compression_preserved": {
+          "label": "Compression preserved key facts",
+          "detail": "Coverage notes include preserved context from compression."
+        },
+        "partial_reviewer": {
+          "label": "Reviewer timed out with partial result",
+          "detail": "{{count}} reviewer result is partial; confidence is reduced."
+        },
+        "user_decision": {
+          "label": "User decision needed",
+          "detail": "{{count}} review item needs your decision before fixing."
+        }
+      },
       "sections": {
         "summary": "Executive Summary",
         "issues": "Issues",
@@ -1198,6 +1232,7 @@
         "findings": "Findings",
         "validation": "Validation",
         "source": "Source",
+        "reliabilitySignals": "Review Reliability",
         "noItems": "None."
       },
       "export": {

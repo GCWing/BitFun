@@ -33,6 +33,7 @@ import { useAgentsStore } from '../agentsStore';
 import {
   DEFAULT_REVIEW_TEAM_EXECUTION_POLICY,
   DEFAULT_REVIEW_TEAM_MODEL,
+  FALLBACK_REVIEW_TEAM_DEFINITION,
   loadDefaultReviewTeam,
   REVIEW_STRATEGY_DEFINITIONS,
   type ReviewStrategyLevel,
@@ -166,6 +167,7 @@ const ReviewTeamPage: React.FC = () => {
         strategyLevel: 'normal',
         memberStrategyOverrides: {},
         executionPolicy: { ...DEFAULT_REVIEW_TEAM_EXECUTION_POLICY },
+        definition: FALLBACK_REVIEW_TEAM_DEFINITION,
         members: [],
         coreMembers: [],
         extraMembers: [],

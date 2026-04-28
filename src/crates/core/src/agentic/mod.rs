@@ -17,6 +17,7 @@ pub mod execution;
 pub mod tools;
 
 // Coordination module
+pub mod context_profile;
 pub mod coordination;
 pub mod deep_review_policy;
 
@@ -43,6 +44,7 @@ mod util;
 pub mod insights;
 
 pub use agents::*;
+pub use context_profile::*;
 pub use coordination::*;
 pub use core::*;
 pub use events::{queue, router, types as event_types};

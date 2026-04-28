@@ -4,6 +4,8 @@
  * Used by session lists and persistence metadata in the frontend.
  */
 
+import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+
 export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review';
 export type PersistedSessionKind = 'standard' | 'subagent';
 export type SessionTitleSource = 'text' | 'i18n';
@@ -63,6 +65,11 @@ export interface SessionMetadata {
    * Allows restoring the review action bar across app restarts.
    */
   reviewActionState?: ReviewActionPersistedState;
+  /**
+   * The per-run Deep Review reviewer manifest used to launch this session.
+   * Continuation and later backend gates use this as the source of truth.
+   */
+  deepReviewRunManifest?: ReviewTeamRunManifest;
 }
 
 export interface ReviewActionPersistedState {

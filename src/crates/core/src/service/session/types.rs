@@ -78,6 +78,16 @@ pub struct SessionMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub todos: Option<serde_json::Value>,
 
+    /// Deep Review run manifest for this session, when the session was launched
+    /// from Code Review Team.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "deep_review_run_manifest",
+        alias = "deepReviewRunManifest"
+    )]
+    pub deep_review_run_manifest: Option<serde_json::Value>,
+
     /// Workspace path this session belongs to (normalized source workspace root, not mirror dir)
     #[serde(skip_serializing_if = "Option::is_none", alias = "workspace_path")]
     pub workspace_path: Option<String>,
@@ -526,6 +536,7 @@ impl SessionMetadata {
             tags: Vec::new(),
             custom_metadata: None,
             todos: None,
+            deep_review_run_manifest: None,
             workspace_path: None,
             workspace_hostname: None,
             unread_completion: None,
@@ -745,5 +756,45 @@ mod tests {
 
         assert!(!metadata.is_subagent());
         assert!(metadata.is_standard());
+    }
+
+    #[test]
+    fn session_metadata_preserves_deep_review_run_manifest() {
+        let payload = serde_json::json!({
+            "sessionId": "session-1",
+            "sessionName": "Deep Review",
+            "agentType": "DeepReview",
+            "sessionKind": "standard",
+            "modelName": "fast",
+            "createdAt": 1,
+            "lastActiveAt": 1,
+            "turnCount": 0,
+            "messageCount": 0,
+            "toolCallCount": 0,
+            "status": "active",
+            "deep_review_run_manifest": {
+                "reviewMode": "deep",
+                "coreReviewers": [
+                    { "subagentId": "ReviewBusinessLogic" }
+                ],
+                "skippedReviewers": [
+                    { "subagentId": "ReviewFrontend", "reason": "not_applicable" }
+                ]
+            }
+        });
+
+        let metadata: SessionMetadata =
+            serde_json::from_value(payload).expect("metadata should deserialize");
+
+        assert_eq!(
+            metadata.deep_review_run_manifest.as_ref().unwrap()["reviewMode"],
+            "deep"
+        );
+
+        let serialized = serde_json::to_value(&metadata).expect("metadata should serialize");
+        assert_eq!(
+            serialized["deepReviewRunManifest"]["coreReviewers"][0]["subagentId"],
+            "ReviewBusinessLogic"
+        );
     }
 }

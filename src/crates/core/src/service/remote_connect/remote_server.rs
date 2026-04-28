@@ -1780,6 +1780,7 @@ impl RemoteExecutionDispatcher {
                 binding_workspace,
                 submission_policy,
                 None,
+                None,
                 image_payload,
             )
             .await

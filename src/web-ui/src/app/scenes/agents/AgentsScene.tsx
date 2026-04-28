@@ -200,6 +200,7 @@ const AgentsHomeView: React.FC = () => {
     availableTools,
     getModeSkills,
     counts,
+    hiddenAgentIds,
     loadAgents,
     getModeConfig,
     handleSetTools,
@@ -264,8 +265,8 @@ const AgentsHomeView: React.FC = () => {
   const coreAgents = useMemo(() => allAgents.filter((agent) => CORE_AGENT_IDS.has(agent.id)), [allAgents]);
 
   const visibleAgents = useMemo(
-    () => filteredAgents.filter(isAgentInOverviewZone),
-    [filteredAgents],
+    () => filteredAgents.filter((agent) => isAgentInOverviewZone(agent, hiddenAgentIds)),
+    [filteredAgents, hiddenAgentIds],
   );
 
   const scrollToZone = useCallback((targetId: string) => {

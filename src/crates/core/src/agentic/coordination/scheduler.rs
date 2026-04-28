@@ -135,6 +135,7 @@ pub struct QueuedTurn {
     pub workspace_path: Option<String>,
     pub policy: DialogSubmissionPolicy,
     pub reply_route: Option<AgentSessionReplyRoute>,
+    pub user_message_metadata: Option<serde_json::Value>,
     pub image_contexts: Option<Vec<ImageContextData>>,
     #[allow(dead_code)]
     pub enqueued_at: SystemTime,
@@ -233,6 +234,7 @@ impl DialogScheduler {
         workspace_path: Option<String>,
         policy: DialogSubmissionPolicy,
         reply_route: Option<AgentSessionReplyRoute>,
+        user_message_metadata: Option<serde_json::Value>,
         image_contexts: Option<Vec<ImageContextData>>,
     ) -> Result<DialogSubmitOutcome, String> {
         let resolved_turn_id = turn_id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -244,6 +246,7 @@ impl DialogScheduler {
             workspace_path,
             policy,
             reply_route,
+            user_message_metadata,
             image_contexts,
             enqueued_at: SystemTime::now(),
         };
@@ -488,6 +491,7 @@ impl DialogScheduler {
                         queued_turn.agent_type.clone(),
                         queued_turn.workspace_path.clone(),
                         queued_turn.policy,
+                        queued_turn.user_message_metadata.clone(),
                     )
                     .await
             }
@@ -501,6 +505,7 @@ impl DialogScheduler {
                         queued_turn.agent_type.clone(),
                         queued_turn.workspace_path.clone(),
                         queued_turn.policy,
+                        queued_turn.user_message_metadata.clone(),
                     )
                     .await
             }
@@ -563,6 +568,7 @@ impl DialogScheduler {
                 String::new(),
                 Some(reply_route.source_workspace_path.clone()),
                 DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
+                None,
                 None,
                 None,
             )

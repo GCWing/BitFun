@@ -519,6 +519,7 @@ impl CronService {
                 scheduled_job_policy(),
                 None,
                 None,
+                None,
             )
             .await;
 

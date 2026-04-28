@@ -3,19 +3,23 @@
 //! Responsible for session CRUD, lifecycle management, and resource association
 
 use crate::agentic::core::{
-    CompressionState, DialogTurn, Message, MessageSemanticKind, ProcessingPhase, Session,
-    SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
+    CompressionContract, CompressionState, DialogTurn, Message, MessageSemanticKind,
+    ProcessingPhase, Session, SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
-use crate::agentic::session::SessionContextStore;
+use crate::agentic::session::{
+    EvidenceLedgerCheckpoint, EvidenceLedgerEvent, EvidenceLedgerEventStatus,
+    EvidenceLedgerSummary, EvidenceLedgerTargetKind, SessionContextStore, SessionEvidenceLedger,
+};
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::{
     get_app_language_code, get_global_config_service, short_model_user_language_instruction,
     subscribe_config_updates, ConfigUpdateEvent,
 };
 use crate::service::session::{
-    DialogTurnData, DialogTurnKind, ModelRoundData, TextItemData, TurnStatus, UserMessageData,
+    DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, TextItemData, TurnStatus,
+    UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -226,6 +230,30 @@ mod tests {
 
         assert_eq!(title, "New Session");
     }
+
+    #[tokio::test]
+    async fn records_subagent_partial_timeout_in_evidence_ledger() {
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+
+        let event = manager.record_subagent_partial_timeout(
+            "session-a",
+            "turn-a",
+            "ReviewSecurity",
+            "Found token logging before timeout.",
+            Some("timeout"),
+        );
+
+        assert!(!event.event_id.is_empty());
+        let events = manager.evidence_events_for_turn("session-a", "turn-a");
+        assert_eq!(events, vec![event.clone()]);
+        let summary = manager.evidence_summary_for_session("session-a", 10);
+        assert_eq!(summary.partial_subagent_results.len(), 1);
+        assert_eq!(summary.partial_subagent_results[0].event_id, event.event_id);
+    }
 }
 
 /// Session manager
@@ -241,6 +269,7 @@ pub struct SessionManager {
 
     /// Sub-components
     context_store: Arc<SessionContextStore>,
+    evidence_ledger: Arc<SessionEvidenceLedger>,
     persistence_manager: Arc<PersistenceManager>,
 
     /// Configuration
@@ -577,6 +606,7 @@ impl SessionManager {
             sessions: Arc::new(DashMap::new()),
             session_workspace_index: Arc::new(DashMap::new()),
             context_store,
+            evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             persistence_manager,
             config,
         };
@@ -589,6 +619,76 @@ impl SessionManager {
         manager.spawn_model_reconciliation_listener();
 
         manager
+    }
+
+    pub fn append_evidence_event(&self, event: EvidenceLedgerEvent) -> EvidenceLedgerEvent {
+        self.evidence_ledger.append(event)
+    }
+
+    pub fn record_checkpoint_created(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        tool_name: &str,
+        target: &str,
+        checkpoint: EvidenceLedgerCheckpoint,
+    ) -> EvidenceLedgerEvent {
+        self.append_evidence_event(EvidenceLedgerEvent::checkpoint_created(
+            session_id, turn_id, tool_name, target, checkpoint,
+        ))
+    }
+
+    pub fn evidence_events_for_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Vec<EvidenceLedgerEvent> {
+        self.evidence_ledger.events_for_turn(session_id, turn_id)
+    }
+
+    pub fn evidence_summary_for_session(
+        &self,
+        session_id: &str,
+        limit: usize,
+    ) -> EvidenceLedgerSummary {
+        self.evidence_ledger.summary_for_session(session_id, limit)
+    }
+
+    pub fn compression_contract_for_session(
+        &self,
+        session_id: &str,
+        limit: usize,
+    ) -> Option<CompressionContract> {
+        let contract: CompressionContract =
+            self.evidence_summary_for_session(session_id, limit).into();
+        (!contract.is_empty()).then_some(contract)
+    }
+
+    pub fn record_subagent_partial_timeout(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        subagent_type: &str,
+        partial_output: &str,
+        error_kind: Option<&str>,
+    ) -> EvidenceLedgerEvent {
+        let summary = format!(
+            "Subagent {} timed out after producing partial output.",
+            subagent_type
+        );
+        let event = EvidenceLedgerEvent::new(
+            session_id,
+            turn_id,
+            "Task",
+            EvidenceLedgerTargetKind::Subagent,
+            subagent_type,
+            EvidenceLedgerEventStatus::PartialTimeout,
+            summary,
+        )
+        .with_error_kind(error_kind.unwrap_or("timeout"))
+        .with_partial_output(partial_output);
+
+        self.append_evidence_event(event)
     }
 
     /// Decide whether the given session model id is still usable.
@@ -691,6 +791,7 @@ impl SessionManager {
         let sessions = self.sessions.clone();
         let session_workspace_index = self.session_workspace_index.clone();
         let context_store = self.context_store.clone();
+        let evidence_ledger = self.evidence_ledger.clone();
         let persistence_manager = self.persistence_manager.clone();
         let manager_config = self.config.clone();
 
@@ -709,6 +810,7 @@ impl SessionManager {
                 sessions,
                 session_workspace_index,
                 context_store,
+                evidence_ledger,
                 persistence_manager,
                 config: manager_config,
             };
@@ -1433,6 +1535,16 @@ impl SessionManager {
                 .collect();
             Ok(summaries)
         }
+    }
+
+    pub async fn load_session_metadata(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Option<SessionMetadata>> {
+        self.persistence_manager
+            .load_session_metadata(workspace_path, session_id)
+            .await
     }
 
     // ============ Dialog Turn Management ============
@@ -2326,5 +2438,3 @@ impl SessionManager {
         debug!("Cleanup task started");
     }
 }
-
-

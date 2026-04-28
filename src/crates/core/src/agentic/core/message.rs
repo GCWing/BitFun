@@ -88,6 +88,9 @@ pub struct CompressionPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CompressionEntry {
+    Contract {
+        contract: CompressionContract,
+    },
     ModelSummary {
         text: String,
     },
@@ -99,6 +102,75 @@ pub enum CompressionEntry {
         #[serde(skip_serializing_if = "Option::is_none")]
         todo: Option<CompressedTodoSnapshot>,
     },
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompressionContract {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub touched_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verification_commands: Vec<CompressionContractItem>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocking_failures: Vec<CompressionContractItem>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_statuses: Vec<CompressionContractItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompressionContractItem {
+    pub target: String,
+    pub status: String,
+    pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<String>,
+}
+
+impl CompressionContract {
+    pub fn is_empty(&self) -> bool {
+        self.touched_files.is_empty()
+            && self.verification_commands.is_empty()
+            && self.blocking_failures.is_empty()
+            && self.subagent_statuses.is_empty()
+    }
+
+    pub fn render_for_model(&self) -> String {
+        let mut lines = vec![
+            "Compaction contract: preserve these factual fields when continuing the task."
+                .to_string(),
+        ];
+
+        if !self.touched_files.is_empty() {
+            lines.push("Touched files:".to_string());
+            for file in &self.touched_files {
+                lines.push(format!("- {}", file));
+            }
+        }
+
+        render_contract_items(
+            &mut lines,
+            "Verification commands:",
+            &self.verification_commands,
+        );
+        render_contract_items(&mut lines, "Blocking failures:", &self.blocking_failures);
+        render_contract_items(&mut lines, "Subagent statuses:", &self.subagent_statuses);
+
+        lines.join("\n")
+    }
+}
+
+fn render_contract_items(lines: &mut Vec<String>, title: &str, items: &[CompressionContractItem]) {
+    if items.is_empty() {
+        return;
+    }
+
+    lines.push(title.to_string());
+    for item in items {
+        let mut rendered = format!("- {} [{}]: {}", item.target, item.status, item.summary);
+        if let Some(error_kind) = item.error_kind.as_ref() {
+            rendered.push_str(&format!(" ({})", error_kind));
+        }
+        lines.push(rendered);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

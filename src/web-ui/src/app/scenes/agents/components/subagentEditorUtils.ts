@@ -3,6 +3,15 @@ export interface SubagentEditorToolInfo {
   isReadonly: boolean;
 }
 
+export {
+  REVIEW_SUBAGENT_OPTIONAL_TOOLS,
+  REVIEW_SUBAGENT_RECOMMENDED_TOOLS,
+  REVIEW_SUBAGENT_REQUIRED_TOOLS,
+  evaluateReviewSubagentToolReadiness,
+  type ReviewSubagentToolReadiness,
+  type ReviewSubagentToolReadinessResult,
+} from '@/shared/services/reviewSubagentCapabilities';
+
 export function filterToolsForReviewMode(
   tools: SubagentEditorToolInfo[],
   review: boolean,

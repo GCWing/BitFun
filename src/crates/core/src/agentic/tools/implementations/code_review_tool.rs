@@ -2,6 +2,10 @@
 //!
 //! Used to get structured code review results.
 
+use crate::agentic::agents::get_agent_registry;
+use crate::agentic::context_profile::ContextProfilePolicy;
+use crate::agentic::coordination::get_global_coordinator;
+use crate::agentic::core::CompressionContract;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::service::config::get_app_language_code;
 use crate::service::i18n::code_review_copy_for_language;
@@ -204,6 +208,19 @@ impl CodeReviewTool {
                                 "type": "string",
                                 "description": reviewer_summary_desc
                             },
+                            "partial_output": {
+                                "type": "string",
+                                "description": "Partial reviewer output captured before timeout or cancellation"
+                            },
+                            "packet_id": {
+                                "type": "string",
+                                "description": "Deep Review work packet id associated with this reviewer output"
+                            },
+                            "packet_status_source": {
+                                "type": "string",
+                                "enum": ["reported", "inferred", "missing"],
+                                "description": "Whether packet_id/status was reported by the reviewer, inferred from scheduling metadata, or missing"
+                            },
                             "issue_count": {
                                 "type": "integer",
                                 "description": "Validated issue count for this reviewer"
@@ -299,6 +316,46 @@ impl CodeReviewTool {
                     },
                     "additionalProperties": false
                 },
+                "reliability_signals": {
+                    "type": "array",
+                    "description": "Structured reliability/status signals for Deep Review report UI and export",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "kind": {
+                                "type": "string",
+                                "enum": [
+                                    "context_pressure",
+                                    "compression_preserved",
+                                    "partial_reviewer",
+                                    "user_decision"
+                                ],
+                                "description": "Reliability signal category"
+                            },
+                            "severity": {
+                                "type": "string",
+                                "enum": ["info", "warning", "action"],
+                                "description": "User-facing severity of this signal"
+                            },
+                            "count": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "description": "Optional affected item count"
+                            },
+                            "source": {
+                                "type": "string",
+                                "enum": ["runtime", "manifest", "report", "inferred"],
+                                "description": "Where this reliability signal came from"
+                            },
+                            "detail": {
+                                "type": "string",
+                                "description": "Short user-facing detail for this signal"
+                            }
+                        },
+                        "required": ["kind", "severity"],
+                        "additionalProperties": false
+                    }
+                },
                 "schema_version": {
                     "type": "integer",
                     "description": "Schema version for forward compatibility",
@@ -317,10 +374,345 @@ impl CodeReviewTool {
             .is_some_and(|agent_type| agent_type == "DeepReview")
     }
 
+    fn normalized_non_empty_string(value: Option<&Value>) -> Option<String> {
+        value
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    }
+
+    fn packet_string_field<'a>(packet: &'a Value, keys: &[&str]) -> Option<&'a str> {
+        keys.iter()
+            .find_map(|key| packet.get(*key).and_then(Value::as_str))
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    }
+
+    fn reviewer_match_tokens(reviewer: &Value) -> Vec<String> {
+        ["name", "specialty"]
+            .iter()
+            .filter_map(|key| Self::normalized_non_empty_string(reviewer.get(*key)))
+            .map(|value| value.to_ascii_lowercase())
+            .collect()
+    }
+
+    fn packet_match_tokens(packet: &Value) -> Vec<String> {
+        [
+            &["subagentId", "subagent_id", "subagent_type"][..],
+            &["displayName", "display_name"][..],
+            &["roleName", "role"][..],
+        ]
+        .iter()
+        .filter_map(|keys| Self::packet_string_field(packet, keys))
+        .map(|value| value.to_ascii_lowercase())
+        .collect()
+    }
+
+    fn infer_unique_packet_id_for_reviewer(
+        reviewer: &Value,
+        run_manifest: Option<&Value>,
+    ) -> Option<String> {
+        let reviewer_tokens = Self::reviewer_match_tokens(reviewer);
+        if reviewer_tokens.is_empty() {
+            return None;
+        }
+
+        let manifest = run_manifest?;
+        let packets = manifest
+            .get("workPackets")
+            .or_else(|| manifest.get("work_packets"))?
+            .as_array()?;
+        let mut matches = packets.iter().filter_map(|packet| {
+            let packet_id = Self::packet_string_field(packet, &["packetId", "packet_id"])?;
+            let packet_tokens = Self::packet_match_tokens(packet);
+            let matched = packet_tokens
+                .iter()
+                .any(|packet_token| reviewer_tokens.iter().any(|token| token == packet_token));
+            matched.then(|| packet_id.to_string())
+        });
+        let first = matches.next()?;
+        if matches.next().is_some() {
+            None
+        } else {
+            Some(first)
+        }
+    }
+
+    fn fill_deep_review_packet_metadata(input: &mut Value, run_manifest: Option<&Value>) {
+        let Some(reviewers) = input.get_mut("reviewers").and_then(Value::as_array_mut) else {
+            return;
+        };
+
+        for reviewer in reviewers {
+            let packet_id = Self::normalized_non_empty_string(reviewer.get("packet_id"));
+            let packet_status_source =
+                Self::normalized_non_empty_string(reviewer.get("packet_status_source"));
+            let inferred_packet_id = if packet_id.is_none() {
+                Self::infer_unique_packet_id_for_reviewer(reviewer, run_manifest)
+            } else {
+                None
+            };
+
+            let Some(object) = reviewer.as_object_mut() else {
+                continue;
+            };
+
+            if packet_id.is_some() {
+                if packet_status_source.is_none() {
+                    object.insert("packet_status_source".to_string(), json!("reported"));
+                }
+            } else if let Some(inferred_packet_id) = inferred_packet_id {
+                object.insert("packet_id".to_string(), json!(inferred_packet_id));
+                object.insert("packet_status_source".to_string(), json!("inferred"));
+            } else if packet_status_source.is_none() {
+                object.insert("packet_status_source".to_string(), json!("missing"));
+            }
+        }
+    }
+
+    fn value_for_any_key<'a>(value: &'a Value, keys: &[&str]) -> Option<&'a Value> {
+        keys.iter().find_map(|key| value.get(*key))
+    }
+
+    fn bool_for_any_key(value: &Value, keys: &[&str]) -> bool {
+        Self::value_for_any_key(value, keys)
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    fn u64_for_any_key(value: &Value, keys: &[&str]) -> Option<u64> {
+        Self::value_for_any_key(value, keys).and_then(Value::as_u64)
+    }
+
+    fn has_non_empty_array_for_any_key(value: &Value, keys: &[&str]) -> bool {
+        Self::value_for_any_key(value, keys)
+            .and_then(Value::as_array)
+            .is_some_and(|items| !items.is_empty())
+    }
+
+    fn count_partial_reviewers(input: &Value) -> usize {
+        input
+            .get("reviewers")
+            .and_then(Value::as_array)
+            .map(|reviewers| {
+                reviewers
+                    .iter()
+                    .filter(|reviewer| {
+                        let status = reviewer
+                            .get("status")
+                            .and_then(Value::as_str)
+                            .map(str::trim)
+                            .unwrap_or_default();
+                        let has_partial_output = reviewer
+                            .get("partial_output")
+                            .and_then(Value::as_str)
+                            .map(str::trim)
+                            .is_some_and(|output| !output.is_empty());
+                        status == "partial_timeout"
+                            || (matches!(status, "timed_out" | "cancelled_by_user")
+                                && has_partial_output)
+                    })
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
+    fn count_decision_items(input: &Value) -> usize {
+        let needs_decision_count = input
+            .pointer("/report_sections/remediation_groups/needs_decision")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::trim)
+                    .filter(|item| !item.is_empty())
+                    .count()
+            })
+            .unwrap_or(0);
+        if needs_decision_count > 0 {
+            return needs_decision_count;
+        }
+
+        let recommended_action = input
+            .pointer("/summary/recommended_action")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .unwrap_or_default();
+        usize::from(recommended_action == "block")
+    }
+
+    fn has_reliability_signal(input: &Value, kind: &str) -> bool {
+        input
+            .get("reliability_signals")
+            .and_then(Value::as_array)
+            .is_some_and(|signals| {
+                signals.iter().any(|signal| {
+                    signal
+                        .get("kind")
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| value == kind)
+                })
+            })
+    }
+
+    fn push_reliability_signal_if_missing(input: &mut Value, signal: Value) {
+        let Some(kind) = signal.get("kind").and_then(Value::as_str) else {
+            return;
+        };
+        if Self::has_reliability_signal(input, kind) {
+            return;
+        }
+        if !input
+            .get("reliability_signals")
+            .is_some_and(Value::is_array)
+        {
+            input["reliability_signals"] = json!([]);
+        }
+        if let Some(signals) = input
+            .get_mut("reliability_signals")
+            .and_then(Value::as_array_mut)
+        {
+            signals.push(signal);
+        }
+    }
+
+    fn compression_contract_for_context(context: &ToolUseContext) -> Option<CompressionContract> {
+        let session_id = context.session_id.as_deref()?;
+        let coordinator = get_global_coordinator()?;
+        let session = coordinator.get_session_manager().get_session(session_id)?;
+        let agent_type = Some(session.agent_type.as_str());
+        let model_id = session.config.model_id.as_deref();
+        let limit = Self::reliability_contract_limit(agent_type, model_id);
+        let contract = coordinator
+            .get_session_manager()
+            .compression_contract_for_session(session_id, limit)?;
+        Self::should_report_compression_preserved(
+            session.compression_state.compression_count,
+            Some(&contract),
+        )
+        .then_some(contract)
+    }
+
+    fn reliability_contract_limit(agent_type: Option<&str>, model_id: Option<&str>) -> usize {
+        let agent_type = agent_type
+            .map(str::trim)
+            .filter(|agent_type| !agent_type.is_empty())
+            .unwrap_or("DeepReview");
+        let model_id = model_id
+            .map(str::trim)
+            .filter(|model_id| !model_id.is_empty())
+            .unwrap_or_default();
+        let is_review_subagent = get_agent_registry()
+            .get_subagent_is_review(agent_type)
+            .unwrap_or(false);
+
+        ContextProfilePolicy::for_agent_context_and_model(
+            agent_type,
+            is_review_subagent,
+            model_id,
+            model_id,
+        )
+        .compression_contract_limit
+    }
+
+    fn should_report_compression_preserved(
+        compression_count: usize,
+        compression_contract: Option<&CompressionContract>,
+    ) -> bool {
+        compression_count > 0 && compression_contract.is_some_and(|contract| !contract.is_empty())
+    }
+
+    fn compression_contract_signal_count(contract: &CompressionContract) -> usize {
+        contract.touched_files.len()
+            + contract.verification_commands.len()
+            + contract.blocking_failures.len()
+            + contract.subagent_statuses.len()
+    }
+
+    fn fill_deep_review_reliability_signals(
+        input: &mut Value,
+        run_manifest: Option<&Value>,
+        compression_contract: Option<&CompressionContract>,
+    ) {
+        if let Some(token_budget) = run_manifest.and_then(|manifest| {
+            Self::value_for_any_key(manifest, &["tokenBudget", "token_budget"])
+        }) {
+            let has_context_pressure =
+                Self::bool_for_any_key(
+                    token_budget,
+                    &["largeDiffSummaryFirst", "large_diff_summary_first"],
+                ) || Self::has_non_empty_array_for_any_key(token_budget, &["warnings"]);
+            if has_context_pressure {
+                let count = Self::u64_for_any_key(
+                    token_budget,
+                    &["estimatedReviewerCalls", "estimated_reviewer_calls"],
+                )
+                .unwrap_or(0);
+                Self::push_reliability_signal_if_missing(
+                    input,
+                    json!({
+                        "kind": "context_pressure",
+                        "severity": "info",
+                        "count": count,
+                        "source": "runtime"
+                    }),
+                );
+            }
+        }
+
+        if let Some(contract) = compression_contract.filter(|contract| !contract.is_empty()) {
+            let count = Self::compression_contract_signal_count(contract);
+            if count > 0 {
+                Self::push_reliability_signal_if_missing(
+                    input,
+                    json!({
+                        "kind": "compression_preserved",
+                        "severity": "info",
+                        "count": count,
+                        "source": "runtime"
+                    }),
+                );
+            }
+        }
+
+        let partial_reviewer_count = Self::count_partial_reviewers(input);
+        if partial_reviewer_count > 0 {
+            Self::push_reliability_signal_if_missing(
+                input,
+                json!({
+                    "kind": "partial_reviewer",
+                    "severity": "warning",
+                    "count": partial_reviewer_count,
+                    "source": "runtime"
+                }),
+            );
+        }
+
+        let decision_item_count = Self::count_decision_items(input);
+        if decision_item_count > 0 {
+            Self::push_reliability_signal_if_missing(
+                input,
+                json!({
+                    "kind": "user_decision",
+                    "severity": "action",
+                    "count": decision_item_count,
+                    "source": "report"
+                }),
+            );
+        }
+    }
+
     /// Validate and fill missing fields with default values
     ///
     /// When AI-returned data is missing certain fields, fill with default values to avoid entire review failure
-    fn validate_and_fill_defaults(input: &mut Value, deep_review: bool) {
+    fn validate_and_fill_defaults(
+        input: &mut Value,
+        deep_review: bool,
+        run_manifest: Option<&Value>,
+        compression_contract: Option<&CompressionContract>,
+    ) {
         // Fill summary default values
         if input.get("summary").is_none() {
             warn!("CodeReview tool missing summary field, using default values");
@@ -375,6 +767,10 @@ impl CodeReviewTool {
 
         if input.get("reviewers").is_none() {
             input["reviewers"] = json!([]);
+        }
+        if deep_review {
+            Self::fill_deep_review_packet_metadata(input, run_manifest);
+            Self::fill_deep_review_reliability_signals(input, run_manifest, compression_contract);
         }
 
         if input.get("remediation_plan").is_none() {
@@ -459,9 +855,15 @@ impl Tool for CodeReviewTool {
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         let mut filled_input = input.clone();
+        let deep_review = Self::is_deep_review_context(Some(context));
+        let compression_contract = deep_review
+            .then(|| Self::compression_contract_for_context(context))
+            .flatten();
         Self::validate_and_fill_defaults(
             &mut filled_input,
-            Self::is_deep_review_context(Some(context)),
+            deep_review,
+            context.custom_data.get("deep_review_run_manifest"),
+            compression_contract.as_ref(),
         );
 
         Ok(vec![ToolResult::Result {
@@ -475,6 +877,7 @@ impl Tool for CodeReviewTool {
 #[cfg(test)]
 mod tests {
     use super::CodeReviewTool;
+    use crate::agentic::core::{CompressionContract, CompressionContractItem};
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use serde_json::json;
     use std::collections::HashMap;
@@ -517,6 +920,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn deep_review_schema_accepts_reviewer_partial_output() {
+        let tool = CodeReviewTool::new();
+        let context = tool_context(Some("DeepReview"));
+        let schema = tool
+            .input_schema_for_model_with_context(Some(&context))
+            .await;
+        let reviewer_properties = &schema["properties"]["reviewers"]["items"]["properties"];
+
+        assert_eq!(reviewer_properties["partial_output"]["type"], "string");
+    }
+
+    #[tokio::test]
+    async fn deep_review_schema_accepts_reviewer_packet_fallback_metadata() {
+        let tool = CodeReviewTool::new();
+        let context = tool_context(Some("DeepReview"));
+        let schema = tool
+            .input_schema_for_model_with_context(Some(&context))
+            .await;
+        let reviewer_properties = &schema["properties"]["reviewers"]["items"]["properties"];
+
+        assert_eq!(reviewer_properties["packet_id"]["type"], "string");
+        assert_eq!(
+            reviewer_properties["packet_status_source"]["enum"],
+            json!(["reported", "inferred", "missing"])
+        );
+    }
+
+    #[tokio::test]
+    async fn deep_review_schema_accepts_structured_reliability_signals() {
+        let tool = CodeReviewTool::new();
+        let context = tool_context(Some("DeepReview"));
+        let schema = tool
+            .input_schema_for_model_with_context(Some(&context))
+            .await;
+        let reliability_properties =
+            &schema["properties"]["reliability_signals"]["items"]["properties"];
+
+        assert_eq!(
+            reliability_properties["kind"]["enum"],
+            json!([
+                "context_pressure",
+                "compression_preserved",
+                "partial_reviewer",
+                "user_decision"
+            ])
+        );
+        assert_eq!(
+            reliability_properties["source"]["enum"],
+            json!(["runtime", "manifest", "report", "inferred"])
+        );
+    }
+
+    #[tokio::test]
     async fn deep_review_submission_defaults_missing_mode_to_deep() {
         let tool = CodeReviewTool::new();
         let context = tool_context(Some("DeepReview"));
@@ -542,5 +998,274 @@ mod tests {
         assert_eq!(data["review_mode"], "deep");
         assert!(data["reviewers"].as_array().is_some());
         assert!(data["remediation_plan"].as_array().is_some());
+    }
+
+    #[tokio::test]
+    async fn deep_review_submission_infers_unique_reviewer_packet_from_manifest() {
+        let tool = CodeReviewTool::new();
+        let mut context = tool_context(Some("DeepReview"));
+        context.custom_data.insert(
+            "deep_review_run_manifest".to_string(),
+            json!({
+                "workPackets": [
+                    {
+                        "packetId": "reviewer:ReviewSecurity",
+                        "phase": "reviewer",
+                        "subagentId": "ReviewSecurity",
+                        "displayName": "Security Reviewer",
+                        "roleName": "Security Reviewer"
+                    }
+                ]
+            }),
+        );
+
+        let result = tool
+            .call_impl(
+                &json!({
+                    "summary": {
+                        "overall_assessment": "No blocking issues",
+                        "risk_level": "low",
+                        "recommended_action": "approve"
+                    },
+                    "issues": [],
+                    "positive_points": [],
+                    "reviewers": [
+                        {
+                            "name": "Security Reviewer",
+                            "specialty": "security",
+                            "status": "completed",
+                            "summary": "Checked the security packet."
+                        }
+                    ]
+                }),
+                &context,
+            )
+            .await
+            .expect("submit review result");
+
+        let ToolResult::Result { data, .. } = &result[0] else {
+            panic!("expected tool result");
+        };
+        assert_eq!(data["reviewers"][0]["packet_id"], "reviewer:ReviewSecurity");
+        assert_eq!(data["reviewers"][0]["packet_status_source"], "inferred");
+    }
+
+    #[tokio::test]
+    async fn deep_review_submission_marks_uninferable_packet_metadata_as_missing() {
+        let tool = CodeReviewTool::new();
+        let context = tool_context(Some("DeepReview"));
+        let result = tool
+            .call_impl(
+                &json!({
+                    "summary": {
+                        "overall_assessment": "No blocking issues",
+                        "risk_level": "low",
+                        "recommended_action": "approve"
+                    },
+                    "issues": [],
+                    "positive_points": [],
+                    "reviewers": [
+                        {
+                            "name": "Unknown Reviewer",
+                            "specialty": "unknown",
+                            "status": "completed",
+                            "summary": "Packet was omitted."
+                        }
+                    ]
+                }),
+                &context,
+            )
+            .await
+            .expect("submit review result");
+
+        let ToolResult::Result { data, .. } = &result[0] else {
+            panic!("expected tool result");
+        };
+        assert!(data["reviewers"][0].get("packet_id").is_none());
+        assert_eq!(data["reviewers"][0]["packet_status_source"], "missing");
+    }
+
+    #[tokio::test]
+    async fn deep_review_submission_marks_existing_packet_metadata_as_reported() {
+        let tool = CodeReviewTool::new();
+        let context = tool_context(Some("DeepReview"));
+        let result = tool
+            .call_impl(
+                &json!({
+                    "summary": {
+                        "overall_assessment": "No blocking issues",
+                        "risk_level": "low",
+                        "recommended_action": "approve"
+                    },
+                    "issues": [],
+                    "positive_points": [],
+                    "reviewers": [
+                        {
+                            "name": "Security Reviewer",
+                            "specialty": "security",
+                            "status": "completed",
+                            "summary": "Packet was reported.",
+                            "packet_id": "reviewer:ReviewSecurity"
+                        }
+                    ]
+                }),
+                &context,
+            )
+            .await
+            .expect("submit review result");
+
+        let ToolResult::Result { data, .. } = &result[0] else {
+            panic!("expected tool result");
+        };
+        assert_eq!(data["reviewers"][0]["packet_id"], "reviewer:ReviewSecurity");
+        assert_eq!(data["reviewers"][0]["packet_status_source"], "reported");
+    }
+
+    #[tokio::test]
+    async fn deep_review_submission_fills_runtime_reliability_signals() {
+        let tool = CodeReviewTool::new();
+        let mut context = tool_context(Some("DeepReview"));
+        context.custom_data.insert(
+            "deep_review_run_manifest".to_string(),
+            json!({
+                "tokenBudget": {
+                    "largeDiffSummaryFirst": true,
+                    "warnings": [],
+                    "estimatedReviewerCalls": 7
+                }
+            }),
+        );
+
+        let result = tool
+            .call_impl(
+                &json!({
+                    "summary": {
+                        "overall_assessment": "Review completed with reduced confidence",
+                        "risk_level": "medium",
+                        "recommended_action": "request_changes"
+                    },
+                    "issues": [],
+                    "positive_points": [],
+                    "reviewers": [
+                        {
+                            "name": "Security Reviewer",
+                            "specialty": "security",
+                            "status": "partial_timeout",
+                            "summary": "Timed out after partial evidence.",
+                            "partial_output": "Found one likely issue before timeout."
+                        }
+                    ],
+                    "report_sections": {
+                        "remediation_groups": {
+                            "needs_decision": [
+                                "Decide whether to block the release."
+                            ]
+                        }
+                    }
+                }),
+                &context,
+            )
+            .await
+            .expect("submit review result");
+
+        let ToolResult::Result { data, .. } = &result[0] else {
+            panic!("expected tool result");
+        };
+        assert_eq!(
+            data["reliability_signals"],
+            json!([
+                {
+                    "kind": "context_pressure",
+                    "severity": "info",
+                    "count": 7,
+                    "source": "runtime"
+                },
+                {
+                    "kind": "partial_reviewer",
+                    "severity": "warning",
+                    "count": 1,
+                    "source": "runtime"
+                },
+                {
+                    "kind": "user_decision",
+                    "severity": "action",
+                    "count": 1,
+                    "source": "report"
+                }
+            ])
+        );
+    }
+
+    #[test]
+    fn deep_review_defaults_include_compression_contract_reliability_signal() {
+        let contract = CompressionContract {
+            touched_files: vec!["src/web-ui/src/flow_chat/utils/codeReviewReport.ts".to_string()],
+            verification_commands: vec![CompressionContractItem {
+                target: "pnpm --dir src/web-ui run test:run".to_string(),
+                status: "succeeded".to_string(),
+                summary: "Frontend report tests passed.".to_string(),
+                error_kind: None,
+            }],
+            blocking_failures: vec![],
+            subagent_statuses: vec![],
+        };
+        let mut input = json!({
+            "summary": {
+                "overall_assessment": "No blocking issues",
+                "risk_level": "low",
+                "recommended_action": "approve"
+            },
+            "issues": [],
+            "positive_points": []
+        });
+
+        CodeReviewTool::validate_and_fill_defaults(&mut input, true, None, Some(&contract));
+
+        assert_eq!(
+            input["reliability_signals"],
+            json!([
+                {
+                    "kind": "compression_preserved",
+                    "severity": "info",
+                    "count": 2,
+                    "source": "runtime"
+                }
+            ])
+        );
+    }
+
+    #[test]
+    fn deep_review_reliability_contract_limit_uses_context_profile_policy() {
+        assert_eq!(
+            CodeReviewTool::reliability_contract_limit(Some("DeepReview"), Some("gpt-5")),
+            8
+        );
+        assert_eq!(
+            CodeReviewTool::reliability_contract_limit(Some("DeepReview"), Some("gpt-5-mini")),
+            4
+        );
+    }
+
+    #[test]
+    fn deep_review_compression_signal_requires_completed_compression() {
+        let contract = CompressionContract {
+            touched_files: vec!["src/main.rs".to_string()],
+            verification_commands: vec![],
+            blocking_failures: vec![],
+            subagent_statuses: vec![],
+        };
+
+        assert!(!CodeReviewTool::should_report_compression_preserved(
+            0,
+            Some(&contract)
+        ));
+        assert!(CodeReviewTool::should_report_compression_preserved(
+            1,
+            Some(&contract)
+        ));
+        assert!(!CodeReviewTool::should_report_compression_preserved(
+            1,
+            Some(&CompressionContract::default())
+        ));
     }
 }
