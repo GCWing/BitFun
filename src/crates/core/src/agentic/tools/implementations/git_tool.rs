@@ -6,8 +6,8 @@ use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::service::git::{
-    execute_git_command, GitAddParams, GitCommitParams, GitDiffParams, GitLogParams, GitPullParams,
-    GitPushParams, GitService,
+    execute_git_command, execute_git_command_raw, GitAddParams, GitCommitParams, GitDiffParams,
+    GitLogParams, GitPullParams, GitPushParams, GitService,
 };
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -663,23 +663,38 @@ impl GitTool {
 
         let start_time = std::time::Instant::now();
 
-        match execute_git_command(repo_path, &cmd_args).await {
-            Ok(output) => {
+        // Use raw execution so we can distinguish git diff exit code 1 (has differences)
+        // from actual errors.
+        match execute_git_command_raw(repo_path, &cmd_args).await {
+            Ok(raw) => {
                 let duration = elapsed_ms_u64(start_time);
+
+                // git diff returns exit code 1 when there are differences, which is not an error.
+                // Other commands may also use exit code 1 for non-error conditions (e.g. grep with no matches).
+                // We treat exit code 0 and exit code 1 with non-empty stdout as success,
+                // but exit code >1 or exit code 1 with empty stdout and non-empty stderr as failure.
+                let is_diff_like = operation == "diff";
+                let success = if raw.exit_code == 0 {
+                    true
+                } else if is_diff_like && raw.exit_code == 1 && !raw.stdout.is_empty() {
+                    true
+                } else {
+                    false
+                };
+
                 Ok(json!({
-                    "success": true,
-                    "exit_code": 0,
-                    "stdout": output,
-                    "stderr": "",
+                    "success": success,
+                    "exit_code": raw.exit_code,
+                    "stdout": raw.stdout,
+                    "stderr": raw.stderr,
                     "execution_time_ms": duration
                 }))
             }
             Err(e) => {
                 let duration = elapsed_ms_u64(start_time);
-                // Git command failed but still return result
                 Ok(json!({
                     "success": false,
-                    "exit_code": 1,
+                    "exit_code": -1,
                     "stdout": "",
                     "stderr": e.to_string(),
                     "execution_time_ms": duration

@@ -1,7 +1,7 @@
 /**
  * Git utility functions
  */
-use super::git_types::{GitError, GitFileStatus};
+use super::git_types::{GitCommandOutput, GitError, GitFileStatus};
 use git2::{Repository, Status, StatusOptions};
 use std::path::Path;
 
@@ -194,8 +194,14 @@ pub fn get_file_statuses(repo: &Repository) -> Result<Vec<GitFileStatus>, GitErr
     }
 }
 
-/// Executes a Git command.
-pub async fn execute_git_command(repo_path: &str, args: &[&str]) -> Result<String, GitError> {
+/// Executes a Git command and returns the raw output including exit code.
+///
+/// Git diff returns exit code 1 when there are differences (not an error).
+/// Callers that need to distinguish this case should inspect `exit_code`.
+pub async fn execute_git_command_raw(
+    repo_path: &str,
+    args: &[&str],
+) -> Result<GitCommandOutput, GitError> {
     let output = crate::util::process_manager::create_tokio_command("git")
         .current_dir(repo_path)
         .args(args)
@@ -203,27 +209,64 @@ pub async fn execute_git_command(repo_path: &str, args: &[&str]) -> Result<Strin
         .await
         .map_err(|e| GitError::CommandFailed(format!("Failed to execute git command: {}", e)))?;
 
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    Ok(GitCommandOutput {
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        exit_code: output.status.code().unwrap_or(-1),
+    })
+}
+
+/// Executes a Git command.
+///
+/// For most git commands, exit code 0 means success and anything else is an error.
+/// However, `git diff` returns exit code 1 when there are differences, which is
+/// not an error. Use [`execute_git_command_raw`] if you need to handle that case.
+pub async fn execute_git_command(repo_path: &str, args: &[&str]) -> Result<String, GitError> {
+    let result = execute_git_command_raw(repo_path, args).await?;
+
+    if result.exit_code == 0 {
+        Ok(result.stdout)
     } else {
-        let error = String::from_utf8_lossy(&output.stderr);
-        Err(GitError::CommandFailed(error.to_string()))
+        let error = if result.stderr.is_empty() {
+            result.stdout
+        } else {
+            result.stderr
+        };
+        Err(GitError::CommandFailed(error))
     }
 }
 
-/// Executes a Git command synchronously.
-pub fn execute_git_command_sync(repo_path: &str, args: &[&str]) -> Result<String, GitError> {
+/// Executes a Git command synchronously and returns the raw output including exit code.
+pub fn execute_git_command_sync_raw(
+    repo_path: &str,
+    args: &[&str],
+) -> Result<GitCommandOutput, GitError> {
     let output = crate::util::process_manager::create_command("git")
         .current_dir(repo_path)
         .args(args)
         .output()
         .map_err(|e| GitError::CommandFailed(format!("Failed to execute git command: {}", e)))?;
 
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    Ok(GitCommandOutput {
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        exit_code: output.status.code().unwrap_or(-1),
+    })
+}
+
+/// Executes a Git command synchronously.
+pub fn execute_git_command_sync(repo_path: &str, args: &[&str]) -> Result<String, GitError> {
+    let result = execute_git_command_sync_raw(repo_path, args)?;
+
+    if result.exit_code == 0 {
+        Ok(result.stdout)
     } else {
-        let error = String::from_utf8_lossy(&output.stderr);
-        Err(GitError::CommandFailed(error.to_string()))
+        let error = if result.stderr.is_empty() {
+            result.stdout
+        } else {
+            result.stderr
+        };
+        Err(GitError::CommandFailed(error))
     }
 }
 

@@ -248,3 +248,11 @@ pub enum GitError {
     #[error("Git2 error: {0}")]
     Git2Error(#[from] git2::Error),
 }
+
+/// Raw result of executing a git command, preserving exit code and both streams.
+#[derive(Debug, Clone)]
+pub struct GitCommandOutput {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+}
