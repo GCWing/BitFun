@@ -20,6 +20,17 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('ThemeService');
 
+const FLOW_CHAT_LINK_COLORS = {
+  dark: {
+    default: '#60a5fa',
+    hover: '#93c5fd',
+  },
+  light: {
+    default: '#0969da',
+    hover: '#0550ae',
+  },
+} as const;
+
 /** Space-separated R G B for `rgba(var(--color-primary-rgb) / α)` in component styles. */
 function accentColorToRgbChannels(accent: string): string | null {
   const trimmed = accent.trim();
@@ -339,6 +350,11 @@ export class ThemeService {
     root.style.setProperty('--color-primary-hover', primaryHover);
     root.style.setProperty('--color-accent', primaryAccent);
     root.style.setProperty('--color-accent-primary', primaryAccent);
+    const flowChatLinkColors = theme.type === 'light'
+      ? FLOW_CHAT_LINK_COLORS.light
+      : FLOW_CHAT_LINK_COLORS.dark;
+    root.style.setProperty('--flowchat-link-color', flowChatLinkColors.default);
+    root.style.setProperty('--flowchat-link-hover-color', flowChatLinkColors.hover);
     const primaryRgb = accentColorToRgbChannels(primaryAccent);
     if (primaryRgb) {
       root.style.setProperty('--color-primary-rgb', primaryRgb);

@@ -3,6 +3,8 @@
   --markdown-font-mono: "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace;
   --markdown-block-gap: 0.65rem;
   --markdown-code-bg-elevated: color-mix(in srgb, var(--color-bg-primary) 92%, #ffffff 8%);
+  --markdown-link-color: var(--flowchat-link-color, #60a5fa);
+  --markdown-link-hover-color: var(--flowchat-link-hover-color, #93c5fd);
 
   color: var(--color-text-primary);
   line-height: var(--line-height-relaxed);
@@ -604,12 +606,15 @@
 
 
 .markdown-renderer a {
-  color: var(--primary-color);
-  text-decoration: none;
+  color: var(--markdown-link-color);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 
 .markdown-renderer a:hover {
-  text-decoration: underline;
+  color: var(--markdown-link-hover-color);
+  text-decoration-thickness: 1.5px;
 }
 
 
@@ -618,8 +623,10 @@
 .tab-link {
   background: none;
   border: none;
-  color: var(--primary-color);
+  color: var(--markdown-link-color);
   text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
   cursor: pointer;
   font: inherit;
   padding: 0;
@@ -629,7 +636,18 @@
 .file-link:hover,
 .visualization-link:hover,
 .tab-link:hover {
-  color: var(--primary-color-hover);
+  color: var(--markdown-link-hover-color);
+  text-decoration-thickness: 1.5px;
+}
+
+.markdown-link-path-tooltip {
+  display: inline-block;
+  max-width: min(520px, 80vw);
+  overflow-wrap: anywhere;
+  text-align: left;
+  font-family: var(--markdown-font-mono);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 
@@ -726,6 +744,8 @@
 :root[data-theme-type="light"] .markdown-renderer,
 [data-theme-type="light"] .markdown-renderer,
 .light .markdown-renderer {
+  --markdown-link-color: #0969da;
+  --markdown-link-hover-color: #0550ae;
 
   .inline-code {
     background: rgba(0, 0, 0, 0.05);
