@@ -36,6 +36,7 @@ describe('SessionsSection layout styles', () => {
     expect(inlineListBlock).toContain('margin: 0 $size-gap-1 0 calc(#{$size-gap-1} + 4px);');
     expect(inlineListBlock).toContain('gap: 0;');
     expect(inlineItemBlock).toContain('height: 26px;');
+    expect(stylesheet).toContain('margin-top: -2px;');
   });
 
   it('keeps hidden session row actions from reserving title width', () => {

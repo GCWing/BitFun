@@ -96,6 +96,7 @@
     }
 
     &.is-child {
+      margin-top: -2px;
       min-height: 24px;
       font-size: var(--font-size-xs);
       padding-left: calc(#{$size-gap-1} + 14px);
