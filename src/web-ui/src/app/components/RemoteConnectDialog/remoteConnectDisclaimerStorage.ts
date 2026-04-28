@@ -15,5 +15,6 @@ export const setRemoteConnectDisclaimerAgreed = (): void => {
     storage.setItem(REMOTE_CONNECT_DISCLAIMER_KEY, 'true');
   } catch {
     // Ignore storage failures and fall back to in-memory state.
+    console.error('setRemoteConnectDisclaimerAgreed setItem error');
   }
 };

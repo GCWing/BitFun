@@ -75,10 +75,10 @@ impl Default for OhosPlatform {
     fn default() -> Self {
         Self {
             version: "6.0.0".to_string(),
-            devic_type: "2in".to_string(),
+            devic_type: "2in1".to_string(),
             api_level: 12,
             feature: vec![
-                "webview".to_string(),
+                "web_view".to_string(),
                 "file_system".to_string(),
                 "network".to_string(),
                 "storage".to_string(),

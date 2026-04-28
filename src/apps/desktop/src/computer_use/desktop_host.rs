@@ -2290,6 +2290,7 @@ impl ComputerUseHost for DesktopComputerUseHost {
         &self,
         query: UiElementLocateQuery,
     ) -> BitFunResult<UiElementLocateResult> {
+        Self::ensure_input_automation_allowed()?;
         Err(BitFunError::Tool(
             "Native UI element (accessibility) lookup is not avaliable on this platform"
                 .to_string(),

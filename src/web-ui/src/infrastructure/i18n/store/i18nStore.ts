@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { LocaleId, I18nNamespace, I18nState, I18nActions } from '../types';
 import { DEFAULT_LOCALE, DEFAULT_FALLBACK_LOCALE } from '../presets';
-import { storage } from '@/shared';
+import { storage } from '@/shared/utils/storageAdapter';
 
  
 const initialState: I18nState = {
