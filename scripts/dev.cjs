@@ -544,21 +544,21 @@ async function startDesktopPreview() {
   await new Promise(() => {});
 }
 
-function codgrepBinaryName() {
-  return process.platform === 'win32' ? 'cg.exe' : 'cg';
+function flashgrepBinaryName() {
+  return process.platform === 'win32' ? 'flashgrep.exe' : 'flashgrep';
 }
 
-function codgrepBinaryPath() {
-  return path.join(ROOT_DIR, 'resources', 'codgrep', codgrepBinaryName());
+function flashgrepBinaryPath() {
+  return path.join(ROOT_DIR, 'resources', 'flashgrep', flashgrepBinaryName());
 }
 
-function ensureCodgrepBinary() {
-  const binaryPath = codgrepBinaryPath();
+function ensureFlashgrepBinary() {
+  const binaryPath = flashgrepBinaryPath();
   if (!fs.existsSync(binaryPath)) {
     return {
       ok: false,
       error: new Error(
-        `codgrep binary not found: ${binaryPath}. Put the prebuilt daemon binary at resources/codgrep/${codgrepBinaryName()}`
+        `flashgrep binary not found: ${binaryPath}. Put the prebuilt daemon binary at resources/flashgrep/${flashgrepBinaryName()}`
       ),
     };
   }
@@ -566,10 +566,10 @@ function ensureCodgrepBinary() {
   return { ok: true, binaryPath };
 }
 
-async function ensureCodgrepBundleResource() {
-  const helperUrl = pathToFileURL(path.join(__dirname, 'prepare-codgrep-resource.mjs')).href;
+async function ensureFlashgrepBundleResource() {
+  const helperUrl = pathToFileURL(path.join(__dirname, 'prepare-flashgrep-resource.mjs')).href;
   const helper = await import(helperUrl);
-  return helper.ensureCodgrepBinary();
+  return helper.ensureFlashgrepBinary();
 }
 
 /**
@@ -650,21 +650,21 @@ async function main() {
     }
 
     printStep(currentStep++, totalSteps, 'Build workspace search daemon');
-    const codgrepResult = ensureCodgrepBinary();
-    if (!codgrepResult.ok) {
+    const flashgrepResult = ensureFlashgrepBinary();
+    if (!flashgrepResult.ok) {
       printError('Workspace search daemon is missing');
-      if (codgrepResult.error && codgrepResult.error.message) {
-        printError(codgrepResult.error.message);
+      if (flashgrepResult.error && flashgrepResult.error.message) {
+        printError(flashgrepResult.error.message);
       }
-      if (codgrepResult.error && codgrepResult.error.status !== undefined) {
-        printError(`Exit code: ${codgrepResult.error.status}`);
+      if (flashgrepResult.error && flashgrepResult.error.status !== undefined) {
+        printError(`Exit code: ${flashgrepResult.error.status}`);
       }
       process.exit(1);
     }
-    process.env.CODGREP_DAEMON_BIN = codgrepResult.binaryPath;
+    process.env.FLASHGREP_DAEMON_BIN = flashgrepResult.binaryPath;
 
     try {
-      await ensureCodgrepBundleResource();
+      await ensureFlashgrepBundleResource();
     } catch (error) {
       printError('Validate workspace search daemon failed');
       printError(error instanceof Error ? error.message : String(error));

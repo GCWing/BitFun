@@ -1,4 +1,4 @@
-pub(crate) mod codgrep;
+pub(crate) mod flashgrep;
 pub mod service;
 pub mod types;
 

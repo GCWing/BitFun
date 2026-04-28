@@ -20,7 +20,7 @@ pub mod project_context; // Project context management
 pub mod remote_connect; // Remote Connect (phone → desktop)
 pub mod remote_ssh; // Remote SSH (desktop → server)
 pub mod runtime; // Managed runtime and capability management
-pub mod search; // Workspace search via managed codgrep daemon
+pub mod search; // Workspace search via managed flashgrep daemon
 pub mod session; // Session persistence
 pub mod snapshot; // Snapshot-based change tracking
 pub mod system; // System command detection and execution

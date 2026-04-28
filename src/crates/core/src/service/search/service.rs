@@ -1,6 +1,6 @@
 use crate::infrastructure::{FileSearchOutcome, FileSearchResult, SearchMatchType};
-use crate::service::search::codgrep::sdk::tokio::{ManagedClient, RepoSession};
-use crate::service::search::codgrep::sdk::{
+use crate::service::search::flashgrep::sdk::tokio::{ManagedClient, RepoSession};
+use crate::service::search::flashgrep::sdk::{
     ConsistencyMode, GlobRequest, OpenRepoParams, PathScope, QuerySpec, RefreshPolicyConfig,
     RepoConfig, SearchRequest, SearchResults,
 };
@@ -40,7 +40,7 @@ impl WorkspaceSearchService {
             );
             client = client.with_daemon_program(program);
         } else {
-            log::info!("WorkspaceSearchService daemon configured: program=cg");
+            log::info!("WorkspaceSearchService daemon configured: program=flashgrep");
         }
 
         Self {
@@ -70,11 +70,11 @@ impl WorkspaceSearchService {
         let task = session
             .index_build()
             .await
-            .map_err(map_codgrep_error("Failed to start index build"))?;
+            .map_err(map_flashgrep_error("Failed to start index build"))?;
         let repo_status = session
             .status()
             .await
-            .map_err(map_codgrep_error("Failed to fetch repository status"))?;
+            .map_err(map_flashgrep_error("Failed to fetch repository status"))?;
         Ok(IndexTaskHandle {
             task: task.into(),
             repo_status: repo_status.into(),
@@ -89,11 +89,11 @@ impl WorkspaceSearchService {
         let task = session
             .index_rebuild()
             .await
-            .map_err(map_codgrep_error("Failed to start index rebuild"))?;
+            .map_err(map_flashgrep_error("Failed to start index rebuild"))?;
         let repo_status = session
             .status()
             .await
-            .map_err(map_codgrep_error("Failed to fetch repository status"))?;
+            .map_err(map_flashgrep_error("Failed to fetch repository status"))?;
         Ok(IndexTaskHandle {
             task: task.into(),
             repo_status: repo_status.into(),
@@ -147,7 +147,7 @@ impl WorkspaceSearchService {
                     .with_scan_fallback(true),
             )
             .await
-            .map_err(map_codgrep_error("Content search failed"))?;
+            .map_err(map_flashgrep_error("Content search failed"))?;
         let search_completed_at = Instant::now();
 
         let mut results = convert_search_results(&search.results, request.output_mode);
@@ -227,7 +227,7 @@ impl WorkspaceSearchService {
         let mut outcome = session
             .glob(GlobRequest::new().with_scope(scope))
             .await
-            .map_err(map_codgrep_error("Glob search failed"))?;
+            .map_err(map_flashgrep_error("Glob search failed"))?;
         outcome.paths.sort();
         if request.limit > 0 {
             outcome.paths.truncate(request.limit);
@@ -269,8 +269,8 @@ impl WorkspaceSearchService {
             self.client
                 .open_repo(params)
                 .await
-                .map_err(map_codgrep_error(
-                    "Failed to open codgrep repository session",
+                .map_err(map_flashgrep_error(
+                    "Failed to open flashgrep repository session",
                 ))?,
         );
 
@@ -288,12 +288,12 @@ impl WorkspaceSearchService {
         let repo_status = session
             .status()
             .await
-            .map_err(map_codgrep_error("Failed to fetch repository status"))?;
+            .map_err(map_flashgrep_error("Failed to fetch repository status"))?;
         let active_task = match repo_status.active_task_id.clone() {
             Some(task_id) => match session.task_status(task_id).await {
                 Ok(task) => Some(task),
                 Err(error) => {
-                    log::warn!("Failed to fetch active codgrep task status: {}", error);
+                    log::warn!("Failed to fetch active flashgrep task status: {}", error);
                     None
                 }
             },
@@ -322,13 +322,13 @@ pub fn get_global_workspace_search_service() -> Option<Arc<WorkspaceSearchServic
 }
 
 fn resolve_daemon_program() -> Option<OsString> {
-    if let Some(program) = std::env::var_os("CODGREP_DAEMON_BIN") {
+    if let Some(program) = std::env::var_os("FLASHGREP_DAEMON_BIN") {
         return Some(program);
     }
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let workspace_root = manifest_dir.join("../../..");
-    let binary_name = if cfg!(windows) { "cg.exe" } else { "cg" };
+    let binary_name = if cfg!(windows) { "flashgrep.exe" } else { "flashgrep" };
     let profile = std::env::var("PROFILE").ok();
 
     for candidate in daemon_binary_candidates(&workspace_root, binary_name, profile.as_deref()) {
@@ -337,7 +337,7 @@ fn resolve_daemon_program() -> Option<OsString> {
         }
     }
 
-    which::which("cg").ok().map(|path| path.into_os_string())
+    which::which("flashgrep").ok().map(|path| path.into_os_string())
 }
 
 fn daemon_binary_candidates(
@@ -382,18 +382,18 @@ fn push_exe_relative_bundle_candidates(
     binary_name: &str,
 ) {
     if cfg!(target_os = "macos") {
-        push_candidate(exe_dir.join("../Resources/codgrep").join(binary_name));
+        push_candidate(exe_dir.join("../Resources/flashgrep").join(binary_name));
     }
 
-    push_candidate(exe_dir.join("codgrep").join(binary_name));
-    push_candidate(exe_dir.join("resources/codgrep").join(binary_name));
+    push_candidate(exe_dir.join("flashgrep").join(binary_name));
+    push_candidate(exe_dir.join("resources/flashgrep").join(binary_name));
 
     if cfg!(target_os = "linux") {
-        push_candidate(exe_dir.join("../lib/bitfun/codgrep").join(binary_name));
-        push_candidate(exe_dir.join("../share/bitfun/codgrep").join(binary_name));
+        push_candidate(exe_dir.join("../lib/bitfun/flashgrep").join(binary_name));
+        push_candidate(exe_dir.join("../share/bitfun/flashgrep").join(binary_name));
         push_candidate(
             exe_dir
-                .join("../share/com.bitfun.desktop/codgrep")
+                .join("../share/com.bitfun.desktop/flashgrep")
                 .join(binary_name),
         );
     }
@@ -403,7 +403,7 @@ fn default_storage_root(repo_root: &Path) -> PathBuf {
     repo_root
         .join(".bitfun")
         .join("search")
-        .join("codgrep-index")
+        .join("flashgrep-index")
 }
 
 fn abbreviate_pattern_for_log(pattern: &str) -> String {
@@ -601,8 +601,8 @@ fn split_preview(
     (None, Some(snippet.to_string()), None)
 }
 
-fn map_codgrep_error(
+fn map_flashgrep_error(
     prefix: &'static str,
-) -> impl Fn(crate::service::search::codgrep::error::AppError) -> BitFunError {
+) -> impl Fn(crate::service::search::flashgrep::error::AppError) -> BitFunError {
     move |error| BitFunError::service(format!("{prefix}: {error}"))
 }

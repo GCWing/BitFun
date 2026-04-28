@@ -1,14 +1,14 @@
 use crate::infrastructure::FileSearchOutcome;
-use crate::service::search::codgrep::daemon::protocol::{
-    FileMatch as CodgrepFileMatch, MatchLocation as CodgrepMatchLocation,
-    SearchHit as CodgrepSearchHit, SearchLine as CodgrepSearchLine,
+use crate::service::search::flashgrep::daemon::protocol::{
+    FileMatch as FlashgrepFileMatch, MatchLocation as FlashgrepMatchLocation,
+    SearchHit as FlashgrepSearchHit, SearchLine as FlashgrepSearchLine,
 };
-use crate::service::search::codgrep::sdk::{
-    DirtyFileStats as CodgrepDirtyFileStats, FileCount as CodgrepFileCount,
-    RepoPhase as CodgrepRepoPhase, RepoStatus as CodgrepRepoStatus,
-    SearchBackend as CodgrepSearchBackend, SearchModeConfig, TaskKind as CodgrepTaskKind,
-    TaskPhase as CodgrepTaskPhase, TaskState as CodgrepTaskState, TaskStatus as CodgrepTaskStatus,
-    WorkspaceOverlayStatus as CodgrepWorkspaceOverlayStatus,
+use crate::service::search::flashgrep::sdk::{
+    DirtyFileStats as FlashgrepDirtyFileStats, FileCount as FlashgrepFileCount,
+    RepoPhase as FlashgrepRepoPhase, RepoStatus as FlashgrepRepoStatus,
+    SearchBackend as FlashgrepSearchBackend, SearchModeConfig, TaskKind as FlashgrepTaskKind,
+    TaskPhase as FlashgrepTaskPhase, TaskState as FlashgrepTaskState, TaskStatus as FlashgrepTaskStatus,
+    WorkspaceOverlayStatus as FlashgrepWorkspaceOverlayStatus,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -65,15 +65,15 @@ pub enum WorkspaceSearchBackend {
     ScanFallback,
 }
 
-impl From<CodgrepSearchBackend> for WorkspaceSearchBackend {
-    fn from(value: CodgrepSearchBackend) -> Self {
+impl From<FlashgrepSearchBackend> for WorkspaceSearchBackend {
+    fn from(value: FlashgrepSearchBackend) -> Self {
         match value {
-            CodgrepSearchBackend::IndexedSnapshot | CodgrepSearchBackend::IndexedClean => {
+            FlashgrepSearchBackend::IndexedSnapshot | FlashgrepSearchBackend::IndexedClean => {
                 Self::Indexed
             }
-            CodgrepSearchBackend::IndexedWorkspaceView => Self::IndexedWorkspace,
-            CodgrepSearchBackend::RgFallback => Self::TextFallback,
-            CodgrepSearchBackend::ScanFallback => Self::ScanFallback,
+            FlashgrepSearchBackend::IndexedWorkspaceView => Self::IndexedWorkspace,
+            FlashgrepSearchBackend::RgFallback => Self::TextFallback,
+            FlashgrepSearchBackend::ScanFallback => Self::ScanFallback,
         }
     }
 }
@@ -90,16 +90,16 @@ pub enum WorkspaceSearchRepoPhase {
     Limited,
 }
 
-impl From<CodgrepRepoPhase> for WorkspaceSearchRepoPhase {
-    fn from(value: CodgrepRepoPhase) -> Self {
+impl From<FlashgrepRepoPhase> for WorkspaceSearchRepoPhase {
+    fn from(value: FlashgrepRepoPhase) -> Self {
         match value {
-            CodgrepRepoPhase::Opening => Self::Preparing,
-            CodgrepRepoPhase::MissingBaseSnapshot => Self::NeedsIndex,
-            CodgrepRepoPhase::BuildingBaseSnapshot => Self::Building,
-            CodgrepRepoPhase::ReadyClean => Self::Ready,
-            CodgrepRepoPhase::ReadyDirty => Self::Stale,
-            CodgrepRepoPhase::RebuildingBaseSnapshot => Self::Refreshing,
-            CodgrepRepoPhase::Degraded => Self::Limited,
+            FlashgrepRepoPhase::Opening => Self::Preparing,
+            FlashgrepRepoPhase::MissingBaseSnapshot => Self::NeedsIndex,
+            FlashgrepRepoPhase::BuildingBaseSnapshot => Self::Building,
+            FlashgrepRepoPhase::ReadyClean => Self::Ready,
+            FlashgrepRepoPhase::ReadyDirty => Self::Stale,
+            FlashgrepRepoPhase::RebuildingBaseSnapshot => Self::Refreshing,
+            FlashgrepRepoPhase::Degraded => Self::Limited,
         }
     }
 }
@@ -112,12 +112,12 @@ pub enum WorkspaceSearchTaskKind {
     Refresh,
 }
 
-impl From<CodgrepTaskKind> for WorkspaceSearchTaskKind {
-    fn from(value: CodgrepTaskKind) -> Self {
+impl From<FlashgrepTaskKind> for WorkspaceSearchTaskKind {
+    fn from(value: FlashgrepTaskKind) -> Self {
         match value {
-            CodgrepTaskKind::BuildBaseSnapshot => Self::Build,
-            CodgrepTaskKind::RebuildBaseSnapshot => Self::Rebuild,
-            CodgrepTaskKind::RefreshWorkspace => Self::Refresh,
+            FlashgrepTaskKind::BuildBaseSnapshot => Self::Build,
+            FlashgrepTaskKind::RebuildBaseSnapshot => Self::Rebuild,
+            FlashgrepTaskKind::RefreshWorkspace => Self::Refresh,
         }
     }
 }
@@ -132,14 +132,14 @@ pub enum WorkspaceSearchTaskState {
     Cancelled,
 }
 
-impl From<CodgrepTaskState> for WorkspaceSearchTaskState {
-    fn from(value: CodgrepTaskState) -> Self {
+impl From<FlashgrepTaskState> for WorkspaceSearchTaskState {
+    fn from(value: FlashgrepTaskState) -> Self {
         match value {
-            CodgrepTaskState::Queued => Self::Queued,
-            CodgrepTaskState::Running => Self::Running,
-            CodgrepTaskState::Completed => Self::Completed,
-            CodgrepTaskState::Failed => Self::Failed,
-            CodgrepTaskState::Cancelled => Self::Cancelled,
+            FlashgrepTaskState::Queued => Self::Queued,
+            FlashgrepTaskState::Running => Self::Running,
+            FlashgrepTaskState::Completed => Self::Completed,
+            FlashgrepTaskState::Failed => Self::Failed,
+            FlashgrepTaskState::Cancelled => Self::Cancelled,
         }
     }
 }
@@ -154,14 +154,14 @@ pub enum WorkspaceSearchTaskPhase {
     Refreshing,
 }
 
-impl From<CodgrepTaskPhase> for WorkspaceSearchTaskPhase {
-    fn from(value: CodgrepTaskPhase) -> Self {
+impl From<FlashgrepTaskPhase> for WorkspaceSearchTaskPhase {
+    fn from(value: FlashgrepTaskPhase) -> Self {
         match value {
-            CodgrepTaskPhase::Scanning => Self::Discovering,
-            CodgrepTaskPhase::Tokenizing => Self::Processing,
-            CodgrepTaskPhase::Writing => Self::Persisting,
-            CodgrepTaskPhase::Finalizing => Self::Finalizing,
-            CodgrepTaskPhase::RefreshingOverlay => Self::Refreshing,
+            FlashgrepTaskPhase::Scanning => Self::Discovering,
+            FlashgrepTaskPhase::Tokenizing => Self::Processing,
+            FlashgrepTaskPhase::Writing => Self::Persisting,
+            FlashgrepTaskPhase::Finalizing => Self::Finalizing,
+            FlashgrepTaskPhase::RefreshingOverlay => Self::Refreshing,
         }
     }
 }
@@ -174,8 +174,8 @@ pub struct WorkspaceSearchDirtyFiles {
     pub new: usize,
 }
 
-impl From<CodgrepDirtyFileStats> for WorkspaceSearchDirtyFiles {
-    fn from(value: CodgrepDirtyFileStats) -> Self {
+impl From<FlashgrepDirtyFileStats> for WorkspaceSearchDirtyFiles {
+    fn from(value: FlashgrepDirtyFileStats) -> Self {
         Self {
             modified: value.modified,
             deleted: value.deleted,
@@ -201,8 +201,8 @@ pub struct WorkspaceSearchOverlayStatus {
     pub last_merge_error: Option<String>,
 }
 
-impl From<CodgrepWorkspaceOverlayStatus> for WorkspaceSearchOverlayStatus {
-    fn from(value: CodgrepWorkspaceOverlayStatus) -> Self {
+impl From<FlashgrepWorkspaceOverlayStatus> for WorkspaceSearchOverlayStatus {
+    fn from(value: FlashgrepWorkspaceOverlayStatus) -> Self {
         Self {
             committed_seq_no: value.committed_seq_no,
             last_seq_no: value.last_seq_no,
@@ -240,8 +240,8 @@ pub struct WorkspaceSearchRepoStatus {
     pub overlay: Option<WorkspaceSearchOverlayStatus>,
 }
 
-impl From<CodgrepRepoStatus> for WorkspaceSearchRepoStatus {
-    fn from(value: CodgrepRepoStatus) -> Self {
+impl From<FlashgrepRepoStatus> for WorkspaceSearchRepoStatus {
+    fn from(value: FlashgrepRepoStatus) -> Self {
         Self {
             repo_id: value.repo_id,
             repo_path: value.repo_path,
@@ -280,8 +280,8 @@ pub struct WorkspaceSearchTaskStatus {
     pub error: Option<String>,
 }
 
-impl From<CodgrepTaskStatus> for WorkspaceSearchTaskStatus {
-    fn from(value: CodgrepTaskStatus) -> Self {
+impl From<FlashgrepTaskStatus> for WorkspaceSearchTaskStatus {
+    fn from(value: FlashgrepTaskStatus) -> Self {
         Self {
             task_id: value.task_id,
             workspace_id: value.workspace_id,
@@ -307,8 +307,8 @@ pub struct WorkspaceSearchFileCount {
     pub matched_lines: usize,
 }
 
-impl From<CodgrepFileCount> for WorkspaceSearchFileCount {
-    fn from(value: CodgrepFileCount) -> Self {
+impl From<FlashgrepFileCount> for WorkspaceSearchFileCount {
+    fn from(value: FlashgrepFileCount) -> Self {
         Self {
             path: value.path,
             matched_lines: value.matched_lines,
@@ -323,8 +323,8 @@ pub struct WorkspaceSearchMatchLocation {
     pub column: usize,
 }
 
-impl From<CodgrepMatchLocation> for WorkspaceSearchMatchLocation {
-    fn from(value: CodgrepMatchLocation) -> Self {
+impl From<FlashgrepMatchLocation> for WorkspaceSearchMatchLocation {
+    fn from(value: FlashgrepMatchLocation) -> Self {
         Self {
             line: value.line,
             column: value.column,
@@ -340,8 +340,8 @@ pub struct WorkspaceSearchMatch {
     pub matched_text: String,
 }
 
-impl From<CodgrepFileMatch> for WorkspaceSearchMatch {
-    fn from(value: CodgrepFileMatch) -> Self {
+impl From<FlashgrepFileMatch> for WorkspaceSearchMatch {
+    fn from(value: FlashgrepFileMatch) -> Self {
         Self {
             location: value.location.into(),
             snippet: value.snippet,
@@ -365,13 +365,13 @@ pub enum WorkspaceSearchLine {
     ContextBreak,
 }
 
-impl From<CodgrepSearchLine> for WorkspaceSearchLine {
-    fn from(value: CodgrepSearchLine) -> Self {
+impl From<FlashgrepSearchLine> for WorkspaceSearchLine {
+    fn from(value: FlashgrepSearchLine) -> Self {
         match value {
-            CodgrepSearchLine::Match { value } => Self::Match {
+            FlashgrepSearchLine::Match { value } => Self::Match {
                 value: value.into(),
             },
-            CodgrepSearchLine::Context {
+            FlashgrepSearchLine::Context {
                 line_number,
                 snippet,
             } => Self::Context {
@@ -380,7 +380,7 @@ impl From<CodgrepSearchLine> for WorkspaceSearchLine {
                     snippet,
                 },
             },
-            CodgrepSearchLine::ContextBreak => Self::ContextBreak,
+            FlashgrepSearchLine::ContextBreak => Self::ContextBreak,
         }
     }
 }
@@ -393,8 +393,8 @@ pub struct WorkspaceSearchHit {
     pub lines: Vec<WorkspaceSearchLine>,
 }
 
-impl From<CodgrepSearchHit> for WorkspaceSearchHit {
-    fn from(value: CodgrepSearchHit) -> Self {
+impl From<FlashgrepSearchHit> for WorkspaceSearchHit {
+    fn from(value: FlashgrepSearchHit) -> Self {
         Self {
             path: value.path,
             matches: value.matches.into_iter().map(Into::into).collect(),
