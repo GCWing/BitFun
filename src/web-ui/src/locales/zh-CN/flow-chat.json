@@ -36,6 +36,9 @@
       "title": "拖拽调整面板大小 | 双击切换模式 | 当前: {{mode}}"
     }
   },
+  "runtimeStatus": {
+    "waitingForModelResponse": "等待模型响应..."
+  },
   "session": {
     "new": "新建会话",
     "newCode": "新建 Code 会话",
@@ -642,6 +645,9 @@
       "failed": "失败",
       "confirmExecute": "确认执行",
       "cancel": "取消",
+      "copyCommand": "复制 Git 命令",
+      "commandCopied": "Git 命令已复制",
+      "copyCommandFailed": "复制 Git 命令失败",
       "expandOutput": "展开输出",
       "collapseOutput": "收起输出",
       "noOutput": "(无输出)",

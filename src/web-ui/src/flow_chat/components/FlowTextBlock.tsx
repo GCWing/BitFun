@@ -12,6 +12,7 @@ import { TaskRunningIndicator } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
 import { useTypewriter } from '../hooks/useTypewriter';
+import { DEFAULT_MODEL_RESPONSE_STATUS_MESSAGE_KEY } from '../services/flow-chat-manager/RuntimeStatusModule';
 import './FlowTextBlock.scss';
 
 // Idle timeout (ms) after content stops growing.
@@ -84,7 +85,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   const hasContent = content.length > 0;
 
   if (textItem.runtimeStatus) {
-    const messageKey = textItem.runtimeStatus.messageKey || 'toolCards.terminal.waitingForModelResponse';
+    const messageKey = textItem.runtimeStatus.messageKey || DEFAULT_MODEL_RESPONSE_STATUS_MESSAGE_KEY;
     return (
       <div className={`flow-text-block flow-text-block--runtime-status ${className}`}>
         <TaskRunningIndicator size="sm" className="flow-text-block__runtime-status-icon" />

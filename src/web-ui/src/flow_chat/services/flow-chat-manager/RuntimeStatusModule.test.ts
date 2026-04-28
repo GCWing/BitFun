@@ -4,6 +4,9 @@ import {
   clearRuntimeStatus,
   scheduleModelResponseStatus,
 } from './RuntimeStatusModule';
+import enFlowChat from '@/locales/en-US/flow-chat.json';
+import zhCnFlowChat from '@/locales/zh-CN/flow-chat.json';
+import zhTwFlowChat from '@/locales/zh-TW/flow-chat.json';
 
 const SESSION_ID = 'session-1';
 const TURN_ID = 'turn-1';
@@ -60,6 +63,15 @@ function createContext(turn = createTurn()): any {
   };
 }
 
+function resolveLocalePath(resource: unknown, key: string): unknown {
+  return key.split('.').reduce<unknown>((value, segment) => {
+    if (!value || typeof value !== 'object') {
+      return undefined;
+    }
+    return (value as Record<string, unknown>)[segment];
+  }, resource);
+}
+
 describe('RuntimeStatusModule', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -82,8 +94,25 @@ describe('RuntimeStatusModule', () => {
     const [statusItem] = turn.modelRounds[0].items as FlowTextItem[];
     expect(statusItem.runtimeStatus?.phase).toBe('waiting_model');
     expect(statusItem.runtimeStatus?.scope).toBe('main');
+    expect(statusItem.runtimeStatus?.messageKey).toBe('runtimeStatus.waitingForModelResponse');
     expect(statusItem.content).toBe('\u200B');
     expect(context.activeTextItems.get(SESSION_ID)?.get(ROUND_ID)).toBe(statusItem.id);
+  });
+
+  it('uses a runtime status i18n key that exists in every flow-chat locale', () => {
+    const turn = createTurn();
+    const context = createContext(turn);
+
+    scheduleModelResponseStatus(context, SESSION_ID, TURN_ID, ROUND_ID, { delayMs: 1000 });
+    vi.advanceTimersByTime(1000);
+
+    const [statusItem] = turn.modelRounds[0].items as FlowTextItem[];
+    const messageKey = statusItem.runtimeStatus?.messageKey;
+
+    expect(messageKey).toBe('runtimeStatus.waitingForModelResponse');
+    expect(resolveLocalePath(enFlowChat, messageKey!)).toBe('Waiting for model response...');
+    expect(resolveLocalePath(zhCnFlowChat, messageKey!)).toBe('等待模型响应...');
+    expect(resolveLocalePath(zhTwFlowChat, messageKey!)).toBe('等待模型回應...');
   });
 
   it('clears a pending status timer before it can render', () => {

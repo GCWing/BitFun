@@ -36,6 +36,9 @@
       "title": "Drag to resize | Double-click to switch mode | Current: {{mode}}"
     }
   },
+  "runtimeStatus": {
+    "waitingForModelResponse": "Waiting for model response..."
+  },
   "session": {
     "new": "New Session",
     "newCode": "New Code session",
@@ -642,6 +645,9 @@
       "failed": "Failed",
       "confirmExecute": "Confirm execute",
       "cancel": "Cancel",
+      "copyCommand": "Copy git command",
+      "commandCopied": "Git command copied",
+      "copyCommandFailed": "Failed to copy git command",
       "expandOutput": "Expand output",
       "collapseOutput": "Collapse output",
       "noOutput": "(no output)",

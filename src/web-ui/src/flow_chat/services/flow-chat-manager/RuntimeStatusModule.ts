@@ -9,6 +9,7 @@ import type { FlowTextItem } from '../../types/flow-chat';
 import type { DialogTurn, FlowChatContext } from './types';
 
 export const MODEL_RESPONSE_STATUS_DELAY_MS = 1000;
+export const DEFAULT_MODEL_RESPONSE_STATUS_MESSAGE_KEY = 'runtimeStatus.waitingForModelResponse';
 const RUNTIME_STATUS_CONTENT = '\u200B';
 type RuntimeStatus = NonNullable<FlowTextItem['runtimeStatus']>;
 type RuntimeStatusScope = RuntimeStatus['scope'];
@@ -89,7 +90,7 @@ function createRuntimeStatusItem(
     runtimeStatus: {
       phase: 'waiting_model',
       scope: options.scope,
-      messageKey: options.messageKey || 'toolCards.terminal.waitingForModelResponse',
+      messageKey: options.messageKey || DEFAULT_MODEL_RESPONSE_STATUS_MESSAGE_KEY,
     },
     ...(options.parentToolId && {
       isSubagentItem: true,
