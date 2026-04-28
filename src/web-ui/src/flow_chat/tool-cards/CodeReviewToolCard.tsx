@@ -113,6 +113,17 @@ function formatReviewerStats(stats: { total: number; completed: number; degraded
   });
 }
 
+function formatReviewerStatus(status: string, t: Translate): string {
+  const normalizedStatus = status
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+
+  return t(`toolCards.codeReview.reviewerStatuses.${normalizedStatus}`, {
+    defaultValue: status,
+  });
+}
+
 function renderReportGroupList<TId extends RemediationGroupId | StrengthGroupId>(
   groups: Array<ReviewReportGroup<TId>>,
   titleForGroup: (id: TId) => string,
@@ -694,7 +705,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                       <span className="reviewer-specialty">{reviewer.specialty}</span>
                     </div>
                     <div className="reviewer-metrics">
-                      <span className="reviewer-status">{reviewer.status}</span>
+                      <span className="reviewer-status">{formatReviewerStatus(reviewer.status, t)}</span>
                       <span className="reviewer-issues">
                         {typeof reviewer.issue_count === 'number'
                           ? t('toolCards.codeReview.reviewerIssues', {

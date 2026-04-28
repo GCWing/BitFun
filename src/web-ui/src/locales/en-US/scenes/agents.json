@@ -158,6 +158,7 @@
       "open": "Open team",
       "back": "Back to Agents",
       "openSettings": "Review settings",
+      "loading": "Loading code review team...",
       "title": "Code Review Team",
       "subtitle": "Configure the code review team used by Deep Review and /DeepReview. Every reviewer starts on the Fast model unless you change it.",
       "summaryTitle": "Team Overview",

@@ -158,6 +158,7 @@
       "open": "打開團隊",
       "back": "返回專業智能體",
       "openSettings": "審核設定",
+      "loading": "正在載入程式碼審核團隊...",
       "title": "程式碼審核團隊",
       "subtitle": "配置深度審核及 /DeepReview 使用的程式碼審核團隊。每個審核員預設使用快速模型，也可以單獨修改。",
       "summaryTitle": "團隊概覽",

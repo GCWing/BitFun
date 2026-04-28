@@ -319,7 +319,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(useReviewActionBarStore.getState().dismissed).toBe(true);
   });
 
-  it('dismisses action bar when close button is clicked', async () => {
+  it('minimizes action bar when close button is clicked', async () => {
     const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
 
     useReviewActionBarStore.getState().showActionBar({
@@ -344,7 +344,38 @@ describeWithJsdom('DeepReviewActionBar', () => {
       await Promise.resolve();
     });
 
-    expect(useReviewActionBarStore.getState().dismissed).toBe(true);
+    const state = useReviewActionBarStore.getState();
+    expect(state.dismissed).toBe(false);
+    expect(state.minimized).toBe(true);
+  });
+
+  it('shows distinct progress text after starting fix and re-review', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+
+    useReviewActionBarStore.getState().showActionBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        summary: { recommended_action: 'request_changes' },
+        remediation_plan: ['Fix issue 1'],
+      },
+      phase: 'review_completed',
+    });
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    const fixAndReviewButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Fix and re-review'));
+    expect(fixAndReviewButton).toBeTruthy();
+
+    await act(async () => {
+      fixAndReviewButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Fixing and preparing re-review...');
   });
 
   it('marks completed remediation items when fix completes', async () => {

@@ -1,4 +1,6 @@
 .deep-review-action-bar {
+  --deep-review-action-bar-surface: var(--color-bg-secondary);
+
   position: relative;
   bottom: auto;
   left: auto;
@@ -6,7 +8,7 @@
   z-index: 10;
   border-radius: 12px;
   padding: 16px 18px;
-  max-height: 520px;
+  max-height: min(520px, calc(100vh - 180px));
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -15,32 +17,45 @@
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.06);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   transition: transform 0.3s ease, opacity 0.3s ease;
 
   /* Variants */
   &--success {
-    background: color-mix(in srgb, var(--color-success, #22c55e) 10%, var(--color-bg-secondary));
+    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-success, #22c55e) 10%, var(--color-bg-secondary));
+
+    background: var(--deep-review-action-bar-surface);
     border: 1px solid color-mix(in srgb, var(--color-success, #22c55e) 22%, transparent);
   }
 
   &--loading {
-    background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 10%, var(--color-bg-secondary));
+    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-accent-500, #60a5fa) 10%, var(--color-bg-secondary));
+
+    background: var(--deep-review-action-bar-surface);
     border: 1px solid color-mix(in srgb, var(--color-accent-500, #60a5fa) 22%, transparent);
   }
 
   &--error {
-    background: color-mix(in srgb, var(--color-error, #ef4444) 10%, var(--color-bg-secondary));
+    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-error, #ef4444) 10%, var(--color-bg-secondary));
+
+    background: var(--deep-review-action-bar-surface);
     border: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 22%, transparent);
   }
 
   &--warning {
-    background: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, var(--color-bg-secondary));
+    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, var(--color-bg-secondary));
+
+    background: var(--deep-review-action-bar-surface);
     border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 22%, transparent);
   }
 
   &--info {
-    background: var(--color-bg-secondary);
+    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-accent-500, #60a5fa) 5%, var(--color-bg-secondary));
+
+    background: var(--deep-review-action-bar-surface);
     border: 1px solid var(--border-base);
   }
 
@@ -151,7 +166,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    max-height: 260px;
+    max-height: min(260px, 32vh);
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
@@ -370,10 +385,17 @@
 
   /* Action buttons */
   &__actions {
+    position: sticky;
+    bottom: -6px;
+    z-index: 2;
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+    margin: 2px 0 -6px;
+    padding: 12px 0 6px;
+    border-top: 1px solid color-mix(in srgb, var(--border-base) 56%, transparent);
+    background: var(--deep-review-action-bar-surface);
   }
 
   /* Interruption notice */

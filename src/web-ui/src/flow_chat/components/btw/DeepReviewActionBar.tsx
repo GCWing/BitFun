@@ -87,6 +87,7 @@ export const ReviewActionBar: React.FC = () => {
     selectedRemediationIds,
     dismissed,
     activeAction,
+    lastSubmittedAction,
     customInstructions,
     errorMessage,
     interruption,
@@ -316,8 +317,8 @@ export const ReviewActionBar: React.FC = () => {
     store.dismiss();
   }, [reviewData, selectedRemediationIds, customInstructions, reviewMode, store, t]);
 
-  const handleDismiss = useCallback(() => {
-    store.dismiss();
+  const handleMinimize = useCallback(() => {
+    store.minimize();
   }, [store]);
 
   const handleContinueReview = useCallback(async () => {
@@ -499,6 +500,11 @@ export const ReviewActionBar: React.FC = () => {
           defaultValue: isDeepReview ? 'Deep review completed' : 'Review completed',
         });
       case 'fix_running':
+        if (lastSubmittedAction === 'fix-review') {
+          return t('deepReviewActionBar.fixAndReviewRunning', {
+            defaultValue: 'Fixing and preparing re-review...',
+          });
+        }
         return t('deepReviewActionBar.fixRunning', {
           defaultValue: 'Fixing in progress...',
         });
@@ -537,7 +543,7 @@ export const ReviewActionBar: React.FC = () => {
       default:
         return '';
     }
-  }, [phase, isDeepReview, t, hasInterruption, interruption, errorAttribution]);
+  }, [phase, isDeepReview, t, hasInterruption, interruption, errorAttribution, lastSubmittedAction]);
 
   if (dismissed || phase === 'idle' || !childSessionId) {
     return null;
@@ -552,8 +558,8 @@ export const ReviewActionBar: React.FC = () => {
       <button
         type="button"
         className="deep-review-action-bar__close"
-        onClick={handleDismiss}
-        aria-label={t('deepReviewActionBar.close', { defaultValue: 'Close' })}
+        onClick={handleMinimize}
+        aria-label={t('deepReviewActionBar.minimize', { defaultValue: 'Minimize' })}
       >
         <X size={16} />
       </button>
@@ -1035,9 +1041,9 @@ export const ReviewActionBar: React.FC = () => {
           <Button
             variant="ghost"
             size="small"
-            onClick={handleDismiss}
+            onClick={handleMinimize}
           >
-            {t('deepReviewActionBar.close', { defaultValue: 'Close' })}
+            {t('deepReviewActionBar.minimize', { defaultValue: 'Minimize' })}
           </Button>
         )}
       </div>

@@ -158,6 +158,7 @@
       "open": "打开团队",
       "back": "返回专业智能体",
       "openSettings": "审核设置",
+      "loading": "正在加载代码审核团队...",
       "title": "代码审核团队",
       "subtitle": "配置深度审核及 /DeepReview 使用的代码审核团队。每个审核员默认使用快速模型，你也可以单独修改。",
       "summaryTitle": "团队概览",

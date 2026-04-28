@@ -57,6 +57,8 @@ export interface ReviewActionBarState {
   minimized: boolean;
   /** Which fix action is currently in flight */
   activeAction: 'fix' | 'fix-review' | 'resume' | null;
+  /** Last user action that changed the action bar content */
+  lastSubmittedAction: 'fix' | 'fix-review' | 'resume' | null;
   /** User-supplied custom instructions (from the textarea) */
   customInstructions: string;
   /** Error message when phase is fix_failed or review_error */
@@ -112,6 +114,7 @@ const initialState = {
   dismissed: false,
   minimized: false,
   activeAction: null as 'fix' | 'fix-review' | 'resume' | null,
+  lastSubmittedAction: null as 'fix' | 'fix-review' | 'resume' | null,
   customInstructions: '',
   errorMessage: null as string | null,
   interruption: null as DeepReviewInterruption | null,
@@ -149,6 +152,7 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       dismissed: false,
       minimized: false,
       activeAction: null,
+      lastSubmittedAction: null,
       customInstructions: '',
       errorMessage: null,
       interruption: null,
@@ -170,6 +174,7 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       dismissed: false,
       minimized: false,
       activeAction: null,
+      lastSubmittedAction: null,
       customInstructions: '',
       errorMessage: null,
       interruption,
@@ -245,7 +250,13 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
     if (action === 'fix' || action === 'fix-review') {
       set({
         activeAction: action,
+        lastSubmittedAction: action,
         fixingRemediationIds: new Set(get().selectedRemediationIds),
+      });
+    } else if (action === 'resume') {
+      set({
+        activeAction: action,
+        lastSubmittedAction: action,
       });
     } else {
       set({ activeAction: action });
@@ -260,6 +271,7 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
     phase: 'review_completed',
     remainingFixIds: [],
     activeAction: null,
+    lastSubmittedAction: null,
   }),
   reset: () => set({ ...initialState, selectedRemediationIds: new Set() }),
 }));

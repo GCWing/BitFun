@@ -143,13 +143,23 @@
   }
 
   &__action-bar-wrapper {
-    flex-shrink: 0;
-    padding: 0 14px 14px;
+    position: absolute;
+    inset: 0;
+    z-index: 13;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 0;
+    padding: 56px 14px 14px;
+    box-sizing: border-box;
+    overflow: hidden;
     pointer-events: none;
+  }
 
-    > * {
-      pointer-events: auto;
-    }
+  &__action-bar-wrapper > .deep-review-action-bar {
+    width: 100%;
+    max-height: 100%;
+    pointer-events: auto;
   }
 
   &__empty-state {

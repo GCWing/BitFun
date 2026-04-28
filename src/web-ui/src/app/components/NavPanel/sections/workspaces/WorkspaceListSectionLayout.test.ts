@@ -17,7 +17,7 @@ function extractBlock(stylesheet: string, selector: string): string {
 }
 
 describe('WorkspaceListSection layout styles', () => {
-  it('keeps workspace rows constrained while hidden action buttons do not reserve title space', () => {
+  it('keeps workspace rows constrained while only visible row actions reserve title space', () => {
     const stylesheet = readWorkspaceListStylesheet();
     const workspaceList = extractBlock(stylesheet, '&__workspace-list');
     const workspaceGroup = extractBlock(stylesheet, '&__workspace-group');
@@ -55,6 +55,7 @@ describe('WorkspaceListSection layout styles', () => {
     expect(workspaceLabel).toContain('text-overflow: ellipsis;');
     expect(workspaceActions).toContain('position: absolute;');
     expect(workspaceActions).toContain('right: var(--bitfun-nav-row-action-offset);');
+    expect(workspaceActions).toContain('gap: var(--bitfun-nav-row-action-gap);');
     expect(workspaceMenu).toContain('gap: var(--bitfun-nav-row-action-gap);');
 
     expect(assistantItem).toContain('min-width: 0;');
