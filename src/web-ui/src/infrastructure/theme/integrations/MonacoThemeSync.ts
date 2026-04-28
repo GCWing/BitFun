@@ -94,47 +94,49 @@ export class MonacoThemeSync {
   syncTheme(theme: ThemeConfig): void {
     try {
       let targetThemeId: string;
-      
-      
+
       if (theme.monaco) {
-        const monacoTheme = this.convertToMonacoTheme(theme);
-        
-        monaco.editor.defineTheme(theme.id, monacoTheme);
         targetThemeId = theme.id;
-        log.debug('Custom theme registered', { themeId: theme.id, themeName: theme.name });
       } else {
-        
         if (theme.type === 'dark') {
           targetThemeId = 'bitfun-dark';
         } else {
           targetThemeId = 'bitfun-light';
+        }
+      }
+
+      if (this.currentThemeId === targetThemeId) {
+        return;
+      }
+
+      if (theme.monaco) {
+        const monacoTheme = this.convertToMonacoTheme(theme);
+        monaco.editor.defineTheme(theme.id, monacoTheme);
+        log.debug('Custom theme registered', { themeId: theme.id, themeName: theme.name });
+      } else {
+        if (theme.type === 'light') {
           monaco.editor.defineTheme('bitfun-light', getBitfunLightMonacoTheme());
         }
         log.debug('Using builtin theme', { themeId: targetThemeId });
       }
-      
-      
+
       monaco.editor.setTheme(targetThemeId);
-      
-      
-      
+
       const editors = monaco.editor.getEditors();
       if (editors && editors.length > 0) {
         log.debug('Refreshing editor instances', { count: editors.length });
         editors.forEach((editor, index) => {
           try {
-            
             editor.updateOptions({});
           } catch (err) {
             log.warn('Failed to refresh editor instance', { index, error: err });
           }
         });
       }
-      
+
       this.currentThemeId = targetThemeId;
       log.info('Theme switched successfully', { themeName: theme.name, themeId: targetThemeId });
-      
-      
+
       window.dispatchEvent(new CustomEvent('monaco-theme-changed', {
         detail: { themeId: targetThemeId, theme }
       }));

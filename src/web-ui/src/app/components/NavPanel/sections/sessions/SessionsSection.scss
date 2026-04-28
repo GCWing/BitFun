@@ -70,6 +70,8 @@
     cursor: pointer;
     width: 100%;
     text-align: left;
+    overflow: hidden;
+    position: relative;
     transition: color $motion-fast $easing-standard,
                 background $motion-fast $easing-standard;
 
@@ -181,9 +183,11 @@
   &__inline-item-main {
     flex: 1;
     min-width: 0;
+    max-width: 100%;
     display: flex;
     align-items: center;
     gap: 6px;
+    overflow: hidden;
   }
 
   &__inline-item-label {
@@ -334,7 +338,7 @@
     display: none;
     align-items: center;
     gap: 2px;
-    flex-shrink: 0;
+    flex: 0 0 auto;
     margin-left: auto;
 
     .bitfun-nav-panel__inline-item:hover & {
