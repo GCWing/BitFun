@@ -43,6 +43,7 @@ $_nav-collapsed-width: 80px;
 
   &.is-collapsed {
     width: 0;
+    overflow: hidden;
     pointer-events: none;
   }
 }
