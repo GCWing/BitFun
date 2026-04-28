@@ -6,6 +6,8 @@
     display: flex;
     flex-direction: column;
     gap: 0;
+    min-width: 0;
+    max-width: 100%;
     padding: 2px 0 0;
 
     &.is-dragging {
@@ -19,6 +21,8 @@
     display: flex;
     flex-direction: column;
     gap: $size-gap-1;
+    min-width: 0;
+    max-width: 100%;
   }
 
   &__workspace-group-title {
@@ -76,6 +80,8 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
+    max-width: 100%;
     padding: 2px $size-gap-1;
     border-radius: $size-radius-base;
     background: transparent;
@@ -128,7 +134,7 @@
       }
     }
 
-    &:not(.is-active):not(:hover):not(:focus-within):not(.is-menu-open) {
+    &:not(:hover):not(:focus-within):not(.is-menu-open) {
       .bitfun-nav-panel__workspace-item-branch {
         max-width: 0;
         margin-left: 0;
@@ -154,10 +160,13 @@
     display: flex;
     align-items: center;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     min-height: 30px;
     border-radius: 6px;
     color: var(--color-text-primary);
     background: var(--color-bg-primary);
+    overflow: hidden;
     transition: color $motion-fast $easing-standard,
                 background $motion-fast $easing-standard,
                 box-shadow $motion-fast $easing-standard;
@@ -231,19 +240,32 @@
   }
 
   &__workspace-item-name-btn {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
     display: flex;
     align-items: center;
     gap: 6px;
     min-height: 30px;
-    padding: 0 58px 0 4px;
+    padding: 0 4px;
     border: none;
     border-radius: 0 6px 6px 0;
     background: transparent;
     color: inherit;
     cursor: pointer;
+    overflow: hidden;
     text-align: left;
+  }
+
+  &__workspace-item:hover &__workspace-item-name-btn,
+  &__workspace-item.is-menu-open &__workspace-item-name-btn,
+  &__workspace-item:focus-within &__workspace-item-name-btn {
+    padding-right: calc(
+      var(--bitfun-nav-row-action-size) +
+      var(--bitfun-nav-row-action-size) +
+      var(--bitfun-nav-row-action-gap) +
+      var(--bitfun-nav-row-action-offset) +
+      4px
+    );
   }
 
   &__workspace-item-active-icon {
@@ -350,6 +372,7 @@
   }
 
   &__workspace-item-label {
+    flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -369,10 +392,11 @@
 
   &__workspace-item-title {
     min-width: 0;
+    max-width: 100%;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    flex: 1;
+    flex: 1 1 0;
     overflow: hidden;
 
     &.is-remote {
@@ -468,11 +492,11 @@
   &__workspace-item-menu {
     position: absolute;
     top: 50%;
-    right: 6px;
+    right: var(--bitfun-nav-row-action-offset);
     transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--bitfun-nav-row-action-gap);
     transition: opacity $motion-fast $easing-standard,
                 visibility $motion-fast $easing-standard;
   }
@@ -481,8 +505,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: var(--bitfun-nav-row-action-size);
+    height: var(--bitfun-nav-row-action-size);
     border: none;
     border-radius: 6px;
     background: transparent;
@@ -591,9 +615,11 @@
     }
 
     .bitfun-nav-panel__inline-list {
-      margin-left: 12px;
+      margin-left: 8px;
       margin-right: 0;
       padding-top: 0;
+      padding-left: 2px;
+      padding-right: 0;
     }
 
     .bitfun-nav-panel__inline-empty {
@@ -636,6 +662,8 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
+    max-width: 100%;
     padding: $size-gap-1;
     border-radius: $size-radius-base;
     background: transparent;
@@ -656,7 +684,7 @@
       border-color: transparent;
     }
 
-    &:not(.is-active):not(:hover):not(:focus-within):not(.is-menu-open) {
+    &:not(:hover):not(:focus-within):not(.is-menu-open) {
       .bitfun-nav-panel__assistant-item-menu {
         opacity: 0;
         visibility: hidden;
@@ -673,9 +701,12 @@
     display: flex;
     align-items: center;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     border-radius: 6px;
     color: var(--color-text-secondary);
     background: var(--color-bg-primary);
+    overflow: hidden;
     transition: color $motion-fast $easing-standard,
                 background $motion-fast $easing-standard,
                 box-shadow $motion-fast $easing-standard;
@@ -794,22 +825,36 @@
   }
 
   &__assistant-item-name-btn {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
     display: flex;
     align-items: center;
     gap: 6px;
     min-height: 44px;
-    padding: 0 58px 0 6px;
+    padding: 0 6px;
     border: none;
     border-radius: 0 6px 6px 0;
     background: transparent;
     color: inherit;
     cursor: pointer;
+    overflow: hidden;
     text-align: left;
   }
 
+  &__assistant-item:hover &__assistant-item-name-btn,
+  &__assistant-item.is-menu-open &__assistant-item-name-btn,
+  &__assistant-item:focus-within &__assistant-item-name-btn {
+    padding-right: calc(
+      var(--bitfun-nav-row-action-size) +
+      var(--bitfun-nav-row-action-size) +
+      var(--bitfun-nav-row-action-gap) +
+      var(--bitfun-nav-row-action-offset) +
+      4px
+    );
+  }
+
   &__assistant-item-label {
+    flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -845,11 +890,11 @@
   &__assistant-item-menu {
     position: absolute;
     top: 50%;
-    right: 6px;
+    right: var(--bitfun-nav-row-action-offset);
     transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--bitfun-nav-row-action-gap);
     transition: opacity $motion-fast $easing-standard,
                 visibility $motion-fast $easing-standard;
   }
@@ -858,8 +903,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: var(--bitfun-nav-row-action-size);
+    height: var(--bitfun-nav-row-action-size);
     border: none;
     border-radius: 6px;
     background: transparent;
@@ -887,9 +932,11 @@
     }
 
     .bitfun-nav-panel__inline-list {
-      margin-left: 12px;
+      margin-left: 8px;
       margin-right: 0;
       padding-top: 0;
+      padding-left: 2px;
+      padding-right: 0;
     }
 
     .bitfun-nav-panel__inline-empty {

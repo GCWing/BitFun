@@ -502,6 +502,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 isChildSession && 'is-btw-child',
                 isRowActive && 'is-active',
                 isEditing && 'is-editing',
+                openMenuSessionId === session.sessionId && 'is-menu-open',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -610,13 +611,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       </span>
                     ) : null}
                   </span>
-                  <div className="bitfun-nav-panel__inline-item-actions">
+                  <div
+                    className={`bitfun-nav-panel__inline-item-actions${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
+                  >
                     <button
                       type="button"
                       className={`bitfun-nav-panel__inline-item-action-btn${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
                       onClick={e => handleMenuOpen(e, session.sessionId)}
                     >
-                      <MoreHorizontal size={12} />
+                      <MoreHorizontal size="var(--bitfun-nav-row-action-icon-size)" />
                     </button>
                   </div>
                   {openMenuSessionId === session.sessionId && sessionMenuPosition && createPortal(

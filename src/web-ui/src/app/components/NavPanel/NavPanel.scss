@@ -31,16 +31,24 @@ $_section-header-height: 24px;
   width: 100%;
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   background: var(--color-bg-primary);
   overflow: visible;
   user-select: none;
+  --bitfun-nav-row-action-size: 20px;
+  --bitfun-nav-row-action-icon-size: 13px;
+  --bitfun-nav-row-action-offset: 4px;
+  --bitfun-nav-row-action-gap: 4px;
 
   // ── Container ──────────────────────────────
   &__content {
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
     // Dynamic clip-path origin — set via JS from anchor element measurement.
@@ -62,6 +70,8 @@ $_section-header-height: 24px;
     // ── MainNav layer ──
     &--main {
       flex: 1 1 auto;
+      min-width: 0;
+      max-width: 100%;
       transition: opacity 0.2s $easing-standard;
 
       // Non-split scenes: hide MainNav instantly when scene nav opens
@@ -113,6 +123,8 @@ $_section-header-height: 24px;
   &__scene-inner {
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
+    max-width: 100%;
     display: flex;
     flex-direction: column;
   }
@@ -548,7 +560,7 @@ $_section-header-height: 24px;
     gap: $size-gap-1;
     height: $_section-header-height;
     padding: 0 $size-gap-2;
-    margin: 0 $size-gap-2;
+    margin: 0 $size-gap-1;
     border-radius: 4px;
     opacity: 0.92;
     transition: background $motion-fast $easing-standard,
@@ -838,8 +850,8 @@ $_section-header-height: 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: var(--bitfun-nav-row-action-size);
+    height: var(--bitfun-nav-row-action-size);
     padding: 0;
     border: none;
     border-radius: 4px;
@@ -1013,6 +1025,8 @@ $_section-header-height: 24px;
   &__collapsible {
     display: grid;
     grid-template-rows: 1fr;
+    min-width: 0;
+    max-width: 100%;
     transition: grid-template-rows $motion-base $easing-standard,
                 transform $motion-base $easing-decelerate,
                 opacity $motion-base $easing-decelerate;
@@ -1029,6 +1043,8 @@ $_section-header-height: 24px;
   &__collapsible-inner {
     overflow: visible;
     min-height: 0;
+    min-width: 0;
+    max-width: 100%;
   }
 
   // ──────────────────────────────────────────────
@@ -1038,7 +1054,9 @@ $_section-header-height: 24px;
   &__items {
     display: flex;
     flex-direction: column;
-    padding: 2px $size-gap-2;
+    min-width: 0;
+    max-width: 100%;
+    padding: 2px $size-gap-1;
     gap: 2px;
 
     // Multiple SessionsSection siblings: match vertical rhythm of __workspace-list (gap 0 + 2px row padding).
@@ -1260,8 +1278,8 @@ $_section-header-height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: var(--bitfun-nav-row-action-size);
+    height: var(--bitfun-nav-row-action-size);
     margin-left: auto;
     border-radius: $size-radius-sm;
     color: var(--color-text-primary);

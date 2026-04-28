@@ -12,11 +12,11 @@
   &__inline-list {
     display: flex;
     flex-direction: column;
-    padding: 2px $size-gap-2 2px;
-    gap: 1px;
+    padding: 2px $size-gap-1 2px;
+    gap: 0;
     // No vertical margin: spacing between assistant blocks comes from 2px top/bottom padding only
     // (see .bitfun-nav-panel__items--session-blocks gap: 0), aligned with __workspace-item padding.
-    margin: 0 $size-gap-2 0 calc(#{$size-gap-2} + 4px);
+    margin: 0 $size-gap-1 0 calc(#{$size-gap-1} + 4px);
   }
 
   &__inline-action {
@@ -181,17 +181,22 @@
   }
 
   &__inline-item-main {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
-    max-width: 100%;
     display: flex;
     align-items: center;
-    gap: 6px;
-    overflow: hidden;
+    gap: 4px;
+    overflow: visible;
+  }
+
+  &__inline-item:hover &__inline-item-main,
+  &__inline-item.is-menu-open &__inline-item-main,
+  &__inline-item:focus-within &__inline-item-main {
+    padding-right: calc(var(--bitfun-nav-row-action-size) + var(--bitfun-nav-row-action-offset));
   }
 
   &__inline-item-label {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -212,6 +217,8 @@
     font-weight: 500;
     letter-spacing: 0.02em;
     opacity: 0.78;
+    overflow: visible;
+    white-space: nowrap;
   }
 
   &__inline-item-review-badge {
@@ -228,6 +235,7 @@
     font-size: var(--font-size-xxs);
     font-weight: 500;
     letter-spacing: 0.02em;
+    white-space: nowrap;
 
     svg {
       animation: bitfun-nav-session-spin 1s linear infinite;
@@ -249,6 +257,7 @@
     font-size: var(--font-size-xxs);
     font-weight: 600;
     letter-spacing: 0.02em;
+    white-space: nowrap;
   }
 
   &__inline-item-tooltip {
@@ -335,14 +344,24 @@
   }
 
   &__inline-item-actions {
-    display: none;
+    position: absolute;
+    top: 50%;
+    right: var(--bitfun-nav-row-action-offset);
+    transform: translateY(-50%);
+    display: flex;
     align-items: center;
-    gap: 2px;
-    flex: 0 0 auto;
-    margin-left: auto;
+    gap: var(--bitfun-nav-row-action-gap);
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity $motion-fast $easing-standard,
+                visibility $motion-fast $easing-standard;
 
-    .bitfun-nav-panel__inline-item:hover & {
-      display: flex;
+    .bitfun-nav-panel__inline-item:hover &,
+    &.is-open {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
     }
   }
 
@@ -350,8 +369,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: var(--bitfun-nav-row-action-size);
+    height: var(--bitfun-nav-row-action-size);
     padding: 0;
     border: none;
     border-radius: 4px;
