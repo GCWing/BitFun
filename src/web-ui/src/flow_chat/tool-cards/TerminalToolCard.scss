@@ -18,40 +18,91 @@
 .compact-tool-card-wrapper.terminal-tool-card--compact-collapsed {
   width: 100%;
 
-  /* Mirror thinking row geometry: chevron 14px + gap 6px = 20px to label.
-   * Terminal lucide icon has internal whitespace inside its 14px viewBox, so the
-   * status-icon slot is widened to 16px to push the action text rightward and
-   * match the optical x-position of "思考了 XX 字". */
   .compact-tool-card {
     width: 100%;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
   }
 
-  .compact-card-status-icon {
-    width: 16px;
-    min-width: 16px;
-    height: calc(var(--flowchat-font-size-base) * 1.65);
-    justify-content: flex-start;
+  .tool-card-icon-slot {
+    align-self: center;
+    width: 20px;
+    margin-right: 1px;
+  }
+
+  .tool-card-icon-marks {
+    width: 20px;
+    height: 20px;
   }
 
   .terminal-card-icon {
+    width: 14px;
+    height: 14px;
     flex-shrink: 0;
+  }
+
+  .tool-card-icon.tool-identifier-icon.tool-card-icon-main .terminal-card-icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .compact-card-action {
+    font-size: var(--flowchat-font-size-xs);
+    line-height: 1.45;
+    font-weight: normal;
+  }
+
+  .compact-card-content {
+    font-size: var(--flowchat-font-size-xs);
+    line-height: 1.45;
+  }
+
+  .compact-card-extra {
+    font-size: var(--flowchat-font-size-xs);
+    line-height: 1.45;
+  }
+
+  .compact-card-right-status-icon {
+    min-height: calc(var(--flowchat-font-size-xs) * 1.45);
+    justify-content: flex-start;
+  }
+
+  .terminal-header-extra {
+    gap: 4px;
+  }
+
+  .terminal-header-duration .duration-text {
+    gap: 3px;
+    font-size: var(--flowchat-font-size-xs);
+  }
+
+  .terminal-header-duration .duration-text svg {
+    width: 11px;
+    height: 11px;
+  }
+
+  .terminal-header-actions {
+    gap: 1px;
+  }
+
+  .terminal-action-btn {
+    width: 16px;
+    height: 16px;
+
+    svg {
+      width: 11px;
+      height: 11px;
+    }
   }
 
   /* Collapsed-only command preview. Intentionally does NOT inherit `.terminal-command`
    * (which forces 12px monospace + inline-block) so the text shares the exact same
-   * font-size/line-height/baseline as the sibling "执行命令" action span. */
-  /* Match `.read-file-card` typography: default weight, muted color, mono font. */
-  .compact-card-action {
-    font-weight: normal;
-  }
-
+   * font-size/line-height/baseline as the sibling action span. */
   .terminal-command-compact {
     flex: 1;
     min-width: 0;
-    font-size: var(--flowchat-font-size-base);
-    line-height: 1.65;
+    font-size: var(--flowchat-font-size-xs);
+    line-height: 1.45;
     font-weight: normal;
     color: var(--color-text-muted);
     font-family: var(--tool-card-font-mono);
@@ -69,6 +120,21 @@
 /* Entire base card shows pointer (card toggles expand); children must not force default cursor. */
 .base-tool-card-wrapper.terminal-tool-card .base-tool-card {
   cursor: pointer;
+}
+
+.base-tool-card-wrapper.terminal-tool-card {
+  .tool-card-action {
+    display: inline-flex;
+    align-items: center;
+    height: calc(12px * 1.45);
+    line-height: 1;
+    margin-right: 2px;
+    transform: translateY(-0.5px);
+  }
+
+  .tool-card-content {
+    min-height: calc(12px * 1.45);
+  }
 }
 
 /* Footer bar: full width + background to bottom inner edge of expanded content (matches .base-tool-card-expanded padding). */
@@ -215,6 +281,53 @@
   }
 }
 
+.terminal-header-extra {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  line-height: 1;
+}
+
+.terminal-header-duration {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--color-text-muted);
+
+  &:empty {
+    display: none;
+  }
+
+  .duration-text {
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 500;
+  }
+
+  .duration-text svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.terminal-header-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.terminal-header-extra > .terminal-status-text {
+  margin-right: 0;
+}
+
 /* ========== Confirmation action button group ========== */
 .terminal-confirm-actions {
   display: inline-flex;
@@ -321,6 +434,14 @@
     background: rgba(255, 255, 255, 0.1);
     color: var(--color-text-secondary);
     box-shadow: none;
+  }
+}
+
+.copy-command-btn {
+  color: var(--color-text-muted);
+
+  &.copied {
+    color: var(--color-success);
   }
 }
 
