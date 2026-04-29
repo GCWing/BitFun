@@ -49,7 +49,7 @@ pub struct ExecutionEngineConfig {
 impl Default for ExecutionEngineConfig {
     fn default() -> Self {
         Self {
-            max_rounds: 50,
+            max_rounds: crate::service::config::types::DEFAULT_MAX_ROUNDS,
             max_consecutive_same_tool: 3,
         }
     }

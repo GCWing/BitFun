@@ -503,6 +503,10 @@ pub struct AIConfig {
     /// Allow Computer use (desktop automation) when the desktop host is available (all session modes).
     #[serde(default)]
     pub computer_use_enabled: bool,
+
+    /// Maximum number of rounds per dialog turn before soft-pausing.
+    #[serde(default = "default_max_rounds")]
+    pub max_rounds: usize,
 }
 
 impl AIConfig {
@@ -644,6 +648,12 @@ fn default_skip_tool_confirmation() -> bool {
 
 fn default_subagent_max_concurrency() -> usize {
     5
+}
+
+pub const DEFAULT_MAX_ROUNDS: usize = 200;
+
+fn default_max_rounds() -> usize {
+    DEFAULT_MAX_ROUNDS
 }
 
 impl Default for ModeConfig {
@@ -1448,6 +1458,7 @@ impl Default for AIConfig {
             skip_tool_confirmation: true,
             debug_mode_config: DebugModeConfig::default(),
             computer_use_enabled: false,
+            max_rounds: default_max_rounds(),
         }
     }
 }

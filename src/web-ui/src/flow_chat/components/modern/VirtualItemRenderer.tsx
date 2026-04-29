@@ -3,8 +3,8 @@
  * Renders user messages, model rounds, explore groups, or image-analyzing indicators by type.
  */
 
-import React from 'react';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import React, { useCallback } from 'react';
+import { Loader2, AlertTriangle, Play } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { VirtualItem } from '../../store/modernFlowChatStore';
 import { UserMessageItem } from './UserMessageItem';
@@ -21,7 +21,7 @@ interface VirtualItemRendererProps {
 
 export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
   ({ item, index }) => {
-    const { searchMatchIndices, searchCurrentMatchVirtualIndex } = useFlowChatContext();
+    const { searchMatchIndices, searchCurrentMatchVirtualIndex, onContinueTurn, sessionId } = useFlowChatContext();
     const { t } = useTranslation('errors');
     const isSearchMatch = searchMatchIndices != null && searchMatchIndices.size > 0
       ? searchMatchIndices.has(index)
@@ -29,6 +29,12 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
     const isSearchCurrent = searchCurrentMatchVirtualIndex != null && searchCurrentMatchVirtualIndex >= 0
       ? searchCurrentMatchVirtualIndex === index
       : false;
+
+    const handleContinueTurn = useCallback(() => {
+      if (onContinueTurn && sessionId && item.turnId) {
+        onContinueTurn(sessionId, item.turnId);
+      }
+    }, [onContinueTurn, sessionId, item.turnId]);
     const content = (() => {
       switch (item.type) {
         case 'user-message':
@@ -77,6 +83,7 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
             : item.finishReason === 'max_rounds'
               ? 'ai.maxRoundsSuggestion'
               : 'ai.loopDetectedSuggestion';
+          const canContinue = item.finishReason === 'max_rounds' && onContinueTurn && sessionId;
           return (
             <div className="turn-stopped-banner">
               <div className="turn-stopped-banner__icon">
@@ -86,6 +93,16 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
                 <div className="turn-stopped-banner__title">{t(titleKey)}</div>
                 <div className="turn-stopped-banner__suggestion">{t(suggestionKey)}</div>
               </div>
+              {canContinue && (
+                <button
+                  className="turn-stopped-banner__continue-btn"
+                  onClick={handleContinueTurn}
+                  title={t('ai.continueTurn')}
+                >
+                  <Play size={14} />
+                  {t('ai.continueTurn')}
+                </button>
+              )}
             </div>
           );
         }

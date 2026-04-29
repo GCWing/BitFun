@@ -814,6 +814,7 @@ async fn init_agentic_system() -> anyhow::Result<(
     Arc<bitfun_core::service::token_usage::TokenUsageService>,
 )> {
     use bitfun_core::agentic::*;
+    use bitfun_core::service::config::get_global_config_service;
 
     let ai_client_factory = AIClientFactory::get_global().await?;
 
@@ -851,12 +852,27 @@ async fn init_agentic_system() -> anyhow::Result<(
         event_queue.clone(),
         tool_pipeline.clone(),
     ));
+    
+    // Get execution config from global settings
+    let exec_config = match get_global_config_service().await {
+        Ok(config_service) => {
+            match config_service.get_config::<bitfun_core::service::config::types::GlobalConfig>(None).await {
+                Ok(global_config) => execution::ExecutionEngineConfig {
+                    max_rounds: global_config.ai.max_rounds,
+                    ..Default::default()
+                },
+                Err(_) => Default::default(),
+            }
+        },
+        Err(_) => Default::default(),
+    };
+    
     let execution_engine = Arc::new(execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
         session_manager.clone(),
         context_compressor,
-        Default::default(),
+        exec_config,
     ));
 
     let coordinator = Arc::new(coordination::ConversationCoordinator::new(

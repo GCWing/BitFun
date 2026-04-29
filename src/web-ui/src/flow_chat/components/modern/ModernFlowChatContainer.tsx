@@ -62,6 +62,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onCollapseGroup: handleCollapseGroup,
   } = useExploreGroupState(virtualItems);
   const { handleToolConfirm, handleToolReject } = useFlowChatToolActions();
+
   const { handleFileViewRequest } = useFlowChatFileActions({
     workspacePath,
     onFileViewRequest,
@@ -86,6 +87,16 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     virtualItems,
     virtualListRef,
   });
+
+  const handleContinueTurn = useCallback(async (sessionId: string, _turnId: string) => {
+    try {
+      const manager = FlowChatManager.getInstance();
+      await manager.continueDialogTurn(sessionId);
+    } catch (_e) {
+      const { notificationService } = await import('@/shared/notification-system');
+      notificationService.error('Failed to continue turn. Please try starting a new dialog.', { duration: 3000 });
+    }
+  }, []);
 
   const contextValue: FlowChatContextValue = useMemo(() => ({
     onFileViewRequest: handleFileViewRequest,
@@ -114,6 +125,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchQuery,
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
+    onContinueTurn: handleContinueTurn,
   }), [
     handleFileViewRequest,
     onTabOpen,
@@ -132,6 +144,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchQuery,
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
+    handleContinueTurn,
   ]);
 
   const turnSummaries = useMemo<FlowChatHeaderTurnSummary[]>(() => {

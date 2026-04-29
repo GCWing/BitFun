@@ -83,12 +83,21 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
         event_queue.clone(),
         tool_pipeline.clone(),
     ));
+    
+    // Get execution config from global settings
+    let global_config: bitfun_core::service::config::types::GlobalConfig =
+        config_service.get_config(None).await.map_err(|e| anyhow::anyhow!("Failed to load config: {}", e))?;
+    let exec_config = execution::ExecutionEngineConfig {
+        max_rounds: global_config.ai.max_rounds,
+        ..Default::default()
+    };
+    
     let execution_engine = Arc::new(execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
         session_manager.clone(),
         context_compressor,
-        Default::default(),
+        exec_config,
     ));
 
     let coordinator = Arc::new(coordination::ConversationCoordinator::new(

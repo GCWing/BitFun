@@ -382,6 +382,21 @@ export class FlowChatManager {
     return cancelCurrentTaskModule(this.context);
   }
 
+  /**
+   * Continue a dialog turn that was paused due to max_rounds being reached.
+   * Sends a continuation message that instructs the AI to resume where it left off.
+   */
+  async continueDialogTurn(sessionId: string): Promise<void> {
+    return sendMessageModule(
+      this.context,
+      '[Continue execution from where you left off. The previous turn was paused because the round limit was reached. Please continue the task.]',
+      sessionId,
+      undefined,
+      undefined,
+      undefined
+    );
+  }
+
   public async saveAllInProgressTurns(): Promise<void> {
     return saveAllInProgressTurns(this.context);
   }
