@@ -63,6 +63,8 @@
     "networkErrorSuggestion": "The connection was unstable or the model server closed it prematurely. Check your network and retry",
     "loopDetected": "Repetitive operation detected",
     "loopDetectedSuggestion": "AI repeated the same operation and was stopped automatically. Try adjusting your instructions or completing remaining steps manually",
+    "maxRounds": "Maximum rounds reached",
+    "maxRoundsSuggestion": "The dialog has reached the maximum number of rounds and was stopped automatically. Start a new dialog to continue",
     "rateLimit": "Model rate limit exceeded",
     "rateLimitSuggestion": "Please retry later, or switch to a different model in settings",
     "authError": "API authentication failed",

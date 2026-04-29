@@ -1747,6 +1747,17 @@ impl ExecutionEngine {
             context.dialog_turn_id, completed_rounds, total_tools
         );
 
+        // Determine finish reason
+        let finish_reason = if loop_detected {
+            FinishReason::LoopDetected
+        } else if completed_rounds >= self.config.max_rounds {
+            FinishReason::MaxRounds
+        } else {
+            FinishReason::Complete
+        };
+
+        let success = !loop_detected && completed_rounds < self.config.max_rounds;
+
         // Emit dialog turn completed event
         debug!("Preparing to send DialogTurnCompleted event");
 
@@ -1761,6 +1772,8 @@ impl ExecutionEngine {
                     duration_ms,
                     subagent_parent_info: event_subagent_parent_info,
                     partial_recovery_reason: last_partial_recovery_reason,
+                    success: Some(success),
+                    finish_reason: Some(finish_reason.to_string()),
                 },
                 None,
             )
@@ -1796,17 +1809,6 @@ impl ExecutionEngine {
                 safe_initial_count
             );
         }
-
-        // Determine finish reason
-        let finish_reason = if loop_detected {
-            FinishReason::LoopDetected
-        } else if completed_rounds >= self.config.max_rounds {
-            FinishReason::MaxRounds
-        } else {
-            FinishReason::Complete
-        };
-
-        let success = !loop_detected && completed_rounds < self.config.max_rounds;
 
         if loop_detected {
             warn!(

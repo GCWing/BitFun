@@ -41,7 +41,8 @@ export type VirtualItem =
   | { type: 'user-message'; data: DialogTurn['userMessage']; turnId: string }
   | { type: 'model-round'; data: ModelRound; turnId: string; isLastRound: boolean }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
-  | { type: 'image-analyzing'; turnId: string };
+  | { type: 'image-analyzing'; turnId: string }
+  | { type: 'turn-stopped'; turnId: string; finishReason: string };
 
 /**
  * Currently visible turn information
@@ -269,6 +270,15 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
         });
         roundIndex++;
       }
+    }
+
+    // If the turn was stopped abnormally, add a turn-stopped indicator
+    if (turn.finishReason && turn.finishReason !== 'complete' && turn.status === 'completed') {
+      items.push({
+        type: 'turn-stopped',
+        turnId: turn.id,
+        finishReason: turn.finishReason,
+      });
     }
   });
 

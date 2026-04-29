@@ -155,6 +155,10 @@ export interface DialogTurn {
   tokenUsage?: TokenUsage;
   todos?: TodoItem[];
   backendTurnIndex?: number;
+  /** Whether the turn completed successfully (false for loop_detected / max_rounds). */
+  success?: boolean;
+  /** Why the turn finished: "complete", "loop_detected", or "max_rounds". */
+  finishReason?: string;
 }
 
 export interface FlowChatState {

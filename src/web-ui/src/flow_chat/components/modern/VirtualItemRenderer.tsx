@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { VirtualItem } from '../../store/modernFlowChatStore';
 import { UserMessageItem } from './UserMessageItem';
 import { ModelRoundItem } from './ModelRoundItem';
@@ -21,6 +22,7 @@ interface VirtualItemRendererProps {
 export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
   ({ item, index }) => {
     const { searchMatchIndices, searchCurrentMatchVirtualIndex } = useFlowChatContext();
+    const { t } = useTranslation('errors');
     const isSearchMatch = searchMatchIndices != null && searchMatchIndices.size > 0
       ? searchMatchIndices.has(index)
       : false;
@@ -63,6 +65,30 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
               />
             </div>
           );
+
+        case 'turn-stopped': {
+          const titleKey = item.finishReason === 'loop_detected'
+            ? 'ai.loopDetected'
+            : item.finishReason === 'max_rounds'
+              ? 'ai.maxRounds'
+              : 'ai.loopDetected';
+          const suggestionKey = item.finishReason === 'loop_detected'
+            ? 'ai.loopDetectedSuggestion'
+            : item.finishReason === 'max_rounds'
+              ? 'ai.maxRoundsSuggestion'
+              : 'ai.loopDetectedSuggestion';
+          return (
+            <div className="turn-stopped-banner">
+              <div className="turn-stopped-banner__icon">
+                <AlertTriangle size={16} />
+              </div>
+              <div className="turn-stopped-banner__content">
+                <div className="turn-stopped-banner__title">{t(titleKey)}</div>
+                <div className="turn-stopped-banner__suggestion">{t(suggestionKey)}</div>
+              </div>
+            </div>
+          );
+        }
         
         default:
           return <div style={{ minHeight: '1px' }} />;

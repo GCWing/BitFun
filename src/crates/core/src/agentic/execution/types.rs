@@ -82,6 +82,19 @@ pub enum FinishReason {
     LoopDetected,
 }
 
+impl std::fmt::Display for FinishReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FinishReason::Complete => write!(f, "complete"),
+            FinishReason::ToolCalls => write!(f, "tool_calls"),
+            FinishReason::MaxRounds => write!(f, "max_rounds"),
+            FinishReason::Cancelled => write!(f, "cancelled"),
+            FinishReason::Error => write!(f, "error"),
+            FinishReason::LoopDetected => write!(f, "loop_detected"),
+        }
+    }
+}
+
 /// Execution result
 #[derive(Debug, Clone)]
 pub struct ExecutionResult {

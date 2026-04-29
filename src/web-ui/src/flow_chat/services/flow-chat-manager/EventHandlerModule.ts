@@ -1527,6 +1527,8 @@ function handleDialogTurnComplete(
   const subagentParentInfo = normalizeSubagentParentInfo(event);
   // Partial recovery reason from backend (stream was interrupted mid-way)
   const partialRecoveryReason = event?.partialRecoveryReason ?? event?.partial_recovery_reason;
+  const success = event?.success;
+  const finishReason = event?.finishReason ?? event?.finish_reason;
 
   if (subagentParentInfo) {
     if (sessionId) {
@@ -1561,6 +1563,8 @@ function handleDialogTurnComplete(
     return {
       ...turn,
       status: 'finishing' as const,
+      success: success ?? undefined,
+      finishReason: finishReason ?? undefined,
     };
   });
 
