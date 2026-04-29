@@ -14,6 +14,7 @@
       "review": "Deep Review strategy, reviewer models, and extra Review Sub-Agents.",
       "aiContext": "Rules and memory for AI context.",
       "mcpTools": "MCP servers and tool integrations.",
+      "acpAgents": "External ACP agents such as opencode, Claude Code, and Codex.",
       "editor": "Editor font, display, and formatting.",
       "lsp": "Language servers and code intelligence.",
       "keyboard": "Shortcuts and key bindings."
@@ -33,6 +34,7 @@
       "aiContext": "Rules & Memory",
       "skills": "Skills",
       "mcpTools": "MCP",
+      "acpAgents": "ACP Agents",
       "agents": "Agents",
       "editor": "Editor",
       "lsp": "LSP",

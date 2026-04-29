@@ -22,6 +22,7 @@ import { useVirtualItems, useActiveSession, useVisibleTurnInfo, type VisibleTurn
 import type { FlowChatConfig } from '../../types/flow-chat';
 import type { LineRange } from '@/component-library';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { isAcpFlowSession } from '../../utils/acpSession';
 import './ModernFlowChatContainer.scss';
 
 interface ModernFlowChatContainerProps {
@@ -52,6 +53,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const virtualListRef = useRef<VirtualMessageListRef>(null);
   const chatScopeRef = useRef<HTMLDivElement>(null);
   const { workspacePath } = useWorkspaceContext();
+  const allowUserMessageRollback = !isAcpFlowSession(activeSession);
   const {
     exploreGroupStates,
     onExploreGroupToggle: handleExploreGroupToggle,
@@ -94,6 +96,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onToolReject: handleToolReject,
     sessionId: activeSession?.sessionId,
     activeSessionOverride: activeSession,
+    allowUserMessageRollback,
     config: {
       enableMarkdown: true,
       autoScroll: true,
@@ -119,6 +122,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     handleToolConfirm,
     handleToolReject,
     activeSession,
+    allowUserMessageRollback,
     config,
     exploreGroupStates,
     handleExploreGroupToggle,

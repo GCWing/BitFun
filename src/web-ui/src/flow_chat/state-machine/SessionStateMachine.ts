@@ -318,4 +318,3 @@ export class SessionStateMachineImpl {
     this.notifyListeners();
   }
 }
-

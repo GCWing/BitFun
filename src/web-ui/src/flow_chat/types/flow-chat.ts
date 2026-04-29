@@ -64,6 +64,23 @@ export interface FlowToolItem extends FlowItem {
   };
   requiresConfirmation?: boolean;
   userConfirmed?: boolean;
+  acpPermission?: {
+    permissionId: string;
+    sessionId?: string;
+    toolCallId?: string;
+    requestedAt: number;
+    options?: Array<{
+      optionId: string;
+      name: string;
+      kind: 'allow_once' | 'allow_always' | 'reject_once' | 'reject_always';
+    }>;
+    toolCall?: {
+      toolCallId?: string;
+      title?: string;
+      rawInput?: unknown;
+      content?: unknown;
+    };
+  };
   aiIntent?: string; // AI rationale for calling the tool.
   startTime?: number;  // Tool start time.
   endTime?: number;    // Tool end time.
@@ -96,6 +113,14 @@ export interface ImageAnalysisResult {
   analysis_time_ms: number;     // Analysis duration.
 }
 
+export interface ModelRoundRenderHints {
+  /**
+   * Keep all round items in the normal transcript instead of merging
+   * collapsible tools and adjacent narrative into an explore group.
+   */
+  disableExploreGrouping?: boolean;
+}
+
 // Model round: output from a single model call.
 export interface ModelRound {
   id: string;
@@ -107,6 +132,7 @@ export interface ModelRound {
   startTime: number;
   endTime?: number;
   error?: string;
+  renderHints?: ModelRoundRenderHints;
 }
 
 // Token usage stats.

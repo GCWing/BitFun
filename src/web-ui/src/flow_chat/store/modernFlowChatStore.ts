@@ -89,6 +89,10 @@ function hasActiveStreamingNarrative(round: ModelRound): boolean {
 function isExploreOnlyRound(round: ModelRound): boolean {
   if (!round.items || round.items.length === 0) return false;
 
+  if (round.renderHints?.disableExploreGrouping === true) {
+    return false;
+  }
+
   if (round.isStreaming && hasActiveStreamingNarrative(round)) {
     return false;
   }
@@ -164,7 +168,6 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
   
   cachedSession = session;
   cachedDialogTurnsRef = session.dialogTurns;
-  if (!session) return [];
 
   const items: VirtualItem[] = [];
 
@@ -182,7 +185,8 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       return;
     }
 
-    const nonEmptyRounds = turn.modelRounds.filter(round => round.items && round.items.length > 0);
+    const nonEmptyRounds = turn.modelRounds
+      .filter(round => round.items && round.items.length > 0);
     
     interface TempExploreGroup {
       rounds: ModelRound[];

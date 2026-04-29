@@ -397,6 +397,7 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
         turnId: dialogTurn.id,
         roundIndex,
         timestamp: round.startTime,
+        renderHints: round.renderHints,
         textItems: round.items
           .map((item, index) => ({ item, index }))
           .filter(({ item }) => item.type === 'text' && !isRuntimeStatusItem(item))

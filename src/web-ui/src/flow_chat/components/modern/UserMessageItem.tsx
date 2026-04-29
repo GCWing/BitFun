@@ -27,7 +27,12 @@ interface UserMessageItemProps {
 export const UserMessageItem = React.memo<UserMessageItemProps>(
   ({ message, turnId }) => {
     const { t } = useTranslation('flow-chat');
-    const { config, sessionId, activeSessionOverride } = useFlowChatContext();
+    const {
+      config,
+      sessionId,
+      activeSessionOverride,
+      allowUserMessageRollback = true,
+    } = useFlowChatContext();
     const activeSessionFromStore = useActiveSession();
     const activeSession = activeSessionOverride ?? activeSessionFromStore;
     const [copied, setCopied] = useState(false);
@@ -43,7 +48,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const turnIndex = activeSession?.dialogTurns.findIndex(t => t.id === turnId) ?? -1;
     const dialogTurn = turnIndex >= 0 ? activeSession?.dialogTurns[turnIndex] : null;
     const isFailed = dialogTurn?.status === 'error';
-    const canRollback = !!sessionId && turnIndex >= 0 && !isRollingBack;
+    const canRollback = allowUserMessageRollback && !!sessionId && turnIndex >= 0 && !isRollingBack;
 
     const { displayText, reproductionSteps } = useMemo(() => {
       const reproductionRegex = /<reproduction_steps>([\s\S]*?)<\/reproduction_steps\s*>?/g;
@@ -225,7 +230,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                   <ArrowDownToLine size={14} />
                 </button>
               </Tooltip>
-            ) : (
+            ) : allowUserMessageRollback ? (
               <Tooltip content={canRollback ? t('message.rollbackTo', { index: turnIndex + 1 }) : t('message.cannotRollback')}>
                 <button
                   className="user-message-item__rollback-btn"
@@ -239,7 +244,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                   )}
                 </button>
               </Tooltip>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -276,4 +281,3 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
 );
 
 UserMessageItem.displayName = 'UserMessageItem';
-

@@ -21,6 +21,7 @@ export interface FlowChatContextValue {
   // Session info
   sessionId?: string;
   activeSessionOverride?: Session | null;
+  allowUserMessageRollback?: boolean;
 
   // Config
   config?: FlowChatConfig;
@@ -66,5 +67,4 @@ export const FlowChatContext = createContext<FlowChatContextValue>({});
 export const useFlowChatContext = () => {
   return useContext(FlowChatContext);
 };
-
 

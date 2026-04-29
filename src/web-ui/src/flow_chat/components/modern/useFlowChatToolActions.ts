@@ -5,46 +5,51 @@
 import { useCallback } from 'react';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  ACPClientAPI,
+} from '@/infrastructure/api/service-api/ACPClientAPI';
 import { flowChatStore } from '../../store/FlowChatStore';
 import type { DialogTurn, FlowItem, FlowToolItem, ModelRound } from '../../types/flow-chat';
 
 const log = createLogger('useFlowChatToolActions');
 
 interface ResolvedToolContext {
-  activeSessionId: string | null;
+  sessionId: string | null;
   toolItem: FlowToolItem | null;
   turnId: string | null;
 }
 
 function resolveToolContext(toolId: string): ResolvedToolContext {
   const latestState = flowChatStore.getState();
-  const dialogTurns = Array.from(latestState.sessions.values()).flatMap(session =>
-    session.dialogTurns as DialogTurn[],
-  );
-
+  let sessionId: string | null = null;
   let toolItem: FlowToolItem | null = null;
   let turnId: string | null = null;
 
-  for (const turn of dialogTurns) {
-    for (const modelRound of turn.modelRounds as ModelRound[]) {
-      const item = modelRound.items.find((candidate: FlowItem) => (
-        candidate.type === 'tool' && candidate.id === toolId
-      )) as FlowToolItem | undefined;
+  for (const [candidateSessionId, session] of latestState.sessions) {
+    for (const turn of session.dialogTurns as DialogTurn[]) {
+      for (const modelRound of turn.modelRounds as ModelRound[]) {
+        const item = modelRound.items.find((candidate: FlowItem) => (
+          candidate.type === 'tool' && candidate.id === toolId
+        )) as FlowToolItem | undefined;
 
-      if (item) {
-        toolItem = item;
-        turnId = turn.id;
+        if (item) {
+          sessionId = candidateSessionId;
+          toolItem = item;
+          turnId = turn.id;
+          break;
+        }
+      }
+
+      if (toolItem) {
         break;
       }
     }
 
-    if (toolItem) {
-      break;
-    }
+    if (toolItem) break;
   }
 
   return {
-    activeSessionId: latestState.activeSessionId,
+    sessionId,
     toolItem,
     turnId,
   };
@@ -53,33 +58,36 @@ function resolveToolContext(toolId: string): ResolvedToolContext {
 export function useFlowChatToolActions() {
   const handleToolConfirm = useCallback(async (toolId: string, updatedInput?: any) => {
     try {
-      const { activeSessionId, toolItem, turnId } = resolveToolContext(toolId);
+      const { sessionId, toolItem, turnId } = resolveToolContext(toolId);
 
-      if (!toolItem || !turnId) {
+      if (!sessionId || !toolItem || !turnId) {
         notificationService.error(`Tool confirmation failed: tool item ${toolId} not found in current session`);
         return;
       }
 
       const finalInput = updatedInput || toolItem.toolCall?.input;
 
-      if (activeSessionId) {
-        flowChatStore.updateModelRoundItem(activeSessionId, turnId, toolId, {
-          userConfirmed: true,
-          status: 'confirmed',
-          toolCall: {
-            ...toolItem.toolCall,
-            input: finalInput,
-          },
-        } as any);
-      }
+      flowChatStore.updateModelRoundItem(sessionId, turnId, toolId, {
+        userConfirmed: true,
+        status: 'confirmed',
+        toolCall: {
+          ...toolItem.toolCall,
+          input: finalInput,
+        },
+      } as any);
 
-      if (!activeSessionId) {
-        throw new Error('No active session ID');
+      const acpPermission = toolItem.acpPermission;
+      if (acpPermission?.permissionId) {
+        await ACPClientAPI.submitPermissionResponse({
+          permissionId: acpPermission.permissionId,
+          approve: true,
+        });
+        return;
       }
 
       const { agentService } = await import('../../../shared/services/agent-service');
       await agentService.confirmToolExecution(
-        activeSessionId,
+        sessionId,
         toolId,
         'confirm',
         finalInput,
@@ -92,27 +100,30 @@ export function useFlowChatToolActions() {
 
   const handleToolReject = useCallback(async (toolId: string) => {
     try {
-      const { activeSessionId, toolItem, turnId } = resolveToolContext(toolId);
+      const { sessionId, toolItem, turnId } = resolveToolContext(toolId);
 
-      if (!toolItem || !turnId) {
+      if (!sessionId || !toolItem || !turnId) {
         log.warn('Tool rejection failed: tool item not found', { toolId });
         return;
       }
 
-      if (activeSessionId) {
-        flowChatStore.updateModelRoundItem(activeSessionId, turnId, toolId, {
-          userConfirmed: false,
-          status: 'rejected',
-        } as any);
-      }
+      flowChatStore.updateModelRoundItem(sessionId, turnId, toolId, {
+        userConfirmed: false,
+        status: 'cancelled',
+      } as any);
 
-      if (!activeSessionId) {
-        throw new Error('No active session ID');
+      const acpPermission = toolItem.acpPermission;
+      if (acpPermission?.permissionId) {
+        await ACPClientAPI.submitPermissionResponse({
+          permissionId: acpPermission.permissionId,
+          approve: false,
+        });
+        return;
       }
 
       const { agentService } = await import('../../../shared/services/agent-service');
       await agentService.confirmToolExecution(
-        activeSessionId,
+        sessionId,
         toolId,
         'reject',
       );

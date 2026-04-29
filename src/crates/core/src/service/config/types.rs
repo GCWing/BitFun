@@ -44,6 +44,9 @@ pub struct GlobalConfig {
     /// MCP server configuration (stored uniformly; supports both JSON and structured formats).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_servers: Option<serde_json::Value>,
+    /// ACP client configuration (stored as `{ "acpClients": { ... } }`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acp_clients: Option<serde_json::Value>,
     /// Theme system configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub themes: Option<ThemesConfig>,
@@ -1175,6 +1178,7 @@ impl Default for GlobalConfig {
             workspace: WorkspaceConfig::default(),
             ai: AIConfig::default(),
             mcp_servers: None,
+            acp_clients: None,
             themes: Some(ThemesConfig::default()),
             font: None,
             version: "1.0.0".to_string(),

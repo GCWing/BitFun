@@ -1568,6 +1568,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setQueuedInput,
     t,
   ]);
+
+  const handleCancelCurrentTask = useCallback(async () => {
+    await FlowChatManager.getInstance().cancelCurrentTask();
+  }, []);
   
   const handleSendOrCancel = useCallback(async () => {
     if (!derivedState) return;
@@ -1578,7 +1582,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // While generating, an empty control in `cancel` mode means stop. If the user has typed a follow-up,
     // never treat this path as cancel — that would call cancel_dialog_turn and abort the current round early.
     if (sendButtonMode === 'cancel' && !draftTrimmed) {
-      await transition(SessionExecutionEvent.USER_CANCEL);
+      await handleCancelCurrentTask();
       return;
     }
     
@@ -1679,6 +1683,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     inputState.value,
     derivedState,
+    handleCancelCurrentTask,
     transition,
     sendMessage,
     addToHistory,
@@ -2058,9 +2063,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     
     if (e.key === 'Escape' && derivedState?.canCancel) {
       e.preventDefault();
-      transition(SessionExecutionEvent.USER_CANCEL);
+      void handleCancelCurrentTask();
     }
-  }, [handleSendOrCancel, submitBtwFromInput, derivedState, transition, slashCommandState, getFilteredIncrementalModes, getFilteredActions, getSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashPromptCommand, canSwitchModes, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, t]);
+  }, [handleSendOrCancel, submitBtwFromInput, derivedState, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getFilteredActions, getSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashPromptCommand, canSwitchModes, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
@@ -2197,7 +2202,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (e.key === 'Escape' && derivedState?.canCancel) {
         if (isEditable) return;
         e.preventDefault();
-        void transition(SessionExecutionEvent.USER_CANCEL);
+        void handleCancelCurrentTask();
         return;
       }
 
@@ -2212,7 +2217,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // Capture phase so activation runs before nested handlers; Space must dispatch ACTIVATE, not only focus().
     document.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [derivedState?.canCancel, focusRichTextInputSoon, inputState.isActive, transition]);
+  }, [derivedState?.canCancel, focusRichTextInputSoon, handleCancelCurrentTask, inputState.isActive]);
   
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -2320,7 +2325,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <div
               className="bitfun-chat-input__send-button bitfun-chat-input__send-button--breathing"
               onClick={() => {
-                void transition(SessionExecutionEvent.USER_CANCEL);
+                void handleCancelCurrentTask();
               }}
               data-testid="chat-input-cancel-btn"
             >
@@ -2412,7 +2417,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       className="bitfun-chat-input__pet-stop-btn"
                       onClick={e => {
                         e.stopPropagation();
-                        void transition(SessionExecutionEvent.USER_CANCEL);
+                        void handleCancelCurrentTask();
                       }}
                       aria-label={t('input.stopGeneration')}
                     >

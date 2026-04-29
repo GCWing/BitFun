@@ -43,6 +43,11 @@ import { sessionBelongsToWorkspaceNavRow } from '../utils/sessionOrdering';
 import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 
 const log = createLogger('FlowChatStore');
+const VALID_AGENT_TYPES = new Set(['agentic', 'debug', 'Plan', 'Cowork', 'Claw', 'Team', 'DeepResearch']);
+
+function isValidPersistedAgentType(agentType: string): boolean {
+  return VALID_AGENT_TYPES.has(agentType) || agentType.startsWith('acp:');
+}
 
 export class FlowChatStore {
   private static instance: FlowChatStore;
@@ -1549,6 +1554,7 @@ export class FlowChatStore {
             turnId,
             roundIndex,
             timestamp: round.startTime,
+            renderHints: round.renderHints,
             textItems,
             toolItems,
             thinkingItems,
@@ -1639,9 +1645,8 @@ export class FlowChatStore {
             return prev;
           }
           
-          const VALID_AGENT_TYPES = ['agentic', 'debug', 'Plan', 'Cowork', 'Claw', 'Team', 'DeepResearch'];
           const rawAgentType = metadata.agentType || 'agentic';
-          const validatedAgentType = VALID_AGENT_TYPES.includes(rawAgentType) ? rawAgentType : 'agentic';
+          const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
           
           if (rawAgentType !== validatedAgentType) {
             log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
@@ -1711,11 +1716,16 @@ export class FlowChatStore {
       const { stateMachineManager } = await import('../state-machine');
       stateMachineManager.getOrCreate(sessionId);
       
-      try {
-        const { agentAPI } = await import('@/infrastructure/api');
-        await agentAPI.restoreSession(sessionId, workspacePath, remoteConnectionId, remoteSshHost);
-      } catch (error) {
-        log.warn('Backend session restore failed (may be new session)', { sessionId, error });
+      const existingSession = this.state.sessions.get(sessionId);
+      const isAcpSession = existingSession?.mode?.startsWith('acp:') ||
+        existingSession?.config.agentType?.startsWith('acp:');
+      if (!isAcpSession) {
+        try {
+          const { agentAPI } = await import('@/infrastructure/api');
+          await agentAPI.restoreSession(sessionId, workspacePath, remoteConnectionId, remoteSshHost);
+        } catch (error) {
+          log.warn('Backend session restore failed (may be new session)', { sessionId, error });
+        }
       }
       
       const { sessionAPI } = await import('@/infrastructure/api');
@@ -1814,6 +1824,7 @@ export class FlowChatStore {
           id: round.id,
           turnId: round.turnId,
           index: round.roundIndex ?? 0,
+          renderHints: round.renderHints,
           items: [
             ...round.textItems.map((text: any) => ({
               id: text.id,

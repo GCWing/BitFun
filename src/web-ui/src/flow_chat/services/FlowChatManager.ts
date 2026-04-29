@@ -10,6 +10,7 @@
 import { processingStatusManager } from './ProcessingStatusManager';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { AgentService } from '../../shared/services/agent-service';
+import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { stateMachineManager } from '../state-machine';
 import { EventBatcher } from './EventBatcher';
 import { createLogger } from '@/shared/utils/logger';
@@ -196,6 +197,51 @@ export class FlowChatManager {
 
   async createChatSession(config: SessionConfig, mode?: string): Promise<string> {
     return createChatSessionModule(this.context, config, mode);
+  }
+
+  async createAcpChatSession(clientId: string, config: SessionConfig = {}): Promise<string> {
+    const workspacePath =
+      config.workspacePath?.trim() ||
+      this.context.currentWorkspacePath?.trim();
+    if (!workspacePath) {
+      throw new Error('Workspace path is required to create an ACP session');
+    }
+
+    window.dispatchEvent(new CustomEvent('bitfun:acp-session-creation', {
+      detail: { phase: 'start', clientId },
+    }));
+
+    try {
+      const response = await ACPClientAPI.createFlowSession({
+        clientId,
+        workspacePath,
+        remoteConnectionId: config.remoteConnectionId,
+        remoteSshHost: config.remoteSshHost,
+        sessionName: `${clientId} ACP`,
+      });
+
+      this.context.flowChatStore.createSession(
+        response.sessionId,
+        {
+          ...config,
+          workspacePath,
+          agentType: response.agentType,
+        },
+        undefined,
+        response.sessionName,
+        128128,
+        response.agentType,
+        workspacePath,
+        config.remoteConnectionId,
+        config.remoteSshHost,
+      );
+
+      return response.sessionId;
+    } finally {
+      window.dispatchEvent(new CustomEvent('bitfun:acp-session-creation', {
+        detail: { phase: 'finish', clientId },
+      }));
+    }
   }
 
   async switchChatSession(sessionId: string): Promise<void> {

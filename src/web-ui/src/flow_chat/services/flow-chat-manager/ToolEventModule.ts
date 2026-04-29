@@ -8,6 +8,7 @@ import { parsePartialJson } from '../../../shared/utils/partialJsonParser';
 import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn } from './types';
 import { immediateSaveDialogTurn } from './PersistenceModule';
+import { applyPendingAcpPermissionForTool } from './AcpPermissionToolCardModule';
 import type {
   CancelledToolEvent,
   CompletedToolEvent,
@@ -204,6 +205,7 @@ function applyParamsPartial(
       _contentSize: hasContentField ? ((parsedParams.content || parsedParams.contents || '').length) : undefined
     }, silent);
     applyPendingTerminalSessionId(store, sessionId, turnId, toolEvent.tool_id, silent);
+    applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
   }
 }
 
@@ -279,6 +281,7 @@ function handleEarlyDetected(
   
   if (options?.isSubagent && options.parentToolId && !shouldDisplayInMainFlow) {
     store.insertModelRoundItemAfterTool(sessionId, turnId, options.parentToolId, preparingToolItem);
+    applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
   } else {
     let lastModelRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
     if (!lastModelRound) {
@@ -296,6 +299,7 @@ function handleEarlyDetected(
     }
     
     store.addModelRoundItem(sessionId, turnId, preparingToolItem, lastModelRound.id);
+    applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
   }
 }
 
@@ -340,6 +344,7 @@ function handleStarted(
       partialParams: undefined
     } as any);
     applyPendingTerminalSessionId(store, sessionId, turnId, toolEvent.tool_id);
+    applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
   } else {
     const toolItem: FlowToolItem = {
       id: toolEvent.tool_id,
@@ -361,11 +366,13 @@ function handleStarted(
     if (options?.isSubagent && options.parentToolId) {
       store.insertModelRoundItemAfterTool(sessionId, turnId, options.parentToolId, toolItem);
       pendingTerminalSessionIds.delete(toolEvent.tool_id);
+      applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
     } else {
       const lastModelRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
       if (lastModelRound) {
         store.addModelRoundItem(sessionId, turnId, toolItem, lastModelRound.id);
         pendingTerminalSessionIds.delete(toolEvent.tool_id);
+        applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
       } else {
         log.error('Tool Started event without ModelRound (backend bug)', {
           sessionId,
@@ -402,6 +409,8 @@ function handleCompleted(
       duration_ms: toolEvent.duration_ms
     },
     status: 'completed' as const,
+    requiresConfirmation: false,
+    acpPermission: undefined,
     isParamsStreaming: false,
     endTime: Date.now()
   };
@@ -430,6 +439,8 @@ function handleFailed(
       error: toolEvent.error
     },
     status: 'error',
+    requiresConfirmation: false,
+    acpPermission: undefined,
     endTime: Date.now()
   } as any);
 
@@ -459,6 +470,8 @@ function handleCancelled(
       error: toolEvent.reason || 'User cancelled operation'
     },
     status: finalStatus,
+    requiresConfirmation: false,
+    acpPermission: undefined,
     endTime: Date.now()
   } as any);
 

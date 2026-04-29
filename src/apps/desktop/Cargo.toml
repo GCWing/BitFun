@@ -22,6 +22,7 @@ serde_json = { workspace = true }
 bitfun-core = { path = "../../crates/core", features = ["ssh-remote"] }
 bitfun-transport = { path = "../../crates/transport", features = ["tauri-adapter"] }
 bitfun-webdriver = { path = "../../crates/webdriver" }
+bitfun-acp = { path = "../../crates/acp" }
 
 # Tauri
 tauri = { workspace = true }
@@ -39,6 +40,7 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
+uuid = { workspace = true }
 regex = { workspace = true }
 dirs = { workspace = true }
 dark-light = { workspace = true }

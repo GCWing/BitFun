@@ -4,7 +4,8 @@ import React, { useCallback } from 'react';
 import { Globe } from 'lucide-react';
 import { useLanguageSelector } from '../hooks/useI18n';
 import type { LocaleId } from '../types';
-import { IconButton, Select } from '@/component-library';
+import { IconButton } from '@components/IconButton/IconButton';
+import { Select } from '@components/Select/Select';
 import './LanguageSelector.scss';
 
 export interface LanguageSelectorProps {

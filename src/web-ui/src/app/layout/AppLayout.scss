@@ -118,6 +118,59 @@ html, body {
   background: var(--color-bg-flowchat);
 }
 
+.bitfun-app-acp-session-loading {
+  position: absolute;
+  left: 50%;
+  bottom: $size-gap-5;
+  z-index: 10020;
+  display: inline-flex;
+  align-items: center;
+  gap: $size-gap-2;
+  max-width: min(360px, calc(100vw - 32px));
+  min-height: 36px;
+  padding: 0 $size-gap-3;
+  border: 1px solid var(--border-subtle);
+  border-radius: $size-radius-base;
+  background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  line-height: 1.35;
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: bitfun-acp-session-loading-in $motion-fast $easing-decelerate forwards;
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__spinner {
+    flex-shrink: 0;
+    color: var(--color-accent-500);
+    animation: bitfun-acp-session-spinner 0.9s linear infinite;
+  }
+}
+
+@keyframes bitfun-acp-session-loading-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes bitfun-acp-session-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 // ==================== Scrollbar styles ====================
 // Moved to global scrollbar.css for shared management.
 

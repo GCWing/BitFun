@@ -1,5 +1,6 @@
 //! API layer module
 
+pub mod acp_client_api;
 pub mod agentic_api;
 pub mod ai_memory_api;
 pub mod ai_rules_api;

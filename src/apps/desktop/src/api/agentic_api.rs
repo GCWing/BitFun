@@ -579,8 +579,28 @@ fn resolve_missing_image_payloads(
 #[tauri::command]
 pub async fn cancel_dialog_turn(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
     request: CancelDialogTurnRequest,
 ) -> Result<(), String> {
+    if let Some(acp_client_service) = app_state.acp_client_service.as_ref() {
+        match acp_client_service
+            .cancel_bitfun_session(&request.session_id)
+            .await
+        {
+            Ok(true) => return Ok(()),
+            Ok(false) => {}
+            Err(error) => {
+                log::error!(
+                    "Failed to cancel ACP dialog turn: session_id={}, dialog_turn_id={}, error={}",
+                    request.session_id,
+                    request.dialog_turn_id,
+                    error
+                );
+                return Err(format!("Failed to cancel ACP dialog turn: {}", error));
+            }
+        }
+    }
+
     coordinator
         .cancel_dialog_turn(&request.session_id, &request.dialog_turn_id)
         .await
@@ -696,6 +716,11 @@ pub async fn delete_session(
         request.remote_ssh_host.as_deref(),
     )
     .await;
+    if let Some(acp_client_service) = app_state.acp_client_service.as_ref() {
+        acp_client_service
+            .release_bitfun_session(&request.session_id)
+            .await;
+    }
     coordinator
         .delete_session(&effective_path, &request.session_id)
         .await

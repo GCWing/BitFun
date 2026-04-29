@@ -28,6 +28,7 @@ use tauri::Manager;
 // Re-export API
 pub use api::*;
 
+use api::acp_client_api::*;
 use api::ai_rules_api::*;
 use api::clipboard_file_api::*;
 use api::commands::*;
@@ -314,6 +315,7 @@ pub async fn run() {
             }
 
             init_mcp_servers(app_handle.clone());
+            init_acp_clients(app_handle.clone());
 
             init_services(app_handle.clone(), startup_log_level);
 
@@ -583,6 +585,20 @@ pub async fn run() {
             api::mcp_api::start_mcp_remote_oauth,
             api::mcp_api::get_mcp_remote_oauth_session,
             api::mcp_api::cancel_mcp_remote_oauth,
+            initialize_acp_clients,
+            get_acp_clients,
+            probe_acp_client_requirements,
+            predownload_acp_client_adapter,
+            install_acp_client_cli,
+            stop_acp_client,
+            load_acp_json_config,
+            save_acp_json_config,
+            submit_acp_permission_response,
+            create_acp_flow_session,
+            start_acp_dialog_turn,
+            cancel_acp_dialog_turn,
+            get_acp_session_options,
+            set_acp_session_model,
             lsp_initialize,
             lsp_start_server_for_file,
             lsp_stop_server,
@@ -911,6 +927,17 @@ async fn init_function_agents(ai_client_factory: Arc<AIClientFactory>) -> anyhow
 fn init_mcp_servers(app_handle: tauri::AppHandle) {
     tokio::spawn(async move {
         let _ = app_handle;
+    });
+}
+
+fn init_acp_clients(app_handle: tauri::AppHandle) {
+    tokio::spawn(async move {
+        let state: tauri::State<'_, api::AppState> = app_handle.state();
+        if let Some(service) = state.acp_client_service.as_ref() {
+            if let Err(error) = service.initialize_all().await {
+                log::warn!("Failed to initialize ACP clients: {}", error);
+            }
+        }
     });
 }
 

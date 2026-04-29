@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { Button, ConfirmDialog, Modal, Tooltip } from '@/component-library';
@@ -19,6 +19,11 @@ import { notificationService } from '@/shared/notification-system';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
 import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace';
+import {
+  ACPClientAPI,
+  type AcpClientInfo,
+  type AcpClientRequirementProbe,
+} from '@/infrastructure/api/service-api/ACPClientAPI';
 import { BranchSelectModal, type BranchSelectResult } from '../../../panels/BranchSelectModal';
 import SessionsSection from '../sessions/SessionsSection';
 import {
@@ -82,7 +87,6 @@ function useStickyObserver(ref: React.RefObject<HTMLDivElement | null>) {
 
   return isStuck;
 }
-
 interface WorkspaceItemProps {
   workspace: WorkspaceInfo;
   isActive: boolean;
@@ -131,6 +135,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [isResettingWorkspace, setIsResettingWorkspace] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [searchIndexModalOpen, setSearchIndexModalOpen] = useState(false);
+  const [acpClients, setAcpClients] = useState<AcpClientInfo[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuAnchorRef = useRef<HTMLDivElement>(null);
   const menuPopoverRef = useRef<HTMLDivElement>(null);
@@ -339,6 +344,36 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     };
   }, [menuOpen, updateMenuPosition]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAcpClients = async () => {
+      try {
+        const [clients, requirementProbes] = await Promise.all([
+          ACPClientAPI.getClients(),
+          ACPClientAPI.probeClientRequirements(),
+        ]);
+        const probesById = new Map<string, AcpClientRequirementProbe>(
+          requirementProbes.map(probe => [probe.id, probe])
+        );
+        if (!cancelled) {
+          setAcpClients(clients.filter(client => client.enabled && probesById.get(client.id)?.runnable === true));
+        }
+      } catch (_error) {
+        setAcpClients([]);
+      }
+    };
+
+    void loadAcpClients();
+    window.addEventListener('bitfun:acp-clients-changed', loadAcpClients);
+    window.addEventListener('bitfun:acp-requirements-changed', loadAcpClients);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('bitfun:acp-clients-changed', loadAcpClients);
+      window.removeEventListener('bitfun:acp-requirements-changed', loadAcpClients);
+    };
+  }, []);
+
   const handleActivate = useCallback(async () => {
     if (!isActive) {
       await setActiveWorkspace(workspace.id);
@@ -498,6 +533,33 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const handleCreateCoworkSession = useCallback(() => {
     void handleCreateSession('Cowork');
   }, [handleCreateSession]);
+
+  const handleCreateAcpSession = useCallback(async (client: AcpClientInfo) => {
+    setMenuOpen(false);
+    try {
+      const sessionId = await flowChatManager.createAcpChatSession(
+        client.id,
+        {
+          workspacePath: workspace.rootPath,
+          ...(isRemoteWorkspace(workspace) && workspace.connectionId
+            ? { remoteConnectionId: workspace.connectionId }
+            : {}),
+          ...(isRemoteWorkspace(workspace) && workspace.sshHost
+            ? { remoteSshHost: workspace.sshHost }
+            : {}),
+        },
+      );
+      await openMainSession(sessionId, {
+        workspaceId: workspace.id,
+        activateWorkspace: setActiveWorkspace,
+      });
+    } catch (error) {
+      notificationService.error(
+        error instanceof Error ? error.message : t('nav.workspaces.createSessionFailed'),
+        { duration: 4000 }
+      );
+    }
+  }, [setActiveWorkspace, t, workspace]);
 
   const handleCreateInitSession = useCallback(async () => {
     setMenuOpen(false);
@@ -999,6 +1061,22 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   <Plus size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.newCoworkSessionShort')}</span>
                 </button>
+                {acpClients.map(client => {
+                  const label = client.name || client.id;
+                  return (
+                    <button
+                      key={client.id}
+                      type="button"
+                      className="bitfun-nav-panel__workspace-item-menu-item"
+                      onClick={() => { void handleCreateAcpSession(client); }}
+                    >
+                      <Bot size={13} />
+                      <span className="bitfun-nav-panel__workspace-item-menu-label">
+                        {t('nav.sessions.newExternalAgentSessionShort', { agentName: label })}
+                      </span>
+                    </button>
+                  );
+                })}
                 <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={() => { void handleCreateInitSession(); }}>
                   <FileText size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.initAgents')}</span>

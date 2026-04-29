@@ -14,6 +14,7 @@
       "review": "深度审核策略、审核员模型与额外审核 Sub-Agent。",
       "aiContext": "规则与记忆等 AI 上下文。",
       "mcpTools": "MCP 服务器与工具集成。",
+      "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",
       "editor": "编辑器字体、显示与格式化。",
       "lsp": "语言服务与代码智能。",
       "keyboard": "快捷键与键位。"
@@ -33,6 +34,7 @@
       "aiContext": "规则 & 记忆",
       "skills": "技能",
       "mcpTools": "MCP",
+      "acpAgents": "ACP Agent",
       "agents": "智能体",
       "editor": "编辑器",
       "lsp": "语言服务",

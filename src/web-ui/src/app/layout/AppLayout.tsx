@@ -10,6 +10,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef, useContext } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
+import { LoaderCircle } from 'lucide-react';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { useWindowControls } from '../hooks/useWindowControls';
 import { useAssistantBootstrap } from '../hooks/useAssistantBootstrap';
@@ -43,8 +44,14 @@ interface AppLayoutProps {
   className?: string;
 }
 
+interface AcpSessionCreationEventDetail {
+  phase?: 'start' | 'finish';
+  clientId?: string;
+}
+
 const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const { t } = useI18n('components');
+  const { t: tCommon } = useI18n('common');
   const {
     currentWorkspace,
     hasWorkspace,
@@ -115,6 +122,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showWorkspaceStatus, setShowWorkspaceStatus] = useState(false);
+  const [pendingAcpSessionClients, setPendingAcpSessionClients] = useState<string[]>([]);
   const handleOpenProject = useCallback(async () => {
     try {
       const selected = await open({
@@ -418,6 +426,36 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     return () => window.removeEventListener('toolbar-create-session', handler);
   }, [handleCreateFlowChatSession]);
 
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const clientId = (e as CustomEvent<{ clientId?: string }>).detail?.clientId?.trim();
+      if (!clientId) return;
+      void FlowChatManager.getInstance()
+        .createAcpChatSession(clientId)
+        .catch(error => log.error('Failed to create ACP FlowChat session', error));
+    };
+    window.addEventListener('bitfun:create-acp-session', handler);
+    return () => window.removeEventListener('bitfun:create-acp-session', handler);
+  }, []);
+
+  React.useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<AcpSessionCreationEventDetail>).detail;
+      const clientId = detail?.clientId?.trim() || 'ACP';
+      if (detail?.phase === 'start') {
+        setPendingAcpSessionClients(prev => [...prev, clientId]);
+      } else if (detail?.phase === 'finish') {
+        setPendingAcpSessionClients(prev => {
+          const index = prev.indexOf(clientId);
+          if (index === -1) return prev;
+          return prev.filter((_, currentIndex) => currentIndex !== index);
+        });
+      }
+    };
+    window.addEventListener('bitfun:acp-session-creation', handler);
+    return () => window.removeEventListener('bitfun:acp-session-creation', handler);
+  }, []);
+
   // Global drag-and-drop
   React.useEffect(() => {
     const handleDragStart = (e: DragEvent) => {
@@ -469,6 +507,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
         {/* Non-agent scenes: floating mini chat button */}
         {!isWelcomeScene && !isAgentScene && <FloatingMiniChat />}
+        {pendingAcpSessionClients.length > 0 && (
+          <div className="bitfun-app-acp-session-loading" role="status" aria-live="polite">
+            <LoaderCircle size={18} className="bitfun-app-acp-session-loading__spinner" />
+            <span>
+              {tCommon('nav.workspaces.creatingAcpSession', {
+                agentName: pendingAcpSessionClients[pendingAcpSessionClients.length - 1],
+              })}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Dialogs (previously owned by TitleBar) */}

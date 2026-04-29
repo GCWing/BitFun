@@ -109,12 +109,17 @@ export interface ModelRoundData {
   turnId: string;
   roundIndex: number;
   timestamp: number;
+  renderHints?: ModelRoundRenderHints;
   textItems: TextItemData[];
   toolItems: ToolItemData[];
   thinkingItems?: ThinkingItemData[];
   startTime: number;
   endTime?: number;
   status: string;
+}
+
+export interface ModelRoundRenderHints {
+  disableExploreGrouping?: boolean;
 }
 
 export interface TextItemData {

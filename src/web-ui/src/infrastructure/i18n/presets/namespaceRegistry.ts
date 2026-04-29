@@ -20,6 +20,7 @@ export const ALL_NAMESPACES = [
   'scenes/profile',
   'scenes/skills',
   'settings',
+  'settings/acp-agents',
   'settings/agentic-tools',
   'settings/agents',
   'settings/ai-context',

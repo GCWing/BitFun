@@ -4,6 +4,7 @@
  */
 
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { notificationService } from '../../../shared/notification-system';
@@ -28,6 +29,13 @@ import {
 const log = createLogger('MessageModule');
 
 const ONE_SHOT_AGENT_TYPES_FOR_SESSION = new Set(['Init']);
+
+function acpClientIdFromMode(mode: string | undefined): string | null {
+  const value = mode?.trim();
+  if (!value?.startsWith('acp:')) return null;
+  const clientId = value.slice('acp:'.length).trim();
+  return clientId || null;
+}
 
 function normalizeModelSelection(
   modelId: string | undefined,
@@ -127,8 +135,10 @@ export async function sendMessage(
   try {
     const refreshedSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
     const currentAgentType = (agentType?.trim() || refreshedSession.mode || 'agentic').trim();
+    const acpClientId = acpClientIdFromMode(currentAgentType);
 
     if (
+      !acpClientId &&
       agentType?.trim() &&
       !ONE_SHOT_AGENT_TYPES_FOR_SESSION.has(currentAgentType) &&
       refreshedSession.mode !== currentAgentType
@@ -160,7 +170,9 @@ export async function sendMessage(
       return;
     }
 
-    await ensureBackendSession(context, sessionId);
+    if (!acpClientId) {
+      await ensureBackendSession(context, sessionId);
+    }
 
     const readySession = context.flowChatStore.getState().sessions.get(sessionId);
     if (!readySession) {
@@ -227,7 +239,9 @@ export async function sendMessage(
       metadata: { sessionId: sessionId, dialogTurnId }
     });
 
-    await syncSessionModelSelection(context, sessionId, currentAgentType);
+    if (!acpClientId) {
+      await syncSessionModelSelection(context, sessionId, currentAgentType);
+    }
 
     const updatedSession = context.flowChatStore.getState().sessions.get(sessionId);
     if (!updatedSession) {
@@ -239,25 +253,19 @@ export async function sendMessage(
 
     const workspacePath = updatedSession.workspacePath;
     
-    try {
-      await agentAPI.startDialogTurn({
-        sessionId: sessionId,
+    if (acpClientId) {
+      await ACPClientAPI.startDialogTurn({
+        sessionId,
+        clientId: acpClientId,
         userInput: message,
         originalUserInput: displayMessage || message,
         turnId: dialogTurnId,
-        agentType: currentAgentType,
         workspacePath,
-        imageContexts: options?.imageContexts,
+        remoteConnectionId: updatedSession.remoteConnectionId,
+        remoteSshHost: updatedSession.remoteSshHost,
       });
-    } catch (error: any) {
-      if (error?.message?.includes('Session does not exist') || error?.message?.includes('Not found')) {
-        log.warn('Backend session still not found, retrying creation', {
-          sessionId: sessionId,
-          dialogTurnsCount: updatedSession.dialogTurns.length
-        });
-        
-        await retryCreateBackendSession(context, sessionId);
-        
+    } else {
+      try {
         await agentAPI.startDialogTurn({
           sessionId: sessionId,
           userInput: message,
@@ -267,8 +275,27 @@ export async function sendMessage(
           workspacePath,
           imageContexts: options?.imageContexts,
         });
-      } else {
-        throw error;
+      } catch (error: any) {
+        if (error?.message?.includes('Session does not exist') || error?.message?.includes('Not found')) {
+          log.warn('Backend session still not found, retrying creation', {
+            sessionId: sessionId,
+            dialogTurnsCount: updatedSession.dialogTurns.length
+          });
+
+          await retryCreateBackendSession(context, sessionId);
+
+          await agentAPI.startDialogTurn({
+            sessionId: sessionId,
+            userInput: message,
+            originalUserInput: displayMessage || message,
+            turnId: dialogTurnId,
+            agentType: currentAgentType,
+            workspacePath,
+            imageContexts: options?.imageContexts,
+          });
+        } else {
+          throw error;
+        }
       }
     }
 
@@ -325,7 +352,7 @@ export async function cancelCurrentTask(context: FlowChatContext): Promise<boole
       log.debug('No active session to cancel');
       return false;
     }
-    
+
     const currentState = stateMachineManager.getCurrentState(sessionId);
     const success = currentState === SessionExecutionState.PROCESSING 
       ? await stateMachineManager.transition(sessionId, SessionExecutionEvent.USER_CANCEL)

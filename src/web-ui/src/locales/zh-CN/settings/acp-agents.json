@@ -1,0 +1,80 @@
+{
+  "title": "ACP Agents",
+  "subtitle": "管理可在 FlowChat 会话里运行的 ACP Agent。",
+  "actions": {
+    "add": "添加",
+    "download": "下载",
+    "save": "保存",
+    "refresh": "刷新",
+    "learnMore": "了解更多",
+    "editJson": "编辑 JSON",
+    "closeJson": "关闭 JSON",
+    "saveJson": "保存 JSON",
+    "revert": "还原",
+    "install": "安装",
+    "restorePreset": "恢复预设",
+    "predownloadAcp": "预下载 ACP"
+  },
+  "json": {
+    "title": "原始 JSON",
+    "description": "高级编辑器，对应 acpClients 配置。桌面端会通过 stdio 启动这些客户端。"
+  },
+  "registry": {
+    "title": "Agent 列表",
+    "description": "安装完成且依赖就绪后，ACP Agent 会出现在工作区操作菜单里。",
+    "searchPlaceholder": "搜索 Agent...",
+    "filterLabel": "ACP Agent 筛选",
+    "filters": {
+      "all": "全部",
+      "enabled": "已启用",
+      "installed": "已安装",
+      "notInstalled": "未安装",
+      "configInvalid": "配置异常"
+    },
+    "enabled": "已启用",
+    "ready": "依赖就绪",
+    "installed": "已安装",
+    "notInstalled": "未安装",
+    "configInvalid": "配置异常",
+    "cliRequired": "需安装 CLI",
+    "checking": "检测中",
+    "empty": "没有匹配的 ACP Agent。"
+  },
+  "clients": {
+    "loading": "正在加载 ACP Agent…"
+  },
+  "fields": {
+    "name": "名称",
+    "command": "命令",
+    "args": "参数，每行一个",
+    "env": "环境变量，每行 KEY=VALUE",
+    "permissionMode": "工具确认"
+  },
+  "permissionMode": {
+    "ask": "询问",
+    "allowOnce": "自动通过",
+    "rejectOnce": "自动拒绝"
+  },
+  "requirements": {
+    "tool": "CLI",
+    "adapter": "ACP",
+    "installed": "已安装",
+    "missing": "缺失",
+    "checking": "检测中",
+    "ready": "依赖已就绪",
+    "notReady": "依赖缺失"
+  },
+  "notifications": {
+    "loadFailed": "加载 ACP 配置失败",
+    "saveSuccess": "ACP 配置已保存",
+    "saveFailed": "保存 ACP 配置失败",
+    "probeFailed": "检测 ACP 依赖失败",
+    "openLinkFailed": "打开链接失败",
+    "invalidJson": "ACP JSON 无效",
+    "invalidEnv": "环境变量无效",
+    "downloadSuccess": "ACP Agent CLI 已下载",
+    "downloadFailed": "下载 ACP Agent CLI 失败",
+    "predownloadSuccess": "ACP 适配器已下载",
+    "predownloadFailed": "下载 ACP 适配器失败"
+  }
+}

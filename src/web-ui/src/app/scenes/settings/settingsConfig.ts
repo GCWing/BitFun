@@ -12,6 +12,7 @@ export type ConfigTab =
   | 'review'
   | 'ai-context'
   | 'mcp-tools'
+  | 'acp-agents'
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
   | 'keyboard';
@@ -143,6 +144,20 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         labelKey: 'configCenter.tabs.mcpTools',
         descriptionKey: 'configCenter.tabDescriptions.mcpTools',
         keywords: ['mcp', 'server', 'plugin', 'stdio', 'sse', 'tools'],
+      },
+      {
+        id: 'acp-agents',
+        labelKey: 'configCenter.tabs.acpAgents',
+        descriptionKey: 'configCenter.tabDescriptions.acpAgents',
+        keywords: [
+          'acp',
+          'agent client protocol',
+          'external agent',
+          'opencode',
+          'claude code',
+          'codex',
+          'stdio',
+        ],
       },
     ],
   },

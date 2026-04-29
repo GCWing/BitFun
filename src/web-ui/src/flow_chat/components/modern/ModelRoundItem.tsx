@@ -145,7 +145,9 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     // 1) group subagent items
     // 2) group normal items into explore/critical via anchor tool
     const groupedItems = useMemo(() => {
-      const deferExploreGrouping = round.isStreaming && hasActiveStreamingNarrative(sortedItems);
+      const deferExploreGrouping =
+        round.renderHints?.disableExploreGrouping === true ||
+        (round.isStreaming && hasActiveStreamingNarrative(sortedItems));
       const intermediateGroups: Array<{ type: 'normal', item: FlowItem } | { type: 'subagent', parentTaskToolId: string, items: FlowItem[] }> = [];
       let currentSubagentGroup: { parentTaskToolId: string, items: FlowItem[] } | null = null;
       
@@ -259,7 +261,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       flushPendingAsCritical();
       
       return finalGroups;
-    }, [round.isStreaming, sortedItems]);
+    }, [round.isStreaming, round.renderHints?.disableExploreGrouping, sortedItems]);
 
     const extractDialogTurnContent = useCallback(() => {
       const flowChatStore = FlowChatStore.getInstance();

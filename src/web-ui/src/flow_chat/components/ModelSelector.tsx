@@ -12,6 +12,7 @@ import { Cpu, ChevronDown, Check, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { ACPClientAPI, type AcpSessionOptions } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import { getEffectiveReasoningMode, isReasoningVisiblyEnabled } from '@/infrastructure/config/utils/reasoning';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -126,10 +127,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [allModels, setAllModels] = useState<AIModelConfig[]>([]);
   const [defaultModels, setDefaultModels] = useState<Record<string, string>>({});
   const [agentModels, setAgentModels] = useState<Record<string, string>>({}); // mode_id -> model_id
+  const [acpOptions, setAcpOptions] = useState<AcpSessionOptions | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const activeSession = sessionId ? FlowChatStore.getInstance().getState().sessions.get(sessionId) : undefined;
+  const acpClientId = activeSession?.config.agentType?.startsWith('acp:')
+    ? activeSession.config.agentType.slice('acp:'.length)
+    : null;
+  const isAcpSession = Boolean(acpClientId && sessionId);
 
   // Load configuration data.
   const loadConfigData = useCallback(async () => {
@@ -174,6 +181,39 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       unsubscribe();
     };
   }, [loadConfigData]);
+
+  const loadAcpOptions = useCallback(async () => {
+    if (!isAcpSession || !acpClientId || !sessionId) {
+      setAcpOptions(null);
+      return;
+    }
+
+    try {
+      const options = await ACPClientAPI.getSessionOptions({
+        sessionId,
+        clientId: acpClientId,
+        workspacePath: activeSession?.workspacePath || activeSession?.config.workspacePath,
+        remoteConnectionId: activeSession?.remoteConnectionId,
+        remoteSshHost: activeSession?.remoteSshHost,
+      });
+      setAcpOptions(options);
+    } catch (error) {
+      log.warn('Failed to load ACP session model options', { sessionId, acpClientId, error });
+      setAcpOptions(null);
+    }
+  }, [
+    activeSession?.config.workspacePath,
+    activeSession?.remoteConnectionId,
+    activeSession?.remoteSshHost,
+    activeSession?.workspacePath,
+    acpClientId,
+    isAcpSession,
+    sessionId,
+  ]);
+
+  useEffect(() => {
+    loadAcpOptions();
+  }, [loadAcpOptions]);
   
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -190,6 +230,28 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [dropdownOpen]);
+
+  const acpAvailableModels = useMemo((): ModelInfo[] => {
+    if (!isAcpSession || !acpOptions) return [];
+    return acpOptions.availableModels.map(model => ({
+      id: model.id,
+      configName: model.name,
+      modelName: model.name,
+      providerName: acpClientId ? `${acpClientId} ACP` : 'ACP',
+      provider: 'acp',
+    }));
+  }, [acpClientId, acpOptions, isAcpSession]);
+
+  const acpCurrentModel = useMemo((): ModelInfo | null => {
+    if (!isAcpSession || !acpOptions?.currentModelId) return null;
+    return acpAvailableModels.find(model => model.id === acpOptions.currentModelId) || {
+      id: acpOptions.currentModelId,
+      configName: acpOptions.currentModelId,
+      modelName: acpOptions.currentModelId,
+      providerName: acpClientId ? `${acpClientId} ACP` : 'ACP',
+      provider: 'acp',
+    };
+  }, [acpAvailableModels, acpClientId, acpOptions?.currentModelId, isAcpSession]);
   
   const getCurrentModelId = useCallback((): string => {
     const configuredModelId = agentModels[currentMode] || 'auto';
@@ -269,6 +331,22 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
     setLoading(true);
     try {
+      if (isAcpSession && acpClientId && sessionId) {
+        const options = await ACPClientAPI.setSessionModel({
+          sessionId,
+          clientId: acpClientId,
+          workspacePath: activeSession?.workspacePath || activeSession?.config.workspacePath,
+          remoteConnectionId: activeSession?.remoteConnectionId,
+          remoteSshHost: activeSession?.remoteSshHost,
+          modelId,
+        });
+        setAcpOptions(options);
+        FlowChatStore.getInstance().updateSessionModelName(sessionId, modelId);
+        log.info('ACP session model updated', { sessionId, acpClientId, modelId });
+        setDropdownOpen(false);
+        return;
+      }
+
       const currentAgentModels = await configManager.getConfig<Record<string, string>>('ai.agent_models') || {};
 
       const updatedAgentModels = {
@@ -301,7 +379,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [currentMode, loading, sessionId]);
+  }, [
+    activeSession?.config.workspacePath,
+    activeSession?.remoteConnectionId,
+    activeSession?.remoteSshHost,
+    activeSession?.workspacePath,
+    acpClientId,
+    currentMode,
+    isAcpSession,
+    loading,
+    sessionId,
+  ]);
   
   const tokenPercentage = useMemo(() => {
     if (!maxTokens || maxTokens <= 0 || !currentTokens) return 0;
@@ -316,6 +404,77 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const formatTokenCount = (n: number) =>
     n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`;
+
+  if (isAcpSession) {
+    if (acpAvailableModels.length === 0) {
+      return null;
+    }
+
+    const currentAcpModelId = acpOptions?.currentModelId || acpAvailableModels[0]?.id || '';
+    const acpTooltip = getModelTooltipText(acpCurrentModel, acpClientId ? `${acpClientId} ACP` : 'ACP');
+
+    return (
+      <div
+        ref={dropdownRef}
+        className={`bitfun-model-selector ${className}`}
+      >
+        <Tooltip content={acpTooltip}>
+          <button
+            className={`bitfun-model-selector__trigger ${dropdownOpen ? 'bitfun-model-selector__trigger--open' : ''}`}
+            onClick={() => {
+              const nextOpen = !dropdownOpen;
+              setDropdownOpen(nextOpen);
+              if (nextOpen) {
+                loadAcpOptions();
+              }
+            }}
+            disabled={loading}
+          >
+            <Cpu size={10} className="bitfun-model-selector__icon" />
+            <span className="bitfun-model-selector__name">
+              {getModelDisplayLabel(acpCurrentModel, currentAcpModelId)}
+            </span>
+            <ChevronDown size={10} className="bitfun-model-selector__chevron" />
+          </button>
+        </Tooltip>
+
+        {dropdownOpen && (
+          <div className="bitfun-model-selector__dropdown">
+            <div className="bitfun-model-selector__dropdown-header">
+              <span>ACP model</span>
+              <span className="bitfun-model-selector__dropdown-hint">
+                {acpClientId}
+              </span>
+            </div>
+
+            <div className="bitfun-model-selector__list">
+              {acpAvailableModels.map(model => {
+                const isSelected = currentAcpModelId === model.id;
+
+                return (
+                  <Tooltip key={model.id} content={model.id} placement="right">
+                    <div
+                      className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
+                      onClick={() => handleSelectModel(model.id)}
+                    >
+                      <div className="bitfun-model-selector__option-main">
+                        <span className="bitfun-model-selector__option-name">
+                          {model.modelName}
+                        </span>
+                      </div>
+                      {isSelected && (
+                        <Check size={14} className="bitfun-model-selector__option-check" />
+                      )}
+                    </div>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (availableModels.length === 0) {
     return null;

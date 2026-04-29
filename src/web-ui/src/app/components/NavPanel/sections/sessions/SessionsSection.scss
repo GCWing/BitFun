@@ -12,6 +12,8 @@
   &__inline-list {
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    max-width: 100%;
     padding: 2px $size-gap-1 2px;
     gap: 0;
     // No vertical margin: spacing between assistant blocks comes from 2px top/bottom padding only
@@ -59,6 +61,8 @@
     display: flex;
     align-items: center;
     gap: 5px;
+    min-width: 0;
+    max-width: 100%;
     height: 26px;
     padding: 0 $size-gap-1;
     border: none;
@@ -69,6 +73,7 @@
     font-weight: 400;
     cursor: pointer;
     width: 100%;
+    overflow: hidden;
     text-align: left;
     overflow: hidden;
     position: relative;
@@ -184,6 +189,8 @@
   &__inline-item-main {
     flex: 1 1 0;
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
     display: flex;
     align-items: center;
     gap: 4px;
