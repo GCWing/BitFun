@@ -19,6 +19,7 @@ import type { SceneTabId } from '@/app/components/SceneBar/types';
 import type { WorkspaceInfo } from '@/shared/types';
 import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
 import './WelcomeScene.scss';
+import {workspaceAPI} from "@/infrastructure";
 
 const log = createLogger('WelcomeScene');
 
@@ -55,7 +56,7 @@ const WelcomeScene: React.FC = () => {
   const handleOpenFolder = useCallback(async () => {
     try {
       setIsSelecting(true);
-      let selected = "/data/storage/el2/base/files/test";
+      const selected = await workspaceAPI.open_oh_file_dialog();
       if (selected && typeof selected === 'string') {
         await openWorkspace(selected);
         openScene('session' as SceneTabId);

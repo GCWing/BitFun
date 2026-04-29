@@ -8,6 +8,7 @@ pub mod process_manager;
 pub mod timing;
 pub mod token_counter;
 pub mod types;
+pub mod register_arkts_function;
 
 pub use errors::*;
 pub use front_matter_markdown::FrontMatterMarkdown;
@@ -16,6 +17,7 @@ pub use plain_output::sanitize_plain_model_output;
 pub use process_manager::*;
 pub use timing::*;
 pub use token_counter::*;
+pub use register_arkts_function::*;
 pub use types::*;
 
 pub fn truncate_at_char_boundary(s: &str, max_bytes: usize) -> &str {

@@ -5,9 +5,9 @@ import { Save, X, RefreshCw, Upload } from 'lucide-react';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { LspPluginList } from '@/tools/lsp';
 import { lspService } from '@/tools/lsp/services/LspService';
-import { open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import './LspConfig.scss';
+import {workspaceAPI} from "@/infrastructure";
 import { storage } from '@/shared';
 
 const log = createLogger('LspConfig');
@@ -71,10 +71,7 @@ const LspConfig: React.FC = () => {
 
   const handleInstallPlugin = async () => {
     try {
-      const selected = await open({
-        multiple: false,
-        filters: [{ name: t('fileDialog.pluginPackage'), extensions: ['vcpkg'] }]
-      });
+      const selected = await workspaceAPI.open_oh_file_dialog();
       if (!selected) return;
 
       setIsInstalling(true);

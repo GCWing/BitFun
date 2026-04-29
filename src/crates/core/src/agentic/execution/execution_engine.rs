@@ -1787,7 +1787,11 @@ impl ExecutionEngine {
             }
 
             let tool_name = tool.name().to_string();
-            if mode_allowed_tools.contains(&tool_name) {
+            #[cfg(target_env = "ohos")]
+            let allow = true;
+            #[cfg(not(target_env = "ohos"))]
+            let allow = mode_allowed_tools.contains(&tool_name);
+            if allow {
                 let description = tool
                     .description_with_context(Some(&description_context))
                     .await

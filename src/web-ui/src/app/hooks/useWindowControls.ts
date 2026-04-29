@@ -6,6 +6,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { nowMs } from '@/shared/utils/timing';
 import { useI18n } from '@/infrastructure/i18n';
+import {workspaceAPI} from "@/infrastructure";
 import { isMacOSDesktopRuntime, supportsNativeWindowControls } from '@/infrastructure/runtime';
 
 const log = createLogger('useWindowControls');
@@ -200,8 +201,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
     );
     
     try {
-      const appWindow = getCurrentWindow();
-      await appWindow.minimize();
+      await workspaceAPI.handle_min_window();
       
       // Ensure input is usable after restore
       // Listen for restore
@@ -261,15 +261,13 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
       isMaximizeInProgress.current = true;
       // Skip auto updates to avoid duplicate state changes
       shouldSkipStateUpdate.current = true;
-      
-      const appWindow = getCurrentWindow();
-      
+
       // Optimization: skip isVisible check; query maximized directly.
       // If minimized, user restores via taskbar instead of double-clicking header.
       // Check current state to avoid duplicate toggles.
       let currentMaximized = false;
       try {
-        currentMaximized = await appWindow.isMaximized();
+        currentMaximized = await workspaceAPI.window_is_maximized();
       } catch (error) {
         log.warn('Failed to get maximized state, assuming not maximized', error);
         currentMaximized = false;
@@ -283,10 +281,10 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
       
       // Toggle maximize/restore
       if (currentMaximized) {
-        await appWindow.unmaximize();
+        await workspaceAPI.handle_restore_window();
         updateState(false);
       } else {
-        await appWindow.maximize();
+        await workspaceAPI.handle_max_window();
         updateState(true);
       }
       
@@ -333,8 +331,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
     if (!canUseNativeWindowControls) return;
 
     try {
-      const appWindow = getCurrentWindow();
-      await appWindow.close();
+      await workspaceAPI.close_window()
     } catch (error) {
       log.error('Failed to close window', error);
       notificationService.error(t('window.closeFailed', { error: formatErrorMessage(error) }));

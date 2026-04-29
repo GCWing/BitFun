@@ -6,7 +6,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, ChevronDown, Check, GitBranch } from 'lucide-react';
-import { gitAPI } from '../../infrastructure/api';
+import { gitAPI ,workspaceAPI} from '../../infrastructure/api';
 import type { GitWorkState } from '../../infrastructure/api/service-api/StartchatAgentAPI';
 import { useApp } from '../../app/hooks/useApp';
 import { createLogger } from '@/shared/utils/logger';
@@ -151,8 +151,9 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     try {
       setWorkspaceDropdownOpen(false);
       setIsSelectingWorkspace(true);
-      let path_manager = "/data/storage/el2/base/files/test";
-      await openWorkspace(path_manager);
+
+      const selected = await workspaceAPI.open_oh_file_dialog();
+      if (selected && typeof selected === 'string') await openWorkspace(selected);
     } catch (err) {
       log.warn('Failed to open workspace folder', err);
     } finally {

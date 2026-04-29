@@ -168,7 +168,7 @@ impl AppState {
                     "worker_host.js not found in any candidate location; \
                      MiniApp Workers will not start"
                 );
-                std::path::PathBuf::from("worker_host.js")
+                std::path::PathBuf::from("/data/storage/el2/base/files").join("woker_host.js")
             }
         };
         let js_worker_pool = JsWorkerPool::new(path_manager, worker_host_path)

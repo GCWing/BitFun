@@ -9,7 +9,6 @@
  */
 
 import React, { useState, useCallback, useEffect, useMemo, useRef, useContext } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { useWindowControls } from '../hooks/useWindowControls';
 import { useAssistantBootstrap } from '../hooks/useAssistantBootstrap';
@@ -118,11 +117,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const [showWorkspaceStatus, setShowWorkspaceStatus] = useState(false);
   const handleOpenProject = useCallback(async () => {
     try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: t('header.selectProjectDirectory'),
-      });
+      const selected = await workspaceAPI.open_oh_file_dialog();
 
       if (selected && typeof selected === 'string') {
         await openWorkspace(selected);
@@ -132,7 +127,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     }
   }, [openWorkspace, t]);
   const handleNewProject = useCallback(() => setShowNewProjectDialog(true), []);
-  const handleShowAbout  = useCallback(() => setShowAboutDialog(true), []);
+  const handleShowAbout = useCallback(() => setShowAboutDialog(true), []);
 
   const handleConfirmNewProject = useCallback(async (parentPath: string, projectName: string) => {
     const normalized = parentPath.replace(/\\/g, '/');
@@ -169,16 +164,15 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     void (async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
-        const { open } = await import('@tauri-apps/plugin-dialog');
         unlistenFns.push(await listen('bitfun_menu_open_project', async () => {
           try {
-            const selected = await open({ directory: true, multiple: false }) as string;
+            const selected = await workspaceAPI.open_oh_file_dialog();
             if (selected) await openWorkspace(selected);
-          } catch {}
+          } catch { }
         }));
         unlistenFns.push(await listen('bitfun_menu_new_project', () => handleNewProject()));
         unlistenFns.push(await listen('bitfun_menu_about', () => handleShowAbout()));
-      } catch {}
+      } catch { }
     })();
     return () => { unlistenFns.forEach(fn => fn()); unlistenFns = []; };
   }, [isMacOS, openWorkspace, handleNewProject, handleShowAbout]);
@@ -427,20 +421,20 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         e.dataTransfer.effectAllowed = 'copy';
       }
     };
-    const handleDragOver  = (e: DragEvent) => e.preventDefault();
-    const handleDragEnter = (_e: DragEvent) => {};
-    const handleDrop      = (e: DragEvent) => { if (!e.defaultPrevented) e.preventDefault(); };
+    const handleDragOver = (e: DragEvent) => e.preventDefault();
+    const handleDragEnter = (_e: DragEvent) => { };
+    const handleDrop = (e: DragEvent) => { if (!e.defaultPrevented) e.preventDefault(); };
 
     document.addEventListener('dragstart', handleDragStart, true);
-    document.addEventListener('dragover',  handleDragOver,  true);
+    document.addEventListener('dragover', handleDragOver, true);
     document.addEventListener('dragenter', handleDragEnter, true);
-    document.addEventListener('drop',      handleDrop,      true);
+    document.addEventListener('drop', handleDrop, true);
 
     return () => {
       document.removeEventListener('dragstart', handleDragStart, true);
-      document.removeEventListener('dragover',  handleDragOver,  true);
+      document.removeEventListener('dragover', handleDragOver, true);
       document.removeEventListener('dragenter', handleDragEnter, true);
-      document.removeEventListener('drop',      handleDrop,      true);
+      document.removeEventListener('drop', handleDrop, true);
     };
   }, []);
 
@@ -486,7 +480,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       <WorkspaceManager
         isVisible={showWorkspaceStatus}
         onClose={() => setShowWorkspaceStatus(false)}
-        onWorkspaceSelect={() => {}}
+        onWorkspaceSelect={() => { }}
       />
       <MCPInteractionDialog />
     </>

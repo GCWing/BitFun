@@ -1,4 +1,4 @@
- 
+
 
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { ITransportAdapter } from './base';
@@ -27,14 +27,6 @@ export class TauriTransportAdapter implements ITransportAdapter {
 
   private async doInitialize() {
     try {
-      // Check if Tauri API is available
-      if (typeof window !== 'undefined' && !('__TAURI__' in window)) {
-        log.warn('Tauri API not available, running in non-Tauri environment');
-        this.invokeFn = async () => {
-          throw new Error('Tauri API is not available. Make sure you are running in a Tauri environment.');
-        };
-        return;
-      }
 
       const tauriApi = await import('@tauri-apps/api/core');
       this.invokeFn = tauriApi.invoke;

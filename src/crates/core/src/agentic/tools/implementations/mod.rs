@@ -2,6 +2,7 @@
 
 pub mod ask_user_question_tool;
 pub mod bash_tool;
+pub mod calendar_tool;
 pub mod code_review_tool;
 pub mod computer_use_actions;
 pub mod computer_use_input;
@@ -40,7 +41,9 @@ pub mod terminal_control_tool;
 pub mod todo_write_tool;
 pub mod util;
 pub mod web_tools;
+pub mod harmonyos_project;
 
+pub use calendar_tool::CalendarTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
 pub use bash_tool::BashTool;
 pub use code_review_tool::CodeReviewTool;

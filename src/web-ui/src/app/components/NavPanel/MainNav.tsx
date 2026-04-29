@@ -46,6 +46,7 @@ import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { ALL_SHORTCUTS } from '@/shared/constants/shortcuts';
 
 import './NavPanel.scss';
+import {workspaceAPI} from "@/infrastructure";
 
 const NAV_TOGGLE_SEARCH_DEF = ALL_SHORTCUTS.find((d) => d.id === 'nav.toggleSearch')!;
 
@@ -239,12 +240,10 @@ const MainNav: React.FC<MainNavProps> = ({
 
   const handleOpenProject = useCallback(async () => {
     try {
-      // const { open } = await import('@tauri-apps/plugin-dialog');
-      // const selected = await open({ directory: true, multiple: false, title: t('header.selectProjectDirectory') });
-      // if (selected && typeof selected === 'string') {
-      let path_manager = "/data/storage/el2/base/files/test";
-      await workspaceManager.openWorkspace(path_manager);
-      // }
+      const selected = await workspaceAPI.open_oh_file_dialog();
+      if(selected && typeof selected === 'string'){
+        await workspaceManager.openWorkspace(selected);
+      }
     } catch (err) {
       log.error('Failed to open project', err);
     }

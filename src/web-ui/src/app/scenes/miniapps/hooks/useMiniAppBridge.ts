@@ -6,13 +6,14 @@
  */
 import { useLayoutEffect, useRef, useEffect, RefObject } from 'react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
-import { open as dialogOpen, save as dialogSave, message as dialogMessage } from '@tauri-apps/plugin-dialog';
+import { save as dialogSave, message as dialogMessage } from '@tauri-apps/plugin-dialog';
 import type { MiniApp } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import { buildMiniAppThemeVars } from '../utils/buildMiniAppThemeVars';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useI18n } from '@/infrastructure/i18n';
+import {workspaceAPI} from "@/infrastructure";
 
 interface JSONRPC {
   jsonrpc?: string;
@@ -157,7 +158,7 @@ export function useMiniAppBridge(
           return;
         }
         if (method === 'dialog.open') {
-          reply(await dialogOpen(params as unknown as Parameters<typeof dialogOpen>[0]));
+          reply(await workspaceAPI.open_oh_file_dialog());
           return;
         }
         if (method === 'dialog.save') {
