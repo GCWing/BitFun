@@ -797,7 +797,8 @@
       "searching": "Searching \"{{term}}\"...",
       "preparingSearch": "Preparing to search \"{{term}}\"",
       "clickToOpenLink": "Click to open link",
-      "noTitle": "No title"
+      "noTitle": "No title",
+      "summaryAvailable": "summary available"
     },
     "todoWrite": {
       "tasksCount": "{{count}} tasks",

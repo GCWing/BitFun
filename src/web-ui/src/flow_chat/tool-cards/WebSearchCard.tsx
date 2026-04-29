@@ -87,20 +87,27 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
   const searchTerm = getSearchTerm();
   const hasResultData = toolResult?.result !== undefined && toolResult?.result !== null;
   const hasResults = searchResults && searchResults.results.length > 0;
+  const hasSummary = !hasResults && searchResults && searchResults.summary;
+  const isExpandable = status === 'completed' && (hasResults || hasSummary);
 
   const handleClick = useCallback(() => {
-    if (status === 'completed' && hasResults) {
+    if (isExpandable) {
       applyExpandedState(isExpanded, !isExpanded, setIsExpanded, {
         onExpand,
       });
     }
-  }, [applyExpandedState, hasResults, isExpanded, onExpand, status]);
+  }, [applyExpandedState, isExpandable, isExpanded, onExpand]);
 
   const renderContent = () => {
     if (status === 'completed') {
-      const resultsText = hasResultData && searchResults 
-        ? ` (${t('toolCards.webSearch.resultsCount', { count: searchResults.total || 0 })})` 
-        : '';
+      let resultsText = '';
+      if (hasResultData && searchResults) {
+        if (hasResults) {
+          resultsText = ` (${t('toolCards.webSearch.resultsCount', { count: searchResults.total })})`;
+        } else if (hasSummary) {
+          resultsText = ` (${t('toolCards.webSearch.summaryAvailable')})`;
+        }
+      }
       return `${t('toolCards.webSearch.searchTitle', { term: searchTerm })}${resultsText}`;
     }
     if (status === 'running' || status === 'streaming' || status === 'preparing') {
@@ -112,30 +119,52 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
     return t('toolCards.webSearch.searchTitle', { term: searchTerm });
   };
 
-  const renderExpandedContent = () => (
-    <div className="compact-expanded-results-list">
-      {searchResults?.results.map((result: any, index: number) => (
-        <div key={index} className="compact-expanded-result-item">
-          <Tooltip content={t('toolCards.webSearch.clickToOpenLink')}>
-            <div 
-              className="compact-expanded-result-title"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenLink(result.url);
-              }}
-            >
-              <Link size={12} className="inline-icon" />
-              {result.title || t('toolCards.webSearch.noTitle')}
+  const renderExpandedContent = () => {
+    if (hasResults) {
+      return (
+        <div className="compact-expanded-results-list">
+          {searchResults?.results.map((result: any, index: number) => (
+            <div key={index} className="compact-expanded-result-item">
+              <Tooltip content={t('toolCards.webSearch.clickToOpenLink')}>
+                <div
+                  className="compact-expanded-result-title"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenLink(result.url);
+                  }}
+                >
+                  <Link size={12} className="inline-icon" />
+                  {result.title || t('toolCards.webSearch.noTitle')}
+                </div>
+              </Tooltip>
+              {result.snippet && (
+                <div className="compact-expanded-result-snippet">{result.snippet}</div>
+              )}
+              <div className="compact-expanded-result-url">{result.url}</div>
             </div>
-          </Tooltip>
-          {result.snippet && (
-            <div className="compact-expanded-result-snippet">{result.snippet}</div>
-          )}
-          <div className="compact-expanded-result-url">{result.url}</div>
+          ))}
         </div>
-      ))}
-    </div>
-  );
+      );
+    }
+
+    if (hasSummary) {
+      return (
+        <div className="compact-result-content">
+          <pre style={{
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            fontSize: '12px',
+            maxHeight: '400px',
+            overflow: 'auto'
+          }}>
+            {searchResults!.summary}
+          </pre>
+        </div>
+      );
+    }
+
+    return undefined;
+  };
 
   if (status === 'error') {
     return null;
@@ -147,7 +176,7 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
         status={status}
         isExpanded={isExpanded}
         onClick={handleClick}
-        clickable={Boolean(status === 'completed' && hasResults)}
+        clickable={isExpandable}
         header={
           <CompactToolCardHeader
             icon={<Globe size={16} className="web-search-card-icon" />}
@@ -156,7 +185,7 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
             rightStatusIconWithDivider
           />
         }
-        expandedContent={hasResults ? renderExpandedContent() : undefined}
+        expandedContent={isExpandable ? renderExpandedContent() : undefined}
       />
     </div>
   );

@@ -797,7 +797,8 @@
       "searching": "正在搜索 \"{{term}}\"...",
       "preparingSearch": "准备搜索 \"{{term}}\"",
       "clickToOpenLink": "点击打开链接",
-      "noTitle": "无标题"
+      "noTitle": "无标题",
+      "summaryAvailable": "有搜索摘要"
     },
     "todoWrite": {
       "tasksCount": "{{count}} 项任务",

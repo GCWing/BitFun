@@ -752,7 +752,8 @@
       "searching": "正在搜索 \"{{term}}\"...",
       "preparingSearch": "準備搜索 \"{{term}}\"",
       "clickToOpenLink": "點擊打開鏈接",
-      "noTitle": "無標題"
+      "noTitle": "無標題",
+      "summaryAvailable": "有搜索摘要"
     },
     "todoWrite": {
       "tasksCount": "{{count}} 項任務",
