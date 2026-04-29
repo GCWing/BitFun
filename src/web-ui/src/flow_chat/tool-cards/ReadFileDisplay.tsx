@@ -3,7 +3,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { Loader2, Clock, Check } from 'lucide-react';
+import { FileText, Loader2, Clock, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
@@ -19,12 +19,12 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     switch (status) {
       case 'running':
       case 'streaming':
-        return <Loader2 className="animate-spin" size={16} />;
+        return <Loader2 className="animate-spin" size={14} />;
       case 'completed':
-        return <Check size={16} className="icon-check-done" />;
+        return <Check size={14} className="icon-check-done" />;
       case 'pending':
       default:
-        return <Clock size={16} />;
+        return <Clock size={14} />;
     }
   };
 
@@ -134,8 +134,10 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
       clickable={canOpenFile}
       header={
         <CompactToolCardHeader
-          icon={getStatusIcon()}
+          icon={<FileText size={16} className="read-file-card-icon" />}
           content={renderContent()}
+          rightStatusIcon={getStatusIcon()}
+          rightStatusIconWithDivider
         />
       }
     />

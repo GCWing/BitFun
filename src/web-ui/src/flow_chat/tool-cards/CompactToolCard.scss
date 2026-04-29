@@ -106,16 +106,21 @@
 
 /* ========== Loading state: A (border via text fade) + E (text fade) ========== */
 
-/* Hide left spinner/cube */
+/* Hide left spinner/cube when it is the ONLY child (legacy: status icon used as left icon) */
 .compact-tool-card-wrapper--loading-shimmer .tool-card-icon-marks:has(.cube-loading),
 .compact-tool-card-wrapper--loading-shimmer .tool-card-icon-marks:has(svg.animate-spin) {
   display: none !important;
 }
 
-/* E — status icon + action + content breathe */
-.compact-tool-card-wrapper--loading-shimmer .tool-card-icon-marks,
+/* E — action + content breathe; keep tool-identifier-icon steady */
 .compact-tool-card-wrapper--loading-shimmer .compact-card-action,
 .compact-tool-card-wrapper--loading-shimmer .compact-card-content {
+  animation: tool-card-text-fade 1.6s ease-in-out infinite;
+}
+
+/* Legacy compact cards that still use status icon as left icon (no .tool-identifier-icon child):
+   fade the icon-marks too for the original shimmer effect. */
+.compact-tool-card-wrapper--loading-shimmer .tool-card-icon-marks:not(:has(.tool-identifier-icon)) {
   animation: tool-card-text-fade 1.6s ease-in-out infinite;
 }
 

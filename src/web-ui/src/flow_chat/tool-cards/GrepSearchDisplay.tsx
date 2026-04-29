@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Loader2, Clock, Check } from 'lucide-react';
+import { Search, Loader2, Clock, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
@@ -25,11 +25,11 @@ export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
     switch (status) {
       case 'running':
       case 'streaming':
-        return <Loader2 className="animate-spin" size={16} />;
+        return <Loader2 className="animate-spin" size={14} />;
       case 'completed':
-        return <Check size={16} className="icon-check-done" />;
+        return <Check size={14} className="icon-check-done" />;
       default:
-        return <Clock size={16} />;
+        return <Clock size={14} />;
     }
   };
 
@@ -151,8 +151,10 @@ export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
         clickable={hasDetails}
         header={
           <CompactToolCardHeader
-            icon={getStatusIcon()}
+            icon={<Search size={16} className="grep-search-card-icon" />}
             content={renderContent()}
+            rightStatusIcon={getStatusIcon()}
+            rightStatusIconWithDivider
           />
         }
         expandedContent={hasDetails ? renderExpandedContent() : undefined}

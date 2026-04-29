@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Loader2, Link, Clock, Check } from 'lucide-react';
+import { Globe, Loader2, Link, Clock, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { systemAPI } from '../../infrastructure/api';
@@ -32,11 +32,11 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
       case 'running':
       case 'streaming':
       case 'preparing':
-        return <Loader2 className="animate-spin" size={16} />;
+        return <Loader2 className="animate-spin" size={14} />;
       case 'completed':
-        return <Check size={16} className="icon-check-done" />;
+        return <Check size={14} className="icon-check-done" />;
       default:
-        return <Clock size={16} />;
+        return <Clock size={14} />;
     }
   };
 
@@ -150,8 +150,10 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
         clickable={Boolean(status === 'completed' && hasResults)}
         header={
           <CompactToolCardHeader
-            icon={getStatusIcon()}
+            icon={<Globe size={16} className="web-search-card-icon" />}
             content={renderContent()}
+            rightStatusIcon={getStatusIcon()}
+            rightStatusIconWithDivider
           />
         }
         expandedContent={hasResults ? renderExpandedContent() : undefined}
