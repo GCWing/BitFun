@@ -26,6 +26,7 @@
     gap: 4px;
   }
 
+  /* Spacing-only overrides — icon size & text styling are inherited from shared variables */
   .tool-card-icon-slot {
     align-self: center;
     width: 20px;
@@ -37,29 +38,8 @@
     height: 20px;
   }
 
-  .tool-card-icon.tool-identifier-icon.tool-card-icon-main svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  .compact-card-action {
-    font-size: var(--flowchat-font-size-xs);
-    line-height: 1.45;
-    font-weight: normal;
-  }
-
-  .compact-card-content {
-    font-size: var(--flowchat-font-size-xs);
-    line-height: 1.45;
-  }
-
-  .compact-card-extra {
-    font-size: var(--flowchat-font-size-xs);
-    line-height: 1.45;
-  }
-
   .compact-card-right-status-icon {
-    min-height: calc(var(--flowchat-font-size-xs) * 1.45);
+    min-height: 24px;
     justify-content: flex-start;
   }
 
@@ -195,9 +175,9 @@
  *   spans (line-height 1.65 × 14px = 23.1px), not by icon wrappers.
  */
 .compact-card-action {
-  font-size: var(--flowchat-font-size-base);
-  line-height: 1.65;
-  font-weight: 500;
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--tool-card-action-line-height);
+  font-weight: var(--tool-card-action-font-weight);
   color: var(--color-text-muted);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
@@ -205,8 +185,8 @@
 
 .compact-card-content {
   flex: 1;
-  font-size: var(--flowchat-font-size-base);
-  line-height: 1.65;
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--tool-card-action-line-height);
   color: var(--color-text-muted);
   min-width: 0;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -222,8 +202,8 @@
 }
 
 .compact-card-extra {
-  font-size: var(--flowchat-font-size-base);
-  line-height: 1.65;
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--tool-card-action-line-height);
   color: var(--color-text-muted);
   display: flex;
   align-items: center;

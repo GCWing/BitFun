@@ -71,6 +71,12 @@
   --tool-card-header-pad-right: 10px;
   --tool-card-header-icon-rail: 24px;
   --tool-card-header-icon-slot: calc(var(--tool-card-header-icon-rail) + 10px);
+
+  /* Shared icon & text sizing — dense-command variants only override spacing, not these */
+  --tool-card-icon-size: 16px;
+  --tool-card-action-font-size: var(--flowchat-font-size-base);
+  --tool-card-action-line-height: 1.65;
+  --tool-card-action-font-weight: 500;
 }
 
 /* ========== Shared icon-slot (left rail) ========== */
@@ -140,8 +146,8 @@
   transition: opacity 0.18s ease;
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: var(--tool-card-icon-size);
+    height: var(--tool-card-icon-size);
   }
 }
 
