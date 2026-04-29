@@ -324,10 +324,19 @@ impl GitTool {
             .await
             .map_err(|e| BitFunError::tool(format!("Git diff failed: {}", e)))?;
 
+        // When there are no differences, git diff returns exit code 0 with an
+        // empty stdout. Return a friendly message so the model (and user) see
+        // a clear "no changes" indication instead of a bare empty string.
+        let stdout = if diff_output.trim().is_empty() {
+            "No differences found.".to_string()
+        } else {
+            diff_output
+        };
+
         Ok(json!({
             "success": true,
             "exit_code": 0,
-            "stdout": diff_output,
+            "stdout": stdout,
             "stderr": ""
         }))
     }
@@ -777,6 +786,12 @@ This tool provides a safe and convenient way to execute Git commands. It support
    {"operation": "switch", "args": "main"}
    ```
 
+## Important: `args` Field Rules
+
+- The `operation` field already specifies the Git subcommand (e.g. `diff`, `log`, `add`).
+- The `args` field must contain **only additional arguments** for that subcommand.
+- **Do NOT include the subcommand name itself in `args`.** For example, use `{"operation": "diff", "args": "HEAD~2..HEAD --stat"}` — NOT `{"operation": "diff", "args": "diff HEAD~2..HEAD --stat"}`.
+
 ## Safety Notes
 
 - This tool validates operations to ensure only allowed Git commands are executed
@@ -1021,6 +1036,20 @@ When creating commits, use this format for the commit message:
             .ok_or_else(|| BitFunError::tool("operation is required".to_string()))?;
 
         let args = input.get("args").and_then(|v| v.as_str());
+
+        // Tolerance: strip a leading operation name from args if the model
+        // mistakenly includes it (e.g. "diff HEAD~2..HEAD --stat" when
+        // operation is already "diff"). This prevents commands like
+        // "git diff diff HEAD~2..HEAD --stat".
+        let args = args.map(|a| {
+            let trimmed = a.trim();
+            let prefix = format!("{} ", operation);
+            if trimmed.starts_with(&prefix) {
+                &trimmed[prefix.len()..]
+            } else {
+                trimmed
+            }
+        });
 
         let working_directory = input.get("working_directory").and_then(|v| v.as_str());
 
