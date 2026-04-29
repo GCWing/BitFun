@@ -1256,6 +1256,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     duration_ms: outcome.duration_ms,
                     subagent_parent_info: None,
                     partial_recovery_reason: None,
+                    success: Some(true),
+                    finish_reason: Some("complete".to_string()),
                 })
                 .await;
 

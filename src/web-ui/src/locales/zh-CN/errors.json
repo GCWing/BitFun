@@ -63,6 +63,8 @@
     "networkErrorSuggestion": "网络连接不稳定或模型服务端提前关闭了连接，请检查网络后重试",
     "loopDetected": "检测到重复操作",
     "loopDetectedSuggestion": "AI 连续执行了相同的操作，已自动停止。请尝试调整指令或手动完成剩余步骤",
+    "maxRounds": "对话达到上限",
+    "maxRoundsSuggestion": "对话轮次已达到系统上限，已自动终止。如需继续，请发起新的对话",
     "rateLimit": "模型请求频率超限",
     "rateLimitSuggestion": "请稍后重试，或在模型设置中切换到其他模型",
     "authError": "API 认证失败",

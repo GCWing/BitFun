@@ -195,6 +195,8 @@ impl TransportAdapter for TauriTransportAdapter {
                 turn_id,
                 subagent_parent_info,
                 partial_recovery_reason,
+                success,
+                finish_reason,
                 ..
             } => {
                 self.app_handle.emit(
@@ -204,6 +206,8 @@ impl TransportAdapter for TauriTransportAdapter {
                         "turnId": turn_id,
                         "subagentParentInfo": subagent_parent_info,
                         "partialRecoveryReason": partial_recovery_reason,
+                        "success": success,
+                        "finishReason": finish_reason,
                     }),
                 )?;
             }
