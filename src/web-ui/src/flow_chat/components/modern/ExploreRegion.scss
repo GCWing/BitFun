@@ -22,6 +22,8 @@
     // should not push the first summary line downward when the round is
     // re-wrapped from `model-round` into `explore-group`.
     padding: 0;
+    // Hide scrollbar track by default; only show when content actually overflows.
+    overflow: hidden;
 
     // In the plain model-round layout, the first/last flow item margins can
     // collapse with the parent. Once wrapped by explore-group, that collapse no
@@ -113,6 +115,8 @@
     // Align nested tool cards with the summary text, not the group chevron.
     padding: 0 0 0 20px;
     box-sizing: border-box;
+    // Hide scrollbar track by default; only show when content actually overflows.
+    overflow: hidden;
 
     &::-webkit-scrollbar {
       width: 4px;
@@ -201,11 +205,14 @@
   }
 }
 
-// Limit height and enable scroll during streaming.
+// Limit height and enable scroll only when content actually overflows.
+.explore-region--has-scroll .explore-region__content {
+  overflow-y: auto;
+}
+
 .explore-region--expanded.explore-region--streaming {
   .explore-region__content {
     max-height: 400px;
-    overflow-y: auto;
   }
 }
 
