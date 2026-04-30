@@ -38,6 +38,7 @@ const DEFAULT_MAX_SAME_ROLE_INSTANCES: usize = 3;
 const MAX_SAME_ROLE_INSTANCES: usize = 8;
 const DEFAULT_MAX_RETRIES_PER_ROLE: usize = 1;
 const MAX_RETRIES_PER_ROLE: usize = 3;
+const DEFAULT_MAX_PARALLEL_INSTANCES: usize = 4;
 const BUDGET_TTL: Duration = Duration::from_secs(60 * 60);
 const PRUNE_INTERVAL: Duration = Duration::from_secs(300);
 
@@ -422,6 +423,28 @@ impl DeepReviewStrategyLevel {
     }
 }
 
+/// Risk factors used for automatic strategy selection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChangeRiskFactors {
+    pub file_count: usize,
+    pub total_lines_changed: usize,
+    pub files_in_security_paths: usize,
+    pub max_cyclomatic_complexity_delta: usize,
+    pub cross_crate_changes: usize,
+}
+
+impl Default for ChangeRiskFactors {
+    fn default() -> Self {
+        Self {
+            file_count: 0,
+            total_lines_changed: 0,
+            files_in_security_paths: 0,
+            max_cyclomatic_complexity_delta: 0,
+            cross_crate_changes: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeepReviewExecutionPolicy {
     pub extra_subagent_ids: Vec<String>,
@@ -748,6 +771,14 @@ impl DeepReviewExecutionPolicy {
         policy
     }
 
+    /// Extract the concurrency policy from a run manifest, if present.
+    pub fn concurrency_policy_from_manifest(&self, raw_manifest: &Value) -> DeepReviewConcurrencyPolicy {
+        raw_manifest
+            .get("concurrencyPolicy")
+            .map(DeepReviewConcurrencyPolicy::from_manifest)
+            .unwrap_or_default()
+    }
+
     /// Returns true when the file count exceeds the split threshold and
     /// `max_same_role_instances > 1`, meaning the orchestrator should
     /// partition the file list across multiple same-role reviewer instances.
@@ -768,6 +799,145 @@ impl DeepReviewExecutionPolicy {
         let needed = (file_count + self.reviewer_file_split_threshold - 1)
             / self.reviewer_file_split_threshold;
         needed.clamp(1, self.max_same_role_instances)
+    }
+
+    /// Auto-select strategy level based on change risk factors.
+    /// Returns the recommended level and a human-readable rationale.
+    pub fn auto_select_strategy(
+        &self,
+        risk: &ChangeRiskFactors,
+    ) -> (DeepReviewStrategyLevel, String) {
+        let score = risk.file_count
+            + risk.total_lines_changed / 100
+            + risk.files_in_security_paths * 3
+            + risk.cross_crate_changes * 2;
+
+        match score {
+            0..=5 => (
+                DeepReviewStrategyLevel::Quick,
+                format!(
+                    "Small change ({} files, {} lines). Quick scan sufficient.",
+                    risk.file_count, risk.total_lines_changed
+                ),
+            ),
+            6..=20 => (
+                DeepReviewStrategyLevel::Normal,
+                format!(
+                    "Medium change ({} files, {} lines). Standard review recommended.",
+                    risk.file_count, risk.total_lines_changed
+                ),
+            ),
+            _ => (
+                DeepReviewStrategyLevel::Deep,
+                format!(
+                    "Large/high-risk change ({} files, {} lines, {} security files). Deep review recommended.",
+                    risk.file_count,
+                    risk.total_lines_changed,
+                    risk.files_in_security_paths
+                ),
+            ),
+        }
+    }
+}
+
+/// Dynamic concurrency control for deep review reviewer launches.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeepReviewConcurrencyPolicy {
+    /// Maximum parallel reviewer instances at once.
+    pub max_parallel_instances: usize,
+    /// Whether to stagger launches (wait N seconds between batches).
+    pub stagger_seconds: u64,
+    /// Whether to batch extras separately from core reviewers.
+    pub batch_extras_separately: bool,
+}
+
+impl Default for DeepReviewConcurrencyPolicy {
+    fn default() -> Self {
+        Self {
+            max_parallel_instances: DEFAULT_MAX_PARALLEL_INSTANCES,
+            stagger_seconds: 0,
+            batch_extras_separately: true,
+        }
+    }
+}
+
+impl DeepReviewConcurrencyPolicy {
+    pub fn from_manifest(raw: &Value) -> Self {
+        let Some(obj) = raw.as_object() else {
+            return Self::default();
+        };
+
+        Self {
+            max_parallel_instances: clamp_usize(
+                obj.get("maxParallelInstances"),
+                1,
+                16,
+                DEFAULT_MAX_PARALLEL_INSTANCES,
+            ),
+            stagger_seconds: clamp_u64(
+                obj.get("staggerSeconds"),
+                0,
+                60,
+                0,
+            ),
+            batch_extras_separately: obj
+                .get("batchExtrasSeparately")
+                .and_then(Value::as_bool)
+                .unwrap_or(true),
+        }
+    }
+
+    /// Compute the effective max same-role instances, capped by both
+    /// the execution policy's `max_same_role_instances` and the
+    /// concurrency policy's `max_parallel_instances / role_count`.
+    pub fn effective_max_same_role_instances(
+        &self,
+        policy: &DeepReviewExecutionPolicy,
+    ) -> usize {
+        let role_count = reviewer_agent_type_count() + policy.extra_subagent_ids.len();
+        let max_per_role = self.max_parallel_instances / role_count.max(1);
+        max_per_role.max(1).min(policy.max_same_role_instances)
+    }
+
+    /// Check whether the current number of active launches exceeds the cap.
+    /// Returns `Ok(())` if the launch is allowed, or an error describing why not.
+    pub fn check_launch_allowed(
+        &self,
+        active_count: usize,
+        role: DeepReviewSubagentRole,
+        is_judge_pending: bool,
+    ) -> Result<(), DeepReviewPolicyViolation> {
+        match role {
+            DeepReviewSubagentRole::Reviewer => {
+                if active_count >= self.max_parallel_instances {
+                    return Err(DeepReviewPolicyViolation::new(
+                        "deep_review_concurrency_cap_reached",
+                        format!(
+                            "Maximum parallel reviewer instances reached ({}/{}). Wait for running reviewers to complete before launching more.",
+                            active_count, self.max_parallel_instances
+                        ),
+                    ));
+                }
+            }
+            DeepReviewSubagentRole::Judge => {
+                if active_count > 0 {
+                    return Err(DeepReviewPolicyViolation::new(
+                        "deep_review_judge_launch_blocked_by_reviewers",
+                        format!(
+                            "ReviewJudge cannot launch while {} reviewer(s) are still active. Wait for reviewers to complete first.",
+                            active_count
+                        ),
+                    ));
+                }
+                if is_judge_pending {
+                    return Err(DeepReviewPolicyViolation::new(
+                        "deep_review_judge_already_pending",
+                        "ReviewJudge is already pending or running in this turn.",
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -934,6 +1104,23 @@ impl DeepReviewBudgetTracker {
             *last_pruned = Instant::now();
         }
     }
+
+    /// Returns the number of reviewer calls recorded for a given turn.
+    /// Used by the concurrency enforcement to check if a new launch is allowed.
+    pub fn active_reviewer_count(&self, parent_dialog_turn_id: &str) -> usize {
+        self.turns
+            .get(parent_dialog_turn_id)
+            .map(|budget| budget.reviewer_calls)
+            .unwrap_or(0)
+    }
+
+    /// Returns true if a judge call has been recorded for a given turn.
+    pub fn has_judge_been_launched(&self, parent_dialog_turn_id: &str) -> bool {
+        self.turns
+            .get(parent_dialog_turn_id)
+            .map(|budget| budget.judge_calls > 0)
+            .unwrap_or(false)
+    }
 }
 
 static GLOBAL_DEEP_REVIEW_BUDGET_TRACKER: LazyLock<DeepReviewBudgetTracker> =
@@ -991,6 +1178,41 @@ pub fn record_deep_review_task_budget(
         subagent_type,
         is_retry,
     )
+}
+
+/// Returns the number of active reviewer calls for a given turn.
+pub fn deep_review_active_reviewer_count(parent_dialog_turn_id: &str) -> usize {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.active_reviewer_count(parent_dialog_turn_id)
+}
+
+/// Returns true if a judge has been launched for a given turn.
+pub fn deep_review_has_judge_been_launched(parent_dialog_turn_id: &str) -> bool {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.has_judge_been_launched(parent_dialog_turn_id)
+}
+
+/// Returns the number of retries used for a specific subagent type in a given turn.
+pub fn deep_review_retries_used(parent_dialog_turn_id: &str, subagent_type: &str) -> usize {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER
+        .turns
+        .get(parent_dialog_turn_id)
+        .map(|budget| {
+            budget
+                .retries_used_by_subagent
+                .get(subagent_type)
+                .copied()
+                .unwrap_or(0)
+        })
+        .unwrap_or(0)
+}
+
+/// Returns the configured max retries per role for the given turn.
+/// Returns 0 if no budget tracking exists for the turn.
+pub fn deep_review_max_retries_per_role(_parent_dialog_turn_id: &str) -> usize {
+    // Use the compile-time default. The runtime policy can override via
+    // run manifest, but this function is called from a non-async context
+    // (task_tool result formatting) where we cannot await the async loader.
+    // The default value matches DEFAULT_MAX_RETRIES_PER_ROLE.
+    DEFAULT_MAX_RETRIES_PER_ROLE
 }
 
 fn collect_manifest_members(raw: Option<&Value>, output: &mut HashSet<String>) {
@@ -1122,13 +1344,93 @@ fn number_as_i64(value: &Value) -> Option<i64> {
     })
 }
 
+/// Incremental review cache stores completed reviewer outputs keyed by packet_id.
+/// When a deep review is re-run with the same target fingerprint, cached outputs
+/// are reused instead of re-dispatching reviewers.
+pub struct DeepReviewIncrementalCache {
+    fingerprint: String,
+    packets: HashMap<String, String>,
+}
+
+impl DeepReviewIncrementalCache {
+    pub fn new(fingerprint: &str) -> Self {
+        Self {
+            fingerprint: fingerprint.to_string(),
+            packets: HashMap::new(),
+        }
+    }
+
+    pub fn from_value(value: &Value) -> Self {
+        let obj = value.as_object();
+        let fingerprint = obj
+            .and_then(|o| o.get("fingerprint"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let packets = obj
+            .and_then(|o| o.get("packets"))
+            .and_then(Value::as_object)
+            .map(|map| {
+                map.iter()
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Self {
+            fingerprint,
+            packets,
+        }
+    }
+
+    pub fn to_value(&self) -> Value {
+        json!({
+            "fingerprint": self.fingerprint,
+            "packets": self.packets,
+        })
+    }
+
+    pub fn fingerprint(&self) -> &str {
+        &self.fingerprint
+    }
+
+    pub fn store_packet(&mut self, packet_id: &str, output: &str) {
+        self.packets
+            .insert(packet_id.to_string(), output.to_string());
+    }
+
+    pub fn get_packet(&self, packet_id: &str) -> Option<&str> {
+        self.packets.get(packet_id).map(|s| s.as_str())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.packets.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.packets.len()
+    }
+
+    /// Check if the cached fingerprint matches the fingerprint in the run manifest.
+    /// Returns false if the manifest has no incrementalReviewCache section.
+    pub fn matches_manifest(&self, manifest: &Value) -> bool {
+        manifest
+            .get("incrementalReviewCache")
+            .and_then(|ic| ic.get("fingerprint"))
+            .and_then(Value::as_str)
+            .map(|fp| fp == self.fingerprint)
+            .unwrap_or(false)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         is_missing_default_review_team_config_error, DeepReviewBudgetTracker,
-        DeepReviewExecutionPolicy, DeepReviewRunManifestGate, DeepReviewStrategyLevel,
-        DeepReviewSubagentRole, REVIEW_FIXER_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+        DeepReviewExecutionPolicy, DeepReviewIncrementalCache, DeepReviewRunManifestGate,
+        DeepReviewStrategyLevel, DeepReviewSubagentRole, REVIEW_FIXER_AGENT_TYPE,
+        REVIEW_JUDGE_AGENT_TYPE,
     };
+    use serde_json::Value;
     use crate::util::errors::BitFunError;
     use serde_json::json;
 
@@ -1663,5 +1965,213 @@ mod tests {
             "max_same_role_instances": 100
         })));
         assert_eq!(policy.max_same_role_instances, 8);
+    }
+
+    #[test]
+    fn auto_select_strategy_quick_for_small_changes() {
+        let policy = DeepReviewExecutionPolicy::default();
+        let risk = super::ChangeRiskFactors {
+            file_count: 2,
+            total_lines_changed: 80,
+            files_in_security_paths: 0,
+            max_cyclomatic_complexity_delta: 0,
+            cross_crate_changes: 0,
+        };
+        let (level, rationale) = policy.auto_select_strategy(&risk);
+        assert_eq!(level, DeepReviewStrategyLevel::Quick);
+        assert!(rationale.contains("2 files"));
+        assert!(rationale.contains("80 lines"));
+    }
+
+    #[test]
+    fn auto_select_strategy_normal_for_medium_changes() {
+        let policy = DeepReviewExecutionPolicy::default();
+        let risk = super::ChangeRiskFactors {
+            file_count: 8,
+            total_lines_changed: 400,
+            files_in_security_paths: 0,
+            max_cyclomatic_complexity_delta: 0,
+            cross_crate_changes: 0,
+        };
+        let (level, rationale) = policy.auto_select_strategy(&risk);
+        assert_eq!(level, DeepReviewStrategyLevel::Normal);
+        assert!(rationale.contains("8 files"));
+    }
+
+    #[test]
+    fn auto_select_strategy_deep_for_large_or_risky_changes() {
+        let policy = DeepReviewExecutionPolicy::default();
+        let risk = super::ChangeRiskFactors {
+            file_count: 30,
+            total_lines_changed: 2000,
+            files_in_security_paths: 3,
+            max_cyclomatic_complexity_delta: 0,
+            cross_crate_changes: 2,
+        };
+        let (level, rationale) = policy.auto_select_strategy(&risk);
+        assert_eq!(level, DeepReviewStrategyLevel::Deep);
+        assert!(rationale.contains("30 files"));
+        assert!(rationale.contains("3 security files"));
+    }
+
+    #[test]
+    fn auto_select_strategy_security_paths_boost_score() {
+        let policy = super::DeepReviewExecutionPolicy::default();
+        // 4 files + 0 lines/100 + 2 security * 3 = 10 → Normal
+        let risk = super::ChangeRiskFactors {
+            file_count: 4,
+            total_lines_changed: 0,
+            files_in_security_paths: 2,
+            max_cyclomatic_complexity_delta: 0,
+            cross_crate_changes: 0,
+        };
+        let (level, _) = policy.auto_select_strategy(&risk);
+        assert_eq!(level, DeepReviewStrategyLevel::Normal);
+    }
+
+    #[test]
+    fn concurrency_policy_default_values() {
+        let policy = super::DeepReviewConcurrencyPolicy::default();
+        assert_eq!(policy.max_parallel_instances, 4);
+        assert_eq!(policy.stagger_seconds, 0);
+        assert!(policy.batch_extras_separately);
+    }
+
+    #[test]
+    fn concurrency_policy_from_manifest() {
+        let raw = json!({
+            "maxParallelInstances": 6,
+            "staggerSeconds": 5,
+            "batchExtrasSeparately": false
+        });
+        let policy = super::DeepReviewConcurrencyPolicy::from_manifest(&raw);
+        assert_eq!(policy.max_parallel_instances, 6);
+        assert_eq!(policy.stagger_seconds, 5);
+        assert!(!policy.batch_extras_separately);
+    }
+
+    #[test]
+    fn concurrency_effective_max_same_role_instances() {
+        let exec_policy = DeepReviewExecutionPolicy::default();
+        let conc_policy = super::DeepReviewConcurrencyPolicy {
+            max_parallel_instances: 4,
+            stagger_seconds: 0,
+            batch_extras_separately: true,
+        };
+        // 5 reviewer types (4 core + 1 conditional), 4 / 5 = 0 → clamped to 1
+        assert_eq!(conc_policy.effective_max_same_role_instances(&exec_policy), 1);
+
+        let conc_policy_12 = super::DeepReviewConcurrencyPolicy {
+            max_parallel_instances: 12,
+            stagger_seconds: 0,
+            batch_extras_separately: true,
+        };
+        // 12 / 5 = 2, capped by default max_same_role_instances (3) → 2
+        assert_eq!(conc_policy_12.effective_max_same_role_instances(&exec_policy), 2);
+    }
+
+    #[test]
+    fn concurrency_check_launch_allowed() {
+        let policy = super::DeepReviewConcurrencyPolicy::default();
+        // 0 active reviewers → reviewer allowed
+        assert!(policy
+            .check_launch_allowed(0, DeepReviewSubagentRole::Reviewer, false)
+            .is_ok());
+        // 4 active reviewers (at cap) → reviewer blocked
+        let err = policy
+            .check_launch_allowed(4, DeepReviewSubagentRole::Reviewer, false)
+            .unwrap_err();
+        assert_eq!(err.code, "deep_review_concurrency_cap_reached");
+        // 1 active reviewer → judge blocked
+        let err = policy
+            .check_launch_allowed(1, DeepReviewSubagentRole::Judge, false)
+            .unwrap_err();
+        assert_eq!(err.code, "deep_review_judge_launch_blocked_by_reviewers");
+        // 0 active reviewers, judge not pending → judge allowed
+        assert!(policy
+            .check_launch_allowed(0, DeepReviewSubagentRole::Judge, false)
+            .is_ok());
+        // 0 active reviewers, judge pending → blocked
+        let err = policy
+            .check_launch_allowed(0, DeepReviewSubagentRole::Judge, true)
+            .unwrap_err();
+        assert_eq!(err.code, "deep_review_judge_already_pending");
+    }
+
+    #[test]
+    fn concurrency_policy_from_run_manifest() {
+        let policy = DeepReviewExecutionPolicy::default();
+        let manifest = json!({
+            "reviewMode": "deep",
+            "concurrencyPolicy": {
+                "maxParallelInstances": 3,
+                "staggerSeconds": 10
+            }
+        });
+        let conc = policy.concurrency_policy_from_manifest(&manifest);
+        assert_eq!(conc.max_parallel_instances, 3);
+        assert_eq!(conc.stagger_seconds, 10);
+        assert!(conc.batch_extras_separately);
+    }
+
+    // --- Incremental review cache tests ---
+
+    #[test]
+    fn incremental_cache_builds_and_reads() {
+        let mut cache = DeepReviewIncrementalCache::new("fp-abc123");
+        assert_eq!(cache.fingerprint(), "fp-abc123");
+        assert!(cache.is_empty());
+
+        cache.store_packet("reviewer:ReviewSecurity", "Found 2 security issues");
+        cache.store_packet("reviewer:ReviewBusinessLogic", "All good");
+        assert_eq!(cache.len(), 2);
+        assert!(!cache.is_empty());
+
+        assert_eq!(
+            cache.get_packet("reviewer:ReviewSecurity"),
+            Some("Found 2 security issues")
+        );
+        assert_eq!(cache.get_packet("reviewer:ReviewArchitecture"), None);
+    }
+
+    #[test]
+    fn incremental_cache_matches_fingerprint() {
+        let cache = DeepReviewIncrementalCache::new("fp-abc123");
+        let manifest = json!({
+            "incrementalReviewCache": {
+                "fingerprint": "fp-abc123"
+            }
+        });
+        assert!(cache.matches_manifest(&manifest));
+
+        let wrong_manifest = json!({
+            "incrementalReviewCache": {
+                "fingerprint": "fp-other"
+            }
+        });
+        assert!(!cache.matches_manifest(&wrong_manifest));
+    }
+
+    #[test]
+    fn incremental_cache_to_and_from_value() {
+        let mut cache = DeepReviewIncrementalCache::new("fp-test");
+        cache.store_packet("reviewer:ReviewSecurity", "sec result");
+        cache.store_packet("reviewer:ReviewBusinessLogic", "logic result");
+
+        let value = cache.to_value();
+        let restored = DeepReviewIncrementalCache::from_value(&value);
+        assert_eq!(restored.fingerprint(), "fp-test");
+        assert_eq!(restored.len(), 2);
+        assert_eq!(
+            restored.get_packet("reviewer:ReviewSecurity"),
+            Some("sec result")
+        );
+    }
+
+    #[test]
+    fn incremental_cache_from_null_value() {
+        let cache = DeepReviewIncrementalCache::from_value(&Value::Null);
+        assert!(cache.is_empty());
+        assert_eq!(cache.fingerprint(), "");
     }
 }

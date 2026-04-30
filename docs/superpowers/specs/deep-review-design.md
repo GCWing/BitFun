@@ -31,7 +31,14 @@ The proposal has three parts:
 
 ### Remaining / Future Work
 
-- Continue the Strategy Engine beyond predictive timeout: partial result capture, risk classification, dynamic concurrency control, and retry budget.
+- **Change risk auto-classification**: Rust backend `ChangeRiskFactors` struct and `auto_select_strategy` method (frontend `recommendReviewStrategyForTarget` is complete; backend side is not).
+- **Dynamic concurrency control**: Rust backend `DeepReviewConcurrencyPolicy` enforcement with batched/staggered launch, `effective_max_same_role_instances` (frontend policy computation is complete; backend enforcement is not).
+- **Incremental review cache**: Frontend plan + fingerprint generation is complete; backend cache read/write/invalidation logic is not implemented.
+- **Shared context cache**: Frontend plan generation is complete; backend cache read/write to avoid duplicate file reads is not implemented.
+- **Token budget enforcement**: Frontend plan generation is complete; backend enforcement of `maxFilesPerReviewer`, `maxPromptBytesPerReviewer`, `largeDiffSummaryFirst` is not implemented.
+- **Pre-review summary UI**: Frontend data structure and prompt block generation is complete; user-facing UI display is not implemented.
+- **Work packet batched scheduling**: Frontend work packet data structure is complete; backend `launchBatch` / `staggerSeconds` / `batchExtrasSeparately` scheduling is not implemented.
+- **Compression contract integration**: `CompressionContract` structure and `From<EvidenceLedgerSummary>` conversion is complete; the compressor prompt already injects contract content; no additional implementation needed.
 - Add automated coverage tests for new role i18n and card layout constraints.
 
 ## Current State Analysis
@@ -853,6 +860,75 @@ ReviewFrontend: {
 4. **Change risk auto-classification** — Reduces misconfiguration; ~30% time savings.
 5. **Dynamic concurrency control** — Prevents rate limit violations, especially important with 4-5 reviewers.
 6. **Retry budget** — Improves resilience for transient failures.
+
+### Implementation Additions (Beyond Original Design)
+
+The following additions emerged during implementation as natural extensions of the original design.
+
+#### ContextHealthSnapshot
+
+**Added in**: `execution_engine.rs`
+
+A runtime health snapshot used by the compression and context-profile subsystems to detect degraded sessions:
+
+```rust
+struct ContextHealthSnapshot {
+    token_usage_ratio: f64,              // current / context_window
+    repeated_tool_signature_count: usize, // same tool+args pattern in consecutive turns
+    consecutive_failed_commands: usize,   // back-to-back tool errors
+}
+```
+
+**Purpose**: The Context Profile Policy (Section 1.3) needs runtime signals to decide when to downgrade concurrency or switch to a lighter compression strategy. `ContextHealthSnapshot` provides these signals from observed turn history rather than static configuration.
+
+**Integration points**:
+- `context_profile.rs` uses the snapshot to adjust `LongTask` profile concurrency limits when `repeated_tool_signature_count > 2` or `consecutive_failed_commands > 1`.
+- The compression subsystem uses `token_usage_ratio` to decide between model-based and fallback compression.
+
+#### ModelCapabilityProfile
+
+**Added in**: `context_profile.rs`
+
+A lightweight model capability classifier used to adapt review behavior for weaker models:
+
+```rust
+enum ModelCapabilityProfile {
+    Standard, // full-featured models
+    Weak,     // models with limited reasoning (detected by id heuristic)
+}
+```
+
+**Detection heuristic**: Matches model id against known weak-model suffixes (`haiku`, `mini`, `flash`, etc.).
+
+**Purpose**: Weak models require different concurrency and context strategies (lower parallel reviewer count, smaller per-reviewer context windows, reduced file-splitting). This is a runtime complement to the user-configured strategy level.
+
+**Integration points**:
+- `context_profile.rs` reduces `max_parallel_reviewers` for `Weak` models.
+- `deep_review_policy.rs` can lower predictive timeout multipliers for weak models (future work).
+
+#### Extended Review Target Path Classification
+
+**Added in**: `reviewTargetClassifier.ts`
+
+The original design defined a simple `hasFrontendFiles()` boolean check. The implementation extends this to a multi-domain path classification system with 15+ tag rules:
+
+| Domain Tag | Path Patterns | Purpose |
+|---|---|---|
+| `frontend_ui` | `src/web-ui/src/**`, `*.tsx` | Frontend UI components |
+| `frontend_style` | `*.scss`, `*.css` (in web-ui) | Frontend styling |
+| `frontend_i18n` | `**/locales/**` | Internationalization files |
+| `frontend_contract` | `src/apps/desktop/src/api/**` | Frontend-backend API surface |
+| `desktop_contract` | `src/apps/desktop/**` | Desktop-specific integration |
+| `backend_core` | `src/crates/core/**` | Core Rust logic |
+| `api_layer` | `src/crates/api-layer/**` | API abstraction layer |
+| `transport` | `src/crates/transport/**` | Transport adapters |
+
+**Purpose**: Fine-grained classification enables:
+1. More accurate `recommendReviewStrategyForTarget()` scoring (e.g., `contractSurfaceChanged` flag).
+2. Conditional reviewer activation beyond just Frontend (e.g., future backend-only optimizations).
+3. Pre-review summary with workspace area breakdown.
+
+**Backward compatibility**: The simple `hasFrontendFiles()` check is derived from the tags: `target.tags.includes('frontend_ui') || target.tags.includes('frontend_style') || target.tags.includes('frontend_i18n')`.
 
 ### Future Role Extensibility Improvements
 

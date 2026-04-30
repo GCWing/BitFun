@@ -853,6 +853,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 custom_metadata: None,
                 todos: None,
                 deep_review_run_manifest: None,
+                deep_review_cache: None,
                 workspace_path: Some(workspace_path.to_string()),
                 workspace_hostname: None,
                 unread_completion: None,
