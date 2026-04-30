@@ -25,6 +25,7 @@ import type { RemediationGroupId } from '../../utils/codeReviewReport';
 import { continueDeepReviewSession } from '../../services/DeepReviewContinuationService';
 import { flowChatManager } from '../../services/FlowChatManager';
 import { globalEventBus } from '@/infrastructure/event-bus';
+import { DEEP_REVIEW_SCROLL_TO_EVENT } from '../../events/flowchatNavigation';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { getAiErrorPresentation } from '@/shared/ai-errors/aiErrorPresenter';
@@ -838,7 +839,10 @@ export const ReviewActionBar: React.FC = () => {
                               disabled={isCompleted}
                               size="small"
                             />
-                            <span className="deep-review-action-bar__remediation-text" title={item.plan}>
+                            <span
+                              className="deep-review-action-bar__remediation-text"
+                              title={item.decisionContext ? item.plan : undefined}
+                            >
                               {isCompleted && (
                                 <CheckCircle size={12} className="deep-review-action-bar__completed-icon" />
                               )}
@@ -847,7 +851,27 @@ export const ReviewActionBar: React.FC = () => {
                                   {t('reviewActionBar.needsDecisionTag', { defaultValue: 'Decision' })}
                                 </span>
                               )}
-                              {item.plan}
+                              <a
+                                className="deep-review-action-bar__remediation-link"
+                                href={`#review-remediation-${item.groupId ?? 'ungrouped'}-${item.groupIndex}`}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (item.groupId != null) {
+                                    globalEventBus.emit(DEEP_REVIEW_SCROLL_TO_EVENT, {
+                                      groupId: item.groupId,
+                                      groupIndex: item.groupIndex,
+                                    });
+                                  }
+                                }}
+                              >
+                                {item.decisionContext?.question ?? item.plan}
+                              </a>
+                              {item.decisionContext?.tradeoffs && (
+                                <span className="deep-review-action-bar__remediation-tradeoffs">
+                                  {item.decisionContext.tradeoffs}
+                                </span>
+                              )}
                             </span>
                           </label>
                         );

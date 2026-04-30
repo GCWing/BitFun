@@ -223,6 +223,59 @@
     color: var(--color-text-secondary);
     font-size: 12px;
     line-height: 1.55;
+
+    li {
+      padding: 2px 4px;
+      border-radius: 3px;
+      transition: background-color 0.15s ease;
+
+      &.is-highlighted {
+        animation: review-highlight-fade 2s ease-out forwards;
+      }
+    }
+  }
+
+  @keyframes review-highlight-fade {
+    0% {
+      background-color: color-mix(in srgb, var(--color-accent-500, #60a5fa) 18%, transparent);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  .review-decision-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .review-decision-item__question {
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+
+  .review-decision-item__options {
+    margin: 0;
+    padding-left: 16px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    line-height: 1.55;
+
+    li {
+      padding: 1px 0;
+
+      &.is-recommended {
+        color: var(--color-accent-500, #60a5fa);
+        font-weight: 500;
+      }
+    }
+  }
+
+  .review-decision-item__tradeoffs {
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-style: italic;
   }
 
   .team-list {

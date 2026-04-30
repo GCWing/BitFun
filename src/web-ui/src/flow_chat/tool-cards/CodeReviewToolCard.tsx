@@ -34,6 +34,9 @@ import {
   type StrengthGroupId,
 } from '../utils/codeReviewReport';
 import { CodeReviewReportExportActions } from './CodeReviewReportExportActions';
+import { DEEP_REVIEW_SCROLL_TO_EVENT, type DeepReviewScrollToRequest } from '../events/flowchatNavigation';
+import { globalEventBus } from '@/infrastructure';
+import { normalizeDecisionEntry, type DecisionContext } from '../utils/codeReviewReport';
 import './CodeReviewToolCard.scss';
 
 const log = createLogger('CodeReviewToolCard');
@@ -129,11 +132,11 @@ function renderReportGroupList<TId extends RemediationGroupId | StrengthGroupId>
   titleForGroup: (id: TId) => string,
 ): React.ReactNode {
   return groups.map((group) => (
-    <div key={group.id} className="review-report-group">
+    <div key={group.id} id={`review-remediation-group-${group.id}`} className="review-report-group">
       <div className="review-report-group__title">{titleForGroup(group.id)}</div>
       <ul className="review-report-group__list">
         {group.items.map((item, index) => (
-          <li key={`${group.id}-${index}`}>{item}</li>
+          <li key={`${group.id}-${index}`} id={`review-remediation-${group.id}-${index}`}>{item}</li>
         ))}
       </ul>
     </div>
@@ -318,6 +321,40 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
       return next;
     });
   }, []);
+
+  // Listen for scroll-to events from the review action bar
+  useEffect(() => {
+    const handler = (request: DeepReviewScrollToRequest) => {
+      // Ensure the card is expanded
+      if (!isExpanded) {
+        setIsExpanded(true);
+      }
+
+      // Ensure the remediation section is expanded
+      setExpandedReportSectionIds((current) => {
+        if (current.has('remediation')) return current;
+        const next = new Set(current);
+        next.add('remediation');
+        return next;
+      });
+
+      // Scroll to the target item after render
+      requestAnimationFrame(() => {
+        const anchorId = `review-remediation-${request.groupId}-${request.groupIndex}`;
+        const anchor = document.getElementById(anchorId);
+        if (anchor) {
+          anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          anchor.classList.add('is-highlighted');
+          setTimeout(() => anchor.classList.remove('is-highlighted'), 2000);
+        }
+      });
+    };
+
+    globalEventBus.on(DEEP_REVIEW_SCROLL_TO_EVENT, handler);
+    return () => {
+      globalEventBus.off(DEEP_REVIEW_SCROLL_TO_EVENT, handler);
+    };
+  }, [isExpanded]);
 
   const renderContent = () => {
     if (status === 'completed' && reviewData) {
@@ -564,10 +601,60 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
             </div>
             {review_mode === 'deep' ? (
               <div className="review-remediation__groups">
-                {renderReportGroupList(
-                  reportSections.remediationGroups,
-                  (id) => getRemediationGroupTitle(id, t),
-                )}
+                {reportSections.remediationGroups.map((group) => {
+                  const groupTitle = getRemediationGroupTitle(group.id, t);
+
+                  // Render needs_decision group with structured decision context
+                  if (group.id === 'needs_decision') {
+                    const rawEntries = reviewData?.report_sections?.remediation_groups?.needs_decision;
+                    return (
+                      <div key={group.id} id={`review-remediation-group-${group.id}`} className="review-report-group">
+                        <div className="review-report-group__title">{groupTitle}</div>
+                        <ul className="review-report-group__list">
+                          {group.items.map((_, index) => {
+                            const raw = rawEntries?.[index];
+                            const ctx = raw ? normalizeDecisionEntry(raw as string | DecisionContext) : null;
+                            return (
+                              <li key={`${group.id}-${index}`} id={`review-remediation-${group.id}-${index}`}>
+                                {ctx && ctx.question !== ctx.plan ? (
+                                  <div className="review-decision-item">
+                                    <div className="review-decision-item__question">{ctx.question}</div>
+                                    {ctx.options && ctx.options.length > 0 && (
+                                      <ul className="review-decision-item__options">
+                                        {ctx.options.map((opt, oi) => (
+                                          <li key={oi} className={oi === ctx.recommendation ? 'is-recommended' : ''}>
+                                            {opt}{oi === ctx.recommendation ? ` (${t('toolCards.codeReview.remediationActions.recommended', { defaultValue: 'recommended' })})` : ''}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
+                                    {ctx.tradeoffs && (
+                                      <div className="review-decision-item__tradeoffs">{ctx.tradeoffs}</div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  group.items[index]
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  }
+
+                  // Default rendering for other groups
+                  return (
+                    <div key={group.id} id={`review-remediation-group-${group.id}`} className="review-report-group">
+                      <div className="review-report-group__title">{groupTitle}</div>
+                      <ul className="review-report-group__list">
+                        {group.items.map((item, index) => (
+                          <li key={`${group.id}-${index}`} id={`review-remediation-${group.id}-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="remediation-list">

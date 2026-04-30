@@ -115,7 +115,9 @@ When you have gathered sufficient context and completed your review, call the `s
     "remediation_groups": {
       "must_fix": ["Required correctness/security/regression fixes"],
       "should_improve": ["Non-blocking cleanup or quality improvements"],
-      "needs_decision": ["Items needing user/product judgment"],
+      "needs_decision": [
+        {"question": "Decision point description", "plan": "Remediation if approved", "options": ["Option A", "Option B"], "tradeoffs": "Trade-off explanation", "recommendation": 0}
+      ],
       "verification": ["Focused verification steps"]
     },
     "strength_groups": {

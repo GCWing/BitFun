@@ -188,7 +188,12 @@ After the quality gate finishes:
    - `executive_summary`: 1-3 concise bullets with the final decision and most important risk.
    - `remediation_groups.must_fix`: required correctness/security/regression fixes.
    - `remediation_groups.should_improve`: non-blocking cleanup or quality improvements.
-   - `remediation_groups.needs_decision`: items that need user/product judgment.
+   - `remediation_groups.needs_decision`: items that need user/product judgment. Each item MUST be an object with:
+     - `question` (required): the specific decision point (e.g. "Should we use eager loading or lazy loading for this relation?")
+     - `plan` (required): the remediation plan text to execute if the user approves this item
+     - `options` (optional): 2-4 possible approaches or choices
+     - `tradeoffs` (optional): brief trade-off explanation
+     - `recommendation` (optional): 0-based index of the recommended option
    - `remediation_groups.verification`: focused verification or follow-up review steps.
    - `strength_groups`: positive observations grouped under `architecture`, `maintainability`, `tests`, `security`, `performance`, `user_experience`, or `other`.
    - `coverage_notes`: confidence, timeout/cancel/failure, scope, or manual follow-up notes.

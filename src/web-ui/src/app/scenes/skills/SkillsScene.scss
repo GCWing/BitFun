@@ -159,34 +159,36 @@ $skills-content-top: clamp(36px, 4.5vh, 48px);
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 34px;
-  padding: 0 $size-gap-3;
-  border: none;
-  border-radius: $size-radius-base;
-  @include btn-primary.btn-primary-surface-default;
+  gap: $size-gap-1;
+  height: 24px;
+  padding: 0 $size-gap-2;
+  border: 1px solid color-mix(in srgb, var(--color-accent-500) 20%, var(--border-subtle));
+  border-radius: $size-radius-full;
+  background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+  color: var(--color-accent-600, var(--color-text-secondary));
   font-size: var(--font-size-xs);
   font-weight: $font-weight-medium;
   cursor: pointer;
+  white-space: nowrap;
   transition:
     background $motion-fast $easing-standard,
     color $motion-fast $easing-standard,
-    box-shadow $motion-fast $easing-standard;
-  white-space: nowrap;
+    border-color $motion-fast $easing-standard;
 
   &:hover {
-    @include btn-primary.btn-primary-surface-hover;
+    background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-500) 30%, var(--border-medium));
+    color: var(--color-accent-600, var(--color-text-primary));
   }
 
   &:active {
-    @include btn-primary.btn-primary-surface-active;
+    background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
   }
 
   &:focus-visible {
     outline: 2px solid color-mix(
       in srgb,
-      var(--btn-primary-color, var(--color-accent-500)) 55%,
+      var(--color-accent-500) 55%,
       transparent
     );
     outline-offset: 2px;

@@ -44,9 +44,29 @@ export interface CodeReviewReviewer {
 
 export interface CodeReviewReportSectionsData {
   executive_summary?: string[];
-  remediation_groups?: Partial<Record<RemediationGroupId, string[]>>;
+  remediation_groups?: Partial<Record<RemediationGroupId, (string | DecisionContext)[]>>;
   strength_groups?: Partial<Record<StrengthGroupId, string[]>>;
   coverage_notes?: string[];
+}
+
+/**
+ * Structured decision context for `needs_decision` remediation items.
+ * Falls back to a plain string when the AI returns a legacy format.
+ */
+export interface DecisionContext {
+  question: string;
+  plan: string;
+  options?: string[];
+  tradeoffs?: string;
+  recommendation?: number;
+}
+
+/** Normalize a raw `needs_decision` entry to a DecisionContext object. */
+export function normalizeDecisionEntry(entry: string | DecisionContext): DecisionContext {
+  if (typeof entry === 'string') {
+    return { question: entry, plan: entry };
+  }
+  return entry;
 }
 
 export interface CodeReviewReportData {

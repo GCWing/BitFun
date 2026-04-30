@@ -36,7 +36,8 @@
   },
   "toolbar": {
     "searchPlaceholder": "Search skills...",
-    "addTooltip": "Add Skill"
+    "addTooltip": "Add Skill",
+    "hideDuplicates": "Duplicates"
   },
   "filters": {
     "all": "All",

@@ -1,8 +1,10 @@
 import type {
   CodeReviewReportSectionsData,
+  DecisionContext,
   RemediationGroupId,
   ReviewMode,
 } from './codeReviewReport';
+import { normalizeDecisionEntry } from './codeReviewReport';
 
 export interface CodeReviewRemediationSummary {
   overall_assessment?: string;
@@ -34,10 +36,12 @@ export interface CodeReviewRemediationData {
 export interface ReviewRemediationItem {
   id: string;
   index: number;
+  groupIndex: number;
   plan: string;
   issue?: CodeReviewRemediationIssue;
   groupId?: RemediationGroupId;
   requiresDecision?: boolean;
+  decisionContext?: DecisionContext;
   defaultSelected: boolean;
 }
 
@@ -98,17 +102,33 @@ function buildStructuredRemediationItems(
   const items: ReviewRemediationItem[] = [];
 
   for (const groupId of REMEDIATION_GROUP_ORDER) {
-    for (const plan of nonEmpty(remediationGroups[groupId])) {
+    const rawEntries = remediationGroups[groupId];
+    if (!rawEntries || !Array.isArray(rawEntries) || rawEntries.length === 0) {
+      continue;
+    }
+
+    let groupIndex = 0;
+    for (const raw of rawEntries) {
+      // Normalize: needs_decision entries may be structured objects or plain strings
+      const isDecision = groupId === 'needs_decision';
+      const normalized = isDecision ? normalizeDecisionEntry(raw as string | DecisionContext) : null;
+      const plan = isDecision && normalized ? normalized.plan : String(raw).trim();
+      if (!plan) {
+        continue;
+      }
+
       const index = items.length;
-      const requiresDecision = groupId === 'needs_decision';
       items.push({
         id: `remediation-${groupId}-${index}`,
         index,
+        groupIndex,
         plan,
         groupId,
-        requiresDecision,
+        requiresDecision: isDecision,
+        decisionContext: isDecision ? normalized ?? undefined : undefined,
         defaultSelected: groupId === 'must_fix',
       });
+      groupIndex++;
     }
   }
 
@@ -135,6 +155,7 @@ export function buildReviewRemediationItems(
     items.push({
       id: `remediation-${index}`,
       index,
+      groupIndex: index,
       plan: trimmedPlan,
       ...(issue ? { issue } : {}),
       defaultSelected: shouldSelectByDefault(reviewData, issue),

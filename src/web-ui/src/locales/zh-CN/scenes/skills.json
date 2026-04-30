@@ -36,7 +36,8 @@
   },
   "toolbar": {
     "searchPlaceholder": "搜索技能...",
-    "addTooltip": "添加技能"
+    "addTooltip": "添加技能",
+    "hideDuplicates": "重复项"
   },
   "filters": {
     "all": "全部",

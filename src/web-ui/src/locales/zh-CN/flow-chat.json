@@ -1240,7 +1240,8 @@
         "cancel": "取消",
         "fixUnavailable": "无法开始修复：审核会话不可用。",
         "fixRequestDisplay": "开始修复深度审核问题",
-        "fixAndReviewRequestDisplay": "修复深度审核问题并重新审核"
+        "fixAndReviewRequestDisplay": "修复深度审核问题并重新审核",
+        "recommended": "推荐"
       },
       "riskLevels": {
         "low": "低风险",

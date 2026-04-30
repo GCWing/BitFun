@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Filter,
   FolderOpen,
   Package,
   Plus,
@@ -43,10 +44,12 @@ const SkillsScene: React.FC = () => {
     searchDraft,
     marketQuery,
     installedFilter,
+    hideDuplicates,
     isAddFormOpen,
     setSearchDraft,
     submitMarketQuery,
     setInstalledFilter,
+    setHideDuplicates,
     setAddFormOpen,
     toggleAddForm,
   } = useSkillsSceneStore();
@@ -115,7 +118,9 @@ const SkillsScene: React.FC = () => {
   const selectedInstalledSkill = selectedDetail?.type === 'installed' ? selectedDetail.skill : null;
   const selectedMarketSkill = selectedDetail?.type === 'market' ? selectedDetail.skill : null;
 
-  const installedFiltered = installed.filteredSkills;
+  const installedFiltered = hideDuplicates
+    ? installed.filteredSkills.filter((s) => !s.isShadowed)
+    : installed.filteredSkills;
   const installedTotalPages = Math.max(
     1,
     Math.ceil(installedFiltered.length / INSTALLED_PAGE_SIZE),
@@ -300,13 +305,24 @@ const SkillsScene: React.FC = () => {
                       <span className="skills-split__filter-count">{count}</span>
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    className={[
+                      'skills-split__filter-chip',
+                      hideDuplicates && 'is-active',
+                    ].filter(Boolean).join(' ')}
+                    onClick={() => setHideDuplicates(!hideDuplicates)}
+                  >
+                    <Filter size={13} />
+                    <span>{t('toolbar.hideDuplicates')}</span>
+                  </button>
                 </div>
                 <button
                   type="button"
                   className="skills-split__add-btn"
                   onClick={toggleAddForm}
                 >
-                  <Plus size={14} />
+                  <Plus size={13} />
                   <span>{t('toolbar.addTooltip')}</span>
                 </button>
               </div>

@@ -1236,7 +1236,8 @@
         "cancel": "Cancel",
         "fixUnavailable": "Unable to start remediation because the review session is unavailable.",
         "fixRequestDisplay": "Start fixing Deep Review findings",
-        "fixAndReviewRequestDisplay": "Fix Deep Review findings and re-review"
+        "fixAndReviewRequestDisplay": "Fix Deep Review findings and re-review",
+        "recommended": "recommended"
       },
       "riskLevels": {
         "low": "Low Risk",

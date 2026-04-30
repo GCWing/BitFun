@@ -1195,7 +1195,8 @@
         "cancel": "取消",
         "fixUnavailable": "無法開始修復：審核會話不可用。",
         "fixRequestDisplay": "開始修復深度審核問題",
-        "fixAndReviewRequestDisplay": "修復深度審核問題並重新審核"
+        "fixAndReviewRequestDisplay": "修復深度審核問題並重新審核",
+        "recommended": "推薦"
       },
       "riskLevels": {
         "low": "低風險",

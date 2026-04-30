@@ -267,6 +267,28 @@
     overflow: hidden;
   }
 
+  &__remediation-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dashed color-mix(in srgb, var(--color-accent-500, #60a5fa) 60%, transparent);
+    cursor: pointer;
+    transition: border-bottom-color 0.15s ease;
+
+    &:hover {
+      border-bottom-style: solid;
+      border-bottom-color: var(--color-accent-500, #60a5fa);
+    }
+  }
+
+  &__remediation-tradeoffs {
+    display: block;
+    font-size: 10px;
+    color: var(--color-text-muted);
+    font-style: italic;
+    margin-top: 2px;
+    line-height: 1.4;
+  }
+
   &__remediation-tag {
     display: inline-flex;
     align-items: center;
