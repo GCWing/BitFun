@@ -529,8 +529,7 @@ impl SkillRegistry {
 
     pub async fn refresh(&self) {
         let skills = sort_skills(annotate_shadowed_skills(
-            self.scan_skill_candidates_for_workspace(None)
-                .await,
+            self.scan_skill_candidates_for_workspace(None).await,
         ));
         let mut cache = self.cache.write().await;
         *cache = skills;

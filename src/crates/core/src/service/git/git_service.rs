@@ -14,6 +14,48 @@ pub struct GitService;
 
 type CommitStats = (Option<i32>, Option<i32>, Option<i32>);
 
+fn parse_name_status_output(output: &str) -> Vec<GitChangedFile> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split('\t');
+            let raw_status = parts.next()?.trim();
+            if raw_status.is_empty() {
+                return None;
+            }
+
+            let status = match raw_status.chars().next().unwrap_or_default() {
+                'A' => GitChangedFileStatus::Added,
+                'M' => GitChangedFileStatus::Modified,
+                'D' => GitChangedFileStatus::Deleted,
+                'R' => GitChangedFileStatus::Renamed,
+                'C' => GitChangedFileStatus::Copied,
+                _ => GitChangedFileStatus::Unknown,
+            };
+
+            match status {
+                GitChangedFileStatus::Renamed | GitChangedFileStatus::Copied => {
+                    let old_path = parts.next()?.to_string();
+                    let path = parts.next()?.to_string();
+                    Some(GitChangedFile {
+                        path,
+                        old_path: Some(old_path),
+                        status,
+                    })
+                }
+                _ => {
+                    let path = parts.next()?.to_string();
+                    Some(GitChangedFile {
+                        path,
+                        old_path: None,
+                        status,
+                    })
+                }
+            }
+        })
+        .collect()
+}
+
 impl GitService {
     /// Checks whether the path is a Git repository.
     pub async fn is_repository<P: AsRef<Path>>(path: P) -> Result<bool, GitError> {
@@ -769,6 +811,38 @@ impl GitService {
         execute_git_command(&repo_path, &args).await
     }
 
+    /// Gets changed files using `git diff --name-status`.
+    pub async fn get_changed_files<P: AsRef<Path>>(
+        path: P,
+        params: &GitChangedFilesParams,
+    ) -> Result<Vec<GitChangedFile>, GitError> {
+        let repo_path = path.as_ref().to_string_lossy();
+
+        let mut args = vec!["diff", "--name-status"];
+        let range;
+
+        if params.staged.unwrap_or(false) {
+            args.push("--cached");
+        }
+
+        match (&params.source, &params.target) {
+            (Some(src), Some(tgt)) => {
+                range = format!("{}..{}", src, tgt);
+                args.push(&range);
+            }
+            (Some(src), None) => {
+                args.push(src);
+            }
+            (None, Some(tgt)) => {
+                args.push(tgt);
+            }
+            (None, None) => {}
+        }
+
+        let output = execute_git_command(&repo_path, &args).await?;
+        Ok(parse_name_status_output(&output))
+    }
+
     /// Gets file content.
     ///
     /// # Parameters
@@ -1123,5 +1197,48 @@ impl GitService {
             output: Some(output),
             duration: Some(duration),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_name_status_output_for_common_statuses() {
+        let files = parse_name_status_output(
+            "M\tsrc/main.rs\nA\tsrc/new.rs\nD\tsrc/old.rs\nR100\tsrc/old_name.rs\tsrc/new_name.rs\nC087\tsrc/source.rs\tsrc/copy.rs\n",
+        );
+
+        assert_eq!(
+            files,
+            vec![
+                GitChangedFile {
+                    path: "src/main.rs".to_string(),
+                    old_path: None,
+                    status: GitChangedFileStatus::Modified,
+                },
+                GitChangedFile {
+                    path: "src/new.rs".to_string(),
+                    old_path: None,
+                    status: GitChangedFileStatus::Added,
+                },
+                GitChangedFile {
+                    path: "src/old.rs".to_string(),
+                    old_path: None,
+                    status: GitChangedFileStatus::Deleted,
+                },
+                GitChangedFile {
+                    path: "src/new_name.rs".to_string(),
+                    old_path: Some("src/old_name.rs".to_string()),
+                    status: GitChangedFileStatus::Renamed,
+                },
+                GitChangedFile {
+                    path: "src/copy.rs".to_string(),
+                    old_path: Some("src/source.rs".to_string()),
+                    status: GitChangedFileStatus::Copied,
+                },
+            ],
+        );
     }
 }

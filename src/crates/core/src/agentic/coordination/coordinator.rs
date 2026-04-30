@@ -4,6 +4,7 @@
 
 use super::{scheduler::DialogSubmissionPolicy, turn_outcome::TurnOutcome};
 use crate::agentic::agents::get_agent_registry;
+use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::core::{
     has_prompt_markup, Message, MessageContent, ProcessingPhase, PromptEnvelope, Session,
     SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
@@ -49,6 +50,48 @@ const SUBAGENT_TIMEOUT_GRACE_PERIOD: Duration = Duration::from_secs(10);
 pub struct SubagentResult {
     /// AI text response
     pub text: String,
+    pub status: SubagentResultStatus,
+    pub reason: Option<String>,
+    pub ledger_event_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubagentResultStatus {
+    Completed,
+    PartialTimeout,
+}
+
+impl SubagentResult {
+    fn completed(text: String) -> Self {
+        Self {
+            text,
+            status: SubagentResultStatus::Completed,
+            reason: None,
+            ledger_event_id: None,
+        }
+    }
+
+    fn partial_timeout(text: String, reason: String) -> Self {
+        Self {
+            text,
+            status: SubagentResultStatus::PartialTimeout,
+            reason: Some(reason),
+            ledger_event_id: None,
+        }
+    }
+
+    fn with_ledger_event_id(mut self, event_id: String) -> Self {
+        self.ledger_event_id = Some(event_id);
+        self
+    }
+
+    pub fn is_partial_timeout(&self) -> bool {
+        self.status == SubagentResultStatus::PartialTimeout
+    }
+
+    pub fn ledger_event_id(&self) -> Option<&str> {
+        self.ledger_event_id.as_deref()
+    }
 }
 
 struct HiddenSubagentExecutionRequest {
@@ -130,20 +173,17 @@ struct SubagentConcurrencyLimiter {
 }
 
 struct SubagentConcurrencyPermitGuard {
-    permit: Option<OwnedSemaphorePermit>,
-    limiter: SubagentConcurrencyLimiter,
+    permits: Vec<(OwnedSemaphorePermit, SubagentConcurrencyLimiter)>,
     agent_type: String,
 }
 
 impl SubagentConcurrencyPermitGuard {
     fn new(
-        permit: OwnedSemaphorePermit,
-        limiter: SubagentConcurrencyLimiter,
+        permits: Vec<(OwnedSemaphorePermit, SubagentConcurrencyLimiter)>,
         agent_type: String,
     ) -> Self {
         Self {
-            permit: Some(permit),
-            limiter,
+            permits,
             agent_type,
         }
     }
@@ -151,20 +191,17 @@ impl SubagentConcurrencyPermitGuard {
 
 impl Drop for SubagentConcurrencyPermitGuard {
     fn drop(&mut self) {
-        let Some(permit) = self.permit.take() else {
-            return;
-        };
+        for (permit, limiter) in std::mem::take(&mut self.permits) {
+            drop(permit);
 
-        drop(permit);
-
-        let active_subagents = self
-            .limiter
-            .max_concurrency
-            .saturating_sub(self.limiter.semaphore.available_permits());
-        debug!(
-            "Released subagent concurrency permit: agent_type={}, active_subagents={}, max_concurrency={}",
-            self.agent_type, active_subagents, self.limiter.max_concurrency
-        );
+            let active_subagents = limiter
+                .max_concurrency
+                .saturating_sub(limiter.semaphore.available_permits());
+            debug!(
+                "Released subagent concurrency permit: agent_type={}, active_subagents={}, max_concurrency={}",
+                self.agent_type, active_subagents, limiter.max_concurrency
+            );
+        }
     }
 }
 
@@ -254,6 +291,7 @@ pub struct ConversationCoordinator {
     event_queue: Arc<EventQueue>,
     event_router: Arc<EventRouter>,
     subagent_concurrency_limiter: Arc<RwLock<Option<SubagentConcurrencyLimiter>>>,
+    subagent_profile_concurrency_limiters: Arc<RwLock<HashMap<usize, SubagentConcurrencyLimiter>>>,
     /// Registry for dynamically adjusting subagent timeouts.
     subagent_timeout_registry: Arc<RwLock<HashMap<String, Arc<SubagentTimeoutHandle>>>>,
     /// Notifies DialogScheduler of turn outcomes; injected after construction
@@ -565,6 +603,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             event_queue,
             event_router,
             subagent_concurrency_limiter: Arc::new(RwLock::new(None)),
+            subagent_profile_concurrency_limiters: Arc::new(RwLock::new(HashMap::new())),
             subagent_timeout_registry: Arc::new(RwLock::new(HashMap::new())),
             scheduler_notify_tx: OnceLock::new(),
             round_preempt_source: OnceLock::new(),
@@ -813,6 +852,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 tags: Vec::new(),
                 custom_metadata: None,
                 todos: None,
+                deep_review_run_manifest: None,
+                deep_review_cache: None,
                 workspace_path: Some(workspace_path.to_string()),
                 workspace_hostname: None,
                 unread_completion: None,
@@ -1077,6 +1118,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         agent_type: String,
         workspace_path: Option<String>,
         submission_policy: DialogSubmissionPolicy,
+        user_message_metadata: Option<serde_json::Value>,
     ) -> BitFunResult<()> {
         self.start_dialog_turn_internal(
             session_id,
@@ -1087,7 +1129,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             agent_type,
             workspace_path,
             submission_policy,
-            None,
+            user_message_metadata,
             false,
         )
         .await
@@ -1104,6 +1146,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         agent_type: String,
         workspace_path: Option<String>,
         submission_policy: DialogSubmissionPolicy,
+        user_message_metadata: Option<serde_json::Value>,
     ) -> BitFunResult<()> {
         self.start_dialog_turn_internal(
             session_id,
@@ -1114,7 +1157,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             agent_type,
             workspace_path,
             submission_policy,
-            None,
+            user_message_metadata,
             false,
         )
         .await
@@ -1636,6 +1679,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         // Pass turn_index (for operation history/rollback)
         context_vars.insert("turn_index".to_string(), turn_index.to_string());
+        if let Some(run_manifest) = user_message_metadata.as_ref().and_then(|metadata| {
+            metadata
+                .get("deepReviewRunManifest")
+                .or_else(|| metadata.get("deep_review_run_manifest"))
+        }) {
+            context_vars.insert(
+                "deep_review_run_manifest".to_string(),
+                run_manifest.to_string(),
+            );
+        }
         let session_workspace_path = session_workspace
             .as_ref()
             .map(|workspace| workspace.root_path_string());
@@ -1658,6 +1711,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services,
             round_preempt: self.round_preempt_source.get().cloned(),
+            recover_partial_on_cancel: false,
         };
 
         // Auto-generate session title on first message
@@ -2154,16 +2208,41 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         limiter
     }
 
-    async fn acquire_subagent_concurrency_permit(
+    async fn get_subagent_profile_concurrency_limiter(
         &self,
+        max_concurrency: usize,
+    ) -> SubagentConcurrencyLimiter {
+        let max_concurrency = normalize_subagent_max_concurrency(max_concurrency);
+
+        {
+            let limiter_guard = self.subagent_profile_concurrency_limiters.read().await;
+            if let Some(limiter) = limiter_guard.get(&max_concurrency) {
+                return limiter.clone();
+            }
+        }
+
+        let mut limiter_guard = self.subagent_profile_concurrency_limiters.write().await;
+        if let Some(limiter) = limiter_guard.get(&max_concurrency) {
+            return limiter.clone();
+        }
+
+        let limiter = SubagentConcurrencyLimiter {
+            semaphore: Arc::new(Semaphore::new(max_concurrency)),
+            max_concurrency,
+        };
+        limiter_guard.insert(max_concurrency, limiter.clone());
+        limiter
+    }
+
+    async fn acquire_permit_from_limiter(
+        &self,
+        limiter: &SubagentConcurrencyLimiter,
         agent_type: &str,
         cancel_token: Option<&CancellationToken>,
         deadline: Option<Instant>,
-    ) -> BitFunResult<(OwnedSemaphorePermit, SubagentConcurrencyLimiter, u128)> {
-        let limiter = self.get_subagent_concurrency_limiter().await;
-        let started_waiting = Instant::now();
+        label: &str,
+    ) -> BitFunResult<OwnedSemaphorePermit> {
         let semaphore = limiter.semaphore.clone();
-
         let permit = match (cancel_token, deadline) {
             (Some(token), Some(deadline)) => {
                 tokio::select! {
@@ -2175,8 +2254,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     }
                     _ = tokio::time::sleep_until(deadline) => {
                         return Err(BitFunError::Timeout(format!(
-                            "Timed out while waiting for a concurrency slot for subagent '{}'",
-                            agent_type
+                            "Timed out while waiting for a {} concurrency slot for subagent '{}'",
+                            label, agent_type
                         )));
                     }
                 }
@@ -2196,8 +2275,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     result = semaphore.acquire_owned() => result?,
                     _ = tokio::time::sleep_until(deadline) => {
                         return Err(BitFunError::Timeout(format!(
-                            "Timed out while waiting for a concurrency slot for subagent '{}'",
-                            agent_type
+                            "Timed out while waiting for a {} concurrency slot for subagent '{}'",
+                            label, agent_type
                         )));
                     }
                 }
@@ -2205,16 +2284,104 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             (None, None) => semaphore.acquire_owned().await?,
         };
 
-        let wait_ms = started_waiting.elapsed().as_millis();
         let active_subagents = limiter
             .max_concurrency
             .saturating_sub(limiter.semaphore.available_permits());
         debug!(
-            "Acquired subagent concurrency permit: agent_type={}, wait_ms={}, active_subagents={}, max_concurrency={}",
-            agent_type, wait_ms, active_subagents, limiter.max_concurrency
+            "Acquired subagent {} concurrency permit: agent_type={}, active_subagents={}, max_concurrency={}",
+            label, agent_type, active_subagents, limiter.max_concurrency
         );
 
-        Ok((permit, limiter, wait_ms))
+        Ok(permit)
+    }
+
+    async fn acquire_subagent_concurrency_permit(
+        &self,
+        agent_type: &str,
+        profile_concurrency_cap: usize,
+        cancel_token: Option<&CancellationToken>,
+        deadline: Option<Instant>,
+    ) -> BitFunResult<(
+        Vec<(OwnedSemaphorePermit, SubagentConcurrencyLimiter)>,
+        u128,
+    )> {
+        let started_waiting = Instant::now();
+
+        let profile_limiter = self
+            .get_subagent_profile_concurrency_limiter(profile_concurrency_cap)
+            .await;
+        let profile_permit = self
+            .acquire_permit_from_limiter(
+                &profile_limiter,
+                agent_type,
+                cancel_token,
+                deadline,
+                "profile",
+            )
+            .await?;
+
+        let global_limiter = self.get_subagent_concurrency_limiter().await;
+        let global_permit = self
+            .acquire_permit_from_limiter(
+                &global_limiter,
+                agent_type,
+                cancel_token,
+                deadline,
+                "global",
+            )
+            .await?;
+
+        let wait_ms = started_waiting.elapsed().as_millis();
+        debug!(
+            "Acquired subagent concurrency permits: agent_type={}, wait_ms={}, profile_max_concurrency={}, global_max_concurrency={}",
+            agent_type, wait_ms, profile_limiter.max_concurrency, global_limiter.max_concurrency
+        );
+
+        Ok((
+            vec![
+                (profile_permit, profile_limiter),
+                (global_permit, global_limiter),
+            ],
+            wait_ms,
+        ))
+    }
+
+    fn context_profile_policy_for_subagent(
+        &self,
+        agent_type: &str,
+        session_config: &SessionConfig,
+        subagent_parent_info: Option<&SubagentParentInfo>,
+    ) -> ContextProfilePolicy {
+        if let Some(parent_info) = subagent_parent_info {
+            if let Some(parent_session) = self.session_manager.get_session(&parent_info.session_id)
+            {
+                let parent_is_review_subagent = get_agent_registry()
+                    .get_subagent_is_review(&parent_session.agent_type)
+                    .unwrap_or(false);
+                let is_review_subagent = get_agent_registry()
+                    .get_subagent_is_review(agent_type)
+                    .unwrap_or(false);
+                return ContextProfilePolicy::for_subagent_context_and_models(
+                    agent_type,
+                    is_review_subagent,
+                    session_config.model_id.as_deref(),
+                    Some(&parent_session.agent_type),
+                    parent_is_review_subagent,
+                    parent_session.config.model_id.as_deref(),
+                );
+            }
+        }
+
+        let is_review_subagent = get_agent_registry()
+            .get_subagent_is_review(agent_type)
+            .unwrap_or(false);
+        let model_id = session_config.model_id.as_deref().unwrap_or_default();
+        ContextProfilePolicy::for_agent_context_and_model(
+            agent_type,
+            is_review_subagent,
+            model_id,
+            model_id,
+        )
     }
 
     async fn execute_hidden_subagent_internal(
@@ -2248,6 +2415,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             timeout_seconds.map(|seconds| Instant::now() + Duration::from_secs(seconds));
         let (deadline_tx, mut deadline_rx) = watch::channel(initial_deadline);
 
+        let context_profile_policy = self.context_profile_policy_for_subagent(
+            &agent_type,
+            &session_config,
+            subagent_parent_info.as_ref(),
+        );
+        debug!(
+            "Subagent context profile policy selected: agent_type={}, profile={:?}, profile_concurrency_cap={}",
+            agent_type,
+            context_profile_policy.profile,
+            context_profile_policy.subagent_concurrency_cap
+        );
+
         // Check cancel token (before creating session)
         if let Some(token) = cancel_token {
             if token.is_cancelled() {
@@ -2262,11 +2441,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // Use create_subagent_session (not create_session) so that no SessionCreated
         // event is emitted to the transport layer — subagent sessions are internal
         // implementation details and must not appear in the UI session list.
-        let (permit, limiter, wait_ms) = self
-            .acquire_subagent_concurrency_permit(&agent_type, cancel_token, initial_deadline)
+        let (permits, wait_ms) = self
+            .acquire_subagent_concurrency_permit(
+                &agent_type,
+                context_profile_policy.subagent_concurrency_cap,
+                cancel_token,
+                initial_deadline,
+            )
             .await?;
-        let _permit_guard =
-            SubagentConcurrencyPermitGuard::new(permit, limiter, agent_type.clone());
+        let _permit_guard = SubagentConcurrencyPermitGuard::new(permits, agent_type.clone());
 
         if let Some(token) = cancel_token {
             if token.is_cancelled() {
@@ -2376,7 +2559,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             original_user_input: None,
             user_message_metadata: None,
             subagent_parent_info: subagent_parent_info.clone().map(Into::into),
-        }).await;
+        })
+        .await;
 
         let subagent_workspace = Self::build_workspace_binding(&session.config).await;
         let subagent_services = Self::build_workspace_services(&subagent_workspace).await;
@@ -2395,6 +2579,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions,
             workspace_services: subagent_services,
             round_preempt: self.round_preempt_source.get().cloned(),
+            recover_partial_on_cancel: true,
         };
 
         let execution_engine = self.execution_engine.clone();
@@ -2577,15 +2762,41 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     );
                 }
 
-                match tokio::time::timeout(SUBAGENT_TIMEOUT_GRACE_PERIOD, &mut execution_task).await
+                let partial_timeout_result = match tokio::time::timeout(
+                    SUBAGENT_TIMEOUT_GRACE_PERIOD,
+                    &mut execution_task,
+                )
+                .await
                 {
-                    Ok(Ok(Ok(_))) | Ok(Ok(Err(_))) => {}
+                    Ok(Ok(Ok(exec_result))) => {
+                        let response_text = match exec_result.final_message.content {
+                            MessageContent::Mixed { text, .. } => text,
+                            MessageContent::Text(text) => text,
+                            _ => String::new(),
+                        };
+                        if response_text.trim().is_empty() {
+                            None
+                        } else {
+                            Some(SubagentResult::partial_timeout(
+                                response_text,
+                                timeout_error_message.clone(),
+                            ))
+                        }
+                    }
+                    Ok(Ok(Err(error))) => {
+                        debug!(
+                            "Subagent returned error during timeout grace period: agent_type={}, session={}, error={}",
+                            agent_type, session_id, error
+                        );
+                        None
+                    }
                     Ok(Err(error)) => {
                         warn!(
                             "Subagent join failed during timeout grace period: agent_type={}, session={}, error={}",
                             agent_type, session_id, error
                         );
                         execution_task.abort();
+                        None
                     }
                     Err(_) => {
                         warn!(
@@ -2593,7 +2804,37 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             agent_type, session_id
                         );
                         execution_task.abort();
+                        None
                     }
+                };
+
+                if let Some(mut partial_result) = partial_timeout_result {
+                    warn!(
+                        "Subagent timed out with partial output: agent_type={}, session={}, text_len={}",
+                        agent_type,
+                        session_id,
+                        partial_result.text.len()
+                    );
+                    if let Some(parent_info) = subagent_parent_info.as_ref() {
+                        let event = self.session_manager.record_subagent_partial_timeout(
+                            &parent_info.session_id,
+                            &parent_info.dialog_turn_id,
+                            &agent_type,
+                            &partial_result.text,
+                            Some("timeout"),
+                        );
+                        partial_result = partial_result.with_ledger_event_id(event.event_id);
+                    }
+                    if let Err(cleanup_err) = self.cleanup_subagent_resources(&session_id).await {
+                        warn!(
+                            "Failed to cleanup subagent resources after partial timeout: session={}, error={}",
+                            session_id, cleanup_err
+                        );
+                    }
+                    let mut registry = self.subagent_timeout_registry.write().await;
+                    registry.remove(&session_id);
+
+                    return Ok(partial_result);
                 }
 
                 if let Err(cleanup_err) = self.cleanup_subagent_resources(&session_id).await {
@@ -2653,9 +2894,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let mut registry = self.subagent_timeout_registry.write().await;
         registry.remove(&session_id);
 
-        Ok(SubagentResult {
-            text: response_text,
-        })
+        Ok(SubagentResult::completed(response_text))
     }
 
     pub async fn capture_fork_agent_context_snapshot(
@@ -2739,7 +2978,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .ensure_hidden_btw_session(parent_session_id, child_session_id, child_session_name)
             .await?;
 
-        if let Some(model_id) = model_id.map(str::trim).filter(|model_id| !model_id.is_empty()) {
+        if let Some(model_id) = model_id
+            .map(str::trim)
+            .filter(|model_id| !model_id.is_empty())
+        {
             self.session_manager
                 .update_session_model_id(child_session_id, model_id)
                 .await?;

@@ -10,7 +10,8 @@ use crate::agentic::agents::custom_subagents::{
 };
 use crate::agentic::deep_review_policy::{
     REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
-    REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+    REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE,
+    REVIEW_JUDGE_AGENT_TYPE,
 };
 use crate::agentic::tools::{get_all_registered_tool_names, get_readonly_registered_tool_names};
 use crate::service::config::global::GlobalConfigManager;
@@ -148,6 +149,7 @@ fn is_review_agent_entry(entry: &AgentEntry) -> bool {
             | REVIEWER_PERFORMANCE_AGENT_TYPE
             | REVIEWER_SECURITY_AGENT_TYPE
             | REVIEWER_ARCHITECTURE_AGENT_TYPE
+            | REVIEWER_FRONTEND_AGENT_TYPE
             | REVIEW_JUDGE_AGENT_TYPE
     )
 }
@@ -1357,6 +1359,19 @@ mod tests {
                 "{agent_type} should stay on the fast model slot"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn frontend_reviewer_is_registered_as_review_subagent() {
+        let registry = AgentRegistry::new();
+        let subagents = registry.get_subagents_info(None).await;
+        let frontend = subagents
+            .iter()
+            .find(|agent| agent.id == "ReviewFrontend")
+            .expect("ReviewFrontend should be registered as a subagent");
+
+        assert!(frontend.is_review);
+        assert!(frontend.is_readonly);
     }
 
     #[test]

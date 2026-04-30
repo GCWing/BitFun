@@ -659,6 +659,9 @@ impl PersistenceManager {
             tags: existing.map(|value| value.tags.clone()).unwrap_or_default(),
             custom_metadata: existing.and_then(|value| value.custom_metadata.clone()),
             todos: existing.and_then(|value| value.todos.clone()),
+            deep_review_run_manifest: existing
+                .and_then(|value| value.deep_review_run_manifest.clone()),
+            deep_review_cache: existing.and_then(|value| value.deep_review_cache.clone()),
             workspace_path: Some(workspace_root),
             workspace_hostname,
             unread_completion: existing.and_then(|value| value.unread_completion.clone()),
@@ -1227,10 +1230,7 @@ impl PersistenceManager {
         Ok(metadata_list)
     }
 
-    async fn count_session_metadata_dirs(
-        &self,
-        workspace_path: &Path,
-    ) -> BitFunResult<usize> {
+    async fn count_session_metadata_dirs(&self, workspace_path: &Path) -> BitFunResult<usize> {
         let Some(sessions_root) = self.existing_project_sessions_dir(workspace_path) else {
             return Ok(0);
         };
@@ -1251,10 +1251,7 @@ impl PersistenceManager {
             }
 
             let session_id = entry.file_name().to_string_lossy().to_string();
-            if self
-                .metadata_path(workspace_path, &session_id)
-                .exists()
-            {
+            if self.metadata_path(workspace_path, &session_id).exists() {
                 count += 1;
             }
         }

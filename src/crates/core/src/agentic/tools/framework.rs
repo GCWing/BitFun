@@ -1,4 +1,6 @@
 //! Tool framework - Tool interface definition and execution context
+use crate::agentic::coordination::get_global_coordinator;
+use crate::agentic::session::EvidenceLedgerCheckpoint;
 use crate::agentic::tools::restrictions::{
     is_local_path_within_root, is_remote_posix_path_within_root, ToolPathOperation,
     ToolRuntimeRestrictions,
@@ -10,13 +12,16 @@ use crate::agentic::tools::workspace_paths::{
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::get_path_manager_arc;
+use crate::service::git::{GitDiffParams, GitService};
 use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
 use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
 use crate::util::errors::BitFunResult;
 use crate::util::types::ToolImageAttachment;
 use async_trait::async_trait;
+use log::warn;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
@@ -93,6 +98,107 @@ impl ToolUseContext {
 
     pub fn ws_shell(&self) -> Option<&dyn crate::agentic::workspace::WorkspaceShell> {
         self.workspace_services.as_ref().map(|s| s.shell.as_ref())
+    }
+
+    pub async fn record_light_checkpoint(
+        &self,
+        tool_name: &str,
+        target: &str,
+        touched_files: Vec<String>,
+    ) {
+        let Some(session_id) = self.session_id.as_deref() else {
+            return;
+        };
+        let Some(turn_id) = self.dialog_turn_id.as_deref() else {
+            return;
+        };
+        let Some(coordinator) = get_global_coordinator() else {
+            return;
+        };
+
+        let checkpoint = self.build_light_checkpoint(touched_files).await;
+        coordinator
+            .get_session_manager()
+            .record_checkpoint_created(session_id, turn_id, tool_name, target, checkpoint);
+    }
+
+    async fn build_light_checkpoint(&self, touched_files: Vec<String>) -> EvidenceLedgerCheckpoint {
+        let mut checkpoint = EvidenceLedgerCheckpoint {
+            current_branch: None,
+            dirty_state_summary: "workspace_unavailable".to_string(),
+            touched_files,
+            diff_hash: None,
+        };
+
+        if self.is_remote() {
+            checkpoint.dirty_state_summary =
+                "remote_workspace_git_metadata_unavailable".to_string();
+            return checkpoint;
+        }
+
+        let Some(workspace_root) = self.workspace_root() else {
+            return checkpoint;
+        };
+
+        match GitService::get_status(workspace_root).await {
+            Ok(status) => {
+                checkpoint.current_branch = Some(status.current_branch);
+                checkpoint.dirty_state_summary = format!(
+                    "staged={}, unstaged={}, untracked={}",
+                    status.staged.len(),
+                    status.unstaged.len(),
+                    status.untracked.len()
+                );
+            }
+            Err(error) => {
+                checkpoint.dirty_state_summary = format!("git_status_unavailable: {}", error);
+            }
+        }
+
+        checkpoint.diff_hash = self
+            .checkpoint_diff_hash(workspace_root, &checkpoint.touched_files)
+            .await;
+        checkpoint
+    }
+
+    async fn checkpoint_diff_hash(
+        &self,
+        workspace_root: &Path,
+        touched_files: &[String],
+    ) -> Option<String> {
+        let files = touched_files
+            .iter()
+            .filter_map(|file| git_relative_path(workspace_root, file))
+            .collect::<Vec<_>>();
+
+        if files.is_empty() {
+            return None;
+        }
+
+        let mut diff = String::new();
+        for staged in [false, true] {
+            let params = GitDiffParams {
+                files: Some(files.clone()),
+                staged: Some(staged),
+                ..Default::default()
+            };
+            match GitService::get_diff(workspace_root, &params).await {
+                Ok(part) => diff.push_str(&part),
+                Err(error) => {
+                    warn!(
+                        "Failed to collect checkpoint diff hash: staged={}, error={}",
+                        staged, error
+                    );
+                    return None;
+                }
+            }
+        }
+
+        if diff.is_empty() {
+            return None;
+        }
+
+        Some(hex::encode(Sha256::digest(diff.as_bytes())))
     }
 
     pub fn enforce_tool_runtime_restrictions(&self, tool_name: &str) -> BitFunResult<()> {
@@ -410,6 +516,21 @@ impl ToolResult {
             image_attachments: Some(image_attachments),
         }
     }
+}
+
+fn git_relative_path(workspace_root: &Path, path: &str) -> Option<String> {
+    if is_bitfun_runtime_uri(path) {
+        return None;
+    }
+
+    let path = Path::new(path);
+    let relative = if path.is_absolute() {
+        path.strip_prefix(workspace_root).ok()?
+    } else {
+        path
+    };
+
+    Some(relative.to_string_lossy().replace('\\', "/"))
 }
 
 /// Tool trait

@@ -261,6 +261,7 @@ export function buildSessionMetadata(
     | 'titleI18nParams'
     | 'hasUnreadCompletion'
     | 'needsUserAttention'
+    | 'deepReviewRunManifest'
   >,
   existingMetadata?: SessionMetadata | null
 ): SessionMetadata {
@@ -317,5 +318,7 @@ export function buildSessionMetadata(
     // `undefined ?? existingMetadata.unreadCompletion` would restore the old value.
     unreadCompletion: session.hasUnreadCompletion,
     needsUserAttention: session.needsUserAttention,
+    deepReviewRunManifest:
+      session.deepReviewRunManifest ?? existingMetadata?.deepReviewRunManifest,
   };
 }

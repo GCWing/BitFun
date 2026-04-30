@@ -1,4 +1,10 @@
-import { agentAPI } from '@/infrastructure/api';
+import { agentAPI, gitAPI } from '@/infrastructure/api';
+import type {
+  GitChangedFile,
+  GitChangedFilesParams,
+  GitDiffParams,
+  GitStatus,
+} from '@/infrastructure/api/service-api/GitAPI';
 import { createLogger } from '@/shared/utils/logger';
 import { createBtwChildSession } from './BtwThreadService';
 import { closeBtwSessionInAuxPane, openBtwSessionInAuxPane } from './openBtwSession';
@@ -8,8 +14,19 @@ import { insertReviewSessionSummaryMarker } from './ReviewSessionMarkerService';
 import {
   buildEffectiveReviewTeamManifest,
   buildReviewTeamPromptBlock,
+  loadDefaultReviewTeam,
+  loadReviewTeamProjectStrategyOverride,
+  loadReviewTeamRateLimitStatus,
   prepareDefaultReviewTeamForLaunch,
+  type ReviewTeamChangeStats,
+  type ReviewTeamRunManifest,
 } from '@/shared/services/reviewTeamService';
+import {
+  classifyReviewTargetFromFiles,
+  createUnknownReviewTargetClassification,
+  normalizeReviewPath,
+  type ReviewTargetClassification,
+} from '@/shared/services/reviewTargetClassifier';
 import { DEEP_REVIEW_COMMAND_RE } from '../utils/deepReviewConstants';
 import { classifyLaunchError } from '../utils/deepReviewExperience';
 
@@ -24,6 +41,17 @@ interface LaunchDeepReviewSessionParams {
   displayMessage: string;
   childSessionName?: string;
   requestedFiles?: string[];
+  runManifest?: ReviewTeamRunManifest;
+}
+
+export interface DeepReviewLaunchPrompt {
+  prompt: string;
+  runManifest: ReviewTeamRunManifest;
+}
+
+interface ResolvedDeepReviewTarget {
+  target: ReviewTargetClassification;
+  changeStats: ReviewTeamChangeStats;
 }
 
 type DeepReviewLaunchStep =
@@ -220,19 +248,291 @@ function getDeepReviewCommandFocus(commandText: string): string {
   return commandText.trim().replace(/^\/DeepReview\b/, '').trim();
 }
 
-export async function buildDeepReviewPromptFromSessionFiles(
+const EXPLICIT_REVIEW_FILE_EXTENSIONS = new Set([
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.rs',
+  '.json',
+  '.scss',
+  '.css',
+  '.md',
+  '.toml',
+  '.yaml',
+  '.yml',
+]);
+
+function cleanPotentialFileToken(token: string): string {
+  return token
+    .trim()
+    .replace(/^[`"']+/, '')
+    .replace(/[`"',;:]+$/, '');
+}
+
+function getPathExtension(path: string): string {
+  const lastSlash = path.lastIndexOf('/');
+  const lastDot = path.lastIndexOf('.');
+  if (lastDot <= lastSlash) {
+    return '';
+  }
+  return path.slice(lastDot);
+}
+
+function looksLikeExplicitReviewPath(token: string): boolean {
+  const normalizedPath = normalizeReviewPath(token);
+  return (
+    normalizedPath.includes('/') &&
+    !normalizedPath.startsWith('-') &&
+    EXPLICIT_REVIEW_FILE_EXTENSIONS.has(getPathExtension(normalizedPath))
+  );
+}
+
+function extractExplicitReviewFilePaths(commandFocus: string): string[] {
+  const paths = commandFocus
+    .split(/\s+/)
+    .map(cleanPotentialFileToken)
+    .filter(Boolean)
+    .filter(looksLikeExplicitReviewPath);
+
+  return Array.from(new Set(paths));
+}
+
+function parseSlashCommandGitTarget(commandFocus: string): GitChangedFilesParams | null {
+  const tokens = commandFocus
+    .split(/\s+/)
+    .map(cleanPotentialFileToken)
+    .filter(Boolean);
+
+  const commitKeywordIndex = tokens.findIndex((token) => token.toLowerCase() === 'commit');
+  const commitRef = commitKeywordIndex >= 0 ? tokens[commitKeywordIndex + 1] : undefined;
+  if (commitRef && !commitRef.startsWith('-')) {
+    return {
+      source: `${commitRef}^`,
+      target: commitRef,
+    };
+  }
+
+  const rangeToken = tokens.find((token) => {
+    if (token.startsWith('-') || !token.includes('..')) {
+      return false;
+    }
+
+    const parts = token.split('..');
+    return parts.length === 2 && Boolean(parts[0]) && Boolean(parts[1]);
+  });
+
+  if (!rangeToken) {
+    return null;
+  }
+
+  const [source, target] = rangeToken.split('..');
+  return { source, target };
+}
+
+function collectChangedFilePaths(changedFiles: GitChangedFile[]): string[] {
+  return Array.from(
+    new Set(
+      changedFiles
+        .flatMap((file) => [file.path, file.old_path])
+        .filter((path): path is string => Boolean(path)),
+    ),
+  );
+}
+
+function collectWorkspaceDiffFilePaths(status: GitStatus): string[] {
+  return Array.from(
+    new Set([
+      ...status.staged.map((file) => file.path),
+      ...status.unstaged.map((file) => file.path),
+      ...status.untracked,
+      ...status.conflicts,
+    ].filter(Boolean)),
+  );
+}
+
+function countReviewTargetFiles(target: ReviewTargetClassification): number {
+  return target.files.filter((file) => !file.excluded).length;
+}
+
+function buildUnknownChangeStats(target: ReviewTargetClassification): ReviewTeamChangeStats {
+  return {
+    fileCount: countReviewTargetFiles(target),
+    lineCountSource: 'unknown',
+  };
+}
+
+function countChangedLinesFromUnifiedDiff(diff: string): number | undefined {
+  if (!diff.trim()) {
+    return undefined;
+  }
+
+  let changedLines = 0;
+  for (const line of diff.split(/\r?\n/)) {
+    if (
+      (line.startsWith('+') && !/^\+\+\+\s/.test(line)) ||
+      (line.startsWith('-') && !/^---\s/.test(line))
+    ) {
+      changedLines += 1;
+    }
+  }
+
+  return changedLines;
+}
+
+function buildDiffChangeStats(
+  target: ReviewTargetClassification,
+  totalLinesChanged: number | undefined,
+): ReviewTeamChangeStats {
+  if (totalLinesChanged === undefined) {
+    return buildUnknownChangeStats(target);
+  }
+
+  return {
+    fileCount: countReviewTargetFiles(target),
+    totalLinesChanged,
+    lineCountSource: 'diff_stat',
+  };
+}
+
+async function resolveGitDiffChangeStats(
+  workspacePath: string,
+  params: GitDiffParams,
+  target: ReviewTargetClassification,
+): Promise<ReviewTeamChangeStats> {
+  try {
+    const diff = await gitAPI.getDiff(workspacePath, params);
+    return buildDiffChangeStats(target, countChangedLinesFromUnifiedDiff(diff));
+  } catch (error) {
+    log.warn('Failed to resolve Git diff stats for Deep Review target', {
+      workspacePath,
+      params,
+      error,
+    });
+    return buildUnknownChangeStats(target);
+  }
+}
+
+async function resolveWorkspaceDiffChangeStats(
+  workspacePath: string,
+  target: ReviewTargetClassification,
+): Promise<ReviewTeamChangeStats> {
+  return resolveGitDiffChangeStats(workspacePath, { source: 'HEAD' }, target);
+}
+
+async function resolveSlashCommandReviewTarget(
+  commandFocus: string,
+  workspacePath?: string,
+): Promise<ResolvedDeepReviewTarget> {
+  const explicitFilePaths = extractExplicitReviewFilePaths(commandFocus);
+  if (explicitFilePaths.length > 0) {
+    const target = classifyReviewTargetFromFiles(
+      explicitFilePaths,
+      'slash_command_explicit_files',
+    );
+    return { target, changeStats: buildUnknownChangeStats(target) };
+  }
+
+  const gitTarget = parseSlashCommandGitTarget(commandFocus);
+  if (gitTarget) {
+    if (!workspacePath) {
+      const target = createUnknownReviewTargetClassification('slash_command_git_ref');
+      return { target, changeStats: buildUnknownChangeStats(target) };
+    }
+
+    try {
+      const changedFiles = await gitAPI.getChangedFiles(workspacePath, gitTarget);
+      const target = classifyReviewTargetFromFiles(
+        collectChangedFilePaths(changedFiles),
+        'slash_command_git_ref',
+      );
+      const changeStats = await resolveGitDiffChangeStats(
+        workspacePath,
+        gitTarget,
+        target,
+      );
+      return { target, changeStats };
+    } catch (error) {
+      log.warn('Failed to resolve Git target for Deep Review target', {
+        workspacePath,
+        gitTarget,
+        error,
+      });
+      const target = createUnknownReviewTargetClassification('slash_command_git_ref');
+      return { target, changeStats: buildUnknownChangeStats(target) };
+    }
+  }
+
+  if (!commandFocus && workspacePath) {
+    try {
+      const status = await gitAPI.getStatus(workspacePath);
+      const target = classifyReviewTargetFromFiles(
+        collectWorkspaceDiffFilePaths(status),
+        'workspace_diff',
+      );
+      const changeStats = await resolveWorkspaceDiffChangeStats(
+        workspacePath,
+        target,
+      );
+      return { target, changeStats };
+    } catch (error) {
+      log.warn('Failed to resolve workspace diff for Deep Review target', {
+        workspacePath,
+        error,
+      });
+    }
+  }
+
+  const target = createUnknownReviewTargetClassification(
+    commandFocus ? 'manual_prompt' : 'unknown',
+  );
+  return { target, changeStats: buildUnknownChangeStats(target) };
+}
+
+async function buildReviewTeamManifestWithRuntimeSignals(
+  team: Parameters<typeof buildEffectiveReviewTeamManifest>[0],
+  options: Parameters<typeof buildEffectiveReviewTeamManifest>[1],
+): Promise<ReviewTeamRunManifest> {
+  const manifestOptions = options ?? {};
+  const [rateLimitStatus, strategyOverride] = await Promise.all([
+    loadReviewTeamRateLimitStatus().catch((error) => {
+      log.warn('Failed to load Deep Review rate limit status', { error });
+      return null;
+    }),
+    manifestOptions.workspacePath
+      ? loadReviewTeamProjectStrategyOverride(manifestOptions.workspacePath).catch((error) => {
+        log.warn('Failed to load Deep Review project strategy override', { error });
+        return undefined;
+      })
+      : Promise.resolve(undefined),
+  ]);
+
+  return buildEffectiveReviewTeamManifest(team, {
+    ...manifestOptions,
+    ...(rateLimitStatus ? { rateLimitStatus } : {}),
+    ...(strategyOverride ? { strategyOverride } : {}),
+  });
+}
+
+export async function buildDeepReviewLaunchFromSessionFiles(
   filePaths: string[],
   extraContext?: string,
   workspacePath?: string,
-): Promise<string> {
+): Promise<DeepReviewLaunchPrompt> {
   const team = await prepareDefaultReviewTeamForLaunch(workspacePath);
-  const manifest = buildEffectiveReviewTeamManifest(team, { workspacePath });
+  const target = classifyReviewTargetFromFiles(filePaths, 'session_files');
+  const changeStats = buildUnknownChangeStats(target);
+  const manifest = await buildReviewTeamManifestWithRuntimeSignals(team, {
+    workspacePath,
+    target,
+    changeStats,
+  });
   const fileList = formatFileList(filePaths);
   const contextBlock = extraContext?.trim()
     ? `User-provided focus:\n${extraContext.trim()}`
     : 'User-provided focus:\nNone.';
 
-  return [
+  const prompt = [
     'Run a deep code review using the parallel Code Review Team.',
     'Review scope: ONLY inspect the following files modified in this session.',
     fileList,
@@ -240,21 +540,54 @@ export async function buildDeepReviewPromptFromSessionFiles(
     buildReviewTeamPromptBlock(team, manifest),
     'Keep the scope tight to the listed files unless a directly-related dependency must be read to confirm a finding.',
   ].join('\n\n');
+
+  return { prompt, runManifest: manifest };
 }
 
-export async function buildDeepReviewPromptFromSlashCommand(
-  commandText: string,
+export async function buildDeepReviewPreviewFromSessionFiles(
+  filePaths: string[],
+  workspacePath?: string,
+): Promise<ReviewTeamRunManifest> {
+  const team = await loadDefaultReviewTeam(workspacePath);
+  const target = classifyReviewTargetFromFiles(filePaths, 'session_files');
+  const changeStats = buildUnknownChangeStats(target);
+  return buildReviewTeamManifestWithRuntimeSignals(team, {
+    workspacePath,
+    target,
+    changeStats,
+  });
+}
+
+export async function buildDeepReviewPromptFromSessionFiles(
+  filePaths: string[],
+  extraContext?: string,
   workspacePath?: string,
 ): Promise<string> {
+  return (await buildDeepReviewLaunchFromSessionFiles(
+    filePaths,
+    extraContext,
+    workspacePath,
+  )).prompt;
+}
+
+export async function buildDeepReviewLaunchFromSlashCommand(
+  commandText: string,
+  workspacePath?: string,
+): Promise<DeepReviewLaunchPrompt> {
   const team = await prepareDefaultReviewTeamForLaunch(workspacePath);
-  const manifest = buildEffectiveReviewTeamManifest(team, { workspacePath });
   const trimmed = commandText.trim();
   const extraContext = getDeepReviewCommandFocus(trimmed);
+  const { target, changeStats } = await resolveSlashCommandReviewTarget(extraContext, workspacePath);
+  const manifest = await buildReviewTeamManifestWithRuntimeSignals(team, {
+    workspacePath,
+    target,
+    changeStats,
+  });
   const contextBlock = extraContext
     ? `User-provided focus or target:\n${extraContext}`
     : 'User-provided focus or target:\nNone. If no explicit target is given, review the current workspace changes relative to HEAD.';
 
-  return [
+  const prompt = [
     'Run a deep code review using the parallel Code Review Team.',
     'Interpret the user command below to determine the review target.',
     'If the user mentions a commit, ref, branch, or explicit file set, review that target.',
@@ -263,6 +596,30 @@ export async function buildDeepReviewPromptFromSlashCommand(
     contextBlock,
     buildReviewTeamPromptBlock(team, manifest),
   ].join('\n\n');
+
+  return { prompt, runManifest: manifest };
+}
+
+export async function buildDeepReviewPreviewFromSlashCommand(
+  commandText: string,
+  workspacePath?: string,
+): Promise<ReviewTeamRunManifest> {
+  const team = await loadDefaultReviewTeam(workspacePath);
+  const trimmed = commandText.trim();
+  const extraContext = getDeepReviewCommandFocus(trimmed);
+  const { target, changeStats } = await resolveSlashCommandReviewTarget(extraContext, workspacePath);
+  return buildReviewTeamManifestWithRuntimeSignals(team, {
+    workspacePath,
+    target,
+    changeStats,
+  });
+}
+
+export async function buildDeepReviewPromptFromSlashCommand(
+  commandText: string,
+  workspacePath?: string,
+): Promise<string> {
+  return (await buildDeepReviewLaunchFromSlashCommand(commandText, workspacePath)).prompt;
 }
 
 export async function launchDeepReviewSession({
@@ -272,6 +629,7 @@ export async function launchDeepReviewSession({
   displayMessage,
   childSessionName = 'Deep review',
   requestedFiles = [],
+  runManifest,
 }: LaunchDeepReviewSessionParams): Promise<{ childSessionId: string }> {
   let childSessionId: string | null = null;
   let launchStep: DeepReviewLaunchStep = 'create_child_session';
@@ -288,6 +646,7 @@ export async function launchDeepReviewSession({
       autoCompact: true,
       enableContextCompression: true,
       addMarker: false,
+      deepReviewRunManifest: runManifest,
     });
     childSessionId = created.childSessionId;
 
@@ -301,11 +660,26 @@ export async function launchDeepReviewSession({
 
     launchStep = 'send_start_message';
     const flowChatManager = FlowChatManager.getInstance();
-    await flowChatManager.sendMessage(
-      prompt,
-      childSessionId,
-      displayMessage,
-    );
+    if (runManifest) {
+      await flowChatManager.sendMessage(
+        prompt,
+        childSessionId,
+        displayMessage,
+        undefined,
+        undefined,
+        {
+          userMessageMetadata: {
+            deepReviewRunManifest: runManifest,
+          },
+        },
+      );
+    } else {
+      await flowChatManager.sendMessage(
+        prompt,
+        childSessionId,
+        displayMessage,
+      );
+    }
 
     insertReviewSessionSummaryMarker({
       parentSessionId,

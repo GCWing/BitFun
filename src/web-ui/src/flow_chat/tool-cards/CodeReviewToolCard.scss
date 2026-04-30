@@ -79,6 +79,72 @@
   flex-direction: column;
   gap: 10px;
 
+  .review-reliability-status {
+    display: grid;
+    gap: 7px;
+    padding: 2px 0 8px;
+    border-bottom: 1px dashed var(--border-base);
+  }
+
+  .review-reliability-status__title {
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  .review-reliability-status__items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .review-reliability-status__item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 6px;
+    max-width: 100%;
+    padding: 6px 8px;
+    border-left: 2px solid var(--color-accent-500, #60a5fa);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--color-bg-elevated) 70%, transparent);
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    line-height: 1.4;
+
+    &--warning {
+      border-left-color: var(--color-warning, #f59e0b);
+    }
+
+    &--action {
+      border-left-color: var(--color-danger, #ef4444);
+    }
+  }
+
+  .review-reliability-status__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+    color: var(--color-text-muted);
+  }
+
+  .review-reliability-status__text {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .review-reliability-status__label {
+    color: var(--color-text-primary);
+    font-weight: 650;
+  }
+
+  .review-reliability-status__detail {
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+  }
+
   /* ---------- Summary section — vertical layout ---------- */
   .review-summary {
     padding-bottom: 10px;
@@ -223,6 +289,140 @@
     color: var(--color-text-secondary);
     font-size: 12px;
     line-height: 1.55;
+  }
+
+  .run-manifest {
+    display: grid;
+    gap: 10px;
+  }
+
+  .run-manifest__facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .run-manifest__fact {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid var(--border-base);
+    border-radius: 6px;
+    background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
+
+    span {
+      color: var(--color-text-muted);
+      font-size: 11px;
+    }
+
+    strong {
+      overflow: hidden;
+      color: var(--color-text-primary);
+      font-size: 12px;
+      font-weight: 650;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .run-manifest__group {
+    display: grid;
+    gap: 6px;
+  }
+
+  .run-manifest__group-title {
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 650;
+
+    &--warning {
+      color: var(--color-warning, #f59e0b);
+    }
+  }
+
+  .run-manifest__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .run-manifest__chip {
+    display: inline-grid;
+    max-width: 100%;
+    gap: 2px;
+    padding: 6px 8px;
+    border: 1px solid var(--border-base);
+    border-radius: 6px;
+    background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
+  }
+
+  .run-manifest__chip-name {
+    overflow: hidden;
+    color: var(--color-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .run-manifest__chip-meta {
+    overflow: hidden;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .run-manifest__skipped-list {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 6px 8px;
+      border: 1px solid var(--border-base);
+      border-radius: 6px;
+      background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
+      color: var(--color-text-secondary);
+      font-size: 12px;
+    }
+
+    span {
+      overflow: hidden;
+      min-width: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    strong {
+      color: var(--color-text-muted);
+      font-size: 11px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .run-manifest__facts {
+      grid-template-columns: 1fr;
+    }
+
+    .run-manifest__skipped-list li {
+      grid-template-columns: 1fr;
+      align-items: start;
+    }
+
+    .run-manifest__skipped-list strong {
+      white-space: normal;
+    }
   }
 
   .team-list {

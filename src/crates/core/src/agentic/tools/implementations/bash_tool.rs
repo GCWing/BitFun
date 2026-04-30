@@ -593,6 +593,12 @@ Usage notes:
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("command is required".to_string()))?;
 
+        if command_needs_light_checkpoint(command_str) {
+            context
+                .record_light_checkpoint("Bash", command_str, Vec::new())
+                .await;
+        }
+
         // Remote workspace: execute via injected workspace shell
         if context.is_remote() {
             if let Some(ws_shell) = context.ws_shell() {
@@ -955,6 +961,39 @@ Usage notes:
     }
 }
 
+fn command_needs_light_checkpoint(command: &str) -> bool {
+    let command = command.trim().to_ascii_lowercase();
+    let mutating_prefixes = [
+        "rm ",
+        "rmdir ",
+        "del ",
+        "erase ",
+        "move ",
+        "mv ",
+        "cp ",
+        "git reset",
+        "git clean",
+        "git checkout",
+        "git switch",
+        "git merge",
+        "git rebase",
+        "git pull",
+        "git stash",
+        "git commit",
+        "cargo fmt",
+        "cargo fix",
+        "rustfmt",
+        "prettier --write",
+    ];
+
+    mutating_prefixes
+        .iter()
+        .any(|prefix| command.starts_with(prefix))
+        || command.contains(" --fix")
+        || command.contains(" > ")
+        || command.contains(" >> ")
+}
+
 impl BashTool {
     fn background_output_file_path(
         context: &ToolUseContext,
@@ -1158,6 +1197,15 @@ impl BashTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn checkpoint_detection_flags_mutating_bash_commands() {
+        assert!(command_needs_light_checkpoint("cargo fmt"));
+        assert!(command_needs_light_checkpoint("pnpm lint --fix"));
+        assert!(command_needs_light_checkpoint("rm -rf target/tmp"));
+        assert!(!command_needs_light_checkpoint("cargo test"));
+        assert!(!command_needs_light_checkpoint("git status"));
+    }
 
     #[test]
     fn truncate_output_preserving_tail_keeps_end_of_output() {

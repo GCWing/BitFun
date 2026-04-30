@@ -990,6 +990,13 @@ impl ToolPipeline {
                         );
                     }
                 }
+                if let Some(raw_manifest) =
+                    task.context.context_vars.get("deep_review_run_manifest")
+                {
+                    if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(raw_manifest) {
+                        map.insert("deep_review_run_manifest".to_string(), manifest);
+                    }
+                }
 
                 map
             },

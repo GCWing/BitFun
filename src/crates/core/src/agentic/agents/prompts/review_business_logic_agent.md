@@ -58,6 +58,10 @@ Never modify files or git state.
 
 Return markdown only, using this exact structure:
 
+## Packet
+packet_id: <packet_id from the work packet, or none if no packet was provided>
+status: completed
+
 ## Reviewer
 Business Logic Reviewer
 

@@ -62,6 +62,7 @@ export interface StartDialogTurnRequest {
   workspacePath?: string;
   /** Optional multimodal image contexts (snake_case fields, aligned with backend ImageContextData). */
   imageContexts?: ImageInputContextData[];
+  userMessageMetadata?: Record<string, unknown>;
 }
 
 export interface CompactSessionRequest {
@@ -441,7 +442,14 @@ export class AgentAPI {
     }
   }
 
-   
+  async getDefaultReviewTeamDefinition(): Promise<unknown> {
+    try {
+      return await api.invoke<unknown>('get_default_review_team_definition');
+    } catch (error) {
+      throw createTauriCommandError('get_default_review_team_definition', error);
+    }
+  }
+
   async generateSessionTitle(
     sessionId: string,
     userMessage: string,

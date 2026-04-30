@@ -1,5 +1,6 @@
 use crate::agentic::core::{
-    CompressedMessage, CompressedMessageRole, CompressionEntry, CompressionPayload,
+    CompressedMessage, CompressedMessageRole, CompressionContract, CompressionEntry,
+    CompressionPayload,
 };
 use serde_json::{json, Value};
 
@@ -9,12 +10,16 @@ pub(super) fn render_payload_for_model(payload: &CompressionPayload) -> String {
             .to_string();
     }
 
-    let mut sections = Vec::new();
+    let mut contract_sections = Vec::new();
+    let mut history_sections = Vec::new();
 
     for (index, entry) in payload.entries.iter().enumerate() {
         match entry {
+            CompressionEntry::Contract { contract } => {
+                contract_sections.push(render_contract(contract));
+            }
             CompressionEntry::ModelSummary { text } => {
-                sections.push(format!(
+                history_sections.push(format!(
                     "Earlier summarized history {}:\n{}",
                     index + 1,
                     text
@@ -41,12 +46,18 @@ pub(super) fn render_payload_for_model(payload: &CompressionPayload) -> String {
                         }
                     }
                 }
-                sections.push(lines.join("\n"));
+                history_sections.push(lines.join("\n"));
             }
         }
     }
 
+    let mut sections = contract_sections;
+    sections.extend(history_sections);
     sections.join("\n\n")
+}
+
+fn render_contract(contract: &CompressionContract) -> String {
+    contract.render_for_model()
 }
 
 fn render_compressed_message(

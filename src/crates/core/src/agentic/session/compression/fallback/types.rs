@@ -1,4 +1,6 @@
-use crate::agentic::core::{CompressedMessage, CompressedTodoSnapshot, CompressionPayload};
+use crate::agentic::core::{
+    CompressedMessage, CompressedTodoSnapshot, CompressionContract, CompressionPayload,
+};
 
 #[derive(Debug, Clone)]
 pub struct CompressionFallbackOptions {
@@ -18,6 +20,9 @@ pub struct CompressionSummaryArtifact {
 
 #[derive(Debug, Clone)]
 pub(super) enum CompressionUnit {
+    Contract {
+        contract: CompressionContract,
+    },
     ModelSummary {
         text: String,
     },

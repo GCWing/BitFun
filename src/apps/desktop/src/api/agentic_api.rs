@@ -13,6 +13,9 @@ use bitfun_core::agentic::coordination::{
     SubagentTimeoutAction,
 };
 use bitfun_core::agentic::core::*;
+use bitfun_core::agentic::deep_review_policy::{
+    default_review_team_definition, ReviewTeamDefinition,
+};
 use bitfun_core::agentic::image_analysis::ImageContextData;
 use bitfun_core::agentic::tools::image_context::get_image_context;
 #[derive(Debug, Deserialize)]
@@ -84,6 +87,8 @@ pub struct StartDialogTurnRequest {
     pub turn_id: Option<String>,
     #[serde(default)]
     pub image_contexts: Option<Vec<ImageContextData>>,
+    #[serde(default)]
+    pub user_message_metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -396,6 +401,7 @@ pub async fn start_dialog_turn(
         workspace_path,
         turn_id,
         image_contexts,
+        user_message_metadata,
     } = request;
 
     let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi);
@@ -419,6 +425,7 @@ pub async fn start_dialog_turn(
             workspace_path,
             policy,
             None,
+            user_message_metadata,
             resolved_images,
         )
         .await
@@ -840,6 +847,11 @@ pub async fn get_available_modes(state: State<'_, AppState>) -> Result<Vec<ModeI
         .collect();
 
     Ok(dtos)
+}
+
+#[tauri::command]
+pub async fn get_default_review_team_definition() -> Result<ReviewTeamDefinition, String> {
+    Ok(default_review_team_definition())
 }
 
 #[derive(Debug, Serialize)]

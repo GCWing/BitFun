@@ -12,8 +12,9 @@ pub mod state;
 pub use dialog_turn::{DialogTurn, DialogTurnState, TurnStats};
 pub use message::{
     CompressedMessage, CompressedMessageRole, CompressedTodoItem, CompressedTodoSnapshot,
-    CompressedToolCall, CompressionEntry, CompressionPayload, Message, MessageContent, MessageRole,
-    MessageSemanticKind, ToolCall, ToolResult,
+    CompressedToolCall, CompressionContract, CompressionContractItem, CompressionEntry,
+    CompressionPayload, Message, MessageContent, MessageRole, MessageSemanticKind, ToolCall,
+    ToolResult,
 };
 pub use messages_helper::{MessageHelper, RequestReasoningTokenPolicy};
 pub use model_round::ModelRound;

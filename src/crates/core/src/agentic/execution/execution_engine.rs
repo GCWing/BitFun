@@ -7,6 +7,7 @@ use super::types::{ExecutionContext, ExecutionResult, RoundContext};
 use crate::agentic::agents::{
     get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
 };
+use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
     render_system_reminder, Message, MessageContent, MessageHelper, MessageRole,
     MessageSemanticKind, RequestReasoningTokenPolicy, Session,
@@ -66,6 +67,161 @@ pub struct ContextCompactionOutcome {
     pub has_summary: bool,
     pub summary_source: String,
     pub applied: bool,
+}
+
+#[derive(Debug, Clone)]
+struct ContextHealthSnapshot {
+    token_usage_ratio: f32,
+    microcompact_count: usize,
+    full_compression_count: usize,
+    compression_failure_count: u32,
+    repeated_tool_signature_count: usize,
+    consecutive_failed_commands: usize,
+}
+
+impl ContextHealthSnapshot {
+    fn from_runtime_observations(
+        token_usage_ratio: f32,
+        microcompact_count: usize,
+        full_compression_count: usize,
+        compression_failure_count: u32,
+        recent_tool_signatures: &[String],
+        messages: &[Message],
+    ) -> Self {
+        Self {
+            token_usage_ratio,
+            microcompact_count,
+            full_compression_count,
+            compression_failure_count,
+            repeated_tool_signature_count: Self::repeated_tool_signature_count(
+                recent_tool_signatures,
+            ),
+            consecutive_failed_commands: Self::consecutive_failed_commands(messages),
+        }
+    }
+
+    fn token_usage_ratio(current_tokens: usize, context_window: usize) -> f32 {
+        if context_window == 0 {
+            return 0.0;
+        }
+        current_tokens as f32 / context_window as f32
+    }
+
+    fn log(&self, session_id: &str, turn_id: &str, round_index: usize, stage: &str) {
+        debug!(
+            "Context health snapshot: session_id={}, turn_id={}, round_index={}, stage={}, token_usage={:.3}, microcompact_count={}, full_compression_count={}, compression_failure_count={}, repeated_tool_signature_count={}, consecutive_failed_commands={}",
+            session_id,
+            turn_id,
+            round_index,
+            stage,
+            self.token_usage_ratio,
+            self.microcompact_count,
+            self.full_compression_count,
+            self.compression_failure_count,
+            self.repeated_tool_signature_count,
+            self.consecutive_failed_commands
+        );
+    }
+
+    fn log_policy_thresholds(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        round_index: usize,
+        policy: &ContextProfilePolicy,
+    ) {
+        if policy.has_repeated_tool_loop(self.repeated_tool_signature_count) {
+            debug!(
+                "Context profile repeated-tool threshold reached: session_id={}, turn_id={}, round_index={}, profile={:?}, repeated_tool_signature_count={}, threshold={}",
+                session_id,
+                turn_id,
+                round_index,
+                policy.profile,
+                self.repeated_tool_signature_count,
+                policy.repeated_tool_signature_threshold
+            );
+        }
+
+        if policy.has_consecutive_command_failure_loop(self.consecutive_failed_commands) {
+            warn!(
+                "Context profile command-failure threshold reached: session_id={}, turn_id={}, round_index={}, profile={:?}, consecutive_failed_commands={}, threshold={}",
+                session_id,
+                turn_id,
+                round_index,
+                policy.profile,
+                self.consecutive_failed_commands,
+                policy.consecutive_failed_command_threshold
+            );
+        }
+    }
+
+    fn repeated_tool_signature_count(recent_tool_signatures: &[String]) -> usize {
+        let Some(last_signature) = recent_tool_signatures.last() else {
+            return 0;
+        };
+
+        let repeated_count = recent_tool_signatures
+            .iter()
+            .rev()
+            .take_while(|signature| *signature == last_signature)
+            .count();
+
+        if repeated_count >= 2 {
+            repeated_count
+        } else {
+            0
+        }
+    }
+
+    fn consecutive_failed_commands(messages: &[Message]) -> usize {
+        let mut failures = 0;
+        for message in messages.iter().rev() {
+            let Some(failed) = Self::command_result_failed(message) else {
+                continue;
+            };
+
+            if failed {
+                failures += 1;
+            } else {
+                break;
+            }
+        }
+        failures
+    }
+
+    fn command_result_failed(message: &Message) -> Option<bool> {
+        let MessageContent::ToolResult {
+            tool_name,
+            result,
+            is_error,
+            ..
+        } = &message.content
+        else {
+            return None;
+        };
+
+        if !matches!(tool_name.as_str(), "Bash" | "Git") {
+            return None;
+        }
+
+        Some(Self::tool_result_failed(result, *is_error))
+    }
+
+    fn tool_result_failed(result: &serde_json::Value, is_error: bool) -> bool {
+        is_error
+            || Self::bool_field(result, "timed_out") == Some(true)
+            || Self::bool_field(result, "interrupted") == Some(true)
+            || Self::bool_field(result, "success") == Some(false)
+            || Self::numeric_field(result, "exit_code").is_some_and(|code| code != 0)
+    }
+
+    fn bool_field(value: &serde_json::Value, key: &str) -> Option<bool> {
+        value.get(key).and_then(|field| field.as_bool())
+    }
+
+    fn numeric_field(value: &serde_json::Value, key: &str) -> Option<i64> {
+        value.get(key).and_then(|field| field.as_i64())
+    }
 }
 
 /// Execution engine
@@ -701,6 +857,7 @@ impl ExecutionEngine {
         context_window: usize,
         tool_definitions: &Option<Vec<ToolDefinition>>,
         system_prompt_message: Message,
+        compression_contract_limit: usize,
         tail_policy: CompressionTailPolicy,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
         let event_subagent_parent_info = subagent_parent_info.map(|info| info.clone().into());
@@ -742,14 +899,18 @@ impl ExecutionEngine {
         .await;
 
         // Execute compression
+        let compression_contract = self
+            .session_manager
+            .compression_contract_for_session(session_id, compression_contract_limit);
         match self
             .context_compressor
-            .compress_turns(
+            .compress_turns_with_contract(
                 session_id,
                 context_window,
                 turn_index_to_keep,
                 turns,
                 tail_policy,
+                compression_contract,
             )
             .await
         {
@@ -914,9 +1075,30 @@ impl ExecutionEngine {
             });
         }
 
+        let is_review_subagent = get_agent_registry()
+            .get_subagent_is_review(&session.agent_type)
+            .unwrap_or(false);
+        let model_id = session.config.model_id.as_deref().unwrap_or_default();
+        let context_profile_policy = ContextProfilePolicy::for_agent_context_and_model(
+            &session.agent_type,
+            is_review_subagent,
+            model_id,
+            model_id,
+        );
+        let compression_contract = self.session_manager.compression_contract_for_session(
+            session_id,
+            context_profile_policy.compression_contract_limit,
+        );
         match self
             .context_compressor
-            .compress_turns(session_id, context_window, turns.len(), turns, tail_policy)
+            .compress_turns_with_contract(
+                session_id,
+                context_window,
+                turns.len(),
+                turns,
+                tail_policy,
+                compression_contract,
+            )
             .await
         {
             Ok(compression_result) => {
@@ -1174,6 +1356,32 @@ impl ExecutionEngine {
             );
         }
 
+        let model_capability_profile = ModelCapabilityProfile::from_resolved_model(
+            &resolved_primary_model_id,
+            &ai_client.config.model,
+        );
+        let is_review_subagent = agent_registry
+            .get_subagent_is_review(&agent_type)
+            .unwrap_or(false);
+        let context_profile_policy = ContextProfilePolicy::for_agent_context(
+            &agent_type,
+            is_review_subagent,
+            model_capability_profile,
+        );
+        debug!(
+            "Context profile policy selected: session_id={}, agent_type={}, profile={:?}, model_capability={:?}, microcompact_keep_recent={}, microcompact_trigger_ratio={:.2}, compression_contract_limit={}, subagent_concurrency_cap={}, repeated_tool_signature_threshold={}, consecutive_failed_command_threshold={}",
+            context.session_id,
+            agent_type,
+            context_profile_policy.profile,
+            model_capability_profile,
+            context_profile_policy.microcompact_keep_recent,
+            context_profile_policy.microcompact_trigger_ratio,
+            context_profile_policy.compression_contract_limit,
+            context_profile_policy.subagent_concurrency_cap,
+            context_profile_policy.repeated_tool_signature_threshold,
+            context_profile_policy.consecutive_failed_command_threshold
+        );
+
         // 3. Get System Prompt from current Agent
         debug!(
             "Building system prompt from agent: {}, model={}",
@@ -1222,6 +1430,9 @@ impl ExecutionEngine {
         // P0: Loop detection: track recent tool call signatures
         let mut recent_tool_signatures: Vec<String> = Vec::new();
         let mut loop_detected = false;
+        let mut microcompact_count = 0usize;
+        let mut full_compression_count = 0usize;
+        let mut compression_failure_count = 0u32;
 
         // Save the last token usage statistics
         let mut last_usage: Option<crate::util::types::ai::GeminiUsage> = None;
@@ -1279,8 +1490,7 @@ impl ExecutionEngine {
 
         let enable_context_compression = session.config.enable_context_compression;
         let compression_threshold = session.config.compression_threshold;
-        let microcompact_config =
-            crate::agentic::session::compression::microcompact::MicrocompactConfig::default();
+        let microcompact_config = context_profile_policy.microcompact_config();
 
         let mut execution_context_vars = context.context.clone();
         execution_context_vars.insert(
@@ -1350,20 +1560,29 @@ impl ExecutionEngine {
             if enable_context_compression && token_usage_ratio >= microcompact_config.trigger_ratio
             {
                 if let Some(mc_result) =
-                    crate::agentic::session::compression::microcompact::microcompact_messages(
+                    crate::agentic::session::compression::microcompact::microcompact_messages_with_evidence(
                         &mut messages,
                         &microcompact_config,
+                        crate::agentic::session::compression::microcompact::MicrocompactEvidenceScope {
+                            session_id: &context.session_id,
+                            turn_id: &context.dialog_turn_id,
+                        },
                     )
                 {
+                    microcompact_count += 1;
+                    for event in mc_result.evidence_events.iter().cloned() {
+                        self.session_manager.append_evidence_event(event);
+                    }
                     current_tokens = Self::estimate_request_tokens_internal(
                         &mut messages,
                         tool_definitions.as_deref(),
                     );
                     debug!(
-                        "Round {} after microcompact: cleared={}, kept={}, tokens now {} ({:.1}%)",
+                        "Round {} after microcompact: cleared={}, kept={}, evidence_events={}, tokens now {} ({:.1}%)",
                         round_index,
                         mc_result.tools_cleared,
                         mc_result.tools_kept,
+                        mc_result.evidence_events_preserved,
                         current_tokens,
                         (current_tokens as f32 / context_window as f32) * 100.0
                     );
@@ -1409,6 +1628,7 @@ impl ExecutionEngine {
                         context_window,
                         &tool_definitions,
                         system_prompt_message.clone(),
+                        context_profile_policy.compression_contract_limit,
                         CompressionTailPolicy::PreserveLiveFrontier,
                     )
                     .await
@@ -1424,6 +1644,7 @@ impl ExecutionEngine {
                         );
 
                         messages = compressed_messages;
+                        full_compression_count += 1;
                         consecutive_compression_failures = 0;
                     }
                     Ok(None) => {
@@ -1432,6 +1653,7 @@ impl ExecutionEngine {
                     }
                     Err(e) => {
                         consecutive_compression_failures += 1;
+                        compression_failure_count += 1;
                         error!(
                             "Round {} compression failed ({}/{}): {}, continuing with uncompressed context",
                             round_index,
@@ -1465,6 +1687,23 @@ impl ExecutionEngine {
                 );
             }
 
+            let before_send_tokens =
+                Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
+            ContextHealthSnapshot::from_runtime_observations(
+                ContextHealthSnapshot::token_usage_ratio(before_send_tokens, context_window),
+                microcompact_count,
+                full_compression_count,
+                compression_failure_count,
+                &recent_tool_signatures,
+                &messages,
+            )
+            .log(
+                &context.session_id,
+                &context.dialog_turn_id,
+                round_index,
+                "before_send",
+            );
+
             // Create round context
             let mut round_context_vars = execution_context_vars.clone();
             if context.skip_tool_confirmation {
@@ -1485,6 +1724,7 @@ impl ExecutionEngine {
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 cancellation_token: CancellationToken::new(),
                 workspace_services: context.workspace_services.clone(),
+                recover_partial_on_cancel: context.recover_partial_on_cancel,
             };
 
             // Execute single model round
@@ -1589,7 +1829,31 @@ impl ExecutionEngine {
                 recent_tool_signatures.clear();
             }
 
-            let max_consec = self.config.max_consecutive_same_tool;
+            let after_round_tokens =
+                Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
+            let after_round_health = ContextHealthSnapshot::from_runtime_observations(
+                ContextHealthSnapshot::token_usage_ratio(after_round_tokens, context_window),
+                microcompact_count,
+                full_compression_count,
+                compression_failure_count,
+                &recent_tool_signatures,
+                &messages,
+            );
+            after_round_health.log(
+                &context.session_id,
+                &context.dialog_turn_id,
+                round_index,
+                "after_round",
+            );
+            after_round_health.log_policy_thresholds(
+                &context.session_id,
+                &context.dialog_turn_id,
+                round_index,
+                &context_profile_policy,
+            );
+
+            let max_consec = context_profile_policy
+                .effective_loop_threshold(self.config.max_consecutive_same_tool);
             if recent_tool_signatures.len() >= max_consec {
                 let tail = &recent_tool_signatures[recent_tool_signatures.len() - max_consec..];
                 if tail.windows(2).all(|w| w[0] == w[1]) {
@@ -1703,6 +1967,7 @@ impl ExecutionEngine {
                     runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                     cancellation_token: CancellationToken::new(),
                     workspace_services: context.workspace_services.clone(),
+                    recover_partial_on_cancel: context.recover_partial_on_cancel,
                 };
 
                 let final_round_result = self
@@ -1956,7 +2221,7 @@ impl ExecutionEngine {
 
 #[cfg(test)]
 mod tests {
-    use super::ExecutionEngine;
+    use super::{ContextHealthSnapshot, ExecutionEngine};
     use crate::agentic::core::{Message, ToolCall, ToolResult};
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
@@ -2024,6 +2289,41 @@ mod tests {
     }
 
     #[test]
+    fn context_health_snapshot_scores_repeated_tool_signatures() {
+        let signatures = vec![
+            r#"Bash:{"command":"cargo test"}"#.to_string(),
+            r#"Bash:{"command":"cargo test"}"#.to_string(),
+            r#"Bash:{"command":"cargo test"}"#.to_string(),
+        ];
+
+        let snapshot =
+            ContextHealthSnapshot::from_runtime_observations(0.82, 2, 1, 0, &signatures, &[]);
+
+        assert!((snapshot.token_usage_ratio - 0.82).abs() < f32::EPSILON);
+        assert_eq!(snapshot.microcompact_count, 2);
+        assert_eq!(snapshot.full_compression_count, 1);
+        assert_eq!(snapshot.compression_failure_count, 0);
+        assert_eq!(snapshot.repeated_tool_signature_count, 3);
+        assert_eq!(snapshot.consecutive_failed_commands, 0);
+    }
+
+    #[test]
+    fn context_health_snapshot_counts_consecutive_failed_commands() {
+        let messages = vec![
+            command_result("Bash", true, Some(0)),
+            command_result("Bash", false, Some(1)),
+            command_result("Git", false, Some(128)),
+        ];
+
+        let snapshot =
+            ContextHealthSnapshot::from_runtime_observations(0.44, 0, 0, 2, &[], &messages);
+
+        assert_eq!(snapshot.repeated_tool_signature_count, 0);
+        assert_eq!(snapshot.consecutive_failed_commands, 2);
+        assert_eq!(snapshot.compression_failure_count, 2);
+    }
+
+    #[test]
     fn assistant_has_tool_calls_detects_mixed_tool_message() {
         let message = Message::assistant_with_tools(
             String::new(),
@@ -2071,5 +2371,21 @@ mod tests {
             Message::user("read it".to_string()),
             assistant,
         ]));
+    }
+
+    fn command_result(tool_name: &str, success: bool, exit_code: Option<i32>) -> Message {
+        Message::tool_result(ToolResult {
+            tool_id: format!("{}-tool", tool_name),
+            tool_name: tool_name.to_string(),
+            result: json!({
+                "success": success,
+                "exit_code": exit_code,
+                "command": format!("{} command", tool_name),
+            }),
+            result_for_assistant: None,
+            is_error: !success,
+            duration_ms: Some(1),
+            image_attachments: None,
+        })
     }
 }

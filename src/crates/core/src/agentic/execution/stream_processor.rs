@@ -139,6 +139,11 @@ pub struct StreamProcessError {
     pub has_effective_output: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StreamProcessOptions {
+    pub recover_partial_on_cancel: bool,
+}
+
 impl StreamProcessError {
     fn new(error: BitFunError, has_effective_output: bool) -> Self {
         Self {
@@ -695,6 +700,32 @@ impl StreamProcessor {
     #[allow(clippy::too_many_arguments)]
     pub async fn process_stream(
         &self,
+        stream: futures::stream::BoxStream<'static, Result<UnifiedResponse, anyhow::Error>>,
+        watchdog_timeout: Option<std::time::Duration>,
+        raw_sse_rx: Option<mpsc::UnboundedReceiver<String>>,
+        session_id: String,
+        dialog_turn_id: String,
+        round_id: String,
+        subagent_parent_info: Option<SubagentParentInfo>,
+        cancellation_token: &tokio_util::sync::CancellationToken,
+    ) -> Result<StreamResult, StreamProcessError> {
+        self.process_stream_with_options(
+            stream,
+            watchdog_timeout,
+            raw_sse_rx,
+            session_id,
+            dialog_turn_id,
+            round_id,
+            subagent_parent_info,
+            cancellation_token,
+            StreamProcessOptions::default(),
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn process_stream_with_options(
+        &self,
         mut stream: futures::stream::BoxStream<'static, Result<UnifiedResponse, anyhow::Error>>,
         watchdog_timeout: Option<std::time::Duration>,
         raw_sse_rx: Option<mpsc::UnboundedReceiver<String>>,
@@ -703,6 +734,7 @@ impl StreamProcessor {
         round_id: String,
         subagent_parent_info: Option<SubagentParentInfo>,
         cancellation_token: &tokio_util::sync::CancellationToken,
+        options: StreamProcessOptions,
     ) -> Result<StreamResult, StreamProcessError> {
         let mut ctx =
             StreamContext::new(session_id, dialog_turn_id, round_id, subagent_parent_info);
@@ -744,6 +776,14 @@ impl StreamProcessor {
                 // Check cancellation token
                 _ = cancellation_token.cancelled() => {
                     debug!("Cancel token detected, stopping stream processing: session_id={}", ctx.session_id);
+                    if options.recover_partial_on_cancel && ctx.can_recover_as_partial_result() {
+                        self.send_thinking_end_if_needed(&mut ctx).await;
+                        ctx.force_finish_pending_tool_calls();
+                        ctx.partial_recovery_reason =
+                            Some("Stream processing cancelled after partial output".to_string());
+                        self.log_stream_result(&ctx);
+                        break;
+                    }
                     self.graceful_shutdown_from_ctx(&mut ctx, "User cancelled stream processing".to_string()).await;
                     return Err(StreamProcessError::new(
                         BitFunError::Cancelled("Stream processing cancelled".to_string()),
@@ -890,7 +930,7 @@ impl StreamProcessor {
 
 #[cfg(test)]
 mod tests {
-    use super::StreamProcessor;
+    use super::{StreamProcessOptions, StreamProcessor};
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::infrastructure::ai::ai_stream_handlers::{
         UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall,
@@ -923,6 +963,47 @@ mod tests {
             reasoning_token_count: None,
             cached_content_token_count: None,
         }
+    }
+
+    #[tokio::test]
+    async fn recovers_partial_text_when_cancellation_allows_partial_recovery() {
+        let processor = build_processor();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        tx.send(Ok(UnifiedResponse {
+            text: Some("Partial reviewer evidence.".to_string()),
+            ..Default::default()
+        }))
+        .expect("send partial chunk");
+        let _keep_stream_open = tx;
+        let cancellation_token = CancellationToken::new();
+        let cancel_clone = cancellation_token.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            cancel_clone.cancel();
+        });
+
+        let result = processor
+            .process_stream_with_options(
+                tokio_stream::wrappers::UnboundedReceiverStream::new(rx).boxed(),
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                None,
+                &cancellation_token,
+                StreamProcessOptions {
+                    recover_partial_on_cancel: true,
+                },
+            )
+            .await
+            .expect("partial stream result");
+
+        assert_eq!(result.full_text, "Partial reviewer evidence.");
+        assert!(result
+            .partial_recovery_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("cancelled")));
     }
 
     #[tokio::test]

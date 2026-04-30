@@ -27,6 +27,9 @@ pub struct ExecutionContext {
     pub workspace_services: Option<WorkspaceServices>,
     /// When set, engine may end the turn after a full model round if a user message was queued.
     pub round_preempt: Option<Arc<dyn DialogRoundPreemptSource>>,
+    /// When true, stream cancellation may be converted into a partial assistant
+    /// result if text/tool output has already been produced.
+    pub recover_partial_on_cancel: bool,
 }
 
 /// Round context
@@ -46,6 +49,7 @@ pub struct RoundContext {
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     pub cancellation_token: CancellationToken,
     pub workspace_services: Option<WorkspaceServices>,
+    pub recover_partial_on_cancel: bool,
 }
 
 /// Round result

@@ -89,9 +89,33 @@ export interface GitPullParams {
 }
 
 export interface GitDiffParams {
+  source?: string;
+  target?: string;
+  files?: string[];
+  stat?: boolean;
   filePath?: string;
   staged?: boolean;
   commit?: string;
+}
+
+export interface GitChangedFilesParams {
+  source?: string;
+  target?: string;
+  staged?: boolean;
+}
+
+export type GitChangedFileStatus =
+  | 'added'
+  | 'modified'
+  | 'deleted'
+  | 'renamed'
+  | 'copied'
+  | 'unknown';
+
+export interface GitChangedFile {
+  path: string;
+  old_path?: string;
+  status: GitChangedFileStatus;
 }
 
 export interface GitLogParams {
@@ -330,6 +354,17 @@ export class GitAPI {
   }
 
    
+  async getChangedFiles(repositoryPath: string, params: GitChangedFilesParams): Promise<GitChangedFile[]> {
+    try {
+      return await api.invoke('git_get_changed_files', {
+        request: { repositoryPath, params }
+      });
+    } catch (error) {
+      throw createTauriCommandError('git_get_changed_files', error, { repositoryPath, params });
+    }
+  }
+
+
   async resetFiles(repositoryPath: string, files: string[], staged: boolean = false): Promise<GitOperationResult> {
     try {
       return await api.invoke('git_reset_files', { 

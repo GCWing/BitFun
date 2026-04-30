@@ -473,7 +473,18 @@
     "dontShowAgain": "下次不再提示",
     "cancel": "取消",
     "confirm": "開始深度審核",
-    "estimatedTokens": "預計消耗：{{min}} - {{max}} tokens"
+    "estimatedTokens": "預計消耗：{{min}} - {{max}} tokens",
+    "runStrategy": "運行策略：{{strategy}}",
+    "recommendedStrategy": "推薦策略：{{strategy}}",
+    "recommendationTitle": "風險推薦",
+    "strategyOverrideTitle": "運行策略",
+    "strategyOverrideBody": "為本專案的本次啟動選擇審核策略。",
+    "teamDefaultStrategy": "團隊預設",
+    "strategyLabels": {
+      "quick": "快速",
+      "normal": "標準",
+      "deep": "深度"
+    }
   },
   "flowChatHeader": {
     "turnList": "輪次列表",
@@ -1125,8 +1136,31 @@
         "partial": "部分完成",
         "unknown": "未知"
       },
+      "runManifest": {
+        "recommendedStrategy": "推薦策略",
+        "riskRecommendationTitle": "風險推薦"
+      },
       "sectionItemCount": "{{count}} 項",
       "remediationPlan": "修復計劃",
+      "reliabilityStatus": {
+        "title": "審核狀態",
+        "context_pressure": {
+          "label": "上下文壓力上升",
+          "detail": "大型或受限目標預計會呼叫 {{count}} 次審核者。"
+        },
+        "compression_preserved": {
+          "label": "壓縮已保留關鍵事實",
+          "detail": "覆蓋說明包含壓縮保留下來的上下文。"
+        },
+        "partial_reviewer": {
+          "label": "審核者逾時但有部分結果",
+          "detail": "{{count}} 個審核者結果是部分結果，信心已降低。"
+        },
+        "user_decision": {
+          "label": "需要使用者決策",
+          "detail": "{{count}} 個審核項需要先決策再修復。"
+        }
+      },
       "sections": {
         "summary": "結論摘要",
         "issues": "問題列表",
@@ -1157,6 +1191,7 @@
         "findings": "問題數",
         "validation": "驗證說明",
         "source": "來源",
+        "reliabilitySignals": "審核可靠性",
         "noItems": "無。"
       },
       "export": {
