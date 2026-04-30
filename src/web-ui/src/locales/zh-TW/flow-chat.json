@@ -959,11 +959,16 @@
       "toolBatchComplete": "工具批次完成",
       "manualTrigger": "手動觸發",
       "autoTrigger": "自動觸發",
+      "afterAiResponse": "AI 回覆後",
       "contextCompressionFailed": "上下文壓縮失敗",
       "contextCompression": "上下文壓縮:",
-      "localFallbackHeader": "模型請求異常，已改用本地結構化裁剪",
+      "localFallbackHeader": "模型請求異常，改用本地壓縮",
       "localFallbackNotice": "本次壓縮無法使用模型生成總結，因此改用了本地結構化裁剪。",
-      "noSummaryNotice": "本次壓縮沒有生成額外的總結內容。"
+      "noSummaryNotice": "本次壓縮沒有生成額外的總結內容。",
+      "tokenChange": "{{before}} → {{after}} tokens",
+      "savingsTag": "節省 {{saved}} · 壓縮率 {{ratio}}%",
+      "compressingContext": "正在壓縮上下文...",
+      "compressionCount": "第 {{count}} 次壓縮"
     },
     "globSearch": {
       "parsingPattern": "解析搜索模式中...",
@@ -1196,7 +1201,9 @@
         "fixUnavailable": "無法開始修復：審核會話不可用。",
         "fixRequestDisplay": "開始修復深度審核問題",
         "fixAndReviewRequestDisplay": "修復深度審核問題並重新審核",
-        "recommended": "推薦"
+        "recommended": "推薦",
+        "expandOptions": "查看選項",
+        "collapseOptions": "收起選項"
       },
       "riskLevels": {
         "low": "低風險",

@@ -1004,11 +1004,16 @@
       "toolBatchComplete": "工具批次完成",
       "manualTrigger": "手动触发",
       "autoTrigger": "自动触发",
+      "afterAiResponse": "AI 回复后",
       "contextCompressionFailed": "上下文压缩失败",
       "contextCompression": "上下文压缩:",
-      "localFallbackHeader": "模型请求异常，已改用本地结构化裁剪",
+      "localFallbackHeader": "模型请求异常，改用本地压缩",
       "localFallbackNotice": "本次压缩无法使用模型生成总结，因此改用了本地结构化裁剪。",
-      "noSummaryNotice": "本次压缩没有生成额外的总结内容。"
+      "noSummaryNotice": "本次压缩没有生成额外的总结内容。",
+      "tokenChange": "{{before}} → {{after}} tokens",
+      "savingsTag": "节省 {{saved}} · 压缩率 {{ratio}}%",
+      "compressingContext": "正在压缩上下文...",
+      "compressionCount": "第 {{count}} 次压缩"
     },
     "globSearch": {
       "parsingPattern": "解析搜索模式中...",
@@ -1241,7 +1246,9 @@
         "fixUnavailable": "无法开始修复：审核会话不可用。",
         "fixRequestDisplay": "开始修复深度审核问题",
         "fixAndReviewRequestDisplay": "修复深度审核问题并重新审核",
-        "recommended": "推荐"
+        "recommended": "推荐",
+        "expandOptions": "查看选项",
+        "collapseOptions": "收起选项"
       },
       "riskLevels": {
         "low": "低风险",

@@ -1000,11 +1000,16 @@
       "toolBatchComplete": "Tool batch complete",
       "manualTrigger": "Manual trigger",
       "autoTrigger": "Auto trigger",
+      "afterAiResponse": "After AI response",
       "contextCompressionFailed": "Context compression failed",
       "contextCompression": "Context compression:",
-      "localFallbackHeader": "Model request failed; local structured trimming",
+      "localFallbackHeader": "Model request failed; local structured compression",
       "localFallbackNotice": "Model-based summary was unavailable, so this compression used local structured truncation.",
-      "noSummaryNotice": "No additional summary was generated for this compaction pass."
+      "noSummaryNotice": "No additional summary was generated for this compaction pass.",
+      "tokenChange": "{{before}} → {{after}} tokens",
+      "savingsTag": "Saved {{saved}} · Ratio {{ratio}}%",
+      "compressingContext": "Compressing context...",
+      "compressionCount": "Compression #{{count}}"
     },
     "globSearch": {
       "parsingPattern": "Parsing search pattern...",
@@ -1237,7 +1242,9 @@
         "fixUnavailable": "Unable to start remediation because the review session is unavailable.",
         "fixRequestDisplay": "Start fixing Deep Review findings",
         "fixAndReviewRequestDisplay": "Fix Deep Review findings and re-review",
-        "recommended": "recommended"
+        "recommended": "recommended",
+        "expandOptions": "Show options",
+        "collapseOptions": "Hide options"
       },
       "riskLevels": {
         "low": "Low Risk",
