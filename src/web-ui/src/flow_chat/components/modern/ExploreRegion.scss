@@ -58,18 +58,18 @@
 // ==================== Collapsible (header + animated content) ====================
 
 .explore-region--collapsible {
-  margin: 0 0 var(--flowchat-flow-item-gap, 0.45rem) 0;
-  font-size: var(--flowchat-font-size-base);
-  line-height: 1.65;
+  margin: 0 0 0.3rem 0;
+  font-size: var(--flowchat-font-size-sm);
+  line-height: 1.5;
 
   .explore-region__header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     padding: 0;
     color: var(--text-tertiary, #6b7280);
-    font-size: var(--flowchat-font-size-base);
-    line-height: 1.65;
+    font-size: var(--flowchat-font-size-sm);
+    line-height: 1.5;
     cursor: pointer;
     user-select: none;
     border-radius: var(--radius-sm, 6px);
@@ -90,8 +90,8 @@
   }
 
   .explore-region__summary {
-    font-size: var(--flowchat-font-size-base);
-    line-height: 1.65;
+    font-size: var(--flowchat-font-size-sm);
+    line-height: 1.5;
     opacity: 0.8;
   }
 
@@ -213,6 +213,9 @@
 .explore-region--expanded.explore-region--streaming {
   .explore-region__content {
     max-height: 400px;
+    // Add bottom padding so the last line of text isn't obscured by the
+    // streaming gradient overlay or clipped at the container edge.
+    padding-bottom: 8px;
   }
 }
 

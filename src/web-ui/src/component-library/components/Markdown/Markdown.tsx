@@ -750,13 +750,19 @@ export const Markdown = React.memo<MarkdownProps>(({
         icon: 'FolderOpen',
         onClick: () => handleRevealInExplorer(displayPath || filePath),
       },
+      {
+        id: 'markdown-copy-file-path',
+        label: t('markdown.copyFilePath'),
+        icon: 'Copy',
+        onClick: () => void handleCopyLink(displayPath || filePath),
+      },
     ];
 
     showLinkContextMenu(event, items, 'markdown-local-file-link', {
       filePath,
       displayPath,
     });
-  }, [handleRevealInExplorer, showLinkContextMenu, t]);
+  }, [handleRevealInExplorer, handleCopyLink, showLinkContextMenu, t]);
 
   const handleWebLinkContextMenu = useCallback((event: React.MouseEvent<HTMLElement>, url: string) => {
     const targetElement = event.currentTarget;

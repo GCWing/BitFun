@@ -1441,5 +1441,9 @@
         "prompt": "Help me create a budget plan.\n\nContext:\n- Budget period (monthly / quarterly / project):\n- Total budget:\n- Fixed costs:\n- Variable costs:\n- Goal (save money / control spending / save for something):\n\nOutput:\n1) Suggested categories + ratios\n2) A category budget table (copy-paste friendly)\n3) Overrun rules + adjustment plan\n4) Weekly/monthly review checklist"
       }
     }
+  },
+  "subagent": {
+    "showingLines": "Showing {{shown}} of {{total}} lines",
+    "showAll": "Show all"
   }
 }

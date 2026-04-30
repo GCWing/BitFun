@@ -46,7 +46,8 @@
     "openInExplorer": "在檔案總管中開啟",
     "openInBrowser": "透過瀏覽器開啟",
     "openInBuiltInBrowser": "透過內建瀏覽器開啟",
-    "copyLink": "複製連結"
+    "copyLink": "複製連結",
+    "copyFilePath": "複製檔案路徑"
   },
   "mermaidBlock": {
     "renderFailed": "圖表渲染失敗",

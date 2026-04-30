@@ -535,15 +535,19 @@ const SubagentItemsContainer = React.memo<SubagentItemsContainerProps>(({
   // Auto-scroll only when the subagent item data changes. A MutationObserver on
   // the whole subtree also reacts to layout-driven DOM churn while the right
   // panel opens, which amplifies FlowChat reflow work.
+  // Use double requestAnimationFrame to ensure the browser has completed
+  // layout of newly added content before we measure scrollHeight.
   useEffect(() => {
     const container = containerRef.current;
     if (!container || isCollapsed) return;
 
     const rafId = requestAnimationFrame(() => {
-      if (!userScrolledUpRef.current) {
-        container.scrollTop = container.scrollHeight;
-        lastScrollTopRef.current = container.scrollTop;
-      }
+      requestAnimationFrame(() => {
+        if (!userScrolledUpRef.current) {
+          container.scrollTop = container.scrollHeight;
+          lastScrollTopRef.current = container.scrollTop;
+        }
+      });
     });
 
     return () => cancelAnimationFrame(rafId);
@@ -571,6 +575,69 @@ const SubagentItemsContainer = React.memo<SubagentItemsContainerProps>(({
             isLastItem={idx === items.length - 1}
           />
         ))}
+      </div>
+    </div>
+  );
+});
+
+/**
+ * Truncates text content by line count to avoid breaking Markdown structures
+ * (code blocks, tables, links) in the middle. Shows an expand hint when truncated.
+ */
+const SUBAGENT_TEXT_TRUNCATE_LINES = 50;
+
+const SubagentTextBlock = React.memo<{ textItem: FlowTextItem; className?: string }>(({
+  textItem,
+  className = '',
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const { t } = useTranslation('flow-chat');
+
+  const content = typeof textItem.content === 'string'
+    ? textItem.content
+    : String(textItem.content || '');
+
+  const isStreaming = textItem.isStreaming &&
+    (textItem.status === 'streaming' || textItem.status === 'running');
+
+  const lines = content.split('\n');
+  const shouldTruncate = !isStreaming && !isExpanded && lines.length > SUBAGENT_TEXT_TRUNCATE_LINES;
+
+  if (!shouldTruncate) {
+    return (
+      <FlowTextBlock
+        textItem={textItem}
+        className={className}
+      />
+    );
+  }
+
+  // Truncate at line boundary to keep Markdown structures intact.
+  const truncatedContent = lines.slice(0, SUBAGENT_TEXT_TRUNCATE_LINES).join('\n');
+  const truncatedItem: FlowTextItem = {
+    ...textItem,
+    content: truncatedContent,
+    isStreaming: false,
+  };
+
+  return (
+    <div className="subagent-text-block--truncated">
+      <FlowTextBlock
+        textItem={truncatedItem}
+        className={className}
+        replayStreamingOnMount={false}
+      />
+      <div className="subagent-text-block__truncation-hint">
+        <span className="subagent-text-block__truncation-message">
+          {t('subagent.showingLines', { shown: SUBAGENT_TEXT_TRUNCATE_LINES, total: lines.length })}
+        </span>
+        <button
+          type="button"
+          className="subagent-text-block__expand-btn"
+          onClick={() => setIsExpanded(true)}
+        >
+          {t('subagent.showAll')}
+        </button>
       </div>
     </div>
   );
@@ -615,7 +682,7 @@ const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundI
   switch (item.type) {
     case 'text':
       return (
-        <FlowTextBlock
+        <SubagentTextBlock
           textItem={item as FlowTextItem}
           className="flow-text-block--subagent-compact"
         />

@@ -41,8 +41,6 @@
 
   .flow-text-block--subagent-compact {
     margin-bottom: 0.15rem;
-    max-height: calc(var(--flowchat-font-size-base) * 1.45 * 3);
-    overflow: hidden;
     line-height: 1.45;
 
     .markdown-renderer,
@@ -64,6 +62,31 @@
 
 .subagent-items-container--collapsed {
   overflow: hidden;
+}
+
+// Truncated subagent text block styles.
+.subagent-text-block--truncated {
+  .subagent-text-block__truncation-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: var(--flowchat-font-size-sm);
+    color: var(--color-text-muted);
+  }
+
+  .subagent-text-block__expand-btn {
+    background: none;
+    border: none;
+    color: var(--flowchat-link-color, var(--markdown-link-color, #60a5fa));
+    cursor: pointer;
+    font-size: var(--flowchat-font-size-sm);
+    padding: 0;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 }
 
 // Keep the legacy subagent-item class for compatibility.

@@ -227,7 +227,7 @@
      that can leave only padding visible and push the prompt text out of view. */
   .task-expanded-content .task-prompt-content {
     padding: 0 12px;
-    max-height: calc(var(--flowchat-font-size-base) * 1.65 * 3 + 10px);
+    max-height: calc(var(--flowchat-font-size-base) * 1.5 * 2 + 6px);
     overflow-y: auto;
   }
 
@@ -271,7 +271,7 @@
 
   /* Extra breathing room below header / divider before prompt + actions. */
   &.base-tool-card-wrapper > .base-tool-card-expanded {
-    padding-top: 14px;
+    padding-top: 8px;
   }
 
   &.base-tool-card-wrapper > .base-tool-card-expanded:has(.task-prompt-content) {
@@ -319,7 +319,7 @@
   .task-expanded-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
   }
 
 

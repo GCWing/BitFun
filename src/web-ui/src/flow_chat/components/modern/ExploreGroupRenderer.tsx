@@ -105,13 +105,17 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   ]);
   
   // Auto-scroll to bottom during streaming.
+  // Use double requestAnimationFrame to ensure the browser has completed
+  // layout of newly added content before we measure scrollHeight.
   useEffect(() => {
     if (!isCollapsed && isGroupStreaming && containerRef.current) {
       requestAnimationFrame(() => {
-        if (containerRef.current) {
-          containerRef.current.scrollTop = containerRef.current.scrollHeight;
-          checkScrollState();
-        }
+        requestAnimationFrame(() => {
+          if (containerRef.current) {
+            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+            checkScrollState();
+          }
+        });
       });
     }
   }, [allItems, checkScrollState, isCollapsed, isGroupStreaming]);
