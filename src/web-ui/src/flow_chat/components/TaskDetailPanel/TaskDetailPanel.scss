@@ -88,6 +88,31 @@
     color: var(--color-error);
   }
 
+  &__error-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 16px;
+    background: color-mix(in srgb, var(--color-error, #ef4444) 10%, var(--color-bg-secondary));
+    border-bottom: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 22%, transparent);
+    flex-shrink: 0;
+
+    &-icon {
+      flex-shrink: 0;
+      margin-top: 1px;
+      color: var(--color-error);
+    }
+
+    &-text {
+      flex: 1;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--color-error);
+      word-break: break-word;
+      user-select: text;
+    }
+  }
+
   &__content {
     flex: 1;
     display: flex;

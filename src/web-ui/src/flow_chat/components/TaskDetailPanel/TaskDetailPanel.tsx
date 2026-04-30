@@ -16,7 +16,7 @@ import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { ToolTimeoutIndicator } from '../../tool-cards/ToolTimeoutIndicator';
-import { Button, Tooltip, DotMatrixLoader } from '@/component-library';
+import { Button, DotMatrixLoader } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import type { ReviewerContext } from '@/shared/services/reviewTeamService';
@@ -542,14 +542,16 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
             <DotMatrixLoader size="small" />
           </span>
         )}
-        {isFailed && (
-          <Tooltip content={getErrorMessage()} placement="bottom">
-            <AlertCircle size={14} className="task-detail-panel__header-failed" />
-          </Tooltip>
-        )}
       </div>
 
-      <div 
+      {isFailed && (
+        <div className="task-detail-panel__error-banner">
+          <AlertCircle size={14} className="task-detail-panel__error-banner-icon" />
+          <span className="task-detail-panel__error-banner-text">{getErrorMessage()}</span>
+        </div>
+      )}
+
+      <div
         ref={contentRef}
         className="task-detail-panel__content"
       >
