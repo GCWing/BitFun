@@ -51,6 +51,22 @@ fn is_valid_chat_completion_chunk_weak(event_json: &Value) -> bool {
 fn extract_sse_api_error_message(event_json: &Value) -> Option<String> {
     let error = event_json.get("error")?;
     if let Some(message) = error.get("message").and_then(|value| value.as_str()) {
+        if let Some(code) = error
+            .get("code")
+            .and_then(|value| value.as_str())
+            .map(str::to_string)
+            .or_else(|| error.get("code").map(|value| value.to_string()))
+        {
+            let mut formatted = format!("code={}, message={}", code, message);
+            if let Some(request_id) = event_json
+                .get("request_id")
+                .or_else(|| event_json.get("requestId"))
+                .and_then(|value| value.as_str())
+            {
+                formatted.push_str(&format!(", request_id={}", request_id));
+            }
+            return Some(formatted);
+        }
         return Some(message.to_string());
     }
     if let Some(message) = error.as_str() {
@@ -271,6 +287,24 @@ mod tests {
         assert_eq!(
             extract_sse_api_error_message(&event).as_deref(),
             Some("provider error")
+        );
+    }
+
+    #[test]
+    fn extracts_api_error_code_message_and_request_id_from_object_shape() {
+        let event = serde_json::json!({
+            "error": {
+                "code": "1305",
+                "message": "该模型当前访问量过大，请您稍后再试"
+            },
+            "request_id": "20260410100425fab0cd73dea74cc3"
+        });
+
+        assert_eq!(
+            extract_sse_api_error_message(&event).as_deref(),
+            Some(
+                "code=1305, message=该模型当前访问量过大，请您稍后再试, request_id=20260410100425fab0cd73dea74cc3"
+            )
         );
     }
 
