@@ -128,10 +128,11 @@ impl RoundExecutor {
                     (response, send_to_stream_ms)
                 }
                 Err(e) => {
-                    error!("AI request failed: {}", e);
-                    let err_msg = e.to_string();
-                    let can_retry = attempt_index < max_attempts - 1
-                        && Self::is_transient_network_error(&err_msg);
+                    let ai_error = BitFunError::from_ai_adapter_error(e);
+                    error!("AI request failed: {}", ai_error);
+                    let err_msg = ai_error.to_string();
+                    let can_retry =
+                        attempt_index < max_attempts - 1 && Self::is_retryable_ai_error(&ai_error);
                     if can_retry {
                         let delay_ms = Self::retry_delay_ms(attempt_index);
                         warn!(
@@ -147,7 +148,7 @@ impl RoundExecutor {
                         attempt_index += 1;
                         continue;
                     }
-                    return Err(BitFunError::AIClient(err_msg));
+                    return Err(ai_error);
                 }
             };
 
@@ -263,7 +264,7 @@ impl RoundExecutor {
                     let err_msg = stream_err.error.to_string();
                     let can_retry = !stream_err.has_effective_output
                         && attempt_index < max_attempts - 1
-                        && Self::is_transient_network_error(&err_msg);
+                        && Self::is_retryable_ai_error(&stream_err.error);
                     if can_retry {
                         let delay_ms = Self::retry_delay_ms(attempt_index);
                         warn!(
@@ -716,6 +717,15 @@ impl RoundExecutor {
         Self::RETRY_BASE_DELAY_MS * (1u64 << attempt_index.min(3))
     }
 
+    fn is_retryable_ai_error(error: &BitFunError) -> bool {
+        match error {
+            BitFunError::AIProvider(provider_error) => provider_error.is_retryable(),
+            BitFunError::AIClient(error_message) => Self::is_transient_network_error(error_message),
+            BitFunError::Timeout(_) => true,
+            _ => false,
+        }
+    }
+
     fn is_transient_network_error(error_message: &str) -> bool {
         let msg = error_message.to_lowercase();
 
@@ -793,6 +803,8 @@ impl RoundExecutor {
 #[cfg(test)]
 mod tests {
     use super::RoundExecutor;
+    use crate::util::errors::BitFunError;
+    use bitfun_ai_adapters::{ProviderError, ProviderErrorKind};
 
     #[test]
     fn detects_transient_stream_transport_error() {
@@ -826,6 +838,32 @@ mod tests {
 
         assert!(!RoundExecutor::is_transient_network_error(auth));
         assert!(!RoundExecutor::is_transient_network_error(billing));
+    }
+
+    #[test]
+    fn retries_structured_provider_unavailable_error() {
+        let err = BitFunError::AIProvider(
+            ProviderError::builder("provider temporarily overloaded")
+                .provider("openai_compatible")
+                .kind(ProviderErrorKind::ProviderUnavailable)
+                .code("1305")
+                .build(),
+        );
+
+        assert!(RoundExecutor::is_retryable_ai_error(&err));
+    }
+
+    #[test]
+    fn rejects_structured_provider_quota_error() {
+        let err = BitFunError::AIProvider(
+            ProviderError::builder("insufficient balance")
+                .provider("anthropic_compatible")
+                .kind(ProviderErrorKind::ProviderQuota)
+                .code("1113")
+                .build(),
+        );
+
+        assert!(!RoundExecutor::is_retryable_ai_error(&err));
     }
 
     #[test]
