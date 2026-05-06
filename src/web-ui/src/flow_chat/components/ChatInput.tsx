@@ -281,10 +281,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [agentCompanionEnabled, setAgentCompanionEnabled] = useState(
     () => aiExperienceConfigService.getSettings().enable_agent_companion,
   );
+  const [agentCompanionPet, setAgentCompanionPet] = useState(
+    () => aiExperienceConfigService.getSettings().agent_companion_pet ?? null,
+  );
   useEffect(() => {
-    setAgentCompanionEnabled(aiExperienceConfigService.getSettings().enable_agent_companion);
+    void aiExperienceConfigService.getSettingsAsync().then(initialSettings => {
+      setAgentCompanionEnabled(initialSettings.enable_agent_companion);
+      setAgentCompanionPet(initialSettings.agent_companion_pet ?? null);
+    });
     return aiExperienceConfigService.addChangeListener(settings => {
       setAgentCompanionEnabled(settings.enable_agent_companion);
+      setAgentCompanionPet(settings.agent_companion_pet ?? null);
     });
   }, []);
   const showCollapsedPet =
@@ -2424,12 +2431,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       <ChatInputPixelPet
                         mood={petMood}
                         layout={petReplacesStopChrome ? 'stopRight' : 'center'}
+                        pet={agentCompanionPet}
                       />
                     </button>
                   ) : (
                     <ChatInputPixelPet
                       mood={petMood}
                       layout={petReplacesStopChrome ? 'stopRight' : 'center'}
+                      pet={agentCompanionPet}
                     />
                   )}
                 </div>

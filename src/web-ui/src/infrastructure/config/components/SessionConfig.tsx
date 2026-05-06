@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, RefreshCw, ChevronDown } from 'lucide-react';
+import { FolderOpen, RefreshCw, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import {
   Switch,
   NumberInput,
@@ -12,9 +12,18 @@ import {
   IconButton,
   ConfigPageLoading,
   Modal,
+  Select,
+  type SelectOption,
 } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
+import {
+  deleteAgentCompanionPetPackage,
+  importAgentCompanionPetPackage,
+  listAgentCompanionPets,
+  releaseAgentCompanionPetPreviewBlobs,
+  type AgentCompanionPetPackage,
+} from '../services/AgentCompanionPetService';
 import { configManager } from '../services/ConfigManager';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { useNotification, notificationService } from '@/shared/notification-system';
@@ -26,7 +35,8 @@ import {
   DEFAULT_LANGUAGE_TEMPLATES,
 } from '../types';
 import { ModelSelectionRadio } from './ModelSelectionRadio';
-import { open } from '@tauri-apps/plugin-dialog';
+import { ChatInputPixelPet } from '@/flow_chat/components/ChatInputPixelPet';
+import { ask, open } from '@tauri-apps/plugin-dialog';
 import { createLogger } from '@/shared/utils/logger';
 import './AIFeaturesConfig.scss';
 import './DebugConfig.scss';
@@ -51,6 +61,8 @@ type BrowserControlLaunchResponse = {
   browserKind: string;
 };
 
+const DEFAULT_COMPANION_PET_VALUE = '__default_panda__';
+
 const SessionConfig: React.FC = () => {
   const { t } = useTranslation('settings/session-config');
   const { t: tTools } = useTranslation('settings/agentic-tools');
@@ -60,6 +72,10 @@ const SessionConfig: React.FC = () => {
   // ── Session config state ─────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
+  const [companionPets, setCompanionPets] = useState<AgentCompanionPetPackage[]>([]);
+  const [companionPetsLoading, setCompanionPetsLoading] = useState(false);
+  const [companionPetImporting, setCompanionPetImporting] = useState(false);
+  const [companionPetDeletingPath, setCompanionPetDeletingPath] = useState<string | null>(null);
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
   const [skipToolConfirmation, setSkipToolConfirmation] = useState(true);
@@ -162,6 +178,7 @@ const SessionConfig: React.FC = () => {
         debugConfigData,
         computerUseCfg,
         maxRoundsValue,
+        loadedCompanionPets,
       ] = await Promise.all([
         aiExperienceConfigService.getSettingsAsync(),
         configManager.getConfig<AIModelConfig[]>('ai.models') || [],
@@ -172,9 +189,11 @@ const SessionConfig: React.FC = () => {
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
         configManager.getConfig<number>('ai.max_rounds'),
+        listAgentCompanionPets(),
       ]);
 
       setSettings(loadedSettings);
+      setCompanionPets(loadedCompanionPets);
       setModels(allModels as AIModelConfig[]);
       setFuncAgentModels(funcAgentModelsData as Record<string, string>);
       setSkipToolConfirmation(skipConfirm ?? true);
@@ -213,6 +232,115 @@ const SessionConfig: React.FC = () => {
       notification.error(t('messages.saveFailed'));
       setSettings(settings);
     }
+  };
+
+  const handleRefreshCompanionPets = async () => {
+    setCompanionPetsLoading(true);
+    try {
+      setCompanionPets(await listAgentCompanionPets());
+    } finally {
+      setCompanionPetsLoading(false);
+    }
+  };
+
+  const handleImportCompanionPet = async () => {
+    if (!IS_TAURI_DESKTOP) return;
+    setCompanionPetImporting(true);
+    try {
+      const selected = await open({
+        directory: false,
+        multiple: false,
+        title: t('features.agentCompanion.importDialogTitle'),
+        filters: [{ name: 'Petdex', extensions: ['zip'] }],
+      });
+      if (!selected || Array.isArray(selected)) return;
+      const imported = await importAgentCompanionPetPackage(selected);
+      const refreshed = await listAgentCompanionPets();
+      setCompanionPets(refreshed);
+      await updateSetting('agent_companion_pet', {
+        id: imported.id,
+        displayName: imported.displayName,
+        description: imported.description,
+        source: imported.source,
+        packagePath: imported.packagePath,
+        spritesheetPath: imported.spritesheetPath,
+        spritesheetMimeType: imported.spritesheetMimeType,
+      });
+    } catch (error) {
+      log.error('Failed to import Agent companion pet', error);
+      notification.error(t('features.agentCompanion.importFailed'));
+    } finally {
+      setCompanionPetImporting(false);
+    }
+  };
+
+  const handleDeleteCompanionPet = async (event: React.MouseEvent, pet: AgentCompanionPetPackage) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!IS_TAURI_DESKTOP || pet.source !== 'user' || !settings) return;
+    const confirmed = await ask(t('features.agentCompanion.deleteConfirmBody'), {
+      title: t('features.agentCompanion.deleteConfirmTitle'),
+      kind: 'warning',
+    });
+    if (!confirmed) return;
+    setCompanionPetDeletingPath(pet.packagePath);
+    try {
+      await deleteAgentCompanionPetPackage(pet.packagePath);
+      releaseAgentCompanionPetPreviewBlobs(pet.packagePath, pet.spritesheetPath);
+      const refreshed = await listAgentCompanionPets();
+      setCompanionPets(refreshed);
+      if (settings.agent_companion_pet?.packagePath === pet.packagePath) {
+        const next = { ...settings, agent_companion_pet: null };
+        setSettings(next);
+        await aiExperienceConfigService.saveSettings(next);
+      }
+      notification.success(t('features.agentCompanion.deleteSuccess'));
+    } catch (error) {
+      log.error('Failed to delete Agent companion pet', error);
+      notification.error(t('features.agentCompanion.deleteFailed'));
+    } finally {
+      setCompanionPetDeletingPath(null);
+    }
+  };
+
+  const companionPetOptions: SelectOption[] = [
+    {
+      value: DEFAULT_COMPANION_PET_VALUE,
+      label: t('features.agentCompanion.defaultPet'),
+      group: t('features.agentCompanion.groupBuiltin'),
+    },
+    ...companionPets.map(pet => ({
+      value: pet.packagePath,
+      label: pet.displayName,
+      description: pet.description ?? undefined,
+      group: pet.source === 'preset'
+        ? t('features.agentCompanion.groupPreset')
+        : t('features.agentCompanion.groupImported'),
+    })),
+  ];
+
+  const selectedCompanionPet = settings?.agent_companion_pet
+    ? companionPets.find(pet => pet.packagePath === settings.agent_companion_pet?.packagePath)
+      ?? settings.agent_companion_pet
+    : null;
+
+  const handleCompanionPetChange = async (value: string | number | (string | number)[]) => {
+    const selectedValue = String(Array.isArray(value) ? value[0] : value);
+    if (selectedValue === DEFAULT_COMPANION_PET_VALUE) {
+      await updateSetting('agent_companion_pet', null);
+      return;
+    }
+    const pet = companionPets.find(item => item.packagePath === selectedValue);
+    if (!pet) return;
+    await updateSetting('agent_companion_pet', {
+      id: pet.id,
+      displayName: pet.displayName,
+      description: pet.description,
+      source: pet.source,
+      packagePath: pet.packagePath,
+      spritesheetPath: pet.spritesheetPath,
+      spritesheetMimeType: pet.spritesheetMimeType,
+    });
   };
 
   const getModelName = useCallback((modelId: string | null | undefined): string | undefined => {
@@ -603,6 +731,102 @@ const SessionConfig: React.FC = () => {
                 onChange={(e) => updateSetting('enable_agent_companion', e.target.checked)}
                 size="small"
               />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('features.agentCompanion.petLabel')}
+            description={t('features.agentCompanion.petDescription')}
+            align="start"
+            multiline
+            className="bitfun-func-agent-config__pet-row"
+          >
+            <div className="bitfun-func-agent-config__pet-picker">
+              <div className="bitfun-func-agent-config__pet-picker-preview" aria-hidden>
+                <ChatInputPixelPet
+                  mood="rest"
+                  pet={selectedCompanionPet}
+                  className="bitfun-func-agent-config__pet-picker-pet"
+                />
+              </div>
+              <Select
+                className="bitfun-func-agent-config__pet-select"
+                size="small"
+                searchable
+                options={companionPetOptions}
+                value={settings.agent_companion_pet?.packagePath ?? DEFAULT_COMPANION_PET_VALUE}
+                onChange={(value) => { void handleCompanionPetChange(value); }}
+                placeholder={t('features.agentCompanion.petPlaceholder')}
+                renderOption={(option) => {
+                  const pet = companionPets.find(item => item.packagePath === option.value);
+                  const isUserPet = pet?.source === 'user';
+                  const isDeleting = !!pet && companionPetDeletingPath === pet.packagePath;
+                  return (
+                    <div className="bitfun-func-agent-config__pet-select-option">
+                      <div className="bitfun-func-agent-config__pet-select-option-main">
+                        <span className="bitfun-func-agent-config__pet-select-thumb" aria-hidden>
+                          {pet ? (
+                            <span
+                              className="bitfun-func-agent-config__pet-preview-sprite"
+                              style={{ '--bitfun-pet-preview-src': `url("${pet.previewSrc}")` } as React.CSSProperties}
+                            />
+                          ) : (
+                            <ChatInputPixelPet mood="rest" className="bitfun-func-agent-config__pet-select-panda" />
+                          )}
+                        </span>
+                        <span className="bitfun-func-agent-config__pet-select-text">
+                          <span className="bitfun-func-agent-config__pet-select-label">{option.label}</span>
+                          {option.description && (
+                            <span className="bitfun-func-agent-config__pet-select-description">{option.description}</span>
+                          )}
+                        </span>
+                      </div>
+                      {isUserPet && IS_TAURI_DESKTOP && pet && (
+                        <IconButton
+                          type="button"
+                          size="small"
+                          variant="ghost"
+                          className="bitfun-func-agent-config__pet-select-delete"
+                          disabled={isDeleting}
+                          aria-label={t('features.agentCompanion.delete')}
+                          tooltip={t('features.agentCompanion.delete')}
+                          onClick={(e) => void handleDeleteCompanionPet(e, pet)}
+                        >
+                          <Trash2 size={14} />
+                        </IconButton>
+                      )}
+                    </div>
+                  );
+                }}
+                renderValue={(option) => {
+                  const selectedOption = Array.isArray(option) ? option[0] : option;
+                  return selectedOption ? (
+                    <span className="bitfun-func-agent-config__pet-select-value">{selectedOption.label}</span>
+                  ) : undefined;
+                }}
+              />
+              <div className="bitfun-func-agent-config__pet-actions">
+                <IconButton
+                  type="button"
+                  size="small"
+                  variant="ghost"
+                  onClick={() => void handleRefreshCompanionPets()}
+                  disabled={companionPetsLoading}
+                  aria-label={t('features.agentCompanion.refresh')}
+                  tooltip={t('features.agentCompanion.refresh')}
+                >
+                  <RefreshCw size={14} />
+                </IconButton>
+                <Button
+                  size="small"
+                  variant="secondary"
+                  onClick={() => void handleImportCompanionPet()}
+                  disabled={!IS_TAURI_DESKTOP || companionPetImporting}
+                  title={t('features.agentCompanion.importHint')}
+                >
+                  <Plus size={14} />
+                  {companionPetImporting ? t('features.agentCompanion.importing') : t('features.agentCompanion.import')}
+                </Button>
+              </div>
             </div>
           </ConfigPageRow>
         </ConfigPageSection>

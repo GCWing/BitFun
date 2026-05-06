@@ -53,6 +53,34 @@
     overflow: visible;
     shape-rendering: geometricPrecision;
   }
+
+  &__petdex {
+    width: 42px;
+    height: 46px;
+    margin-top: -8px;
+    background-image: var(--bitfun-petdex-src);
+    background-repeat: no-repeat;
+    background-size: 800% 900%;
+    background-position-x: 0;
+    background-position-y: calc(var(--bitfun-petdex-row) * 12.5%);
+    image-rendering: pixelated;
+    transform-origin: 50% 80%;
+    animation:
+      bitfun-petdex-walk 0.9s steps(6) infinite,
+      bitfun-petdex-breathe 3s ease-in-out infinite;
+  }
+
+  &__petdex--rest {
+    animation:
+      bitfun-petdex-walk 1.2s steps(6) infinite,
+      bitfun-petdex-breathe 3.2s ease-in-out infinite;
+  }
+
+  &__petdex--working {
+    animation:
+      bitfun-petdex-walk 0.58s steps(6) infinite,
+      bitfun-petdex-work 0.28s linear infinite;
+  }
 }
 
 /* Dark theme: keep panda colors, invert decoration color, and apply the
@@ -530,12 +558,45 @@
   }
 }
 
+@keyframes bitfun-petdex-walk {
+  from {
+    background-position-x: 0;
+  }
+
+  to {
+    background-position-x: 85.7142857%;
+  }
+}
+
+@keyframes bitfun-petdex-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-2px) scale(1.03, 0.97);
+  }
+}
+
+@keyframes bitfun-petdex-work {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  50% {
+    transform: translate(0, -2px);
+  }
+}
+
 /* ---------- Reduced motion ---------- */
 
 @media (prefers-reduced-motion: reduce) {
   .bitfun-chat-input-pixel-pet__stage,
   .bitfun-chat-input-pixel-pet__stage--transition,
-  .bitfun-chat-input-pixel-pet__stage[class*='--idle-'] {
+  .bitfun-chat-input-pixel-pet__stage[class*='--idle-'],
+  .bitfun-chat-input-pixel-pet__petdex {
     animation: none !important;
     transition: none;
   }

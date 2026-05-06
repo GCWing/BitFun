@@ -10,6 +10,18 @@ export interface AIExperienceSettings {
   enable_visual_mode: boolean;
   /** Pixel Agent companion in collapsed chat input (session settings). */
   enable_agent_companion: boolean;
+  /** Optional Petdex-compatible companion package selected by the user. */
+  agent_companion_pet?: AgentCompanionPetSelection | null;
+}
+
+export interface AgentCompanionPetSelection {
+  id: string;
+  displayName: string;
+  description?: string | null;
+  source: 'preset' | 'user';
+  packagePath: string;
+  spritesheetPath: string;
+  spritesheetMimeType: string;
 }
 
 const CONFIG_PATH = 'app.ai_experience';
@@ -133,4 +145,3 @@ export class AIExperienceConfigService {
 
  
 export const aiExperienceConfigService = AIExperienceConfigService.getInstance();
-

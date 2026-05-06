@@ -10,7 +10,25 @@
     "agentCompanion": {
       "title": "Agent companion",
       "subtitle": "Show BitFun companion in the collapsed chat input.",
-      "enable": "Show Agent companion"
+      "enable": "Show Agent companion",
+      "petLabel": "Companion appearance",
+      "petDescription": "Choose a preset, or import a Petdex zip downloaded from petdex.crafter.run.",
+      "defaultPet": "Default panda",
+      "petPlaceholder": "Choose companion appearance",
+      "groupBuiltin": "Built-in",
+      "groupPreset": "Presets",
+      "groupImported": "Imported",
+      "import": "Import",
+      "importing": "Importing",
+      "importHint": "Download an appearance zip from https://petdex.crafter.run/zh, then import it here.",
+      "importDialogTitle": "Choose Petdex appearance zip",
+      "importFailed": "Failed to import Agent companion appearance",
+      "delete": "Remove imported appearance",
+      "deleteConfirmTitle": "Remove appearance",
+      "deleteConfirmBody": "Delete this imported companion from your device? This cannot be undone.",
+      "deleteSuccess": "Imported appearance removed",
+      "deleteFailed": "Failed to remove imported appearance",
+      "refresh": "Refresh appearances"
     }
   },
   "toolExecution": {

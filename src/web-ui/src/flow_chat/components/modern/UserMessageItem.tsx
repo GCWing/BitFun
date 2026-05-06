@@ -135,12 +135,12 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           globalEventBus.emit('editor:file-changed', { filePath });
         });
 
-        // 3) Restore the original user input back into the chat input box,
-        //    but only when the input is empty to avoid clobbering pending edits.
+        // 3) Restore the original user input back into the chat input box.
+        //    Rollback is an explicit user action — always fill to avoid the
+        //    content silently disappearing when the input already has text.
         if (messageContent.trim().length > 0) {
           globalEventBus.emit('fill-chat-input', {
             content: messageContent,
-            onlyIfEmpty: true,
           });
         }
 

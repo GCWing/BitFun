@@ -10,7 +10,25 @@
     "agentCompanion": {
       "title": "Agent 伙伴",
       "subtitle": "在收起的会话输入框中显示BitFun伙伴。",
-      "enable": "显示 Agent 伙伴"
+      "enable": "显示 Agent 伙伴",
+      "petLabel": "伙伴形象",
+      "petDescription": "选择预置形象，或导入从 petdex.crafter.run 下载的 Petdex zip。",
+      "defaultPet": "默认小熊猫",
+      "petPlaceholder": "选择伙伴形象",
+      "groupBuiltin": "内置",
+      "groupPreset": "预置",
+      "groupImported": "已导入",
+      "import": "导入",
+      "importing": "导入中",
+      "importHint": "可以去 https://petdex.crafter.run/zh 下载形象 zip 后导入。",
+      "importDialogTitle": "选择 Petdex 形象 zip",
+      "importFailed": "导入 Agent 伙伴形象失败",
+      "delete": "删除已导入形象",
+      "deleteConfirmTitle": "删除形象",
+      "deleteConfirmBody": "从本机删除该已导入的伙伴形象？此操作不可恢复。",
+      "deleteSuccess": "已删除导入的形象",
+      "deleteFailed": "删除导入形象失败",
+      "refresh": "刷新形象列表"
     }
   },
   "toolExecution": {

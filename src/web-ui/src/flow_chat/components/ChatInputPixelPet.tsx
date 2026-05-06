@@ -24,12 +24,15 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import type { ChatInputPetMood } from '../utils/chatInputPetMood';
+import type { AgentCompanionPetSelection } from '@/infrastructure/config/services/AIExperienceConfigService';
+import { resolveAgentCompanionPetSrc } from '@/infrastructure/config/services/AgentCompanionPetService';
 import './ChatInputPixelPet.scss';
 
 export interface ChatInputPixelPetProps {
   mood: ChatInputPetMood;
   className?: string;
   layout?: 'center' | 'stopRight';
+  pet?: AgentCompanionPetSelection | null;
 }
 
 const VIEW_W = 320;
@@ -252,9 +255,20 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
   mood,
   className = '',
   layout = 'center',
+  pet = null,
 }) => {
   const layoutMod =
     layout === 'stopRight' ? ' bitfun-chat-input-pixel-pet--layout-stop-right' : '';
+
+  const [petSrc, setPetSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pet) { setPetSrc(null); return; }
+    let cancelled = false;
+    void resolveAgentCompanionPetSrc(pet).then(src => {
+      if (!cancelled) setPetSrc(src || null);
+    });
+    return () => { cancelled = true; };
+  }, [pet]);
 
   const [transitioning, setTransitioning] = useState(false);
   const prevMoodRef = useRef<ChatInputPetMood>(mood);
@@ -312,6 +326,26 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
   ]
     .filter(Boolean)
     .join(' ');
+
+  if (pet && petSrc) {
+    const rowByMood: Record<ChatInputPetMood, number> = {
+      rest: 0,
+      analyzing: 8,
+      waiting: 6,
+      working: 7,
+    };
+    return (
+      <div className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()} aria-hidden>
+        <div
+          className={`bitfun-chat-input-pixel-pet__petdex bitfun-chat-input-pixel-pet__petdex--${mood}`}
+          style={{
+            '--bitfun-petdex-src': `url("${petSrc}")`,
+            '--bitfun-petdex-row': rowByMood[mood],
+          } as React.CSSProperties}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()} aria-hidden>

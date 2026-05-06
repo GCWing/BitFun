@@ -10,7 +10,25 @@
     "agentCompanion": {
       "title": "Agent 夥伴",
       "subtitle": "在收起的會話輸入框中顯示BitFun夥伴。",
-      "enable": "顯示 Agent 夥伴"
+      "enable": "顯示 Agent 夥伴",
+      "petLabel": "夥伴形象",
+      "petDescription": "選擇預置形象，或導入從 petdex.crafter.run 下載的 Petdex zip。",
+      "defaultPet": "默認小熊貓",
+      "petPlaceholder": "選擇夥伴形象",
+      "groupBuiltin": "內置",
+      "groupPreset": "預置",
+      "groupImported": "已導入",
+      "import": "導入",
+      "importing": "導入中",
+      "importHint": "可以去 https://petdex.crafter.run/zh 下載形象 zip 後導入。",
+      "importDialogTitle": "選擇 Petdex 形象 zip",
+      "importFailed": "導入 Agent 夥伴形象失敗",
+      "delete": "刪除已導入形象",
+      "deleteConfirmTitle": "刪除形象",
+      "deleteConfirmBody": "從本機刪除此已導入的夥伴形象？此操作無法復原。",
+      "deleteSuccess": "已刪除導入的形象",
+      "deleteFailed": "刪除導入形象失敗",
+      "refresh": "刷新形象列表"
     }
   },
   "toolExecution": {
