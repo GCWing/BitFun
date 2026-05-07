@@ -18,12 +18,7 @@
   height: 100vh;
   position: relative;
   background: transparent;
-  cursor: grab;
   user-select: none;
-
-  &:active {
-    cursor: grabbing;
-  }
 
   &__pet {
     width: min(96px, 100vw);
@@ -52,18 +47,34 @@
 
   &__bubbles {
     position: absolute;
-    right: 88px;
-    bottom: 24px;
-    width: min(252px, calc(100vw - 104px));
-    max-height: calc(100vh - 16px);
+    right: calc(var(--bitfun-agent-companion-pet-size, 96px) - var(--bitfun-agent-companion-gap, 8px));
+    bottom: 0;
+    width: min(252px, calc(100vw - var(--bitfun-agent-companion-pet-size, 96px) - var(--bitfun-agent-companion-gap, 8px)));
+    max-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     gap: 6px;
-    pointer-events: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    pointer-events: auto;
+    scrollbar-width: thin;
+
+    &::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.18);
+    }
   }
 
   &__bubble {
+    appearance: none;
+    text-align: left;
+    font: inherit;
     max-width: 100%;
     min-width: 132px;
     padding: 7px 10px;
@@ -73,6 +84,17 @@
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
     color: #1f2937;
     backdrop-filter: blur(10px);
+    cursor: pointer;
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgba(59, 130, 246, 0.7);
+      outline-offset: 2px;
+    }
   }
 
   &__bubble-title,

@@ -7,8 +7,9 @@ use log::{debug, error, warn};
 use tauri::{Manager, WebviewUrl};
 
 const AGENT_COMPANION_WINDOW_LABEL: &str = "agent-companion-pet";
-const AGENT_COMPANION_WINDOW_WIDTH: f64 = 360.0;
-const AGENT_COMPANION_WINDOW_HEIGHT: f64 = 180.0;
+const AGENT_COMPANION_WINDOW_MIN_SIZE: f64 = 96.0;
+const AGENT_COMPANION_WINDOW_MAX_WIDTH: f64 = 360.0;
+const AGENT_COMPANION_WINDOW_MAX_HEIGHT: f64 = 240.0;
 const AGENT_COMPANION_WINDOW_MARGIN: i32 = 64;
 
 #[derive(Debug, Clone)]
@@ -321,31 +322,104 @@ fn app_url(path: &str) -> WebviewUrl {
     }
 }
 
-fn position_agent_companion_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
+fn agent_companion_default_position(
+    app: &tauri::AppHandle,
+    window: &tauri::WebviewWindow,
+) -> Option<tauri::LogicalPosition<f64>> {
     let monitor: Option<tauri::Monitor> = window
         .current_monitor()
         .ok()
         .flatten()
         .or_else(|| app.primary_monitor().ok().flatten());
 
-    let Some(monitor) = monitor else {
-        return;
-    };
+    let monitor = monitor?;
 
     let scale_factor = monitor.scale_factor();
     let area = monitor.work_area();
     let area_position = area.position.to_logical::<f64>(scale_factor);
     let area_size = area.size.to_logical::<f64>(scale_factor);
+    let window_size = window
+        .outer_size()
+        .ok()
+        .map(|size| size.to_logical::<f64>(scale_factor));
+    let window_width = window_size
+        .as_ref()
+        .map(|size| size.width)
+        .unwrap_or(AGENT_COMPANION_WINDOW_MIN_SIZE);
+    let window_height = window_size
+        .as_ref()
+        .map(|size| size.height)
+        .unwrap_or(AGENT_COMPANION_WINDOW_MIN_SIZE);
     let x = area_position.x + area_size.width
-        - AGENT_COMPANION_WINDOW_WIDTH
+        - window_width
         - f64::from(AGENT_COMPANION_WINDOW_MARGIN);
     let y = area_position.y + area_size.height
-        - AGENT_COMPANION_WINDOW_HEIGHT
+        - window_height
         - f64::from(AGENT_COMPANION_WINDOW_MARGIN);
 
-    if let Err(e) = window.set_position(tauri::LogicalPosition::new(
+    Some(tauri::LogicalPosition::new(
         x.max(area_position.x),
         y.max(area_position.y),
+    ))
+}
+
+fn position_agent_companion_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
+    let Some(position) = agent_companion_default_position(app, window) else {
+        return;
+    };
+
+    if let Err(e) = window.set_position(position) {
+        warn!("Failed to position Agent companion window: {}", e);
+    }
+}
+
+fn resize_agent_companion_window(
+    app: &tauri::AppHandle,
+    window: &tauri::WebviewWindow,
+    width: f64,
+    height: f64,
+) {
+    let monitor: Option<tauri::Monitor> = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| app.primary_monitor().ok().flatten());
+    let scale_factor = monitor.as_ref().map(|monitor| monitor.scale_factor());
+    let old_size = scale_factor.and_then(|scale_factor| {
+        window
+            .outer_size()
+            .ok()
+            .map(|size| size.to_logical::<f64>(scale_factor))
+    });
+    let old_position = scale_factor.and_then(|scale_factor| {
+        window
+            .outer_position()
+            .ok()
+            .map(|position| position.to_logical::<f64>(scale_factor))
+    });
+
+    if let Err(e) = window.set_size(tauri::LogicalSize::new(width, height)) {
+        warn!("Failed to resize Agent companion window: {}", e);
+        return;
+    }
+
+    let next_position = old_position
+        .zip(old_size)
+        .map(|(position, size)| {
+            tauri::LogicalPosition::new(
+                position.x + size.width - width,
+                position.y + size.height - height,
+            )
+        })
+        .or_else(|| agent_companion_default_position(app, window));
+
+    let Some(position) = next_position else {
+        return;
+    };
+
+    if let Err(e) = window.set_position(tauri::LogicalPosition::new(
+        position.x,
+        position.y,
     )) {
         warn!("Failed to position Agent companion window: {}", e);
     }
@@ -366,17 +440,14 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
     let mut builder = tauri::WebviewWindowBuilder::new(&app, AGENT_COMPANION_WINDOW_LABEL, url)
         .title("BitFun Agent Companion")
         .inner_size(
-            AGENT_COMPANION_WINDOW_WIDTH,
-            AGENT_COMPANION_WINDOW_HEIGHT,
+            AGENT_COMPANION_WINDOW_MIN_SIZE,
+            AGENT_COMPANION_WINDOW_MIN_SIZE,
         )
         .max_inner_size(
-            AGENT_COMPANION_WINDOW_WIDTH,
-            AGENT_COMPANION_WINDOW_HEIGHT,
+            AGENT_COMPANION_WINDOW_MAX_WIDTH,
+            AGENT_COMPANION_WINDOW_MAX_HEIGHT,
         )
-        .min_inner_size(
-            AGENT_COMPANION_WINDOW_WIDTH,
-            AGENT_COMPANION_WINDOW_HEIGHT,
-        )
+        .min_inner_size(1.0, 1.0)
         .resizable(false)
         .decorations(false)
         .transparent(true)
@@ -401,6 +472,18 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
         format!("Failed to show Agent companion window: {}", e)
     })?;
 
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn resize_agent_companion_desktop_pet(
+    app: tauri::AppHandle,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(AGENT_COMPANION_WINDOW_LABEL) {
+        resize_agent_companion_window(&app, &window, width, height);
+    }
     Ok(())
 }
 

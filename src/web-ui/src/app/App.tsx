@@ -14,6 +14,7 @@ import { aiExperienceConfigService } from '@/infrastructure/config/services/AIEx
 import { syncAgentCompanionDesktopWindow } from '@/infrastructure/config/services/AgentCompanionWindowService';
 import { buildAgentCompanionActivity, subscribeAgentCompanionActivity } from '@/flow_chat/utils/agentCompanionActivity';
 import { emitAgentCompanionActivity } from '@/flow_chat/services/AgentCompanionActivityBridge';
+import { FlowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useWorkspaceContext } from '../infrastructure/contexts/WorkspaceContext';
 import SplashScreen from './components/SplashScreen/SplashScreen';
 import { useGlobalSceneShortcuts } from './hooks/useGlobalSceneShortcuts';
@@ -184,6 +185,43 @@ function App() {
   useEffect(() => subscribeAgentCompanionActivity(activity => {
     void emitAgentCompanionActivity(activity);
   }), []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void import('@tauri-apps/api/event')
+      .then(({ listen }) => listen<{ sessionId?: string }>(
+        'agent-companion://open-session',
+        async event => {
+          const sessionId = event.payload?.sessionId;
+          if (!sessionId) return;
+
+          const flowChatStore = FlowChatStore.getInstance();
+          if (flowChatStore.getState().sessions.has(sessionId)) {
+            flowChatStore.switchSession(sessionId);
+          }
+
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('show_main_window');
+          } catch (error) {
+            log.warn('Failed to show main window from Agent companion bubble', {
+              sessionId,
+              error,
+            });
+          }
+        },
+      ))
+      .then(removeListener => {
+        unlisten = removeListener;
+      })
+      .catch(error => {
+        log.warn('Failed to listen for Agent companion session open events', error);
+      });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   // Observe AI initialization state
   useEffect(() => {
