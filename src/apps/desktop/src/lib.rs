@@ -700,6 +700,7 @@ pub async fn _run() {
             api::remote_connect_api::remote_connect_start,
             api::remote_connect_api::remote_connect_stop,
             api::remote_connect_api::remote_connect_stop_bot,
+            api::remote_connect_api::send_remote_connect_dialog_status,
             api::remote_connect_api::remote_connect_status,
             api::remote_connect_api::remote_connect_get_form_state,
             api::remote_connect_api::remote_connect_set_form_state,
