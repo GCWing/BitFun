@@ -128,6 +128,15 @@
     "copyToolInput": "複製工具輸入",
     "copyToolOutput": "複製工具輸出"
   },
+  "widgetContextMenu": {
+    "addToInput": "把選中元素加入輸入框",
+    "addedToInput": "已將選中元素加入輸入框",
+    "unknownElement": "元素",
+    "displayText": "UI：{{summary}}",
+    "promptSelected": "選中的生成式 UI 元素：{{summary}}。",
+    "promptSection": "所屬區域：{{section}}。",
+    "promptFile": "關聯文件：{{file}}{{line}}。"
+  },
   "input": {
     "placeholder": "有什麼可以幫您...",
     "placeholderWithContext": "輸入消息，或拖放文件添加上下文...",
@@ -597,11 +606,26 @@
     "searchCount_one": "進行了 {{count}} 次搜索",
     "searchCount_other": "進行了 {{count}} 次搜索",
     "searchCount": "進行了 {{count}} 次搜索",
+    "commandCount_one": "執行了 {{count}} 個命令",
+    "commandCount_other": "執行了 {{count}} 個命令",
+    "commandCount": "執行了 {{count}} 個命令",
     "exploreCount_one": "執行了 {{count}} 次探索",
     "exploreCount_other": "執行了 {{count}} 次探索",
     "exploreCount": "執行了 {{count}} 次探索",
     "separator": "，",
     "collapse": "收起探索過程"
+  },
+  "terminalRegion": {
+    "executedCommands_one": "執行了 {{count}} 個命令",
+    "executedCommands_other": "執行了 {{count}} 個命令",
+    "executedCommands": "執行了 {{count}} 個命令",
+    "allSuccess": "全部成功",
+    "partialSuccess": "{{success}} 個成功，{{failed}} 個失敗",
+    "withRunning": "{{success}} 個成功，{{running}} 個運行中",
+    "withCancelled": "{{success}} 個成功，{{cancelled}} 個已取消",
+    "mixedStatus": "{{success}} 個成功，{{failed}} 個失敗，{{running}} 個運行中",
+    "separator": "，",
+    "collapse": "收起命令列表"
   },
   "toolCards": {
     "file": {
@@ -625,6 +649,27 @@
       "gettingDiff": "獲取差異",
       "preparing": "準備獲取差異",
       "failed": "獲取差異失敗"
+    },
+    "generativeUI": {
+      "action": "生成式 UI",
+      "streamingPreview": "預覽流式生成中",
+      "openSource": "打開源碼",
+      "renderFailed": "組件渲染失敗。",
+      "waitingForContent": "等待組件內容中...",
+      "saving": "保存中",
+      "unsaved": "有未保存改動",
+      "saveFailed": "保存失敗",
+      "savedToSession": "已保存到會話",
+      "saveError": "保存組件源碼失敗",
+      "saveNow": "立即保存",
+      "reset": "重置",
+      "source": "源碼",
+      "empty": "暫無組件內容。",
+      "workspaceUnavailable": "當前會話沒有可用工作區，無法保存生成式 UI 源碼",
+      "openSourceFailed": "打開生成式 UI 源碼編輯器失敗"
+    },
+    "generativeWidget": {
+      "exportFileNamePrefix": "BitFun組件"
     },
     "git": {
       "title": "Git",
@@ -821,10 +866,6 @@
       "errorLabel": "錯誤信息",
       "resultLabel": "執行結果",
       "noData": "無法加載任務數據",
-      "stopSubagentFailed": "無法停止該子代理。",
-      "stoppingSubagent": "正在停止子代理……",
-      "stopSubagent": "停止子代理",
-      "stopSubagentHint": "僅取消此審查員/子代理。父級審查仍可繼續並生成摘要。",
       "executionContent": "執行內容",
       "duration": "耗時",
       "waitingForModelResponse": "等待模型回應...",

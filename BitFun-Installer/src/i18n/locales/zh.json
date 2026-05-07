@@ -72,8 +72,8 @@
     "addHeader": "添加字段",
     "headerKey": "key",
     "headerValue": "value",
-    "advancedShow": "Show advanced settings",
-    "advancedHide": "Hide advanced settings",
+    "advancedShow": "显示高级设置",
+    "advancedHide": "隐藏高级设置",
     "providers": {
       "openbitfun": {
         "name": "OpenBitFun",

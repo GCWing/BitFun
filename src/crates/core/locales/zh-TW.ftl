@@ -1,4 +1,4 @@
-# BitFun 簡體中文語言包
+# BitFun 繁體中文語言包
 # Chinese Traditional (zh-TW) Fluent Translation File
 
 # ==================== 通用 ====================
