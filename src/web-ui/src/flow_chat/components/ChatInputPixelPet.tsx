@@ -29,11 +29,13 @@ import { resolveAgentCompanionPetSrc } from '@/infrastructure/config/services/Ag
 import './ChatInputPixelPet.scss';
 
 export interface ChatInputPixelPetProps {
-  mood: ChatInputPetMood;
+  mood: ChatInputPixelPetMood;
   className?: string;
   layout?: 'center' | 'stopRight';
   pet?: AgentCompanionPetSelection | null;
 }
+
+export type ChatInputPixelPetMood = ChatInputPetMood | 'hover' | 'dragging';
 
 const VIEW_W = 320;
 const VIEW_H = 204;
@@ -202,9 +204,31 @@ function FaceWorking() {
   );
 }
 
-const FACE_ORDER: ChatInputPetMood[] = ['rest', 'analyzing', 'waiting', 'working'];
+function FaceHover() {
+  return (
+    <g className="bitfun-panda-head__face bitfun-panda-head__face--hover">
+      <g className="bitfun-panda-head__sparkles" aria-hidden>
+        <path d="M226 46 L232 58 L244 64 L232 70 L226 82 L220 70 L208 64 L220 58 Z" className="bitfun-panda-head__sparkle bitfun-panda-head__sparkle--a" />
+        <path d="M270 20 L274 28 L282 32 L274 36 L270 44 L266 36 L258 32 L266 28 Z" className="bitfun-panda-head__sparkle bitfun-panda-head__sparkle--b" />
+      </g>
+    </g>
+  );
+}
 
-function FaceFor(mood: ChatInputPetMood) {
+function FaceDragging() {
+  return (
+    <g className="bitfun-panda-head__face bitfun-panda-head__face--drag">
+      <g className="bitfun-panda-head__drag-lines" aria-hidden>
+        <path d="M226 48 C244 40 262 40 282 48" className="bitfun-panda-head__drag-line bitfun-panda-head__drag-line--a" />
+        <path d="M230 72 C248 64 268 65 286 75" className="bitfun-panda-head__drag-line bitfun-panda-head__drag-line--b" />
+      </g>
+    </g>
+  );
+}
+
+const FACE_ORDER: ChatInputPixelPetMood[] = ['rest', 'analyzing', 'waiting', 'working', 'hover', 'dragging'];
+
+function FaceFor(mood: ChatInputPixelPetMood) {
   switch (mood) {
     case 'rest':
       return <FaceRest />;
@@ -212,6 +236,10 @@ function FaceFor(mood: ChatInputPetMood) {
       return <FaceAnalyzing />;
     case 'waiting':
       return <FaceWaiting />;
+    case 'hover':
+      return <FaceHover />;
+    case 'dragging':
+      return <FaceDragging />;
     default:
       return <FaceWorking />;
   }
@@ -271,7 +299,7 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
   }, [pet]);
 
   const [transitioning, setTransitioning] = useState(false);
-  const prevMoodRef = useRef<ChatInputPetMood>(mood);
+  const prevMoodRef = useRef<ChatInputPixelPetMood>(mood);
   useEffect(() => {
     if (prevMoodRef.current === mood) return;
     prevMoodRef.current = mood;
@@ -328,8 +356,10 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
     .join(' ');
 
   if (pet && petSrc) {
-    const rowByMood: Record<ChatInputPetMood, number> = {
+    const rowByMood: Record<ChatInputPixelPetMood, number> = {
       rest: 0,
+      hover: 1,
+      dragging: 2,
       analyzing: 8,
       waiting: 6,
       working: 7,

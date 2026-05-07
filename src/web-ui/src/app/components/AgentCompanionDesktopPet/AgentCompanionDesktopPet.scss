@@ -26,15 +26,28 @@
   }
 
   &__pet {
-    position: absolute;
-    right: 0;
-    bottom: 0;
     width: min(96px, 100vw);
     height: min(96px, 100vh);
     max-width: 96px;
     max-height: 96px;
     transform-origin: center bottom;
     filter: drop-shadow(0 12px 18px rgba(15, 23, 42, 0.18));
+  }
+
+  &__pet-hitbox {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: min(96px, 100vw);
+    height: min(96px, 100vh);
+    display: grid;
+    place-items: center;
+    cursor: grab;
+    pointer-events: auto;
+
+    &:active {
+      cursor: grabbing;
+    }
   }
 
   &__bubbles {

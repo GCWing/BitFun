@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { aiExperienceConfigService, type AgentCompanionPetSelection, type AIExperienceSettings } from '@/infrastructure/config/services/AIExperienceConfigService';
-import { ChatInputPixelPet } from '@/flow_chat/components/ChatInputPixelPet';
+import { ChatInputPixelPet, type ChatInputPixelPetMood } from '@/flow_chat/components/ChatInputPixelPet';
 import type { ChatInputPetMood } from '@/flow_chat/utils/chatInputPetMood';
 import type { AgentCompanionActivityPayload, AgentCompanionTaskStatus } from '@/flow_chat/utils/agentCompanionActivity';
 import { createLogger } from '@/shared/utils/logger';
@@ -18,6 +18,8 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   );
   const [mood, setMood] = useState<ChatInputPetMood>('rest');
   const [tasks, setTasks] = useState<AgentCompanionTaskStatus[]>([]);
+  const [isHoveringPet, setIsHoveringPet] = useState(false);
+  const [isDraggingPet, setIsDraggingPet] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.add('bitfun-agent-companion-window-root');
@@ -66,16 +68,31 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     };
   }, []);
 
-  const startDrag = () => {
-    void getCurrentWindow().startDragging().catch(error => {
-      log.warn('Failed to start Agent companion window drag', error);
-    });
+  const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    setIsDraggingPet(true);
+    void getCurrentWindow().startDragging()
+      .catch(error => {
+        log.warn('Failed to start Agent companion window drag', error);
+      })
+      .finally(() => {
+        setIsDraggingPet(false);
+      });
   };
+
+  const displayMood: ChatInputPixelPetMood = isDraggingPet
+    ? 'dragging'
+    : isHoveringPet
+      ? 'hover'
+      : mood;
 
   return (
     <main
       className="bitfun-agent-companion-window"
-      onMouseDown={startDrag}
       onDoubleClick={() => void getCurrentWindow().close()}
       title="Double-click to close"
     >
@@ -96,11 +113,18 @@ export const AgentCompanionDesktopPet: React.FC = () => {
           ))}
         </div>
       )}
-      <ChatInputPixelPet
-        mood={mood}
-        pet={pet}
-        className="bitfun-agent-companion-window__pet"
-      />
+      <div
+        className="bitfun-agent-companion-window__pet-hitbox"
+        onPointerEnter={() => setIsHoveringPet(true)}
+        onPointerLeave={() => setIsHoveringPet(false)}
+        onPointerDown={startDrag}
+      >
+        <ChatInputPixelPet
+          mood={displayMood}
+          pet={pet}
+          className="bitfun-agent-companion-window__pet"
+        />
+      </div>
     </main>
   );
 };
