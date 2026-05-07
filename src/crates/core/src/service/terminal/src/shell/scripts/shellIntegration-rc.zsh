@@ -1,7 +1,33 @@
 # ---------------------------------------------------------------------------------------------
 #   Shell Integration for Zsh
 # ---------------------------------------------------------------------------------------------
-builtin autoload -Uz add-zsh-hook is-at-least
+
+add-zsh-hook() {
+	local hook_name= "$1"
+	local func_name= "$2"
+	local -a hook_array
+
+	case "${hook_name}" in
+		precmd)
+			hook_array=("${(@)precmd_functions[@]}")
+			precmd_functions+=("${func_name}")
+			;;
+		preexec)
+			preexec_functions+=("${func_name}")
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
+if ! builtin type is-at-least >/dev/null 2>&1; then
+	is-at-least() {
+		local required="$1"
+		local current="${ZSH_VERSION}"
+		[[ "${current}" == $(echo -e "${required}\n${current}" sort -V | head -n1) ]]
+	}
+fi
 
 # Prevent the script recursing when setting up
 if [ -n "$TERMINAL_SHELL_INTEGRATION" ]; then
