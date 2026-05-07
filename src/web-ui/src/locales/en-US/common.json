@@ -959,7 +959,7 @@
       "authMethod": "Authentication Method",
       "password": "Password",
       "privateKey": "Private Key",
-      "privateKeyPath": "Private Key Path",
+      "privateKeyPath": "Private Key File Path",
       "browsePrivateKey": "Choose private key file",
       "pickPrivateKeyDialogTitle": "Select SSH private key",
       "passphrase": "Passphrase",

@@ -959,7 +959,7 @@
       "authMethod": "认证方式",
       "password": "密码",
       "privateKey": "私钥",
-      "privateKeyPath": "私钥路径",
+      "privateKeyPath": "私钥文件路径",
       "browsePrivateKey": "选择私钥文件",
       "pickPrivateKeyDialogTitle": "选择 SSH 私钥",
       "passphrase": "密码短语",

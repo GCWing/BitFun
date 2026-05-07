@@ -147,6 +147,18 @@ impl SnapshotManager {
         }))
     }
 
+    pub async fn get_session_file_diff_stats(
+        &self,
+        session_id: &str,
+        file_path: &str,
+    ) -> SnapshotResult<crate::service::snapshot::types::SessionFileDiffStats> {
+        let snapshot_service = self.snapshot_service.read().await;
+        let file_path = std::path::Path::new(file_path);
+        snapshot_service
+            .get_session_file_diff_stats(session_id, file_path)
+            .await
+    }
+
     pub async fn get_operation_summary(
         &self,
         session_id: &str,

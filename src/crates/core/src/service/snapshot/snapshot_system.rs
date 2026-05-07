@@ -526,6 +526,12 @@ impl FileSnapshotSystem {
         None
     }
 
+    /// Recorded logical size (bytes) from snapshot metadata, without loading file contents.
+    pub async fn get_snapshot_recorded_size_bytes(&self, snapshot_id: &str) -> SnapshotResult<u64> {
+        let snapshot = self.load_snapshot_from_disk(snapshot_id).await?;
+        Ok(snapshot.metadata.size)
+    }
+
     /// Loads snapshot metadata from disk (without using in-memory cache).
     async fn load_snapshot_from_disk(&self, snapshot_id: &str) -> SnapshotResult<FileSnapshot> {
         debug!(

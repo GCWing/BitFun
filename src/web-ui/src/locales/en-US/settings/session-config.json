@@ -14,7 +14,7 @@
       "displayModeLabel": "Display location",
       "displayModeDescription": "Show the companion inside the input, or as a floating desktop pet outside the app.",
       "displayInput": "Inside input",
-      "displayInputDesc": "Keep the current behavior and show it when the chat input is collapsed.",
+      "displayInputDesc": "Show it when the chat input is collapsed.",
       "displayDesktop": "Floating desktop pet",
       "displayDesktopDesc": "Show a borderless always-on-top mini window outside the app. Drag to move it.",
       "petLabel": "Companion appearance",

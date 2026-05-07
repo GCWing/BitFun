@@ -20,7 +20,6 @@ import { useSnapshotState } from '../../../tools/snapshot_system/hooks/useSnapsh
 import { createDiffEditorTab } from '../../../shared/utils/tabUtils';
 import { snapshotAPI } from '../../../infrastructure/api';
 import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceContext';
-import { diffService } from '../../../tools/editor/services';
 import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { createBtwChildSession } from '../../services/BtwThreadService';
@@ -314,30 +313,21 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
           let stats: FileStats | null = null;
 
           try {
-            const diffData = await snapshotAPI.getOperationDiff(sessionId, file.filePath);
+            const statsResp = await snapshotAPI.getSessionFileDiffStats(
+              sessionId,
+              file.filePath,
+              currentWorkspace?.rootPath,
+            );
             const fileName = file.filePath.split(/[/\\]/).pop() || file.filePath;
 
-            let additions = 0;
-            let deletions = 0;
-            let operationType: 'write' | 'edit' | 'delete' = 'edit';
-
-            if (!diffData.originalContent && diffData.modifiedContent) {
-              operationType = 'write';
-              additions = diffData.modifiedContent.split('\n').length;
-              deletions = 0;
-            } else if (diffData.originalContent && !diffData.modifiedContent) {
-              operationType = 'delete';
-              additions = 0;
-              deletions = diffData.originalContent.split('\n').length;
-            } else if (diffData.originalContent && diffData.modifiedContent) {
-              const result = await diffService.computeDiff(
-                diffData.originalContent,
-                diffData.modifiedContent,
-                { timeout: 3000 }
-              );
-              additions = result.stats.additions;
-              deletions = result.stats.deletions;
-            }
+            const additions = statsResp.linesAdded;
+            const deletions = statsResp.linesRemoved;
+            const operationType: 'write' | 'edit' | 'delete' =
+              statsResp.changeKind === 'create'
+                ? 'write'
+                : statsResp.changeKind === 'delete'
+                  ? 'delete'
+                  : 'edit';
 
             stats = {
               filePath: file.filePath,
@@ -381,7 +371,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     } finally {
       setLoadingStats(false);
     }
-  }, [sessionId, t]);
+  }, [sessionId, t, currentWorkspace?.rootPath]);
 
   // Reload stats when the file list changes.
   useEffect(() => {

@@ -168,6 +168,18 @@ impl SnapshotService {
             .await
     }
 
+    pub async fn get_session_file_diff_stats(
+        &self,
+        session_id: &str,
+        file_path: &Path,
+    ) -> SnapshotResult<crate::service::snapshot::types::SessionFileDiffStats> {
+        self.ensure_initialized().await?;
+        let snapshot_core = self.snapshot_core.read().await;
+        snapshot_core
+            .get_session_file_diff_stats(session_id, file_path)
+            .await
+    }
+
     pub async fn get_operation_summary(
         &self,
         session_id: &str,

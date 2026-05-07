@@ -1713,12 +1713,12 @@ mod tests {
             "enable_agent_companion": true,
             "agent_companion_display_mode": "desktop",
             "agent_companion_pet": {
-                "id": "pixel-panda",
-                "displayName": "Pixel Panda",
-                "description": "A gentle panda holding a tiny pixel brush.",
+                "id": "boxcat",
+                "displayName": "Boxcat",
+                "description": "A tiny cat tucked inside a cardboard box for cozy coding sessions.",
                 "source": "preset",
-                "packagePath": "/agent-companion-pets/pixel-panda",
-                "spritesheetPath": "/agent-companion-pets/pixel-panda/spritesheet.webp",
+                "packagePath": "/agent-companion-pets/boxcat",
+                "spritesheetPath": "/agent-companion-pets/boxcat/spritesheet.webp",
                 "spritesheetMimeType": "image/webp"
             }
         }))
@@ -1728,19 +1728,19 @@ mod tests {
             .agent_companion_pet
             .as_ref()
             .expect("selected companion pet should be retained");
-        assert_eq!(pet.id, "pixel-panda");
-        assert_eq!(pet.display_name, "Pixel Panda");
-        assert_eq!(pet.package_path, "/agent-companion-pets/pixel-panda");
+        assert_eq!(pet.id, "boxcat");
+        assert_eq!(pet.display_name, "Boxcat");
+        assert_eq!(pet.package_path, "/agent-companion-pets/boxcat");
         assert_eq!(config.agent_companion_display_mode, "desktop");
 
         let serialized = serde_json::to_value(&config).expect("config should serialize");
         assert_eq!(
             serialized["agent_companion_pet"]["displayName"],
-            "Pixel Panda"
+            "Boxcat"
         );
         assert_eq!(
             serialized["agent_companion_pet"]["spritesheetPath"],
-            "/agent-companion-pets/pixel-panda/spritesheet.webp"
+            "/agent-companion-pets/boxcat/spritesheet.webp"
         );
     }
 

@@ -59,14 +59,15 @@ const BUILTIN_PETS: AgentCompanionPetSelection[] = [
     spritesheetMimeType: 'image/webp',
   },
   {
-    id: 'cream-cat',
-    displayName: 'Cream Cat',
-    description: 'A tiny cream pixel-art cat with a heart bubble for happy moments.',
+    id: 'capy',
+    displayName: 'Capy',
+    description: 'An original emotionally stable capybara with a tiny orange on its head.',
     source: 'preset',
-    packagePath: `${BUILTIN_PET_BASE}/cream-cat`,
-    spritesheetPath: `${BUILTIN_PET_BASE}/cream-cat/spritesheet.webp`,
+    packagePath: `${BUILTIN_PET_BASE}/capy`,
+    spritesheetPath: `${BUILTIN_PET_BASE}/capy/spritesheet.webp`,
     spritesheetMimeType: 'image/webp',
   },
+
   {
     id: 'elaina',
     displayName: 'Elaina',
@@ -86,6 +87,16 @@ const BUILTIN_PETS: AgentCompanionPetSelection[] = [
     spritesheetMimeType: 'image/webp',
   },
   {
+    id: 'hachiware',
+    displayName: 'Hachiware',
+    description:
+      'A tiny Hachiware-inspired desktop pet with white and blue cat markings, bright eyes, and cheerful expressions.',
+    source: 'preset',
+    packagePath: `${BUILTIN_PET_BASE}/hachiware`,
+    spritesheetPath: `${BUILTIN_PET_BASE}/hachiware/spritesheet.webp`,
+    spritesheetMimeType: 'image/webp',
+  },
+  {
     id: 'ikun',
     displayName: 'IKUN',
     description: 'A hoodie chick with hot path stage energy.',
@@ -95,13 +106,23 @@ const BUILTIN_PETS: AgentCompanionPetSelection[] = [
     spritesheetMimeType: 'image/webp',
   },
   {
-    id: 'pixel-panda',
-    displayName: 'Pixel Panda',
-    description: 'A gentle panda holding a tiny pixel brush.',
+    id: 'jiyi',
+    displayName: '吉伊',
+    description:
+      'A round white chibi bear with dark chocolate outlines, pink cheeks, tiny limbs, curled ears, and a small pink bear pouch.',
     source: 'preset',
-    packagePath: `${BUILTIN_PET_BASE}/pixel-panda`,
-    spritesheetPath: `${BUILTIN_PET_BASE}/pixel-panda/spritesheet.webp`,
+    packagePath: `${BUILTIN_PET_BASE}/jiyi`,
+    spritesheetPath: `${BUILTIN_PET_BASE}/jiyi/spritesheet.webp`,
     spritesheetMimeType: 'image/webp',
+  },
+  {
+    id: 'panda-pix',
+    displayName: 'Panda',
+    description: 'Codux bundled pet atlas.',
+    source: 'preset',
+    packagePath: `${BUILTIN_PET_BASE}/panda-pix`,
+    spritesheetPath: `${BUILTIN_PET_BASE}/panda-pix/spritesheet.png`,
+    spritesheetMimeType: 'image/png',
   },
   {
     id: 'usagi',

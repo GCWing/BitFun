@@ -14,7 +14,7 @@
       "displayModeLabel": "显示位置",
       "displayModeDescription": "选择伙伴显示在输入框内，还是作为软件外的悬浮桌面宠物。",
       "displayInput": "输入框内",
-      "displayInputDesc": "保持当前效果，在会话输入框收起时显示。",
+      "displayInputDesc": "在会话输入框收起时显示。",
       "displayDesktop": "悬浮桌面宠物",
       "displayDesktopDesc": "在软件外显示为置顶的无边框小窗口，可拖动。",
       "petLabel": "伙伴形象",

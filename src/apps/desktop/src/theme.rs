@@ -1,5 +1,7 @@
 //! Theme System
 
+use std::sync::OnceLock;
+
 use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::config::types::GlobalConfig;
 use dark_light::Mode;
@@ -11,6 +13,12 @@ const AGENT_COMPANION_WINDOW_MIN_SIZE: f64 = 96.0;
 const AGENT_COMPANION_WINDOW_MAX_WIDTH: f64 = 360.0;
 const AGENT_COMPANION_WINDOW_MAX_HEIGHT: f64 = 240.0;
 const AGENT_COMPANION_WINDOW_MARGIN: i32 = 64;
+
+static AGENT_COMPANION_WINDOW_OPS: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+fn agent_companion_window_ops() -> &'static tokio::sync::Mutex<()> {
+    AGENT_COMPANION_WINDOW_OPS.get_or_init(|| tokio::sync::Mutex::new(()))
+}
 
 #[derive(Debug, Clone)]
 pub struct ThemeConfig {
@@ -403,32 +411,30 @@ fn resize_agent_companion_window(
         return;
     }
 
-    let next_position = old_position
-        .zip(old_size)
-        .map(|(position, size)| {
-            tauri::LogicalPosition::new(
-                position.x + size.width - width,
-                position.y + size.height - height,
-            )
-        })
-        .or_else(|| agent_companion_default_position(app, window));
-
-    let Some(position) = next_position else {
-        return;
-    };
-
-    if let Err(e) = window.set_position(tauri::LogicalPosition::new(
-        position.x,
-        position.y,
-    )) {
-        warn!("Failed to position Agent companion window: {}", e);
+    // Keep the bottom-right corner fixed when bubbles change height. If we cannot
+    // read the previous geometry (e.g. transient platform errors), avoid snapping
+    // back to the default corner — that would feel like the pet "jumped".
+    if let Some((position, size)) = old_position.zip(old_size) {
+        let next_position = tauri::LogicalPosition::new(
+            position.x + size.width - width,
+            position.y + size.height - height,
+        );
+        if let Err(e) = window.set_position(next_position) {
+            warn!("Failed to position Agent companion window: {}", e);
+        }
     }
 }
 
 #[tauri::command]
 pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
+    let _guard = agent_companion_window_ops().lock().await;
+
+    // Reuse any existing window: never destroy here. A previous implementation destroyed
+    // whenever `is_visible` was false, which raced with another `show` that had built the
+    // window but not called `show()` yet (or with `hide`), producing duplicate pets or
+    // stuck windows.
     if let Some(window) = app.get_webview_window(AGENT_COMPANION_WINDOW_LABEL) {
-        position_agent_companion_window(&app, &window);
+        let _ = window.unminimize();
         window.show().map_err(|e| {
             error!("Failed to show Agent companion window: {}", e);
             format!("Failed to show Agent companion window: {}", e)
@@ -481,6 +487,7 @@ pub async fn resize_agent_companion_desktop_pet(
     width: f64,
     height: f64,
 ) -> Result<(), String> {
+    let _guard = agent_companion_window_ops().lock().await;
     if let Some(window) = app.get_webview_window(AGENT_COMPANION_WINDOW_LABEL) {
         resize_agent_companion_window(&app, &window, width, height);
     }
@@ -489,10 +496,11 @@ pub async fn resize_agent_companion_desktop_pet(
 
 #[tauri::command]
 pub async fn hide_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
+    let _guard = agent_companion_window_ops().lock().await;
     if let Some(window) = app.get_webview_window(AGENT_COMPANION_WINDOW_LABEL) {
-        window.close().map_err(|e| {
-            error!("Failed to close Agent companion window: {}", e);
-            format!("Failed to close Agent companion window: {}", e)
+        window.destroy().map_err(|e| {
+            error!("Failed to destroy Agent companion window: {}", e);
+            format!("Failed to destroy Agent companion window: {}", e)
         })?;
     }
     Ok(())

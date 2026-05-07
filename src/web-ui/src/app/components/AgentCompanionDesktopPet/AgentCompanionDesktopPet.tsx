@@ -35,9 +35,6 @@ export const AgentCompanionDesktopPet: React.FC = () => {
 
     const applySettings = (settings: AIExperienceSettings) => {
       setPet(settings.agent_companion_pet ?? null);
-      if (!settings.enable_agent_companion || settings.agent_companion_display_mode !== 'desktop') {
-        void getCurrentWindow().close();
-      }
     };
 
     void aiExperienceConfigService.getSettingsAsync().then(settings => {
@@ -63,12 +60,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       log.warn('Failed to listen for Agent companion activity updates', error);
     });
 
-    const removeListener = aiExperienceConfigService.addChangeListener(settings => {
-      applySettings(settings);
-    });
-
     return () => {
-      removeListener();
       removeTauriListener?.();
       removeActivityListener?.();
       document.documentElement.classList.remove('bitfun-agent-companion-window-root');
@@ -144,8 +136,6 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   return (
     <main
       className="bitfun-agent-companion-window"
-      onDoubleClick={() => void getCurrentWindow().close()}
-      title="Double-click to close"
     >
       {tasks.length > 0 && (
         <div

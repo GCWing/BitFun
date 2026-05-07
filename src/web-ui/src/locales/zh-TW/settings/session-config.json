@@ -14,7 +14,7 @@
       "displayModeLabel": "顯示位置",
       "displayModeDescription": "選擇夥伴顯示在輸入框內，還是作為軟體外的懸浮桌面寵物。",
       "displayInput": "輸入框內",
-      "displayInputDesc": "保持目前效果，在會話輸入框收起時顯示。",
+      "displayInputDesc": "在會話輸入框收起時顯示。",
       "displayDesktop": "懸浮桌面寵物",
       "displayDesktopDesc": "在軟體外顯示為置頂的無邊框小視窗，可拖動。",
       "petLabel": "夥伴形象",
