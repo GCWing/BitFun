@@ -173,10 +173,11 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   useEffect(() => {
     if (!isOpen) {
       if (pollRef.current) clearInterval(pollRef.current);
+      void remoteConnectAPI.sendRemoteDialogStatus(false);
       pollRef.current = null;
       return;
     }
-
+    void remoteConnectAPI.sendRemoteDialogStatus(true);
     setHasAgreedDisclaimer(getRemoteConnectDisclaimerAgreed());
 
     let cancelled = false;

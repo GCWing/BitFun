@@ -422,6 +422,12 @@ pub async fn remote_connect_stop() -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn send_remote_connect_dialog_status(is_open: bool) -> Result<(), String> {
+    bitfun_core::service::remote_connect::send_remote_dialog_status(is_open);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn remote_connect_stop_bot() -> Result<(), String> {
     let holder = get_service_holder();
     let guard = holder.read().await;

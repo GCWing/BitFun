@@ -135,6 +135,14 @@ class RemoteConnectAPIService {
       throw e;
     }
   }
+  async sendRemoteDialogStatus(is_open: boolean): Promise<void> {
+    try {
+      await this.adapter.request<void>('send_remote_connect_dialog_status', {isOpen: is_open});
+    } catch (e) {
+      log.error('sendRemoteDialogStatus failed', e);
+      throw e;
+    }
+  }
 
   async getStatus(): Promise<RemoteConnectStatus> {
     try {

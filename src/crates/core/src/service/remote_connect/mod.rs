@@ -953,6 +953,7 @@ impl RemoteConnectService {
 
         self.pairing.write().await.reset().await;
         *self.trusted_mobile_identity.write().await = None;
+        let _ = send_remote_url(String::new());
         info!("Relay connections stopped (bots unaffected)");
     }
 
@@ -1375,6 +1376,41 @@ fn send_remote_url(args: String) -> Result<String, String> {
                         }
                         Err(err) => {
                             log::error!("send_remote_url failed with error: {}", err);
+                        }
+                    }
+                    Ok(())
+                },
+            );
+            let res = results.lock().to_string();
+            Ok(res)
+        }
+    }
+}
+pub fn send_remote_dialog_status(is_open: bool) -> Result<String, String> {
+    let args = if is_open {
+        "is_open".to_owned()
+    }
+    else {
+        String::new()
+    };
+    let result = Ok(args);
+    let results = Arc::new(Mutex::new(String::default()));
+    match JS_THREADSAFE_FUNCTION.write().get("send_remote_dialog_status") {
+        None => {
+            log::error!("send_remote_dialog_status has not register");
+            Err("The Arkts has not register the function".to_owned())
+        }
+        Some(function) => {
+            function.call_with_return_value(
+                result,
+                ThreadsafeFunctionCallMode::Blocking,
+                move |result, _| {
+                    match result {
+                        Ok(_) => {
+                            log::info!("send_remote_dialog_status successfully");
+                        }
+                        Err(err) => {
+                            log::error!("send_remote_dialog_status failed with error: {}", err);
                         }
                     }
                     Ok(())

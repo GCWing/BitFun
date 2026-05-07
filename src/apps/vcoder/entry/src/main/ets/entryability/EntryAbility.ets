@@ -26,12 +26,12 @@ export default class EntryAbility extends RustAbility {
   public moduleName: string = "bitfun_desktop_lib";
   public defaultPage: boolean = true;
   public commonEventListener: CommonEventListener | undefined = undefined;
-  public remote_url: string = "";
+  public remoteUrl: string = "";
+  public shareStatus: boolean = false;
 
   async onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): Promise<void> {
     super.onCreate(want, launchParam);
     this.commonEventListener = new CommonEventListener();
-    this.aboutToAppear();
   }
 
   onDestroy(): void {
@@ -105,8 +105,24 @@ export default class EntryAbility extends RustAbility {
     });
     RustModule.registerArktsFunction('send_remote_url', async (err: Error, arg: string): Promise<string> => {
       hilog.info(DOMAIN_NUMBER, TAG, 'get remote url ' + arg);
-      this.remote_url = arg;
+      this.remoteUrl = arg;
+      if (this.remoteUrl.length == 0) {
+        this.shareDisablingListening();
+      }
+      else {
+        this.shareListening();
+      }
       return '';
+    });
+    RustModule.registerArktsFunction('send_remote_dialog_status', async (err: Error, arg: string): Promise<string> => {
+          hilog.info(DOMAIN_NUMBER, TAG, 'get remote dialog status ' + arg);
+          if (arg.length == 0) {
+            this.shareDisablingListening();
+          }
+          else {
+            this.shareListening();
+          }
+          return '';
     });
     RustModule.registerArktsFunction('harmony_create', async (err: Error, arg: string): Promise<string> => {
       await fileIo.copyDir('/storage/Users/currentUser/Documents/DevecoStudioProjects/MyApplication',
@@ -158,14 +174,20 @@ export default class EntryAbility extends RustAbility {
     return super.onWindowStageCreate(windowStage);
   }
 
-  aboutToAppear(): void {
-    console.info("aboutToAppear");
-    harmonyShare.on('knockShare', this.sendOnlyCallback);
+  private shareListening() {
+    hilog.info(0x0000, 'vnext', 'shareListening');
+    if (this.remoteUrl.length !=0 || !this.shareStatus) {
+      harmonyShare.on('knockShare', this.sendOnlyCallback);
+      this.shareStatus = true;
+    }
   }
-
+  private shareDisablingListening() {
+    harmonyShare.off('knockShare', this.sendOnlyCallback);
+    this.shareStatus = false;
+  }
   private sendOnlyCallback = (sharableTable: harmonyShare.SharableTarget) => {
-    if (this.remote_url.length == 0) {
-      let content = this.remote_url;
+    if (this.remoteUrl.length == 0) {
+      let content = this.remoteUrl;
       let shareData: systemShare.SharedData = new systemShare.SharedData({
         utd: uniformTypeDescriptor.UniformDataType.HYPERLINK,
         content,
