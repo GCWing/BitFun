@@ -10,9 +10,13 @@ export interface AIExperienceSettings {
   enable_visual_mode: boolean;
   /** Pixel Agent companion in collapsed chat input (session settings). */
   enable_agent_companion: boolean;
+  /** Where to show the Agent companion. */
+  agent_companion_display_mode: AgentCompanionDisplayMode;
   /** Optional Petdex-compatible companion package selected by the user. */
   agent_companion_pet?: AgentCompanionPetSelection | null;
 }
+
+export type AgentCompanionDisplayMode = 'input' | 'desktop';
 
 export interface AgentCompanionPetSelection {
   id: string;
@@ -30,6 +34,7 @@ const defaultSettings: AIExperienceSettings = {
   enable_session_title_generation: true,
   enable_visual_mode: false,
   enable_agent_companion: true,
+  agent_companion_display_mode: 'desktop',
 };
 
  

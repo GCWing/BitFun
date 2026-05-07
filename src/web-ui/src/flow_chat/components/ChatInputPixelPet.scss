@@ -27,6 +27,9 @@
      stay readable on either chat background. */
   --bitfun-pet-decor: #1f2024;
   --bitfun-pet-decor-soft: rgba(31, 32, 36, 0.55);
+  --bitfun-petdex-width: 42px;
+  --bitfun-petdex-height: 46px;
+  --bitfun-petdex-margin-top: -8px;
 
   position: relative;
   z-index: 0;
@@ -55,9 +58,9 @@
   }
 
   &__petdex {
-    width: 42px;
-    height: 46px;
-    margin-top: -8px;
+    width: var(--bitfun-petdex-width);
+    height: var(--bitfun-petdex-height);
+    margin-top: var(--bitfun-petdex-margin-top);
     background-image: var(--bitfun-petdex-src);
     background-repeat: no-repeat;
     background-size: 800% 900%;

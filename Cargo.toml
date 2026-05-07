@@ -102,7 +102,7 @@ similar = "2.5"
 urlencoding = "2.1"
 
 # Tauri (desktop only)
- tauri = { version = "2", features = ["unstable"] }
+ tauri = { version = "2", features = ["unstable", "macos-private-api"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2.6"
 tauri-plugin-fs = "2"

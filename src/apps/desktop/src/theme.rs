@@ -4,7 +4,12 @@ use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::config::types::GlobalConfig;
 use dark_light::Mode;
 use log::{debug, error, warn};
-use tauri::WebviewUrl;
+use tauri::{Manager, WebviewUrl};
+
+const AGENT_COMPANION_WINDOW_LABEL: &str = "agent-companion-pet";
+const AGENT_COMPANION_WINDOW_WIDTH: f64 = 360.0;
+const AGENT_COMPANION_WINDOW_HEIGHT: f64 = 180.0;
+const AGENT_COMPANION_WINDOW_MARGIN: i32 = 64;
 
 #[derive(Debug, Clone)]
 pub struct ThemeConfig {
@@ -297,10 +302,121 @@ pub fn create_main_window(app_handle: &tauri::AppHandle) {
     }
 }
 
+fn app_url(path: &str) -> WebviewUrl {
+    if cfg!(debug_assertions) {
+        match format!("http://localhost:1422/{}", path).parse() {
+            Ok(url) => WebviewUrl::External(url),
+            Err(e) => {
+                error!("Invalid dev URL, fallback to app URL: {}", e);
+                WebviewUrl::App(path.into())
+            }
+        }
+    } else {
+        let app_path = if path.starts_with('?') {
+            format!("index.html{}", path)
+        } else {
+            path.to_string()
+        };
+        WebviewUrl::App(app_path.into())
+    }
+}
+
+fn position_agent_companion_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
+    let monitor: Option<tauri::Monitor> = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| app.primary_monitor().ok().flatten());
+
+    let Some(monitor) = monitor else {
+        return;
+    };
+
+    let scale_factor = monitor.scale_factor();
+    let area = monitor.work_area();
+    let area_position = area.position.to_logical::<f64>(scale_factor);
+    let area_size = area.size.to_logical::<f64>(scale_factor);
+    let x = area_position.x + area_size.width
+        - AGENT_COMPANION_WINDOW_WIDTH
+        - f64::from(AGENT_COMPANION_WINDOW_MARGIN);
+    let y = area_position.y + area_size.height
+        - AGENT_COMPANION_WINDOW_HEIGHT
+        - f64::from(AGENT_COMPANION_WINDOW_MARGIN);
+
+    if let Err(e) = window.set_position(tauri::LogicalPosition::new(
+        x.max(area_position.x),
+        y.max(area_position.y),
+    )) {
+        warn!("Failed to position Agent companion window: {}", e);
+    }
+}
+
+#[tauri::command]
+pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(AGENT_COMPANION_WINDOW_LABEL) {
+        position_agent_companion_window(&app, &window);
+        window.show().map_err(|e| {
+            error!("Failed to show Agent companion window: {}", e);
+            format!("Failed to show Agent companion window: {}", e)
+        })?;
+        return Ok(());
+    }
+
+    let url = app_url("?bitfunWindow=agent-companion");
+    let mut builder = tauri::WebviewWindowBuilder::new(&app, AGENT_COMPANION_WINDOW_LABEL, url)
+        .title("BitFun Agent Companion")
+        .inner_size(
+            AGENT_COMPANION_WINDOW_WIDTH,
+            AGENT_COMPANION_WINDOW_HEIGHT,
+        )
+        .max_inner_size(
+            AGENT_COMPANION_WINDOW_WIDTH,
+            AGENT_COMPANION_WINDOW_HEIGHT,
+        )
+        .min_inner_size(
+            AGENT_COMPANION_WINDOW_WIDTH,
+            AGENT_COMPANION_WINDOW_HEIGHT,
+        )
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .visible(false)
+        .accept_first_mouse(true)
+        .background_color(tauri::window::Color(0, 0, 0, 0));
+
+    builder = builder.disable_drag_drop_handler();
+
+    let window = builder.build().map_err(|e| {
+        error!("Failed to create Agent companion window: {}", e);
+        format!("Failed to create Agent companion window: {}", e)
+    })?;
+
+    position_agent_companion_window(&app, &window);
+
+    window.show().map_err(|e| {
+        error!("Failed to show Agent companion window: {}", e);
+        format!("Failed to show Agent companion window: {}", e)
+    })?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn hide_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(AGENT_COMPANION_WINDOW_LABEL) {
+        window.close().map_err(|e| {
+            error!("Failed to close Agent companion window: {}", e);
+            format!("Failed to close Agent companion window: {}", e)
+        })?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
-
     if let Some(main_window) = app.get_webview_window("main") {
         #[cfg(target_os = "windows")]
         {

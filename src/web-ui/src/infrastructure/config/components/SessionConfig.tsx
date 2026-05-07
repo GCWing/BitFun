@@ -319,6 +319,19 @@ const SessionConfig: React.FC = () => {
     })),
   ];
 
+  const companionDisplayModeOptions: SelectOption[] = [
+    {
+      value: 'desktop',
+      label: t('features.agentCompanion.displayDesktop'),
+      description: t('features.agentCompanion.displayDesktopDesc'),
+    },
+    {
+      value: 'input',
+      label: t('features.agentCompanion.displayInput'),
+      description: t('features.agentCompanion.displayInputDesc'),
+    },
+  ];
+
   const selectedCompanionPet = settings?.agent_companion_pet
     ? companionPets.find(pet => pet.packagePath === settings.agent_companion_pet?.packagePath)
       ?? settings.agent_companion_pet
@@ -732,6 +745,25 @@ const SessionConfig: React.FC = () => {
                 size="small"
               />
             </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('features.agentCompanion.displayModeLabel')}
+            description={t('features.agentCompanion.displayModeDescription')}
+            align="center"
+          >
+            <Select
+              className="bitfun-func-agent-config__pet-select"
+              size="small"
+              options={companionDisplayModeOptions}
+              value={settings.agent_companion_display_mode}
+              onChange={(value) => {
+                const selectedValue = String(Array.isArray(value) ? value[0] : value);
+                void updateSetting(
+                  'agent_companion_display_mode',
+                  selectedValue === 'desktop' ? 'desktop' : 'input',
+                );
+              }}
+            />
           </ConfigPageRow>
           <ConfigPageRow
             label={t('features.agentCompanion.petLabel')}

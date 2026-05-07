@@ -39,6 +39,23 @@
   "runtimeStatus": {
     "waitingForModelResponse": "Waiting for model response..."
   },
+  "agentCompanion": {
+    "activity": {
+      "starting": "Starting",
+      "thinking": "Thinking",
+      "usingTools": "Using tools",
+      "waitingApproval": "Waiting for approval",
+      "writing": "Writing",
+      "compacting": "Compacting context",
+      "finishing": "Finishing",
+      "working": "Working",
+      "needsInput": "Needs input",
+      "needsApproval": "Needs approval",
+      "completed": "Completed",
+      "failed": "Failed",
+      "interrupted": "Interrupted"
+    }
+  },
   "session": {
     "new": "New Session",
     "newCode": "New Code session",

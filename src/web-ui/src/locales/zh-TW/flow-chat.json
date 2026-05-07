@@ -39,6 +39,23 @@
   "runtimeStatus": {
     "waitingForModelResponse": "等待模型回應..."
   },
+  "agentCompanion": {
+    "activity": {
+      "starting": "啟動中",
+      "thinking": "思考中",
+      "usingTools": "正在使用工具",
+      "waitingApproval": "等待確認",
+      "writing": "正在輸出",
+      "compacting": "正在壓縮上下文",
+      "finishing": "收尾中",
+      "working": "執行中",
+      "needsInput": "需要輸入",
+      "needsApproval": "需要確認",
+      "completed": "已完成",
+      "failed": "執行失敗",
+      "interrupted": "已中斷"
+    }
+  },
   "session": {
     "new": "新建會話",
     "newCode": "新建 Code 會話",

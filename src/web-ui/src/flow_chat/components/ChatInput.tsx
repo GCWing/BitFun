@@ -56,6 +56,7 @@ import { deriveChatInputPetMood } from '../utils/chatInputPetMood';
 import { ChatInputPixelPet } from './ChatInputPixelPet';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
 import { useDeepReviewConsent } from './DeepReviewConsentDialog';
+import { useAgentCompanionActivity } from '../hooks/useAgentCompanionActivity';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
 import './ChatInput.scss';
@@ -273,13 +274,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const currentReviewActivity = useSessionReviewActivity(currentSessionId);
   const sessionMachineSnapshot = useSessionStateMachine(effectiveTargetSessionId);
+  const companionActivity = useAgentCompanionActivity();
   const { confirmDeepReviewLaunch, deepReviewConsentDialog } = useDeepReviewConsent();
-  const petMood = useMemo(
+  const targetPetMood = useMemo(
     () => deriveChatInputPetMood(sessionMachineSnapshot),
     [sessionMachineSnapshot],
   );
+  const petMood = targetPetMood === 'rest' ? companionActivity.mood : targetPetMood;
   const [agentCompanionEnabled, setAgentCompanionEnabled] = useState(
     () => aiExperienceConfigService.getSettings().enable_agent_companion,
+  );
+  const [agentCompanionDisplayMode, setAgentCompanionDisplayMode] = useState(
+    () => aiExperienceConfigService.getSettings().agent_companion_display_mode,
   );
   const [agentCompanionPet, setAgentCompanionPet] = useState(
     () => aiExperienceConfigService.getSettings().agent_companion_pet ?? null,
@@ -287,15 +293,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   useEffect(() => {
     void aiExperienceConfigService.getSettingsAsync().then(initialSettings => {
       setAgentCompanionEnabled(initialSettings.enable_agent_companion);
+      setAgentCompanionDisplayMode(initialSettings.agent_companion_display_mode);
       setAgentCompanionPet(initialSettings.agent_companion_pet ?? null);
     });
     return aiExperienceConfigService.addChangeListener(settings => {
       setAgentCompanionEnabled(settings.enable_agent_companion);
+      setAgentCompanionDisplayMode(settings.agent_companion_display_mode);
       setAgentCompanionPet(settings.agent_companion_pet ?? null);
     });
   }, []);
+  const agentCompanionInInput =
+    agentCompanionEnabled && agentCompanionDisplayMode === 'input';
   const showCollapsedPet =
-    agentCompanionEnabled && !inputState.isActive && !inputState.value.trim();
+    agentCompanionInInput && !inputState.isActive && !inputState.value.trim();
   const { transition, setQueuedInput } = useSessionStateMachineActions(effectiveTargetSessionId);
 
   const { workspace, workspacePath } = useCurrentWorkspace();
@@ -2266,7 +2276,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
   const isCollapsedProcessing = !inputState.isActive && !!derivedState?.isProcessing;
-  const petReplacesStopChrome = agentCompanionEnabled && isCollapsedProcessing;
+  const petReplacesStopChrome = agentCompanionInInput && isCollapsedProcessing;
   const petStopClickable = petReplacesStopChrome && derivedState?.canCancel;
   const collapsedPetSplitSend =
     petReplacesStopChrome && derivedState?.sendButtonMode === 'split';
@@ -2530,7 +2540,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
               {!inputState.isActive &&
                 !inputState.value.trim() &&
-                !agentCompanionEnabled && (
+                !agentCompanionInInput && (
                 <span className="bitfun-chat-input__space-hint">
                   <Trans
                     i18nKey="input.spaceToActivate"

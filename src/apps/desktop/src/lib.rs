@@ -386,6 +386,8 @@ pub async fn run() {
             fix_mermaid_code,
             get_app_state,
             update_app_status,
+            theme::show_agent_companion_desktop_pet,
+            theme::hide_agent_companion_desktop_pet,
             list_agent_companion_pets,
             import_agent_companion_pet_package,
             delete_agent_companion_pet_package,

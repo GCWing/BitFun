@@ -10,6 +10,10 @@ import { NotificationContainer, NotificationCenter } from '../shared/notificatio
 import { AnnouncementProvider } from '../shared/announcement-system';
 import { ConfirmDialogRenderer } from '../component-library';
 import { createLogger } from '@/shared/utils/logger';
+import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
+import { syncAgentCompanionDesktopWindow } from '@/infrastructure/config/services/AgentCompanionWindowService';
+import { buildAgentCompanionActivity, subscribeAgentCompanionActivity } from '@/flow_chat/utils/agentCompanionActivity';
+import { emitAgentCompanionActivity } from '@/flow_chat/services/AgentCompanionActivityBridge';
 import { useWorkspaceContext } from '../infrastructure/contexts/WorkspaceContext';
 import SplashScreen from './components/SplashScreen/SplashScreen';
 import { useGlobalSceneShortcuts } from './hooks/useGlobalSceneShortcuts';
@@ -158,6 +162,28 @@ function App() {
     initACPClients();
     
   }, []);
+
+  useEffect(() => {
+    const emitCurrentAgentCompanionActivity = () => {
+      void emitAgentCompanionActivity(buildAgentCompanionActivity());
+    };
+
+    void aiExperienceConfigService.getSettingsAsync().then(async settings => {
+      await syncAgentCompanionDesktopWindow(settings);
+      emitCurrentAgentCompanionActivity();
+      window.setTimeout(emitCurrentAgentCompanionActivity, 250);
+    });
+    return aiExperienceConfigService.addChangeListener(settings => {
+      void syncAgentCompanionDesktopWindow(settings).then(() => {
+        emitCurrentAgentCompanionActivity();
+        window.setTimeout(emitCurrentAgentCompanionActivity, 250);
+      });
+    });
+  }, []);
+
+  useEffect(() => subscribeAgentCompanionActivity(activity => {
+    void emitAgentCompanionActivity(activity);
+  }), []);
 
   // Observe AI initialization state
   useEffect(() => {
