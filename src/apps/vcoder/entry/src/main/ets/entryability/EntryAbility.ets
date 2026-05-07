@@ -126,7 +126,7 @@ export default class EntryAbility extends RustAbility {
     });
     setTimeout(() => {
       windowStage.getMainWindow((err, data) => {
-        data.setWindowDecorHeight(32)
+        data.setWindowDecorHeight(44)
         data.setWindowDecorVisible(false);
       })
     }, 40)

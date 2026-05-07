@@ -82,14 +82,22 @@ impl ShellDetector {
 
         #[cfg(not(windows))]
         {
-            if let Some(bash_path) = Self::find_bash_with_which() {
+            if let Some(zsh_path) = Self::find_zsh_with_which() {
+                return DetectedShell {
+                    shell_type: ShellType::Zsh,
+                    path: zsh_path.clone(),
+                    version: Self::get_shell_version(zsh_path.to_str().unwrap_or_default()),
+                    display_name: "zsh".to_string(),
+                };
+            } else if let Some(bash_path) = Self::find_bash_with_which() {
                 return DetectedShell {
                     shell_type: ShellType::Bash,
                     path: bash_path.clone(),
                     version: Self::get_shell_version(bash_path.to_str().unwrap_or_default()),
                     display_name: "bash".to_string(),
                 };
-            } else {
+            }
+            {
                 log::error!("bash not found");
             }
             // Try to use $SHELL environment variable
@@ -310,6 +318,35 @@ impl ShellDetector {
             }
         }
 
+        None
+    }
+
+    #[cfg(not(windows))]
+    fn find_zsh_with_which() -> Option<PathBuf> {
+        let output = std::process::Command::new("which").arg("zsh").output();
+        match output {
+            Ok(output) => {
+                if output.status.success() {
+                    let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !path_str.is_empty() {
+                        let path = PathBuf::from(path_str);
+                        if path.exists() {
+                            return Some(path);
+                        } else {
+                            log::warn!("zsh path not exist");
+                        }
+                    } else {
+                        log::warn!("zsh not exist");
+                    }
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    log::error!("which zsh error: {}", stderr.trim());
+                }
+            }
+            Err(e) => {
+                log::error!("which zsh error: {}", e);
+            }
+        };
         None
     }
 

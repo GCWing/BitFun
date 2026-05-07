@@ -35,44 +35,14 @@
     ],
     "requestPermissions": [
       {
-        "name": "ohos.permission.PREPARE_APP_TERMINATE"
-      },
-      {
         "name": "ohos.permission.INTERNET"
       },
-//      {
-//        "name": "ohos.permission.GET_ALL_PROCESSES"
-//      },
       {
         "name": "ohos.permission.READ_WRITE_USER_FILE"
       },
-//      {
-//        "name": "ohos.permission.SECURE_PASTE"
-//      },
       {
         "name": "ohos.permission.CUSTOM_SANDBOX"
       },
-//      {
-//        "name": "ohos.permission.MANAGE_USER_IDM"
-//      },
-//      {
-//        "name": "ohos.permission.ACCESS_PIN_AUTH"
-//      },
-//      {
-//        "name": "ohos.permission.ACCESS_USER_AUTH_INTERNAL"
-//      },
-//      {
-//        "name": "ohos.permission.DUMP"
-//      },
-//      {
-//        "name": "ohos.permission.READ_DIAGNOSTIC_LOGS"
-//      },
-//      {
-//        "name": "ohos.permission.READ_DFX_SYSEVENT"
-//      },
-//      {
-//        "name": "ohos.permission.GET_BUNDLE_INFO_PRIVILEGED"
-//      },
       {
         "name": "ohos.permission.READ_CALENDAR",
         "reason": "$string:module_desc",
