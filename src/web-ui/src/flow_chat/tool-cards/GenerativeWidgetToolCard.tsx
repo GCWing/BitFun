@@ -57,6 +57,8 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
   const [isExporting, setIsExporting] = useState(false);
   const [shouldRenderExportClone, setShouldRenderExportClone] = useState(false);
   const [exportWidth, setExportWidth] = useState<number | null>(null);
+  /** Failure body is toggled separately; BaseToolCard always renders error in `.base-tool-card-error`, so default collapsed on error. */
+  const [failedBodyExpanded, setFailedBodyExpanded] = useState(false);
 
   const liveParams = isParamsStreaming ? partialParams : toolCall?.input;
   const widgetCode = useMemo(() => {
@@ -100,6 +102,15 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
   const isClickable = status === 'completed' && widgetCode.trim().length > 0;
   const hasRenderableWidget = widgetCode.trim().length > 0 && !isFailed;
 
+  useEffect(() => {
+    if (isFailed) {
+      setFailedBodyExpanded(false);
+    }
+  }, [isFailed]);
+
+  const isCardExpanded = !isFailed || failedBodyExpanded;
+  const showFailedErrorPanel = isFailed && failedBodyExpanded;
+
   const handleOpenPanel = useCallback(() => {
     if (!isClickable) {
       return;
@@ -138,6 +149,18 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
       }));
     }, 100);
   }, [isClickable, sessionId, title, toolCall?.id, toolItem.id, widgetCode, widgetId]);
+
+  const handleCardClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (isFailed) {
+        e.preventDefault();
+        setFailedBodyExpanded((v) => !v);
+        return;
+      }
+      handleOpenPanel();
+    },
+    [handleOpenPanel, isFailed],
+  );
 
   const handleWidgetEvent = useCallback((event: WidgetMessage) => {
     if (event.type === 'bitfun-widget:context-menu') {
@@ -291,15 +314,15 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
     <>
       <BaseToolCard
         status={status}
-        isExpanded={true}
-        onClick={isClickable ? handleOpenPanel : undefined}
-        className={`generative-widget-card ${isClickable ? 'clickable' : ''}`.trim()}
+        isExpanded={isCardExpanded}
+        onClick={isFailed || isClickable ? handleCardClick : undefined}
+        className={`generative-widget-card ${isClickable || isFailed ? 'clickable' : ''}`.trim()}
         header={header}
         expandedContent={expandedBody}
-        errorContent={expandedBody}
+        errorContent={showFailedErrorPanel ? expandedBody : undefined}
         isFailed={isFailed}
-        headerExpandAffordance={isClickable}
-        headerAffordanceKind="open-panel-right"
+        headerExpandAffordance={isClickable || isFailed}
+        headerAffordanceKind={isFailed ? 'expand' : 'open-panel-right'}
       />
       {shouldRenderExportClone && hasRenderableWidget && (
         <div className="generative-widget-card__export-stage">

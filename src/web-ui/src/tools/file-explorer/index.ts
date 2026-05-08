@@ -9,6 +9,11 @@ export {
   type UseExplorerSearchOptions,
   type UseExplorerSearchResult,
 } from './search/useExplorerSearch';
+export {
+  useWorkspaceSearchIndex,
+  type UseWorkspaceSearchIndexOptions,
+  type UseWorkspaceSearchIndexResult,
+} from './search/useWorkspaceSearchIndex';
 export { filterTreeByPredicate, filterTreeBySearch } from './search/treeFilter';
 export type {
   ExplorerChildrenRequest,

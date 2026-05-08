@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { Clock, Coins, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Clock, Coins, ShieldCheck, X } from 'lucide-react';
+import { estimateTokenConsumption, formatTokenCount } from '../utils/deepReviewExperience';
 import { useTranslation } from 'react-i18next';
 import { Button, Checkbox, Modal } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
@@ -66,9 +67,6 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
     >
       <div className="deep-review-consent">
         <div className="deep-review-consent__header">
-          <div className="deep-review-consent__badge" aria-hidden="true">
-            <Sparkles size={18} />
-          </div>
           <div className="deep-review-consent__heading">
             <span className="deep-review-consent__eyebrow">
               {t('deepReviewConsent.eyebrow', { defaultValue: 'Code review team' })}
@@ -109,6 +107,16 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
                 {t('deepReviewConsent.costLabel', { defaultValue: 'Higher token usage' })}
               </span>
               <p>{t('deepReviewConsent.cost')}</p>
+              <p className="deep-review-consent__token-estimate">
+                {(() => {
+                  const est = estimateTokenConsumption(5);
+                  return t('deepReviewConsent.estimatedTokens', {
+                    min: formatTokenCount(est.min),
+                    max: formatTokenCount(est.max),
+                    defaultValue: 'Estimated: {{min}} - {{max}} tokens',
+                  });
+                })()}
+              </p>
             </div>
           </div>
           <div className="deep-review-consent__fact">

@@ -3,13 +3,14 @@
  * Provides unified card styles and interaction logic
  */
 import React, { ReactNode } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
   ToolCardHeaderLayoutContext,
   useToolCardHeaderLayout,
   type ToolCardHeaderAffordanceKind,
   type ToolCardHeaderLayoutContextValue,
 } from './ToolCardHeaderLayoutContext';
+import { ToolCardIconSlot } from './ToolCardIconSlot';
+import { ToolCardStatusIcon } from './ToolCardStatusIcon';
 import './BaseToolCard.scss';
 
 const LOADING_SHIMMER_STATUSES = new Set([
@@ -167,51 +168,27 @@ export const ToolCardHeader: React.FC<ToolCardHeaderProps> = ({
     affordanceKind !== undefined ? affordanceKind : layout.headerAffordanceKind;
   const expandedForChevron =
     headerExpanded !== undefined ? headerExpanded : layout.isExpanded;
-  const isPanelAffordance = resolvedAffordanceKind === 'open-panel-right';
 
   return (
     <>
       {icon != null && icon !== false && icon !== '' && (
-        <div
-          className={`tool-card-icon-slot${showExpandHint ? ' tool-card-icon-slot--expandable' : ''}${showExpandHint && isPanelAffordance ? ' tool-card-icon-slot--affordance-panel' : ''}`}
-        >
-          <div className="tool-card-icon-marks">
-            <div className={`tool-card-icon tool-identifier-icon tool-card-icon-main ${iconClassName || ''}`}>
-              {icon}
-            </div>
-            {showExpandHint && (
-              <span
-                className={`tool-card-icon-expand-hint${!isPanelAffordance && expandedForChevron ? ' tool-card-icon-expand-hint--open' : ''}`}
-                aria-hidden
-              >
-                {isPanelAffordance ? (
-                  <ChevronRight size={16} strokeWidth={2} absoluteStrokeWidth />
-                ) : (
-                  <ChevronDown size={16} strokeWidth={2} absoluteStrokeWidth />
-                )}
-              </span>
-            )}
-          </div>
-          {showExpandHint && onAffordanceClick && (
-            <button
-              type="button"
-              className="tool-card-icon-affordance-hit"
-              onClick={(e) => {
-                e.stopPropagation();
-                onAffordanceClick(e);
-              }}
-              aria-label={isPanelAffordance ? 'Open details' : 'Expand details'}
-            />
-          )}
-        </div>
+        <ToolCardIconSlot
+          icon={icon}
+          iconClassName={iconClassName}
+          expandable={showExpandHint}
+          affordanceKind={resolvedAffordanceKind}
+          isExpanded={expandedForChevron}
+          onAffordanceClick={onAffordanceClick}
+        />
       )}
       {action && <span className="tool-card-action">{action}</span>}
       {content && <div className="tool-card-content">{content}</div>}
       {extra && <div className="tool-card-extra">{extra}</div>}
       {statusIcon && (
-        <div className={`tool-card-status-icon ${extra ? 'tool-card-status-icon--with-divider' : ''}`}>
-          {statusIcon}
-        </div>
+        <ToolCardStatusIcon
+          icon={statusIcon}
+          withDivider={Boolean(extra)}
+        />
       )}
     </>
   );

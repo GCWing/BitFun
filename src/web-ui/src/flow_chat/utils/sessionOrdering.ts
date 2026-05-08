@@ -1,4 +1,5 @@
 import type { Session } from '../types/flow-chat';
+import type { SessionMetadata } from '@/shared/types/session-history';
 import { isSamePath, normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 
 /** Extract `host` from our saved form `ssh-{user}@{host}:{port}` (used when metadata omits `remoteSshHost`). */
@@ -75,6 +76,46 @@ export function compareSessionsForDisplay(
     return timestampDiff;
   }
 
+  const createdAtDiff = b.createdAt - a.createdAt;
+  if (createdAtDiff !== 0) {
+    return createdAtDiff;
+  }
+
+  return a.sessionId.localeCompare(b.sessionId);
+}
+
+export function getSessionMetadataSortTimestamp(
+  session: Pick<SessionMetadata, 'createdAt' | 'customMetadata'>
+): number {
+  const lastFinishedAt = session.customMetadata?.lastFinishedAt;
+  return typeof lastFinishedAt === 'number' ? lastFinishedAt : session.createdAt;
+}
+
+export function compareSessionMetadataForDisplay(
+  a: Pick<SessionMetadata, 'sessionId' | 'createdAt' | 'customMetadata'>,
+  b: Pick<SessionMetadata, 'sessionId' | 'createdAt' | 'customMetadata'>
+): number {
+  const timestampDiff = getSessionMetadataSortTimestamp(b) - getSessionMetadataSortTimestamp(a);
+  if (timestampDiff !== 0) {
+    return timestampDiff;
+  }
+
+  const createdAtDiff = b.createdAt - a.createdAt;
+  if (createdAtDiff !== 0) {
+    return createdAtDiff;
+  }
+
+  return a.sessionId.localeCompare(b.sessionId);
+}
+
+/**
+ * Left-nav session list order: newest-created first, stable while switching sessions
+ * (does not use `lastActiveAt`, so rows do not jump to the top on click).
+ */
+export function compareSessionsForNavStable(
+  a: Pick<Session, 'sessionId' | 'createdAt'>,
+  b: Pick<Session, 'sessionId' | 'createdAt'>
+): number {
   const createdAtDiff = b.createdAt - a.createdAt;
   if (createdAtDiff !== 0) {
     return createdAtDiff;

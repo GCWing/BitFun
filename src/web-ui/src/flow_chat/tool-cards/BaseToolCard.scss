@@ -3,13 +3,6 @@
  * Provides unified card appearance and interaction effects
  */
 
-/* ========== Shared header variables ========== */
-:root {
-  --tool-card-header-pad-y: 7px;
-  --tool-card-header-pad-x: 10px;
-  --tool-card-header-icon-rail: 24px;
-}
-
 /* ========== Card wrapper ========== */
 .base-tool-card-wrapper {
   display: flex;
@@ -21,6 +14,8 @@
   backdrop-filter: blur(10px);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
   
   &:hover {
     border-color: var(--border-medium);
@@ -98,7 +93,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: var(--tool-card-header-pad-y) var(--tool-card-header-pad-x);
+  padding: var(--tool-card-header-pad-y) var(--tool-card-header-pad-right) var(--tool-card-header-pad-y) var(--tool-card-header-pad-x);
   position: relative;
   z-index: 11;
   flex-shrink: 0;
@@ -130,105 +125,6 @@
 
 }
 
-/* ========== Header sub-element styles ========== */
-
-/* Left rail: fixed icon box + vertical divider from card inner top to bottom of header row. */
-.tool-card-icon-slot {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  flex-shrink: 0;
-  align-self: stretch;
-  padding-right: 10px;
-  margin-right: 8px;
-  box-sizing: border-box;
-  min-height: 0;
-}
-
-.tool-card-icon-slot::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  top: calc(-1 * var(--tool-card-header-pad-y));
-  bottom: calc(-1 * var(--tool-card-header-pad-y));
-  width: 0;
-  border-right: 1px solid var(--border-base);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.tool-card-icon-affordance-hit {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  appearance: none;
-
-  &:focus-visible {
-    outline: 2px solid var(--color-accent-500, #60a5fa);
-    outline-offset: 2px;
-    border-radius: 6px;
-  }
-}
-
-/* Same square box so tool glyph and chevron share center (no circular fill). */
-.tool-card-icon-marks {
-  position: relative;
-  z-index: 1;
-  width: var(--tool-card-header-icon-rail);
-  height: var(--tool-card-header-icon-rail);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tool-card-icon.tool-identifier-icon.tool-card-icon-main {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: opacity 0.18s ease;
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-}
-
-.tool-card-icon-slot--expandable .tool-card-icon-expand-hint {
-  position: absolute;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0;
-  opacity: 0;
-  pointer-events: none;
-  color: var(--color-text-secondary);
-  transition: opacity 0.18s ease;
-
-  svg {
-    width: 16px;
-    height: 16px;
-    flex-shrink: 0;
-    transition: transform 0.2s ease;
-  }
-}
-
-.tool-card-icon-slot--expandable .tool-card-icon-expand-hint--open svg {
-  transform: rotate(180deg);
-}
-
 /* Chevron swap: only when card opts in via headerExpandAffordance (includes status-error with collapsible details). */
 .base-tool-card-wrapper:hover .base-tool-card.base-tool-card--header-expandable:not(.status-cancelled) .tool-card-icon-slot--expandable .tool-card-icon-main {
   opacity: 0;
@@ -236,49 +132,6 @@
 
 .base-tool-card-wrapper:hover .base-tool-card.base-tool-card--header-expandable:not(.status-cancelled) .tool-card-icon-slot--expandable .tool-card-icon-expand-hint {
   opacity: 1;
-}
-
-/* Status icon (at right border) */
-.tool-card-status-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  margin-left: 4px;
-  padding-left: 4px;
-  transition: all 0.2s ease;
-
-  &.tool-card-status-icon--with-divider {
-    border-left: 1px solid var(--border-base);
-  }
-
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  /* Loading icon */
-  .loading {
-    width: 16px !important;
-    height: 16px !important;
-    gap: 0 !important;
-  }
-
-  .loading__spinner {
-    width: 16px !important;
-    height: 16px !important;
-    border-width: 2px !important;
-    box-shadow: 0 0 8px var(--loading-color-light) !important;
-  }
-
-  .icon-completed {
-    color: var(--color-success);
-  }
-
-  .icon-error {
-    color: var(--color-error);
-    filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.4));
-  }
 }
 
 /* Action text */
@@ -297,7 +150,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   font-size: 12px;
   font-weight: 500;
@@ -308,6 +161,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+
+  > * {
+    min-width: 0;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
 }
 
 /* Right extra content */
@@ -316,11 +177,19 @@
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+  min-width: 0;
+
+  svg {
+    flex-shrink: 0;
+  }
 }
 
 /* ========== Expanded content area ========== */
 .base-tool-card-expanded {
-  padding: 10px 10px;
+  /* Full-bleed dividers in children use these (header pad-x is 0; do not conflate). */
+  --tool-card-expanded-pad-x: 9px;
+  --tool-card-expanded-pad-y: 8px;
+  padding: var(--tool-card-expanded-pad-y) var(--tool-card-expanded-pad-x);
   background: transparent;
   position: relative;
   animation: expandDown 0.2s ease-out;
@@ -329,8 +198,8 @@
 
 /* ========== Error details area ========== */
 .base-tool-card-error {
-  margin-top: 8px;
-  padding: 8px 12px 8px 22px;
+  margin-top: 6px;
+  padding: 7px 10px 7px 20px;
   margin-left: 6px;
   background: none !important;
   border: none !important;

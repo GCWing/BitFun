@@ -21,6 +21,10 @@ import { useScrollToTurnHeader } from '../../hooks/useScrollToTurnHeader';
 import { useVisibleTaskInfo } from '../../hooks/useVisibleTaskInfo';
 import { StickyTaskIndicator } from '../StickyTaskIndicator';
 import { ProcessingIndicator } from './ProcessingIndicator';
+import {
+  shouldReserveProcessingIndicatorSpace,
+  shouldShowProcessingIndicator,
+} from './processingIndicatorVisibility';
 import { ScrollAnchor } from './ScrollAnchor';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
 import type { FlowChatPinTurnToTopMode } from '../../events/flowchatNavigation';
@@ -1678,9 +1682,20 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
       const hasUnread = activeSession?.hasUnreadCompletion;
       const isFinished = !isStreamingOutput;
-      if (hasUnread && isFinished && virtuosoRef.current) {
+      if (hasUnread && isFinished && virtuosoRef.current && virtualItems.length > 0) {
+        // Use scrollToIndex instead of scrollTo({ top: largeNumber }) because
+        // Virtuoso's scrollHeight may not be stable immediately after a session
+        // switch; scrolling by index lets Virtuoso resolve the correct position.
+        const scrollToBottom = () => {
+          virtuosoRef.current?.scrollToIndex({
+            index: virtualItems.length - 1,
+            align: 'end',
+            behavior: 'auto',
+          });
+        };
+        // Allow two frames for virtual items to settle before scrolling.
         requestAnimationFrame(() => {
-          virtuosoRef.current?.scrollTo({ top: 999999999, behavior: 'auto' });
+          requestAnimationFrame(scrollToBottom);
         });
       }
 
@@ -1711,6 +1726,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     cancelPendingAutoFollowArm,
     isStreamingOutput,
     latestTurnId,
+    virtualItems.length,
   ]);
 
   useEffect(() => {
@@ -1922,32 +1938,24 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   }, [lastItemInfo.isTurnProcessing, isProcessing]);
 
   const showBreathingIndicator = React.useMemo(() => {
-    const { lastItem, isTurnProcessing } = lastItemInfo;
-
-    if (!isTurnProcessing && !isProcessing) return false;
-    if (processingPhase === 'tool_confirming') return false;
-    if (!lastItem) return true;
-
-    if ((lastItem.type === 'text' || lastItem.type === 'thinking')) {
-      const hasContent = 'content' in lastItem && lastItem.content;
-      if (hasContent && isContentGrowing) return false;
-    }
-
-    if (lastItem.type === 'tool') {
-      const toolStatus = lastItem.status;
-      if (toolStatus === 'running' || toolStatus === 'streaming' || toolStatus === 'preparing') {
-        return false;
-      }
-    }
-
-    return isTurnProcessing || isProcessing;
+    return shouldShowProcessingIndicator({
+      isTurnProcessing: lastItemInfo.isTurnProcessing,
+      isSessionProcessing: isProcessing,
+      processingPhase,
+      lastItem: lastItemInfo.lastItem,
+      isContentGrowing,
+    });
   }, [isProcessing, processingPhase, lastItemInfo, isContentGrowing]);
 
   const reserveSpaceForIndicator = React.useMemo(() => {
-    if (!lastItemInfo.isTurnProcessing && !isProcessing) return false;
-    if (processingPhase === 'tool_confirming') return false;
-    return true;
-  }, [lastItemInfo.isTurnProcessing, isProcessing, processingPhase]);
+    return shouldReserveProcessingIndicatorSpace({
+      isTurnProcessing: lastItemInfo.isTurnProcessing,
+      isSessionProcessing: isProcessing,
+      processingPhase,
+      lastItem: lastItemInfo.lastItem,
+      isContentGrowing,
+    });
+  }, [lastItemInfo.isTurnProcessing, lastItemInfo.lastItem, isProcessing, processingPhase, isContentGrowing]);
 
   const footerHeightPx = getFooterHeightPx(getTotalBottomCompensationPx(bottomReservationState));
 

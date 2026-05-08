@@ -1,6 +1,21 @@
 use super::*;
 
 impl MCPServerManager {
+    async fn runtime_server_config(&self, server_id: &str) -> BitFunResult<MCPServerConfig> {
+        if let Some(config) = self.config_service.get_server_config(server_id).await? {
+            return Ok(config);
+        }
+
+        self.ephemeral_configs
+            .read()
+            .await
+            .get(server_id)
+            .cloned()
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("MCP server config not found: {}", server_id))
+            })
+    }
+
     /// Initializes all servers.
     pub async fn initialize_all(&self) -> BitFunResult<()> {
         info!("Initializing all MCP servers");
@@ -134,12 +149,7 @@ impl MCPServerManager {
             return Ok(());
         }
 
-        let Some(config) = self.config_service.get_server_config(server_id).await? else {
-            return Err(BitFunError::NotFound(format!(
-                "MCP server config not found: {}",
-                server_id
-            )));
-        };
+        let config = self.runtime_server_config(server_id).await?;
 
         if !config.enabled {
             return Ok(());
@@ -155,12 +165,11 @@ impl MCPServerManager {
         info!("Starting MCP server: id={}", server_id);
 
         let config = self
-            .config_service
-            .get_server_config(server_id)
-            .await?
-            .ok_or_else(|| {
+            .runtime_server_config(server_id)
+            .await
+            .map_err(|error| {
                 error!("MCP server config not found: id={}", server_id);
-                BitFunError::NotFound(format!("MCP server config not found: {}", server_id))
+                error
             })?;
 
         if !config.enabled {
@@ -325,13 +334,7 @@ impl MCPServerManager {
     pub async fn restart_server(&self, server_id: &str) -> BitFunResult<()> {
         info!("Restarting MCP server: id={}", server_id);
 
-        let config = self
-            .config_service
-            .get_server_config(server_id)
-            .await?
-            .ok_or_else(|| {
-                BitFunError::NotFound(format!("MCP server config not found: {}", server_id))
-            })?;
+        let config = self.runtime_server_config(server_id).await?;
 
         match config.server_type {
             super::super::MCPServerType::Local => {
@@ -423,6 +426,58 @@ impl MCPServerManager {
         if config.enabled && config.auto_start {
             self.start_server(&config.id).await?;
         }
+
+        Ok(())
+    }
+
+    /// Adds a runtime-only MCP server without saving it to user or project config.
+    pub async fn add_ephemeral_server(&self, config: MCPServerConfig) -> BitFunResult<()> {
+        config.validate()?;
+
+        let server_id = config.id.clone();
+        if self.registry.contains(&server_id).await {
+            let _ = self.remove_ephemeral_server(&server_id).await;
+        }
+
+        self.ephemeral_configs
+            .write()
+            .await
+            .insert(server_id.clone(), config.clone());
+        self.registry.register(&config).await?;
+
+        if config.enabled && config.auto_start {
+            if let Err(error) = self.start_server(&server_id).await {
+                let _ = self.remove_ephemeral_server(&server_id).await;
+                return Err(error);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Removes a runtime-only MCP server and its registered tools without touching persisted config.
+    pub async fn remove_ephemeral_server(&self, server_id: &str) -> BitFunResult<()> {
+        info!("Removing ephemeral MCP server: id={}", server_id);
+
+        let _ = self.stop_server(server_id).await;
+        self.stop_connection_event_listener(server_id).await;
+
+        match self.registry.unregister(server_id).await {
+            Ok(_) => {
+                info!("Unregistered ephemeral MCP server: id={}", server_id);
+            }
+            Err(e) => {
+                warn!(
+                    "Ephemeral MCP server was not registered, skipping unregister: id={} error={}",
+                    server_id, e
+                );
+            }
+        }
+
+        self.ephemeral_configs.write().await.remove(server_id);
+        self.clear_reconnect_state(server_id).await;
+        self.resource_catalog_cache.write().await.remove(server_id);
+        self.prompt_catalog_cache.write().await.remove(server_id);
 
         Ok(())
     }

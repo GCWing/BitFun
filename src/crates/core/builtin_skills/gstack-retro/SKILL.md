@@ -10,7 +10,16 @@ description: |
 
 # /retro — Weekly Engineering Retrospective
 
-Generates a comprehensive engineering retrospective analyzing commit history, work patterns, and code quality metrics. Team-aware: identifies the user running the command, then analyzes every contributor with per-person praise and growth opportunities. Designed for a senior IC/CTO-level builder using Claude Code as a force multiplier.
+Generates a comprehensive engineering retrospective analyzing commit history, work patterns, and code quality metrics. Team-aware: identifies the user running the command, then analyzes every contributor with per-person praise and growth opportunities. Designed for a senior IC/CTO-level builder using BitFun as a force multiplier.
+
+## BitFun Team Mode Dispatch
+
+When this skill is invoked by BitFun Team Mode, this skill supplies the retrospective methodology. Use existing Task sub-agents for independent read-only analysis tracks, then keep the final retro narrative in the main Team session.
+
+- Do not assume a Retro sub-agent exists. Choose only from the Task tool's available agents.
+- Prefer matching custom analytics/docs sub-agents if available; otherwise use `Explore` for repository history/work-pattern analysis and `FileFinder` for related reports or release notes.
+- Good parallel Task tracks: commit/theme analysis, quality-risk patterns, docs/release trace, and follow-up action extraction.
+- Do not ask Task sub-agents to edit files. The main Team orchestrator synthesizes the retro and action items.
 
 ## User-invocable
 When the user types `/retro`, run this skill.
@@ -48,41 +57,7 @@ Usage: /retro [window | compare | global]
 
 ## Prior Learnings
 
-Search for relevant learnings from previous sessions:
-
-```bash
-_CROSS_PROJ=$(~/.claude/skills/gstack/bin/gstack-config get cross_project_learnings 2>/dev/null || echo "unset")
-echo "CROSS_PROJECT: $_CROSS_PROJ"
-if [ "$_CROSS_PROJ" = "true" ]; then
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 --cross-project 2>/dev/null || true
-else
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 2>/dev/null || true
-fi
-```
-
-If `CROSS_PROJECT` is `unset` (first time): Use AskUserQuestion:
-
-> gstack can search learnings from your other projects on this machine to find
-> patterns that might apply here. This stays local (no data leaves your machine).
-> Recommended for solo developers. Skip if you work on multiple client codebases
-> where cross-contamination would be a concern.
-
-Options:
-- A) Enable cross-project learnings (recommended)
-- B) Keep learnings project-scoped only
-
-If A: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings true`
-If B: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings false`
-
-Then re-run the search with the appropriate flag.
-
-If learnings are found, incorporate them into your analysis. When a review finding
-matches a past learning, display:
-
-**"Prior learning applied: [key] (confidence N/10, from [date])"**
-
-This makes the compounding visible. The user should see that gstack is getting
-smarter on their codebase over time.
+Use only BitFun in-session memory, project docs, `.bitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior BitFun context applied: <source>`.
 
 ### Step 1: Gather Raw Data
 
@@ -123,7 +98,7 @@ git log origin/<default> --since="<window>" --format="AUTHOR:%aN" --name-only
 git shortlog origin/<default> --since="<window>" -sn --no-merges
 
 # 8. Greptile triage history (if available)
-cat ~/.gstack/greptile-history.md 2>/dev/null || true
+cat $HOME/.bitfun/team/greptile-history.md 2>/dev/null || true
 
 # 9. TODOS.md backlog (if available)
 cat TODOS.md 2>/dev/null || true
@@ -135,7 +110,7 @@ find . -name '*.test.*' -o -name '*.spec.*' -o -name '*_test.*' -o -name '*_spec
 git log origin/<default> --since="<window>" --oneline --grep="test(qa):" --grep="test(design):" --grep="test: coverage"
 
 # 12. gstack skill usage telemetry (if available)
-cat ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
+cat $HOME/.bitfun/team/analytics/skill-usage.jsonl 2>/dev/null || true
 
 # 12. Test files changed in window
 git log origin/<default> --since="<window>" --format="" --name-only | grep -E '\.(test|spec)\.' | sort -u | wc -l
@@ -173,7 +148,7 @@ bob                       3   +120/-40     tests/
 
 Sort by commits descending. The current user (from `git config user.name`) always appears first, labeled "You (name)".
 
-**Greptile signal (if history exists):** Read `~/.gstack/greptile-history.md` (fetched in Step 1, command 8). Filter entries within the retro time window by date. Count entries by type: `fix`, `fp`, `already-fixed`. Compute signal ratio: `(fix + already-fixed) / (fix + already-fixed + fp)`. If no entries exist in the window or the file doesn't exist, skip the Greptile metric row. Skip unparseable lines silently.
+**Greptile signal (if history exists):** Read `$HOME/.bitfun/team/greptile-history.md` (fetched in Step 1, command 8). Filter entries within the retro time window by date. Count entries by type: `fix`, `fp`, `already-fixed`. Compute signal ratio: `(fix + already-fixed) / (fix + already-fixed + fp)`. If no entries exist in the window or the file doesn't exist, skip the Greptile metric row. Skip unparseable lines silently.
 
 **Backlog Health (if TODOS.md exists):** Read `TODOS.md` (fetched in Step 1, command 9). Compute:
 - Total open TODOs (exclude items in `## Completed` section)
@@ -189,7 +164,7 @@ Include in the metrics table:
 
 If TODOS.md doesn't exist, skip the Backlog Health row.
 
-**Skill Usage (if analytics exist):** Read `~/.gstack/analytics/skill-usage.jsonl` if it exists. Filter entries within the retro time window by `ts` field. Separate skill activations (no `event` field) from hook fires (`event: "hook_fire"`). Aggregate by skill name. Present as:
+**Skill Usage (if analytics exist):** Read `$HOME/.bitfun/team/analytics/skill-usage.jsonl` if it exists. Filter entries within the retro time window by `ts` field. Separate skill activations (no `event` field) from hook fires (`event: "hook_fire"`). Aggregate by skill name. Present as:
 
 ```
 | Skill Usage | /ship(12) /qa(8) /review(5) · 3 safety hook fires |
@@ -197,7 +172,7 @@ If TODOS.md doesn't exist, skip the Backlog Health row.
 
 If the JSONL file doesn't exist or has no entries in the window, skip the Skill Usage row.
 
-**Eureka Moments (if logged):** Read `~/.gstack/analytics/eureka.jsonl` if it exists. Filter entries within the retro time window by `ts` field. For each eureka moment, show the skill that flagged it, the branch, and a one-line summary of the insight. Present as:
+**Eureka Moments (if logged):** Read `$HOME/.bitfun/team/analytics/eureka.jsonl` if it exists. Filter entries within the retro time window by `ts` field. For each eureka moment, show the skill that flagged it, the branch, and a one-line summary of the insight. Present as:
 
 ```
 | Eureka Moments | 2 this period |
@@ -301,7 +276,7 @@ For each contributor (including the current user), compute:
 
 **If only one contributor (solo repo):** Skip the team breakdown and proceed as before — the retro is personal.
 
-**If there are Co-Authored-By trailers:** Parse `Co-Authored-By:` lines in commit messages. Credit those authors for the commit alongside the primary author. Note AI co-authors (e.g., `noreply@anthropic.com`) but do not include them as team members — instead, track "AI-assisted commits" as a separate metric.
+**If there are Co-Authored-By trailers:** Parse `Co-Authored-By:` lines in commit messages. Credit those authors for the commit alongside the primary author. Note AI co-authors (e.g., `noreply@example.com`) but do not include them as team members — instead, track "AI-assisted commits" as a separate metric.
 
 ## Capture Learnings
 
@@ -309,7 +284,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-learnings-log '{"skill":"retro","type":"TYPE","key":"SHORT_KEY","insight":"DESCRIPTION","confidence":N,"source":"SOURCE","files":["path/to/relevant/file"]}'
+true # BitFun Team Mode has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`
@@ -317,7 +292,7 @@ this session, log it for future sessions:
 `operational` (project environment/CLI/workflow knowledge).
 
 **Sources:** `observed` (you found this in the code), `user-stated` (user told you),
-`inferred` (AI deduction), `cross-model` (both Claude and Codex agree).
+`inferred` (AI deduction), `cross-model` (both BitFun and outside-voice sub-agent agree).
 
 **Confidence:** 1-10. Be honest. An observed pattern you verified in the code is 8-9.
 An inference you're not sure about is 4-5. A user preference they explicitly stated is 10.
@@ -433,7 +408,7 @@ Use the Write tool to save the JSON file with this schema:
 }
 ```
 
-**Note:** Only include the `greptile` field if `~/.gstack/greptile-history.md` exists and has entries within the time window. Only include the `backlog` field if `TODOS.md` exists. Only include the `test_health` field if test files were found (command 10 returns > 0). If any has no data, omit the field entirely.
+**Note:** Only include the `greptile` field if `$HOME/.bitfun/team/greptile-history.md` exists and has entries within the time window. Only include the `backlog` field if `TODOS.md` exists. Only include the `test_health` field if test files were found (command 10 returns > 0). If any has no data, omit the field entirely.
 
 Include test health data in the JSON when test files exist:
 ```json
@@ -510,8 +485,8 @@ Check review JSONL logs for plan completion data from /ship runs this period:
 
 ```bash
 setopt +o nomatch 2>/dev/null || true  # zsh compat
-eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
-cat ~/.gstack/projects/$SLUG/*-reviews.jsonl 2>/dev/null | grep '"skill":"ship"' | grep '"plan_items_total"' || echo "NO_PLAN_DATA"
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-)
+cat $HOME/.bitfun/team/projects/$SLUG/*-reviews.jsonl 2>/dev/null | grep '"skill":"ship"' | grep '"plan_items_total"' || echo "NO_PLAN_DATA"
 ```
 
 If plan completion data exists within the retro time window:
@@ -560,7 +535,7 @@ For each teammate (sorted by commits descending), write a section:
   - "Most commits land in a single burst — spacing work across the day could reduce context-switching fatigue"
   - "All commits land between 1-4am — sustainable pace matters for code quality long-term"
 
-**AI collaboration note:** If many commits have `Co-Authored-By` AI trailers (e.g., Claude, Copilot), note the AI-assisted commit percentage as a team metric. Frame it neutrally — "N% of commits were AI-assisted" — without judgment.
+**AI collaboration note:** If many commits have `Co-Authored-By` AI trailers (e.g., BitFun, Copilot), note the AI-assisted commit percentage as a team metric. Frame it neutrally — "N% of commits were AI-assisted" — without judgment.
 
 ### Top 3 Team Wins
 Identify the 3 highest-impact things shipped in the window across the whole team. For each:
@@ -587,27 +562,12 @@ When the user runs `/retro global` (or `/retro global 14d`), follow this flow in
 
 Same midnight-aligned logic as the regular retro. Default 7d. The second argument after `global` is the window (e.g., `14d`, `30d`, `24h`).
 
-### Global Step 2: Run discovery
+### Global Step 2: Discover sessions
 
-Locate and run the discovery script using this fallback chain:
-
-```bash
-DISCOVER_BIN=""
-[ -x ~/.claude/skills/gstack/bin/gstack-global-discover ] && DISCOVER_BIN=~/.claude/skills/gstack/bin/gstack-global-discover
-[ -z "$DISCOVER_BIN" ] && [ -x .claude/skills/gstack/bin/gstack-global-discover ] && DISCOVER_BIN=.claude/skills/gstack/bin/gstack-global-discover
-[ -z "$DISCOVER_BIN" ] && which gstack-global-discover >/dev/null 2>&1 && DISCOVER_BIN=$(which gstack-global-discover)
-[ -z "$DISCOVER_BIN" ] && [ -f bin/gstack-global-discover.ts ] && DISCOVER_BIN="bun run bin/gstack-global-discover.ts"
-echo "DISCOVER_BIN: $DISCOVER_BIN"
-```
-
-If no binary is found, tell the user: "Discovery script not found. Run `bun run build` in the gstack directory to compile it." and stop.
-
-Run the discovery:
-```bash
-$DISCOVER_BIN --since "<window>" --format json 2>/tmp/gstack-discover-stderr
-```
-
-Read the stderr output from `/tmp/gstack-discover-stderr` for diagnostic info. Parse the JSON output from stdout.
+Use BitFun's built-in session/project metadata and ordinary filesystem inspection.
+Do not locate, build, or run external `global session discovery` binaries. If BitFun
+session metadata is unavailable, fall back to the current repository only and say
+that global session discovery is unavailable in this environment.
 
 If `total_sessions` is 0, say: "No AI coding sessions found in the last <window>. Try a longer window: `/retro global 30d`" and stop.
 
@@ -663,7 +623,7 @@ From the commit timestamps gathered in Step 3, group by date. For each date, cou
 From the discovery JSON, analyze tool usage patterns:
 - Which AI tool is used for which repos (exclusive vs. shared)
 - Session count per tool
-- Behavioral patterns (e.g., "Codex used exclusively for myapp, Claude Code for everything else")
+- Behavioral patterns (e.g., "outside-voice sub-agent used exclusively for myapp, BitFun for everything else")
 
 ### Global Step 7: Aggregate and generate narrative
 
@@ -697,7 +657,7 @@ align cleanly. Never truncate project names.
 ║
 ║  [N] commits across [M] projects
 ║  +[X]k LOC added · [Y]k LOC deleted · [Z]k net
-║  [N] AI coding sessions (CC: X, Codex: Y, Gemini: Z)
+║  [N] AI coding sessions (CC: X, outside-voice sub-agent: Y, Gemini: Z)
 ║  [N]-day shipping streak 🔥
 ║
 ║  PROJECTS
@@ -730,7 +690,7 @@ align cleanly. Never truncate project names.
 - Top Work: 3 bullet points summarizing the user's major themes, inferred from
   commit messages. Not individual commits — synthesize into themes.
   E.g., "Built /retro global — cross-project retrospective with AI session discovery"
-  not "feat: gstack-global-discover" + "feat: /retro global template".
+  not "feat: global session discovery" + "feat: /retro global template".
 - The card must be self-contained. Someone seeing ONLY this block should understand
   the user's week without any surrounding context.
 - Do NOT include team members, project totals, or context switching data here.
@@ -751,7 +711,7 @@ This is the "deep dive" that follows the shareable card.
 | Projects active | N |
 | Total commits (all repos, all contributors) | N |
 | Total LOC | +N / -N |
-| AI coding sessions | N (CC: X, Codex: Y, Gemini: Z) |
+| AI coding sessions | N (CC: X, outside-voice sub-agent: Y, Gemini: Z) |
 | Active days | N |
 | Global shipping streak (any contributor, any repo) | N consecutive days |
 | Context switches/day | N avg (max: M) |
@@ -793,8 +753,8 @@ Format:
 
 ### Tool Usage Analysis
 Per-tool breakdown with behavioral patterns:
-- Claude Code: N sessions across M repos — patterns observed
-- Codex: N sessions across M repos — patterns observed
+- BitFun: N sessions across M repos — patterns observed
+- outside-voice sub-agent: N sessions across M repos — patterns observed
 - Gemini: N sessions across M repos — patterns observed
 
 ### Ship of the Week (Global)
@@ -812,7 +772,7 @@ Considering the full cross-project picture.
 
 ```bash
 setopt +o nomatch 2>/dev/null || true  # zsh compat
-ls -t ~/.gstack/retros/global-*.json 2>/dev/null | head -5
+ls -t $HOME/.bitfun/team/retros/global-*.json 2>/dev/null | head -5
 ```
 
 **Only compare against a prior retro with the same `window` value** (e.g., 7d vs 7d). If the most recent prior retro has a different window, skip comparison and note: "Prior global retro used a different window — skipping comparison."
@@ -824,18 +784,18 @@ If no prior global retros exist, append: "First global retro recorded — run ag
 ### Global Step 9: Save snapshot
 
 ```bash
-mkdir -p ~/.gstack/retros
+mkdir -p $HOME/.bitfun/team/retros
 ```
 
 Determine the next sequence number for today:
 ```bash
 setopt +o nomatch 2>/dev/null || true  # zsh compat
 today=$(date +%Y-%m-%d)
-existing=$(ls ~/.gstack/retros/global-${today}-*.json 2>/dev/null | wc -l | tr -d ' ')
+existing=$(ls $HOME/.bitfun/team/retros/global-${today}-*.json 2>/dev/null | wc -l | tr -d ' ')
 next=$((existing + 1))
 ```
 
-Use the Write tool to save JSON to `~/.gstack/retros/global-${today}-${next}.json`:
+Use the Write tool to save JSON to `$HOME/.bitfun/team/retros/global-${today}-${next}.json`:
 
 ```json
 {
@@ -862,7 +822,7 @@ Use the Write tool to save JSON to `~/.gstack/retros/global-${today}-${next}.jso
     "global_streak_days": 52,
     "avg_context_switches_per_day": 2.1
   },
-  "tweetable": "Week of Mar 14: 5 projects, 182 commits, 15.3k LOC | CC: 48, Codex: 8, Gemini: 3 | Focus: gstack (58%) | Streak: 52d"
+  "tweetable": "Week of Mar 14: 5 projects, 182 commits, 15.3k LOC | CC: 48, outside-voice sub-agent: 8, Gemini: 3 | Focus: gstack (58%) | Streak: 52d"
 }
 ```
 
@@ -899,6 +859,6 @@ When the user runs `/retro compare` (or `/retro compare 14d`):
 - If the window has zero commits, say so and suggest a different window
 - Round LOC/hour to nearest 50
 - Treat merge commits as PR boundaries
-- Do not read CLAUDE.md or other docs — this skill is self-contained
+- Do not read AGENTS.md or other docs — this skill is self-contained
 - On first run (no prior retros), skip comparison sections gracefully
-- **Global mode:** Does NOT require being inside a git repo. Saves snapshots to `~/.gstack/retros/` (not `.context/retros/`). Gracefully skip AI tools that aren't installed. Only compare against prior global retros with the same window value. If streak hits 365d cap, display as "365+ days".
+- **Global mode:** Does NOT require being inside a git repo. Saves snapshots to `$HOME/.bitfun/team/retros/` (not `.context/retros/`). Gracefully skip AI tools that aren't installed. Only compare against prior global retros with the same window value. If streak hits 365d cap, display as "365+ days".

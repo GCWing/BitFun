@@ -2374,7 +2374,7 @@ tell application "System Events" to get unix id of first process whose frontmost
         #[cfg(target_os = "windows")]
         {
             let result = tokio::task::spawn_blocking(move || -> BitFunResult<OpenAppResult> {
-                let output = std::process::Command::new("cmd")
+                let output = bitfun_core::util::process_manager::create_command("cmd")
                     .args(["/c", "start", "", &name])
                     .output()
                     .map_err(|e| BitFunError::tool(format!("open_app: {}", e)))?;

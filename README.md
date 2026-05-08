@@ -46,6 +46,14 @@ BitFun aims to pack **the coding power of Code Agents, the office productivity o
 
 ---
 
+## What's New
+
+BitFun combines **flashgrep** with **ripgrep** into an enhanced code-search pipeline. On very large repositories such as Chromium, search time drops by up to about **94.6%**, with an average speedup of about **36.1×**, significantly reducing the time you spend exploring a project.
+
+![flashgrep feature](./png/feat_flashgrep.png)
+
+---
+
 ## Cutting Edge · Ready Out of the Box
 
 New paradigms appear almost weekly in the Agent space. BitFun’s pace is: **when we see something great, we ship it on the desktop and make it work seamlessly with what you already have.**

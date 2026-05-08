@@ -1,5 +1,6 @@
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import type { Session } from '@/flow_chat/types/flow-chat';
+import { isAcpFlowSession } from '@/flow_chat/utils/acpSession';
 import { WorkspaceKind, isRemoteWorkspace, type WorkspaceInfo } from '@/shared/types';
 
 type SessionDisplayBucket = 'code' | 'cowork' | 'claw';
@@ -51,6 +52,9 @@ function sessionBelongsToWorkspace(session: Session, workspace: WorkspaceInfo): 
 
 function isEmptyReusableSession(session: Session, workspace: WorkspaceInfo, bucket: SessionDisplayBucket): boolean {
   if (session.sessionKind !== 'normal') {
+    return false;
+  }
+  if (isAcpFlowSession(session)) {
     return false;
   }
   if (session.isHistorical) {

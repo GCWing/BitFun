@@ -2,23 +2,24 @@
 //!
 //! Executes a single model round: calls AI, processes streaming responses, executes tools
 
-use super::stream_processor::StreamProcessor;
+use super::stream_processor::{StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
-use crate::agentic::MessageContent;
-use crate::agentic::core::Message;
-use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
+use crate::agentic::core::{Message, ToolCall};
+use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
+use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
 use crate::service::config::GlobalConfigManager;
+use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use dashmap::DashMap;
 use log::{debug, error, warn};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
 /// Round executor
@@ -62,6 +63,7 @@ impl RoundExecutor {
         tool_definitions: Option<Vec<ToolDefinition>>,
         context_window: Option<usize>,
     ) -> BitFunResult<RoundResult> {
+        let round_started_at = Instant::now();
         let subagent_parent_info = context.subagent_parent_info.clone();
         let is_subagent = subagent_parent_info.is_some();
         let event_subagent_parent_info = subagent_parent_info.clone().map(|info| info.into());
@@ -97,7 +99,8 @@ impl RoundExecutor {
 
         let max_attempts = Self::MAX_RETRIES_WITHOUT_OUTPUT + 1;
         let mut attempt_index = 0usize;
-        let stream_result = loop {
+        let (stream_result, send_to_stream_ms, stream_processing_ms) = loop {
+            let request_started_at = Instant::now();
             debug!(
                 "Sending request: model={}, messages={}, tools={}, attempt={}/{}",
                 context.model_name,
@@ -108,11 +111,22 @@ impl RoundExecutor {
             );
 
             // Use dynamically obtained client for call
-            let stream_response = match ai_client
+            let (stream_response, send_to_stream_ms) = match ai_client
                 .send_message_stream(ai_messages.clone(), tool_definitions.clone())
                 .await
             {
-                Ok(response) => response,
+                Ok(response) => {
+                    let send_to_stream_ms = elapsed_ms_u64(request_started_at);
+                    debug!(
+                        "AI stream opened: session_id={}, round_id={}, attempt={}/{}, send_to_stream_ms={}",
+                        context.session_id,
+                        round_id,
+                        attempt_index + 1,
+                        max_attempts,
+                        send_to_stream_ms
+                    );
+                    (response, send_to_stream_ms)
+                }
                 Err(e) => {
                     error!("AI request failed: {}", e);
                     let err_msg = e.to_string();
@@ -159,6 +173,7 @@ impl RoundExecutor {
                 max_attempts
             );
 
+            let stream_started_at = Instant::now();
             match self
                 .stream_processor
                 .process_stream(
@@ -174,7 +189,43 @@ impl RoundExecutor {
                 .await
             {
                 Ok(result) => {
+                    let stream_processing_ms = elapsed_ms_u64(stream_started_at);
+                    if Self::is_interrupted_invalid_tool_only(&result) {
+                        let err_msg = result.partial_recovery_reason.clone().unwrap_or_else(|| {
+                            "Interrupted while streaming tool arguments".to_string()
+                        });
+                        self.emit_failed_partial_tool_calls(
+                            &context,
+                            &result.tool_calls,
+                            &err_msg,
+                            event_subagent_parent_info.clone(),
+                        )
+                        .await;
+
+                        if attempt_index < max_attempts - 1
+                            && Self::is_transient_network_error(&err_msg)
+                        {
+                            let delay_ms = Self::retry_delay_ms(attempt_index);
+                            warn!(
+                                "Retrying stream because tool arguments were interrupted before valid JSON completed: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
+                                context.session_id,
+                                round_id,
+                                attempt_index + 1,
+                                max_attempts,
+                                delay_ms,
+                                err_msg
+                            );
+                            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                            attempt_index += 1;
+                            continue;
+                        }
+
+                        return Err(BitFunError::AIClient(err_msg));
+                    }
+
                     let no_effective_output = !result.has_effective_output;
+                    let is_partial_recovery = result.partial_recovery_reason.is_some();
+
                     if no_effective_output && attempt_index < max_attempts - 1 {
                         let delay_ms = Self::retry_delay_ms(attempt_index);
                         warn!(
@@ -189,7 +240,24 @@ impl RoundExecutor {
                         attempt_index += 1;
                         continue;
                     }
-                    break result;
+
+                    if is_partial_recovery && attempt_index < max_attempts - 1 {
+                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        warn!(
+                            "Retrying stream after partial recovery: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, reason={}",
+                            context.session_id,
+                            round_id,
+                            attempt_index + 1,
+                            max_attempts,
+                            delay_ms,
+                            result.partial_recovery_reason.as_deref().unwrap_or("unknown")
+                        );
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        attempt_index += 1;
+                        continue;
+                    }
+
+                    break (result, send_to_stream_ms, stream_processing_ms);
                 }
                 Err(stream_err) => {
                     let err_msg = stream_err.error.to_string();
@@ -235,10 +303,14 @@ impl RoundExecutor {
             .collect();
         debug!(
             target: "ai::model_response",
-            "Model response received: text_length={}, tool_calls={}, token_usage={:?}",
+            "Model response received: text_length={}, tool_calls={}, token_usage={:?}, send_to_stream_ms={}, stream_processing_ms={}, first_chunk_ms={:?}, first_visible_output_ms={:?}",
             stream_result.full_text.len(),
             if tool_names.is_empty() { "none".to_string() } else { tool_names.join(", ") },
-            stream_result.usage.as_ref().map(|u| format!("input={}, output={}, total={}", u.prompt_token_count, u.candidates_token_count, u.total_token_count)).unwrap_or_else(|| "none".to_string())
+            stream_result.usage.as_ref().map(|u| format!("input={}, output={}, total={}", u.prompt_token_count, u.candidates_token_count, u.total_token_count)).unwrap_or_else(|| "none".to_string()),
+            send_to_stream_ms,
+            stream_processing_ms,
+            stream_result.first_chunk_ms,
+            stream_result.first_visible_output_ms
         );
 
         // Check cancellation token again after stream processing completes
@@ -317,6 +389,17 @@ impl RoundExecutor {
             .with_thinking_signature(stream_result.thinking_signature.clone());
 
             debug!("Returning RoundResult: has_more_rounds=false");
+            debug!(
+                "Model round timing summary: session_id={}, turn_id={}, round_id={}, tool_calls=0, send_to_stream_ms={}, stream_processing_ms={}, first_chunk_ms={:?}, first_visible_output_ms={:?}, tool_phase_ms=0, round_total_ms={}, has_more_rounds=false",
+                context.session_id,
+                context.dialog_turn_id,
+                round_id,
+                send_to_stream_ms,
+                stream_processing_ms,
+                stream_result.first_chunk_ms,
+                stream_result.first_visible_output_ms,
+                elapsed_ms_u64(round_started_at)
+            );
 
             // Note: Do not cleanup cancellation token here, as this is only the end of a single model round
             // Cancellation token will be cleaned up by ExecutionEngine when the entire dialog turn ends
@@ -329,6 +412,7 @@ impl RoundExecutor {
                 finish_reason: FinishReason::Complete,
                 usage: stream_result.usage.clone(),
                 provider_metadata: stream_result.provider_metadata.clone(),
+                partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
             });
         }
 
@@ -347,6 +431,7 @@ impl RoundExecutor {
             stream_result.tool_calls.len()
         );
 
+        let tool_phase_started_at = Instant::now();
         let tool_results = if let Some(tool_pipeline) = &self.tool_pipeline {
             // Create tool execution context
             let tool_context = ToolExecutionContext {
@@ -463,6 +548,7 @@ impl RoundExecutor {
         } else {
             vec![]
         };
+        let tool_phase_ms = elapsed_ms_u64(tool_phase_started_at);
 
         // Create assistant message (includes tool calls and thinking content, supports interleaved thinking mode)
         let reasoning = if stream_result.full_thinking.is_empty() {
@@ -516,6 +602,21 @@ impl RoundExecutor {
             has_more_rounds,
             tool_result_messages.len()
         );
+        debug!(
+            "Model round timing summary: session_id={}, turn_id={}, round_id={}, tool_calls={}, tool_results={}, send_to_stream_ms={}, stream_processing_ms={}, first_chunk_ms={:?}, first_visible_output_ms={:?}, tool_phase_ms={}, round_total_ms={}, has_more_rounds={}",
+            context.session_id,
+            context.dialog_turn_id,
+            round_id,
+            stream_result.tool_calls.len(),
+            tool_result_messages.len(),
+            send_to_stream_ms,
+            stream_processing_ms,
+            stream_result.first_chunk_ms,
+            stream_result.first_visible_output_ms,
+            tool_phase_ms,
+            elapsed_ms_u64(round_started_at),
+            has_more_rounds
+        );
 
         // Note: Do not cleanup cancellation token here, as there may be subsequent model rounds
         // Cancellation token will be cleaned up by ExecutionEngine when the entire dialog turn ends
@@ -534,6 +635,7 @@ impl RoundExecutor {
             },
             usage: stream_result.usage.clone(),
             provider_metadata: stream_result.provider_metadata.clone(),
+            partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
         })
     }
 
@@ -573,6 +675,41 @@ impl RoundExecutor {
     /// Emit event
     async fn emit_event(&self, event: AgenticEvent, priority: EventPriority) {
         let _ = self.event_queue.enqueue(event, Some(priority)).await;
+    }
+
+    async fn emit_failed_partial_tool_calls(
+        &self,
+        context: &RoundContext,
+        tool_calls: &[ToolCall],
+        error: &str,
+        subagent_parent_info: Option<crate::agentic::events::SubagentParentInfo>,
+    ) {
+        for tool_call in tool_calls {
+            self.emit_event(
+                AgenticEvent::ToolEvent {
+                    session_id: context.session_id.clone(),
+                    turn_id: context.dialog_turn_id.clone(),
+                    tool_event: ToolEventData::Failed {
+                        tool_id: tool_call.tool_id.clone(),
+                        tool_name: tool_call.tool_name.clone(),
+                        error: format!("Tool arguments stream interrupted: {}", error),
+                    },
+                    subagent_parent_info: subagent_parent_info.clone(),
+                },
+                EventPriority::High,
+            )
+            .await;
+        }
+    }
+
+    fn is_interrupted_invalid_tool_only(result: &StreamResult) -> bool {
+        result.partial_recovery_reason.is_some()
+            && result.full_text.is_empty()
+            && !result.tool_calls.is_empty()
+            && result
+                .tool_calls
+                .iter()
+                .all(|tool_call| !tool_call.is_valid())
     }
 
     fn retry_delay_ms(attempt_index: usize) -> u64 {
@@ -689,5 +826,51 @@ mod tests {
 
         assert!(!RoundExecutor::is_transient_network_error(auth));
         assert!(!RoundExecutor::is_transient_network_error(billing));
+    }
+
+    #[test]
+    fn detects_interrupted_invalid_tool_only_recovery() {
+        let result = crate::agentic::execution::stream_processor::StreamResult {
+            full_thinking: String::new(),
+            thinking_signature: None,
+            full_text: String::new(),
+            tool_calls: vec![crate::agentic::core::ToolCall {
+                tool_id: "call_1".to_string(),
+                tool_name: "Write".to_string(),
+                arguments: serde_json::json!({}),
+                is_error: true,
+            }],
+            usage: None,
+            provider_metadata: None,
+            has_effective_output: true,
+            first_chunk_ms: Some(1),
+            first_visible_output_ms: Some(1),
+            partial_recovery_reason: Some("Stream processing error: SSE stream error".to_string()),
+        };
+
+        assert!(RoundExecutor::is_interrupted_invalid_tool_only(&result));
+    }
+
+    #[test]
+    fn keeps_partial_text_recovery_as_non_retryable_output() {
+        let result = crate::agentic::execution::stream_processor::StreamResult {
+            full_thinking: String::new(),
+            thinking_signature: None,
+            full_text: "I started answering before the stream failed.".to_string(),
+            tool_calls: vec![crate::agentic::core::ToolCall {
+                tool_id: "call_1".to_string(),
+                tool_name: "Write".to_string(),
+                arguments: serde_json::json!({}),
+                is_error: true,
+            }],
+            usage: None,
+            provider_metadata: None,
+            has_effective_output: true,
+            first_chunk_ms: Some(1),
+            first_visible_output_ms: Some(1),
+            partial_recovery_reason: Some("Stream processing error: SSE stream error".to_string()),
+        };
+
+        assert!(!RoundExecutor::is_interrupted_invalid_tool_only(&result));
     }
 }

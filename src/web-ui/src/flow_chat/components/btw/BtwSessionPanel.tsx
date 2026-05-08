@@ -1,10 +1,15 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import path from 'path-browserify';
-import {CornerUpLeft, Link2, Square} from 'lucide-react';
+import {CornerUpLeft, Link2, Square, Sparkles} from 'lucide-react';
 import {FlowChatContext} from '../modern/FlowChatContext';
 import {VirtualItemRenderer} from '../modern/VirtualItemRenderer';
 import {ProcessingIndicator} from '../modern/ProcessingIndicator';
+import {
+  shouldReserveProcessingIndicatorSpace,
+  shouldShowProcessingIndicator,
+} from '../modern/processingIndicatorVisibility';
+import {useExploreGroupState} from '../modern/useExploreGroupState';
 import {ScrollToBottomButton} from '@/flow_chat';
 import {flowChatStore} from '../../store/FlowChatStore';
 import type {FlowChatConfig, FlowChatState, Session} from '../../types/flow-chat';
@@ -13,9 +18,9 @@ import {FLOWCHAT_FOCUS_ITEM_EVENT, type FlowChatFocusItemRequest} from '../../ev
 import {fileTabManager} from '@/shared/services/FileTabManager';
 import {createTab} from '@/shared/utils/tabUtils';
 import {IconButton, type LineRange} from '@/component-library';
-import {globalEventBus} from '@/infrastructure/event-bus';
 import {resolveSessionRelationship} from '../../utils/sessionMetadata';
 import {agentAPI} from '@/infrastructure/api';
+import {globalEventBus} from '@/infrastructure/event-bus';
 import {notificationService} from '@/shared/notification-system';
 import {createLogger} from '@/shared/utils/logger';
 import {settleStoppedReviewSessionState} from '../../utils/reviewSessionStop';
@@ -23,7 +28,9 @@ import {findLatestCodeReviewResult} from '../../utils/reviewSessionSummary';
 import {deriveDeepReviewInterruption} from '../../utils/deepReviewContinuation';
 import {buildReviewRemediationItems, type CodeReviewRemediationData} from '../../utils/codeReviewRemediation';
 import {ReviewActionBar} from './DeepReviewActionBar';
-import {type ReviewActionMode, useReviewActionBarStore} from '../../store/deepReviewActionBarStore';
+import {type ReviewActionMode, type ReviewActionPhase, useReviewActionBarStore} from '../../store/deepReviewActionBarStore';
+import {loadPersistedReviewState} from '../../services/ReviewActionBarPersistenceService';
+import type {ReviewActionPersistedState} from '@/shared/types/session-history';
 import './BtwSessionPanel.scss';
 
 export interface BtwSessionPanelProps {
@@ -70,6 +77,8 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const [stoppingReview, setStoppingReview] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const actionBarRef = useRef<HTMLDivElement>(null);
+  const [actionBarHeight, setActionBarHeight] = useState(0);
   const shouldAutoScrollRef = useRef(true);
 
   useEffect(() => {
@@ -92,6 +101,13 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     defaultValue: t('btw.origin'),
   });
   const virtualItems = useMemo(() => sessionToVirtualItems(childSession ?? null), [childSession]);
+  const {
+    exploreGroupStates,
+    onExploreGroupToggle,
+    onExpandGroup,
+    onExpandAllInTurn,
+    onCollapseGroup,
+  } = useExploreGroupState(virtualItems);
 
   // Load history for historical sessions that have not yet had their turns loaded.
   const isLoadingRef = useRef(false);
@@ -201,7 +217,22 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     sessionId: childSessionId,
     activeSessionOverride: childSession ?? null,
     config: PANEL_CONFIG,
-  }), [childSession, childSessionId, handleFileViewRequest, handleTabOpen]);
+    exploreGroupStates,
+    onExploreGroupToggle,
+    onExpandGroup,
+    onExpandAllInTurn,
+    onCollapseGroup,
+  }), [
+    childSession,
+    childSessionId,
+    handleFileViewRequest,
+    handleTabOpen,
+    exploreGroupStates,
+    onExploreGroupToggle,
+    onExpandGroup,
+    onExpandAllInTurn,
+    onCollapseGroup,
+  ]);
 
   const lastDialogTurn = childSession?.dialogTurns[childSession.dialogTurns.length - 1];
   const lastModelRound = lastDialogTurn?.modelRounds[lastDialogTurn.modelRounds.length - 1];
@@ -239,24 +270,19 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   }, [isTurnProcessing]);
 
   const showProcessingIndicator = useMemo(() => {
-    if (!isTurnProcessing) return false;
-    if (!lastItem) return true;
+    return shouldShowProcessingIndicator({
+      isTurnProcessing,
+      lastItem,
+      isContentGrowing,
+    });
+  }, [isTurnProcessing, lastItem, isContentGrowing]);
 
-    if (lastItem.type === 'text' || lastItem.type === 'thinking') {
-      const hasContent = 'content' in lastItem && Boolean((lastItem as any).content);
-      if (hasContent && isContentGrowing) {
-        return false;
-      }
-    }
-
-    if (lastItem.type === 'tool') {
-      const toolStatus = (lastItem as any).status;
-      if (toolStatus === 'running' || toolStatus === 'streaming' || toolStatus === 'preparing') {
-        return false;
-      }
-    }
-
-    return true;
+  const reserveProcessingIndicatorSpace = useMemo(() => {
+    return shouldReserveProcessingIndicatorSpace({
+      isTurnProcessing,
+      lastItem,
+      isContentGrowing,
+    });
   }, [isTurnProcessing, lastItem, isContentGrowing]);
 
   const canStopReviewSession =
@@ -267,14 +293,82 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   // ---- Review action bar integration ----
   const actionBarPhase = useReviewActionBarStore((s) => s.phase);
   const actionBarDismissed = useReviewActionBarStore((s) => s.dismissed);
+  const actionBarMinimized = useReviewActionBarStore((s) => s.minimized);
   const actionBarChildSessionId = useReviewActionBarStore((s) => s.childSessionId);
+  const actionBarCompletedIds = useReviewActionBarStore((s) => s.completedRemediationIds);
+  const actionBarRemediationItems = useReviewActionBarStore((s) => s.remediationItems);
+  const actionBarLastSubmittedAction = useReviewActionBarStore((s) => s.lastSubmittedAction);
   const isDeepReview = childKind === 'deep_review';
   const isReviewSession = childKind === 'review' || childKind === 'deep_review';
+  const canReturnToParentSession = isReviewSession && Boolean(parentSessionId);
+  const btwOrigin = childSession?.btwOrigin;
   const showReviewActionBar =
     isReviewSession &&
     actionBarChildSessionId === childSessionId &&
     actionBarPhase !== 'idle' &&
-    !actionBarDismissed;
+    !actionBarDismissed &&
+    !actionBarMinimized;
+
+  const showMinimizedIndicator =
+    isReviewSession &&
+    actionBarChildSessionId === childSessionId &&
+    actionBarPhase !== 'idle' &&
+    !actionBarDismissed &&
+    actionBarMinimized;
+  const parentLabel = resolveSessionTitle(parentSession, t('btw.parent'));
+  const backTooltip = btwOrigin?.parentTurnIndex
+    ? t('flowChatHeader.btwBackTooltipWithTurn', {
+        title: parentLabel,
+        turn: btwOrigin.parentTurnIndex,
+        defaultValue: `Go back to the source session: ${parentLabel} (Turn ${btwOrigin.parentTurnIndex})`,
+      })
+    : t('flowChatHeader.btwBackTooltipWithoutTurn', {
+        title: parentLabel,
+        defaultValue: `Go back to the source session: ${parentLabel}`,
+      });
+
+  const remainingCount = actionBarRemediationItems.length - actionBarCompletedIds.size;
+  const totalCount = actionBarRemediationItems.length;
+  const minimizedActionLabel = useMemo(() => {
+    switch (actionBarPhase) {
+      case 'fix_running':
+        return actionBarLastSubmittedAction === 'fix-review'
+          ? t('deepReviewActionBar.minimizedFixReview', {
+              defaultValue: 'Fixing and re-reviewing',
+            })
+          : t('deepReviewActionBar.minimizedFix', {
+              defaultValue: 'Fixing',
+            });
+      case 'fix_completed':
+        return t('deepReviewActionBar.minimizedFixCompleted', {
+          defaultValue: 'Fix completed',
+        });
+      case 'fix_failed':
+      case 'fix_timeout':
+      case 'review_error':
+        return t('deepReviewActionBar.minimizedFixFailed', {
+          defaultValue: 'Needs attention',
+        });
+      case 'review_interrupted':
+      case 'resume_blocked':
+      case 'resume_failed':
+        return t('deepReviewActionBar.minimizedReviewInterrupted', {
+          defaultValue: 'Review interrupted',
+        });
+      case 'resume_running':
+        return t('deepReviewActionBar.minimizedResume', {
+          defaultValue: 'Continuing review',
+        });
+      default:
+        return isDeepReview
+          ? t('deepReviewActionBar.minimizedDeep', {
+              defaultValue: 'Deep Review',
+            })
+          : t('deepReviewActionBar.minimizedStandard', {
+              defaultValue: 'Code Review',
+            });
+    }
+  }, [actionBarPhase, actionBarLastSubmittedAction, isDeepReview, t]);
 
   // Detect when a review completes with a remediation plan and auto-show the action bar.
   useEffect(() => {
@@ -311,7 +405,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     // Only activate if the action bar is idle or not yet shown for this session
     if (store.childSessionId === childSessionId && store.phase !== 'idle') {
       // Update phase based on turn status if currently showing
-      if (isError && store.phase !== 'fix_failed' && store.phase !== 'review_error') {
+      if (isError && store.phase !== 'fix_failed' && store.phase !== 'review_error' && store.phase !== 'fix_interrupted') {
         store.updatePhase(
           store.phase === 'fix_running' ? 'fix_failed' : 'review_error',
           childSession.error ?? undefined,
@@ -324,11 +418,12 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
             reviewData: latestReviewData,
             reviewMode,
             phase: 'review_completed',
+            completedRemediationIds: store.completedRemediationIds,
           });
         } else {
-          // Fix completed with no further remediation needed — dismiss the action bar
-          // so the user can focus on the fix results in the chat stream.
-          store.dismiss();
+          // Fix completed with no further remediation needed — update phase to
+          // show completion state in the action bar instead of dismissing it.
+          store.updatePhase('fix_completed');
         }
       }
       return;
@@ -358,38 +453,105 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     }
   }, [childSession, childSessionId, parentSessionId, isReviewSession, isDeepReview]);
 
-  const btwOrigin = childSession?.btwOrigin;
-  const parentLabel = resolveSessionTitle(parentSession, t('btw.parent'));
-  const backTooltip = btwOrigin?.parentTurnIndex
-    ? t('flowChatHeader.btwBackTooltipWithTurn', {
-        title: parentLabel,
-        turn: btwOrigin.parentTurnIndex,
-        defaultValue: `Go back to the source session: ${parentLabel} (Turn ${btwOrigin.parentTurnIndex})`,
-      })
-    : t('flowChatHeader.btwBackTooltipWithoutTurn', {
-        title: parentLabel,
-        defaultValue: `Go back to the source session: ${parentLabel}`,
+  // Restore persisted review action state on mount
+  useEffect(() => {
+    if (!isReviewSession || !childSessionId || !childSession) return;
+
+    const store = useReviewActionBarStore.getState();
+    // Only restore if store is idle for this session
+    if (store.phase !== 'idle' || store.childSessionId) return;
+
+    const workspacePath = childSession.workspacePath;
+    if (!workspacePath) return;
+
+    let cancelled = false;
+
+    loadPersistedReviewState(
+      childSessionId,
+      workspacePath,
+      childSession.remoteConnectionId,
+      childSession.remoteSshHost,
+    ).then((persisted: ReviewActionPersistedState | null) => {
+      if (cancelled || !persisted) return;
+
+      const latestReviewData = findLatestCodeReviewResult(childSession) as DeepReviewActionData | null;
+      const reviewMode: ReviewActionMode = isDeepReview ? 'deep' : 'standard';
+
+      // Detect fix interruption
+      let phase: ReviewActionPhase = persisted.phase as ReviewActionPhase;
+      let remainingFixIds: string[] = [];
+
+      if (persisted.phase === 'fix_running') {
+        const lastTurn = childSession.dialogTurns[childSession.dialogTurns.length - 1];
+        const isStillRunning = lastTurn?.status === 'processing' || lastTurn?.status === 'finishing';
+
+        if (!isStillRunning) {
+          // Fix was interrupted — determine remaining items
+          phase = 'fix_interrupted';
+          const latestItems = latestReviewData ? buildReviewRemediationItems(latestReviewData) : [];
+          const latestIds = new Set(latestItems.map((i) => i.id));
+          // Items that were being fixed but still exist in latest review data
+          remainingFixIds = persisted.completedRemediationIds.filter((id: string) => latestIds.has(id));
+        }
+      }
+
+      store.showActionBar({
+        childSessionId,
+        parentSessionId: parentSessionId ?? null,
+        reviewData: latestReviewData ?? ({} as CodeReviewRemediationData),
+        reviewMode,
+        phase,
+        completedRemediationIds: new Set(persisted.completedRemediationIds),
       });
 
-  const handleFocusOriginTurn = useCallback(() => {
-    const resolvedParentSessionId = btwOrigin?.parentSessionId || parentSessionId;
-    if (!resolvedParentSessionId) return;
+      // Apply additional restored state
+      store.setCustomInstructions(persisted.customInstructions);
+      if (persisted.minimized) {
+        store.minimize();
+      }
+      if (remainingFixIds.length > 0) {
+        // Set remaining fix IDs in the store
+        // We need to access the store state directly to set this
+        const currentState = useReviewActionBarStore.getState();
+        // Use a type-safe approach
+        (currentState as unknown as { remainingFixIds: string[] }).remainingFixIds = remainingFixIds;
+      }
+    }).catch(() => {
+      // Ignore persistence load errors
+    });
 
-    const requestId = btwOrigin?.requestId;
-    const itemId = requestId ? `btw_marker_${requestId}` : undefined;
-    const request: FlowChatFocusItemRequest = {
-      sessionId: resolvedParentSessionId,
-      turnIndex: btwOrigin?.parentTurnIndex,
-      itemId,
-      source: 'btw-back',
+    return () => {
+      cancelled = true;
     };
+  }, [childSession, childSessionId, parentSessionId, isReviewSession, isDeepReview]);
 
-    globalEventBus.emit(
-      FLOWCHAT_FOCUS_ITEM_EVENT,
-      request,
-      'BtwSessionPanel'
-    );
-  }, [btwOrigin, parentSessionId]);
+  // Observe action bar height to adjust body padding dynamically
+  useEffect(() => {
+    if (!showReviewActionBar) {
+      setActionBarHeight(0);
+      return;
+    }
+
+    const el = actionBarRef.current;
+    if (!el) return;
+    const measuredEl =
+      el.querySelector<HTMLElement>('.deep-review-action-bar') ?? el;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const h = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
+        setActionBarHeight(h);
+      }
+    });
+
+    observer.observe(measuredEl);
+    // Initial measurement
+    setActionBarHeight(measuredEl.getBoundingClientRect().height);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [showReviewActionBar]);
 
   const handleStopReviewSession = useCallback(async () => {
     if (!childSessionId || stoppingReview || !isTurnProcessing) {
@@ -412,6 +574,27 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       setStoppingReview(false);
     }
   }, [childSessionId, stoppingReview, isTurnProcessing, t]);
+
+  const handleReturnToParentSession = useCallback(() => {
+    const resolvedParentSessionId = btwOrigin?.parentSessionId || parentSessionId;
+    if (!resolvedParentSessionId) {
+      return;
+    }
+
+    const requestId = btwOrigin?.requestId;
+    const request: FlowChatFocusItemRequest = {
+      sessionId: resolvedParentSessionId,
+      turnIndex: btwOrigin?.parentTurnIndex,
+      itemId: requestId ? `btw_marker_${requestId}` : undefined,
+      source: 'btw-back',
+    };
+
+    globalEventBus.emit(
+      FLOWCHAT_FOCUS_ITEM_EVENT,
+      request,
+      'BtwSessionPanel',
+    );
+  }, [btwOrigin, parentSessionId]);
 
   if (!childSessionId || !childSession) {
     return (
@@ -457,12 +640,12 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
                 <Square size={11} />
               </IconButton>
             )}
-            {!!(btwOrigin?.parentSessionId || parentSessionId) && (
+            {canReturnToParentSession && (
               <IconButton
                 className="btw-session-panel__origin-button"
                 variant="ghost"
                 size="xs"
-                onClick={handleFocusOriginTurn}
+                onClick={handleReturnToParentSession}
                 tooltip={backTooltip}
                 aria-label={t('btw.backToParent')}
                 data-testid="btw-session-panel-origin-button"
@@ -473,7 +656,11 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           </div>
         </div>
 
-        <div ref={scrollContainerRef} className="btw-session-panel__body">
+        <div
+          ref={scrollContainerRef}
+          className="btw-session-panel__body"
+          style={actionBarHeight > 0 ? { paddingBottom: `${actionBarHeight + 20}px` } : undefined}
+        >
           {virtualItems.length === 0 ? (
             <div className="btw-session-panel__empty-state">{t('session.empty')}</div>
           ) : (
@@ -487,7 +674,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
               ))}
               <ProcessingIndicator
                 visible={showProcessingIndicator}
-                reserveSpace={isTurnProcessing}
+                reserveSpace={reserveProcessingIndicatorSpace}
               />
             </>
           )}
@@ -497,7 +684,35 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           onClick={handleScrollToBottom}
           className="btw-session-panel__scroll-to-bottom"
         />
-        {showReviewActionBar && <ReviewActionBar />}
+        {showMinimizedIndicator && (
+          <div className="btw-session-panel__minimized-indicator">
+            <button
+              type="button"
+              onClick={() => useReviewActionBarStore.getState().restore()}
+              className="btw-session-panel__minimized-button"
+              aria-label={t('deepReviewActionBar.restore', {
+                label: minimizedActionLabel,
+                defaultValue: `Open ${minimizedActionLabel}`,
+              })}
+            >
+              <Sparkles size={14} />
+              <span className="btw-session-panel__minimized-text">
+                {minimizedActionLabel}
+              </span>
+              {totalCount > 0 && (
+                <span className="btw-session-panel__minimized-count">
+                  {remainingCount}/{totalCount}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+
+        {showReviewActionBar && (
+          <div ref={actionBarRef} className="btw-session-panel__action-bar-wrapper">
+            <ReviewActionBar />
+          </div>
+        )}
       </div>
     </FlowChatContext.Provider>
   );

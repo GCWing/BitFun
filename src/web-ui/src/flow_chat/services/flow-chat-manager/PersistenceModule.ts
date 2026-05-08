@@ -7,14 +7,41 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, DialogTurn } from './types';
 import { buildSessionMetadata } from '../../utils/sessionMetadata';
 import { settleInterruptedDialogTurn } from '../../utils/dialogTurnStability';
+import { isRuntimeStatusItem } from './RuntimeStatusModule';
 
 const log = createLogger('PersistenceModule');
+const COALESCED_IMMEDIATE_SAVE_DELAY_MS = 500;
+
+function isTransientSession(session: { isTransient?: boolean } | undefined): boolean {
+  return session?.isTransient === true;
+}
 
 function requireWorkspacePath(sessionId: string, workspacePath?: string): string {
   if (!workspacePath) {
     throw new Error(`Workspace path is required for session: ${sessionId}`);
   }
   return workspacePath;
+}
+
+function getDialogTurn(context: FlowChatContext, sessionId: string, turnId: string): DialogTurn | undefined {
+  return context.flowChatStore
+    .getState()
+    .sessions
+    .get(sessionId)
+    ?.dialogTurns
+    .find(turn => turn.id === turnId);
+}
+
+function isTerminalDialogTurnStatus(status: DialogTurn['status']): boolean {
+  return status === 'completed' || status === 'cancelled' || status === 'error';
+}
+
+function clearSaveTimer(context: FlowChatContext, key: string): void {
+  const existingTimer = context.saveDebouncers.get(key);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    context.saveDebouncers.delete(key);
+  }
 }
 
 async function runSerialDialogTurnSave(
@@ -53,7 +80,12 @@ export function calculateTurnHash(dialogTurn: DialogTurn): string {
   const keyData = JSON.stringify({
     status: dialogTurn.status,
     roundsCount: dialogTurn.modelRounds.length,
-    lastRoundData: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1] || null,
+    lastRoundData: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1]
+      ? {
+          ...dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1],
+          items: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1].items.filter(item => !isRuntimeStatusItem(item)),
+        }
+      : null,
     error: dialogTurn.error,
     endTime: dialogTurn.endTime
   });
@@ -105,17 +137,11 @@ export function immediateSaveDialogTurn(
   skipDuplicateCheck: boolean = false
 ): void {
   const key = `${sessionId}:${turnId}`;
-  
-  const existingTimer = context.saveDebouncers.get(key);
-  if (existingTimer) {
-    clearTimeout(existingTimer);
-    context.saveDebouncers.delete(key);
-  }
+  const dialogTurn = getDialogTurn(context, sessionId, turnId);
   
   if (!skipDuplicateCheck) {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (session) {
-      const dialogTurn = session.dialogTurns.find(turn => turn.id === turnId);
       if (dialogTurn) {
         const currentHash = calculateTurnHash(dialogTurn);
         const lastHash = context.lastSaveHashes.get(key);
@@ -131,10 +157,28 @@ export function immediateSaveDialogTurn(
       }
     }
   }
-  
-  saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
-    log.warn('Immediate save failed', { sessionId, turnId, error });
-  });
+
+  const shouldFlushImmediately =
+    skipDuplicateCheck ||
+    !dialogTurn ||
+    isTerminalDialogTurnStatus(dialogTurn.status);
+
+  if (shouldFlushImmediately) {
+    clearSaveTimer(context, key);
+    saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
+      log.warn('Immediate save failed', { sessionId, turnId, error });
+    });
+    return;
+  }
+
+  clearSaveTimer(context, key);
+  const timer = setTimeout(() => {
+    context.saveDebouncers.delete(key);
+    saveDialogTurnToDisk(context, sessionId, turnId).catch(error => {
+      log.warn('Coalesced save failed', { sessionId, turnId, error });
+    });
+  }, COALESCED_IMMEDIATE_SAVE_DELAY_MS);
+  context.saveDebouncers.set(key, timer);
 }
 
 /**
@@ -207,6 +251,7 @@ export async function saveDialogTurnToDisk(
   sessionId: string,
   turnId: string
 ): Promise<void> {
+  clearSaveTimer(context, `${sessionId}:${turnId}`);
   await runSerialDialogTurnSave(context, sessionId, turnId);
 }
 
@@ -221,6 +266,9 @@ async function performSaveDialogTurnToDisk(
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) {
       log.debug('Session not found, skipping save', { sessionId, turnId });
+      return;
+    }
+    if (isTransientSession(session)) {
       return;
     }
 
@@ -257,6 +305,9 @@ export async function saveAllInProgressTurns(context: FlowChatContext): Promise<
   const savePromises: Promise<void>[] = [];
   
   for (const [sessionId, session] of state.sessions.entries()) {
+    if (isTransientSession(session)) {
+      continue;
+    }
     const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
     
     if (lastTurn) {
@@ -279,12 +330,26 @@ export async function saveAllInProgressTurns(context: FlowChatContext): Promise<
             interruptionReason: 'app_restart',
           })
         );
-        
+
+        // Mark session as unread if it was interrupted while not active
+        if (sessionId !== state.activeSessionId) {
+          context.flowChatStore.markSessionUnreadCompletion(sessionId, 'completed');
+        }
+
         savePromises.push(
           saveDialogTurnToDisk(context, sessionId, lastTurn.id).catch(error => {
             log.error('Failed to save in-progress turn', { sessionId, turnId: lastTurn.id, error });
           })
         );
+
+        // Also persist the unread completion metadata
+        if (sessionId !== state.activeSessionId) {
+          savePromises.push(
+            updateSessionMetadata(context, sessionId).catch(error => {
+              log.error('Failed to update session metadata for unread completion', { sessionId, error });
+            })
+          );
+        }
       }
     }
   }
@@ -332,9 +397,10 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
         turnId: dialogTurn.id,
         roundIndex,
         timestamp: round.startTime,
+        renderHints: round.renderHints,
         textItems: round.items
           .map((item, index) => ({ item, index }))
-          .filter(({ item }) => item.type === 'text')
+          .filter(({ item }) => item.type === 'text' && !isRuntimeStatusItem(item))
           .map(({ item, index }) => {
             return {
               id: item.id,
@@ -416,6 +482,7 @@ export async function updateSessionMetadata(
 
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) return;
+    if (isTransientSession(session)) return;
 
     const workspacePath = requireWorkspacePath(sessionId, session.workspacePath);
 

@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
 import { createLogger } from '@/shared/utils/logger';
-import { Button } from '@/component-library';
+import { Button, Tooltip } from '@/component-library';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import './AskUserQuestionCard.scss';
 
@@ -26,6 +26,33 @@ interface QuestionData {
   options: QuestionOption[];
   multiSelect: boolean;
 }
+
+/** Renders option description with tooltip for truncated text */
+const OptionDescription: React.FC<{ description: string }> = ({ description }) => {
+  const descRef = useRef<HTMLDivElement>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = descRef.current;
+    if (el) {
+      setIsTruncated(el.scrollWidth > el.clientWidth);
+    }
+  }, [description]);
+
+  const descElement = (
+    <div ref={descRef} className="option-description">{description}</div>
+  );
+
+  if (isTruncated) {
+    return (
+      <Tooltip content={description} placement="top" delay={300}>
+        {descElement}
+      </Tooltip>
+    );
+  }
+
+  return descElement;
+};
 
 function normalizeQuestionsFromParams(input: unknown): QuestionData[] {
   if (!input || typeof input !== 'object') return [];
@@ -255,7 +282,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
               )}
               <div className="option-content">
                 <div className="option-label-text">{option.label}</div>
-                <div className="option-description">{option.description}</div>
+                <OptionDescription description={option.description} />
               </div>
             </label>
           ))}

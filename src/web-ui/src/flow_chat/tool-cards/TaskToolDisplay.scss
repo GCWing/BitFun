@@ -8,79 +8,8 @@
     width: 100%;
   }
 
-  .task-icon-container {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    align-self: stretch;
-    padding-right: 10px;
-    margin-right: 8px;
-    box-sizing: border-box;
-    min-height: 0;
+  .task-icon {
     color: var(--color-text-secondary, #6b7280);
-
-    &::after {
-      content: '';
-      position: absolute;
-      right: 0;
-      top: calc(-1 * var(--tool-card-header-pad-y, 10px));
-      bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
-      width: 0;
-      border-right: 1px solid var(--border-base);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .task-task-icon-marks {
-      position: relative;
-      z-index: 1;
-      width: var(--tool-card-header-icon-rail, 28px);
-      height: var(--tool-card-header-icon-rail, 28px);
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .task-task-icon-main {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: opacity 0.18s ease;
-
-      svg {
-        width: 16px;
-        height: 16px;
-      }
-    }
-
-    &.task-icon-container--expandable .task-task-icon-hint {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin: 0;
-      padding: 0;
-      opacity: 0;
-      pointer-events: none;
-      color: var(--color-text-secondary);
-      transition: opacity 0.18s ease;
-
-      svg {
-        width: 16px;
-        height: 16px;
-        flex-shrink: 0;
-        transition: transform 0.2s ease;
-      }
-    }
-
-    &.task-icon-container--expandable .task-task-icon-hint--open svg {
-      transform: rotate(180deg);
-    }
 
     &.is-running {
       color: var(--color-primary, #3b82f6);
@@ -89,15 +18,15 @@
 
   &.base-tool-card-wrapper:hover
     .base-tool-card.base-tool-card--header-expandable:not(.status-cancelled)
-    .task-icon-container.task-icon-container--expandable
-    .task-task-icon-main {
+    .tool-card-icon-slot--expandable
+    .tool-card-icon-main {
     opacity: 0;
   }
 
   &.base-tool-card-wrapper:hover
     .base-tool-card.base-tool-card--header-expandable:not(.status-cancelled)
-    .task-icon-container.task-icon-container--expandable
-    .task-task-icon-hint {
+    .tool-card-icon-slot--expandable
+    .tool-card-icon-expand-hint {
     opacity: 1;
   }
 
@@ -137,8 +66,8 @@
     justify-content: center;
     align-self: stretch;
     flex-shrink: 0;
-    min-width: 40px;
-    padding: 0 0 0 8px;
+    width: var(--tool-card-header-icon-slot, 34px);
+    padding: 0;
     margin-left: 4px;
 
     /* Hover fill: full header height + extend into header right padding to card inner edge. */
@@ -146,7 +75,7 @@
       content: '';
       position: absolute;
       left: 0;
-      right: calc(-1 * var(--tool-card-header-pad-x, 10px));
+      right: calc(-1 * var(--tool-card-header-pad-right, 10px));
       top: calc(-1 * var(--tool-card-header-pad-y, 10px));
       bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
       background-color: transparent;
@@ -181,7 +110,7 @@
     position: absolute;
     left: 0;
     top: calc(-1 * var(--tool-card-header-pad-y, 10px));
-    right: calc(-1 * var(--tool-card-header-pad-x, 10px));
+    right: calc(-1 * var(--tool-card-header-pad-right, 10px));
     bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
     z-index: 2;
     margin: 0;
@@ -207,8 +136,15 @@
     justify-content: center;
     align-self: center;
     gap: 6px;
+    line-height: 0;
     color: var(--color-text-muted);
     pointer-events: none;
+
+    /* Drop inline-SVG strut; keeps chevron + status optically on the same midline as the title. */
+    > svg {
+      display: block;
+      flex-shrink: 0;
+    }
   }
 
   .task-header-main {
@@ -272,24 +208,10 @@
     margin-left: auto;
     margin-right: 10px;
     flex-shrink: 0;
-  }
+    min-width: 0;
 
-  .task-status-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    margin-left: 4px;
-    padding-left: 4px;
-    border-left: 1px solid var(--border-base);
-    
-    .icon-completed {
-      color: var(--color-success);
-    }
-    
-    .loading {
-      width: 16px !important;
-      height: 16px !important;
+    svg {
+      flex-shrink: 0;
     }
   }
 
@@ -298,18 +220,62 @@
     z-index: 1;
     margin-left: 0;
     padding-left: 0;
-    border-left: none;
   }
 
-  /* Prompt uses ModelThinkingDisplay shell + .thinking-markdown (see ModelThinkingDisplay.scss). */
-  .task-expanded-content .thinking-content {
-    /* Keep subagent task prompts compact; the detail panel still exposes the full text. */
-    max-height: calc(1.45em * 1);
+  /* Prompt uses the thinking markdown typography, but needs its own clipping box.
+     The generic thinking content has vertical padding; with a one-line max-height
+     that can leave only padding visible and push the prompt text out of view. */
+  .task-expanded-content .task-prompt-content {
+    padding: 0 12px;
+    max-height: calc(var(--flowchat-font-size-base) * 1.5 * 2 + 6px);
+    overflow-y: auto;
+  }
+
+  .task-expanded-content .task-prompt-wrapper {
+    &::before,
+    &::after {
+      content: none;
+    }
+  }
+
+  .task-interruption-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+
+    svg {
+      flex-shrink: 0;
+      margin-top: 2px;
+      color: var(--color-warning, #f59e0b);
+    }
+  }
+
+  .task-interruption-divider {
+    height: 1px;
+    background: var(--border-base);
+    margin: -2px calc(-1 * var(--tool-card-expanded-pad-x, 10px)) 0;
+  }
+
+  .task-expanded-content .task-prompt-markdown {
+    > :first-child {
+      margin-top: 0 !important;
+    }
+
+    > :last-child {
+      margin-bottom: 0 !important;
+    }
   }
 
   /* Extra breathing room below header / divider before prompt + actions. */
   &.base-tool-card-wrapper > .base-tool-card-expanded {
-    padding-top: 14px;
+    padding-top: 8px;
+  }
+
+  &.base-tool-card-wrapper > .base-tool-card-expanded:has(.task-prompt-content) {
+    padding-bottom: 0;
   }
 
   .duration-text {
@@ -353,7 +319,7 @@
   .task-expanded-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
   }
 
 
@@ -450,11 +416,37 @@
 .task-with-subagent-wrapper {
   position: relative;
   border-radius: 8px;
-  margin-bottom: 10px;
+  margin: 4px 0 10px;
   transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  contain: layout paint style;
+
+  /* Unified task + subagent: title row is optically below geometric center; nudge the rail stack slightly down. */
+  .task-header-rail__visual {
+    transform: translateY(2px);
+  }
+
+  .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display {
+    margin: 0;
+    /*
+     * The global BaseToolCard uses transition: all. During task/subagent merge
+     * that animates border/background/radius removal and briefly exposes a
+     * separate rounded card behind the prompt. Only keep shadow/border hover
+     * feedback in this grouped shell.
+     */
+    transition:
+      box-shadow 0.18s ease,
+      border-color 0.18s ease;
+  }
+
+  // Keep expand/collapse press feedback subtle inside grouped subagent cards.
+  .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display:active {
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.14),
+      inset 0 1px 2px rgba(0, 0, 0, 0.18);
+  }
 
   // Expanded state: the wrapper becomes the unified visual container.
-  &:has(.subagent-items-wrapper--expanded) {
+  &.task-with-subagent-wrapper--expanded {
     // The wrapper itself provides the unified card appearance.
     background: var(--color-bg-flowchat);
     border: 1px solid var(--border-base);
@@ -471,12 +463,16 @@
       border-radius: 0;
       background: transparent;
       backdrop-filter: none;
-      margin-bottom: 0;
       box-shadow: none;
+      transition: none;
 
       &:hover {
         box-shadow: none;
         border-color: transparent;
+      }
+
+      &:active {
+        box-shadow: none;
       }
     }
 
@@ -488,6 +484,14 @@
       backdrop-filter: none;
     }
 
+    .base-tool-card-expanded {
+      animation: none;
+    }
+
+    &.task-with-subagent-wrapper--has-prompt .subagent-items-container {
+      border-top: 1px solid var(--border-base);
+    }
+
     // Hide the header top accent line — the wrapper border already frames
     // the unified card; keeping ::before would show a ghost divider above
     // the title, making the header look like a floating frame.
@@ -497,23 +501,53 @@
   }
 
   // Hover over expanded card: stronger elevation.
-  &:has(.subagent-items-wrapper--expanded):hover {
+  &.task-with-subagent-wrapper--expanded:hover {
     box-shadow:
-      0 4px 16px rgba(0, 0, 0, 0.25),
-      0 2px 8px rgba(0, 0, 0, 0.15),
+      0 2px 8px rgba(0, 0, 0, 0.18),
+      0 1px 4px rgba(0, 0, 0, 0.12),
       inset 0 1px 0 rgba(255, 255, 255, 0.04);
     border-color: var(--border-medium);
   }
 }
 
 /* Loading: task status icon (cube) hidden; border-pulse + text-fade from BaseToolCard handle the rest */
-.task-tool-display.base-tool-card-wrapper--loading-shimmer .task-status-icon:has(.cube-loading) {
+.task-tool-display.base-tool-card-wrapper--loading-shimmer .tool-card-status-icon:has(.cube-loading) {
   display: none !important;
 }
 
 /* E — task description text fades with the card */
 .task-tool-display.base-tool-card-wrapper--loading-shimmer .task-action {
   animation: tool-card-text-fade 1.6s ease-in-out infinite;
+}
+
+/* Reviewer context block — replaces raw prompt for review-team members. */
+.task-reviewer-context {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+
+  &__role {
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  &__description {
+    color: var(--color-text-muted);
+  }
+
+  &__responsibilities {
+    margin: 0;
+    padding-left: 16px;
+    list-style: disc;
+
+    li {
+      color: var(--color-text-secondary);
+    }
+  }
 }
 
 @keyframes slideDown {

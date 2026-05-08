@@ -8,6 +8,10 @@ import type { FlowChatContext, FlowTextItem, SubagentTextChunkData, SubagentTool
 import type { FlowThinkingItem } from '../../types/flow-chat';
 import { processToolEvent } from './ToolEventModule';
 import type { ToolEventData } from '../EventBatcher';
+import {
+  clearRuntimeStatus,
+  scheduleModelResponseStatus,
+} from './RuntimeStatusModule';
 
 const log = createLogger('SubagentModule');
 
@@ -34,7 +38,7 @@ function findParentTurnId(parentSession: { dialogTurns: Array<{ id: string; mode
  * rather than waiting for the first text chunk.
  */
 export function routeModelRoundStartedToToolCard(
-  _context: FlowChatContext,
+  context: FlowChatContext,
   parentSessionId: string,
   parentToolId: string,
   data: {
@@ -57,35 +61,15 @@ export function routeModelRoundStartedToToolCard(
     return;
   }
 
-  const itemId = getSubagentTextItemId(parentToolId, data.sessionId, data.roundId);
-
-  // Check if placeholder already exists (e.g., from a previous call)
-  const parentTurn = parentSession.dialogTurns.find(turn => turn.id === parentTurnId);
-  if (parentTurn) {
-    for (const round of parentTurn.modelRounds) {
-      if (round.items.some(item => item.id === itemId)) {
-        return;
-      }
-    }
-  }
-
   const parentTool = store.findToolItem(parentSessionId, parentTurnId, parentToolId);
   const parentTimestamp = parentTool?.timestamp || Date.now();
 
-  const placeholderItem: FlowTextItem = {
-    id: itemId,
-    type: 'text',
-    content: '\u200B',
-    timestamp: parentTimestamp + 1,
-    isStreaming: true,
-    status: 'streaming',
-    isMarkdown: true,
-    isSubagentItem: true,
-    parentTaskToolId: parentToolId,
+  scheduleModelResponseStatus(context, parentSessionId, parentTurnId, data.roundId, {
+    scope: 'subagent',
+    parentToolId,
+    parentTimestamp,
     subagentSessionId: data.sessionId,
-  };
-
-  store.insertModelRoundItemAfterTool(parentSessionId, parentTurnId, parentToolId, placeholderItem);
+  });
 }
 
 /**
@@ -93,7 +77,7 @@ export function routeModelRoundStartedToToolCard(
  * Supports "text" and "thinking" content types.
  */
 export function routeTextChunkToToolCard(
-  _context: FlowChatContext,
+  context: FlowChatContext,
   parentSessionId: string,
   parentToolId: string,
   data: SubagentTextChunkData
@@ -111,6 +95,11 @@ export function routeTextChunkToToolCard(
     log.debug('Parent tool DialogTurn not found', { parentSessionId, parentToolId });
     return;
   }
+
+  clearRuntimeStatus(context, parentSessionId, parentTurnId, {
+    subagentSessionId: data.sessionId,
+    scope: 'subagent',
+  });
   
   const isThinking = data.contentType === 'thinking';
   const itemPrefix = isThinking ? 'subagent-thinking' : 'subagent-text';
@@ -232,6 +221,11 @@ export function routeToolEventToToolCard(
   }
   
   const { toolEvent } = data;
+
+  clearRuntimeStatus(context, parentSessionId, parentTurnId, {
+    subagentSessionId: data.sessionId,
+    scope: 'subagent',
+  });
   
   // Keep subagent item timestamps right after the parent tool.
   const parentTool = store.findToolItem(parentSessionId, parentTurnId, parentToolId);

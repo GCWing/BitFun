@@ -1,4 +1,4 @@
-
+ 
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
@@ -14,6 +14,9 @@ import type {
   FileSearchResultGroup,
   FileSearchStreamKind,
   FileSearchStreamStartResponse,
+  SearchRepoIndexRequest,
+  WorkspaceSearchIndexStatus,
+  WorkspaceSearchIndexTaskHandle,
 } from './tauri-commands';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -36,6 +39,54 @@ export interface FileMetadata {
   isDir: boolean;
   isRemote?: boolean;
   isRuntimeArtifact?: boolean;
+}
+
+interface WorkspaceSearchRepoStatusRaw {
+  repoId: string;
+  repoPath: string;
+  storageRoot: string;
+  baseSnapshotRoot: string;
+  workspaceOverlayRoot: string;
+  phase: WorkspaceSearchIndexStatus['repoStatus']['phase'];
+  snapshotKey?: string | null;
+  lastProbeUnixSecs?: number | null;
+  lastRebuildUnixSecs?: number | null;
+  dirtyFiles: {
+    modified: number;
+    deleted: number;
+    new: number;
+  };
+  rebuildRecommended: boolean;
+  activeTaskId?: string | null;
+  probeHealthy: boolean;
+  lastError?: string | null;
+  overlay?: WorkspaceSearchIndexStatus['repoStatus']['overlay'] | null;
+}
+
+interface WorkspaceSearchTaskStatusRaw {
+  taskId: string;
+  workspaceId: string;
+  kind: NonNullable<WorkspaceSearchIndexStatus['activeTask']>['kind'];
+  state: NonNullable<WorkspaceSearchIndexStatus['activeTask']>['state'];
+  phase?: NonNullable<WorkspaceSearchIndexStatus['activeTask']>['phase'] | null;
+  message: string;
+  processed: number;
+  total?: number | null;
+  startedUnixSecs: number;
+  updatedUnixSecs: number;
+  finishedUnixSecs?: number | null;
+  cancellable: boolean;
+  error?: string | null;
+}
+
+interface WorkspaceSearchIndexStatusRaw {
+  repoStatus: WorkspaceSearchRepoStatusRaw;
+  activeTask?: WorkspaceSearchTaskStatusRaw | null;
+}
+
+interface WorkspaceSearchIndexTaskHandleRaw {
+  task: WorkspaceSearchTaskStatusRaw;
+  repoStatus: WorkspaceSearchRepoStatusRaw;
 }
 
 function groupSearchResultsByFile(results: FileSearchResult[]): FileSearchResultGroup[] {
@@ -64,78 +115,134 @@ function groupSearchResultsByFile(results: FileSearchResult[]): FileSearchResult
   return Array.from(groups.values());
 }
 
-export class WorkspaceAPI {
+function mapWorkspaceSearchRepoStatus(raw: WorkspaceSearchRepoStatusRaw): WorkspaceSearchIndexStatus['repoStatus'] {
+  return {
+    repoId: raw.repoId,
+    repoPath: raw.repoPath,
+    storageRoot: raw.storageRoot,
+    baseSnapshotRoot: raw.baseSnapshotRoot,
+    workspaceOverlayRoot: raw.workspaceOverlayRoot,
+    phase: raw.phase,
+    snapshotKey: raw.snapshotKey ?? null,
+    lastProbeUnixSecs: raw.lastProbeUnixSecs ?? null,
+    lastRebuildUnixSecs: raw.lastRebuildUnixSecs ?? null,
+    dirtyFiles: raw.dirtyFiles,
+    rebuildRecommended: raw.rebuildRecommended,
+    activeTaskId: raw.activeTaskId ?? null,
+    probeHealthy: raw.probeHealthy,
+    lastError: raw.lastError ?? null,
+    overlay: raw.overlay ?? null,
+  };
+}
 
+function mapWorkspaceSearchTaskStatus(
+  raw: WorkspaceSearchTaskStatusRaw
+): NonNullable<WorkspaceSearchIndexStatus['activeTask']> {
+  return {
+    taskId: raw.taskId,
+    workspaceId: raw.workspaceId,
+    kind: raw.kind,
+    state: raw.state,
+    phase: raw.phase ?? null,
+    message: raw.message,
+    processed: raw.processed,
+    total: raw.total ?? null,
+    startedUnixSecs: raw.startedUnixSecs,
+    updatedUnixSecs: raw.updatedUnixSecs,
+    finishedUnixSecs: raw.finishedUnixSecs ?? null,
+    cancellable: raw.cancellable,
+    error: raw.error ?? null,
+  };
+}
+
+function mapWorkspaceSearchIndexStatus(raw: WorkspaceSearchIndexStatusRaw): WorkspaceSearchIndexStatus {
+  return {
+    repoStatus: mapWorkspaceSearchRepoStatus(raw.repoStatus),
+    activeTask: raw.activeTask ? mapWorkspaceSearchTaskStatus(raw.activeTask) : null,
+  };
+}
+
+function mapWorkspaceSearchIndexTaskHandle(
+  raw: WorkspaceSearchIndexTaskHandleRaw
+): WorkspaceSearchIndexTaskHandle {
+  return {
+    task: mapWorkspaceSearchTaskStatus(raw.task),
+    repoStatus: mapWorkspaceSearchRepoStatus(raw.repoStatus),
+  };
+}
+
+export class WorkspaceAPI {
+   
   async openWorkspace(path: string): Promise<WorkspaceInfo> {
     try {
-      return await api.invoke('open_workspace', {
-        request: { path }
+      return await api.invoke('open_workspace', { 
+        request: { path } 
       });
     } catch (error) {
       throw createTauriCommandError('open_workspace', error, { path });
     }
   }
 
-
+   
   async closeWorkspace(): Promise<void> {
     try {
-      await api.invoke('close_workspace', {
-        request: {}
+      await api.invoke('close_workspace', { 
+        request: {} 
       });
     } catch (error) {
       throw createTauriCommandError('close_workspace', error);
     }
   }
 
-
+   
   async getWorkspaceInfo(): Promise<WorkspaceInfo> {
     try {
-      return await api.invoke('get_workspace_info', {
-        request: {}
+      return await api.invoke('get_workspace_info', { 
+        request: {} 
       });
     } catch (error) {
       throw createTauriCommandError('get_workspace_info', error);
     }
   }
 
-
+   
   async listFiles(path: string): Promise<any[]> {
     try {
-      return await api.invoke('list_files', {
-        request: { path }
+      return await api.invoke('list_files', { 
+        request: { path } 
       });
     } catch (error) {
       throw createTauriCommandError('list_files', error, { path });
     }
   }
 
-
+   
   async readFile(path: string): Promise<string> {
     try {
-      return await api.invoke('read_file', {
-        request: { path }
+      return await api.invoke('read_file', { 
+        request: { path } 
       });
     } catch (error) {
       throw createTauriCommandError('read_file', error, { path });
     }
   }
 
-
+   
   async writeFile(path: string, content: string): Promise<void> {
     try {
-      await api.invoke('write_file', {
-        request: { path, content }
+      await api.invoke('write_file', { 
+        request: { path, content } 
       });
     } catch (error) {
       throw createTauriCommandError('write_file', error, { path, content });
     }
   }
 
-
+   
   async writeFileContent(workspacePath: string, filePath: string, content: string): Promise<void> {
     try {
-
-
+      
+      
       await api.invoke('write_file_content', {
         request: { workspacePath, filePath, content }
       });
@@ -154,81 +261,81 @@ export class WorkspaceAPI {
     }
   }
 
-
+   
   async createFile(path: string): Promise<void> {
     try {
-      await api.invoke('create_file', {
-        request: { path }
+      await api.invoke('create_file', { 
+        request: { path } 
       });
     } catch (error) {
       throw createTauriCommandError('create_file', error, { path });
     }
   }
 
-
+   
   async deleteFile(path: string): Promise<void> {
     try {
-      await api.invoke('delete_file', {
-        request: { path }
+      await api.invoke('delete_file', { 
+        request: { path } 
       });
     } catch (error) {
       throw createTauriCommandError('delete_file', error, { path });
     }
   }
 
-
+   
   async createDirectory(path: string): Promise<void> {
     try {
-      await api.invoke('create_directory', {
-        request: { path }
+      await api.invoke('create_directory', { 
+        request: { path } 
       });
     } catch (error) {
       throw createTauriCommandError('create_directory', error, { path });
     }
   }
 
-
+   
   async deleteDirectory(path: string, recursive: boolean = true): Promise<void> {
     try {
-      await api.invoke('delete_directory', {
-        request: { path, recursive }
+      await api.invoke('delete_directory', { 
+        request: { path, recursive } 
       });
     } catch (error) {
       throw createTauriCommandError('delete_directory', error, { path, recursive });
     }
   }
 
-
+   
   async getFileTree(path: string, maxDepth?: number): Promise<ExplorerNodeDto[]> {
     try {
-      return await api.invoke('get_file_tree', {
-        request: { path, maxDepth }
+      return await api.invoke('get_file_tree', { 
+        request: { path, maxDepth } 
       });
     } catch (error) {
       throw createTauriCommandError('get_file_tree', error, { path, maxDepth });
     }
   }
 
-
+   
   async getDirectoryChildren(path: string): Promise<ExplorerNodeDto[]> {
     try {
-      return await api.invoke('get_directory_children', {
-        request: { path }
+      return await api.invoke('get_directory_children', { 
+        request: { path } 
       });
     } catch (error) {
       throw createTauriCommandError('get_directory_children', error, { path });
     }
   }
 
-
+   
   async getDirectoryChildrenPaginated(
-    path: string,
-    offset: number = 0,
+    path: string, 
+    offset: number = 0, 
     limit: number = 100
   ): Promise<ExplorerChildrenPageDto> {
     try {
-      return await api.invoke('get_directory_children_paginated', {
-        request: { path, offset, limit }
+      return await api.invoke('get_directory_children_paginated', { 
+        request: { path, offset, limit } 
       });
     } catch (error) {
       throw createTauriCommandError('get_directory_children_paginated', error, { path, offset, limit });
@@ -245,11 +352,11 @@ export class WorkspaceAPI {
     }
   }
 
-
+   
   async readFileContent(filePath: string, encoding?: string): Promise<string> {
     try {
-      return await api.invoke('read_file_content', {
-        request: { filePath, encoding }
+      return await api.invoke('read_file_content', { 
+        request: { filePath, encoding } 
       });
     } catch (error) {
       throw createTauriCommandError('read_file_content', error, { filePath, encoding });
@@ -446,8 +553,8 @@ export class WorkspaceAPI {
   }
 
   async searchFiles(
-    rootPath: string,
-    pattern: string,
+    rootPath: string, 
+    pattern: string, 
     searchContent: boolean = true,
     caseSensitive: boolean = false,
     useRegex: boolean = false,
@@ -460,10 +567,10 @@ export class WorkspaceAPI {
     const effectiveSearchId = searchId ?? this.createSearchId(searchContent ? 'legacy-content' : 'legacy-filenames');
 
     try {
-      const resultPromise = api.invoke<FileSearchResult[]>('search_files', {
-        request: {
-          rootPath,
-          pattern,
+      const resultPromise = api.invoke<FileSearchResult[]>('search_files', { 
+        request: { 
+          rootPath, 
+          pattern, 
           searchContent,
           searchId: effectiveSearchId,
           caseSensitive,
@@ -471,7 +578,7 @@ export class WorkspaceAPI {
           wholeWord,
           maxResults,
           includeDirectories,
-        }
+        } 
       });
 
       return await this.raceCancelable('search_files', resultPromise, effectiveSearchId, signal);
@@ -494,8 +601,8 @@ export class WorkspaceAPI {
   }
 
   async searchFilenamesOnly(
-    rootPath: string,
-    pattern: string,
+    rootPath: string, 
+    pattern: string, 
     caseSensitive: boolean = false,
     useRegex: boolean = false,
     wholeWord: boolean = false,
@@ -631,8 +738,8 @@ export class WorkspaceAPI {
   }
 
   async searchContentOnly(
-    rootPath: string,
-    pattern: string,
+    rootPath: string, 
+    pattern: string, 
     caseSensitive: boolean = false,
     useRegex: boolean = false,
     wholeWord: boolean = false,
@@ -668,16 +775,16 @@ export class WorkspaceAPI {
       typeof searchIdOrSignal === 'string' ? searchIdOrSignal : this.createSearchId('content');
 
     try {
-      const resultPromise = api.invoke<FileSearchResponse>('search_file_contents', {
-        request: {
-          rootPath,
-          pattern,
+      const resultPromise = api.invoke<FileSearchResponse>('search_file_contents', { 
+        request: { 
+          rootPath, 
+          pattern, 
           searchId: effectiveSearchId,
           caseSensitive,
           useRegex,
           wholeWord,
           maxResults,
-        }
+        } 
       });
 
       return await this.raceCancelable('search_file_contents', resultPromise, effectiveSearchId, effectiveSignal);
@@ -731,6 +838,7 @@ export class WorkspaceAPI {
         limit: response.limit,
         truncated: response.truncated,
         totalResults: groupedResults.length,
+        searchMetadata: response.searchMetadata,
       };
       if (groupedResults.length > 0) {
         callbacks.onProgress?.({
@@ -759,11 +867,41 @@ export class WorkspaceAPI {
     );
   }
 
+  async getSearchRepoStatus(rootPath: string): Promise<WorkspaceSearchIndexStatus> {
+    const request: SearchRepoIndexRequest = { rootPath };
+    try {
+      const raw = await api.invoke<WorkspaceSearchIndexStatusRaw>('search_get_repo_status', { request });
+      return mapWorkspaceSearchIndexStatus(raw);
+    } catch (error) {
+      throw createTauriCommandError('search_get_repo_status', error, { rootPath });
+    }
+  }
+
+  async buildSearchIndex(rootPath: string): Promise<WorkspaceSearchIndexTaskHandle> {
+    const request: SearchRepoIndexRequest = { rootPath };
+    try {
+      const raw = await api.invoke<WorkspaceSearchIndexTaskHandleRaw>('search_build_index', { request });
+      return mapWorkspaceSearchIndexTaskHandle(raw);
+    } catch (error) {
+      throw createTauriCommandError('search_build_index', error, { rootPath });
+    }
+  }
+
+  async rebuildSearchIndex(rootPath: string): Promise<WorkspaceSearchIndexTaskHandle> {
+    const request: SearchRepoIndexRequest = { rootPath };
+    try {
+      const raw = await api.invoke<WorkspaceSearchIndexTaskHandleRaw>('search_rebuild_index', { request });
+      return mapWorkspaceSearchIndexTaskHandle(raw);
+    } catch (error) {
+      throw createTauriCommandError('search_rebuild_index', error, { rootPath });
+    }
+  }
+
 
   async renameFile(oldPath: string, newPath: string): Promise<void> {
     try {
-      await api.invoke('rename_file', {
-        request: { oldPath, newPath }
+      await api.invoke('rename_file', { 
+        request: { oldPath, newPath } 
       });
     } catch (error) {
       throw createTauriCommandError('rename_file', error, { oldPath, newPath });
@@ -852,8 +990,8 @@ export class WorkspaceAPI {
 
   async revealInExplorer(path: string): Promise<void> {
     try {
-      await api.invoke('reveal_in_explorer', {
-        request: { path }
+      await api.invoke('reveal_in_explorer', { 
+        request: { path } 
       });
     } catch (error) {
       throw createTauriCommandError('reveal_in_explorer', error, { path });
@@ -873,7 +1011,7 @@ export class WorkspaceAPI {
 
   async startFileWatch(path: string, recursive?: boolean): Promise<void> {
     try {
-      await api.invoke('start_file_watch', {
+      await api.invoke('start_file_watch', { 
         path,
         recursive
       });
@@ -883,10 +1021,10 @@ export class WorkspaceAPI {
     }
   }
 
-
+   
   async stopFileWatch(path: string): Promise<void> {
     try {
-      await api.invoke('stop_file_watch', {
+      await api.invoke('stop_file_watch', { 
         path
       });
     } catch (error) {
@@ -895,7 +1033,7 @@ export class WorkspaceAPI {
     }
   }
 
-
+   
   async getWatchedPaths(): Promise<string[]> {
     try {
       return await api.invoke('get_watched_paths', {});
@@ -904,7 +1042,7 @@ export class WorkspaceAPI {
     }
   }
 
-
+   
   async getClipboardFiles(): Promise<{ files: string[]; isCut: boolean }> {
     try {
       return await api.invoke('get_clipboard_files');
@@ -913,7 +1051,7 @@ export class WorkspaceAPI {
     }
   }
 
-
+   
   async pasteFiles(
     sourcePaths: string[],
     targetDirectory: string,

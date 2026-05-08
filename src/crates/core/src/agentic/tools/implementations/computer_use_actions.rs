@@ -1426,7 +1426,7 @@ impl ComputerUseActions {
                 let mut chosen_cmd = String::new();
                 let mut chosen_args: Vec<String> = vec![];
                 for (cmd, args) in &attempts {
-                    match std::process::Command::new(cmd).args(args).output() {
+                    match crate::util::process_manager::create_command(cmd).args(args).output() {
                         Ok(out) => {
                             if out.status.success() {
                                 chosen_cmd = cmd.clone();
@@ -2056,7 +2056,7 @@ fn read_os_version() -> Option<String> {
     }
     #[cfg(target_os = "windows")]
     {
-        let out = std::process::Command::new("cmd")
+        let out = crate::util::process_manager::create_command("cmd")
             .args(["/C", "ver"])
             .output()
             .ok()?;

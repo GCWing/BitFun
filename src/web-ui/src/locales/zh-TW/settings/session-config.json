@@ -9,8 +9,37 @@
     },
     "agentCompanion": {
       "title": "Agent 夥伴",
-      "subtitle": "在收起的會話輸入框中顯示BitFun夥伴。",
-      "enable": "顯示 Agent 夥伴"
+      "subtitle": "控制 BitFun 夥伴的顯示方式。",
+      "enable": "顯示 Agent 夥伴",
+      "displayModeLabel": "顯示位置",
+      "displayModeDescription": "選擇夥伴顯示在輸入框內，還是作為軟體外的懸浮桌面寵物。",
+      "displayInput": "輸入框內",
+      "displayInputDesc": "在會話輸入框收起時顯示。",
+      "displayDesktop": "懸浮桌面寵物",
+      "displayDesktopDesc": "在軟體外顯示為置頂的無邊框小視窗，可拖動。",
+      "petLabel": "夥伴形象",
+      "petDescription": "選擇預置形象，或導入從 petdex.crafter.run 下載的 Petdex zip。",
+      "defaultPet": "默認小熊貓",
+      "petPlaceholder": "選擇夥伴形象",
+      "groupBuiltin": "內置",
+      "groupPreset": "預置",
+      "groupImported": "已導入",
+      "import": "導入",
+      "importing": "導入中",
+      "importHint": "可以去 https://petdex.crafter.run/zh 下載形象 zip 後導入。",
+      "importDialogTitle": "選擇 Petdex 形象 zip",
+      "importFailed": "導入 Agent 夥伴形象失敗",
+      "delete": "刪除已導入形象",
+      "deleteConfirmTitle": "刪除形象",
+      "deleteConfirmBody": "從本機刪除此已導入的夥伴形象？此操作無法復原。",
+      "deleteSuccess": "已刪除導入的形象",
+      "deleteFailed": "刪除導入形象失敗",
+      "refresh": "刷新形象列表"
+    },
+    "workspaceSearch": {
+      "title": "加速工作區搜尋",
+      "subtitle": "為本地工作區啟用基於 flashgrep 的索引搜尋。關閉後 BitFun 會回退到原有搜尋。",
+      "enable": "啟用加速工作區搜尋"
     }
   },
   "toolExecution": {
@@ -74,6 +103,10 @@
   },
   "loading": {
     "text": "加載配置中..."
+  },
+  "maxRounds": {
+    "label": "最大對話輪次",
+    "description": "單次對話中 AI 的最大執行輪次，達到後會暫停。複雜任務可適當提高。"
   },
   "messages": {
     "saveSuccess": "設置已保存",

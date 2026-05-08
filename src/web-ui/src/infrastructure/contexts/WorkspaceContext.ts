@@ -54,8 +54,38 @@ export const useWorkspaceContext = (): WorkspaceContextValue => {
   return context;
 };
 
+export const useOptionalWorkspaceContext = (): WorkspaceContextValue | null => {
+  return useContext(WorkspaceContext);
+};
+
 export const useCurrentWorkspace = () => {
   const { activeWorkspace, loading, error, hasWorkspace, workspaceName, workspacePath } = useWorkspaceContext();
+
+  return {
+    workspace: activeWorkspace,
+    loading,
+    error,
+    hasWorkspace,
+    workspaceName,
+    workspacePath,
+  };
+};
+
+export const useOptionalCurrentWorkspace = () => {
+  const context = useOptionalWorkspaceContext();
+
+  if (!context) {
+    return {
+      workspace: null,
+      loading: false,
+      error: null,
+      hasWorkspace: false,
+      workspaceName: '',
+      workspacePath: '',
+    };
+  }
+
+  const { activeWorkspace, loading, error, hasWorkspace, workspaceName, workspacePath } = context;
 
   return {
     workspace: activeWorkspace,

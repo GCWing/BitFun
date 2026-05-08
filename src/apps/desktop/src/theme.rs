@@ -1,9 +1,23 @@
 //! Theme System
 
+use std::sync::OnceLock;
+
 use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::config::types::GlobalConfig;
 use log::{debug, error, warn};
-use tauri::WebviewUrl;
+use tauri::{Manager, WebviewUrl};
+
+const AGENT_COMPANION_WINDOW_LABEL: &str = "agent-companion-pet";
+const AGENT_COMPANION_WINDOW_MIN_SIZE: f64 = 96.0;
+const AGENT_COMPANION_WINDOW_MAX_WIDTH: f64 = 360.0;
+const AGENT_COMPANION_WINDOW_MAX_HEIGHT: f64 = 240.0;
+const AGENT_COMPANION_WINDOW_MARGIN: i32 = 64;
+
+static AGENT_COMPANION_WINDOW_OPS: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+
+fn agent_companion_window_ops() -> &'static tokio::sync::Mutex<()> {
+    AGENT_COMPANION_WINDOW_OPS.get_or_init(|| tokio::sync::Mutex::new(()))
+}
 
 #[derive(Debug, Clone)]
 pub struct ThemeConfig {
@@ -266,17 +280,17 @@ pub fn create_main_window(app_handle: &tauri::AppHandle) {
 
     match builder.build() {
         Ok(window) => {
-            #[cfg(debug_assertions)]
+            #[cfg(any(debug_assertions, feature = "devtools"))]
             {
                 if std::env::var("BITFUN_OPEN_DEVTOOLS")
                     .map(|v| v == "1")
                     .unwrap_or(false)
                 {
-                    window.open_devtools();
+                    let _ = window.open_devtools();
                 }
             }
 
-            #[cfg(not(debug_assertions))]
+            #[cfg(not(any(debug_assertions, feature = "devtools")))]
             let _ = window;
         }
         Err(e) => {
@@ -285,7 +299,100 @@ pub fn create_main_window(app_handle: &tauri::AppHandle) {
     }
 }
 
+fn app_url(path: &str) -> WebviewUrl {
+    if cfg!(debug_assertions) {
+        match format!("http://localhost:1422/{}", path).parse() {
+            Ok(url) => WebviewUrl::External(url),
+            Err(e) => {
+                error!("Invalid dev URL, fallback to app URL: {}", e);
+                WebviewUrl::App(path.into())
+            }
+        }
+    } else {
+        let app_path = if path.starts_with('?') {
+            format!("index.html{}", path)
+        } else {
+            path.to_string()
+        };
+        WebviewUrl::App(app_path.into())
+    }
+}
+
+fn agent_companion_default_position(
+    app: &tauri::AppHandle,
+    window: &tauri::WebviewWindow,
+) -> Option<tauri::LogicalPosition<f64>> {
+    let monitor: Option<tauri::Monitor> = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| app.primary_monitor().ok().flatten());
+
+    let monitor = monitor?;
+
+    let scale_factor = monitor.scale_factor();
+    let area = monitor.work_area();
+    let area_position = area.position.to_logical::<f64>(scale_factor);
+    let area_size = area.size.to_logical::<f64>(scale_factor);
+    let window_size = window
+        .outer_size()
+        .ok()
+        .map(|size| size.to_logical::<f64>(scale_factor));
+    let window_width = window_size
+        .as_ref()
+        .map(|size| size.width)
+        .unwrap_or(AGENT_COMPANION_WINDOW_MIN_SIZE);
+    let window_height = window_size
+        .as_ref()
+        .map(|size| size.height)
+        .unwrap_or(AGENT_COMPANION_WINDOW_MIN_SIZE);
+    let x = area_position.x + area_size.width
+        - window_width
+        - f64::from(AGENT_COMPANION_WINDOW_MARGIN);
+    let y = area_position.y + area_size.height
+        - window_height
+        - f64::from(AGENT_COMPANION_WINDOW_MARGIN);
+
+    Some(tauri::LogicalPosition::new(
+        x.max(area_position.x),
+        y.max(area_position.y),
+    ))
+}
+
+fn position_agent_companion_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
+
+    warn!("Failed to position Agent companion window");
+}
+
+fn resize_agent_companion_window(
+    app: &tauri::AppHandle,
+    window: &tauri::WebviewWindow,
+    width: f64,
+    height: f64,
+) {
+    warn!("Failed to position Agent companion window")
+}
+
+#[tauri::command]
+pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
+    Err("Failed to create Agent companion window".to_string());
+}
+
+#[tauri::command]
+pub async fn resize_agent_companion_desktop_pet(
+    app: tauri::AppHandle,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    Err("Main window not found".to_string())
+}
+
+#[tauri::command]
+pub async fn hide_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
+    Err("Main window not found".to_string())
+}
+
 #[tauri::command]
 pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
-    Ok(())
+    Err("Main window not found".to_string())
 }

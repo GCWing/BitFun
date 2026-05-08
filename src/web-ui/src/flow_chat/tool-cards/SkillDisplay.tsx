@@ -40,14 +40,14 @@ export const SkillDisplay: React.FC<ToolCardProps> = React.memo(({ toolItem }) =
       case 'running':
       case 'streaming':
       case 'preparing':
-        return <Loader2 className="animate-spin" size={12} />;
+        return <Loader2 className="animate-spin" size={16} />;
       case 'completed':
-        return <Check size={12} className="icon-check-done" />;
+        return <Check size={16} className="icon-check-done" />;
       case 'error':
-        return <X size={12} />;
+        return <X size={16} />;
       case 'pending':
       default:
-        return <Clock size={12} />;
+        return <Clock size={16} />;
     }
   };
 
@@ -96,7 +96,7 @@ export const SkillDisplay: React.FC<ToolCardProps> = React.memo(({ toolItem }) =
       clickable={false}
       header={
         <CompactToolCardHeader
-          statusIcon={getStatusIcon()}
+          icon={getStatusIcon()}
           content={renderContent()}
         />
       }

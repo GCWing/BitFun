@@ -105,6 +105,8 @@ mod tests {
             dir_name: dir_name.to_string(),
             is_builtin: true,
             group_key: None,
+            is_shadowed: false,
+            shadowed_by_key: None,
         }
     }
 
@@ -119,6 +121,8 @@ mod tests {
             dir_name: dir_name.to_string(),
             is_builtin: false,
             group_key: None,
+            is_shadowed: false,
+            shadowed_by_key: None,
         }
     }
 

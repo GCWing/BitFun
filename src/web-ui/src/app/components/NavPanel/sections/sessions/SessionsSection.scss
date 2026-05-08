@@ -12,11 +12,13 @@
   &__inline-list {
     display: flex;
     flex-direction: column;
-    padding: 2px $size-gap-2 2px;
-    gap: 1px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 2px $size-gap-1 2px;
+    gap: 0;
     // No vertical margin: spacing between assistant blocks comes from 2px top/bottom padding only
     // (see .bitfun-nav-panel__items--session-blocks gap: 0), aligned with __workspace-item padding.
-    margin: 0 $size-gap-2 0 calc(#{$size-gap-2} + 4px);
+    margin: 0 $size-gap-1 0 calc(#{$size-gap-1} + 4px);
   }
 
   &__inline-action {
@@ -59,6 +61,8 @@
     display: flex;
     align-items: center;
     gap: 5px;
+    min-width: 0;
+    max-width: 100%;
     height: 26px;
     padding: 0 $size-gap-1;
     border: none;
@@ -69,7 +73,10 @@
     font-weight: 400;
     cursor: pointer;
     width: 100%;
+    overflow: hidden;
     text-align: left;
+    overflow: hidden;
+    position: relative;
     transition: color $motion-fast $easing-standard,
                 background $motion-fast $easing-standard;
 
@@ -94,6 +101,7 @@
     }
 
     &.is-child {
+      margin-top: -2px;
       min-height: 24px;
       font-size: var(--font-size-xs);
       padding-left: calc(#{$size-gap-1} + 14px);
@@ -179,15 +187,24 @@
   }
 
   &__inline-item-main {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
+    overflow: visible;
+  }
+
+  &__inline-item:hover &__inline-item-main,
+  &__inline-item.is-menu-open &__inline-item-main,
+  &__inline-item:focus-within &__inline-item-main {
+    padding-right: calc(var(--bitfun-nav-row-action-size) + var(--bitfun-nav-row-action-offset));
   }
 
   &__inline-item-label {
-    flex: 1;
+    flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -200,14 +217,16 @@
     align-items: center;
     height: 12px;
     padding: 0 4px;
-    border: 1px solid color-mix(in srgb, var(--border-subtle) 85%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-accent-400, #8b5cf6) 34%, var(--border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--element-bg-soft) 42%, transparent);
-    color: var(--color-text-muted);
+    background: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 13%, var(--element-bg-soft));
+    color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 62%, var(--color-text-primary));
     font-size: var(--font-size-xxs);
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: 0.02em;
-    opacity: 0.78;
+    opacity: 0.96;
+    overflow: visible;
+    white-space: nowrap;
   }
 
   &__inline-item-review-badge {
@@ -217,17 +236,36 @@
     gap: 3px;
     height: 14px;
     padding: 0 5px;
-    border: 1px solid color-mix(in srgb, var(--color-accent-400, #8b5cf6) 28%, var(--border-subtle));
+    border: 1px solid color-mix(in srgb, var(--color-accent-400, #8b5cf6) 44%, var(--border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 10%, transparent);
-    color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 72%, var(--color-text-primary));
+    background: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 18%, var(--element-bg-soft));
+    color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 82%, var(--color-text-primary));
     font-size: var(--font-size-xxs);
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: 0.02em;
+    white-space: nowrap;
 
     svg {
       animation: bitfun-nav-session-spin 1s linear infinite;
     }
+  }
+
+  // Attention badge for high-priority states (ask_user / tool_confirm)
+  &__inline-item-attention-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 14px;
+    padding: 0 5px;
+    border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 35%, var(--border-subtle));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-warning, #f59e0b) 14%, transparent);
+    color: color-mix(in srgb, var(--color-warning, #f59e0b) 80%, var(--color-text-primary));
+    font-size: var(--font-size-xxs);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
   }
 
   &__inline-item-tooltip {
@@ -265,23 +303,73 @@
       0 0 0 1px color-mix(in srgb, var(--color-success, #22c55e) 35%, transparent),
       0 0 6px color-mix(in srgb, var(--color-success, #22c55e) 42%, transparent);
 
-    &.is-error {
+    &.is-error,
+    &.is-interrupted {
       background: var(--color-error, #ef4444);
       box-shadow:
         0 0 0 1px color-mix(in srgb, var(--color-error, #ef4444) 35%, transparent),
         0 0 6px color-mix(in srgb, var(--color-error, #ef4444) 42%, transparent);
     }
+
+    // High-priority attention states: larger, brighter, with subtle pulse
+    &.is-ask-user,
+    &.is-tool-confirm {
+      width: 8px;
+      height: 8px;
+      right: -2px;
+      bottom: -2px;
+    }
+
+    &.is-ask-user {
+      background: var(--color-warning, #f59e0b);
+      box-shadow:
+        0 0 0 1.5px color-mix(in srgb, var(--color-warning, #f59e0b) 45%, transparent),
+        0 0 8px color-mix(in srgb, var(--color-warning, #f59e0b) 55%, transparent);
+    }
+
+    &.is-tool-confirm {
+      background: var(--color-accent-500, #8b5cf6);
+      box-shadow:
+        0 0 0 1.5px color-mix(in srgb, var(--color-accent-500, #8b5cf6) 45%, transparent),
+        0 0 8px color-mix(in srgb, var(--color-accent-500, #8b5cf6) 55%, transparent);
+    }
+
+    // Pulse animation for high-priority states
+    &.is-high-priority {
+      animation: bitfun-unread-dot-pulse 2s ease-in-out infinite;
+    }
+  }
+
+  @keyframes bitfun-unread-dot-pulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.35);
+      opacity: 0.85;
+    }
   }
 
   &__inline-item-actions {
-    display: none;
+    position: absolute;
+    top: 50%;
+    right: var(--bitfun-nav-row-action-offset);
+    transform: translateY(-50%);
+    display: flex;
     align-items: center;
-    gap: 2px;
-    flex-shrink: 0;
-    margin-left: auto;
+    gap: var(--bitfun-nav-row-action-gap);
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity $motion-fast $easing-standard,
+                visibility $motion-fast $easing-standard;
 
-    .bitfun-nav-panel__inline-item:hover & {
-      display: flex;
+    .bitfun-nav-panel__inline-item:hover &,
+    &.is-open {
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
     }
   }
 
@@ -289,8 +377,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    width: var(--bitfun-nav-row-action-size);
+    height: var(--bitfun-nav-row-action-size);
     padding: 0;
     border: none;
     border-radius: 4px;

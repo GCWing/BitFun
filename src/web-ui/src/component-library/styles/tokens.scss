@@ -946,6 +946,11 @@ $badge-info-text: $color-info;
   --flowchat-font-size-3xl: var(--font-size-3xl);
   --flowchat-font-size-4xl: var(--font-size-4xl);
   --flowchat-font-size-5xl: var(--font-size-5xl);
+  --flowchat-flow-item-gap: 0.45rem;
+  --flowchat-turn-gap: 0.4rem;
+  --flowchat-text-line-height: 1.62;
+  --flowchat-link-color: #60a5fa;
+  --flowchat-link-hover-color: #93c5fd;
 
   /* Left nav: one baseline step below flow-chat scale (overwritten by FontPreferenceService). */
   --nav-font-size-xxs: var(--font-size-xxs);
@@ -1008,4 +1013,11 @@ $badge-info-text: $color-info;
   --card-bg-accent-hover: #{$card-bg-accent-hover};
   --card-bg-purple: #{$card-bg-purple};
   --card-bg-purple-hover: #{$card-bg-purple-hover};
+}
+
+:root[data-theme="light"],
+:root[data-theme-type="light"],
+[data-theme-type="light"] {
+  --flowchat-link-color: #0969da;
+  --flowchat-link-hover-color: #0550ae;
 }

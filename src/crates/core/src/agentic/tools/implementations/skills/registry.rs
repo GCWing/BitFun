@@ -96,6 +96,8 @@ impl SkillCandidate {
                 dir_name: data.dir_name,
                 is_builtin,
                 group_key,
+                is_shadowed: false,
+                shadowed_by_key: None,
             },
             priority,
         }
@@ -182,6 +184,34 @@ fn resolve_visible_skills(candidates: Vec<SkillCandidate>) -> Vec<SkillInfo> {
         .collect()
 }
 
+/// Annotate each candidate with shadowing information.
+/// For every skill that has a higher-priority (lower number) skill with the same name,
+/// set `is_shadowed = true` and `shadowed_by_key` to the winner's key.
+fn annotate_shadowed_skills(candidates: Vec<SkillCandidate>) -> Vec<SkillInfo> {
+    let mut by_name: HashMap<String, SkillCandidate> = HashMap::new();
+    for candidate in &candidates {
+        match by_name.get(&candidate.info.name) {
+            Some(existing) if existing.priority <= candidate.priority => {}
+            _ => {
+                by_name.insert(candidate.info.name.clone(), candidate.clone());
+            }
+        }
+    }
+
+    candidates
+        .into_iter()
+        .map(|mut candidate| {
+            if let Some(winner) = by_name.get(&candidate.info.name) {
+                if winner.info.key != candidate.info.key {
+                    candidate.info.is_shadowed = true;
+                    candidate.info.shadowed_by_key = Some(winner.info.key.clone());
+                }
+            }
+            candidate.info
+        })
+        .collect()
+}
+
 /// Skill registry
 pub struct SkillRegistry {
     /// Cached raw user-level skills (no workspace-specific project skills).
@@ -218,18 +248,6 @@ impl SkillRegistry {
             }
         }
 
-        let path_manager = get_path_manager_arc();
-        let bitfun_skills = path_manager.user_skills_dir();
-        if bitfun_skills.exists() && bitfun_skills.is_dir() {
-            entries.push(SkillRootEntry {
-                path: bitfun_skills,
-                level: SkillLocation::User,
-                slot: "bitfun",
-                priority,
-            });
-        }
-        priority += 1;
-
         if let Some(home) = dirs::home_dir() {
             for (parent, sub, slot) in USER_HOME_SKILL_SLOTS {
                 let path = home.join(parent).join(sub);
@@ -244,6 +262,21 @@ impl SkillRegistry {
                 priority += 1;
             }
         }
+
+        // BitFun's own user skills dir sits between home slots and config slots.
+        // This lets other agent directories (e.g. ~/.claude/skills) take precedence
+        // while still keeping config-level overrides after BitFun defaults.
+        let path_manager = get_path_manager_arc();
+        let bitfun_skills = path_manager.user_skills_dir();
+        if bitfun_skills.exists() && bitfun_skills.is_dir() {
+            entries.push(SkillRootEntry {
+                path: bitfun_skills,
+                level: SkillLocation::User,
+                slot: "bitfun",
+                priority,
+            });
+        }
+        priority += 1;
 
         if let Some(config_dir) = dirs::config_dir() {
             for (parent, sub, slot) in USER_CONFIG_SKILL_SLOTS {
@@ -495,13 +528,10 @@ impl SkillRegistry {
     }
 
     pub async fn refresh(&self) {
-        let skills = sort_skills(
+        let skills = sort_skills(annotate_shadowed_skills(
             self.scan_skill_candidates_for_workspace(None)
-                .await
-                .into_iter()
-                .map(|candidate| candidate.info)
-                .collect(),
-        );
+                .await,
+        ));
         let mut cache = self.cache.write().await;
         *cache = skills;
     }
@@ -520,13 +550,10 @@ impl SkillRegistry {
         &self,
         workspace_root: Option<&Path>,
     ) -> Vec<SkillInfo> {
-        sort_skills(
+        sort_skills(annotate_shadowed_skills(
             self.scan_skill_candidates_for_workspace(workspace_root)
-                .await
-                .into_iter()
-                .map(|candidate| candidate.info)
-                .collect(),
-        )
+                .await,
+        ))
     }
 
     pub async fn get_all_skills_for_remote_workspace(
@@ -534,13 +561,10 @@ impl SkillRegistry {
         fs: &dyn WorkspaceFileSystem,
         remote_root: &str,
     ) -> Vec<SkillInfo> {
-        sort_skills(
+        sort_skills(annotate_shadowed_skills(
             self.scan_skill_candidates_for_remote_workspace(fs, remote_root)
-                .await
-                .into_iter()
-                .map(|candidate| candidate.info)
-                .collect(),
-        )
+                .await,
+        ))
     }
 
     pub async fn get_resolved_skills_for_workspace(

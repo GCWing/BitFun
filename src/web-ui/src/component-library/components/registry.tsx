@@ -1619,7 +1619,7 @@ console.log(user.greet());`);
                   skill_input: { file_path: 'src/App.tsx' }
                 },
                 {
-                  result: '代码审查已完成',
+                  result: '代码审核已完成',
                   suggestions: ['使用 React.memo', '优化渲染性能', '修复现有警告']
                 },
                 'completed'

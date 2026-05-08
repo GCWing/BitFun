@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, ChildStdin, Command};
+use tokio::process::{Child, ChildStdin};
 use tokio::sync::{oneshot, Mutex};
 
 type JsWorkerResponse = Result<Value, String>;
@@ -36,7 +36,7 @@ impl JsWorker {
     ) -> Result<Self, String> {
         let exe = runtime.path.to_string_lossy();
         let host = worker_host_path.to_string_lossy();
-        let mut child = Command::new(&*exe)
+        let mut child = crate::util::process_manager::create_tokio_command(&*exe)
             .arg(&*host)
             .arg(policy_json)
             .current_dir(app_dir)

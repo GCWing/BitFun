@@ -1,0 +1,24 @@
+[package]
+name = "bitfun-acp"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun Agent Client Protocol integration"
+
+[lib]
+name = "bitfun_acp"
+
+[dependencies]
+bitfun-core = { path = "../core" }
+bitfun-events = { path = "../events" }
+
+agent-client-protocol = { version = "=0.11.1", features = ["unstable"] }
+tokio = { workspace = true }
+tokio-util = { workspace = true, features = ["compat"] }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+dashmap = { workspace = true }
+log = { workspace = true }
+uuid = { workspace = true }

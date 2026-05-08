@@ -41,7 +41,7 @@
   "builtinAgents": {
     "git-func-agent": {
       "displayName": "Git 功能",
-      "description": "提交信息、代码审查"
+      "description": "提交信息、代码审核"
     },
     "startchat-func-agent": {
       "displayName": "会话启动",

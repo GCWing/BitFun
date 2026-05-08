@@ -1,0 +1,6 @@
+{
+  "id": "panda-pix",
+  "displayName": "Panda",
+  "description": "Codux bundled pet atlas.",
+  "spritesheetPath": "spritesheet.png"
+}

@@ -36,6 +36,26 @@
       "title": "拖拽調整面板大小 | 雙擊切換模式 | 當前: {{mode}}"
     }
   },
+  "runtimeStatus": {
+    "waitingForModelResponse": "等待模型回應..."
+  },
+  "agentCompanion": {
+    "activity": {
+      "starting": "啟動中",
+      "thinking": "思考中",
+      "usingTools": "正在使用工具",
+      "waitingApproval": "等待確認",
+      "writing": "正在輸出",
+      "compacting": "正在壓縮上下文",
+      "finishing": "收尾中",
+      "working": "執行中",
+      "needsInput": "需要輸入",
+      "needsApproval": "需要確認",
+      "completed": "已完成",
+      "failed": "執行失敗",
+      "interrupted": "已中斷"
+    }
+  },
   "session": {
     "new": "新建會話",
     "newCode": "新建 Code 會話",
@@ -150,7 +170,7 @@
     "select": "選擇智能體",
     "default": "默認助手",
     "coding": "編程助手",
-    "review": "代碼審查",
+    "review": "代碼審核",
     "architect": "架構師",
     "custom": "自定義智能體"
   },
@@ -226,14 +246,14 @@
     "initUsage": "請直接使用 /init，不要附加額外參數。",
     "initFailed": "初始化 AGENTS.md 失敗",
     "initPrompt": "請根據當前項目內容生成或更新 AGENTS.md",
-    "deepreviewAction": "深度審查",
-    "deepreviewNoSession": "當前沒有可用於深度審查的會話",
-    "deepreviewUsage": "請使用 /DeepReview，可附加聚焦說明，例如 /DeepReview 審查提交 abc123 的安全風險。",
-    "deepreviewFailed": "深度審查失敗",
-    "deepreviewInfo": "深度審查會拉起並行程式碼審核團隊，可能會比普通審查耗時更長且 Token 消耗更高。",
-    "deepreviewBusy": "目前會話已有審查正在進行，請停止或等待完成後再開始新的深度審查。",
-    "deepreviewNestedDisabled": "深度審查只能從主會話啟動。",
-    "deepreviewThreadTitle": "深度審查",
+    "deepreviewAction": "深度審核",
+    "deepreviewNoSession": "當前沒有可用於深度審核的會話",
+    "deepreviewUsage": "請使用 /DeepReview，可附加聚焦說明，例如 /DeepReview 審核提交 abc123 的安全風險。",
+    "deepreviewFailed": "深度審核失敗",
+    "deepreviewInfo": "深度審核會拉起並行程式碼審核團隊，可能會比普通審核耗時更長且 Token 消耗更高。",
+    "deepreviewBusy": "目前會話已有審核正在進行，請停止或等待完成後再開始新的深度審核。",
+    "deepreviewNestedDisabled": "深度審核只能從主會話啟動。",
+    "deepreviewThreadTitle": "深度審核",
     "currentMode": "當前模式: {{mode}}",
     "noMatchingMode": "沒有匹配的模式",
     "noMatchingCommand": "沒有匹配的命令",
@@ -339,9 +359,9 @@
     "noSession": "當前沒有可用於 /btw 的會話"
   },
   "childSession": {
-    "stopReview": "中止審查",
-    "stoppingReview": "正在中止審查...",
-    "stopReviewFailed": "中止審查會話失敗。",
+    "stopReview": "中止審核",
+    "stoppingReview": "正在中止審核...",
+    "stopReviewFailed": "中止審核會話失敗。",
     "kinds": {
       "btw": {
         "short": "側問",
@@ -349,74 +369,129 @@
         "origin": "來自"
       },
       "review": {
-        "short": "審查",
-        "title": "代碼審查",
-        "origin": "審查來源"
+        "short": "審核",
+        "title": "代碼審核",
+        "origin": "審核來源"
       },
       "deep_review": {
         "short": "深審",
-        "title": "深度審查",
-        "origin": "審查來源"
+        "title": "深度審核",
+        "origin": "審核來源"
       }
     }
   },
   "deepReviewActionBar": {
-    "reviewCompleted": "深度審查已完成",
+    "reviewCompleted": "深度審核已完成",
     "fixRunning": "正在修復...",
     "fixCompleted": "修復完成",
     "fixFailed": "修復失敗",
     "fixTimeout": "修復超時",
-    "reviewError": "審查出錯",
+    "fixInterrupted": "修復已中斷，還剩 {{count}} 項。",
+    "continueFix": "繼續修復 {{count}} 項",
+    "skipRemaining": "跳過剩餘項",
+    "reviewError": "審核出錯",
     "dismiss": "關閉",
     "close": "關閉",
+    "minimize": "收起",
+    "restore": "打開 {{label}}",
+    "fixAndReviewRunning": "正在修復\u0026準備重審...",
+    "minimizedDeep": "深度審核",
+    "minimizedStandard": "程式碼審核",
+    "minimizedFix": "正在修復",
+    "minimizedFixReview": "修復並重審中",
+    "minimizedFixCompleted": "修復完成",
+    "minimizedFixFailed": "需要處理",
+    "minimizedReviewInterrupted": "審核已中斷",
+    "minimizedResume": "正在繼續審核",
     "showCustomInput": "補充說明",
     "hideCustomInput": "收起說明",
     "customInstructionsPlaceholder": "描述修復的額外要求或上下文信息...",
     "fillBackInput": "填入輸入框",
     "fillBackInputHint": "將選中的修復計劃填入輸入框，供手動編輯",
-    "reviewInterrupted": "深度審查已中斷",
+    "fixCompletedMessage": "所有修復已成功應用。",
+    "replaceInputConfirmTitle": "替換當前輸入？",
+    "replaceInputConfirmMessage": "輸入框中已有文本，填入計劃將替換當前草稿內容。",
+    "replaceInputConfirmAction": "替換輸入",
+    "reviewInterrupted": "深度審核已中斷",
     "resumeBlocked": "繼續前需要處理問題",
-    "resumeRunning": "正在繼續審查...",
+    "resumeRunning": "正在繼續審核...",
     "resumeFailed": "繼續失敗",
-    "resumeBlockedHint": "請先處理模型配置或額度問題，再繼續審查。",
-    "resumeBlockedConfirmTitle": "繼續審查？",
-    "resumeBlockedConfirmMessage": "導致審查中斷的錯誤尚未解決，繼續審查可能會再次失敗。是否仍要繼續？",
+    "resumeBlockedHint": "請先處理模型配置或額度問題，再繼續審核。",
+    "resumeBlockedConfirmTitle": "繼續審核？",
+    "resumeBlockedConfirmMessage": "導致審核中斷的錯誤尚未解決，繼續審核可能會再次失敗。是否仍要繼續？",
     "resumeBlockedConfirmAction": "仍然繼續",
-    "resumeReview": "繼續審查",
-    "resumeRequestDisplay": "繼續中斷的深度審查",
-    "resumeFailedMessage": "無法繼續深度審查。請檢查模型設置，或稍後重試。",
+    "resumeReview": "繼續審核",
+    "resumeRequestDisplay": "繼續中斷的深度審核",
+    "resumeFailedMessage": "無法繼續深度審核。請檢查模型設置，或稍後重試。",
     "openModelSettings": "打開模型設置",
     "copyDiagnostics": "複製診斷信息",
     "diagnosticsCopied": "診斷信息已複製",
-    "diagnosticsTitle": "=== 深度審查中斷診斷信息 ===",
+    "diagnosticsCopyFailed": "複製診斷信息失敗",
+    "diagnosticsTitle": "=== 深度審核中斷診斷信息 ===",
     "diagnosticsErrorType": "錯誤類型",
     "diagnosticsDescription": "錯誤描述",
     "diagnosticsSuggestedActions": "建議操作",
-    "diagnosticsTechnicalDetails": "技術詳情"
+    "diagnosticsTechnicalDetails": "技術詳情",
+    "reviewInterruptedWithReason": "深度審核已中斷：{{reason}}",
+    "resumeBlockedWithReason": "無法繼續：{{reason}}",
+    "resumeFailedWithReason": "繼續失敗：{{reason}}",
+    "reviewErrorWithReason": "審核出錯：{{reason}}",
+    "retryResume": "重試",
+    "retryWithDifferentModel": "嘗試其他模型",
+    "viewPartialResults": "查看部分結果",
+    "hidePartialResults": "隱藏部分結果",
+    "partialResultsDescription": "{{completed}}/{{total}} 個 reviewer 已完成",
+    "partialIssues": "發現 {{count}} 個問題",
+    "partialRemediationItems": "{{count}} 個修復項",
+    "contextOverflowTitle": "上下文超出限制，請選擇處理方式：",
+    "longRunningHint": "審核仍在進行中，可能需要更長時間...",
+    "elapsedTime": "已運行 {{time}}",
+    "showRecoveryPlan": "顯示恢復計劃",
+    "hideRecoveryPlan": "隱藏恢復計劃",
+    "recoveryPreserve": "{{count}} 個已完成的 reviewer 將保留",
+    "recoveryRerun": "{{count}} 個 reviewer 將重新運行",
+    "recoverySkip": "{{count}} 個 reviewer 將被跳過",
+    "degradation": {
+      "reduceReviewers": "僅運行核心 reviewer",
+      "reduceReviewersDesc": "跳過額外 reviewer，只保留核心 reviewer",
+      "reduceReviewersPending": "精簡 reviewer 模式將在後續版本中支持",
+      "compressContext": "壓縮上下文後重試",
+      "compressContextDesc": "壓縮已完成的 reviewer 結果以釋放上下文空間",
+      "compressContextPending": "上下文壓縮將在後續版本中支持",
+      "viewPartial": "查看部分結果",
+      "viewPartialDesc": "查看已完成的 reviewer 結果"
+    },
+    "launchError": {
+      "modelConfig": "無法創建審核會話，請檢查模型配置",
+      "network": "網絡連接中斷，審核未能啟動",
+      "unknown": "審核啟動失敗，請重試"
+    }
   },
   "reviewActionBar": {
-    "reviewCompletedStandard": "審查已完成",
-    "reviewCompletedDeep": "深度審查已完成",
-    "fixRequestDisplayStandard": "開始修復程式碼審查問題",
-    "fixAndReviewRequestDisplayStandard": "修復程式碼審查問題並重新審查",
-    "fixRequestDisplayDeep": "開始修復深度審查問題",
-    "fixAndReviewRequestDisplayDeep": "修復深度審查問題並重新審查",
-    "needsDecisionTag": "需決策"
+    "reviewCompletedStandard": "審核已完成",
+    "reviewCompletedDeep": "深度審核已完成",
+    "fixRequestDisplayStandard": "開始修復程式碼審核問題",
+    "fixAndReviewRequestDisplayStandard": "修復程式碼審核問題並重新審核",
+    "fixRequestDisplayDeep": "開始修復深度審核問題",
+    "fixAndReviewRequestDisplayDeep": "修復深度審核問題並重新審核",
+    "needsDecisionTag": "需決策",
+    "noIssuesFound": "未發現問題，做得不錯！"
   },
   "deepReviewConsent": {
-    "windowTitle": "深度審查",
+    "windowTitle": "深度審核",
     "eyebrow": "程式碼審核團隊",
-    "title": "開始深度審查？",
-    "body": "深度審查會啟動並行程式碼審核團隊，通常比普通審查耗時更久，也會消耗更多 Token。",
+    "title": "開始深度審核？",
+    "body": "深度審核會啟動並行程式碼審核團隊，通常比普通審核耗時更久，也會消耗更多 Token。",
     "readonlyLabel": "首次只讀",
-    "readonly": "首次審查默認只讀：它會先輸出問題和修復計劃，不會直接修改代碼。",
+    "readonly": "首次審核默認只讀：它會先輸出問題和修復計劃，不會直接修改代碼。",
     "costLabel": "Token 消耗更高",
-    "cost": "預期消耗：多個審查角色加質量門禁，運行時間和 Token 可能達到普通審查的數倍。",
+    "cost": "預期消耗：多個審核角色加質量門禁，運行時間和 Token 可能達到普通審核的數倍。",
     "timeLabel": "耗時更久",
-    "time": "運行期間可以繼續工作；只有整個深度審查在後台完成時才會通知你。",
+    "time": "運行期間可以繼續工作；只有整個深度審核在後台完成時才會通知你。",
     "dontShowAgain": "下次不再提示",
     "cancel": "取消",
-    "confirm": "開始深度審查"
+    "confirm": "開始深度審核",
+    "estimatedTokens": "預計消耗：{{min}} - {{max}} tokens"
   },
   "flowChatHeader": {
     "turnList": "輪次列表",
@@ -441,41 +516,41 @@
   },
   "sessionFilesBadge": {
     "files": "文件",
-    "reviewLabel": "審查",
-    "reviewAll": "全部審查",
-    "reviewMenuLabel": "審查",
-    "reviewMenuHint": "選擇審查深度",
-    "reviewModeStandard": "普通審查",
-    "reviewModeDeep": "深度審查",
-    "reviewRunningStandard": "審查中",
-    "reviewRunningDeep": "審查中",
-    "reviewRunningHint": "請等待當前審查完成，或在審查頁面中止它。",
+    "reviewLabel": "審核",
+    "reviewAll": "全部審核",
+    "reviewMenuLabel": "審核",
+    "reviewMenuHint": "選擇審核深度",
+    "reviewModeStandard": "普通審核",
+    "reviewModeDeep": "深度審核",
+    "reviewRunningStandard": "審核中",
+    "reviewRunningDeep": "審核中",
+    "reviewRunningHint": "請等待當前審核完成，或在審核頁面中止它。",
     "deepReviewLabel": "深審",
-    "deepReviewAll": "深度審查",
+    "deepReviewAll": "深度審核",
     "loadFailed": "加載失敗",
     "clickToViewDiff": "點擊查看 Diff",
     "review": {
-      "displayMessage": "審查修改的文件：\n{{files}}",
-      "displayMessageFiltered": "審查過濾後的文件：\n{{files}}\n\n已跳過 {{skipped}} 個命中排除規則的文件。",
+      "displayMessage": "審核修改的文件：\n{{files}}",
+      "displayMessageFiltered": "審核過濾後的文件：\n{{files}}\n\n已跳過 {{skipped}} 個命中排除規則的文件。",
       "filteredNotice": "本次將分析 {{included}} 個文件，並跳過 {{skipped}} 個命中排除規則的文件，例如鎖文件、生成物或二進制資源。",
-      "noEligibleFiles": "排除命中規則的文件後，本次會話裡沒有可審查文件。",
-      "prompt": "請審查本次會話中修改的以下文件：\n\n{{files}}",
-      "promptFiltered": "請審查本次會話中修改的以下文件：\n\n{{files}}\n\n請不要審查另外 {{skipped}} 個已跳過的文件，因為它們命中了鎖文件、生成物或二進制文件的排除規則。",
-      "threadTitle": "代碼審查"
+      "noEligibleFiles": "排除命中規則的文件後，本次會話裡沒有可審核文件。",
+      "prompt": "請審核本次會話中修改的以下文件：\n\n{{files}}",
+      "promptFiltered": "請審核本次會話中修改的以下文件：\n\n{{files}}\n\n請不要審核另外 {{skipped}} 個已跳過的文件，因為它們命中了鎖文件、生成物或二進制文件的排除規則。",
+      "threadTitle": "代碼審核"
     },
     "deepReview": {
-      "info": "深度審查會啟動並行程式碼審核團隊，可能更耗時並消耗更多 Token。",
-      "displayMessage": "深度審查修改的文件：\n{{files}}",
-      "displayMessageFiltered": "深度審查過濾後的文件：\n{{files}}\n\n已跳過 {{skipped}} 個命中排除規則的文件。",
-      "threadTitle": "深度審查"
+      "info": "深度審核會啟動並行程式碼審核團隊，可能更耗時並消耗更多 Token。",
+      "displayMessage": "深度審核修改的文件：\n{{files}}",
+      "displayMessageFiltered": "深度審核過濾後的文件：\n{{files}}\n\n已跳過 {{skipped}} 個命中排除規則的文件。",
+      "threadTitle": "深度審核"
     }
   },
   "sessionFileModificationsBar": {
     "filesCount": "{{count}} 個文件",
     "expandList": "展開列表",
     "collapseList": "收起列表",
-    "reviewSource": "審查",
-    "deepReviewSource": "深度審查"
+    "reviewSource": "審核",
+    "deepReviewSource": "深度審核"
   },
   "snapshotSystem": {
     "errors": {
@@ -505,6 +580,8 @@
   "modelRound": {
     "copyDialog": "複製對話",
     "copiedDialog": "已複製!",
+    "forkDialog": "從這裡分叉會話",
+    "forkFailed": "建立分叉會話失敗",
     "like": "點贊",
     "dislike": "點踩",
     "report": "舉報",
@@ -520,9 +597,6 @@
     "searchCount_one": "進行了 {{count}} 次搜索",
     "searchCount_other": "進行了 {{count}} 次搜索",
     "searchCount": "進行了 {{count}} 次搜索",
-    "thinkingCount_one": "思考了 {{count}} 次",
-    "thinkingCount_other": "思考了 {{count}} 次",
-    "thinkingCount": "思考了 {{count}} 次",
     "exploreCount_one": "執行了 {{count}} 次探索",
     "exploreCount_other": "執行了 {{count}} 次探索",
     "exploreCount": "執行了 {{count}} 次探索",
@@ -542,6 +616,7 @@
       "analyzing": "分析中...",
       "expandPreview": "展開預覽",
       "collapsePreview": "收起預覽",
+      "openFullCodeHint": "打開全量代碼",
       "viewGitDiff": "查看 Diff",
       "viewBaselineDiff": "查看基線 Diff"
     },
@@ -558,6 +633,9 @@
       "failed": "失敗",
       "confirmExecute": "確認執行",
       "cancel": "取消",
+      "copyCommand": "複製 Git 命令",
+      "commandCopied": "Git 命令已複製",
+      "copyCommandFailed": "複製 Git 命令失敗",
       "expandOutput": "展開輸出",
       "collapseOutput": "收起輸出",
       "noOutput": "(無輸出)",
@@ -615,6 +693,9 @@
       "inputPlaceholder": "輸入命令...",
       "commandEmptyWarning": "命令為空，無法執行",
       "executeCommandTitle": "執行命令",
+      "copyCommand": "複製命令",
+      "commandCopied": "命令已複製",
+      "copyCommandFailed": "複製命令失敗",
       "cancel": "取消",
       "interrupt": "中斷命令執行",
       "openInPanel": "在右側面板打開Terminal",
@@ -689,7 +770,8 @@
       "searching": "正在搜索 \"{{term}}\"...",
       "preparingSearch": "準備搜索 \"{{term}}\"",
       "clickToOpenLink": "點擊打開鏈接",
-      "noTitle": "無標題"
+      "noTitle": "無標題",
+      "summaryAvailable": "有搜索摘要"
     },
     "todoWrite": {
       "tasksCount": "{{count}} 項任務",
@@ -735,9 +817,14 @@
       "untitled": "未命名任務",
       "statusLabel": "狀態",
       "promptLabel": "任務提示詞",
+      "reviewerContextLabel": "審核員",
       "errorLabel": "錯誤信息",
       "resultLabel": "執行結果",
       "noData": "無法加載任務數據",
+      "stopSubagentFailed": "無法停止該子代理。",
+      "stoppingSubagent": "正在停止子代理……",
+      "stopSubagent": "停止子代理",
+      "stopSubagentHint": "僅取消此審查員/子代理。父級審查仍可繼續並生成摘要。",
       "executionContent": "執行內容",
       "duration": "耗時",
       "waitingForModelResponse": "等待模型回應...",
@@ -747,6 +834,13 @@
         "completed": "已完成",
         "failed": "執行失敗"
       }
+    },
+    "timeout": {
+      "disableTooltip": "關閉超時限制",
+      "disableLabel": "關閉",
+      "enableTooltip": "恢復超時限制",
+      "enableLabel": "啟用",
+      "restoreShort": "恢復（剩餘 {{seconds}} 秒）"
     },
     "diagram": {
       "interactive": "交互圖表:",
@@ -883,11 +977,16 @@
       "toolBatchComplete": "工具批次完成",
       "manualTrigger": "手動觸發",
       "autoTrigger": "自動觸發",
+      "afterAiResponse": "AI 回覆後",
       "contextCompressionFailed": "上下文壓縮失敗",
       "contextCompression": "上下文壓縮:",
-      "localFallbackHeader": "模型請求異常，已改用本地結構化裁剪",
+      "localFallbackHeader": "模型請求異常，改用本地壓縮",
       "localFallbackNotice": "本次壓縮無法使用模型生成總結，因此改用了本地結構化裁剪。",
-      "noSummaryNotice": "本次壓縮沒有生成額外的總結內容。"
+      "noSummaryNotice": "本次壓縮沒有生成額外的總結內容。",
+      "tokenChange": "{{before}} → {{after}} tokens",
+      "savingsTag": "節省 {{saved}} · 壓縮率 {{ratio}}%",
+      "compressingContext": "正在壓縮上下文...",
+      "compressionCount": "第 {{count}} 次壓縮"
     },
     "globSearch": {
       "parsingPattern": "解析搜索模式中...",
@@ -996,31 +1095,32 @@
       "rollbackTooltip": "回滾到此輪"
     },
     "reviewSessionSummary": {
-      "standardTitle": "審查",
-      "deepTitle": "深度審查",
+      "standardTitle": "審核",
+      "deepTitle": "深度審核",
       "running": "進行中",
       "failed": "失敗",
       "issueCount": "{{count}} 個問題",
       "noIssues": "無阻塞問題",
       "filesChanged": "{{count}} 個文件",
-      "waitingSummary": "審查仍在運行，程式碼審核團隊完成後會在這裡顯示結果。",
-      "emptySummary": "暫時沒有結構化審查總結。",
-      "changedFilesTitle": "本次審查涉及的文件",
-      "openReview": "打開審查頁面"
+      "waitingSummary": "審核仍在運行，程式碼審核團隊完成後會在這裡顯示結果。",
+      "emptySummary": "暫時沒有結構化審核總結。",
+      "changedFilesTitle": "本次審核涉及的文件",
+      "openReview": "打開審核頁面"
     },
     "codeReview": {
-      "reviewResult": "審查結果",
-      "reviewingCode": "正在審查代碼...",
-      "preparingReview": "準備代碼審查",
-      "reviewFailed": "代碼審查失敗：{{error}}",
+      "reviewResult": "審核結果",
+      "reviewingCode": "正在審核代碼...",
+      "preparingReview": "準備代碼審核",
+      "reviewFailed": "代碼審核失敗：{{error}}",
       "unknownError": "未知錯誤",
+      "noIssues": "無問題",
       "collapseDetails": "收起詳情",
       "expandDetails": "展開詳情",
       "overallAssessment": "總體評估",
       "riskLevel": "風險等級",
       "recommendedAction": "建議操作",
-      "deepReviewResult": "深度審查結果",
-      "reviewMode": "審查模式",
+      "deepReviewResult": "深度審核結果",
+      "reviewMode": "審核模式",
       "reviewScope": "範圍",
       "contextLimitations": "上下文限制",
       "issuesCount": "問題 ({{count}})",
@@ -1030,6 +1130,24 @@
       "reviewerIssues": "{{count}} 個問題",
       "reviewerIssuesUnknown": "問題數量不可用",
       "reviewerTeamSummary": "{{total}} 位審核者 · {{completed}} 已完成 · {{degraded}} 需關注",
+      "severities": {
+        "critical": "嚴重",
+        "high": "高",
+        "medium": "中",
+        "low": "低",
+        "info": "資訊"
+      },
+      "reviewerStatuses": {
+        "completed": "已完成",
+        "timed_out": "已逾時",
+        "cancelled_by_user": "使用者已取消",
+        "cancelled": "已取消",
+        "failed": "失敗",
+        "skipped": "已跳過",
+        "running": "運行中",
+        "partial": "部分完成",
+        "unknown": "未知"
+      },
       "sectionItemCount": "{{count}} 項",
       "remediationPlan": "修復計劃",
       "sections": {
@@ -1054,9 +1172,9 @@
         "other": "其他"
       },
       "report": {
-        "titleStandard": "程式碼審查報告",
-        "titleDeep": "深度審查報告",
-        "reviewDecision": "審查結論",
+        "titleStandard": "程式碼審核報告",
+        "titleDeep": "深度審核報告",
+        "reviewDecision": "審核結論",
         "noIssues": "沒有已驗證問題。",
         "status": "狀態",
         "findings": "問題數",
@@ -1068,14 +1186,14 @@
         "copyMarkdown": "複製 Markdown",
         "openMarkdown": "以 Markdown 開啟",
         "saveMarkdown": "儲存 Markdown",
-        "copySuccess": "已複製 Markdown 審查報告。",
-        "copyFailed": "複製審查報告失敗。",
-        "openFailed": "在編輯器中開啟審查報告失敗。",
-        "saveSuccess": "審查報告已匯出。",
-        "saveFailed": "匯出審查報告失敗。",
-        "saveDialogTitle": "匯出審查報告",
-        "fileNamePrefix": "BitFun-程式碼審查",
-        "editorTitle": "審查報告"
+        "copySuccess": "已複製 Markdown 審核報告。",
+        "copyFailed": "複製審核報告失敗。",
+        "openFailed": "在編輯器中開啟審核報告失敗。",
+        "saveSuccess": "審核報告已匯出。",
+        "saveFailed": "匯出審核報告失敗。",
+        "saveDialogTitle": "匯出審核報告",
+        "fileNamePrefix": "BitFun-程式碼審核",
+        "editorTitle": "審核報告"
       },
       "reviewModes": {
         "standard": "普通",
@@ -1083,7 +1201,7 @@
       },
       "remediationActions": {
         "title": "下一步",
-        "hint": "深度審查默認只讀。請選擇要修復的計劃項。",
+        "hint": "深度審核默認只讀。請選擇要修復的計劃項。",
         "selectAll": "全選",
         "selectionCount": "已選擇 {{selected}}/{{total}} 項",
         "expandPlan": "詳情",
@@ -1094,12 +1212,16 @@
         "certainty": "確定性",
         "location": "位置",
         "noSelectionHint": "至少選擇一項修復計劃後才能開始修復。",
+        "ungrouped": "其他",
         "startFix": "開始修復",
-        "fixAndReview": "修復後重新審查",
+        "fixAndReview": "修復\\u0026重審",
         "cancel": "取消",
-        "fixUnavailable": "無法開始修復：審查會話不可用。",
-        "fixRequestDisplay": "開始修復深度審查問題",
-        "fixAndReviewRequestDisplay": "修復深度審查問題並重新審查"
+        "fixUnavailable": "無法開始修復：審核會話不可用。",
+        "fixRequestDisplay": "開始修復深度審核問題",
+        "fixAndReviewRequestDisplay": "修復深度審核問題並重新審核",
+        "recommended": "推薦",
+        "expandOptions": "查看選項",
+        "collapseOptions": "收起選項"
       },
       "riskLevels": {
         "low": "低風險",
@@ -1160,8 +1282,8 @@
     "timeSinceLastCommit": "上次提交：",
     "timeIcon": "時間",
     "youMightWant": "您可能想要：",
-    "defaultAction1": "審查最近的更改",
-    "defaultAction1Command": "審查最近的更改",
+    "defaultAction1": "審核最近的更改",
+    "defaultAction1Command": "審核最近的更改",
     "defaultAction2": "繼續之前的工作",
     "defaultAction2Command": "繼續之前的工作",
     "defaultAction3": "開始新功能",
@@ -1296,5 +1418,9 @@
         "prompt": "請幫我做一個預算規劃。\n\n背景：\n- 預算週期（按月/按季度/按項目）：\n- 總預算：\n- 固定支出：\n- 可變支出：\n- 目標（省錢/更可控/為某目標攢錢）：\n\n請輸出：\n1) 預算分類與比例建議\n2) 具體到類別的預算表（可複製到表格）\n3) 超支預案與調整規則\n4) 每週/每月覆盤清單"
       }
     }
+  },
+  "subagent": {
+    "showingLines": "當前僅顯示 {{shown}} / {{total}} 行",
+    "showAll": "顯示全部"
   }
 }

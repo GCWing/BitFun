@@ -21,7 +21,7 @@
 
 桌面端包含 SSH 远程功能，会链接 OpenSSL。Windows 上**不使用 OpenSSL 源码编译（vendored）**，需使用**预编译**库。
 
-- **默认**：Windows 下 `pnpm run desktop:dev` 会调用 `ensure-openssl-windows.mjs`；`pnpm run desktop:preview:debug` 在需要为预览执行快速本地 `cargo build -p bitfun-desktop` 时，也会做同样的 OpenSSL 引导。所有 `desktop:build*` 均通过 `scripts/desktop-tauri-build.mjs` 执行，在 `tauri build` 前做相同引导（首次下载到 `.bitfun/cache/`，之后走缓存）。额外参数：`pnpm run desktop:build -- <tauri build 参数>`。
+- **默认**：Windows 下 `pnpm run desktop:dev` 会调用 `ensure-openssl-windows.mjs`；`pnpm run desktop:preview:debug` 在需要为预览执行快速本地 `cargo build -p bitfun-desktop` 时，也会做同样的 OpenSSL 引导。所有 `desktop:build*` 均通过 `scripts/desktop-tauri-build.mjs` 执行，在 `tauri build` 前做相同引导（首次下载到 `.bitfun/cache/`，之后走缓存）。
 - **手动 / CI**：下载 [FireDaemon ZIP](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip)，解压后将 `OPENSSL_DIR` 指向 `x64`，并设 `OPENSSL_STATIC=1`，或运行 `scripts/ci/setup-openssl-windows.ps1`。
 - **关闭自动下载**：设置 `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` 并自行配置 `OPENSSL_DIR`。
 - **`desktop:dev:raw`** 不经过 `dev.cjs`（无 OpenSSL 引导）；请自行设置 `OPENSSL_DIR`、运行 `scripts/ci/setup-openssl-windows.ps1`，或执行 `node scripts/ensure-openssl-windows.mjs`（会预热 `.bitfun/cache/` 并打印可在 PowerShell 中粘贴的 `OPENSSL_*` 命令）。
@@ -35,29 +35,40 @@ pnpm install
 ### 常用命令
 
 ```bash
-# Desktop
-pnpm run desktop:dev
-pnpm run desktop:preview:debug
+# Desktop（日常开发推荐）
+pnpm run desktop:dev                # 完整热更新：Vite HMR + Rust 自动重编译并重启
+
+# Desktop（轻量预览，无 Rust 自动重编译）
+pnpm run desktop:preview:debug      # 复用预构建二进制 + Vite HMR；Rust 改动需手动重启
+
+# Desktop（生产构建）
 pnpm run desktop:build
 
 # E2E
 pnpm run e2e:test
 ```
 
-本地迭代时建议这样选：
+> **`desktop:dev` 与 `desktop:preview:debug` 的区别**：`desktop:dev` 运行 `tauri dev`，提供**完整热更新** — 前端改动通过 Vite HMR 即时生效，Rust/后端改动会触发增量重编译并自动重启应用，是日常开发的首选方式。`desktop:preview:debug` 启动预构建的 debug 二进制和 Vite dev server；前端编辑仍可 HMR，但 **Rust 侧改动不会自动重编译** — 需要手动停止并重新运行命令（或使用 `--force-rebuild`）。适合仅需迭代前端代码、或希望跳过 `tauri dev` 初始化以更快冷启动的场景。
 
-- `desktop:preview:debug` 不经过 `tauri dev`；当已有 debug 桌面二进制仍然可复用时会直接预览，而在 Rust / Tauri 输入更新或二进制缺失时，会先用较轻的 dev 调试信息配置快速重编 `bitfun-desktop` 再预览。
-- 只有在你明确想忽略时间戳复用判断、强制先重编时，才额外使用 `pnpm run desktop:preview:debug -- --force-rebuild`。
-- `desktop:dev` 保留给完整的 Tauri watcher / 启动链路；正式收尾时，仍要按真实改动范围执行对应验证命令。
+> 完整脚本列表见 [`package.json`](package.json)。agent 专用命令、验证与架构规则见 [`AGENTS.md`](AGENTS.md)。
 
-涉及打包与 release 时建议这样处理：
+### 桌面端调试工具
 
-- 如果请求里只说“打包”或“release”，但没有明确产物类型，先确认目标输出形式。
-- 对于 Windows 最终用户安装交付，优先使用 `pnpm run desktop:build:nsis`。
-- 对于独立 Windows 可执行文件，只有在用户明确提出时才使用 `pnpm run desktop:build:exe`。
-- 不要把本地快速/debug 产物与正式 release 交付物混淆。
+开发桌面端 UI/UX 时，`devtools` Cargo feature 提供额外的调试能力。它在 `dev` 构建和 `release-fast` profile 构建中自动启用，但在面向最终用户的 `release` 构建中永不启用。
 
-> 说明：仓库提供更细粒度的脚本（例如 `dev:web`、`cli:dev`、`website:dev`），详情见 `package.json`。
+| 快捷键 | 功能 |
+|---|---|
+| `Cmd/Ctrl + Shift + I` | 切换元素检查器 — 悬停高亮元素，点击采集元数据 |
+| `Cmd/Ctrl + Shift + J` | 打开原生 webview DevTools 窗口 |
+
+元素检查器向主 webview 注入一个轻量脚本。点击元素后会采集：
+- 标签、id、class、CSS 选择器路径
+- Computed styles 和 CSS 变量
+- Box model（margin、padding、border）
+- 颜色值（文本、背景、边框）
+- 元素属性
+
+采集的数据以结构化 JSON 形式输出到 `bitfun::devtools` 日志目标下。
 
 ## 代码规范与架构约束
 
@@ -93,13 +104,12 @@ await api.invoke("your_command", { request: { /* ... */ } });
 ```
 
 ## 重点关注的贡献方向
-1. 贡献好的想法/创意(功能、交互、视觉等)，提交问题
-    > 欢迎产品经理、UI设计师通过PI快速提交创意，我们会帮助完善开发
-2. 优化Agent系统和效果
+
+1. 贡献好的想法/创意（功能、交互、视觉等），提交 Issue
+   > 欢迎产品经理、UI 设计师通过 PI 快速提交创意，我们会帮助完善开发
+2. 优化 Agent 系统和效果
 3. 对提升系统稳定性和完善基础能力
-4. 扩展生态（SKill、MCP、LSP插件，或者对某些垂域开发场景的更好支持）
-
-
+4. 扩展生态（Skills、MCP、LSP 插件，或者对某些垂域开发场景的更好支持）
 
 ## 贡献流程与 PR 约定
 
@@ -136,6 +146,7 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 如为 AI 辅助产出，请在 PR 中注明并说明测试程度（未测/轻测/已测），便于评审风险。
 
 ### 分支管理
+
 **`main` 分支为默认协作分支，并接受特性 PR。** 本仓库欢迎产品经理、开发者使用 AI 生成代码进行快速验证或提交想法，因此 **所有 PR 请直接提交到 `main` 分支**。
 
 ### 变更范围

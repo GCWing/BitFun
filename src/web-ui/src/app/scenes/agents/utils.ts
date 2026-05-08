@@ -2,6 +2,15 @@ import type { TFunction } from 'i18next';
 import type { SubagentSource } from '@/infrastructure/api/service-api/SubagentAPI';
 import type { AgentKind, AgentWithCapabilities, CapabilityCategory } from './agentsStore';
 
+const MODE_DESCRIPTION_KEY_BY_ID: Record<string, string> = {
+  agentic: 'Agentic',
+  plan: 'Plan',
+  debug: 'Debug',
+  cowork: 'Cowork',
+  computeruse: 'ComputerUse',
+  deepresearch: 'DeepResearch',
+};
+
 interface AgentBadgeConfig {
   variant: 'accent' | 'info' | 'success' | 'purple' | 'neutral';
   label: string;
@@ -46,6 +55,28 @@ function getAgentBadge(
   }
 }
 
+function getAgentDescription(
+  t: TFunction<'scenes/agents'>,
+  agent: Pick<AgentWithCapabilities, 'id' | 'name' | 'description'>,
+): string {
+  const fallback = agent.description?.trim() || '—';
+  const canonicalModeKey = MODE_DESCRIPTION_KEY_BY_ID[agent.id.toLowerCase()];
+  const candidates = Array.from(new Set([
+    agent.id,
+    canonicalModeKey,
+    agent.name,
+  ].filter(Boolean)));
+
+  for (const key of candidates) {
+    const translated = t(`agentDescriptions.${key}`, { defaultValue: '' }).trim();
+    if (translated) {
+      return translated;
+    }
+  }
+
+  return fallback;
+}
+
 function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities {
   if (agent.capabilities?.length) {
     return {
@@ -81,5 +112,5 @@ function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities
   return { ...agent, capabilities: [{ category: 'analysis', level: 3 }] };
 }
 
-export { getAgentBadge, getCapabilityLabel, enrichCapabilities };
+export { getAgentBadge, getCapabilityLabel, getAgentDescription, enrichCapabilities };
 export type { AgentBadgeConfig };

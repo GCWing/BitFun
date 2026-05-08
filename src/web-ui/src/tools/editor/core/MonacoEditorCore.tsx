@@ -370,6 +370,7 @@ export const MonacoEditorCore = forwardRef<MonacoEditorCoreRef, MonacoEditorCore
     return (
       <div
         ref={containerRef}
+        data-shortcut-scope="editor"
         className={`monaco-editor-core ${className}`}
         style={{
           width: '100%',

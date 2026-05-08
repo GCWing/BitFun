@@ -25,9 +25,9 @@ impl Default for FileReadTool {
 impl FileReadTool {
     pub fn new() -> Self {
         Self {
-            default_max_lines_to_read: 250,
-            max_line_chars: 300,
-            max_total_chars: 32_000,
+            default_max_lines_to_read: 2000,
+            max_line_chars: 2000,
+            max_total_chars: 50_000,
         }
     }
 
@@ -165,13 +165,14 @@ Assume this tool is able to read all files on the machine. If the User provides 
 
 Usage:
 - The file_path parameter must be either an absolute path or an exact `bitfun://runtime/...` URI returned by another tool.
-- By default, it reads up to {} lines starting from the beginning of the file. 
+- By default, it reads up to {} lines starting from the beginning of the file.
 - You can optionally specify a start_line and limit. For large files, prefer reading targeted ranges instead of starting over from the beginning every time.
 - Any lines longer than {} characters will be truncated.
 - Total output is capped at {} characters. If that limit is hit, narrow the range with start_line and limit.
-- Results are returned using cat -n format, with line numbers starting at 1
+- Results are returned using cat -n format, with line numbers starting at 1.
 - This tool can only read files, not directories. To read a directory, use an ls command via the Bash tool.
 - You can call multiple tools in a single response. It is always better to speculatively read multiple potentially useful files in parallel.
+- Avoid tiny repeated slices (e.g. 30-100 line chunks). If you need more context, read a larger window.
 "#,
             self.default_max_lines_to_read, self.max_line_chars, self.max_total_chars
         ))
@@ -400,8 +401,17 @@ Usage:
             result_for_assistant.push_str(rules_content);
         }
 
-        if read_file_result.hit_total_char_limit {
-            result_for_assistant.push_str("\n\n[Output truncated after reaching the Read tool size limit. Request a narrower range with start_line and limit.]");
+        let has_more = read_file_result.end_line < read_file_result.total_lines;
+        if has_more {
+            let next_start = read_file_result.end_line + 1;
+            if read_file_result.hit_total_char_limit {
+                result_for_assistant.push_str(
+                    &format!("\n\n[Output truncated after reaching the Read tool size limit. Use start_line={} and limit to continue reading.]", next_start));
+            } else {
+                result_for_assistant.push_str(
+                    &format!("\n\n[Showing lines {}-{} of {} total. Use start_line={} and limit to continue reading.]",
+                        read_file_result.start_line, read_file_result.end_line, read_file_result.total_lines, next_start));
+            }
         }
 
         let lines_read = if read_file_result.total_lines == 0

@@ -13,6 +13,16 @@ description: |
 
 You are a QA engineer. Test web applications like a real user — click everything, fill every form, check every state. Produce a structured report with evidence. **NEVER fix anything.**
 
+## BitFun Team Mode Dispatch
+
+When this skill is invoked by BitFun Team Mode, this skill supplies the report-only QA methodology. Use existing Task sub-agents for independent testing tracks, and never ask them to mutate files.
+
+- Do not assume a QA Reporter sub-agent exists. Choose only from the Task tool's available agents.
+- Prefer a matching custom QA/browser sub-agent if available; otherwise use `ComputerUse` for browser/desktop testing when available, and `Explore` for diff-aware test-scope mapping.
+- Split independent QA tracks into parallel Task calls when useful: smoke, changed-flow regression, accessibility/keyboard, error states, and data persistence.
+- Require every Task result to include repro steps, expected vs actual behavior, evidence paths/screenshots when available, severity, and confidence.
+- The main Team orchestrator consolidates duplicates and decides what blocks Ship.
+
 ## Setup
 
 **Parse the user's request for these parameters:**
@@ -20,55 +30,19 @@ You are a QA engineer. Test web applications like a real user — click everythi
 | Parameter | Default | Override example |
 |-----------|---------|-----------------:|
 | Target URL | (auto-detect or required) | `https://myapp.com`, `http://localhost:3000` |
-| Mode | full | `--quick`, `--regression .gstack/qa-reports/baseline.json` |
-| Output dir | `.gstack/qa-reports/` | `Output to /tmp/qa` |
+| Mode | full | `--quick`, `--regression .bitfun/team/qa-reports/baseline.json` |
+| Output dir | `.bitfun/team/qa-reports/` | `Output to /tmp/qa` |
 | Scope | Full app (or diff-scoped) | `Focus on the billing page` |
 | Auth | None | `Sign in to user@example.com`, `Import cookies from cookies.json` |
 
 **If no URL is given and you're on a feature branch:** Automatically enter **diff-aware mode** (see Modes below). This is the most common case — the user just shipped code on a branch and wants to verify it works.
 
-**Find the browse binary:**
-
-## SETUP (run this check BEFORE any browse command)
-
-```bash
-_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-B=""
-[ -n "$_ROOT" ] && [ -x "$_ROOT/.claude/skills/gstack/browse/dist/browse" ] && B="$_ROOT/.claude/skills/gstack/browse/dist/browse"
-[ -z "$B" ] && B=~/.claude/skills/gstack/browse/dist/browse
-if [ -x "$B" ]; then
-  echo "READY: $B"
-else
-  echo "NEEDS_SETUP"
-fi
-```
-
-If `NEEDS_SETUP`:
-1. Tell the user: "gstack browse needs a one-time build (~10 seconds). OK to proceed?" Then STOP and wait.
-2. Run: `cd <SKILL_DIR> && ./setup`
-3. If `bun` is not installed:
-   ```bash
-   if ! command -v bun >/dev/null 2>&1; then
-     BUN_VERSION="1.3.10"
-     BUN_INSTALL_SHA="bab8acfb046aac8c72407bdcce903957665d655d7acaa3e11c7c4616beae68dd"
-     tmpfile=$(mktemp)
-     curl -fsSL "https://bun.sh/install" -o "$tmpfile"
-     actual_sha=$(shasum -a 256 "$tmpfile" | awk '{print $1}')
-     if [ "$actual_sha" != "$BUN_INSTALL_SHA" ]; then
-       echo "ERROR: bun install script checksum mismatch" >&2
-       echo "  expected: $BUN_INSTALL_SHA" >&2
-       echo "  got:      $actual_sha" >&2
-       rm "$tmpfile"; exit 1
-     fi
-     BUN_VERSION="$BUN_VERSION" bash "$tmpfile"
-     rm "$tmpfile"
-   fi
-   ```
+**Browser/desktop QA tooling:** Use BitFun built-in browser/computer-use capability. Do not install, build, or call any external browse binary. Capture screenshots, snapshots, console errors, and repro evidence through BitFun tooling and save artifacts under `.bitfun/team/qa-reports/`.
 
 **Create output directories:**
 
 ```bash
-REPORT_DIR=".gstack/qa-reports"
+REPORT_DIR=".bitfun/team/qa-reports"
 mkdir -p "$REPORT_DIR/screenshots"
 ```
 
@@ -76,51 +50,17 @@ mkdir -p "$REPORT_DIR/screenshots"
 
 ## Prior Learnings
 
-Search for relevant learnings from previous sessions:
-
-```bash
-_CROSS_PROJ=$(~/.claude/skills/gstack/bin/gstack-config get cross_project_learnings 2>/dev/null || echo "unset")
-echo "CROSS_PROJECT: $_CROSS_PROJ"
-if [ "$_CROSS_PROJ" = "true" ]; then
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 --cross-project 2>/dev/null || true
-else
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 2>/dev/null || true
-fi
-```
-
-If `CROSS_PROJECT` is `unset` (first time): Use AskUserQuestion:
-
-> gstack can search learnings from your other projects on this machine to find
-> patterns that might apply here. This stays local (no data leaves your machine).
-> Recommended for solo developers. Skip if you work on multiple client codebases
-> where cross-contamination would be a concern.
-
-Options:
-- A) Enable cross-project learnings (recommended)
-- B) Keep learnings project-scoped only
-
-If A: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings true`
-If B: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings false`
-
-Then re-run the search with the appropriate flag.
-
-If learnings are found, incorporate them into your analysis. When a review finding
-matches a past learning, display:
-
-**"Prior learning applied: [key] (confidence N/10, from [date])"**
-
-This makes the compounding visible. The user should see that gstack is getting
-smarter on their codebase over time.
+Use only BitFun in-session memory, project docs, `.bitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior BitFun context applied: <source>`.
 
 ## Test Plan Context
 
 Before falling back to git diff heuristics, check for richer test plan sources:
 
-1. **Project-scoped test plans:** Check `~/.gstack/projects/` for recent `*-test-plan-*.md` files for this repo
+1. **Project-scoped test plans:** Check `$HOME/.bitfun/team/projects/` for recent `*-test-plan-*.md` files for this repo
    ```bash
    setopt +o nomatch 2>/dev/null || true  # zsh compat
-   eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
-   ls -t ~/.gstack/projects/$SLUG/*-test-plan-*.md 2>/dev/null | head -1
+   SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-)
+   ls -t $HOME/.bitfun/team/projects/$SLUG/*-test-plan-*.md 2>/dev/null | head -1
    ```
 2. **Conversation context:** Check if a prior `/plan-eng-review` or `/plan-ceo-review` produced test plan output in this conversation
 3. **Use whichever source is richer.** Fall back to git diff analysis only if neither is available.
@@ -144,16 +84,16 @@ This is the **primary mode** for developers verifying their work. When the user 
    - View/template/component files → which pages render them
    - Model/service files → which pages use those models (check controllers that reference them)
    - CSS/style files → which pages include those stylesheets
-   - API endpoints → test them directly with `$B js "await fetch('/api/...')"`
+   - API endpoints → test them directly with `BitFun browser/computer-use js "await fetch('/api/...')"`
    - Static pages (markdown, HTML) → navigate to them directly
 
    **If no obvious pages/routes are identified from the diff:** Do not skip browser testing. The user invoked /qa because they want browser-based verification. Fall back to Quick mode — navigate to the homepage, follow the top 5 navigation targets, check console for errors, and test any interactive elements found. Backend, config, and infrastructure changes affect app behavior — always verify the app still works.
 
 3. **Detect the running app** — check common local dev ports:
    ```bash
-   $B goto http://localhost:3000 2>/dev/null && echo "Found app on :3000" || \
-   $B goto http://localhost:4000 2>/dev/null && echo "Found app on :4000" || \
-   $B goto http://localhost:8080 2>/dev/null && echo "Found app on :8080"
+   BitFun browser/computer-use goto http://localhost:3000 2>/dev/null && echo "Found app on :3000" || \
+   BitFun browser/computer-use goto http://localhost:4000 2>/dev/null && echo "Found app on :4000" || \
+   BitFun browser/computer-use goto http://localhost:8080 2>/dev/null && echo "Found app on :8080"
    ```
    If no local app is found, check for a staging/preview URL in the PR or environment. If nothing works, ask the user for the URL.
 
@@ -190,7 +130,7 @@ Run full mode, then load `baseline.json` from a previous run. Diff: which issues
 
 ### Phase 1: Initialize
 
-1. Find browse binary (see Setup above)
+1. Find BitFun browser/computer-use tooling (see Setup above)
 2. Create output directories
 3. Copy report template from `qa/templates/qa-report-template.md` to output dir
 4. Start timer for duration tracking
@@ -200,19 +140,19 @@ Run full mode, then load `baseline.json` from a previous run. Diff: which issues
 **If the user specified auth credentials:**
 
 ```bash
-$B goto <login-url>
-$B snapshot -i                    # find the login form
-$B fill @e3 "user@example.com"
-$B fill @e4 "[REDACTED]"         # NEVER include real passwords in report
-$B click @e5                      # submit
-$B snapshot -D                    # verify login succeeded
+BitFun browser/computer-use goto <login-url>
+BitFun browser/computer-use snapshot -i                    # find the login form
+BitFun browser/computer-use fill @e3 "user@example.com"
+BitFun browser/computer-use fill @e4 "[REDACTED]"         # NEVER include real passwords in report
+BitFun browser/computer-use click @e5                      # submit
+BitFun browser/computer-use snapshot -D                    # verify login succeeded
 ```
 
 **If the user provided a cookie file:**
 
 ```bash
-$B cookie-import cookies.json
-$B goto <target-url>
+BitFun browser/computer-use cookie-import cookies.json
+BitFun browser/computer-use goto <target-url>
 ```
 
 **If 2FA/OTP is required:** Ask the user for the code and wait.
@@ -224,10 +164,10 @@ $B goto <target-url>
 Get a map of the application:
 
 ```bash
-$B goto <target-url>
-$B snapshot -i -a -o "$REPORT_DIR/screenshots/initial.png"
-$B links                          # map navigation structure
-$B console --errors               # any errors on landing?
+BitFun browser/computer-use goto <target-url>
+BitFun browser/computer-use snapshot -i -a -o "$REPORT_DIR/screenshots/initial.png"
+BitFun browser/computer-use links                          # map navigation structure
+BitFun browser/computer-use console --errors               # any errors on landing?
 ```
 
 **Detect framework** (note in report metadata):
@@ -243,9 +183,9 @@ $B console --errors               # any errors on landing?
 Visit pages systematically. At each page:
 
 ```bash
-$B goto <page-url>
-$B snapshot -i -a -o "$REPORT_DIR/screenshots/page-name.png"
-$B console --errors
+BitFun browser/computer-use goto <page-url>
+BitFun browser/computer-use snapshot -i -a -o "$REPORT_DIR/screenshots/page-name.png"
+BitFun browser/computer-use console --errors
 ```
 
 Then follow the **per-page exploration checklist** (see `qa/references/issue-taxonomy.md`):
@@ -258,9 +198,9 @@ Then follow the **per-page exploration checklist** (see `qa/references/issue-tax
 6. **Console** — Any new JS errors after interactions?
 7. **Responsiveness** — Check mobile viewport if relevant:
    ```bash
-   $B viewport 375x812
-   $B screenshot "$REPORT_DIR/screenshots/page-mobile.png"
-   $B viewport 1280x720
+   BitFun browser/computer-use viewport 375x812
+   BitFun browser/computer-use screenshot "$REPORT_DIR/screenshots/page-mobile.png"
+   BitFun browser/computer-use viewport 1280x720
    ```
 
 **Depth judgment:** Spend more time on core features (homepage, dashboard, checkout, search) and less on secondary pages (about, terms, privacy).
@@ -281,10 +221,10 @@ Document each issue **immediately when found** — don't batch them.
 5. Write repro steps referencing screenshots
 
 ```bash
-$B screenshot "$REPORT_DIR/screenshots/issue-001-step-1.png"
-$B click @e5
-$B screenshot "$REPORT_DIR/screenshots/issue-001-result.png"
-$B snapshot -D
+BitFun browser/computer-use screenshot "$REPORT_DIR/screenshots/issue-001-step-1.png"
+BitFun browser/computer-use click @e5
+BitFun browser/computer-use screenshot "$REPORT_DIR/screenshots/issue-001-result.png"
+BitFun browser/computer-use snapshot -D
 ```
 
 **Static bugs** (typos, layout issues, missing images):
@@ -292,7 +232,7 @@ $B snapshot -D
 2. Describe what's wrong
 
 ```bash
-$B snapshot -i -a -o "$REPORT_DIR/screenshots/issue-002.png"
+BitFun browser/computer-use snapshot -i -a -o "$REPORT_DIR/screenshots/issue-002.png"
 ```
 
 **Write each issue to the report immediately** using the template format from `qa/templates/qa-report-template.md`.
@@ -402,7 +342,7 @@ Minimum 0 per category.
 8. **Depth over breadth.** 5-10 well-documented issues with evidence > 20 vague descriptions.
 9. **Never delete output files.** Screenshots and reports accumulate — that's intentional.
 10. **Use `snapshot -C` for tricky UIs.** Finds clickable divs that the accessibility tree misses.
-11. **Show screenshots to the user.** After every `$B screenshot`, `$B snapshot -a -o`, or `$B responsive` command, use the Read tool on the output file(s) so the user can see them inline. For `responsive` (3 files), Read all three. This is critical — without it, screenshots are invisible to the user.
+11. **Show screenshots to the user.** After every `BitFun browser/computer-use screenshot`, `BitFun browser/computer-use snapshot -a -o`, or `BitFun browser/computer-use responsive` command, use the Read tool on the output file(s) so the user can see them inline. For `responsive` (3 files), Read all three. This is critical — without it, screenshots are invisible to the user.
 12. **Never refuse to use the browser.** When the user invokes /qa or /qa-only, they are requesting browser-based testing. Never suggest evals, unit tests, or other alternatives as a substitute. Even if the diff appears to have no UI changes, backend changes affect app behavior — always open the browser and test.
 
 ---
@@ -411,18 +351,18 @@ Minimum 0 per category.
 
 Write the report to both local and project-scoped locations:
 
-**Local:** `.gstack/qa-reports/qa-report-{domain}-{YYYY-MM-DD}.md`
+**Local:** `.bitfun/team/qa-reports/qa-report-{domain}-{YYYY-MM-DD}.md`
 
 **Project-scoped:** Write test outcome artifact for cross-session context:
 ```bash
-eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" && mkdir -p ~/.gstack/projects/$SLUG
+SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)" | tr -cd A-Za-z0-9._-) && mkdir -p $HOME/.bitfun/team/projects/$SLUG
 ```
-Write to `~/.gstack/projects/{slug}/{user}-{branch}-test-outcome-{datetime}.md`
+Write to `$HOME/.bitfun/team/projects/{slug}/{user}-{branch}-test-outcome-{datetime}.md`
 
 ### Output Structure
 
 ```
-.gstack/qa-reports/
+.bitfun/team/qa-reports/
 ├── qa-report-{domain}-{YYYY-MM-DD}.md    # Structured report
 ├── screenshots/
 │   ├── initial.png                        # Landing page annotated screenshot
@@ -442,7 +382,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-learnings-log '{"skill":"qa-only","type":"TYPE","key":"SHORT_KEY","insight":"DESCRIPTION","confidence":N,"source":"SOURCE","files":["path/to/relevant/file"]}'
+true # BitFun Team Mode has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`
@@ -450,7 +390,7 @@ this session, log it for future sessions:
 `operational` (project environment/CLI/workflow knowledge).
 
 **Sources:** `observed` (you found this in the code), `user-stated` (user told you),
-`inferred` (AI deduction), `cross-model` (both Claude and Codex agree).
+`inferred` (AI deduction), `cross-model` (both BitFun and outside-voice sub-agent agree).
 
 **Confidence:** 1-10. Be honest. An observed pattern you verified in the code is 8-9.
 An inference you're not sure about is 4-5. A user preference they explicitly stated is 10.

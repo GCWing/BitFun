@@ -1,5 +1,6 @@
 import ReactDOM from "react-dom/client";
 import App from "./app/App";
+import AgentCompanionDesktopPet from "./app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet";
 import AppErrorBoundary from "./app/components/AppErrorBoundary";
 import { WorkspaceProvider } from "./infrastructure/contexts/WorkspaceProvider";
 import "./app/styles/index.scss";
@@ -326,8 +327,27 @@ async function startApplication(): Promise<void> {
     { data: { step: 'loadI18nProvider' } }
   );
   const { I18nProvider } = i18nProviderImportResult.value;
+  const isAgentCompanionWindow = new URLSearchParams(window.location.search)
+    .get('bitfunWindow') === 'agent-companion';
 
   const renderStartedAt = nowMs();
+  if (isAgentCompanionWindow) {
+    ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+      <AppErrorBoundary>
+        <I18nProvider>
+          <AgentCompanionDesktopPet />
+        </I18nProvider>
+      </AppErrorBoundary>
+    );
+    logElapsed(log, 'Startup step completed', renderStartedAt, {
+      data: {
+        step: 'scheduleAgentCompanionRender',
+        sinceStartupMs: elapsedMs(appStartedAt),
+      },
+    });
+    return;
+  }
+
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <AppErrorBoundary>
       <I18nProvider>

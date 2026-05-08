@@ -6,10 +6,13 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MarkdownRenderer } from '@/component-library';
+import { DotMatrixLoader } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
 import { useTypewriter } from '../hooks/useTypewriter';
+import { processingHintsZh, processingHintsEn } from '../constants/processingHints';
 import './FlowTextBlock.scss';
 
 // Idle timeout (ms) after content stops growing.
@@ -18,6 +21,7 @@ const CONTENT_IDLE_TIMEOUT = 500;
 interface FlowTextBlockProps {
   textItem: FlowTextItem;
   className?: string;
+  replayStreamingOnMount?: boolean;
 }
 
 /**
@@ -26,9 +30,11 @@ interface FlowTextBlockProps {
  */
 export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   textItem,
-  className = ''
+  className = '',
+  replayStreamingOnMount = true
 }) => {
   const { onFileViewRequest, onTabOpen, onOpenVisualization } = useFlowChatContext();
+  const { i18n } = useTranslation();
 
   // Normalize content to a string.
   const content = typeof textItem.content === 'string'
@@ -37,7 +43,9 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
 
   const isStreaming = textItem.isStreaming &&
     (textItem.status === 'streaming' || textItem.status === 'running');
-  const displayContent = useTypewriter(content, isStreaming);
+  const displayContent = useTypewriter(content, isStreaming, {
+    replayOnMount: replayStreamingOnMount,
+  });
   
   // Heuristic: if content does not change for a while, streaming is done.
   const [isContentGrowing, setIsContentGrowing] = useState(true);
@@ -71,10 +79,23 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
     }
   }, [textItem.status, textItem.isStreaming]);
   
-  const isActivelyStreaming = textItem.isStreaming && 
+  const isActivelyStreaming = textItem.isStreaming &&
     (textItem.status === 'streaming' || textItem.status === 'running') &&
     isContentGrowing;
   const hasContent = content.length > 0;
+
+  if (textItem.runtimeStatus) {
+    const hints = i18n.language.startsWith('zh') ? processingHintsZh : processingHintsEn;
+    const hintIndex = Math.abs(textItem.id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)) % hints.length;
+    const hint = hints[hintIndex];
+
+    return (
+      <div className={`flow-text-block flow-text-block--runtime-status ${className}`}>
+        <DotMatrixLoader size="medium" className="flow-text-block__runtime-status-icon" />
+        <span className="flow-text-block__runtime-status-text">{hint}</span>
+      </div>
+    );
+  }
 
   return (
     <div className={`flow-text-block ${className} ${isActivelyStreaming ? 'streaming' : ''}`}>
@@ -103,6 +124,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
     prev.content === next.content &&
     prev.isStreaming === next.isStreaming &&
     prev.status === next.status &&
-    prevProps.className === nextProps.className
+    prevProps.className === nextProps.className &&
+    prevProps.replayStreamingOnMount === nextProps.replayStreamingOnMount
   );
 });

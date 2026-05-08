@@ -4,16 +4,21 @@
 
 .processing-indicator {
   width: 100%;
-  max-width: 900px; /* A4-style max width */
+  max-width: 1200px; /* Relaxed max width for larger screens */
   margin: 0 auto 1rem auto; /* Center horizontally */
   padding: 0 3rem;
   box-sizing: border-box;
-  
+
+  // Responsive: large screens
+  @media (max-width: 1400px) {
+    max-width: 1000px;
+  }
+
   // Responsive: medium screens
   @media (max-width: 1200px) {
-    max-width: 800px;
+    max-width: 900px;
   }
-  
+
   // Responsive: small screens
   @media (max-width: 768px) {
     max-width: 100%;

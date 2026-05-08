@@ -4,6 +4,7 @@
  */
 
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n';
@@ -13,6 +14,7 @@ import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 import type { FlowChatContext, SessionConfig } from './types';
 import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
 import {
+  createTextSessionTitleDescriptor,
   createDefaultSessionTitleDescriptor,
   getNextDefaultSessionTitleCount,
   resolveSessionTitle,
@@ -392,6 +394,10 @@ export async function renameChatSessionTitle(
   if (!trimmedTitle) {
     throw new Error('Session title must not be empty');
   }
+  if (session.isTransient) {
+    await context.flowChatStore.updateSessionTitle(sessionId, trimmedTitle, 'generated');
+    return trimmedTitle;
+  }
 
   const updatedTitle = await agentAPI.updateSessionTitle({
     sessionId,
@@ -405,6 +411,65 @@ export async function renameChatSessionTitle(
   return updatedTitle;
 }
 
+export async function forkChatSession(
+  context: FlowChatContext,
+  sourceSessionId: string,
+  sourceTurnId: string
+): Promise<string> {
+  const sourceSession = context.flowChatStore.getState().sessions.get(sourceSessionId);
+  if (!sourceSession) {
+    throw new Error(`Session does not exist: ${sourceSessionId}`);
+  }
+
+  const workspacePath = requireSessionWorkspacePath(
+    sourceSession.workspacePath,
+    sourceSessionId
+  );
+
+  const response = await sessionAPI.forkSession(
+    sourceSessionId,
+    sourceTurnId,
+    workspacePath,
+    sourceSession.remoteConnectionId,
+    sourceSession.remoteSshHost
+  );
+
+  const currentState = context.flowChatStore.getState();
+  if (!currentState.sessions.has(response.sessionId)) {
+    context.flowChatStore.createSession(
+      response.sessionId,
+      {
+        ...sourceSession.config,
+        workspacePath,
+        workspaceId: sourceSession.workspaceId,
+        remoteConnectionId: sourceSession.remoteConnectionId,
+        remoteSshHost: sourceSession.remoteSshHost,
+      },
+      undefined,
+      response.sessionName,
+      sourceSession.maxContextTokens,
+      sourceSession.mode,
+      workspacePath,
+      sourceSession.remoteConnectionId,
+      sourceSession.remoteSshHost,
+      createTextSessionTitleDescriptor(response.sessionName),
+    );
+  } else {
+    context.flowChatStore.switchSession(response.sessionId);
+  }
+
+  await context.flowChatStore.loadSessionHistory(
+    response.sessionId,
+    workspacePath,
+    undefined,
+    sourceSession.remoteConnectionId,
+    sourceSession.remoteSshHost
+  );
+  context.flowChatStore.switchSession(response.sessionId);
+
+  return response.sessionId;
+}
+
 /**
  * Ensure backend session exists (check before sending message)
  */
@@ -415,6 +480,9 @@ export async function ensureBackendSession(
   const session = context.flowChatStore.getState().sessions.get(sessionId);
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
+  }
+  if (session.isTransient) {
+    return;
   }
 
   if (session.isHistorical) {
@@ -493,6 +561,9 @@ export async function retryCreateBackendSession(
   const session = context.flowChatStore.getState().sessions.get(sessionId);
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
+  }
+  if (session.isTransient) {
+    return;
   }
 
   const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);

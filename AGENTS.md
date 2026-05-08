@@ -2,77 +2,97 @@
 
 # AGENTS.md
 
-## Overview
-
 BitFun is a Rust workspace plus a shared React frontend.
 
 Repository rule: **keep product logic platform-agnostic, then expose it through platform adapters**.
 
-- `src/crates/core`: shared product logic center
-- `src/crates/transport`: Tauri / WebSocket / CLI adapters
-- `src/crates/api-layer`: shared handlers and DTOs
-- `src/apps/desktop`: Tauri host app
-- `src/apps/server`: web backend runtime
-- `src/apps/cli`: CLI runtime
-- `src/web-ui`: shared frontend for desktop and server/web
-- `BitFun-Installer`: separate installer app
-- `tests/e2e`: desktop E2E tests
+## Quick start
 
-## 3-step onboarding
+1. Read `README.md` and `CONTRIBUTING.md` before architecture-sensitive changes.
+2. For desktop development, prefer `pnpm run desktop:dev` — it provides full hot-reload (Vite HMR + Rust auto-rebuild & restart). Use `pnpm run desktop:preview:debug` only when you need a faster cold-start for frontend-only iteration (Rust changes are not auto-rebuilt).
+3. After changes, run the smallest matching verification from the table below.
 
-1. Read `README.md`, `CONTRIBUTING.md`, and this file before architecture-sensitive changes.
-2. Prefer `pnpm run desktop:preview:debug` for fast local desktop checks. It reuses the existing debug binary after shared frontend changes and automatically does a fast local rebuild before preview when Rust / Tauri inputs are newer or the binary is missing. Keep `pnpm run desktop:dev` for the full Tauri dev flow, first-time setup, or startup/build-pipeline debugging, and use `pnpm run dev:web` for browser-only frontend work.
-3. After changes, run the smallest matching verification set below.
+## Module index
 
-## Core commands
+| Module | Path | Agent doc |
+|---|---|---|
+| Core (product logic) | `src/crates/core` | [AGENTS.md](src/crates/core/AGENTS.md) |
+| Transport adapters | `src/crates/transport` | (use core guide) |
+| API layer | `src/crates/api-layer` | (use core guide) |
+| AI adapters | `src/crates/ai-adapters` | [AGENTS.md](src/crates/ai-adapters/AGENTS.md) |
+| Desktop app | `src/apps/desktop` | [AGENTS.md](src/apps/desktop/AGENTS.md) |
+| Server | `src/apps/server` | (use core guide) |
+| CLI | `src/apps/cli` | (use core guide) |
+| Relay server | `src/apps/relay-server` | (use core guide) |
+| Shared frontend | `src/web-ui` | [AGENTS.md](src/web-ui/AGENTS.md) |
+| Installer | `BitFun-Installer` | [AGENTS.md](BitFun-Installer/AGENTS.md) |
+| E2E tests | `tests/e2e` | [AGENTS.md](tests/e2e/AGENTS.md) |
+
+## Most-used commands
 
 ```bash
 # Install
 pnpm install
-pnpm run e2e:install
 
-# Main dev flows
-pnpm run desktop:dev
-pnpm run desktop:preview:debug
-pnpm run dev:web
-pnpm run cli:dev
-pnpm run installer:dev
+# Dev
+pnpm run desktop:dev               # full hot-reload: Vite HMR + Rust auto-rebuild & restart
+pnpm run desktop:preview:debug     # reuse pre-built binary + Vite HMR; no Rust auto-rebuild
+pnpm run dev:web                   # browser-only frontend
+pnpm run cli:dev                   # CLI runtime
 
-# Frontend
+# Check
 pnpm run lint:web
 pnpm run type-check:web
+cargo check --workspace
+
+# Test
 pnpm --dir src/web-ui run test:run
+cargo test --workspace
+
+# Build
+cargo build -p bitfun-desktop
 pnpm run build:web
 
-# Rust
-cargo check --workspace
-cargo test --workspace
-cargo test -p bitfun-core <test_name> -- --nocapture
-
-# Desktop / E2E
-cargo build -p bitfun-desktop
-pnpm run e2e:test:l0
-pnpm --dir tests/e2e exec wdio run ./config/wdio.conf.ts --spec "./specs/<file>.spec.ts"
+# Fast builds (for development / CI speed)
+pnpm run desktop:build:fast           # debug build, no bundling
+pnpm run desktop:build:release-fast   # release with reduced LTO
+pnpm run desktop:build:nsis:fast      # Windows installer, release-fast profile
+pnpm run installer:build:fast         # installer app, fast mode
 ```
 
-## Fast Local Desktop Loops
+For the full script list, see [`package.json`](package.json).
 
-- `pnpm run desktop:preview:debug` starts or reuses the web dev server and launches `target/debug/bitfun-desktop(.exe)` without `tauri dev`. It reuses the existing binary when possible and automatically fast-rebuilds `bitfun-desktop` with `CARGO_PROFILE_DEV_DEBUG=0` and high codegen parallelism when Rust / Tauri inputs are newer or the binary is missing.
-- `pnpm run desktop:preview:debug -- --force-rebuild` is the escape hatch when you explicitly want to rebuild before preview even if the timestamp check says the binary is current.
-- This preview flow is for local iteration speed only. It does not replace the minimum verification set below before you finish the task.
-- If the user intent is to "quickly check the effect", "run locally for a quick look", or similar manual inspection, prefer the preview commands above even when the request also mentions "build" or "debug version".
-- Reserve `pnpm run desktop:build:fast` for cases where the user explicitly wants a debug build artifact and does not need the app launched for preview.
-- Intent examples:
-  - "build a local debug version and quickly inspect it" -> `pnpm run desktop:preview:debug`
-  - "build me a debug artifact only, no need to launch it" -> `pnpm run desktop:build:fast`
+## Global rules
 
-## Packaging Requests
+### Logging
 
-- When the user asks to package, release, or build a distributable desktop artifact without naming the exact output form, confirm the intended package type before running the build.
-- Distinguish local temporary artifacts from real release deliverables. Do not treat `desktop:preview:*`, debug builds, or `--no-bundle` fast outputs as the final user-facing release unless the user explicitly asks for that form.
-- If the user clearly wants a Windows installer for end users, prefer `pnpm run desktop:build:nsis`.
-- If the user clearly wants a standalone Windows executable instead of an installer, prefer `pnpm run desktop:build:exe`.
-- If the user already names the exact target format, do not ask again; just use the requested packaging flow.
+Logs must be English-only, with no emojis.
+
+- Frontend: [`src/web-ui/LOGGING.md`](src/web-ui/LOGGING.md)
+- Backend: [`src/crates/LOGGING.md`](src/crates/LOGGING.md)
+
+### Tauri commands
+
+- Command names: `snake_case`
+- TypeScript may wrap with `camelCase`, but invoke Rust with a structured `request`
+
+```rust
+#[tauri::command]
+pub async fn your_command(
+    state: State<'_, AppState>,
+    request: YourRequest,
+) -> Result<YourResponse, String>
+```
+
+```ts
+await api.invoke('your_command', { request: { ... } });
+```
+
+### Platform boundaries
+
+- Do not call Tauri APIs directly from UI components; go through the adapter/infrastructure layer.
+- Desktop-only integrations belong in `src/apps/desktop`, then flow back through transport/API layers.
+- In shared core, avoid host-specific APIs such as `tauri::AppHandle`; use shared abstractions such as `bitfun_events::EventEmitter`.
 
 ## Architecture
 
@@ -104,70 +124,10 @@ SessionManager → Session → DialogTurn → ModelRound
 
 Session data is stored under `.bitfun/sessions/{session_id}/`.
 
-### Frontend and desktop boundaries
-
-- `src/web-ui` serves both Tauri desktop and server/web
-- Do not call Tauri APIs directly from UI components; go through the adapter/infrastructure layer
-- Desktop-only integrations belong in `src/apps/desktop`, then flow back through transport/API layers
-- In shared core, avoid host-specific APIs such as `tauri::AppHandle`; use shared abstractions such as `bitfun_events::EventEmitter`
-
-## Repository-specific rules
-
-### Logging
-
-Logs must be English-only, with no emojis.
-
-- Frontend: `src/web-ui/LOGGING.md`
-- Backend: `src/crates/LOGGING.md`
-
-Patterns:
-
-```ts
-const log = createLogger('ModuleName');
-log.info('Loaded items', { count });
-```
-
-```rust
-use log::{debug, error, info, trace, warn};
-info!("Registered adapter for session {}", session_id);
-```
-
-### Tauri commands
-
-- command names: `snake_case`
-- Rust side: `snake_case`
-- TypeScript may wrap with `camelCase`, but invoke Rust with a structured `request`
-
-```rust
-#[tauri::command]
-pub async fn your_command(
-    state: State<'_, AppState>,
-    request: YourRequest,
-) -> Result<YourResponse, String>
-```
-
-```ts
-await api.invoke('your_command', { request: { ... } });
-```
-
-### Extra narrow rules
-
-- If you modify `src/crates/ai-adapters`, run the stream integration tests in `src/crates/core/tests`
-- If you modify `src/crates/core/src/agentic/execution/stream_processor.rs`, run the stream integration tests before finishing
-
-## Where to look first
-
-- Agent modes: `src/crates/core/src/agentic/agents/`, `src/crates/core/src/agentic/agents/prompts/`, `src/web-ui/src/locales/*/scenes/agents.json`
-- Deep Review / Code Review Team: `src/crates/core/src/agentic/deep_review_policy.rs`, `src/crates/core/src/agentic/agents/deep_review_agent.rs`, `src/crates/core/src/agentic/tools/implementations/{task_tool.rs,code_review_tool.rs}`, `src/web-ui/src/shared/services/reviewTeamService.ts`, `src/web-ui/src/flow_chat/services/DeepReviewService.ts`, `src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx`
-- Tools: `src/crates/core/src/agentic/tools/implementations/`, `src/crates/core/src/agentic/tools/registry.rs`
-- MCP / LSP / remote: `src/crates/core/src/service/mcp/`, `src/crates/core/src/service/lsp/`, `src/crates/core/src/service/remote_connect/`, `src/crates/core/src/service/remote_ssh/`
-- Desktop APIs: `src/apps/desktop/src/api/`, `src/crates/api-layer/src/`, `src/crates/transport/src/adapters/tauri.rs`
-- Web/server communication: `src/web-ui/src/infrastructure/api/`, `src/crates/transport/src/adapters/websocket.rs`, `src/apps/server/src/routes/`, `src/apps/server/src/main.rs`
-
 ## Verification
 
 | Change type | Minimum verification |
-| --- | --- |
+|---|---|
 | Frontend UI, state, adapters, or locales | `pnpm run lint:web && pnpm run type-check:web && pnpm --dir src/web-ui run test:run` |
 | Deep Review / Code Review Team behavior | Web UI verification above, plus `cargo test -p bitfun-core deep_review -- --nocapture`; also run the Rust / desktop rows below when backend or Tauri APIs are touched |
 | Shared Rust logic in `core`, `transport`, `api-layer`, or services | `cargo check --workspace && cargo test --workspace` |
@@ -176,22 +136,18 @@ await api.invoke('your_command', { request: { ... } });
 | `src/crates/ai-adapters` | Relevant Rust checks above **and** stream integration tests in `src/crates/core/tests` |
 | Installer app | `pnpm run installer:build` |
 
-## Agent-doc coverage
+## Where to look first
 
-This is the repository-wide guide.
+| Feature | Key paths |
+|---|---|
+| Agent modes | `src/crates/core/src/agentic/agents/`, `src/crates/core/src/agentic/agents/prompts/`, `src/web-ui/src/locales/*/scenes/agents.json` |
+| Deep Review / Code Review Team | `src/crates/core/src/agentic/deep_review_policy.rs`, `src/crates/core/src/agentic/agents/deep_review_agent.rs`, `src/crates/core/src/agentic/tools/implementations/{task_tool.rs,code_review_tool.rs}`, `src/web-ui/src/shared/services/reviewTeamService.ts`, `src/web-ui/src/flow_chat/services/DeepReviewService.ts`, `src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx` |
+| Tools | `src/crates/core/src/agentic/tools/implementations/`, `src/crates/core/src/agentic/tools/registry.rs` |
+| MCP / LSP / remote | `src/crates/core/src/service/mcp/`, `src/crates/core/src/service/lsp/`, `src/crates/core/src/service/remote_connect/`, `src/crates/core/src/service/remote_ssh/` |
+| Desktop APIs | `src/apps/desktop/src/api/`, `src/crates/api-layer/src/`, `src/crates/transport/src/adapters/tauri.rs` |
+| Relay server | `src/apps/relay-server/` |
+| Web/server communication | `src/web-ui/src/infrastructure/api/`, `src/crates/transport/src/adapters/websocket.rs`, `src/apps/server/src/routes/`, `src/apps/server/src/main.rs` |
 
-Rule priority:
+## Agent-doc priority
 
-- prefer the nearest matching `AGENTS.md` / `AGENTS-CN.md` for the directory you are changing
-- if local guidance conflicts with this file, follow the more specific, nearer document
-
-Prefer the nearest matching agent doc when present:
-
-- `src/web-ui/AGENTS.md`
-- `src/crates/core/AGENTS.md`
-- `src/apps/desktop/AGENTS.md`
-- `tests/e2e/AGENTS.md`
-- `BitFun-Installer/AGENTS.md`
-- `src/crates/ai-adapters/AGENTS.md`
-- `src/crates/core/src/agentic/execution/AGENTS.md`
-
+Prefer the nearest matching `AGENTS.md` / `AGENTS-CN.md` for the directory you are changing. If local guidance conflicts with this file, follow the more specific, nearer document.

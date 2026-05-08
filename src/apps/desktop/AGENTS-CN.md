@@ -20,24 +20,8 @@
 
 ## 本模块规则
 
-- 保持 Tauri command 一致：名称使用 `snake_case`，调用使用结构化 `request`
 - 桌面端专属集成留在这里，不要下沉到共享 core
-- 本地临时调试时，无论是共享前端改动还是 Rust / Tauri 改动，都优先使用 `pnpm run desktop:preview:debug`；它会在现有 debug 二进制仍然可复用时直接预览，并在桌面侧输入更新或二进制缺失时自动重编后再预览。只有在需要完整 Tauri dev watcher，或正在排查启动 / 构建集成本身时，才回到 `pnpm run desktop:dev`
-- 当表述里同时出现“编译/调试版本”和“快速看看效果/先看一下”时，按更高层的“预览”意图处理，优先使用 preview 命令，而不是 `pnpm run desktop:build:fast`
-
-推荐命令形状：
-
-```rust
-#[tauri::command]
-pub async fn your_command(
-    state: State<'_, AppState>,
-    request: YourRequest,
-) -> Result<YourResponse, String>
-```
-
-```ts
-await api.invoke('your_command', { request: { ... } });
-```
+- 涉及打包或 release 请求时，参见顶层 `AGENTS.md`
 
 ## 命令
 
@@ -50,6 +34,25 @@ cargo build -p bitfun-desktop
 pnpm run desktop:build:fast
 ```
 
+## 快速构建
+
+| 命令 | 使用场景 |
+|---|---|
+| `pnpm run desktop:build:fast` | Debug 构建，不打包；手动测试时编译最快 |
+| `pnpm run desktop:build:release-fast` | 类 Release 构建，降低 LTO；需要 release 行为但无法等待完整 LTO 时使用 |
+| `pnpm run desktop:build:nsis:fast` | Windows 安装器，使用 `release-fast` profile；快速验证安装器 |
+
+`release-fast` profile（`Cargo.toml`）：继承 `release`，但关闭 LTO、`codegen-units` 提高到 16、启用增量编译。编译速度显著提升，代价是二进制体积增大和边际运行时性能下降。
+
+## DevTools feature（模型规则）
+
+`devtools` Cargo feature 用于桌面端 UI/UX 调试。添加或修改调试相关代码时：
+
+- 所有调试专用 API 和 command 必须用 `#[cfg(any(debug_assertions, feature = "devtools"))]` 保护
+- 在 `#[cfg(not(any(debug_assertions, feature = "devtools")))]` 下提供 no-op stub，确保 command 始终可以注册到 `invoke_handler`
+- 该 feature 通过 `--features devtools` 在 `dev` 构建和 `release-fast` profile 构建中自动启用
+- 面向最终用户的 `release` profile 构建中永不启用
+
 ## 验证
 
 ```bash
@@ -61,15 +64,3 @@ cargo check -p bitfun-desktop && cargo test -p bitfun-desktop
 ```bash
 cargo build -p bitfun-desktop
 ```
-
-上面的 preview 命令只是迭代捷径，完成任务前仍要按要求执行最小 Rust 检查，以及必要的 build / E2E 验证。
-
-只有在你明确想忽略时间戳复用判断、强制先重编再预览时，才使用 `pnpm run desktop:preview:debug -- --force-rebuild`。
-
-`pnpm run desktop:build:fast` 只用于用户明确要 debug 构建产物、且不需要启动应用预览的场景。
-
-涉及打包或 release 请求时：
-
-- 如果用户没有明确说明要的是本地快速产物、独立可执行文件，还是安装器，先确认目标打包形式。
-- 不要用 preview/debug 产物替代正式 release 交付物。
-- 在 Windows 上，面向安装交付优先使用 `pnpm run desktop:build:nsis`；只有用户明确要独立可执行文件时，才使用 `pnpm run desktop:build:exe`。

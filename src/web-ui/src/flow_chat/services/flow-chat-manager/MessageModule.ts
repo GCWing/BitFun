@@ -4,6 +4,7 @@
  */
 
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { notificationService } from '../../../shared/notification-system';
@@ -20,10 +21,21 @@ import {
   FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
   type FlowChatPinTurnToTopRequest,
 } from '../../events/flowchatNavigation';
+import {
+  isTransientBtwSession,
+  sendMessageToTransientBtwSession,
+} from '../BtwThreadService';
 
 const log = createLogger('MessageModule');
 
 const ONE_SHOT_AGENT_TYPES_FOR_SESSION = new Set(['Init']);
+
+function acpClientIdFromMode(mode: string | undefined): string | null {
+  const value = mode?.trim();
+  if (!value?.startsWith('acp:')) return null;
+  const clientId = value.slice('acp:'.length).trim();
+  return clientId || null;
+}
 
 function normalizeModelSelection(
   modelId: string | undefined,
@@ -118,11 +130,15 @@ export async function sendMessage(
     }));
   }
 
+  let createdLocalTurnId: string | null = null;
+
   try {
     const refreshedSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
     const currentAgentType = (agentType?.trim() || refreshedSession.mode || 'agentic').trim();
+    const acpClientId = acpClientIdFromMode(currentAgentType);
 
     if (
+      !acpClientId &&
       agentType?.trim() &&
       !ONE_SHOT_AGENT_TYPES_FOR_SESSION.has(currentAgentType) &&
       refreshedSession.mode !== currentAgentType
@@ -134,7 +150,29 @@ export async function sendMessage(
       throw new Error('Session history is still restoring, please retry once loading finishes');
     }
 
-    await ensureBackendSession(context, sessionId);
+    if (isTransientBtwSession(refreshedSession)) {
+      if ((options?.imageContexts?.length ?? 0) > 0) {
+        throw new Error('Transient /btw sessions do not support image attachments yet');
+      }
+
+      const parentSessionId = refreshedSession.parentSessionId?.trim();
+      if (!parentSessionId) {
+        throw new Error(`Transient /btw session is missing parentSessionId: ${sessionId}`);
+      }
+
+      await sendMessageToTransientBtwSession({
+        parentSessionId,
+        childSessionId: sessionId,
+        question: message,
+        childSessionName: refreshedSession.title,
+        modelId: refreshedSession.config.modelName,
+      });
+      return;
+    }
+
+    if (!acpClientId) {
+      await ensureBackendSession(context, sessionId);
+    }
 
     const readySession = context.flowChatStore.getState().sessions.get(sessionId);
     if (!readySession) {
@@ -163,6 +201,7 @@ export async function sendMessage(
     };
 
     context.flowChatStore.addDialogTurn(sessionId, dialogTurn);
+    createdLocalTurnId = dialogTurnId;
     const pinRequest: FlowChatPinTurnToTopRequest = {
       sessionId,
       turnId: dialogTurnId,
@@ -185,7 +224,8 @@ export async function sendMessage(
       dialogTurnId,
     });
     if (!startOk) {
-      throw new Error('Session is still busy finishing the previous turn');
+      const currentState = stateMachineManager.getCurrentState(sessionId);
+      throw new Error(`Session is still busy finishing the previous turn (current state: ${currentState})`);
     }
 
     if (isFirstMessage) {
@@ -199,7 +239,9 @@ export async function sendMessage(
       metadata: { sessionId: sessionId, dialogTurnId }
     });
 
-    await syncSessionModelSelection(context, sessionId, currentAgentType);
+    if (!acpClientId) {
+      await syncSessionModelSelection(context, sessionId, currentAgentType);
+    }
 
     const updatedSession = context.flowChatStore.getState().sessions.get(sessionId);
     if (!updatedSession) {
@@ -211,25 +253,19 @@ export async function sendMessage(
 
     const workspacePath = updatedSession.workspacePath;
     
-    try {
-      await agentAPI.startDialogTurn({
-        sessionId: sessionId,
+    if (acpClientId) {
+      await ACPClientAPI.startDialogTurn({
+        sessionId,
+        clientId: acpClientId,
         userInput: message,
         originalUserInput: displayMessage || message,
         turnId: dialogTurnId,
-        agentType: currentAgentType,
         workspacePath,
-        imageContexts: options?.imageContexts,
+        remoteConnectionId: updatedSession.remoteConnectionId,
+        remoteSshHost: updatedSession.remoteSshHost,
       });
-    } catch (error: any) {
-      if (error?.message?.includes('Session does not exist') || error?.message?.includes('Not found')) {
-        log.warn('Backend session still not found, retrying creation', {
-          sessionId: sessionId,
-          dialogTurnsCount: updatedSession.dialogTurns.length
-        });
-        
-        await retryCreateBackendSession(context, sessionId);
-        
+    } else {
+      try {
         await agentAPI.startDialogTurn({
           sessionId: sessionId,
           userInput: message,
@@ -239,8 +275,27 @@ export async function sendMessage(
           workspacePath,
           imageContexts: options?.imageContexts,
         });
-      } else {
-        throw error;
+      } catch (error: any) {
+        if (error?.message?.includes('Session does not exist') || error?.message?.includes('Not found')) {
+          log.warn('Backend session still not found, retrying creation', {
+            sessionId: sessionId,
+            dialogTurnsCount: updatedSession.dialogTurns.length
+          });
+
+          await retryCreateBackendSession(context, sessionId);
+
+          await agentAPI.startDialogTurn({
+            sessionId: sessionId,
+            userInput: message,
+            originalUserInput: displayMessage || message,
+            turnId: dialogTurnId,
+            agentType: currentAgentType,
+            workspacePath,
+            imageContexts: options?.imageContexts,
+          });
+        } else {
+          throw error;
+        }
       }
     }
 
@@ -256,16 +311,16 @@ export async function sendMessage(
     
     const currentState = stateMachineManager.getCurrentState(sessionId);
     if (currentState === SessionExecutionState.PROCESSING) {
-      stateMachineManager.transition(sessionId, SessionExecutionEvent.ERROR_OCCURRED, {
+      await stateMachineManager.transition(sessionId, SessionExecutionEvent.ERROR_OCCURRED, {
         error: errorMessage
       });
+      await stateMachineManager.transition(sessionId, SessionExecutionEvent.RESET);
     }
     
     const state = context.flowChatStore.getState();
     const currentSession = state.sessions.get(sessionId);
-    if (currentSession && currentSession.dialogTurns.length > 0) {
-      const lastDialogTurn = currentSession.dialogTurns[currentSession.dialogTurns.length - 1];
-      context.flowChatStore.deleteDialogTurn(sessionId, lastDialogTurn.id);
+    if (createdLocalTurnId && currentSession) {
+      context.flowChatStore.deleteDialogTurn(sessionId, createdLocalTurnId);
     }
     
     notificationService.error(errorMessage, {
@@ -297,13 +352,14 @@ export async function cancelCurrentTask(context: FlowChatContext): Promise<boole
       log.debug('No active session to cancel');
       return false;
     }
-    
+
     const currentState = stateMachineManager.getCurrentState(sessionId);
     const success = currentState === SessionExecutionState.PROCESSING 
       ? await stateMachineManager.transition(sessionId, SessionExecutionEvent.USER_CANCEL)
       : false;
     
     if (success) {
+      context.userCancelledSessionIds.add(sessionId);
       markCurrentTurnItemsAsCancelled(context, sessionId);
       cleanupSessionBuffers(context, sessionId);
     }

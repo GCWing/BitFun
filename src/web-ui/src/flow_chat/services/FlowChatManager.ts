@@ -10,6 +10,7 @@
 import { processingStatusManager } from './ProcessingStatusManager';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { AgentService } from '../../shared/services/agent-service';
+import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { stateMachineManager } from '../state-machine';
 import { EventBatcher } from './EventBatcher';
 import { createLogger } from '@/shared/utils/logger';
@@ -20,7 +21,6 @@ import {
 } from '../utils/sessionOrdering';
 
 import type { FlowChatContext, SessionConfig, DialogTurn } from './flow-chat-manager/types';
-import type { FlowToolItem, FlowTextItem, ModelRound } from '../types/flow-chat';
 import {
   saveAllInProgressTurns,
   immediateSaveDialogTurn,
@@ -28,6 +28,7 @@ import {
   switchChatSession as switchChatSessionModule,
   deleteChatSession as deleteChatSessionModule,
   renameChatSessionTitle as renameChatSessionTitleModule,
+  forkChatSession as forkChatSessionModule,
   cleanupSaveState,
   cleanupSessionBuffers,
   sendMessage as sendMessageModule,
@@ -37,7 +38,8 @@ import {
   addDialogTurn as addDialogTurnModule,
   addImageAnalysisPhase as addImageAnalysisPhaseModule,
   updateImageAnalysisResults as updateImageAnalysisResultsModule,
-  updateImageAnalysisItem as updateImageAnalysisItemModule
+  updateImageAnalysisItem as updateImageAnalysisItemModule,
+  updateSessionMetadata,
 } from './flow-chat-manager';
 
 const log = createLogger('FlowChatManager');
@@ -65,6 +67,8 @@ export class FlowChatManager {
       lastSaveHashes: new Map(),
       turnSaveInFlight: new Map(),
       turnSavePending: new Set(),
+      runtimeStatusTimers: new Map(),
+      userCancelledSessionIds: new Set(),
       currentWorkspacePath: null
     };
     
@@ -86,6 +90,16 @@ export class FlowChatManager {
   ): Promise<boolean> {
     try {
       await this.initializeEventListeners();
+
+      // Register callback to persist unread completion changes to backend
+      this.context.flowChatStore.registerPersistUnreadCompletionCallback(
+        (sessionId, value) => {
+          updateSessionMetadata(this.context, sessionId).catch(err => {
+            log.warn('Failed to persist unread completion change', { sessionId, value, err });
+          });
+        }
+      );
+
       await this.context.flowChatStore.initializeFromDisk(
         workspacePath,
         remoteConnectionId,
@@ -185,6 +199,51 @@ export class FlowChatManager {
     return createChatSessionModule(this.context, config, mode);
   }
 
+  async createAcpChatSession(clientId: string, config: SessionConfig = {}): Promise<string> {
+    const workspacePath =
+      config.workspacePath?.trim() ||
+      this.context.currentWorkspacePath?.trim();
+    if (!workspacePath) {
+      throw new Error('Workspace path is required to create an ACP session');
+    }
+
+    window.dispatchEvent(new CustomEvent('bitfun:acp-session-creation', {
+      detail: { phase: 'start', clientId },
+    }));
+
+    try {
+      const response = await ACPClientAPI.createFlowSession({
+        clientId,
+        workspacePath,
+        remoteConnectionId: config.remoteConnectionId,
+        remoteSshHost: config.remoteSshHost,
+        sessionName: `${clientId} ACP`,
+      });
+
+      this.context.flowChatStore.createSession(
+        response.sessionId,
+        {
+          ...config,
+          workspacePath,
+          agentType: response.agentType,
+        },
+        undefined,
+        response.sessionName,
+        128128,
+        response.agentType,
+        workspacePath,
+        config.remoteConnectionId,
+        config.remoteSshHost,
+      );
+
+      return response.sessionId;
+    } finally {
+      window.dispatchEvent(new CustomEvent('bitfun:acp-session-creation', {
+        detail: { phase: 'finish', clientId },
+      }));
+    }
+  }
+
   async switchChatSession(sessionId: string): Promise<void> {
     return switchChatSessionModule(this.context, sessionId);
   }
@@ -206,6 +265,10 @@ export class FlowChatManager {
 
   async renameChatSessionTitle(sessionId: string, title: string): Promise<string> {
     return renameChatSessionTitleModule(this.context, sessionId, title);
+  }
+
+  async forkChatSession(sourceSessionId: string, sourceTurnId: string): Promise<string> {
+    return forkChatSessionModule(this.context, sourceSessionId, sourceTurnId);
   }
 
   async resetWorkspaceSessions(
@@ -319,6 +382,21 @@ export class FlowChatManager {
     return cancelCurrentTaskModule(this.context);
   }
 
+  /**
+   * Continue a dialog turn that was paused due to max_rounds being reached.
+   * Sends a continuation message that instructs the AI to resume where it left off.
+   */
+  async continueDialogTurn(sessionId: string): Promise<void> {
+    return sendMessageModule(
+      this.context,
+      '[Continue execution from where you left off. The previous turn was paused because the round limit was reached. Please continue the task.]',
+      sessionId,
+      undefined,
+      undefined,
+      undefined
+    );
+  }
+
   public async saveAllInProgressTurns(): Promise<void> {
     return saveAllInProgressTurns(this.context);
   }
@@ -333,102 +411,6 @@ export class FlowChatManager {
 
   addDialogTurn(sessionId: string, dialogTurn: DialogTurn): void {
     addDialogTurnModule(this.context, sessionId, dialogTurn);
-  }
-
-  /**
-   * Insert an in-stream /btw marker into the currently streaming turn, and split the streaming text item
-   * so subsequent chunks continue after the marker.
-   *
-   * This is best-effort; if we cannot locate an active streaming turn/round, it becomes a no-op.
-   */
-  public insertBtwMarkerIntoActiveStream(params: {
-    parentSessionId: string;
-    requestId: string;
-    childSessionId: string;
-    title: string;
-  }): void {
-    const { parentSessionId, requestId, childSessionId, title } = params;
-
-    const machine = stateMachineManager.get(parentSessionId);
-    const ctx = machine?.getContext?.();
-    const dialogTurnId = ctx?.currentDialogTurnId;
-    if (!dialogTurnId) return;
-
-    const session = this.context.flowChatStore.getState().sessions.get(parentSessionId);
-    const turn = session?.dialogTurns.find(t => t.id === dialogTurnId);
-    if (!turn) return;
-    if (
-      turn.status !== 'processing' &&
-      turn.status !== 'finishing' &&
-      turn.status !== 'image_analyzing'
-    ) {
-      // Only inject into an actively streaming turn; otherwise we'd create dangling streaming items.
-      return;
-    }
-
-    const lastRound: ModelRound | undefined = (() => {
-      const streaming = [...turn.modelRounds].reverse().find(r => r.isStreaming);
-      if (streaming) return streaming;
-      return turn.modelRounds[turn.modelRounds.length - 1];
-    })();
-    if (!lastRound) return;
-
-    const roundId = lastRound.id;
-
-    if (!this.context.contentBuffers.has(parentSessionId)) {
-      this.context.contentBuffers.set(parentSessionId, new Map());
-    }
-    if (!this.context.activeTextItems.has(parentSessionId)) {
-      this.context.activeTextItems.set(parentSessionId, new Map());
-    }
-    const sessionBuffers = this.context.contentBuffers.get(parentSessionId)!;
-    const sessionActiveItems = this.context.activeTextItems.get(parentSessionId)!;
-
-    const existingTextItemId = sessionActiveItems.get(roundId);
-    if (existingTextItemId) {
-      // Freeze the existing streaming text item as "pre-marker".
-      this.context.flowChatStore.updateModelRoundItem(parentSessionId, dialogTurnId, existingTextItemId, {
-        isStreaming: false,
-        status: 'completed',
-      } as any);
-    }
-
-    // Reset buffer so the new tail text item starts fresh (no duplication).
-    sessionBuffers.set(roundId, '');
-
-    const markerId = `btw_marker_${requestId}`;
-    const markerItem: FlowToolItem = {
-      id: markerId,
-      type: 'tool',
-      timestamp: Date.now(),
-      status: 'completed',
-      toolName: 'BtwMarker',
-      toolCall: {
-        id: markerId,
-        input: {
-          requestId,
-          parentSessionId,
-          childSessionId,
-          title,
-        },
-      },
-      requiresConfirmation: false,
-    };
-    this.context.flowChatStore.addModelRoundItem(parentSessionId, dialogTurnId, markerItem as any, roundId);
-
-    const tailTextItemId = `btw_tail_${requestId}`;
-    const tailTextItem: FlowTextItem = {
-      id: tailTextItemId,
-      type: 'text',
-      content: '',
-      isStreaming: true,
-      isMarkdown: true,
-      timestamp: Date.now(),
-      status: 'streaming',
-    };
-    this.context.flowChatStore.addModelRoundItem(parentSessionId, dialogTurnId, tailTextItem as any, roundId);
-
-    sessionActiveItems.set(roundId, tailTextItemId);
   }
 
   addImageAnalysisPhase(

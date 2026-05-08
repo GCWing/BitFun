@@ -1,4 +1,10 @@
 .review-session-summary-card {
+  /* Header has global pad-x 0; keep left alignment and give the file count + chevron room from the card edge. */
+  .base-tool-card-header {
+    gap: 8px;
+    padding-right: 10px;
+  }
+
   .review-session-summary-card__icon {
     color: color-mix(in srgb, var(--color-accent-400, #0ea5e9) 76%, var(--color-text-primary));
   }
@@ -7,6 +13,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
+    margin-right: 2px;
     color: var(--color-text-muted);
     font-size: var(--flowchat-font-size-sm);
   }

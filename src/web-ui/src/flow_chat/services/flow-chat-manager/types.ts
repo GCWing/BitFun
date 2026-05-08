@@ -18,6 +18,8 @@ export interface FlowChatContext {
     turnId: string;
     lastActivityAt: number;
     timer: ReturnType<typeof setTimeout> | null;
+    /** Set when the turn completed with a partial stream recovery. */
+    partialRecoveryReason?: string;
   }>;
   /** In-flight historical session hydration: sessionId -> promise */
   pendingHistoryLoads: Map<string, Promise<void>>;
@@ -35,6 +37,10 @@ export interface FlowChatContext {
   turnSaveInFlight: Map<string, Promise<void>>;
   /** Pending save marks for coalesced serial execution */
   turnSavePending: Set<string>;
+  /** Transient runtime status timers: key = "sessionId:turnId:roundId:scope" */
+  runtimeStatusTimers: Map<string, ReturnType<typeof setTimeout>>;
+  /** Session IDs that the user explicitly cancelled; used to skip unread marking */
+  userCancelledSessionIds: Set<string>;
   currentWorkspacePath: string | null;
 }
 

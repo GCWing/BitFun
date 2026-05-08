@@ -2,7 +2,7 @@
 name: document-release
 description: |
   Post-ship documentation update. Reads all project docs, cross-references the
-  diff, updates README/ARCHITECTURE/CONTRIBUTING/CLAUDE.md to match what shipped,
+  diff, updates README/ARCHITECTURE/CONTRIBUTING/AGENTS.md to match what shipped,
   polishes CHANGELOG voice, cleans up TODOS, and optionally bumps VERSION. Use when
   asked to "update the docs", "sync documentation", or "post-ship docs".
   Proactively suggest after a PR is merged or code is shipped. (gstack)
@@ -37,6 +37,16 @@ subjective decisions.
 - Bump VERSION without asking — always use AskUserQuestion for version changes
 - Use `Write` tool on CHANGELOG.md — always use `Edit` with exact `old_string` matches
 
+## BitFun Team Mode Dispatch
+
+When this skill is invoked by BitFun Team Mode, this skill supplies the documentation-release methodology. Use existing Task sub-agents for read-only doc drift discovery, then keep edits in the main Team session.
+
+- Do not assume a Technical Writer sub-agent exists. Choose only from the Task tool's available agents.
+- Prefer matching custom docs/writing sub-agents if available; otherwise use `Explore` for diff-to-doc mapping and `FileFinder` for locating impacted docs.
+- Good parallel Task tracks: README/API drift, architecture docs drift, changelog/release-note gaps, and TODO cleanup candidates.
+- Do not ask Task sub-agents to edit docs. Require evidence: changed behavior, affected docs, stale statements, and suggested wording.
+- The main Team orchestrator owns all doc edits and risky narrative questions.
+
 ---
 
 ## Step 1: Pre-flight & Diff Analysis
@@ -60,7 +70,7 @@ git diff <base>...HEAD --name-only
 3. Discover all documentation files in the repo:
 
 ```bash
-find . -maxdepth 2 -name "*.md" -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./.gstack/*" -not -path "./.context/*" | sort
+find . -maxdepth 2 -name "*.md" -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./.bitfun/team/*" -not -path "./.context/*" | sort
 ```
 
 4. Classify the changes into categories relevant to documentation:
@@ -97,7 +107,7 @@ Read each documentation file and cross-reference it against the diff. Use these 
 - Are workflow descriptions (dev setup, operational learnings, etc.) current?
 - Flag anything that would fail or confuse a first-time contributor.
 
-**CLAUDE.md / project instructions:**
+**AGENTS.md / project instructions:**
 - Does the project structure section match the actual file tree?
 - Are listed commands and scripts accurate?
 - Do build/test instructions match what's in package.json (or equivalent)?
@@ -179,11 +189,11 @@ preserved them. This skill must NEVER do that.
 
 After auditing each file individually, do a cross-doc consistency pass:
 
-1. Does the README's feature/capability list match what CLAUDE.md (or project instructions) describes?
+1. Does the README's feature/capability list match what AGENTS.md (or project instructions) describes?
 2. Does ARCHITECTURE's component list match CONTRIBUTING's project structure description?
 3. Does CHANGELOG's latest version match the VERSION file?
-4. **Discoverability:** Is every documentation file reachable from README.md or CLAUDE.md? If
-   ARCHITECTURE.md exists but neither README nor CLAUDE.md links to it, flag it. Every doc
+4. **Discoverability:** Is every documentation file reachable from README.md or AGENTS.md? If
+   ARCHITECTURE.md exists but neither README nor AGENTS.md links to it, flag it. Every doc
    should be discoverable from one of the two entry-point files.
 5. Flag any contradictions between documents. Auto-fix clear factual inconsistencies (e.g., a
    version mismatch). Use AskUserQuestion for narrative contradictions.
@@ -265,8 +275,6 @@ committing.
 ```bash
 git commit -m "$(cat <<'EOF'
 docs: update project documentation for vX.Y.Z.W
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -355,6 +363,6 @@ Where status is one of:
 - **Never bump VERSION silently.** Always ask. Even if already bumped, check whether it covers the full scope of changes.
 - **Be explicit about what changed.** Every edit gets a one-line summary.
 - **Generic heuristics, not project-specific.** The audit checks work on any repo.
-- **Discoverability matters.** Every doc file should be reachable from README or CLAUDE.md.
+- **Discoverability matters.** Every doc file should be reachable from README or AGENTS.md.
 - **Voice: friendly, user-forward, not obscure.** Write like you're explaining to a smart person
   who hasn't seen the code.

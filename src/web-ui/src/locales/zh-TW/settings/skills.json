@@ -29,7 +29,8 @@
       "downloadProject": "下載到項目",
       "installed": "已安裝",
       "installedTooltip": "該 Skill 已安裝",
-      "downloading": "下載中..."
+      "downloading": "下載中...",
+      "downloadUser": "下載到使用者"
     }
   },
   "form": {

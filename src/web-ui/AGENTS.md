@@ -27,13 +27,11 @@ Most changes start in:
 - Do not call Tauri APIs directly from UI components; go through the adapter / infrastructure layer
 - Reuse existing theme, i18n, component-library, and Zustand stores before adding new frontend primitives
 - Follow `src/web-ui/LOGGING.md`: English only, no emojis, structured logs
-- For quick manual desktop verification of shared frontend changes, prefer `pnpm run desktop:preview:debug` over `pnpm run desktop:dev`; switch back to the full desktop flow only when the Tauri startup/dev pipeline itself is part of what you are validating
 
 ## Commands
 
 ```bash
 pnpm --dir src/web-ui dev
-pnpm run desktop:preview:debug
 pnpm --dir src/web-ui run lint
 pnpm --dir src/web-ui run type-check
 pnpm --dir src/web-ui run test:run

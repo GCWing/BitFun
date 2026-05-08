@@ -7,7 +7,6 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::process::Command;
 use tokio::sync::Mutex;
 
 const MAX_WORKERS: usize = 5;
@@ -276,7 +275,7 @@ impl JsWorkerPool {
             }
         };
 
-        let output = Command::new(cmd)
+        let output = crate::util::process_manager::create_tokio_command(cmd)
             .args(args)
             .current_dir(&app_dir)
             .output()

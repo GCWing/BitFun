@@ -41,6 +41,9 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/session-config', key: 'subtitle' },
     { ns: 'settings/session-config', key: 'features.sessionTitle.title' },
     { ns: 'settings/session-config', key: 'features.sessionTitle.subtitle' },
+    { ns: 'settings/session-config', key: 'features.workspaceSearch.title' },
+    { ns: 'settings/session-config', key: 'features.workspaceSearch.subtitle' },
+    { ns: 'settings/session-config', key: 'features.workspaceSearch.enable' },
     { ns: 'settings/session-config', key: 'toolExecution.sectionTitle' },
     { ns: 'settings/session-config', key: 'toolExecution.sectionDescription' },
     { ns: 'settings/session-config', key: 'computerUse.sectionTitle' },
@@ -91,6 +94,14 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/mcp-tools', key: 'subtitle' },
     { ns: 'settings/mcp', key: 'section.serverList.title' },
     { ns: 'settings/mcp', key: 'section.serverList.description' },
+  ],
+
+  'acp-agents': [
+    { ns: 'settings/acp-agents', key: 'title' },
+    { ns: 'settings/acp-agents', key: 'subtitle' },
+    { ns: 'settings/acp-agents', key: 'registry.title' },
+    { ns: 'settings/acp-agents', key: 'registry.description' },
+    { ns: 'settings/acp-agents', key: 'json.title' },
   ],
 
   editor: [

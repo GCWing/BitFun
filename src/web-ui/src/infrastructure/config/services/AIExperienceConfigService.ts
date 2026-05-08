@@ -10,6 +10,24 @@ export interface AIExperienceSettings {
   enable_visual_mode: boolean;
   /** Pixel Agent companion in collapsed chat input (session settings). */
   enable_agent_companion: boolean;
+  /** Where to show the Agent companion. */
+  agent_companion_display_mode: AgentCompanionDisplayMode;
+  /** Optional Petdex-compatible companion package selected by the user. */
+  agent_companion_pet?: AgentCompanionPetSelection | null;
+  /** Flashgrep-backed accelerated workspace search for local workspaces. */
+  enable_workspace_search: boolean;
+}
+
+export type AgentCompanionDisplayMode = 'input' | 'desktop';
+
+export interface AgentCompanionPetSelection {
+  id: string;
+  displayName: string;
+  description?: string | null;
+  source: 'preset' | 'user';
+  packagePath: string;
+  spritesheetPath: string;
+  spritesheetMimeType: string;
 }
 
 const CONFIG_PATH = 'app.ai_experience';
@@ -18,6 +36,8 @@ const defaultSettings: AIExperienceSettings = {
   enable_session_title_generation: true,
   enable_visual_mode: false,
   enable_agent_companion: true,
+  agent_companion_display_mode: 'desktop',
+  enable_workspace_search: false,
 };
 
  
@@ -133,4 +153,3 @@ export class AIExperienceConfigService {
 
  
 export const aiExperienceConfigService = AIExperienceConfigService.getInstance();
-

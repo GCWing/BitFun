@@ -9,9 +9,11 @@ pub mod theme;
 use bitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
 use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::infrastructure::{get_path_manager_arc, try_get_path_manager_arc};
+use bitfun_core::service::search::get_global_workspace_search_service;
 use bitfun_core::service::workspace::get_global_workspace_service;
 use bitfun_core::util::{elapsed_ms, TimingCollector};
 use bitfun_transport::{TauriTransportAdapter, TransportAdapter};
+use serde::Deserialize;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -30,6 +32,7 @@ use crate::ohos::window::{
     window_is_minimized, window_start_dragging
 };
 use std::path::PathBuf;
+use api::acp_client_api::*;
 use api::ai_rules_api::*;
 use api::clipboard_file_api::*;
 use api::commands::*;
@@ -44,6 +47,7 @@ use api::lsp_api::*;
 use api::lsp_workspace_api::*;
 use api::mcp_api::*;
 use api::runtime_api::*;
+use api::search_api::*;
 use api::session_api::*;
 use api::skill_api::*;
 use api::snapshot_service::*;
@@ -52,8 +56,6 @@ use api::storage_commands::*;
 use api::subagent_api::*;
 use api::system_api::*;
 use api::tool_api::*;
-use std::ffi::CString;
-use std::ptr;
 
 /// Agentic Coordinator state
 #[derive(Clone)]
@@ -65,11 +67,6 @@ pub struct CoordinatorState {
 #[derive(Clone)]
 pub struct SchedulerState {
     pub scheduler: Arc<bitfun_core::agentic::coordination::DialogScheduler>,
-}
-
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
 pub struct OhosPlatform {
@@ -169,6 +166,9 @@ pub async fn _run() {
     }
     startup_timings.record_elapsed("init_function_agents", step_started);
 
+    let workspace_search_enabled = bitfun_core::service::search::workspace_search_feature_enabled().await;
+    let startup_flashgrep_path = configure_workspace_search_daemon_env();
+
     let step_started = Instant::now();
     let app_state = match AppState::new_async(token_usage_service).await {
         Ok(state) => state,
@@ -191,7 +191,7 @@ pub async fn _run() {
 
     let path_manager = get_path_manager_arc();
 
-    let run_result = tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(logging::build_log_plugin(log_targets))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
@@ -217,7 +217,6 @@ pub async fn _run() {
             }
 
             logging::register_runtime_log_state(startup_log_level, session_log_dir.clone());
-
             for step in startup_timings.steps() {
                 log::debug!(
                     "Desktop startup step completed: step={}, duration_ms={}",
@@ -226,12 +225,58 @@ pub async fn _run() {
                 );
             }
 
+            if workspace_search_enabled {
+                let flashgrep_path = startup_flashgrep_path.clone().or_else(|| {
+                    let binary_names =
+                        bitfun_core::service::search::workspace_search_daemon_binary_names();
+                    for binary_name in binary_names {
+                        let primary = format!("flashgrep/{}", binary_name);
+                        if let Ok(path) = app
+                            .path()
+                            .resolve(&primary, tauri::path::BaseDirectory::Resource)
+                        {
+                            if path.exists() {
+                                return Some(path);
+                            }
+                        }
+                    }
+
+                    if let Ok(resource_dir) = app.path().resource_dir() {
+                        for binary_name in binary_names {
+                            for candidate in [
+                                resource_dir.join("flashgrep").join(binary_name),
+                                resource_dir.join("resources").join("flashgrep").join(binary_name),
+                                resource_dir.join(binary_name),
+                            ] {
+                                if candidate.exists() {
+                                    return Some(candidate);
+                                }
+                            }
+                        }
+                    }
+
+                    None
+                });
+                if let Some(path) = flashgrep_path {
+                    std::env::set_var("FLASHGREP_DAEMON_BIN", &path);
+                    log::info!(
+                        "Workspace search daemon startup check passed: path={}",
+                        path.display()
+                    );
+                } else {
+                    log::warn!(
+                        "Workspace search daemon startup check failed: {}",
+                        bitfun_core::service::search::workspace_search_daemon_missing_hint()
+                    );
+                }
+            }
+
             // Register bundled mobile-web resource path for remote connect.
             // tauri.conf.json maps "../../mobile-web/dist" -> "mobile-web/dist",
             // so the primary candidate is "mobile-web/dist". Additional fallbacks
             // handle legacy or non-standard bundle layouts.
             {
-                let candidates = ["mobile-web/dist","mobile-web","dist"];
+                let candidates = ["mobile-web/dist", "mobile-web", "dist"];
                 let mut found = false;
                 let path = PathBuf::from("/data/storage/el2/base/files/dist");
                 if path.join("index.html").exists() {
@@ -326,6 +371,7 @@ pub async fn _run() {
             }
 
             init_mcp_servers(app_handle.clone());
+            init_acp_clients(app_handle.clone());
 
             init_services(app_handle.clone(), startup_log_level);
 
@@ -335,22 +381,12 @@ pub async fn _run() {
             Ok(())
         })
         .on_window_event({
-            static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
-
             move |window, event| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
                     if window.label() == "main" {
-                        if CLEANUP_DONE
-                            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                            .is_ok()
-                        {
+                        if perform_process_exit_cleanup() {
                             log::info!("Main window close requested, cleaning up");
-                            bitfun_core::util::process_manager::cleanup_all_processes();
-                            api::remote_connect_api::cleanup_on_exit();
-
                             window.app_handle().exit(0);
-                        } else {
-                            api.prevent_close();
                         }
                     }
                 }
@@ -376,7 +412,6 @@ pub async fn _run() {
             api::agentic_api::cancel_tool,
             api::agentic_api::generate_session_title,
             api::agentic_api::get_available_modes,
-            api::btw_api::btw_ask,
             api::btw_api::btw_ask_stream,
             api::btw_api::btw_cancel,
             api::editor_ai_api::editor_ai_stream,
@@ -406,6 +441,12 @@ pub async fn _run() {
             fix_mermaid_code,
             get_app_state,
             update_app_status,
+            theme::show_agent_companion_desktop_pet,
+            theme::hide_agent_companion_desktop_pet,
+            theme::resize_agent_companion_desktop_pet,
+            list_agent_companion_pets,
+            import_agent_companion_pet_package,
+            delete_agent_companion_pet_package,
             read_file_content,
             write_file_content,
             reset_workspace_persona_files,
@@ -424,6 +465,9 @@ pub async fn _run() {
             search_files,
             search_filenames,
             search_file_contents,
+            search_get_repo_status,
+            search_build_index,
+            search_rebuild_index,
             start_search_filenames_stream,
             start_search_file_contents_stream,
             cancel_search,
@@ -523,6 +567,7 @@ pub async fn _run() {
             get_turn_files,
             get_file_diff,
             get_operation_diff,
+            get_session_file_diff_stats,
             get_operation_summary,
             get_session_operations,
             accept_operation,
@@ -558,6 +603,7 @@ pub async fn _run() {
             delete_persisted_session,
             touch_session_activity,
             load_persisted_session_metadata,
+            fork_session,
             // AI Memory API
             api::ai_memory_api::get_all_memories,
             api::ai_memory_api::add_memory,
@@ -601,6 +647,20 @@ pub async fn _run() {
             api::mcp_api::start_mcp_remote_oauth,
             api::mcp_api::get_mcp_remote_oauth_session,
             api::mcp_api::cancel_mcp_remote_oauth,
+            initialize_acp_clients,
+            get_acp_clients,
+            probe_acp_client_requirements,
+            predownload_acp_client_adapter,
+            install_acp_client_cli,
+            stop_acp_client,
+            load_acp_json_config,
+            save_acp_json_config,
+            submit_acp_permission_response,
+            create_acp_flow_session,
+            start_acp_dialog_turn,
+            cancel_acp_dialog_turn,
+            get_acp_session_options,
+            set_acp_session_model,
             lsp_initialize,
             lsp_start_server_for_file,
             lsp_stop_server,
@@ -795,10 +855,27 @@ pub async fn _run() {
             close_window,
             set_theme_mode,
 
+            // Debug API (no-op stubs in release builds)
+            api::debug_api::debug_element_picked,
+            api::debug_api::debug_open_devtools,
+            api::debug_api::debug_close_devtools,
         ])
-        .run(tauri::generate_context!());
-    if let Err(e) = run_result {
-        log::error!("Error while running tauri application: {}", e);
+        .build(tauri::generate_context!());
+
+    match app {
+        Ok(app) => {
+            app.run(|_app_handle, event| {
+                if matches!(
+                    event,
+                    tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+                ) {
+                    perform_process_exit_cleanup();
+                }
+            });
+        }
+        Err(e) => {
+            log::error!("Error while running tauri application: {}", e);
+        }
     }
 }
 
@@ -811,6 +888,7 @@ async fn init_agentic_system() -> anyhow::Result<(
     Arc<bitfun_core::service::token_usage::TokenUsageService>,
 )> {
     use bitfun_core::agentic::*;
+    use bitfun_core::service::config::get_global_config_service;
 
     let ai_client_factory = AIClientFactory::get_global().await?;
 
@@ -925,6 +1003,113 @@ fn init_mcp_servers(app_handle: tauri::AppHandle) {
     });
 }
 
+fn init_acp_clients(app_handle: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let state: tauri::State<'_, api::AppState> = app_handle.state();
+        if let Some(service) = state.acp_client_service.as_ref() {
+            if let Err(error) = service.initialize_all().await {
+                log::warn!("Failed to initialize ACP clients: {}", error);
+            }
+        }
+    });
+}
+
+fn setup_panic_hook() {
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let location = panic_info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown location".to_string());
+
+        let message = panic_info
+            .payload()
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| {
+                panic_info
+                    .payload()
+                    .downcast_ref::<String>()
+                    .map(String::as_str)
+            })
+            .unwrap_or("unknown panic message");
+
+        log::error!("Application panic at {}: {}", location, message);
+
+        // Known wry bug: WKWebView.URL() returns nil after navigating to an
+        // invalid address, causing url_from_webview to panic on unwrap().
+        // This is non-fatal — the webview is still alive — so we log and
+        // continue instead of killing the process.
+        // See: https://github.com/tauri-apps/wry/pull/1554
+        if location.contains("wry") && location.contains("wkwebview") {
+            log::warn!("Suppressed non-fatal wry/wkwebview panic, application continues");
+            return;
+        }
+
+        if message.contains("WSAStartup") || message.contains("10093") || message.contains("hyper")
+        {
+            log::error!("Network-related crash detected, possible solutions:");
+            log::error!("  1) Restart the application");
+            log::error!("  2) Check Windows network service status");
+            log::error!("  3) Run as administrator");
+        }
+
+        perform_process_exit_cleanup();
+        std::process::exit(1);
+    }));
+}
+
+fn perform_process_exit_cleanup() -> bool {
+    static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
+
+    if CLEANUP_DONE
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return false;
+    }
+
+    if let Some(search_service) = get_global_workspace_search_service() {
+        let shutdown_thread = std::thread::Builder::new()
+            .name("workspace-search-shutdown".to_string())
+            .spawn(move || {
+                match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(runtime) => {
+                        runtime.block_on(async move {
+                            search_service.shutdown_all_daemons().await;
+                        });
+                    }
+                    Err(error) => {
+                        log::warn!(
+                            "Failed to create runtime for workspace search shutdown: {}",
+                            error
+                        );
+                    }
+                }
+            });
+
+        if let Err(error) = shutdown_thread {
+            log::warn!(
+                "Failed to spawn workspace search shutdown thread: {}",
+                error
+            );
+        }
+    }
+    bitfun_core::util::process_manager::cleanup_all_processes();
+    api::remote_connect_api::cleanup_on_exit();
+    true
+}
+
+fn configure_workspace_search_daemon_env() -> Option<std::path::PathBuf> {
+    let path = bitfun_core::service::search::resolve_workspace_search_daemon_program_path();
+    if let Some(path) = path.as_ref() {
+        std::env::set_var("FLASHGREP_DAEMON_BIN", path);
+    }
+    path
+}
+
 fn start_event_loop_with_transport(
     event_queue: Arc<bitfun_core::agentic::events::EventQueue>,
     event_router: Arc<bitfun_core::agentic::events::EventRouter>,
@@ -960,6 +1145,7 @@ fn init_services(app_handle: tauri::AppHandle, default_log_level: log::LevelFilt
 
     spawn_ingest_server_with_config_listener();
     spawn_runtime_log_level_listener(default_log_level);
+    spawn_workspace_search_feature_listener(app_handle.clone());
 
     tauri::async_runtime::spawn(async move {
         let transport = Arc::new(TauriTransportAdapter::new(app_handle.clone()));
@@ -1056,6 +1242,93 @@ fn create_event_emitter(
 ) -> Arc<dyn bitfun_core::infrastructure::events::EventEmitter> {
     use bitfun_core::infrastructure::events::TransportEmitter;
     Arc::new(TransportEmitter::new(transport))
+}
+
+fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {
+    use bitfun_core::service::config::{subscribe_config_updates, ConfigUpdateEvent};
+
+    let app_state: tauri::State<'_, api::AppState> = app_handle.state();
+    let workspace_search_service = app_state.workspace_search_service.clone();
+    let workspace_path = app_state.workspace_path.clone();
+
+    tauri::async_runtime::spawn(async move {
+        let mut feature_enabled =
+            bitfun_core::service::search::workspace_search_feature_enabled().await;
+
+        let Some(mut receiver) = subscribe_config_updates() else {
+            log::warn!("Config update subscription unavailable for workspace search listener");
+            return;
+        };
+
+        loop {
+            match receiver.recv().await {
+                Ok(ConfigUpdateEvent::AppUpdated) | Ok(ConfigUpdateEvent::ConfigReloaded) => {
+                    let next_enabled =
+                        bitfun_core::service::search::workspace_search_feature_enabled().await;
+
+                    if next_enabled == feature_enabled {
+                        continue;
+                    }
+
+                    if !next_enabled {
+                        workspace_search_service.stop_all_daemons().await;
+                        log::info!(
+                            "Workspace search feature disabled; stopped flashgrep daemon and cleared sessions"
+                        );
+                        feature_enabled = false;
+                        continue;
+                    }
+
+                    let resolved_path = configure_workspace_search_daemon_env();
+                    if !bitfun_core::service::search::workspace_search_daemon_available() {
+                        log::warn!(
+                            "Workspace search feature enabled but daemon is unavailable: path={:?}, hint={}",
+                            resolved_path.as_ref().map(|path| path.display().to_string()),
+                            bitfun_core::service::search::workspace_search_daemon_missing_hint()
+                        );
+                        feature_enabled = true;
+                        continue;
+                    }
+
+                    let current_workspace = workspace_path.read().await.clone();
+                    if let Some(current_workspace) = current_workspace {
+                        let workspace_str = current_workspace.to_string_lossy().to_string();
+                        if !bitfun_core::service::remote_ssh::workspace_state::is_remote_path(
+                            workspace_str.trim(),
+                        )
+                        .await
+                        {
+                            match workspace_search_service.open_repo(&current_workspace).await {
+                                Ok(_) => {
+                                    log::info!(
+                                        "Workspace search feature enabled; warmed current workspace: path={}",
+                                        current_workspace.display()
+                                    );
+                                }
+                                Err(error) => {
+                                    log::warn!(
+                                        "Workspace search feature enabled but failed to warm current workspace: path={}, error={}",
+                                        current_workspace.display(),
+                                        error
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    feature_enabled = true;
+                }
+                Ok(_) => {}
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    log::warn!("Workspace search feature listener channel closed");
+                    break;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    log::warn!("Workspace search feature listener lagged by {} messages", n);
+                }
+            }
+        }
+    });
 }
 
 fn spawn_ingest_server_with_config_listener() {
