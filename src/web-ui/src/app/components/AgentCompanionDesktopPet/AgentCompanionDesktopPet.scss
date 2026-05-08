@@ -20,19 +20,31 @@
   background: transparent;
   user-select: none;
 
+  &__dock {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--bitfun-agent-companion-gap, 8px);
+    width: max-content;
+    max-height: 100vh;
+    pointer-events: none;
+  }
+
   &__pet {
     width: min(96px, 100vw);
     height: min(96px, 100vh);
     max-width: 96px;
     max-height: 96px;
     transform-origin: center bottom;
-    filter: drop-shadow(0 12px 18px rgba(15, 23, 42, 0.18));
   }
 
   &__pet-hitbox {
-    position: absolute;
-    right: 0;
-    bottom: 0;
+    position: relative;
+    flex-shrink: 0;
     width: min(96px, 100vw);
     height: min(96px, 100vh);
     display: grid;
@@ -46,10 +58,10 @@
   }
 
   &__bubbles {
-    position: absolute;
-    right: calc(var(--bitfun-agent-companion-pet-size, 96px) - var(--bitfun-agent-companion-gap, 8px));
-    bottom: 0;
-    width: min(252px, calc(100vw - var(--bitfun-agent-companion-pet-size, 96px) - var(--bitfun-agent-companion-gap, 8px)));
+    position: relative;
+    flex-shrink: 0;
+    width: max-content;
+    max-width: 252px;
     max-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -75,20 +87,20 @@
     appearance: none;
     text-align: left;
     font: inherit;
+    width: max-content;
     max-width: 100%;
     min-width: 132px;
+    box-sizing: border-box;
     padding: 7px 10px;
     border: 1px solid rgba(15, 23, 42, 0.1);
     border-radius: 10px 10px 2px 10px;
     background: rgba(255, 255, 255, 0.92);
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
     color: #1f2937;
     backdrop-filter: blur(10px);
     cursor: pointer;
 
     &:hover {
       transform: translateY(-1px);
-      box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);
     }
 
     &:focus-visible {

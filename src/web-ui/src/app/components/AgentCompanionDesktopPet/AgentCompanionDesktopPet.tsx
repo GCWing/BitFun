@@ -11,7 +11,7 @@ import './AgentCompanionDesktopPet.scss';
 
 const log = createLogger('AgentCompanionDesktopPet');
 const PET_SIZE = 96;
-const WINDOW_WIDTH_WITH_BUBBLES = 360;
+const WINDOW_MAX_WIDTH = 360;
 const WINDOW_MAX_HEIGHT = 240;
 const WINDOW_HORIZONTAL_GAP = 8;
 const MAX_VISIBLE_BUBBLES = 3;
@@ -26,6 +26,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   const [tasks, setTasks] = useState<AgentCompanionTaskStatus[]>([]);
   const [isHoveringPet, setIsHoveringPet] = useState(false);
   const [isDraggingPet, setIsDraggingPet] = useState(false);
+  const dockRef = useRef<HTMLDivElement>(null);
   const bubblesRef = useRef<HTMLDivElement>(null);
   const displayTasks = [...tasks].reverse();
 
@@ -70,7 +71,6 @@ export const AgentCompanionDesktopPet: React.FC = () => {
 
   useLayoutEffect(() => {
     const bubbleCount = tasks.length;
-    const nextWidth = bubbleCount > 0 ? WINDOW_WIDTH_WITH_BUBBLES : PET_SIZE;
     const bubbleElements = Array.from(bubblesRef.current?.children ?? [])
       .slice(0, MAX_VISIBLE_BUBBLES);
     const visibleBubbleHeight = bubbleElements.reduce(
@@ -84,6 +84,16 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     const nextHeight = bubbleCount > 0
       ? Math.max(PET_SIZE, Math.min(WINDOW_MAX_HEIGHT, targetBubbleHeight))
       : PET_SIZE;
+    const measuredDockWidth = dockRef.current
+      ? Math.max(
+        dockRef.current.scrollWidth,
+        dockRef.current.getBoundingClientRect().width,
+      )
+      : PET_SIZE;
+    const nextWidth = Math.max(
+      PET_SIZE,
+      Math.min(WINDOW_MAX_WIDTH, Math.ceil(measuredDockWidth)),
+    );
 
     void import('@tauri-apps/api/core')
       .then(({ invoke }) => invoke('resize_agent_companion_desktop_pet', {
@@ -133,49 +143,56 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     }
   };
 
+  const dockVars = {
+    '--bitfun-agent-companion-pet-size': `${PET_SIZE}px`,
+    '--bitfun-agent-companion-gap': `${WINDOW_HORIZONTAL_GAP}px`,
+  } as React.CSSProperties;
+
   return (
     <main
       className="bitfun-agent-companion-window"
     >
-      {tasks.length > 0 && (
-        <div
-          ref={bubblesRef}
-          className="bitfun-agent-companion-window__bubbles"
-          aria-live="polite"
-          onDoubleClick={event => event.stopPropagation()}
-          style={{
-            '--bitfun-agent-companion-pet-size': `${PET_SIZE}px`,
-            '--bitfun-agent-companion-gap': `${WINDOW_HORIZONTAL_GAP}px`,
-          } as React.CSSProperties}
-        >
-          {displayTasks.map(task => (
-            <button
-              type="button"
-              key={task.sessionId}
-              className={`bitfun-agent-companion-window__bubble bitfun-agent-companion-window__bubble--${task.state}`}
-              onClick={() => void openTaskSession(task)}
-            >
-              <span className="bitfun-agent-companion-window__bubble-title">
-                {task.title}
-              </span>
-              <span className="bitfun-agent-companion-window__bubble-status">
-                {t(task.labelKey, { defaultValue: task.defaultLabel })}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
       <div
-        className="bitfun-agent-companion-window__pet-hitbox"
-        onPointerEnter={() => setIsHoveringPet(true)}
-        onPointerLeave={() => setIsHoveringPet(false)}
-        onPointerDown={startDrag}
+        ref={dockRef}
+        className="bitfun-agent-companion-window__dock"
+        style={dockVars}
       >
-        <ChatInputPixelPet
-          mood={displayMood}
-          pet={pet}
-          className="bitfun-agent-companion-window__pet"
-        />
+        {tasks.length > 0 && (
+          <div
+            ref={bubblesRef}
+            className="bitfun-agent-companion-window__bubbles"
+            aria-live="polite"
+            onDoubleClick={event => event.stopPropagation()}
+          >
+            {displayTasks.map(task => (
+              <button
+                type="button"
+                key={task.sessionId}
+                className={`bitfun-agent-companion-window__bubble bitfun-agent-companion-window__bubble--${task.state}`}
+                onClick={() => void openTaskSession(task)}
+              >
+                <span className="bitfun-agent-companion-window__bubble-title">
+                  {task.title}
+                </span>
+                <span className="bitfun-agent-companion-window__bubble-status">
+                  {t(task.labelKey, { defaultValue: task.defaultLabel })}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div
+          className="bitfun-agent-companion-window__pet-hitbox"
+          onPointerEnter={() => setIsHoveringPet(true)}
+          onPointerLeave={() => setIsHoveringPet(false)}
+          onPointerDown={startDrag}
+        >
+          <ChatInputPixelPet
+            mood={displayMood}
+            pet={pet}
+            className="bitfun-agent-companion-window__pet"
+          />
+        </div>
       </div>
     </main>
   );

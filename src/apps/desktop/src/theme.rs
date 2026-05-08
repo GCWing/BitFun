@@ -387,6 +387,14 @@ fn resize_agent_companion_window(
     width: f64,
     height: f64,
 ) {
+    let width = width.clamp(
+        AGENT_COMPANION_WINDOW_MIN_SIZE,
+        AGENT_COMPANION_WINDOW_MAX_WIDTH,
+    );
+    let height = height.clamp(
+        AGENT_COMPANION_WINDOW_MIN_SIZE,
+        AGENT_COMPANION_WINDOW_MAX_HEIGHT,
+    );
     let monitor: Option<tauri::Monitor> = window
         .current_monitor()
         .ok()
