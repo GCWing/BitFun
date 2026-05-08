@@ -1,9 +1,10 @@
 use super::inline_think::InlineThinkParser;
 use super::stream_stats::StreamStats;
 use super::{next_stream_item, TimedStreamItem};
+use crate::provider_error::ProviderError;
 use crate::stream::types::openai::{OpenAISSEData, OpenAIToolCallArgumentsNormalizer};
 use crate::stream::types::unified::UnifiedResponse;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use eventsource_stream::Eventsource;
 use log::{error, trace, warn};
 use reqwest::Response;
@@ -48,15 +49,8 @@ fn is_valid_chat_completion_chunk_weak(event_json: &Value) -> bool {
     )
 }
 
-fn extract_sse_api_error_message(event_json: &Value) -> Option<String> {
-    let error = event_json.get("error")?;
-    if let Some(message) = error.get("message").and_then(|value| value.as_str()) {
-        return Some(message.to_string());
-    }
-    if let Some(message) = error.as_str() {
-        return Some(message.to_string());
-    }
-    Some("An error occurred during streaming".to_string())
+fn extract_sse_api_error(event_json: &Value) -> Option<ProviderError> {
+    ProviderError::from_error_payload("openai_compatible", event_json)
 }
 
 /// Convert a byte stream into a structured response stream
@@ -144,12 +138,12 @@ pub async fn handle_openai_stream(
             }
         };
 
-        if let Some(api_error_message) = extract_sse_api_error_message(&event_json) {
-            let error_msg = format!("SSE API error: {}, data: {}", api_error_message, raw);
+        if let Some(api_error) = extract_sse_api_error(&event_json) {
+            let error_msg = format!("SSE API error: {}, data: {}", api_error, raw);
             stats.increment("error:api");
             stats.log_summary("sse_api_error");
             error!("{}", error_msg);
-            let _ = tx_event.send(Err(anyhow!(error_msg)));
+            let _ = tx_event.send(Err(Error::new(api_error)));
             return;
         }
 
@@ -235,7 +229,8 @@ pub async fn handle_openai_stream(
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_sse_api_error_message, is_valid_chat_completion_chunk_weak};
+    use super::{extract_sse_api_error, is_valid_chat_completion_chunk_weak};
+    use crate::provider_error::ProviderErrorKind;
 
     #[test]
     fn weak_filter_accepts_chat_completion_chunk() {
@@ -262,27 +257,37 @@ mod tests {
     }
 
     #[test]
-    fn extracts_api_error_message_from_object_shape() {
+    fn extracts_structured_provider_error_from_object_shape() {
         let event = serde_json::json!({
             "error": {
+                "code": "1305",
                 "message": "provider error"
-            }
+            },
+            "request_id": "req_1305"
         });
-        assert_eq!(
-            extract_sse_api_error_message(&event).as_deref(),
-            Some("provider error")
-        );
+
+        let error = extract_sse_api_error(&event).expect("provider error");
+
+        assert_eq!(error.provider(), Some("openai_compatible"));
+        assert_eq!(error.kind(), ProviderErrorKind::ProviderUnavailable);
+        assert_eq!(error.code(), Some("1305"));
+        assert_eq!(error.message(), "provider error");
+        assert_eq!(error.request_id(), Some("req_1305"));
+        assert!(error.is_retryable());
     }
 
     #[test]
-    fn extracts_api_error_message_from_string_shape() {
+    fn extracts_structured_provider_error_from_string_shape() {
         let event = serde_json::json!({
             "error": "provider error"
         });
-        assert_eq!(
-            extract_sse_api_error_message(&event).as_deref(),
-            Some("provider error")
-        );
+
+        let error = extract_sse_api_error(&event).expect("provider error");
+
+        assert_eq!(error.provider(), Some("openai_compatible"));
+        assert_eq!(error.kind(), ProviderErrorKind::Unknown);
+        assert_eq!(error.message(), "provider error");
+        assert_eq!(error.code(), None);
     }
 
     #[test]
@@ -290,6 +295,6 @@ mod tests {
         let event = serde_json::json!({
             "object": "chat.completion.chunk"
         });
-        assert!(extract_sse_api_error_message(&event).is_none());
+        assert!(extract_sse_api_error(&event).is_none());
     }
 }

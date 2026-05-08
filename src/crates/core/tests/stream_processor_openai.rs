@@ -1,12 +1,43 @@
 mod common;
 
-use bitfun_core::agentic::events::{AgenticEvent, ToolEventData};
+use bitfun_core::agentic::events::{AgenticEvent, ErrorCategory, ToolEventData};
 use common::sse_fixture_server::FixtureSseServerOptions;
 use common::stream_test_harness::{
     run_stream_fixture, run_stream_fixture_with_options, StreamFixtureProvider,
     StreamFixtureRunOptions,
 };
 use serde_json::json;
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn openai_fixture_preserves_structured_provider_error_detail() {
+    let output = run_stream_fixture(
+        StreamFixtureProvider::OpenAi,
+        "stream/openai/provider_error_with_code.sse",
+        FixtureSseServerOptions::default(),
+    )
+    .await;
+
+    let err = output
+        .result
+        .expect_err("provider error should fail stream");
+    let detail = err.error.error_detail();
+
+    assert_eq!(
+        detail.category,
+        ErrorCategory::ProviderUnavailable,
+        "error={:?}, detail={:?}",
+        err.error,
+        detail
+    );
+    assert_eq!(detail.provider.as_deref(), Some("openai_compatible"));
+    assert_eq!(detail.provider_code.as_deref(), Some("1305"));
+    assert_eq!(
+        detail.provider_message.as_deref(),
+        Some("provider temporarily overloaded")
+    );
+    assert_eq!(detail.request_id.as_deref(), Some("req_1305"));
+    assert_eq!(detail.retryable, Some(true));
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn openai_fixture_keeps_collecting_tool_args_across_usage_chunks() {

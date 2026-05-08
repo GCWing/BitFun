@@ -2,6 +2,7 @@
 //!
 //! Provide unified error types and handling for the whole application
 
+use bitfun_ai_adapters::{ProviderError, ProviderErrorKind};
 use bitfun_events::agentic::{AiErrorDetail, ErrorCategory};
 use serde::Serialize;
 use thiserror::Error;
@@ -20,6 +21,9 @@ pub enum BitFunError {
 
     #[error("AI client error: {0}")]
     AIClient(String),
+
+    #[error("AI provider error: {0}")]
+    AIProvider(ProviderError),
 
     #[error("Session error: {0}")]
     Session(String),
@@ -154,10 +158,19 @@ impl BitFunError {
         Self::Cancelled(msg.into())
     }
 
+    pub fn from_ai_adapter_error(error: anyhow::Error) -> Self {
+        if let Some(provider_error) = error.downcast_ref::<ProviderError>() {
+            return Self::AIProvider(provider_error.clone());
+        }
+
+        Self::AIClient(error.to_string())
+    }
+
     /// Infer an error category from this error for frontend-friendly classification.
     pub fn error_category(&self) -> ErrorCategory {
         match self {
             BitFunError::AIClient(msg) => classify_ai_error(msg),
+            BitFunError::AIProvider(err) => provider_error_kind_to_category(err.kind()),
             BitFunError::Timeout(_) => ErrorCategory::Timeout,
             BitFunError::Cancelled(_) => ErrorCategory::Unknown,
             _ => ErrorCategory::Unknown,
@@ -168,6 +181,19 @@ impl BitFunError {
     pub fn error_detail(&self) -> AiErrorDetail {
         let category = self.error_category();
         let message = self.to_string();
+        if let BitFunError::AIProvider(err) = self {
+            return AiErrorDetail {
+                category: category.clone(),
+                provider: err.provider().map(str::to_string),
+                provider_code: err.code().map(str::to_string),
+                provider_message: Some(err.message().to_string()),
+                request_id: err.request_id().map(str::to_string),
+                http_status: err.http_status(),
+                retryable: Some(err.is_retryable()),
+                action_hints: action_hints_for_category(&category),
+            };
+        }
+
         AiErrorDetail {
             category: category.clone(),
             provider: extract_error_field(&message, "provider"),
@@ -178,6 +204,24 @@ impl BitFunError {
             retryable: Some(is_retryable_category(&category)),
             action_hints: action_hints_for_category(&category),
         }
+    }
+}
+
+fn provider_error_kind_to_category(kind: ProviderErrorKind) -> ErrorCategory {
+    match kind {
+        ProviderErrorKind::Network => ErrorCategory::Network,
+        ProviderErrorKind::Auth => ErrorCategory::Auth,
+        ProviderErrorKind::RateLimit => ErrorCategory::RateLimit,
+        ProviderErrorKind::ContextOverflow => ErrorCategory::ContextOverflow,
+        ProviderErrorKind::Timeout => ErrorCategory::Timeout,
+        ProviderErrorKind::ProviderQuota => ErrorCategory::ProviderQuota,
+        ProviderErrorKind::ProviderBilling => ErrorCategory::ProviderBilling,
+        ProviderErrorKind::ProviderUnavailable => ErrorCategory::ProviderUnavailable,
+        ProviderErrorKind::Permission => ErrorCategory::Permission,
+        ProviderErrorKind::InvalidRequest => ErrorCategory::InvalidRequest,
+        ProviderErrorKind::ContentPolicy => ErrorCategory::ContentPolicy,
+        ProviderErrorKind::ModelError => ErrorCategory::ModelError,
+        ProviderErrorKind::Unknown => ErrorCategory::Unknown,
     }
 }
 
@@ -442,6 +486,7 @@ impl From<tokio::sync::AcquireError> for BitFunError {
 #[cfg(test)]
 mod tests {
     use super::BitFunError;
+    use bitfun_ai_adapters::{ProviderError, ProviderErrorKind};
     use bitfun_events::agentic::ErrorCategory;
 
     #[test]
@@ -471,5 +516,44 @@ mod tests {
         );
 
         assert_eq!(err.error_category(), ErrorCategory::ProviderUnavailable);
+    }
+
+    #[test]
+    fn builds_error_detail_directly_from_structured_provider_error() {
+        let err = BitFunError::AIProvider(
+            ProviderError::builder("OpenAI-compatible provider is overloaded")
+                .provider("openai_compatible")
+                .kind(ProviderErrorKind::ProviderUnavailable)
+                .code("1305")
+                .request_id("req_1305")
+                .build(),
+        );
+
+        let detail = err.error_detail();
+
+        assert_eq!(detail.category, ErrorCategory::ProviderUnavailable);
+        assert_eq!(detail.provider.as_deref(), Some("openai_compatible"));
+        assert_eq!(detail.provider_code.as_deref(), Some("1305"));
+        assert_eq!(
+            detail.provider_message.as_deref(),
+            Some("OpenAI-compatible provider is overloaded")
+        );
+        assert_eq!(detail.request_id.as_deref(), Some("req_1305"));
+        assert_eq!(detail.retryable, Some(true));
+    }
+
+    #[test]
+    fn preserves_structured_provider_error_through_anyhow_context() {
+        let provider_error = ProviderError::builder("provider temporarily overloaded")
+            .provider("openai_compatible")
+            .kind(ProviderErrorKind::ProviderUnavailable)
+            .code("1305")
+            .build();
+        let anyhow_error = anyhow::Error::new(provider_error).context("request failed after retry");
+
+        let err = BitFunError::from_ai_adapter_error(anyhow_error);
+
+        assert_eq!(err.error_category(), ErrorCategory::ProviderUnavailable);
+        assert!(matches!(err, BitFunError::AIProvider(_)));
     }
 }

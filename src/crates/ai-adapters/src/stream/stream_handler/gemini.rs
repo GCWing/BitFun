@@ -1,8 +1,9 @@
 use super::stream_stats::StreamStats;
 use super::{next_stream_item, TimedStreamItem};
+use crate::provider_error::ProviderError;
 use crate::stream::types::gemini::GeminiSSEData;
 use crate::stream::types::unified::UnifiedResponse;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use eventsource_stream::Eventsource;
 use log::{error, trace};
 use reqwest::Response;
@@ -61,15 +62,8 @@ impl GeminiToolCallState {
     }
 }
 
-fn extract_api_error_message(event_json: &Value) -> Option<String> {
-    let error = event_json.get("error")?;
-    if let Some(message) = error.get("message").and_then(Value::as_str) {
-        return Some(message.to_string());
-    }
-    if let Some(message) = error.as_str() {
-        return Some(message.to_string());
-    }
-    Some("Gemini streaming request failed".to_string())
+fn extract_api_error(event_json: &Value) -> Option<ProviderError> {
+    ProviderError::from_error_payload("gemini", event_json)
 }
 
 pub async fn handle_gemini_stream(
@@ -140,12 +134,12 @@ pub async fn handle_gemini_stream(
             }
         };
 
-        if let Some(message) = extract_api_error_message(&event_json) {
-            let error_msg = format!("Gemini SSE API error: {}, data: {}", message, raw);
+        if let Some(api_error) = extract_api_error(&event_json) {
+            let error_msg = format!("Gemini SSE API error: {}, data: {}", api_error, raw);
             stats.increment("error:api");
             stats.log_summary("sse_api_error");
             error!("{}", error_msg);
-            let _ = tx_event.send(Err(anyhow!(error_msg)));
+            let _ = tx_event.send(Err(Error::new(api_error)));
             return;
         }
 
@@ -193,7 +187,8 @@ pub async fn handle_gemini_stream(
 
 #[cfg(test)]
 mod tests {
-    use super::GeminiToolCallState;
+    use super::{extract_api_error, GeminiToolCallState};
+    use crate::provider_error::ProviderErrorKind;
     use crate::stream::types::unified::UnifiedToolCall;
 
     #[test]
@@ -279,5 +274,25 @@ mod tests {
         second_state.assign_id(&mut second);
 
         assert_ne!(first.id, second.id);
+    }
+
+    #[test]
+    fn extracts_structured_gemini_api_error() {
+        let event = serde_json::json!({
+            "error": {
+                "code": 429,
+                "message": "rate limit exceeded"
+            },
+            "request_id": "gemini_req_1"
+        });
+
+        let error = extract_api_error(&event).expect("provider error");
+
+        assert_eq!(error.provider(), Some("gemini"));
+        assert_eq!(error.kind(), ProviderErrorKind::RateLimit);
+        assert_eq!(error.code(), Some("429"));
+        assert_eq!(error.message(), "rate limit exceeded");
+        assert_eq!(error.request_id(), Some("gemini_req_1"));
+        assert!(error.is_retryable());
     }
 }

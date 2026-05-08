@@ -1,10 +1,11 @@
 use super::stream_stats::StreamStats;
 use super::{next_stream_item, TimedStreamItem};
+use crate::provider_error::ProviderError;
 use crate::stream::types::responses::{
     parse_responses_output_item, ResponsesCompleted, ResponsesDone, ResponsesStreamEvent,
 };
 use crate::stream::types::unified::UnifiedResponse;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use eventsource_stream::Eventsource;
 use log::{error, trace};
 use reqwest::Response;
@@ -157,7 +158,7 @@ fn handle_function_call_output_item_done(
     );
 }
 
-fn extract_api_error_message(event_json: &Value) -> Option<String> {
+fn extract_api_error(event_json: &Value) -> Option<ProviderError> {
     let response = event_json.get("response")?;
     let error = response.get("error")?;
 
@@ -165,14 +166,16 @@ fn extract_api_error_message(event_json: &Value) -> Option<String> {
         return None;
     }
 
-    if let Some(message) = error.get("message").and_then(Value::as_str) {
-        return Some(message.to_string());
-    }
-    if let Some(message) = error.as_str() {
-        return Some(message.to_string());
+    let mut provider_payload = serde_json::Map::new();
+    provider_payload.insert("error".to_string(), error.clone());
+    if let Some(request_id) = event_json
+        .get("request_id")
+        .or_else(|| event_json.get("requestId"))
+    {
+        provider_payload.insert("request_id".to_string(), request_id.clone());
     }
 
-    Some("An error occurred during responses streaming".to_string())
+    ProviderError::from_error_payload("responses", &Value::Object(provider_payload))
 }
 
 pub async fn handle_responses_stream(
@@ -244,15 +247,12 @@ pub async fn handle_responses_stream(
             }
         };
 
-        if let Some(api_error_message) = extract_api_error_message(&event_json) {
-            let error_msg = format!(
-                "Responses SSE API error: {}, data: {}",
-                api_error_message, raw
-            );
+        if let Some(api_error) = extract_api_error(&event_json) {
+            let error_msg = format!("Responses SSE API error: {}, data: {}", api_error, raw);
             stats.increment("error:api");
             stats.log_summary("sse_api_error");
             error!("{}", error_msg);
-            let _ = tx_event.send(Err(anyhow!(error_msg)));
+            let _ = tx_event.send(Err(Error::new(api_error)));
             return;
         }
 
@@ -539,28 +539,36 @@ pub async fn handle_responses_stream(
 #[cfg(test)]
 mod tests {
     use super::{
-        super::stream_stats::StreamStats, extract_api_error_message,
-        handle_function_call_output_item_done, InProgressToolCall,
+        super::stream_stats::StreamStats, extract_api_error, handle_function_call_output_item_done,
+        InProgressToolCall,
     };
+    use crate::provider_error::ProviderErrorKind;
     use serde_json::json;
     use std::collections::HashMap;
     use tokio::sync::mpsc;
 
     #[test]
-    fn extracts_api_error_message_from_response_error() {
+    fn extracts_structured_api_error_from_response_error() {
         let event = json!({
             "type": "response.failed",
+            "request_id": "req_resp_1",
             "response": {
+                "id": "resp_1",
                 "error": {
+                    "code": "insufficient_quota",
                     "message": "provider error"
                 }
             }
         });
 
-        assert_eq!(
-            extract_api_error_message(&event).as_deref(),
-            Some("provider error")
-        );
+        let error = extract_api_error(&event).expect("provider error");
+
+        assert_eq!(error.provider(), Some("responses"));
+        assert_eq!(error.kind(), ProviderErrorKind::ProviderQuota);
+        assert_eq!(error.code(), Some("insufficient_quota"));
+        assert_eq!(error.message(), "provider error");
+        assert_eq!(error.request_id(), Some("req_resp_1"));
+        assert!(!error.is_retryable());
     }
 
     #[test]
@@ -572,7 +580,7 @@ mod tests {
             }
         });
 
-        assert!(extract_api_error_message(&event).is_none());
+        assert!(extract_api_error(&event).is_none());
     }
 
     #[test]
@@ -585,7 +593,7 @@ mod tests {
             }
         });
 
-        assert!(extract_api_error_message(&event).is_none());
+        assert!(extract_api_error(&event).is_none());
     }
 
     #[test]

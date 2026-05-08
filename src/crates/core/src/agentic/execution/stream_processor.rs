@@ -760,7 +760,8 @@ impl StreamProcessor {
                             break;
                         }
                         TimedStreamItem::Item(Err(e)) => {
-                            let error_msg = format!("Stream processing error: {}", e);
+                            let stream_error = BitFunError::from_ai_adapter_error(e);
+                            let error_msg = format!("Stream processing error: {}", stream_error);
                             error!("{}", error_msg);
                             if ctx.can_recover_as_partial_result() {
                                 flush_sse_on_error(&sse_collector, &error_msg).await;
@@ -774,7 +775,7 @@ impl StreamProcessor {
                             flush_sse_on_error(&sse_collector, &error_msg).await;
                             self.graceful_shutdown_from_ctx(&mut ctx, error_msg.clone()).await;
                             return Err(StreamProcessError::new(
-                                BitFunError::AIClient(error_msg),
+                                stream_error,
                                 ctx.has_effective_output,
                             ));
                         }

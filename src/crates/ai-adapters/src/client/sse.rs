@@ -1,7 +1,8 @@
 use crate::client::utils::elapsed_ms_u64;
 use crate::client::StreamResponse;
+use crate::provider_error::ProviderError;
 use crate::stream::UnifiedResponse;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use chrono::{DateTime, Utc};
 use log::{debug, error, warn};
 use reqwest::{
@@ -81,8 +82,10 @@ where
                         .text()
                         .await
                         .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
-                    error!("{} client error {}: {}", label, status, error_text);
-                    return Err(anyhow!("{} client error {}: {}", label, status, error_text));
+                    let provider_error =
+                        ProviderError::from_http_error(label, status.as_u16(), &error_text);
+                    error!("{} client error {}: {}", label, status, provider_error);
+                    return Err(Error::new(provider_error));
                 }
 
                 if status.is_success() {
@@ -100,7 +103,9 @@ where
                         .text()
                         .await
                         .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
-                    let error = anyhow!("{} error {}: {}", label, status, error_text);
+                    let provider_error =
+                        ProviderError::from_http_error(label, status.as_u16(), &error_text);
+                    let error = Error::new(provider_error);
                     warn!(
                         "{} request failed: {}ms, attempt {}/{}, error: {}",
                         label,
@@ -162,14 +167,17 @@ where
         });
     }
 
-    let error_msg = format!(
-        "{} failed after {} attempts: {}",
-        label,
-        max_tries,
-        last_error.unwrap_or_else(|| anyhow!("Unknown error"))
-    );
+    let error_msg = match &last_error {
+        Some(error) => format!("{} failed after {} attempts: {}", label, max_tries, error),
+        None => format!(
+            "{} failed after {} attempts: Unknown error",
+            label, max_tries
+        ),
+    };
     error!("{}", error_msg);
-    Err(anyhow!(error_msg))
+    Err(last_error
+        .unwrap_or_else(|| anyhow!("Unknown error"))
+        .context(format!("{} failed after {} attempts", label, max_tries)))
 }
 
 #[cfg(test)]
