@@ -1,4 +1,3 @@
-mod acp;
 mod agent;
 /// BitFun CLI
 ///
@@ -164,6 +163,7 @@ async fn main() -> Result<()> {
     };
 
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
+    let is_acp_mode = matches!(cli.command, Some(Commands::Acp { .. }));
 
     if is_tui_mode {
         use std::fs::OpenOptions;
@@ -197,6 +197,13 @@ async fn main() -> Result<()> {
                 .with_target(false)
                 .init();
         }
+    } else if is_acp_mode {
+        tracing_subscriber::fmt()
+            .with_max_level(log_level)
+            .with_writer(std::io::stderr)
+            .with_ansi(false)
+            .with_target(false)
+            .init();
     } else {
         tracing_subscriber::fmt()
             .with_max_level(log_level)
@@ -271,7 +278,7 @@ async fn main() -> Result<()> {
                 .context("Failed to initialize global AIClientFactory")?;
             tracing::info!("Global AI client factory initialized");
 
-            let agentic_system = agent::agentic_system::init_agentic_system()
+            let agentic_system = bitfun_core::agentic::system::init_agentic_system()
                 .await
                 .context("Failed to initialize agentic system")?;
             tracing::info!("Agentic system initialized");
@@ -338,7 +345,7 @@ async fn main() -> Result<()> {
                 .context("Failed to initialize global AIClientFactory")?;
             tracing::info!("Global AI client factory initialized");
 
-            let agentic_system = agent::agentic_system::init_agentic_system()
+            let agentic_system = bitfun_core::agentic::system::init_agentic_system()
                 .await
                 .context("Failed to initialize agentic system")?;
             tracing::info!("Agentic system initialized");
@@ -407,15 +414,14 @@ async fn main() -> Result<()> {
                 .context("Failed to initialize global AIClientFactory")?;
             tracing::info!("Global AI client factory initialized");
 
-            let agentic_system = agent::agentic_system::init_agentic_system()
+            let agentic_system = bitfun_core::agentic::system::init_agentic_system()
                 .await
                 .context("Failed to initialize agentic system")?;
             tracing::info!("Agentic system initialized");
 
             // Start ACP server
             tracing::info!("Starting ACP server...");
-            let acp_server = acp::AcpServer::new(agentic_system);
-            acp_server.run().await?;
+            bitfun_acp::BitfunAcpRuntime::serve_stdio(agentic_system).await?;
         }
 
         None => {
@@ -463,7 +469,7 @@ async fn main() -> Result<()> {
                     .context("Failed to initialize global AIClientFactory")?;
                 tracing::info!("Global AI client factory initialized");
 
-                let agentic_system = agent::agentic_system::init_agentic_system()
+                let agentic_system = bitfun_core::agentic::system::init_agentic_system()
                     .await
                     .context("Failed to initialize agentic system")?;
                 tracing::info!("Agentic system initialized");

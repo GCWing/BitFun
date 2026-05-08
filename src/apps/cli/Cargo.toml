@@ -13,6 +13,7 @@ path = "src/main.rs"
 # Internal crates
 bitfun-core = { path = "../../crates/core" }
 bitfun-events = { path = "../../crates/events" }
+bitfun-acp = { path = "../../crates/acp" }
 
 # CLI framework
 clap = { version = "4", features = ["derive"] }
@@ -49,4 +50,3 @@ tracing-subscriber = { workspace = true }
 
 [features]
 default = []
-

@@ -31,7 +31,6 @@ import { TerminalToolCard } from './TerminalToolCard';
 import { TerminalControlDisplay } from './TerminalControlDisplay';
 import { InitMiniAppDisplay } from './MiniAppToolDisplay';
 import { GenerativeWidgetToolCard } from './GenerativeWidgetToolCard';
-import { BtwMarkerCard } from './BtwMarkerCard';
 import { ReviewSessionSummaryCard } from './ReviewSessionSummaryCard';
 import { SessionControlToolCard } from './SessionControlToolCard';
 import { SessionMessageToolCard } from './SessionMessageToolCard';
@@ -210,18 +209,6 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: '#8b5cf6'
   },
 
-  // /btw in-stream marker (frontend-inserted tool item)
-  'BtwMarker': {
-    toolName: 'BtwMarker',
-    displayName: 'Side thread',
-    icon: 'BTW',
-    requiresConfirmation: false,
-    resultDisplayType: 'hidden',
-    description: 'Side thread marker (child session link)',
-    displayMode: 'compact',
-    primaryColor: '#7aa6ff'
-  },
-
   'ReviewSessionSummary': {
     toolName: 'ReviewSessionSummary',
     displayName: 'Review summary',
@@ -372,8 +359,6 @@ export const TOOL_CARD_COMPONENTS = {
   // AskUserQuestion tool
   'AskUserQuestion': AskUserQuestionCard,
 
-  // /btw marker
-  'BtwMarker': BtwMarkerCard,
   'ReviewSessionSummary': ReviewSessionSummaryCard,
 
   // Git version control
@@ -487,6 +472,10 @@ export type {
   ToolCardHeaderLayoutContextValue,
   ToolCardHeaderAffordanceKind,
 } from './ToolCardHeaderLayoutContext';
+export { ToolCardIconSlot } from './ToolCardIconSlot';
+export type { ToolCardIconSlotProps } from './ToolCardIconSlot';
+export { ToolCardStatusIcon } from './ToolCardStatusIcon';
+export type { ToolCardStatusIconProps } from './ToolCardStatusIcon';
 export { PlanDisplay } from './CreatePlanDisplay';
 export type { PlanDisplayProps } from './CreatePlanDisplay';
 
@@ -495,16 +484,11 @@ export type { PlanDisplayProps } from './CreatePlanDisplay';
 import type { FlowItem, FlowToolItem } from '../types/flow-chat';
 
 /**
- * Collapsible explorer tools (only these 5).
+ * Collapsible explorer tools.
  * They are auto-collapsed during streaming to reduce visual noise.
  */
 export const COLLAPSIBLE_TOOL_NAMES = new Set([
-  'Read', 'LS', 'Grep', 'Glob', 'WebSearch'
-]);
-
-/** Terminal tools that can be grouped together. */
-export const TERMINAL_COLLAPSIBLE_TOOL_NAMES = new Set([
-  'Bash'
+  'Read', 'LS', 'Grep', 'Glob', 'WebSearch', 'Bash'
 ]);
 
 /** Read tools (counted in readCount). */
@@ -513,14 +497,12 @@ export const READ_TOOL_NAMES = new Set(['Read', 'LS']);
 /** Search tools (counted in searchCount). */
 export const SEARCH_TOOL_NAMES = new Set(['Grep', 'Glob', 'WebSearch']);
 
+/** Command tools (counted in commandCount). */
+export const COMMAND_TOOL_NAMES = new Set(['Bash']);
+
 /** Check whether a tool is collapsible. */
 export function isCollapsibleTool(toolName: string): boolean {
   return COLLAPSIBLE_TOOL_NAMES.has(toolName);
-}
-
-/** Check whether a tool is a terminal collapsible tool. */
-export function isTerminalCollapsibleTool(toolName: string): boolean {
-  return TERMINAL_COLLAPSIBLE_TOOL_NAMES.has(toolName);
 }
 
 /**
@@ -528,7 +510,7 @@ export function isTerminalCollapsibleTool(toolName: string): boolean {
  * - Subagent items are never collapsed.
  * - Text needs context (use isCollapsibleItemWithContext).
  * - Thinking can be collapsed with explorer tools.
- * - Only the 5 explorer tools are collapsible.
+ * - Only explorer tools are collapsible.
  */
 export function isCollapsibleItem(item: FlowItem): boolean {
   // Subagent items are never collapsed.
@@ -540,7 +522,7 @@ export function isCollapsibleItem(item: FlowItem): boolean {
   // Thinking can be collapsed with explorer tools.
   if (item.type === 'thinking') return true;
   
-  // Tools: only the 5 explorer tools are collapsible.
+  // Tools: only explorer tools are collapsible.
   if (item.type === 'tool') {
     return isCollapsibleTool((item as FlowToolItem).toolName);
   }
@@ -581,7 +563,7 @@ export function isCollapsibleItemWithContext(
     return false;
   }
   
-  // Tools: only the 5 explorer tools are collapsible.
+  // Tools: only explorer tools are collapsible.
   if (item.type === 'tool') {
     return isCollapsibleTool((item as FlowToolItem).toolName);
   }

@@ -7,10 +7,10 @@ import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo } 
 import { Trans, useTranslation } from 'react-i18next';
 import { ArrowUp, Image, Maximize2, Minimize2, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
-import { useActiveSessionState } from '../hooks/useActiveSessionState';
+import { useActiveSessionState } from '@/flow_chat/hooks';
 import { RichTextInput, type MentionState } from './RichTextInput';
 import { FileMentionPicker } from './FileMentionPicker';
-import { globalEventBus } from '../../infrastructure/event-bus';
+import { globalEventBus } from '@/infrastructure';
 import {
   useSessionDerivedState,
   useSessionStateMachine,
@@ -20,7 +20,7 @@ import { SessionExecutionEvent } from '../state-machine/types';
 import { ModelSelector } from './ModelSelector';
 import { FlowChatStore } from '../store/FlowChatStore';
 import type { FlowChatState } from '../types/flow-chat';
-import type { FileContext, DirectoryContext, ImageContext } from '../../shared/types/context';
+import type { FileContext, DirectoryContext, ImageContext } from '@/types/context.ts';
 import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { WorkspaceKind } from '@/shared/types';
@@ -33,10 +33,11 @@ import { useMessageSender } from '../hooks/useMessageSender';
 import { useChatInputState } from '../store/chatInputStateStore';
 import { useInputHistoryStore } from '../store/inputHistoryStore';
 import { startBtwThread } from '../services/BtwThreadService';
-import { FlowChatManager } from '../services/FlowChatManager';
+import { FlowChatManager } from '@/flow_chat';
 import {
   DEEP_REVIEW_SLASH_COMMAND,
   buildDeepReviewPromptFromSlashCommand,
+  getDeepReviewLaunchErrorMessage,
   isDeepReviewSlashCommand,
   launchDeepReviewSession,
 } from '../services/DeepReviewService';
@@ -55,6 +56,7 @@ import { deriveChatInputPetMood } from '../utils/chatInputPetMood';
 import { ChatInputPixelPet } from './ChatInputPixelPet';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
 import { useDeepReviewConsent } from './DeepReviewConsentDialog';
+import { useAgentCompanionActivity } from '../hooks/useAgentCompanionActivity';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
 import './ChatInput.scss';
@@ -273,22 +275,38 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const currentReviewActivity = useSessionReviewActivity(currentSessionId);
   const sessionMachineSnapshot = useSessionStateMachine(effectiveTargetSessionId);
+  const companionActivity = useAgentCompanionActivity();
   const { confirmDeepReviewLaunch, deepReviewConsentDialog } = useDeepReviewConsent();
-  const petMood = useMemo(
+  const targetPetMood = useMemo(
     () => deriveChatInputPetMood(sessionMachineSnapshot),
     [sessionMachineSnapshot],
   );
+  const petMood = targetPetMood === 'rest' ? companionActivity.mood : targetPetMood;
   const [agentCompanionEnabled, setAgentCompanionEnabled] = useState(
     () => aiExperienceConfigService.getSettings().enable_agent_companion,
   );
+  const [agentCompanionDisplayMode, setAgentCompanionDisplayMode] = useState(
+    () => aiExperienceConfigService.getSettings().agent_companion_display_mode,
+  );
+  const [agentCompanionPet, setAgentCompanionPet] = useState(
+    () => aiExperienceConfigService.getSettings().agent_companion_pet ?? null,
+  );
   useEffect(() => {
-    setAgentCompanionEnabled(aiExperienceConfigService.getSettings().enable_agent_companion);
+    void aiExperienceConfigService.getSettingsAsync().then(initialSettings => {
+      setAgentCompanionEnabled(initialSettings.enable_agent_companion);
+      setAgentCompanionDisplayMode(initialSettings.agent_companion_display_mode);
+      setAgentCompanionPet(initialSettings.agent_companion_pet ?? null);
+    });
     return aiExperienceConfigService.addChangeListener(settings => {
       setAgentCompanionEnabled(settings.enable_agent_companion);
+      setAgentCompanionDisplayMode(settings.agent_companion_display_mode);
+      setAgentCompanionPet(settings.agent_companion_pet ?? null);
     });
   }, []);
+  const agentCompanionInInput =
+    agentCompanionEnabled && agentCompanionDisplayMode === 'input';
   const showCollapsedPet =
-    agentCompanionEnabled && !inputState.isActive && !inputState.value.trim();
+    agentCompanionInInput && !inputState.isActive && !inputState.value.trim();
   const { transition, setQueuedInput } = useSessionStateMachineActions(effectiveTargetSessionId);
 
   const { workspace, workspacePath } = useCurrentWorkspace();
@@ -627,6 +645,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       globalEventBus.off('fill-chat-input', handleFillChatInput);
     };
   }, [clearPendingLargePastes]);
+
+  // Expose current input value for external queries (e.g. deep review fill-back confirmation)
+  React.useEffect(() => {
+    const handleGetChatInputState = (request: { getValue?: () => string }) => {
+      request.getValue = () => inputValueRef.current;
+    };
+
+    globalEventBus.on('chat-input:get-state', handleGetChatInputState);
+
+    return () => {
+      globalEventBus.off('chat-input:get-state', handleGetChatInputState);
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!slashCommandState.isActive || slashCommandState.kind !== 'all' || derivedState?.isProcessing) {
@@ -1125,8 +1156,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (text.startsWith('/')) {
       const afterSlash = text.slice(1);
       const hasWhitespace = /\s/.test(afterSlash);
-      const firstToken = afterSlash.trimStart().split(/\s+/, 1)[0]?.toLowerCase?.() ?? '';
-      const query = firstToken;
+      const query = afterSlash.trimStart().split(/\s+/, 1)[0]?.toLowerCase?.() ?? '';
       const matchedMcpPrompt = resolveTypedMcpPromptCommand(text);
 
       // While the main session is running, expose a single quick action (/btw) via the same picker UX.
@@ -1218,7 +1248,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         workspacePath,
         question,
         modelId: 'fast',
-        maxContextMessages: 60,
       });
       openBtwSessionInAuxPane({
         childSessionId,
@@ -1442,7 +1471,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: message });
       notificationService.error(
-        error instanceof Error ? error.message : t('error.unknown'),
+        getDeepReviewLaunchErrorMessage(error, t, t('error.unknown')),
         {
           title: t('chatInput.deepreviewFailed', { defaultValue: 'Deep review failed' }),
           duration: 5000,
@@ -1557,6 +1586,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setQueuedInput,
     t,
   ]);
+
+  const handleCancelCurrentTask = useCallback(async () => {
+    await FlowChatManager.getInstance().cancelCurrentTask();
+  }, []);
   
   const handleSendOrCancel = useCallback(async () => {
     if (!derivedState) return;
@@ -1567,7 +1600,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // While generating, an empty control in `cancel` mode means stop. If the user has typed a follow-up,
     // never treat this path as cancel — that would call cancel_dialog_turn and abort the current round early.
     if (sendButtonMode === 'cancel' && !draftTrimmed) {
-      await transition(SessionExecutionEvent.USER_CANCEL);
+      await handleCancelCurrentTask();
       return;
     }
     
@@ -1668,6 +1701,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     inputState.value,
     derivedState,
+    handleCancelCurrentTask,
     transition,
     sendMessage,
     addToHistory,
@@ -2047,9 +2081,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     
     if (e.key === 'Escape' && derivedState?.canCancel) {
       e.preventDefault();
-      transition(SessionExecutionEvent.USER_CANCEL);
+      void handleCancelCurrentTask();
     }
-  }, [handleSendOrCancel, submitBtwFromInput, derivedState, transition, slashCommandState, getFilteredIncrementalModes, getFilteredActions, getSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashPromptCommand, canSwitchModes, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, t]);
+  }, [handleSendOrCancel, submitBtwFromInput, derivedState, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getFilteredActions, getSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashPromptCommand, canSwitchModes, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
@@ -2186,7 +2220,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (e.key === 'Escape' && derivedState?.canCancel) {
         if (isEditable) return;
         e.preventDefault();
-        void transition(SessionExecutionEvent.USER_CANCEL);
+        void handleCancelCurrentTask();
         return;
       }
 
@@ -2201,7 +2235,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // Capture phase so activation runs before nested handlers; Space must dispatch ACTIVATE, not only focus().
     document.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [derivedState?.canCancel, focusRichTextInputSoon, inputState.isActive, transition]);
+  }, [derivedState?.canCancel, focusRichTextInputSoon, handleCancelCurrentTask, inputState.isActive]);
   
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -2243,8 +2277,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
   const isCollapsedProcessing = !inputState.isActive && !!derivedState?.isProcessing;
-  const petReplacesStopChrome = agentCompanionEnabled && isCollapsedProcessing;
-  const petStopClickable = petReplacesStopChrome && !!derivedState?.canCancel;
+  const petReplacesStopChrome = agentCompanionInInput && isCollapsedProcessing;
+  const petStopClickable = petReplacesStopChrome && derivedState?.canCancel;
   const collapsedPetSplitSend =
     petReplacesStopChrome && derivedState?.sendButtonMode === 'split';
 
@@ -2309,7 +2343,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <div
               className="bitfun-chat-input__send-button bitfun-chat-input__send-button--breathing"
               onClick={() => {
-                void transition(SessionExecutionEvent.USER_CANCEL);
+                void handleCancelCurrentTask();
               }}
               data-testid="chat-input-cancel-btn"
             >
@@ -2401,19 +2435,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       className="bitfun-chat-input__pet-stop-btn"
                       onClick={e => {
                         e.stopPropagation();
-                        void transition(SessionExecutionEvent.USER_CANCEL);
+                        void handleCancelCurrentTask();
                       }}
                       aria-label={t('input.stopGeneration')}
                     >
                       <ChatInputPixelPet
                         mood={petMood}
                         layout={petReplacesStopChrome ? 'stopRight' : 'center'}
+                        pet={agentCompanionPet}
                       />
                     </button>
                   ) : (
                     <ChatInputPixelPet
                       mood={petMood}
                       layout={petReplacesStopChrome ? 'stopRight' : 'center'}
+                      pet={agentCompanionPet}
                     />
                   )}
                 </div>
@@ -2505,7 +2541,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
               {!inputState.isActive &&
                 !inputState.value.trim() &&
-                !agentCompanionEnabled && (
+                !agentCompanionInInput && (
                 <span className="bitfun-chat-input__space-hint">
                   <Trans
                     i18nKey="input.spaceToActivate"

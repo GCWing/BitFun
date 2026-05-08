@@ -60,18 +60,6 @@ pub async fn set_config(
         .await
     {
         Ok(_) => {
-            if let Err(e) = bitfun_core::service::config::reload_global_config().await {
-                warn!(
-                    "Failed to sync global config after set_config: path={}, error={}",
-                    request.path, e
-                );
-            } else {
-                info!(
-                    "Global config synced after set_config: path={}",
-                    request.path
-                );
-            }
-
             if request.path.starts_with("ai.models")
                 || request.path.starts_with("ai.default_models")
                 || request.path.starts_with("ai.agent_models")
@@ -103,18 +91,6 @@ pub async fn reset_config(
 
     match config_service.reset_config(request.path.as_deref()).await {
         Ok(_) => {
-            if let Err(e) = bitfun_core::service::config::reload_global_config().await {
-                warn!(
-                    "Failed to sync global config after reset_config: path={:?}, error={}",
-                    request.path, e
-                );
-            } else {
-                info!(
-                    "Global config synced after reset_config: path={:?}",
-                    request.path
-                );
-            }
-
             let message = if let Some(path) = &request.path {
                 format!("Configuration '{}' reset successfully", path)
             } else {
@@ -167,11 +143,6 @@ pub async fn import_config(state: State<'_, AppState>, config: Value) -> Result<
 
     match config_service.import_config(export_data).await {
         Ok(result) => {
-            if let Err(e) = bitfun_core::service::config::reload_global_config().await {
-                warn!("Failed to sync global config after import_config: {}", e);
-            } else {
-                info!("Global config synced after import_config");
-            }
             state.ai_client_factory.invalidate_cache();
             info!("Config imported, AI client cache invalidated");
             Ok(to_json_value(result, "import config result")?)
@@ -280,18 +251,6 @@ pub async fn set_mode_config(
     .await
     {
         Ok(_) => {
-            if let Err(e) = bitfun_core::service::config::reload_global_config().await {
-                warn!(
-                    "Failed to reload global config after mode config change: mode_id={}, error={}",
-                    mode_id, e
-                );
-            } else {
-                info!(
-                    "Global config reloaded after mode config change: mode_id={}",
-                    mode_id
-                );
-            }
-
             Ok(format!("Mode '{}' configuration set successfully", mode_id))
         }
         Err(e) => {
@@ -315,18 +274,6 @@ pub async fn reset_mode_config(
     .await
     {
         Ok(_) => {
-            if let Err(e) = bitfun_core::service::config::reload_global_config().await {
-                warn!(
-                    "Failed to reload global config after mode config reset: mode_id={}, error={}",
-                    mode_id, e
-                );
-            } else {
-                info!(
-                    "Global config reloaded after mode config reset: mode_id={}",
-                    mode_id
-                );
-            }
-
             Ok(format!(
                 "Mode '{}' configuration reset successfully",
                 mode_id
@@ -402,12 +349,6 @@ pub async fn set_subagent_config(
 
     match config_service.set_config(&path, config_value).await {
         Ok(_) => {
-            if let Err(e) = bitfun_core::service::config::reload_global_config().await {
-                warn!("Failed to reload global config after subagent config change: subagent_id={}, error={}", subagent_id, e);
-            } else {
-                info!("Global config reloaded after subagent config change: subagent_id={}, enabled={}", subagent_id, enabled);
-            }
-
             Ok(format!(
                 "SubAgent '{}' configuration set successfully",
                 subagent_id

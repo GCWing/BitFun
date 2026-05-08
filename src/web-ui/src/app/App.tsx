@@ -10,9 +10,15 @@ import { NotificationContainer, NotificationCenter } from '../shared/notificatio
 import { AnnouncementProvider } from '../shared/announcement-system';
 import { ConfirmDialogRenderer } from '../component-library';
 import { createLogger } from '@/shared/utils/logger';
+import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
+import { syncAgentCompanionDesktopWindow } from '@/infrastructure/config/services/AgentCompanionWindowService';
+import { buildAgentCompanionActivity, subscribeAgentCompanionActivity } from '@/flow_chat/utils/agentCompanionActivity';
+import { emitAgentCompanionActivity } from '@/flow_chat/services/AgentCompanionActivityBridge';
+import { FlowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useWorkspaceContext } from '../infrastructure/contexts/WorkspaceContext';
 import SplashScreen from './components/SplashScreen/SplashScreen';
 import { useGlobalSceneShortcuts } from './hooks/useGlobalSceneShortcuts';
+import { useDebugInspector } from '@/infrastructure/debug/useDebugInspector';
 
 // Toolbar Mode
 import { ToolbarModeProvider } from '../flow_chat';
@@ -140,9 +146,81 @@ function App() {
       }
     };
 
+    const initACPClients = async () => {
+      try {
+        const { ACPClientAPI } = await import('../infrastructure/api/service-api/ACPClientAPI');
+        await ACPClientAPI.initializeClients();
+        log.debug('ACP clients initialized');
+        const requirementProbes = await ACPClientAPI.probeClientRequirements({ force: true });
+        log.debug('ACP client requirements probed', { count: requirementProbes.length });
+      } catch (error) {
+        log.error('Failed to initialize ACP clients', error);
+      }
+    };
+
     initIdeControl();
     initMCPServers();
+    initACPClients();
     
+  }, []);
+
+  useEffect(() => {
+    const emitCurrentAgentCompanionActivity = () => {
+      void emitAgentCompanionActivity(buildAgentCompanionActivity());
+    };
+
+    void aiExperienceConfigService.getSettingsAsync().then(async settings => {
+      await syncAgentCompanionDesktopWindow(settings);
+      emitCurrentAgentCompanionActivity();
+      window.setTimeout(emitCurrentAgentCompanionActivity, 250);
+    });
+    return aiExperienceConfigService.addChangeListener(settings => {
+      void syncAgentCompanionDesktopWindow(settings).then(() => {
+        emitCurrentAgentCompanionActivity();
+        window.setTimeout(emitCurrentAgentCompanionActivity, 250);
+      });
+    });
+  }, []);
+
+  useEffect(() => subscribeAgentCompanionActivity(activity => {
+    void emitAgentCompanionActivity(activity);
+  }), []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void import('@tauri-apps/api/event')
+      .then(({ listen }) => listen<{ sessionId?: string }>(
+        'agent-companion://open-session',
+        async event => {
+          const sessionId = event.payload?.sessionId;
+          if (!sessionId) return;
+
+          const flowChatStore = FlowChatStore.getInstance();
+          if (flowChatStore.getState().sessions.has(sessionId)) {
+            flowChatStore.switchSession(sessionId);
+          }
+
+          try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('show_main_window');
+          } catch (error) {
+            log.warn('Failed to show main window from Agent companion bubble', {
+              sessionId,
+              error,
+            });
+          }
+        },
+      ))
+      .then(removeListener => {
+        unlisten = removeListener;
+      })
+      .catch(error => {
+        log.warn('Failed to listen for Agent companion session open events', error);
+      });
+
+    return () => {
+      unlisten?.();
+    };
   }, []);
 
   // Observe AI initialization state
@@ -188,6 +266,9 @@ function App() {
 
   // Top SceneBar: Mod+Alt+1..9 / Mod+Alt+PageUp/PageDown
   useGlobalSceneShortcuts();
+
+  // Debug inspector shortcuts (desktop devtools only)
+  useDebugInspector();
 
   // Unified layout via a single AppLayout
   return (

@@ -1,0 +1,6 @@
+{
+  "id": "boxcat",
+  "displayName": "Boxcat",
+  "description": "A tiny cat tucked inside a cardboard box for cozy coding sessions.",
+  "spritesheetPath": "spritesheet.webp"
+}

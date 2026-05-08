@@ -26,6 +26,7 @@ import type {
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
+import { ACPClientAPI, type AcpPermissionRequestEvent } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { FlowChatContext, DialogTurn, ModelRound, FlowToolItem } from './types';
 import {
@@ -63,12 +64,17 @@ import {
   handleToolExecutionProgress,
   handleToolTerminalReady,
 } from './ToolEventModule';
+import { handleAcpPermissionRequestForToolCard } from './AcpPermissionToolCardModule';
 import {
   routeModelRoundStartedToToolCardInternal,
   routeTextChunkToToolCardInternal,
   routeToolEventToToolCardInternal
 } from './SubagentModule';
 import { normalizeSubagentParentInfo } from './subagentParentInfo';
+import {
+  clearRuntimeStatus,
+  scheduleModelResponseStatus,
+} from './RuntimeStatusModule';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
@@ -152,15 +158,28 @@ function settleSubagentItems(
     return;
   }
 
+  const parentTaskToolIds = new Set<string>([parentInfo.toolCallId]);
+  for (const round of parentTurn.modelRounds) {
+    for (const item of round.items) {
+      if (
+        item.type === 'tool' &&
+        (item.id === parentInfo.toolCallId || (item as FlowToolItem).toolCall?.id === parentInfo.toolCallId)
+      ) {
+        parentTaskToolIds.add(item.id);
+      }
+    }
+  }
+
   const timestamp = Date.now();
   let changed = false;
 
   store.updateDialogTurn(parentInfo.sessionId, parentInfo.dialogTurnId, (turn) => {
     const updatedRounds = turn.modelRounds.map((round) => {
+      let roundChanged = false;
       const updatedItems = round.items.map((item) => {
         if (
           !item.isSubagentItem
-          || item.parentTaskToolId !== parentInfo.toolCallId
+          || !parentTaskToolIds.has(item.parentTaskToolId || '')
           || item.subagentSessionId !== subagentSessionId
         ) {
           return item;
@@ -173,6 +192,7 @@ function settleSubagentItems(
         changed = true;
 
         if (item.type === 'text') {
+          roundChanged = true;
           return {
             ...item,
             status,
@@ -182,6 +202,7 @@ function settleSubagentItems(
         }
 
         if (item.type === 'thinking') {
+          roundChanged = true;
           return {
             ...item,
             status,
@@ -192,6 +213,7 @@ function settleSubagentItems(
         }
 
         if (item.type === 'tool') {
+          roundChanged = true;
           const nextToolResult = status === 'completed'
             ? item.toolResult
             : {
@@ -215,7 +237,7 @@ function settleSubagentItems(
         return item;
       });
 
-      return updatedItems === round.items ? round : { ...round, items: updatedItems };
+      return roundChanged ? { ...round, items: updatedItems } : round;
     });
 
     return changed ? { ...turn, modelRounds: updatedRounds } : turn;
@@ -339,6 +361,9 @@ export async function initializeEventListeners(
   const unlistenMcpInteractionRequest = await listen('backend-event-mcpinteractionrequest', (event: any) => {
     void handleMcpInteractionRequest((event.payload as any)?.value || event.payload);
   });
+  const unlistenAcpPermissionRequest = await listen('backend-event-acppermissionrequest', (event: any) => {
+    void handleAcpPermissionRequest((event.payload as any)?.value || event.payload);
+  });
 
   const callbacks: AgenticEventCallbacks = {
     onSessionCreated: (event) => {
@@ -403,6 +428,7 @@ export async function initializeEventListeners(
     unlistenProgress();
     unlistenTerminalReady();
     unlistenMcpInteractionRequest();
+    unlistenAcpPermissionRequest();
     agenticEventListener.stopListening();
   };
 }
@@ -439,6 +465,28 @@ async function handleMcpInteractionRequest(rawEvent: unknown): Promise<void> {
       });
       notificationService.error(`MCP interaction failed: ${method}`);
     }
+  }
+}
+
+async function handleAcpPermissionRequest(rawEvent: unknown): Promise<void> {
+  const event = rawEvent as AcpPermissionRequestEvent | undefined;
+  const permissionId = event?.permissionId;
+  if (!permissionId) {
+    log.warn('Received invalid ACP permission request event', { rawEvent });
+    return;
+  }
+
+  if (handleAcpPermissionRequestForToolCard(event)) return;
+
+  log.warn('ACP permission request cannot be matched to a tool card, rejecting request', { permissionId });
+  try {
+    await ACPClientAPI.submitPermissionResponse({
+      permissionId,
+      approve: false,
+    });
+  } catch (error) {
+    log.error('Failed to submit ACP permission auto-rejection', { permissionId, error });
+    notificationService.error('Failed to respond to ACP permission request');
   }
 }
 
@@ -548,13 +596,14 @@ function schedulePendingTurnCompletion(
   }, TURN_COMPLETION_QUIET_WINDOW_MS);
 }
 
-function beginTurnCompletion(context: FlowChatContext, sessionId: string, turnId: string): void {
+function beginTurnCompletion(context: FlowChatContext, sessionId: string, turnId: string, partialRecoveryReason?: string): void {
   clearPendingTurnCompletion(context, sessionId);
 
   context.pendingTurnCompletions.set(sessionId, {
     turnId,
     lastActivityAt: Date.now(),
     timer: null,
+    partialRecoveryReason,
   });
 
   schedulePendingTurnCompletion(context, sessionId, turnId);
@@ -580,6 +629,7 @@ function finalizeTurnCompletionState(
   }
 
   completeActiveTextItems(context, sessionId, turnId);
+  clearRuntimeStatus(context, sessionId, turnId);
 
   const sessionContentBuffer = context.contentBuffers.get(sessionId);
   if (sessionContentBuffer) {
@@ -629,7 +679,10 @@ function finalizeTurnCompletionState(
   // Mark unread completion for non-active sessions
   const activeSessionId = store.getState().activeSessionId;
   if (sessionId !== activeSessionId) {
-    context.flowChatStore.markSessionUnreadCompletion(sessionId, 'completed');
+    const pending = context.pendingTurnCompletions.get(sessionId);
+    const isPartialRecovery = !!pending?.partialRecoveryReason;
+    // Partial recovery after retry failure is treated as an error state (red dot)
+    context.flowChatStore.markSessionUnreadCompletion(sessionId, isPartialRecovery ? 'interrupted' : 'completed');
   }
 
   clearPendingTurnCompletion(context, sessionId, turnId);
@@ -1070,6 +1123,7 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
   }
 
   if (!subagentParentInfo) {
+    clearRuntimeStatus(context, sessionId, turnId, { roundId });
     touchPendingTurnCompletion(context, sessionId, turnId);
     const currentState = stateMachineManager.getCurrentState(sessionId);
     if (isStreamingExecutionState(currentState)) {
@@ -1215,6 +1269,7 @@ function handleToolEvent(
   }
 
   if (!subagentParentInfo) {
+    clearRuntimeStatus(context, sessionId, turnId);
     touchPendingTurnCompletion(context, sessionId, turnId);
   }
   
@@ -1315,6 +1370,11 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
 
   completeActiveTextItems(context, sessionId, turnId);
 
+  const disableExploreGrouping =
+    event.renderHints?.disableExploreGrouping === true ||
+    event.metadata?.disableExploreGrouping === true ||
+    event.disableExploreGrouping === true;
+
   const modelRound: ModelRound = {
     id: roundId,
     index: roundIndex || 0,
@@ -1322,10 +1382,14 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
     isStreaming: true,
     isComplete: false,
     status: 'streaming',
-    startTime: Date.now()
+    startTime: Date.now(),
+    ...(disableExploreGrouping
+      ? { renderHints: { disableExploreGrouping: true } }
+      : {}),
   };
 
   context.flowChatStore.addModelRound(sessionId, turnId, modelRound);
+  scheduleModelResponseStatus(context, sessionId, turnId, roundId);
   
   immediateSaveDialogTurn(context, sessionId, turnId);
 }
@@ -1497,6 +1561,10 @@ function handleDialogTurnComplete(
   const sessionId = event?.sessionId ?? event?.session_id;
   const turnId = event?.turnId ?? event?.turn_id;
   const subagentParentInfo = normalizeSubagentParentInfo(event);
+  // Partial recovery reason from backend (stream was interrupted mid-way)
+  const partialRecoveryReason = event?.partialRecoveryReason ?? event?.partial_recovery_reason;
+  const success = event?.success;
+  const finishReason = event?.finishReason ?? event?.finish_reason;
 
   if (subagentParentInfo) {
     if (sessionId) {
@@ -1531,6 +1599,8 @@ function handleDialogTurnComplete(
     return {
       ...turn,
       status: 'finishing' as const,
+      success: success ?? undefined,
+      finishReason: finishReason ?? undefined,
     };
   });
 
@@ -1545,7 +1615,7 @@ function handleDialogTurnComplete(
     log.debug('Skipping BACKEND_STREAM_COMPLETED transition', { currentState, sessionId, turnId });
   }
 
-  beginTurnCompletion(context, sessionId, turnId);
+  beginTurnCompletion(context, sessionId, turnId, partialRecoveryReason);
 }
 
 /**
@@ -1660,6 +1730,7 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
   
   log.error('Dialog turn failed', { sessionId, turnId, error, errorDetail });
   clearPendingTurnCompletion(context, sessionId, turnId);
+  clearRuntimeStatus(context, sessionId, turnId);
   
   const store = FlowChatStore.getInstance();
   const session = store.getState().sessions.get(sessionId);
@@ -1779,6 +1850,7 @@ function handleDialogTurnCancelled(
   
   log.info('Dialog turn cancelled', { sessionId, turnId });
   clearPendingTurnCompletion(context, sessionId, turnId);
+  clearRuntimeStatus(context, sessionId, turnId);
   
   const store = FlowChatStore.getInstance();
   const session = store.getState().sessions.get(sessionId);
@@ -1844,11 +1916,12 @@ function handleDialogTurnCancelled(
       });
   }
 
-  // Mark unread completion for non-active sessions
+  // Mark unread completion for non-active sessions (skip if user explicitly cancelled)
   const activeSessionIdForCancelled = store.getState().activeSessionId;
-  if (sessionId !== activeSessionIdForCancelled) {
+  if (sessionId !== activeSessionIdForCancelled && !context.userCancelledSessionIds.has(sessionId)) {
     context.flowChatStore.markSessionUnreadCompletion(sessionId, 'completed');
   }
+  context.userCancelledSessionIds.delete(sessionId);
 }
 
 /**

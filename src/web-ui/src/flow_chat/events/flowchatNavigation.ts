@@ -23,3 +23,16 @@ export interface FlowChatPinTurnToTopRequest {
   source?: FlowChatPinTurnToTopSource;
   pinMode?: FlowChatPinTurnToTopMode;
 }
+
+/**
+ * Event for scrolling from the review action bar to a specific remediation
+ * item in the CodeReviewToolCard report.
+ */
+export const DEEP_REVIEW_SCROLL_TO_EVENT = 'deep-review:scroll-to';
+
+export interface DeepReviewScrollToRequest {
+  groupId: string;
+  groupIndex: number;
+  /** Index of the best-matching issue in the report's `issues` array, or -1. */
+  issueIndex: number;
+}

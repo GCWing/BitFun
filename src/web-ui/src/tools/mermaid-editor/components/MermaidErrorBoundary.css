@@ -123,6 +123,21 @@
 
 /* Scrollbar styling */
 .error-stack::-webkit-scrollbar,
+.error-info::-webkit-scrollbar {
+  width: 8px;
+}
+
+.error-stack::-webkit-scrollbar-thumb,
+.error-info::-webkit-scrollbar-thumb {
+  background: var(--border-base, rgba(255, 255, 255, 0.08));
+  border-radius: 4px;
+}
+
+.error-stack::-webkit-scrollbar-thumb:hover,
+.error-info::-webkit-scrollbar-thumb:hover {
+  background: var(--border-medium, rgba(255, 255, 255, 0.16));
+}
+
 /* Responsive layout */
 @media (max-width: 768px) {
   .mermaid-error-boundary {

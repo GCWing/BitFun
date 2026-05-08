@@ -272,6 +272,7 @@
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    gap: $size-gap-2;
     flex-shrink: 0;
 
     .btn {
@@ -355,6 +356,7 @@
 
     &__market-item-action {
       justify-content: flex-start;
+      flex-wrap: wrap;
 
       .btn {
         width: 100%;

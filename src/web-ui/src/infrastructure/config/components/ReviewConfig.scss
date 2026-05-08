@@ -133,6 +133,11 @@
   justify-content: flex-start;
 }
 
+/* Allow Select dropdowns to overflow the section body in the members list. */
+.review-config__members-section .bitfun-config-page-section__body {
+  overflow: visible;
+}
+
 @media (max-width: 860px) {
   .review-config__overview-grid {
     grid-template-columns: 1fr;

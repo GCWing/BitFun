@@ -164,6 +164,9 @@ impl TransportAdapter for WebSocketTransportAdapter {
                 session_id,
                 turn_id,
                 subagent_parent_info,
+                partial_recovery_reason,
+                success,
+                finish_reason,
                 ..
             } => {
                 json!({
@@ -171,6 +174,9 @@ impl TransportAdapter for WebSocketTransportAdapter {
                     "sessionId": session_id,
                     "turnId": turn_id,
                     "subagentParentInfo": subagent_parent_info,
+                    "partialRecoveryReason": partial_recovery_reason,
+                    "success": success,
+                    "finishReason": finish_reason,
                 })
             }
             _ => return Ok(()),

@@ -3,6 +3,47 @@
  */
 
 import type { FlowChatContext, FlowTextItem } from './types';
+import { clearRuntimeStatus } from './RuntimeStatusModule';
+import { isAcpFlowSession } from '../../utils/acpSession';
+
+function activeTextHasLaterRoundItem(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId: string,
+  roundId: string,
+  textItemId: string
+): boolean {
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  if (!session || !isAcpFlowSession(session)) {
+    return false;
+  }
+
+  const turn = session?.dialogTurns.find(candidate => candidate.id === turnId);
+  const round = turn?.modelRounds.find(candidate => candidate.id === roundId);
+  if (!round) return false;
+
+  const textItemIndex = round.items.findIndex(item => item.id === textItemId);
+  if (textItemIndex === -1) return false;
+
+  return round.items.slice(textItemIndex + 1).some(item => item.type !== 'text');
+}
+
+function closeActiveTextSegment(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId: string,
+  roundId: string,
+  textItemId: string
+): void {
+  context.flowChatStore.updateModelRoundItemSilent(sessionId, turnId, textItemId, {
+    isStreaming: false,
+    status: 'completed',
+  } as any);
+
+  context.contentBuffers.get(sessionId)?.delete(roundId);
+  context.activeTextItems.get(sessionId)?.delete(roundId);
+}
+
 /**
  * Process a normal text chunk without notifying the store.
  */
@@ -13,6 +54,8 @@ export function processNormalTextChunkInternal(
   roundId: string,
   text: string
 ): void {
+  clearRuntimeStatus(context, sessionId, turnId, { roundId });
+
   if (!context.contentBuffers.has(sessionId)) {
     context.contentBuffers.set(sessionId, new Map());
   }
@@ -22,6 +65,14 @@ export function processNormalTextChunkInternal(
   
   const sessionContentBuffer = context.contentBuffers.get(sessionId)!;
   const sessionActiveTextItems = context.activeTextItems.get(sessionId)!;
+
+  const activeTextItemId = sessionActiveTextItems.get(roundId);
+  if (
+    activeTextItemId &&
+    activeTextHasLaterRoundItem(context, sessionId, turnId, roundId, activeTextItemId)
+  ) {
+    closeActiveTextSegment(context, sessionId, turnId, roundId, activeTextItemId);
+  }
 
   // Coalesce excessive newlines while appending.
   const currentContent = sessionContentBuffer.get(roundId) || '';
@@ -48,6 +99,8 @@ export function processNormalTextChunkInternal(
   } else {
     context.flowChatStore.updateModelRoundItemSilent(sessionId, turnId, textItemId, {
       content: cleanedContent,
+      runtimeStatus: undefined,
+      isMarkdown: true,
       timestamp: Date.now()
     } as any);
   }
@@ -64,6 +117,8 @@ export function processThinkingChunkInternal(
   text: string,
   isThinkingEnd = false
 ): void {
+  clearRuntimeStatus(context, sessionId, turnId, { roundId });
+
   if (!context.contentBuffers.has(sessionId)) {
     context.contentBuffers.set(sessionId, new Map());
   }
@@ -178,6 +233,13 @@ export function cleanupSessionBuffers(context: FlowChatContext, sessionId: strin
   if (activeItems) {
     context.activeTextItems.delete(sessionId);
   }
+
+  for (const [key, timer] of context.runtimeStatusTimers.entries()) {
+    if (key.startsWith(`${sessionId}:`)) {
+      clearTimeout(timer);
+      context.runtimeStatusTimers.delete(key);
+    }
+  }
 }
 
 /**
@@ -193,6 +255,11 @@ export function clearAllBuffers(context: FlowChatContext): void {
 
   context.contentBuffers.clear();
   context.activeTextItems.clear();
+
+  for (const timer of context.runtimeStatusTimers.values()) {
+    clearTimeout(timer);
+  }
+  context.runtimeStatusTimers.clear();
   
   for (const timer of context.saveDebouncers.values()) {
     clearTimeout(timer);

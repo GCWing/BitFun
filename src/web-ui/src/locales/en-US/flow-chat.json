@@ -36,6 +36,26 @@
       "title": "Drag to resize | Double-click to switch mode | Current: {{mode}}"
     }
   },
+  "runtimeStatus": {
+    "waitingForModelResponse": "Waiting for model response..."
+  },
+  "agentCompanion": {
+    "activity": {
+      "starting": "Starting",
+      "thinking": "Thinking",
+      "usingTools": "Using tools",
+      "waitingApproval": "Waiting for approval",
+      "writing": "Writing",
+      "compacting": "Compacting context",
+      "finishing": "Finishing",
+      "working": "Working",
+      "needsInput": "Needs input",
+      "needsApproval": "Needs approval",
+      "completed": "Completed",
+      "failed": "Failed",
+      "interrupted": "Interrupted"
+    }
+  },
   "session": {
     "new": "New Session",
     "newCode": "New Code session",
@@ -375,14 +395,32 @@
     "fixCompleted": "Fix completed",
     "fixFailed": "Fix failed",
     "fixTimeout": "Fix timed out",
+    "fixInterrupted": "Fix was interrupted. {{count}} items remain.",
+    "continueFix": "Continue fixing {{count}} items",
+    "skipRemaining": "Skip remaining",
     "reviewError": "Review error",
     "dismiss": "Dismiss",
     "close": "Close",
+    "minimize": "Minimize",
+    "restore": "Open {{label}}",
+    "fixAndReviewRunning": "Fixing \u0026 preparing re-review...",
+    "minimizedDeep": "Deep Review",
+    "minimizedStandard": "Code Review",
+    "minimizedFix": "Fixing",
+    "minimizedFixReview": "Fixing and re-reviewing",
+    "minimizedFixCompleted": "Fix completed",
+    "minimizedFixFailed": "Needs attention",
+    "minimizedReviewInterrupted": "Review interrupted",
+    "minimizedResume": "Continuing review",
     "showCustomInput": "Add instructions",
     "hideCustomInput": "Hide instructions",
     "customInstructionsPlaceholder": "Describe additional requirements or context for the fix...",
     "fillBackInput": "Fill to input",
     "fillBackInputHint": "Copy selected fix plan to the input box for manual editing",
+    "fixCompletedMessage": "All fixes applied successfully.",
+    "replaceInputConfirmTitle": "Replace current input?",
+    "replaceInputConfirmMessage": "The chat input already has text. Filling this plan will replace the current draft.",
+    "replaceInputConfirmAction": "Replace input",
     "reviewInterrupted": "Deep review interrupted",
     "resumeBlocked": "Action required before continuing",
     "resumeRunning": "Continuing review...",
@@ -397,11 +435,46 @@
     "openModelSettings": "Open model settings",
     "copyDiagnostics": "Copy diagnostics",
     "diagnosticsCopied": "Diagnostics copied",
+    "diagnosticsCopyFailed": "Failed to copy diagnostics",
     "diagnosticsTitle": "=== Deep Review Interruption Diagnostics ===",
     "diagnosticsErrorType": "Error type",
     "diagnosticsDescription": "Description",
     "diagnosticsSuggestedActions": "Suggested actions",
-    "diagnosticsTechnicalDetails": "Technical details"
+    "diagnosticsTechnicalDetails": "Technical details",
+    "reviewInterruptedWithReason": "Deep review interrupted: {{reason}}",
+    "resumeBlockedWithReason": "Cannot continue: {{reason}}",
+    "resumeFailedWithReason": "Continue failed: {{reason}}",
+    "reviewErrorWithReason": "Review error: {{reason}}",
+    "retryResume": "Retry",
+    "retryWithDifferentModel": "Try different model",
+    "viewPartialResults": "View partial results",
+    "hidePartialResults": "Hide partial results",
+    "partialResultsDescription": "{{completed}}/{{total}} reviewers completed",
+    "partialIssues": "{{count}} issues found",
+    "partialRemediationItems": "{{count}} remediation items",
+    "contextOverflowTitle": "Context limit reached. Choose how to proceed:",
+    "longRunningHint": "Review is still running. This may take a few more minutes.",
+    "elapsedTime": "Running for {{time}}",
+    "showRecoveryPlan": "Show recovery plan",
+    "hideRecoveryPlan": "Hide recovery plan",
+    "recoveryPreserve": "{{count}} completed reviewers will be preserved",
+    "recoveryRerun": "{{count}} reviewers will be rerun",
+    "recoverySkip": "{{count}} reviewers will be skipped",
+    "degradation": {
+      "reduceReviewers": "Run with core reviewers only",
+      "reduceReviewersDesc": "Skip extra reviewers and keep only core reviewers",
+      "reduceReviewersPending": "Reduced reviewer mode will be supported in a future update.",
+      "compressContext": "Compress context and retry",
+      "compressContextDesc": "Compress completed reviewer results to free up context space",
+      "compressContextPending": "Context compression will be supported in a future update.",
+      "viewPartial": "View partial results",
+      "viewPartialDesc": "View completed reviewer results"
+    },
+    "launchError": {
+      "modelConfig": "Failed to create review session. Please check model configuration.",
+      "network": "Network connection interrupted. Review failed to start.",
+      "unknown": "Review launch failed. Please retry."
+    }
   },
   "reviewActionBar": {
     "reviewCompletedStandard": "Review completed",
@@ -410,7 +483,8 @@
     "fixAndReviewRequestDisplayStandard": "Fix Code Review findings and re-review",
     "fixRequestDisplayDeep": "Start fixing Deep Review findings",
     "fixAndReviewRequestDisplayDeep": "Fix Deep Review findings and re-review",
-    "needsDecisionTag": "Decision"
+    "needsDecisionTag": "Decision",
+    "noIssuesFound": "No issues found. Great job!"
   },
   "deepReviewConsent": {
     "windowTitle": "Deep Review",
@@ -425,7 +499,8 @@
     "time": "You can keep working while it runs; we will only notify you when the whole Deep Review finishes in the background.",
     "dontShowAgain": "Do not show this again",
     "cancel": "Cancel",
-    "confirm": "Start Deep Review"
+    "confirm": "Start Deep Review",
+    "estimatedTokens": "Estimated: {{min}} - {{max}} tokens"
   },
   "flowChatHeader": {
     "turnList": "Turn list",
@@ -514,6 +589,8 @@
   "modelRound": {
     "copyDialog": "Copy dialog",
     "copiedDialog": "Copied!",
+    "forkDialog": "Fork session from here",
+    "forkFailed": "Failed to fork session",
     "like": "Like",
     "dislike": "Dislike",
     "report": "Report",
@@ -529,9 +606,9 @@
     "searchCount_one": "{{count}} search",
     "searchCount_other": "{{count}} searches",
     "searchCount": "{{count}} search(es)",
-    "thinkingCount_one": "Thought {{count}} time",
-    "thinkingCount_other": "Thought {{count}} times",
-    "thinkingCount": "Thought {{count}} time(s)",
+    "commandCount_one": "Executed {{count}} command",
+    "commandCount_other": "Executed {{count}} commands",
+    "commandCount": "Executed {{count}} command(s)",
     "exploreCount_one": "{{count}} exploration",
     "exploreCount_other": "{{count}} explorations",
     "exploreCount": "{{count}} exploration(s)",
@@ -563,6 +640,7 @@
       "analyzing": "Analyzing...",
       "expandPreview": "Expand preview",
       "collapsePreview": "Collapse preview",
+      "openFullCodeHint": "Open full code",
       "viewGitDiff": "View Diff",
       "viewBaselineDiff": "View Baseline Diff"
     },
@@ -600,6 +678,9 @@
       "failed": "Failed",
       "confirmExecute": "Confirm execute",
       "cancel": "Cancel",
+      "copyCommand": "Copy git command",
+      "commandCopied": "Git command copied",
+      "copyCommandFailed": "Failed to copy git command",
       "expandOutput": "Expand output",
       "collapseOutput": "Collapse output",
       "noOutput": "(no output)",
@@ -657,6 +738,9 @@
       "inputPlaceholder": "Enter command...",
       "commandEmptyWarning": "Command is empty, cannot execute",
       "executeCommandTitle": "Execute command",
+      "copyCommand": "Copy command",
+      "commandCopied": "Command copied",
+      "copyCommandFailed": "Failed to copy command",
       "cancel": "Cancel",
       "interrupt": "Interrupt command",
       "openInPanel": "Open Terminal in panel",
@@ -731,7 +815,8 @@
       "searching": "Searching \"{{term}}\"...",
       "preparingSearch": "Preparing to search \"{{term}}\"",
       "clickToOpenLink": "Click to open link",
-      "noTitle": "No title"
+      "noTitle": "No title",
+      "summaryAvailable": "summary available"
     },
     "todoWrite": {
       "tasksCount": "{{count}} tasks",
@@ -777,6 +862,7 @@
       "untitled": "Untitled Task",
       "statusLabel": "Status",
       "promptLabel": "Task Prompt",
+      "reviewerContextLabel": "Reviewer",
       "errorLabel": "Error",
       "resultLabel": "Result",
       "noData": "Unable to load task data",
@@ -792,7 +878,9 @@
     },
     "timeout": {
       "disableTooltip": "Disable timeout",
+      "disableLabel": "Ignore limit",
       "enableTooltip": "Re-enable timeout",
+      "enableLabel": "Restore limit",
       "restoreShort": "Restore ({{seconds}}s left)"
     },
     "diagram": {
@@ -930,11 +1018,16 @@
       "toolBatchComplete": "Tool batch complete",
       "manualTrigger": "Manual trigger",
       "autoTrigger": "Auto trigger",
+      "afterAiResponse": "After AI response",
       "contextCompressionFailed": "Context compression failed",
       "contextCompression": "Context compression:",
-      "localFallbackHeader": "Model request failed; local structured trimming",
+      "localFallbackHeader": "Model request failed; local structured compression",
       "localFallbackNotice": "Model-based summary was unavailable, so this compression used local structured truncation.",
-      "noSummaryNotice": "No additional summary was generated for this compaction pass."
+      "noSummaryNotice": "No additional summary was generated for this compaction pass.",
+      "tokenChange": "{{before}} → {{after}} tokens",
+      "savingsTag": "Saved {{saved}} · Ratio {{ratio}}%",
+      "compressingContext": "Compressing context...",
+      "compressionCount": "Compression #{{count}}"
     },
     "globSearch": {
       "parsingPattern": "Parsing search pattern...",
@@ -1062,6 +1155,7 @@
       "preparingReview": "Preparing code review",
       "reviewFailed": "Code review failed: {{error}}",
       "unknownError": "Unknown error",
+      "noIssues": "No issues",
       "collapseDetails": "Collapse Details",
       "expandDetails": "Expand Details",
       "overallAssessment": "Overall Assessment",
@@ -1077,6 +1171,24 @@
       "reviewerIssues": "{{count}} issues",
       "reviewerIssuesUnknown": "Issue count unavailable",
       "reviewerTeamSummary": "{{total}} reviewers · {{completed}} completed · {{degraded}} need attention",
+      "severities": {
+        "critical": "critical",
+        "high": "high",
+        "medium": "medium",
+        "low": "low",
+        "info": "info"
+      },
+      "reviewerStatuses": {
+        "completed": "completed",
+        "timed_out": "timed out",
+        "cancelled_by_user": "cancelled by user",
+        "cancelled": "cancelled",
+        "failed": "failed",
+        "skipped": "skipped",
+        "running": "running",
+        "partial": "partial",
+        "unknown": "unknown"
+      },
       "sectionItemCount": "{{count}} items",
       "remediationPlan": "Remediation Plan",
       "sections": {
@@ -1141,12 +1253,16 @@
         "certainty": "Certainty",
         "location": "Location",
         "noSelectionHint": "Select at least one remediation item to start fixing.",
+        "ungrouped": "Other",
         "startFix": "Start fixing",
-        "fixAndReview": "Fix and re-review",
+        "fixAndReview": "Fix \\u0026 re-review",
         "cancel": "Cancel",
         "fixUnavailable": "Unable to start remediation because the review session is unavailable.",
         "fixRequestDisplay": "Start fixing Deep Review findings",
-        "fixAndReviewRequestDisplay": "Fix Deep Review findings and re-review"
+        "fixAndReviewRequestDisplay": "Fix Deep Review findings and re-review",
+        "recommended": "recommended",
+        "expandOptions": "Show options",
+        "collapseOptions": "Hide options"
       },
       "riskLevels": {
         "low": "Low Risk",
@@ -1342,5 +1458,9 @@
         "prompt": "Help me create a budget plan.\n\nContext:\n- Budget period (monthly / quarterly / project):\n- Total budget:\n- Fixed costs:\n- Variable costs:\n- Goal (save money / control spending / save for something):\n\nOutput:\n1) Suggested categories + ratios\n2) A category budget table (copy-paste friendly)\n3) Overrun rules + adjustment plan\n4) Weekly/monthly review checklist"
       }
     }
+  },
+  "subagent": {
+    "showingLines": "Showing {{shown}} of {{total}} lines",
+    "showAll": "Show all"
   }
 }

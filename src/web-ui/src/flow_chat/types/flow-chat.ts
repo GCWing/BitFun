@@ -27,6 +27,15 @@ export interface FlowTextItem extends FlowItem {
   content: string;
   isStreaming: boolean;
   isMarkdown?: boolean;
+  /**
+   * Transient runtime status rendered in the current conversation only.
+   * It is not persisted as assistant content.
+   */
+  runtimeStatus?: {
+    phase: 'waiting_model' | 'streaming' | 'waiting_tool' | 'running_tool' | 'waiting_permission' | 'saving' | 'recovering';
+    scope: 'main' | 'subagent' | 'tool';
+    messageKey?: string;
+  };
 }
 
 export interface FlowThinkingItem extends FlowItem {
@@ -44,6 +53,7 @@ export interface FlowToolItem extends FlowItem {
   toolCall: {
     input: any;
     id: string;
+    timeout_seconds?: number;
   };
   toolResult?: {
     result: any;
@@ -54,6 +64,23 @@ export interface FlowToolItem extends FlowItem {
   };
   requiresConfirmation?: boolean;
   userConfirmed?: boolean;
+  acpPermission?: {
+    permissionId: string;
+    sessionId?: string;
+    toolCallId?: string;
+    requestedAt: number;
+    options?: Array<{
+      optionId: string;
+      name: string;
+      kind: 'allow_once' | 'allow_always' | 'reject_once' | 'reject_always';
+    }>;
+    toolCall?: {
+      toolCallId?: string;
+      title?: string;
+      rawInput?: unknown;
+      content?: unknown;
+    };
+  };
   aiIntent?: string; // AI rationale for calling the tool.
   startTime?: number;  // Tool start time.
   endTime?: number;    // Tool end time.
@@ -86,6 +113,14 @@ export interface ImageAnalysisResult {
   analysis_time_ms: number;     // Analysis duration.
 }
 
+export interface ModelRoundRenderHints {
+  /**
+   * Keep all round items in the normal transcript instead of merging
+   * collapsible tools and adjacent narrative into an explore group.
+   */
+  disableExploreGrouping?: boolean;
+}
+
 // Model round: output from a single model call.
 export interface ModelRound {
   id: string;
@@ -97,6 +132,7 @@ export interface ModelRound {
   startTime: number;
   endTime?: number;
   error?: string;
+  renderHints?: ModelRoundRenderHints;
 }
 
 // Token usage stats.
@@ -145,6 +181,10 @@ export interface DialogTurn {
   tokenUsage?: TokenUsage;
   todos?: TodoItem[];
   backendTurnIndex?: number;
+  /** Whether the turn completed successfully (false for loop_detected / max_rounds). */
+  success?: boolean;
+  /** Why the turn finished: "complete", "loop_detected", or "max_rounds". */
+  finishReason?: string;
 }
 
 export interface FlowChatState {
@@ -250,9 +290,24 @@ export interface Session {
   /**
    * Set when a session finishes (completed / error / cancelled) while not the active session.
    * Cleared after the user switches to it and the content renders.
-   * 'completed' → green dot, 'error' → red dot.
+   * 'completed' → green dot, 'error' → red dot, 'interrupted' → red dot (partial stream recovery).
    */
-  hasUnreadCompletion?: 'completed' | 'error';
+  hasUnreadCompletion?: 'completed' | 'error' | 'interrupted';
+
+  /**
+   * Set when a session requires user attention while not the active session.
+   * This is a high-priority alert that takes precedence over hasUnreadCompletion.
+   * 'ask_user' → session has pending AskUserQuestion waiting for answer
+   * 'tool_confirm' → session has pending tool confirmations
+   * Cleared when the user switches to the session or the pending action is resolved.
+   */
+  needsUserAttention?: 'ask_user' | 'tool_confirm';
+
+  /**
+   * Runtime-only session that should stay in memory but never be persisted or
+   * shown in the main session navigation.
+   */
+  isTransient?: boolean;
 }
 
 export interface SessionConfig {
@@ -307,6 +362,7 @@ export interface ToolCardConfig {
 export interface ToolCardProps {
   toolItem: FlowToolItem;
   config: ToolCardConfig;
+  interruptionNote?: string | null;
   onConfirm?: (updatedInput?: any) => void;  // toolId is known within the card.
   onReject?: () => void;
   onOpenInEditor?: (filePath: string) => void;

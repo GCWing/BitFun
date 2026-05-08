@@ -64,6 +64,23 @@ export interface AIExperienceConfig {
 
   /** Whether to show the pixel Agent companion in the collapsed chat input. */
   enable_agent_companion: boolean;
+
+  /** Where to show the Agent companion. */
+  agent_companion_display_mode: 'input' | 'desktop';
+
+  /** Optional Petdex-compatible companion package selected by the user. */
+  agent_companion_pet?: {
+    id: string;
+    displayName: string;
+    description?: string | null;
+    source: 'preset' | 'user';
+    packagePath: string;
+    spritesheetPath: string;
+    spritesheetMimeType: string;
+  } | null;
+
+  /** Whether to enable flashgrep-backed accelerated workspace search for local workspaces. */
+  enable_workspace_search: boolean;
 }
 
 export type ModelCapability =
@@ -175,6 +192,7 @@ export interface AIConfig {
   tool_confirmation_timeout_secs?: number | null;
   skip_tool_confirmation?: boolean;
   computer_use_enabled?: boolean;
+  max_rounds?: number;
 }
 
 export interface StoredModeConfigItem {
@@ -211,6 +229,10 @@ export interface SkillInfo {
   dirName: string;
   isBuiltin: boolean;
   groupKey?: string | null;
+  /** True when this skill is shadowed by a higher-priority skill with the same name. */
+  isShadowed?: boolean;
+  /** Key of the skill that shadows this one (if any). */
+  shadowedByKey?: string | null;
 }
 
 export interface ModeSkillInfo extends SkillInfo {

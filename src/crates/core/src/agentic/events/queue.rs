@@ -7,7 +7,10 @@ use crate::util::errors::BitFunResult;
 use log::{debug, trace, warn};
 use std::collections::BinaryHeap;
 use std::sync::Arc;
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::{broadcast, Mutex, Notify};
+
+const EVENT_BROADCAST_BUFFER: usize = 1024;
+const SLOW_EVENT_QUEUE_LATENCY_MS: u128 = 250;
 
 /// Event queue configuration
 #[derive(Debug, Clone)]
@@ -46,6 +49,9 @@ pub struct EventQueue {
     /// Notifier (used to wake up waiting consumers)
     notify: Arc<Notify>,
 
+    /// Broadcast stream for non-consuming subscribers.
+    broadcast_tx: broadcast::Sender<EventEnvelope>,
+
     /// Configuration
     config: EventQueueConfig,
 
@@ -55,9 +61,11 @@ pub struct EventQueue {
 
 impl EventQueue {
     pub fn new(config: EventQueueConfig) -> Self {
+        let (broadcast_tx, _) = broadcast::channel(EVENT_BROADCAST_BUFFER);
         Self {
             queue: Arc::new(Mutex::new(BinaryHeap::new())),
             notify: Arc::new(Notify::new()),
+            broadcast_tx,
             config,
             stats: Arc::new(Mutex::new(QueueStats::default())),
         }
@@ -85,8 +93,10 @@ impl EventQueue {
         // Add to queue
         {
             let mut queue = self.queue.lock().await;
-            queue.push(std::cmp::Reverse(envelope));
+            queue.push(std::cmp::Reverse(envelope.clone()));
         }
+
+        let _ = self.broadcast_tx.send(envelope);
 
         // Update statistics: get queue size first, then update statistics (avoid getting queue lock while holding stats lock)
         let queue_len = self.queue.lock().await.len();
@@ -120,12 +130,37 @@ impl EventQueue {
                 batch.push(envelope);
             }
         }
+        let remaining_queue_len = queue.len();
+        drop(queue);
+
+        if let Some((max_age_ms, event_id, priority)) = batch
+            .iter()
+            .filter_map(|envelope| {
+                envelope
+                    .timestamp
+                    .elapsed()
+                    .ok()
+                    .map(|age| (age.as_millis(), envelope.id.as_str(), envelope.priority))
+            })
+            .max_by_key(|(age_ms, _, _)| *age_ms)
+        {
+            if max_age_ms >= SLOW_EVENT_QUEUE_LATENCY_MS {
+                warn!(
+                    "Slow agentic event queue delivery: max_age_ms={}, batch_size={}, remaining_queue_len={}, event_id={}, priority={:?}",
+                    max_age_ms,
+                    batch.len(),
+                    remaining_queue_len,
+                    event_id,
+                    priority
+                );
+            }
+        }
 
         // Update statistics
         if !batch.is_empty() {
             let mut stats = self.stats.lock().await;
             stats.total_processed += batch.len() as u64;
-            stats.pending_events = queue.len();
+            stats.pending_events = remaining_queue_len;
         }
 
         batch
@@ -134,6 +169,11 @@ impl EventQueue {
     /// Dequeue a batch using the queue's configured batch size.
     pub async fn dequeue_configured_batch(&self) -> Vec<EventEnvelope> {
         self.dequeue_batch(self.config.batch_size).await
+    }
+
+    /// Subscribe to events without consuming them from the queue.
+    pub fn subscribe(&self) -> broadcast::Receiver<EventEnvelope> {
+        self.broadcast_tx.subscribe()
     }
 
     /// Clear all events for a session

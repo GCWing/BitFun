@@ -2,6 +2,7 @@
 
 .explore-region {
   position: relative;
+  overflow: hidden;
   padding: 0 3rem; // Match model-round-item horizontal padding.
 
   @media (max-width: 768px) {
@@ -12,7 +13,8 @@
 // ==================== Non-collapsible (streaming / no auto-collapse yet) ====================
 
 .explore-region--expanded:not(.explore-region--collapsible) {
-  margin: 4px 0;
+  margin-top: 3px;
+  margin-bottom: 3px;
 
   .explore-region__content {
     position: relative;
@@ -20,6 +22,8 @@
     // should not push the first summary line downward when the round is
     // re-wrapped from `model-round` into `explore-group`.
     padding: 0;
+    // Hide scrollbar track by default; only show when content actually overflows.
+    overflow: hidden;
 
     // In the plain model-round layout, the first/last flow item margins can
     // collapse with the parent. Once wrapped by explore-group, that collapse no
@@ -54,19 +58,22 @@
 // ==================== Collapsible (header + animated content) ====================
 
 .explore-region--collapsible {
-  margin: 4px 0;
+  margin: 0 0 0.3rem 0;
+  font-size: var(--flowchat-font-size-sm);
+  line-height: 1.5;
 
   .explore-region__header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 0;
+    gap: 4px;
+    padding: 0;
     color: var(--text-tertiary, #6b7280);
-    font-size: 12px;
+    font-size: var(--flowchat-font-size-sm);
+    line-height: 1.5;
     cursor: pointer;
     user-select: none;
-    border-radius: 6px;
-    transition: color 0.15s ease;
+    border-radius: var(--radius-sm, 6px);
+    transition: color 0.15s ease, background 0.15s ease;
 
     &:hover {
       background: var(--bg-hover, rgba(255, 255, 255, 0.05));
@@ -83,6 +90,8 @@
   }
 
   .explore-region__summary {
+    font-size: var(--flowchat-font-size-sm);
+    line-height: 1.5;
     opacity: 0.8;
   }
 
@@ -103,7 +112,11 @@
 
   .explore-region__content {
     position: relative;
-    padding: 4px 0;
+    // Align nested tool cards with the summary text, not the group chevron.
+    padding: 0 0 0 20px;
+    box-sizing: border-box;
+    // Hide scrollbar track by default; only show when content actually overflows.
+    overflow: hidden;
 
     &::-webkit-scrollbar {
       width: 4px;
@@ -192,11 +205,17 @@
   }
 }
 
-// Limit height and enable scroll during streaming.
+// Limit height and enable scroll only when content actually overflows.
+.explore-region--has-scroll .explore-region__content {
+  overflow-y: auto;
+}
+
 .explore-region--expanded.explore-region--streaming {
   .explore-region__content {
     max-height: 400px;
-    overflow-y: auto;
+    // Add bottom padding so the last line of text isn't obscured by the
+    // streaming gradient overlay or clipped at the container edge.
+    padding-bottom: 8px;
   }
 }
 

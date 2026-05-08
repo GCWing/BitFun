@@ -15,9 +15,40 @@
   }
 }
 
+.compact-tool-card-wrapper.terminal-tool-card--compact-collapsed {
+  .terminal-header-extra {
+    gap: 4px;
+  }
+
+  .terminal-header-duration .duration-text {
+    gap: 3px;
+    font-size: var(--flowchat-font-size-xs);
+  }
+
+  .terminal-header-duration .duration-text svg {
+    width: 11px;
+    height: 11px;
+  }
+}
+
 /* Entire base card shows pointer (card toggles expand); children must not force default cursor. */
 .base-tool-card-wrapper.terminal-tool-card .base-tool-card {
   cursor: pointer;
+}
+
+.base-tool-card-wrapper.terminal-tool-card {
+  .tool-card-action {
+    display: inline-flex;
+    align-items: center;
+    height: calc(12px * 1.45);
+    line-height: 1;
+    margin-right: 2px;
+    transform: translateY(-0.5px);
+  }
+
+  .tool-card-content {
+    min-height: calc(12px * 1.45);
+  }
 }
 
 /* Footer bar: full width + background to bottom inner edge of expanded content (matches .base-tool-card-expanded padding). */
@@ -60,7 +91,13 @@
   white-space: nowrap;
   cursor: inherit;
   transition: none;
-  display: inline-block;
+  /* inline-flex + align-items center makes the glyph optically share the same
+   * vertical center as the sibling `.tool-card-action` ("执行命令"), regardless of
+   * the monospace font's intrinsic baseline metrics. */
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.45;
+  height: calc(12px * 1.45);
   background: none !important;
   border: none !important;
   outline: none !important;
@@ -156,6 +193,53 @@
     background: var(--color-error-bg);
     color: var(--color-error);
   }
+}
+
+.terminal-header-extra {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  line-height: 1;
+}
+
+.terminal-header-duration {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: var(--color-text-muted);
+
+  &:empty {
+    display: none;
+  }
+
+  .duration-text {
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 500;
+  }
+
+  .duration-text svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.terminal-header-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.terminal-header-extra > .terminal-status-text {
+  margin-right: 0;
 }
 
 /* ========== Confirmation action button group ========== */
@@ -264,6 +348,14 @@
     background: rgba(255, 255, 255, 0.1);
     color: var(--color-text-secondary);
     box-shadow: none;
+  }
+}
+
+.copy-command-btn {
+  color: var(--color-text-muted);
+
+  &.copied {
+    color: var(--color-success);
   }
 }
 

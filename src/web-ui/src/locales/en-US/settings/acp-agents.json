@@ -1,0 +1,80 @@
+{
+  "title": "ACP Agents",
+  "subtitle": "Manage ACP-compatible agents for FlowChat sessions.",
+  "actions": {
+    "add": "Add",
+    "download": "Download",
+    "save": "Save",
+    "refresh": "Refresh",
+    "learnMore": "Learn More",
+    "editJson": "Edit JSON",
+    "closeJson": "Close JSON",
+    "saveJson": "Save JSON",
+    "revert": "Revert",
+    "install": "Install",
+    "restorePreset": "Restore preset",
+    "predownloadAcp": "Predownload ACP"
+  },
+  "json": {
+    "title": "Raw JSON",
+    "description": "Advanced editor for the acpClients config. Each client is spawned over stdio by the desktop app."
+  },
+  "registry": {
+    "title": "Agents",
+    "description": "Installed ACP agents with ready dependencies appear in the workspace action menu.",
+    "searchPlaceholder": "Search agents...",
+    "filterLabel": "ACP agent filter",
+    "filters": {
+      "all": "All",
+      "enabled": "Enabled",
+      "installed": "Installed",
+      "notInstalled": "Not Installed",
+      "configInvalid": "Invalid config"
+    },
+    "enabled": "Enabled",
+    "ready": "Ready",
+    "installed": "Installed",
+    "notInstalled": "Not Installed",
+    "configInvalid": "Invalid config",
+    "cliRequired": "Install CLI",
+    "checking": "Checking",
+    "empty": "No matching ACP agents."
+  },
+  "clients": {
+    "loading": "Loading ACP agents…"
+  },
+  "fields": {
+    "name": "Name",
+    "command": "Command",
+    "args": "Arguments, one per line",
+    "env": "Environment, KEY=VALUE per line",
+    "permissionMode": "Tool confirmation"
+  },
+  "permissionMode": {
+    "ask": "Ask",
+    "allowOnce": "Auto approve",
+    "rejectOnce": "Auto reject"
+  },
+  "requirements": {
+    "tool": "CLI",
+    "adapter": "ACP",
+    "installed": "Installed",
+    "missing": "Missing",
+    "checking": "Checking",
+    "ready": "Requirements ready",
+    "notReady": "Requirements missing"
+  },
+  "notifications": {
+    "loadFailed": "Failed to load ACP config",
+    "saveSuccess": "ACP config saved",
+    "saveFailed": "Failed to save ACP config",
+    "probeFailed": "Failed to check ACP requirements",
+    "openLinkFailed": "Failed to open link",
+    "invalidJson": "Invalid ACP JSON",
+    "invalidEnv": "Invalid environment value",
+    "downloadSuccess": "ACP agent CLI downloaded",
+    "downloadFailed": "Failed to download ACP agent CLI",
+    "predownloadSuccess": "ACP adapter downloaded",
+    "predownloadFailed": "Failed to download ACP adapter"
+  }
+}

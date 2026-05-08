@@ -228,7 +228,7 @@ describe('sessionMetadata', () => {
     });
   });
 
-  it('round-trips btw identity through persistence and UI selectors', () => {
+  it('treats persisted btw identity as legacy and no longer restores it', () => {
     const metadata: SessionMetadata = {
       sessionId: 'child-1',
       sessionName: 'BTW Child',
@@ -256,29 +256,19 @@ describe('sessionMetadata', () => {
     const resolved = resolveSessionRelationship(relationship);
 
     expect(relationship).toEqual({
-      sessionKind: 'btw',
-      parentSessionId: 'parent-1',
-      btwOrigin: {
-        requestId: 'req-1',
-        parentSessionId: 'parent-1',
-        parentDialogTurnId: 'turn-2',
-        parentTurnIndex: 2,
-      },
+      sessionKind: 'normal',
+      parentSessionId: undefined,
+      btwOrigin: undefined,
     });
     expect(resolved).toEqual({
-      kind: 'btw',
-      isBtw: true,
+      kind: 'normal',
+      isBtw: false,
       isReview: false,
       isDeepReview: false,
-      parentSessionId: 'parent-1',
-      displayAsChild: true,
-      canOpenInAuxPane: true,
-      origin: {
-        requestId: 'req-1',
-        parentSessionId: 'parent-1',
-        parentDialogTurnId: 'turn-2',
-        parentTurnIndex: 2,
-      },
+      parentSessionId: undefined,
+      displayAsChild: false,
+      canOpenInAuxPane: false,
+      origin: undefined,
     });
   });
 
@@ -364,6 +354,85 @@ describe('sessionMetadata', () => {
       isDeepReview: true,
       displayAsChild: true,
       canOpenInAuxPane: true,
+    });
+  });
+
+  describe('unread completion persistence', () => {
+    it('persists unreadCompletion from session to metadata', () => {
+      const session = createSession({
+        hasUnreadCompletion: 'completed',
+      });
+
+      const metadata = buildSessionMetadata(session);
+
+      expect(metadata.unreadCompletion).toBe('completed');
+    });
+
+    it('persists needsUserAttention from session to metadata', () => {
+      const session = createSession({
+        needsUserAttention: 'ask_user',
+      });
+
+      const metadata = buildSessionMetadata(session);
+
+      expect(metadata.needsUserAttention).toBe('ask_user');
+    });
+
+    it('clears unreadCompletion when session has hasUnreadCompletion undefined', () => {
+      const session = createSession({
+        hasUnreadCompletion: undefined,
+      });
+
+      const existingMetadata: SessionMetadata = {
+        sessionId: 'session-1',
+        sessionName: 'Session Title',
+        agentType: 'agentic',
+        modelName: 'gpt-test',
+        createdAt: 1000,
+        lastActiveAt: 1000,
+        turnCount: 0,
+        messageCount: 0,
+        toolCallCount: 0,
+        status: 'active',
+        tags: [],
+        customMetadata: {},
+        todos: [],
+        workspacePath: '/workspace',
+        unreadCompletion: 'completed',
+      };
+
+      const metadata = buildSessionMetadata(session, existingMetadata);
+
+      // The cleared value (undefined) must NOT fall back to existingMetadata.unreadCompletion
+      expect(metadata.unreadCompletion).toBeUndefined();
+    });
+
+    it('clears needsUserAttention when session has needsUserAttention undefined', () => {
+      const session = createSession({
+        needsUserAttention: undefined,
+      });
+
+      const existingMetadata: SessionMetadata = {
+        sessionId: 'session-1',
+        sessionName: 'Session Title',
+        agentType: 'agentic',
+        modelName: 'gpt-test',
+        createdAt: 1000,
+        lastActiveAt: 1000,
+        turnCount: 0,
+        messageCount: 0,
+        toolCallCount: 0,
+        status: 'active',
+        tags: [],
+        customMetadata: {},
+        todos: [],
+        workspacePath: '/workspace',
+        needsUserAttention: 'tool_confirm',
+      };
+
+      const metadata = buildSessionMetadata(session, existingMetadata);
+
+      expect(metadata.needsUserAttention).toBeUndefined();
     });
   });
 });

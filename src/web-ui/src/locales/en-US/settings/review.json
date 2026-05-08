@@ -70,6 +70,14 @@
     "judge": {
       "name": "Review Quality Inspector",
       "role": "Review Quality Inspector"
+    },
+    "architecture": {
+      "name": "Architecture Reviewer",
+      "role": "Architecture Reviewer"
+    },
+    "frontend": {
+      "name": "Frontend Reviewer",
+      "role": "Frontend Reviewer"
     }
   },
   "extra": {

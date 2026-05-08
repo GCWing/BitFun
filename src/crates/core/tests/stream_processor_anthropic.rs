@@ -84,10 +84,7 @@ async fn anthropic_extended_thinking_sse_produces_reasoning_and_text() {
         result.usage.as_ref().map(|usage| usage.total_token_count),
         Some(25)
     );
-    assert_eq!(
-        result.thinking_signature.as_deref(),
-        Some("sig_abc123")
-    );
+    assert_eq!(result.thinking_signature.as_deref(), Some("sig_abc123"));
 
     let thinking_chunks: Vec<(&str, bool)> = output
         .events

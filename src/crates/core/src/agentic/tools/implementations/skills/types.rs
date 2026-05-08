@@ -47,6 +47,12 @@ pub struct SkillInfo {
     /// Optional logical group for built-in skills.
     #[serde(default)]
     pub group_key: Option<String>,
+    /// True when this skill is shadowed by a higher-priority skill with the same name.
+    #[serde(default)]
+    pub is_shadowed: bool,
+    /// Key of the skill that shadows this one (if any).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shadowed_by_key: Option<String>,
 }
 
 impl SkillInfo {

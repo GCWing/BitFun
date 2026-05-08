@@ -49,6 +49,14 @@ export interface SandboxOperationDiff {
   anchorLine?: number | null;
 }
 
+export interface SessionFileDiffStats {
+  filePath: string;
+  linesAdded: number;
+  linesRemoved: number;
+  approximate: boolean;
+  changeKind: 'create' | 'modify' | 'delete';
+}
+
 export interface GetSessionModificationsRequest {
   sessionId: string;
 }
@@ -175,6 +183,25 @@ export class SnapshotAPI {
         sessionId,
         filePath,
         operationId,
+        workspacePath,
+      });
+    }
+  }
+
+  async getSessionFileDiffStats(
+    sessionId: string,
+    filePath: string,
+    workspacePath?: string,
+  ): Promise<SessionFileDiffStats> {
+    try {
+      const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
+      return await api.invoke('get_session_file_diff_stats', {
+        request: { sessionId, filePath, workspacePath: resolvedWorkspacePath },
+      });
+    } catch (error) {
+      throw createTauriCommandError('get_session_file_diff_stats', error, {
+        sessionId,
+        filePath,
         workspacePath,
       });
     }

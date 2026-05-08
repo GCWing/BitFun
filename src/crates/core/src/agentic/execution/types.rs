@@ -2,8 +2,8 @@
 
 use crate::agentic::core::Message;
 use crate::agentic::round_preempt::DialogRoundPreemptSource;
-use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::tools::pipeline::SubagentParentInfo;
+use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use serde_json::Value;
@@ -60,6 +60,9 @@ pub struct RoundResult {
     pub usage: Option<crate::util::types::ai::GeminiUsage>,
     /// Provider-specific metadata returned by the model.
     pub provider_metadata: Option<Value>,
+    /// When set, this round's stream was partially recovered (aborted mid-way
+    /// but some output was already received). Contains a human-readable reason.
+    pub partial_recovery_reason: Option<String>,
 }
 
 /// Finish reason
@@ -77,6 +80,19 @@ pub enum FinishReason {
     Error,
     /// Loop detected: consecutive rounds with identical tool call signatures
     LoopDetected,
+}
+
+impl std::fmt::Display for FinishReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FinishReason::Complete => write!(f, "complete"),
+            FinishReason::ToolCalls => write!(f, "tool_calls"),
+            FinishReason::MaxRounds => write!(f, "max_rounds"),
+            FinishReason::Cancelled => write!(f, "cancelled"),
+            FinishReason::Error => write!(f, "error"),
+            FinishReason::LoopDetected => write!(f, "loop_detected"),
+        }
+    }
 }
 
 /// Execution result

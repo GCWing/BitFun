@@ -19,21 +19,21 @@ import {
   XCircle,
   GitBranch,
   FileText,
-  ChevronDown,
-  ChevronUp,
   FileEdit,
   FilePlus,
   FileX2,
+  ChevronRight,
   Loader2,
   Clock,
   Check,
+  X,
 } from 'lucide-react';
-import { CubeLoading } from '../../component-library';
+import { CubeLoading, IconButton } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { useSnapshotState } from '../../tools/snapshot_system/hooks/useSnapshotState';
 import { SnapshotEventBus, SNAPSHOT_EVENTS } from '../../tools/snapshot_system/core/SnapshotEventBus';
-import { useCurrentWorkspace } from '../../infrastructure/contexts/WorkspaceContext';
+import { useOptionalCurrentWorkspace } from '../../infrastructure/contexts/WorkspaceContext';
 import { createDiffEditorTab } from '../../shared/utils/tabUtils';
 import { fileTabManager } from '../../shared/services/FileTabManager';
 import { CodePreview } from '../components/CodePreview';
@@ -45,6 +45,8 @@ import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import { notificationService } from '@/shared/notification-system';
+import { useGitState } from '@/tools/git/hooks/useGitState';
+import { ToolCardHeaderActions } from './ToolCardHeaderActions';
 import './FileOperationToolCard.scss';
 
 const log = createLogger('FileOperationToolCard');
@@ -59,10 +61,20 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   toolItem,
   config,
   sessionId,
-  onOpenInEditor
+  onOpenInEditor,
+  onConfirm,
+  onReject,
 }) => {
   const { t } = useTranslation('flow-chat');
-  const { toolCall, toolResult, status, isParamsStreaming, partialParams } = toolItem;
+  const {
+    toolCall,
+    toolResult,
+    status,
+    isParamsStreaming,
+    partialParams,
+    requiresConfirmation,
+    userConfirmed,
+  } = toolItem;
   const toolId = toolItem.id ?? toolCall?.id;
   
   const [isErrorExpanded, setIsErrorExpanded] = useState(false);
@@ -87,7 +99,12 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     clearError
   } = useSnapshotState(sessionId);
   const eventBus = SnapshotEventBus.getInstance();
-  const { workspace: currentWorkspace } = useCurrentWorkspace();
+  const { workspace: currentWorkspace } = useOptionalCurrentWorkspace();
+  const { isRepository: workspaceIsGitRepo } = useGitState({
+    repositoryPath: currentWorkspace?.rootPath ?? '',
+    layers: ['basic'],
+    participateInWindowFocusRefresh: false,
+  });
 
   const getFilePath = useCallback((): string => {
     const params = partialParams || toolCall?.input;
@@ -123,6 +140,13 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const contentPreview = getContent();
   
   const isFailed = status === 'error' || (toolResult && 'success' in toolResult && !toolResult.success);
+  const showConfirmationActions = Boolean(
+    requiresConfirmation &&
+    !userConfirmed &&
+    status !== 'completed' &&
+    status !== 'cancelled' &&
+    status !== 'error'
+  );
   
   const fileName = currentFilePath ? 
     (currentFilePath.split(/[/\\]/).pop() || t('context.file')) : 
@@ -356,6 +380,10 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     return t('error.unknown');
   };
 
+  const getSingleLineErrorMessage = () => {
+    return String(getErrorMessage()).replace(/\s+/g, ' ').trim();
+  };
+
   const handleOpenInCodeEditor = useCallback(async () => {
     if (!currentFilePath) return;
 
@@ -421,13 +449,20 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     }
   }, [sessionId, currentFilePath, toolCall?.id, fileName, toolItem.toolName]);
 
+  const canOpenFullCode =
+    !isFailed &&
+    toolItem.toolName !== 'Delete' &&
+    status === 'completed' &&
+    Boolean(currentFilePath) &&
+    Boolean(sessionId || onOpenInEditor);
+
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
     if (
       (e.target as HTMLElement).closest(
-        '.file-op-git-rail:not(.file-op-git-rail--disabled)',
+        '.file-op-diff-pill, .file-op-open-full-button, .tool-card-header-actions',
       )
     ) {
       return;
@@ -441,32 +476,49 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     if (toolItem.toolName === 'Delete') {
       return;
     }
-    
-    if (status !== 'completed') {
-      applyContentExpandedState(!isContentExpanded, 'manual');
+
+    applyContentExpandedState(!isContentExpanded, 'manual');
+  }, [
+    applyContentExpandedState,
+    applyErrorExpandedState,
+    isContentExpanded,
+    isErrorExpanded,
+    isFailed,
+    toolItem.toolName,
+  ]);
+
+  const handleConfirmClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onConfirm?.(toolCall?.input);
+  }, [onConfirm, toolCall?.input]);
+
+  const handleRejectClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onReject?.();
+  }, [onReject]);
+
+  const handleOpenFullCodeClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!canOpenFullCode || !currentFilePath) {
       return;
     }
 
-    if (currentFilePath && sessionId) {
+    if (sessionId) {
       handleOpenInCodeEditor();
       return;
     }
 
-    if (currentFilePath && onOpenInEditor) {
-      onOpenInEditor(currentFilePath);
-    }
+    onOpenInEditor?.(currentFilePath);
   }, [
-    applyContentExpandedState,
-    applyErrorExpandedState,
+    canOpenFullCode,
     currentFilePath,
     handleOpenInCodeEditor,
-    isContentExpanded,
-    isErrorExpanded,
-    isFailed,
     onOpenInEditor,
     sessionId,
-    status,
-    toolItem.toolName,
   ]);
 
   const handleOpenBaselineDiff = useCallback(async () => {
@@ -588,7 +640,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 content={newStringContent}
                 filePath={currentFilePath}
                 isStreaming={isParamsStreaming}
-                showLineNumbers={false}
+                showLineNumbers={isContentExpanded}
                 maxHeight={previewMaxHeight}
                 autoScrollToBottom={isParamsStreaming}
                 onLineClick={handleCodeLineClick}
@@ -607,7 +659,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 modifiedContent={newStringContent}
                 filePath={currentFilePath}
                 maxHeight={previewMaxHeight}
-                showLineNumbers={false}
+                showLineNumbers={isContentExpanded}
                 lineNumberMode="dual"
                 showPrefix={false}
                 contextLines={-1}
@@ -627,7 +679,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 content={contentPreview}
                 filePath={currentFilePath}
                 isStreaming={isParamsStreaming}
-                showLineNumbers={false}
+                showLineNumbers={isContentExpanded}
                 maxHeight={previewMaxHeight}
                 autoScrollToBottom={isParamsStreaming}
                 onLineClick={handleCodeLineClick}
@@ -646,7 +698,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 modifiedContent={contentPreview}
                 filePath={currentFilePath}
                 maxHeight={previewMaxHeight}
-                showLineNumbers={false}
+                showLineNumbers={isContentExpanded}
                 lineNumberMode="single"
                 showPrefix={true}
                 contextLines={-1}
@@ -677,15 +729,15 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       case 'running':
       case 'streaming':
       case 'preparing':
-        return <Loader2 className="animate-spin" size={12} />;
+        return <Loader2 className="animate-spin" size={16} />;
       case 'completed':
-        return <Check size={12} className="icon-check-done" />;
+        return <Check size={16} className="icon-check-done" />;
       case 'pending':
       case 'confirmed':
       case 'pending_confirmation':
       case 'analyzing':
       default:
-        return <Clock size={12} />;
+        return <Clock size={16} />;
     }
   };
 
@@ -699,24 +751,19 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const expandedContent = renderExpandedContent();
   const hasExpandableContent =
     !isFailed &&
-    !isDeleteTool &&
     Boolean(expandedContent);
 
   const isCardContentExpanded =
-    !isDeleteTool &&
     !isFailed &&
+    !isDeleteTool &&
     isContentExpanded;
-
-  const opensPanelOnClick =
-    !isFailed &&
-    !isDeleteTool &&
-    (Boolean(currentFilePath && sessionId && status === 'completed') ||
-      Boolean(currentFilePath && onOpenInEditor));
 
   const renderHeader = () => {
     const { className: iconClassName } = getToolIconInfo();
-    const gitRailDisabled =
+    const gitDiffDisabled =
       !currentFilePath || !currentWorkspace || !sessionId;
+    const hasDiffStats =
+      currentFileDiffStats.additions > 0 || currentFileDiffStats.deletions > 0;
 
     const actionText = isDeleteTool
       ? ''
@@ -726,13 +773,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       <ToolCardHeader
         icon={renderToolIcon()}
         iconClassName={iconClassName}
-        headerExpanded={
-          isFailed
-            ? isErrorExpanded
-            : hasExpandableContent
-              ? isContentExpanded
-              : undefined
-        }
+        headerExpanded={hasExpandableContent ? isContentExpanded : undefined}
         onAffordanceClick={
           hasExpandableContent
             ? () => applyContentExpandedState(!isContentExpanded, 'manual')
@@ -740,67 +781,89 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         }
         action={actionText}
       content={
-        <>
-          <Tooltip content={currentFilePath || fileName} placement="top">
-            <span className={`file-name ${isDeleteTool ? 'file-name--muted' : ''}`}>
-              {fileName}
-            </span>
-          </Tooltip>
-          {!isDeleteTool && !isParamsStreaming && !isFailed && !isLoading && (
-            (currentFileDiffStats.additions > 0 || currentFileDiffStats.deletions > 0)
-          ) && (
-            <span className="diff-preview-group">
-              {currentFileDiffStats.additions > 0 && (
-                <span className="additions">+{currentFileDiffStats.additions}</span>
-              )}
-              {currentFileDiffStats.deletions > 0 && (
-                <span className="deletions">-{currentFileDiffStats.deletions}</span>
-              )}
-            </span>
-          )}
-        </>
+        isFailed ? (
+          <span className="file-error-message-inline">
+            {getSingleLineErrorMessage()}
+          </span>
+        ) : (
+          <>
+            <Tooltip content={currentFilePath || fileName} placement="top">
+              <span className={`file-name ${isDeleteTool ? 'file-name--muted' : ''}`}>
+                {fileName}
+              </span>
+            </Tooltip>
+            {!isDeleteTool && !isParamsStreaming && !isLoading && hasDiffStats && (
+              <Tooltip content={t('toolCards.file.viewGitDiff')} placement="top">
+                <button
+                  type="button"
+                  className={`file-op-diff-pill${gitDiffDisabled ? ' file-op-diff-pill--disabled' : ''}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!gitDiffDisabled) {
+                      handleOpenBaselineDiff();
+                    }
+                  }}
+                  aria-label={t('toolCards.file.viewGitDiff')}
+                  title={t('toolCards.file.viewGitDiff')}
+                >
+                {currentFileDiffStats.additions > 0 && (
+                  <span className="additions">+{currentFileDiffStats.additions}</span>
+                )}
+                {currentFileDiffStats.deletions > 0 && (
+                  <span className="deletions">-{currentFileDiffStats.deletions}</span>
+                )}
+                  {workspaceIsGitRepo ? (
+                    <GitBranch size={12} strokeWidth={2} aria-hidden />
+                  ) : null}
+                </button>
+              </Tooltip>
+            )}
+          </>
+        )
       }
       extra={
-        <>
+        <ToolCardHeaderActions className="file-op-header-actions">
           {isParamsStreaming && (status === 'preparing' || status === 'streaming') && (
             <span className="params-streaming-indicator">
               {currentFilePath ? t('toolCards.file.receivingParams') : t('toolCards.file.analyzing')}
             </span>
           )}
-          {!isDeleteTool &&
-            !isFailed &&
-            !isLoading &&
-            status === 'completed' &&
-            currentFilePath && (
-              <Tooltip content={t('toolCards.file.viewGitDiff')} placement="top">
-                <div
-                  className={`file-op-git-rail${gitRailDisabled ? ' file-op-git-rail--disabled' : ''}`}
-                >
-                  {!gitRailDisabled && (
-                    <button
-                      type="button"
-                      className="file-op-git-rail__hit"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenBaselineDiff();
-                      }}
-                      aria-label={t('toolCards.file.viewGitDiff')}
-                      title={t('toolCards.file.viewGitDiff')}
-                    />
-                  )}
-                  <div className="file-op-git-rail__visual" aria-hidden>
-                    <GitBranch size={16} strokeWidth={2} />
-                  </div>
-                </div>
-              </Tooltip>
-            )}
-
-          {isFailed && (
-            <div className="error-expand-indicator">
-              {isErrorExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </div>
+          {showConfirmationActions && (
+            <>
+              <IconButton
+                className="tool-card-header-action file-op-header-action file-op-confirm-btn"
+                variant="success"
+                size="xs"
+                onClick={handleConfirmClick}
+                tooltip={t('toolCards.mcp.confirmExecute')}
+              >
+                <Check size={12} />
+              </IconButton>
+              <IconButton
+                className="tool-card-header-action file-op-header-action file-op-reject-btn"
+                variant="danger"
+                size="xs"
+                onClick={handleRejectClick}
+                tooltip={t('toolCards.mcp.cancel')}
+              >
+                <X size={12} />
+              </IconButton>
+            </>
           )}
-        </>
+          {canOpenFullCode && (
+            <Tooltip content={t('toolCards.file.openFullCodeHint')} placement="top">
+              <button
+                type="button"
+                className="file-op-open-full-button"
+                onClick={handleOpenFullCodeClick}
+                aria-label={t('toolCards.file.openFullCodeHint')}
+              >
+                <ChevronRight size={14} strokeWidth={2} absoluteStrokeWidth />
+              </button>
+            </Tooltip>
+          )}
+        </ToolCardHeaderActions>
       }
       statusIcon={isDeleteTool ? null : renderStatusIcon()}
     />
@@ -816,8 +879,30 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         clickable={false}
         header={
           <CompactToolCardHeader
-            statusIcon={getDeleteStatusIcon()}
+            icon={getDeleteStatusIcon()}
             content={renderDeleteContent()}
+            extra={showConfirmationActions ? (
+              <ToolCardHeaderActions className="file-op-header-actions">
+                <IconButton
+                  className="tool-card-header-action file-op-header-action file-op-confirm-btn"
+                  variant="success"
+                  size="xs"
+                  onClick={handleConfirmClick}
+                  tooltip={t('toolCards.mcp.confirmExecute')}
+                >
+                  <Check size={12} />
+                </IconButton>
+                <IconButton
+                  className="tool-card-header-action file-op-header-action file-op-reject-btn"
+                  variant="danger"
+                  size="xs"
+                  onClick={handleRejectClick}
+                  tooltip={t('toolCards.mcp.cancel')}
+                >
+                  <X size={12} />
+                </IconButton>
+              </ToolCardHeaderActions>
+            ) : undefined}
           />
         }
       />
@@ -835,14 +920,9 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         expandedContent={expandedContent}
         errorContent={isFailed && isErrorExpanded ? renderErrorContent() : null}
         isFailed={isFailed}
-        headerExpandAffordance={hasExpandableContent || opensPanelOnClick || isFailed}
-        headerAffordanceKind={
-          hasExpandableContent
-            ? 'expand'
-            : opensPanelOnClick
-              ? 'open-panel-right'
-              : 'expand'
-        }
+        requiresConfirmation={showConfirmationActions}
+        headerExpandAffordance={hasExpandableContent}
+        headerAffordanceKind="expand"
       />
     </div>
   );

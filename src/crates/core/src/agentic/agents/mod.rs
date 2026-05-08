@@ -53,7 +53,8 @@ pub use registry::{
 };
 pub use review_fixer_agent::ReviewFixerAgent;
 pub use review_specialist_agents::{
-    BusinessLogicReviewerAgent, PerformanceReviewerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
+    ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,
+    PerformanceReviewerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
 };
 use std::any::Any;
 pub use team_mode::TeamMode;

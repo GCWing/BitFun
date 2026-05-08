@@ -1,6 +1,6 @@
  
 
-import { contextMenuManager, ContextMenuManager } from './ContextMenuManager';
+import { contextMenuManager, ContextMenuManager, getContextMenuManager } from './ContextMenuManager';
 import { contextMenuRegistry } from './ContextMenuRegistry';
 import { IMenuProvider, MenuProviderConfig } from '../types/provider.types';
 import { MenuItem } from '../types/menu.types';
@@ -8,7 +8,7 @@ import { MenuContext } from '../types/context.types';
 
  
 export class ContextMenuController {
-  private manager: ContextMenuManager;
+  private manager?: ContextMenuManager;
 
   constructor(manager?: ContextMenuManager) {
     this.manager = manager || contextMenuManager;
@@ -20,12 +20,12 @@ export class ContextMenuController {
     items: MenuItem[],
     context?: Partial<MenuContext>
   ): Promise<void> {
-    await this.manager.showMenu(position, items, context);
+    await this.getManager().showMenu(position, items, context);
   }
 
    
   async hide(): Promise<void> {
-    await this.manager.hide();
+    await this.getManager().hide();
   }
 
    
@@ -45,12 +45,16 @@ export class ContextMenuController {
 
    
   getManager(): ContextMenuManager {
+    if (!this.manager) {
+      this.manager = contextMenuManager || getContextMenuManager({ registry: contextMenuRegistry });
+    }
+
     return this.manager;
   }
 
    
   getCurrentContext(): MenuContext | null {
-    return this.manager.getCurrentContext();
+    return this.getManager().getCurrentContext();
   }
 }
 

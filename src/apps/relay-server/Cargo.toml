@@ -1,6 +1,6 @@
 [package]
 name = "bitfun-relay-server"
-version = "0.2.4"
+version = "0.2.5"
 authors = ["BitFun Team"]
 edition = "2021"
 description = "BitFun Relay Server - WebSocket relay for Remote Connect"

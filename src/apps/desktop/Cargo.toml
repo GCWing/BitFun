@@ -22,6 +22,7 @@ serde_json = { workspace = true }
 bitfun-core = { path = "../../crates/core", features = ["ssh-remote"] }
 bitfun-transport = { path = "../../crates/transport", features = ["tauri-adapter"] }
 bitfun-webdriver = { path = "../../crates/webdriver" }
+bitfun-acp = { path = "../../crates/acp" }
 
 # Tauri
 tauri = { workspace = true }
@@ -39,12 +40,14 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
+uuid = { workspace = true }
 regex = { workspace = true }
 dirs = { workspace = true }
 similar = { workspace = true }
 ignore = { workspace = true }
 urlencoding = { workspace = true }
 reqwest = { workspace = true }
+zip = { workspace = true }
 thiserror = "1.0"
 futures = { workspace = true }
 async-trait = { workspace = true }
@@ -76,5 +79,13 @@ windows = { version = "0.61.3", features = [
 ] }
 windows-core = "0.61.2"
 
+[features]
+default = []
+# Enable webview devtools and element inspector for development builds.
+# Only active in debug builds or when explicitly requested via --features devtools.
+# Never enabled in release profile intended for end users.
+devtools = ["tauri/devtools"]
+
 [target.'cfg(all(target_os = "linux", not(target_env = "ohos")))'.dependencies]
 leptess = "0.14.0"
+atspi = "0.29"

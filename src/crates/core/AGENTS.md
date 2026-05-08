@@ -47,8 +47,3 @@ cargo test -p bitfun-core <test_name> -- --nocapture
 ```bash
 cargo check --workspace && cargo test --workspace
 ```
-
-Extra rules:
-
-- if you modify `src/crates/ai-adapters`, run the stream integration tests in `src/crates/core/tests`
-- if you modify `src/agentic/execution/stream_processor.rs`, run the stream integration tests before finishing

@@ -147,6 +147,18 @@ impl SnapshotManager {
         }))
     }
 
+    pub async fn get_session_file_diff_stats(
+        &self,
+        session_id: &str,
+        file_path: &str,
+    ) -> SnapshotResult<crate::service::snapshot::types::SessionFileDiffStats> {
+        let snapshot_service = self.snapshot_service.read().await;
+        let file_path = std::path::Path::new(file_path);
+        snapshot_service
+            .get_session_file_diff_stats(session_id, file_path)
+            .await
+    }
+
     pub async fn get_operation_summary(
         &self,
         session_id: &str,
@@ -531,6 +543,7 @@ impl WrappedTool {
 
         let snapshot_service = snapshot_manager.get_snapshot_service();
         let snapshot_service = snapshot_service.read().await;
+        let intercept_started_at = std::time::Instant::now();
         let operation_id = snapshot_service
             .intercept_file_modification(
                 &session_id,
@@ -543,6 +556,7 @@ impl WrappedTool {
             )
             .await
             .map_err(|e| crate::util::errors::BitFunError::Tool(e.to_string()))?;
+        let intercept_ms = crate::util::elapsed_ms_u64(intercept_started_at);
 
         debug!(
             "Recorded file modification operation: operation_id={}",
@@ -551,18 +565,26 @@ impl WrappedTool {
 
         let start_time = std::time::Instant::now();
         let results = self.original_tool.call(input, context).await?;
-        let duration_ms = crate::util::elapsed_ms_u64(start_time);
+        let tool_call_ms = crate::util::elapsed_ms_u64(start_time);
 
+        let complete_started_at = std::time::Instant::now();
         snapshot_service
-            .complete_file_modification(&session_id, &operation_id, duration_ms)
+            .complete_file_modification(&session_id, &operation_id, tool_call_ms)
             .await
             .map_err(|e| crate::util::errors::BitFunError::Tool(e.to_string()))?;
+        let complete_ms = crate::util::elapsed_ms_u64(complete_started_at);
+        let total_ms = intercept_ms
+            .saturating_add(tool_call_ms)
+            .saturating_add(complete_ms);
 
         debug!(
-            "File modification tool completed: tool_name={}, operation_id={}, duration_ms={}, file_path={}",
+            "File modification tool completed: tool_name={}, operation_id={}, total_ms={}, intercept_ms={}, tool_call_ms={}, complete_ms={}, file_path={}",
             self.name(),
             operation_id,
-            duration_ms,
+            total_ms,
+            intercept_ms,
+            tool_call_ms,
+            complete_ms,
             file_path.display()
         );
         Ok(results)

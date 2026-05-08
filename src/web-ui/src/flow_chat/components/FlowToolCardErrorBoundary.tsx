@@ -72,7 +72,7 @@ function RenderFallback({
         isExpanded={true}
         header={(
           <CompactToolCardHeader
-            statusIcon={<AlertTriangle size={12} />}
+            icon={<AlertTriangle size={16} />}
             action={displayName}
             content="Tool card render failed"
           />

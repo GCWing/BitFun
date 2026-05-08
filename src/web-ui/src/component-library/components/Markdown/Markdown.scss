@@ -3,6 +3,8 @@
   --markdown-font-mono: "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace;
   --markdown-block-gap: 0.65rem;
   --markdown-code-bg-elevated: color-mix(in srgb, var(--color-bg-primary) 92%, #ffffff 8%);
+  --markdown-link-color: var(--flowchat-link-color, #60a5fa);
+  --markdown-link-hover-color: var(--flowchat-link-hover-color, #93c5fd);
 
   color: var(--color-text-primary);
   line-height: var(--line-height-relaxed);
@@ -473,13 +475,35 @@
   margin: 0.5rem 0;
 }
 
+/* inline-block so multiple badges / linked images can sit on one row (shields, etc.) */
 .markdown-renderer img,
 .markdown-renderer .markdown-image {
-  display: block;
+  display: inline-block;
   max-width: 100%;
   height: auto;
-  margin: 0.75rem 0;
+  margin: 0.35rem 0.25rem;
+  vertical-align: middle;
   border-radius: 8px;
+}
+
+/* README-style centered badge rows: each badge is often its own <p> inside a div */
+.markdown-renderer div[align="center"] {
+  text-align: center;
+}
+
+.markdown-renderer div[align="center"] > p {
+  display: inline-block;
+  margin: 0.2rem 0.25rem;
+  vertical-align: middle;
+}
+
+.markdown-renderer div[align="center"] > p + p {
+  margin-top: 0.2rem;
+}
+
+.markdown-renderer div[align="center"] > p > a:has(> img) + br,
+.markdown-renderer div[align="center"] > p > img + br {
+  display: none;
 }
 
 .markdown-renderer .markdown-image--loading {
@@ -582,12 +606,15 @@
 
 
 .markdown-renderer a {
-  color: var(--primary-color);
-  text-decoration: none;
+  color: var(--markdown-link-color);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 
 .markdown-renderer a:hover {
-  text-decoration: underline;
+  color: var(--markdown-link-hover-color);
+  text-decoration-thickness: 1.5px;
 }
 
 
@@ -596,8 +623,10 @@
 .tab-link {
   background: none;
   border: none;
-  color: var(--primary-color);
+  color: var(--markdown-link-color);
   text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
   cursor: pointer;
   font: inherit;
   padding: 0;
@@ -607,7 +636,25 @@
 .file-link:hover,
 .visualization-link:hover,
 .tab-link:hover {
-  color: var(--primary-color-hover);
+  color: var(--markdown-link-hover-color);
+  text-decoration-thickness: 1.5px;
+}
+
+.markdown-renderer a .inline-code,
+.file-link .inline-code,
+.visualization-link .inline-code,
+.tab-link .inline-code {
+  color: inherit;
+}
+
+.markdown-link-path-tooltip {
+  display: inline-block;
+  max-width: min(520px, 80vw);
+  overflow-wrap: anywhere;
+  text-align: left;
+  font-family: var(--markdown-font-mono);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 
@@ -704,6 +751,8 @@
 :root[data-theme-type="light"] .markdown-renderer,
 [data-theme-type="light"] .markdown-renderer,
 .light .markdown-renderer {
+  --markdown-link-color: #0969da;
+  --markdown-link-hover-color: #0550ae;
 
   .inline-code {
     background: rgba(0, 0, 0, 0.05);
@@ -812,6 +861,19 @@
 
   .table-wrapper tbody tr:hover {
     background: #eef4ff;
+  }
+
+  blockquote,
+  .custom-blockquote {
+    background: var(--flowchat-md-bq-bg, rgba(15, 23, 42, 0.07));
+    border-left: 3px solid var(--flowchat-md-bq-border, rgba(15, 23, 42, 0.24));
+    color: var(--flowchat-md-bq-fg, var(--color-text-secondary, #475569));
+  }
+
+  blockquote:hover,
+  .custom-blockquote:hover {
+    background: var(--flowchat-md-bq-hover-bg, rgba(15, 23, 42, 0.1));
+    border-left-color: var(--flowchat-md-bq-hover-border, rgba(15, 23, 42, 0.34));
   }
 }
 

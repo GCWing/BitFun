@@ -6,7 +6,7 @@ import { i18nService } from '@/infrastructure/i18n';
  
 const DEFAULT_VERSION_INFO: VersionInfo = {
   name: 'BitFun',
-  version: '0.2.4',
+  version: '0.2.5',
   buildDate: new Date().toISOString(),
   buildTimestamp: Date.now(),
   isDev: import.meta.env.DEV,

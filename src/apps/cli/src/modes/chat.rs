@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-use crate::agent::{agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter, Agent};
+use crate::agent::{core_adapter::CoreAgentAdapter, Agent, AgenticSystem};
 use crate::config::CliConfig;
 use crate::session::Session;
 use crate::ui::chat::ChatView;

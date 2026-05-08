@@ -158,15 +158,23 @@ describeWithJsdom('ReviewTeamPage', () => {
     vi.clearAllMocks();
   });
 
+  async function waitForText(text: string, maxTicks = 20) {
+    for (let i = 0; i < maxTicks; i++) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+      if (container.textContent?.includes(text)) return;
+    }
+    throw new Error(`waitForText: "${text}" not found after ${maxTicks} ticks`);
+  }
+
   it('loads review team data only once on initial render', async () => {
     const { default: ReviewTeamPage } = await import('./ReviewTeamPage');
 
     await act(async () => {
       root.render(<ReviewTeamPage />);
     });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitForText('Team Overview');
 
     expect(loadDefaultReviewTeam).toHaveBeenCalledTimes(1);
   });
@@ -177,9 +185,7 @@ describeWithJsdom('ReviewTeamPage', () => {
     await act(async () => {
       root.render(<ReviewTeamPage />);
     });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitForText('Team Overview');
 
     expect(container.textContent).toContain('Team Overview');
     expect(container.textContent).toContain('Current Policy');
@@ -200,9 +206,7 @@ describeWithJsdom('ReviewTeamPage', () => {
     await act(async () => {
       root.render(<ReviewTeamPage />);
     });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitForText('Team Overview');
 
     const settingsButton = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Review settings'));
@@ -227,9 +231,7 @@ describeWithJsdom('ReviewTeamPage', () => {
     await act(async () => {
       root.render(<ReviewTeamPage />);
     });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitForText('Team Overview');
 
     const policyPanel = container.querySelector<HTMLButtonElement>('.review-team-page__policy-panel');
     expect(policyPanel).toBeTruthy();
@@ -287,9 +289,7 @@ describeWithJsdom('ReviewTeamPage', () => {
     await act(async () => {
       root.render(<ReviewTeamPage />);
     });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitForText('Logic');
 
     const memberButton = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Logic'));

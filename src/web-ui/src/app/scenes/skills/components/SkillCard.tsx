@@ -41,9 +41,11 @@ const SkillCard: React.FC<SkillCardProps> = ({
   const Icon = iconKind === 'market' ? Package : Puzzle;
   const openDetails = () => onOpenDetails?.();
 
+  const hasActions = actions.length > 0;
+
   return (
     <div
-      className="skill-card"
+      className={['skill-card', !hasActions && 'skill-card--no-actions'].filter(Boolean).join(' ')}
       style={{
         '--card-index': index,
         '--skill-card-gradient': getCardGradient(accentSeed ?? name),
@@ -89,7 +91,7 @@ const SkillCard: React.FC<SkillCardProps> = ({
       </div>
 
       {/* Footer: action buttons */}
-      {actions.length > 0 && (
+      {hasActions && (
         <div className="skill-card__footer">
           <div className="skill-card__actions" onClick={(e) => e.stopPropagation()}>
             {actions.map((action) => (

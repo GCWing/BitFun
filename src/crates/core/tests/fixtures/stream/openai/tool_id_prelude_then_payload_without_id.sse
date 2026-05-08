@@ -3,3 +3,4 @@ data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":400,"mode
 data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":401,"model":"gpt-test","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":null,"type":"function","function":{"name":"tool_a","arguments":"{\"city\":\"Beijing\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":3,"completion_tokens":6,"total_tokens":9}}
 
 data: [DONE]
+

@@ -10,7 +10,7 @@ import { Badge, Switch } from '@/component-library';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP, CAPABILITY_ACCENT } from '../agentsIcons';
 import { getCardGradient } from '@/shared/utils/cardGradients';
-import { getAgentBadge, getCapabilityLabel } from '../utils';
+import { getAgentBadge, getAgentDescription, getCapabilityLabel } from '../utils';
 import './AgentCard.scss';
 
 interface AgentCardProps {
@@ -82,7 +82,9 @@ const AgentCard: React.FC<AgentCardProps> = ({
 
       {/* Body: description + meta */}
       <div className="agent-card__body">
-        <p className="agent-card__desc">{agent.description?.trim() || '—'}</p>
+        <p className="agent-card__desc">
+          {getAgentDescription(t, agent)}
+        </p>
 
         <div className="agent-card__meta">
           <div className="agent-card__cap-chips">

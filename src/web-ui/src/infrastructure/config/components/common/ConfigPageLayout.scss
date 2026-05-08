@@ -96,6 +96,7 @@
 }
 
 .bitfun-config-page-section__body {
+  min-width: 0;
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: var(--size-radius-md, 10px);

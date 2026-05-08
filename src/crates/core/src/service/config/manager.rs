@@ -506,12 +506,21 @@ impl ConfigManager {
         path: &str,
         old_config: &GlobalConfig,
     ) -> BitFunResult<()> {
+        self.check_and_broadcast_app_change(path).await;
         self.check_and_broadcast_debug_mode_change(old_config).await;
         self.check_and_broadcast_log_level_change(old_config).await;
 
         self.providers
             .notify_config_changed(path, old_config, &self.config)
             .await
+    }
+
+    /// Detects and broadcasts app-scope configuration changes.
+    async fn check_and_broadcast_app_change(&self, path: &str) {
+        if path == "app" || path.starts_with("app.") {
+            use super::global::{ConfigUpdateEvent, GlobalConfigManager};
+            GlobalConfigManager::broadcast_update(ConfigUpdateEvent::AppUpdated).await;
+        }
     }
 
     /// Detects and broadcasts debug-mode configuration changes.

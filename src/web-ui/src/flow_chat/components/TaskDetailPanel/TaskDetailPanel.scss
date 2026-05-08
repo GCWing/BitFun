@@ -88,6 +88,31 @@
     color: var(--color-error);
   }
 
+  &__error-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 16px;
+    background: color-mix(in srgb, var(--color-error, #ef4444) 10%, var(--color-bg-secondary));
+    border-bottom: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 22%, transparent);
+    flex-shrink: 0;
+
+    &-icon {
+      flex-shrink: 0;
+      margin-top: 1px;
+      color: var(--color-error);
+    }
+
+    &-text {
+      flex: 1;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--color-error);
+      word-break: break-word;
+      user-select: text;
+    }
+  }
+
   &__content {
     flex: 1;
     display: flex;
@@ -163,6 +188,68 @@
     }
   }
 
+  // Reviewer context section replaces raw prompt for review-team members.
+  &__reviewer-section {
+    background: transparent;
+    flex-shrink: 0;
+
+    summary {
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+      border: 1px dashed var(--tool-card-border, rgba(255, 255, 255, 0.15));
+      border-radius: 6px;
+
+      &:hover {
+        color: var(--color-text-primary);
+      }
+
+      &::marker {
+        color: var(--color-text-muted);
+      }
+    }
+
+    &[open] summary {
+      border-radius: 6px 6px 0 0;
+      border-bottom: none;
+    }
+  }
+
+  &__reviewer-context {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px dashed var(--tool-card-border, rgba(255, 255, 255, 0.15));
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  &__reviewer-role {
+    font-weight: 600;
+    font-size: 12px;
+  }
+
+  &__reviewer-desc {
+    color: var(--color-text-muted);
+  }
+
+  &__reviewer-responsibilities {
+    margin: 0;
+    padding-left: 16px;
+    list-style: disc;
+
+    li {
+      color: var(--color-text-secondary);
+    }
+  }
+
   &__execution {
     display: flex;
     flex-direction: column;
@@ -205,6 +292,14 @@
     padding: 40px 20px;
     color: var(--color-text-muted);
     font-size: 13px;
+  }
+
+  &__loading--inline {
+    flex-direction: row;
+    justify-content: center;
+    padding: 10px 12px 4px;
+    font-size: 12px;
+    flex-shrink: 0;
   }
 
   &__error {

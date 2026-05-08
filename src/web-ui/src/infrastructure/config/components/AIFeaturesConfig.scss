@@ -54,12 +54,140 @@
     line-height: $line-height-relaxed;
     background: transparent;
   }
+
+  &__pet-picker {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 56px minmax(220px, 1fr) auto;
+    align-items: center;
+    gap: $size-gap-3;
+  }
+
+  &__pet-picker-preview {
+    width: 56px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+  }
+
+  &__pet-picker-pet {
+    transform: scale(0.95);
+  }
+
+  &__pet-select {
+    min-width: 0;
+  }
+
+  &__pet-select .select__trigger {
+    min-height: 38px;
+  }
+
+  &__pet-select .select__dropdown {
+    max-height: 320px;
+  }
+
+  &__pet-actions {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    white-space: nowrap;
+  }
+
+  &__pet-select-option {
+    min-width: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+  }
+
+  &__pet-select-option-main {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: $size-gap-3;
+  }
+
+  &__pet-select-delete {
+    flex-shrink: 0;
+  }
+
+  &__pet-select-thumb {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+    flex-shrink: 0;
+  }
+
+  &__pet-select-panda {
+    transform: scale(0.62);
+  }
+
+  &__pet-select-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__pet-select-label,
+  &__pet-select-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__pet-select-description {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    line-height: $line-height-tight;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__pet-preview-sprite {
+    width: 34px;
+    height: 38px;
+    background-image: var(--bitfun-pet-preview-src);
+    background-repeat: no-repeat;
+    background-size: 800% 900%;
+    background-position: 0 0;
+    image-rendering: pixelated;
+    animation: bitfun-config-pet-preview 1.2s steps(6) infinite;
+  }
+
+}
+
+@keyframes bitfun-config-pet-preview {
+  from {
+    background-position-x: 0;
+  }
+
+  to {
+    background-position-x: 85.7142857%;
+  }
 }
 
 @container config-panel (max-width: 520px) {
   .bitfun-func-agent-config {
     &__row-control {
       align-items: flex-start;
+    }
+
+    &__pet-picker {
+      grid-template-columns: 44px minmax(0, 1fr);
+    }
+
+    &__pet-actions {
+      grid-column: 2;
+      justify-content: flex-start;
     }
   }
 }

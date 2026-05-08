@@ -44,9 +44,29 @@ export interface CodeReviewReviewer {
 
 export interface CodeReviewReportSectionsData {
   executive_summary?: string[];
-  remediation_groups?: Partial<Record<RemediationGroupId, string[]>>;
+  remediation_groups?: Partial<Record<RemediationGroupId, (string | DecisionContext)[]>>;
   strength_groups?: Partial<Record<StrengthGroupId, string[]>>;
   coverage_notes?: string[];
+}
+
+/**
+ * Structured decision context for `needs_decision` remediation items.
+ * Falls back to a plain string when the AI returns a legacy format.
+ */
+export interface DecisionContext {
+  question: string;
+  plan: string;
+  options?: string[];
+  tradeoffs?: string;
+  recommendation?: number;
+}
+
+/** Normalize a raw `needs_decision` entry to a DecisionContext object. */
+export function normalizeDecisionEntry(entry: string | DecisionContext): DecisionContext {
+  if (typeof entry === 'string') {
+    return { question: entry, plan: entry };
+  }
+  return entry;
 }
 
 export interface CodeReviewReportData {
@@ -253,7 +273,21 @@ function buildReviewerStats(reviewers: CodeReviewReviewer[] = []): ReviewReviewe
 
 export function buildCodeReviewReportSections(report: CodeReviewReportData): ReviewReportSections {
   const structuredSections = report.report_sections;
-  const remediationGroups = buildGroups(REMEDIATION_GROUP_ORDER, structuredSections?.remediation_groups);
+
+  // Normalize remediation groups: DecisionContext entries become their plan text for display
+  const rawRemediationGroups = structuredSections?.remediation_groups;
+  const normalizedRemediationGroups: Partial<Record<RemediationGroupId, string[]>> = {};
+  if (rawRemediationGroups) {
+    for (const [key, entries] of Object.entries(rawRemediationGroups) as [RemediationGroupId, (string | DecisionContext)[] | undefined][]) {
+      if (!entries) continue;
+      normalizedRemediationGroups[key] = entries.map((entry) => {
+        if (typeof entry === 'string') return entry;
+        return entry.plan;
+      });
+    }
+  }
+
+  const remediationGroups = buildGroups(REMEDIATION_GROUP_ORDER, normalizedRemediationGroups);
   const strengthGroups = buildGroups(STRENGTH_GROUP_ORDER, structuredSections?.strength_groups);
   const executiveSummary = nonEmpty(structuredSections?.executive_summary);
   const coverageNotes = nonEmpty(structuredSections?.coverage_notes);

@@ -15,9 +15,24 @@ const FRAME_INTERVAL = 50; // ms per tick – aligned with MutationObserver thro
 const REVEAL_DURATION = 800; // ms to reveal a new batch
 const MIN_CHARS_PER_TICK = 3;
 
-export function useTypewriter(targetText: string, animate: boolean): string {
-  const [displayText, setDisplayText] = useState(animate ? '' : targetText);
-  const revealedRef = useRef(animate ? 0 : targetText.length);
+export interface TypewriterOptions {
+  /**
+   * When false, mounting starts from the current text and only reveals later
+   * appended content. This prevents history/detail views from replaying already
+   * streamed output when they are opened.
+   */
+  replayOnMount?: boolean;
+}
+
+export function useTypewriter(
+  targetText: string,
+  animate: boolean,
+  options: TypewriterOptions = {}
+): string {
+  const replayOnMount = options.replayOnMount ?? true;
+  const shouldReplayInitialText = animate && replayOnMount;
+  const [displayText, setDisplayText] = useState(shouldReplayInitialText ? '' : targetText);
+  const revealedRef = useRef(shouldReplayInitialText ? 0 : targetText.length);
   const targetRef = useRef(targetText);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const speedRef = useRef(MIN_CHARS_PER_TICK);

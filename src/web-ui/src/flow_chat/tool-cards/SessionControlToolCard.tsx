@@ -91,16 +91,16 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
     switch (status) {
       case 'running':
       case 'streaming':
-        return <Loader2 className="animate-spin" size={12} />;
+        return <Loader2 className="animate-spin" size={16} />;
       case 'completed':
-        return <Check size={12} className="icon-check-done" />;
+        return <Check size={16} className="icon-check-done" />;
       case 'error':
       case 'cancelled':
-        return <X size={12} />;
+        return <X size={16} />;
       case 'pending':
       case 'preparing':
       default:
-        return <Clock size={12} />;
+        return <Clock size={16} />;
     }
   };
 
@@ -286,7 +286,7 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
         clickable={hasDetails}
         header={(
           <CompactToolCardHeader
-            statusIcon={getStatusIcon()}
+            icon={getStatusIcon()}
             action={`${t('toolCards.sessionControl.title')}:`}
             content={renderContent()}
             extra={action === 'list' && status === 'completed' ? `${sessionCount}` : undefined}

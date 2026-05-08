@@ -2,11 +2,11 @@
  * TaskTool card display component.
  */
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react';
 import {
+  AlertTriangle,
   Split,
   ChevronRight,
-  ChevronDown,
 } from 'lucide-react';
 
 import { useTranslation } from 'react-i18next';
@@ -14,20 +14,26 @@ import { CubeLoading, Button } from '../../component-library';
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard } from './BaseToolCard';
+import { ToolCardIconSlot } from './ToolCardIconSlot';
+import { ToolCardStatusIcon } from './ToolCardStatusIcon';
 import { taskCollapseStateManager } from '../store/TaskCollapseStateManager';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
+import { getReviewerContextBySubagentId } from '@/shared/services/reviewTeamService';
+import type { ReviewerContext } from '@/shared/services/reviewTeamService';
 import './TaskToolDisplay.scss';
 import './ModelThinkingDisplay.scss';
 
 export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   toolItem,
+  interruptionNote,
   onConfirm,
   onReject,
   onOpenInPanel,
   sessionId
 }) => {
   const { t } = useTranslation('flow-chat');
+  const { t: tAgents } = useTranslation('scenes/agents');
   const { toolCall, toolResult, status, requiresConfirmation, userConfirmed } = toolItem;
   const toolId = toolItem.id ?? toolCall?.id;
   
@@ -53,10 +59,14 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     nextExpanded: boolean,
     reason: 'manual' | 'auto' = 'manual',
   ) => {
+    if (nextExpanded !== isExpanded) {
+      /* Sync before the next commit paints so subagent wrapper + task card merge in one frame. */
+      taskCollapseStateManager.setCollapsed(toolItem.id, !nextExpanded);
+    }
     applyExpandedState(isExpanded, nextExpanded, setIsExpanded, { reason });
-  }, [applyExpandedState, isExpanded]);
+  }, [applyExpandedState, isExpanded, toolItem.id]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const prevStatus = prevStatusRef.current;
     
     if (prevStatus !== status) {
@@ -70,7 +80,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     }
   }, [isRunning, status, updateCardExpandedState]);
   
-  useEffect(() => {
+  useLayoutEffect(() => {
     taskCollapseStateManager.setCollapsed(toolItem.id, !isExpanded);
   }, [isExpanded, toolItem.id]);
 
@@ -108,22 +118,32 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
 
   const getTaskInput = () => {
     if (!toolCall?.input) return null;
-    
+
     const isEarlyDetection = toolCall.input._early_detection === true;
     const isPartialParams = toolCall.input._partial_params === true;
-    
+
     if (isEarlyDetection || isPartialParams) {
       return null;
     }
-    
+
     const inputKeys = Object.keys(toolCall.input).filter(key => !key.startsWith('_'));
     if (inputKeys.length === 0) return null;
-    
+
     const { description, prompt, subagent_type } = toolCall.input;
+    const agentType = subagent_type || 'Not provided';
+
+    // For built-in review-team reviewers, surface role context instead of
+    // the raw prompt so internal directives stay private.
+    const reviewerContext: ReviewerContext | null =
+      agentType !== 'Not provided'
+        ? getReviewerContextBySubagentId(agentType)
+        : null;
+
     return {
       description: description || (prompt ? truncateByVisualWidth(prompt, 70) : 'Not provided'),
       prompt: prompt || 'Not provided',
-      agentType: subagent_type || 'Not provided'
+      agentType,
+      reviewerContext,
     };
   };
 
@@ -131,6 +151,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const hasRealPrompt = Boolean(
     taskInput && taskInput.prompt && taskInput.prompt !== 'Not provided',
   );
+  const hasInterruptionNote = Boolean(interruptionNote);
   const needsConfirmation =
     requiresConfirmation && !userConfirmed && status !== 'completed';
 
@@ -184,21 +205,32 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   }, [isFailed, isExpanded, updateCardExpandedState]);
 
   const showHeaderExpandHint =
-    !isFailed && (hasRealPrompt || needsConfirmation);
+    !isFailed &&
+    (hasInterruptionNote ||
+      hasRealPrompt ||
+      needsConfirmation ||
+      Boolean(taskInput?.reviewerContext));
 
   const taskHeaderLine = useMemo(() => {
     const desc =
       (taskInput?.description || '').trim() || t('toolCards.taskDetailPanel.untitled');
     const raw = taskInput?.agentType;
-    const agentTypeLabel =
-      raw && raw !== 'Not provided'
-        ? raw
-        : t('toolCards.taskTool.defaultAgentKind');
+    let agentTypeLabel: string;
+    if (raw && raw !== 'Not provided') {
+      const rc = taskInput?.reviewerContext;
+      agentTypeLabel = rc
+        ? tAgents(`reviewTeams.members.${rc.definitionKey}.funName`, {
+            defaultValue: rc.roleName,
+          })
+        : raw;
+    } else {
+      agentTypeLabel = t('toolCards.taskTool.defaultAgentKind');
+    }
     return t('toolCards.taskTool.headerLine', {
       agentType: agentTypeLabel,
       description: desc,
     });
-  }, [taskInput, t]);
+  }, [taskInput, t, tAgents]);
 
   const openTaskDetailPanel = useCallback(
     (e: React.MouseEvent) => {
@@ -232,23 +264,14 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
 
   const renderHeader = () => (
     <div className="task-header-wrapper">
-      <div
-        className={`task-icon-container ${isRunning ? 'is-running' : ''}${
-          showHeaderExpandHint ? ' task-icon-container--expandable' : ''
-        }`}
-      >
-        <div className="task-task-icon-marks">
-          <div className="task-task-icon-main">{renderToolIcon()}</div>
-          {showHeaderExpandHint && (
-            <span
-              className={`task-task-icon-hint${isExpanded ? ' task-task-icon-hint--open' : ''}`}
-              aria-hidden
-            >
-              <ChevronDown size={16} strokeWidth={2} absoluteStrokeWidth />
-            </span>
-          )}
-        </div>
-      </div>
+      <ToolCardIconSlot
+        icon={renderToolIcon()}
+        iconClassName={`task-icon ${isRunning ? 'is-running' : ''}`}
+        expandable={showHeaderExpandHint}
+        affordanceKind="expand"
+        isExpanded={isExpanded}
+        onAffordanceClick={handleCardClick}
+      />
 
       <div className="task-content-wrapper">
         <div className="task-body-columns">
@@ -260,7 +283,9 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                   startTime={toolItem.startTime}
                   isRunning={isRunning}
                   timeoutMs={
-                    typeof toolCall?.input?.timeout_seconds === 'number' && toolCall.input.timeout_seconds > 0
+                    typeof toolCall?.timeout_seconds === 'number' && toolCall.timeout_seconds > 0
+                      ? toolCall.timeout_seconds * 1000
+                      : typeof toolCall?.input?.timeout_seconds === 'number' && toolCall.input.timeout_seconds > 0
                       ? toolCall.input.timeout_seconds * 1000
                       : undefined
                   }
@@ -287,10 +312,8 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
               title={t('toolCards.taskTool.openInPanel')}
             />
             <div className="task-header-rail__visual" aria-hidden>
-              <ChevronRight size={18} strokeWidth={2} absoluteStrokeWidth />
-              <div className="task-status-icon task-status-icon--rail">
-                {renderStatusIcon()}
-              </div>
+              <ChevronRight size={16} strokeWidth={2} absoluteStrokeWidth />
+              <ToolCardStatusIcon icon={renderStatusIcon()} className="task-status-icon--rail" />
             </div>
           </div>
         </div>
@@ -304,30 +327,72 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       return null;
     }
 
-    if (!hasRealPrompt && !needsConfirmation) {
+    const rc = taskInput?.reviewerContext;
+
+    if (
+      !hasInterruptionNote &&
+      !hasRealPrompt &&
+      !needsConfirmation &&
+      !rc
+    ) {
       return null;
     }
 
     return (
       <div className="task-expanded-content">
-        {hasRealPrompt && (
+        {interruptionNote && (
+          <>
+            <div className="task-interruption-note" role="note">
+              <AlertTriangle size={14} strokeWidth={2} aria-hidden />
+              <span>{interruptionNote}</span>
+            </div>
+            {(hasRealPrompt || needsConfirmation || taskInput?.reviewerContext) && (
+              <div className="task-interruption-divider" aria-hidden />
+            )}
+          </>
+        )}
+        {rc ? (
+          <div className="task-reviewer-context">
+            <div className="task-reviewer-context__role" style={{ color: rc.accentColor }}>
+              {tAgents(`reviewTeams.members.${rc.definitionKey}.role`, {
+                defaultValue: rc.roleName,
+              })}
+            </div>
+            <div className="task-reviewer-context__description">
+              {tAgents(`reviewTeams.members.${rc.definitionKey}.description`, {
+                defaultValue: rc.description,
+              })}
+            </div>
+            <ul className="task-reviewer-context__responsibilities">
+              {rc.responsibilities.map((resp, idx) => (
+                <li key={idx}>
+                  {tAgents(`reviewTeams.members.${rc.definitionKey}.responsibilities.${idx}`, {
+                    defaultValue: resp,
+                  })}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          hasRealPrompt && (
           <div
-            className={`thinking-content-wrapper${promptScrollState.hasScroll ? ' has-scroll' : ''}${
+            className={`thinking-content-wrapper task-prompt-wrapper${promptScrollState.hasScroll ? ' has-scroll' : ''}${
               promptScrollState.atTop ? ' at-top' : ''
             }${promptScrollState.atBottom ? ' at-bottom' : ''}`}
           >
             <div
               ref={promptContentRef}
-              className="thinking-content expanded"
+              className="thinking-content task-prompt-content expanded"
               onScroll={checkPromptScrollState}
             >
               <Markdown
                 content={taskInput!.prompt}
                 isStreaming={false}
-                className="thinking-markdown"
+                className="thinking-markdown task-prompt-markdown"
               />
             </div>
           </div>
+          )
         )}
         {needsConfirmation && (
           <div className="tool-actions">

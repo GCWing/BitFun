@@ -20,6 +20,7 @@ import type { SessionKind } from '@/shared/types/session-history';
 import {
   deriveLastFinishedAtFromMetadata,
   deriveSessionRelationshipFromMetadata,
+  isLegacyPersistedBtwSession,
   normalizeSessionRelationship,
 } from '../utils/sessionMetadata';
 import type { SessionTitleDescriptor } from '../utils/sessionTitle';
@@ -43,13 +44,18 @@ import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 import { storage } from '@/shared/utils/storageAdapter';
 
 const log = createLogger('FlowChatStore');
+const VALID_AGENT_TYPES = new Set(['agentic', 'debug', 'Plan', 'Cowork', 'Claw', 'Team', 'DeepResearch']);
+
+function isValidPersistedAgentType(agentType: string): boolean {
+  return VALID_AGENT_TYPES.has(agentType) || agentType.startsWith('acp:');
+}
 
 export class FlowChatStore {
   private static instance: FlowChatStore;
   private state: FlowChatState;
   private listeners: Set<(state: FlowChatState) => void> = new Set();
-
   private silentMode = false;
+  private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | 'interrupted' | undefined) => void;
 
   private constructor() {
     this.clearOldStorage();
@@ -66,7 +72,7 @@ export class FlowChatStore {
         'bitfun-flow-chat-global',
         'bitfun-session-ids'
       ];
-
+      
       keysToRemove.forEach(key => {
         if (storage.getItem(key)) {
           storage.removeItem(key);
@@ -103,7 +109,7 @@ export class FlowChatStore {
   public setState(updater: (prevState: FlowChatState) => FlowChatState): void {
     const newState = updater(this.state);
     this.state = newState;
-
+    
     if (!this.silentMode) {
       this.listeners.forEach(listener => {
         try {
@@ -114,7 +120,7 @@ export class FlowChatStore {
       });
     }
   }
-
+  
   /**
    * Silent state update (does not trigger listeners)
    * Used for batch updates, call notifyListeners() after completion
@@ -128,7 +134,7 @@ export class FlowChatStore {
       this.silentMode = prevSilentMode;
     }
   }
-
+  
   /**
    * Manually notify all listeners (call after batch updates complete)
    */
@@ -141,11 +147,11 @@ export class FlowChatStore {
       }
     });
   }
-
+  
   public beginSilentMode(): void {
     this.silentMode = true;
   }
-
+  
   public endSilentMode(): void {
     this.silentMode = false;
     this.notifyListeners();
@@ -202,6 +208,16 @@ export class FlowChatStore {
     };
   }
 
+  /**
+   * Register a callback to persist unread completion changes.
+   * Called by FlowChatManager during initialization.
+   */
+  public registerPersistUnreadCompletionCallback(
+    callback: (sessionId: string, value: 'completed' | 'error' | 'interrupted' | undefined) => void
+  ): void {
+    this.onPersistUnreadCompletion = callback;
+  }
+
   public createSession(
     sessionId: string,
     config: SessionConfig,
@@ -217,7 +233,7 @@ export class FlowChatStore {
     import('../state-machine').then(({ stateMachineManager }) => {
       stateMachineManager.getOrCreate(sessionId);
     });
-
+    
     this.setState(prev => {
       const relationship = normalizeSessionRelationship({ sessionKind: 'normal' });
       const titleState = deriveSessionTitleState(titleDescriptor);
@@ -248,6 +264,7 @@ export class FlowChatStore {
         sessionKind: relationship.sessionKind,
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
+        isTransient: false,
       };
 
       const newSessions = new Map(prev.sessions);
@@ -270,7 +287,12 @@ export class FlowChatStore {
     title: string,
     mode: string,
     workspacePath?: string,
-    meta?: { parentSessionId?: string; sessionKind?: SessionKind; btwOrigin?: Session['btwOrigin'] },
+    meta?: {
+      parentSessionId?: string;
+      sessionKind?: SessionKind;
+      btwOrigin?: Session['btwOrigin'];
+      isTransient?: boolean;
+    },
     remoteConnectionId?: string,
     remoteSshHost?: string
   ): void {
@@ -308,6 +330,7 @@ export class FlowChatStore {
         sessionKind: relationship.sessionKind,
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
+        isTransient: meta?.isTransient ?? false,
       };
 
       const newSessions = new Map(prev.sessions);
@@ -322,18 +345,18 @@ export class FlowChatStore {
 
   public switchSession(sessionId: string): void {
     let sessionMode: string | undefined;
-
+    
     this.setState(prev => {
       if (!prev.sessions.has(sessionId)) return prev;
-
+      
       const session = prev.sessions.get(sessionId)!;
       sessionMode = session.mode;
-
+      
       const updatedSession = {
         ...session,
         lastActiveAt: Date.now()
       };
-
+      
       const newSessions = new Map(prev.sessions);
       newSessions.set(sessionId, updatedSession);
 
@@ -343,7 +366,7 @@ export class FlowChatStore {
         activeSessionId: sessionId
       };
     });
-
+    
     window.dispatchEvent(new CustomEvent('bitfun:session-switched', {
       detail: { sessionId, mode: sessionMode || 'agentic' }
     }));
@@ -862,8 +885,8 @@ export class FlowChatStore {
    * Add image analysis phase to dialog turn
    */
   public addImageAnalysisPhase(
-    sessionId: string,
-    dialogTurnId: string,
+    sessionId: string, 
+    dialogTurnId: string, 
     imageContexts: import('@/shared/types/context').ImageContext[]
   ): void {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => {
@@ -896,11 +919,11 @@ export class FlowChatStore {
     dialogTurnId: string,
     results: ImageAnalysisResult[]
   ): void {
-    this.updateDialogTurn(sessionId, dialogTurnId, turn => {
-      if (!turn.imageAnalysisPhase) {
-        log.warn('Attempting to update non-existent image analysis phase', { sessionId, dialogTurnId });
-        return turn;
-      }
+      this.updateDialogTurn(sessionId, dialogTurnId, turn => {
+        if (!turn.imageAnalysisPhase) {
+          log.warn('Attempting to update non-existent image analysis phase', { sessionId, dialogTurnId });
+          return turn;
+        }
 
       const updatedItems: FlowImageAnalysisItem[] = turn.imageAnalysisPhase.items.map(item => {
         const result = results.find(r => r.image_id === item.imageContext.id);
@@ -969,7 +992,7 @@ export class FlowChatStore {
   public updateModelRound(sessionId: string, dialogTurnId: string, modelRoundId: string, updater: (round: ModelRound) => ModelRound): void {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => ({
       ...turn,
-      modelRounds: turn.modelRounds.map(round =>
+      modelRounds: turn.modelRounds.map(round => 
         round.id === modelRoundId ? updater(round) : round
       )
     }));
@@ -979,12 +1002,12 @@ export class FlowChatStore {
    * Batch update multiple model round items (reduces store update frequency)
    */
   public batchUpdateModelRoundItems(
-    sessionId: string,
-    dialogTurnId: string,
+    sessionId: string, 
+    dialogTurnId: string, 
     updates: Array<{ itemId: string; changes: Partial<FlowItem> }>
   ): void {
     if (updates.length === 0) return;
-
+    
     this.updateDialogTurn(sessionId, dialogTurnId, turn => {
       const updatedModelRounds = turn.modelRounds.map(round => ({
         ...round,
@@ -993,7 +1016,7 @@ export class FlowChatStore {
           return update ? ({ ...item, ...update.changes } as AnyFlowItem) : item;
         })
       }));
-
+      
       return {
         ...turn,
         modelRounds: updatedModelRounds
@@ -1004,18 +1027,18 @@ export class FlowChatStore {
   public addModelRoundItem(sessionId: string, dialogTurnId: string, item: AnyFlowItem, modelRoundId?: string): void {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => {
       let targetModelRoundIndex = turn.modelRounds.length - 1;
-      if (modelRoundId) {
-        targetModelRoundIndex = turn.modelRounds.findIndex(round => round.id === modelRoundId);
+        if (modelRoundId) {
+          targetModelRoundIndex = turn.modelRounds.findIndex(round => round.id === modelRoundId);
+          if (targetModelRoundIndex === -1) {
+            log.warn('Model round not found', { sessionId, dialogTurnId, modelRoundId });
+            return turn;
+          }
+        }
+        
         if (targetModelRoundIndex === -1) {
-          log.warn('Model round not found', { sessionId, dialogTurnId, modelRoundId });
+          log.warn('No available model rounds', { sessionId, dialogTurnId });
           return turn;
         }
-      }
-
-      if (targetModelRoundIndex === -1) {
-        log.warn('No available model rounds', { sessionId, dialogTurnId });
-        return turn;
-      }
 
       const targetModelRound = turn.modelRounds[targetModelRoundIndex];
 
@@ -1025,7 +1048,7 @@ export class FlowChatStore {
       }
 
       const updatedModelRounds = [...turn.modelRounds];
-
+      
       updatedModelRounds[targetModelRoundIndex] = {
         ...targetModelRound,
         items: [...targetModelRound.items, item]
@@ -1063,7 +1086,7 @@ export class FlowChatStore {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => {
       let parentRoundIndex = -1;
       let parentItemIndex = -1;
-
+      
       for (let i = 0; i < turn.modelRounds.length; i++) {
         const itemIndex = turn.modelRounds[i].items.findIndex((item: any) => item.id === parentToolId);
         if (itemIndex !== -1) {
@@ -1072,21 +1095,21 @@ export class FlowChatStore {
           break;
         }
       }
-
+      
       if (parentRoundIndex === -1 || parentItemIndex === -1) {
         log.warn('Parent tool item not found', { sessionId, dialogTurnId, parentToolId });
         return turn;
       }
-
+      
       const targetModelRound = turn.modelRounds[parentRoundIndex];
-
+      
       const existingItem = targetModelRound.items.find((item: any) => item.id === newItem.id);
       if (existingItem) {
         return turn;
       }
-
+      
       let insertIndex = parentItemIndex + 1;
-
+      
       while (insertIndex < targetModelRound.items.length) {
         const currentItem = targetModelRound.items[insertIndex] as any;
         if (currentItem.parentTaskToolId === parentToolId && currentItem.isSubagentItem) {
@@ -1095,19 +1118,19 @@ export class FlowChatStore {
           break;
         }
       }
-
+      
       const updatedItems = [
         ...targetModelRound.items.slice(0, insertIndex),
         newItem,
         ...targetModelRound.items.slice(insertIndex)
       ];
-
+      
       const updatedModelRounds = [...turn.modelRounds];
       updatedModelRounds[parentRoundIndex] = {
         ...targetModelRound,
         items: updatedItems
       };
-
+      
       return {
         ...turn,
         modelRounds: updatedModelRounds
@@ -1118,10 +1141,10 @@ export class FlowChatStore {
   public updateModelRoundItem(sessionId: string, dialogTurnId: string, itemId: string, updates: Partial<FlowItem>): void {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => {
       let updated = false;
-
+      
       const updatedModelRounds = turn.modelRounds.map(modelRound => {
         if (updated) return modelRound;
-
+        
         const updatedItems = modelRound.items.map((item: any) => {
           if (item.id === itemId) {
             const updatedItem = { ...item, ...updates };
@@ -1129,15 +1152,15 @@ export class FlowChatStore {
           }
           return item;
         });
-
+        
         if (updatedItems.some((item: any) => item.id === itemId)) {
           updated = true;
           return { ...modelRound, items: updatedItems };
         }
-
+        
         return modelRound;
       });
-
+      
       if (!updated) {
         log.warn('Item not found for update', { sessionId, dialogTurnId, itemId });
         return turn;
@@ -1185,7 +1208,7 @@ export class FlowChatStore {
   }
 
   public updateTokenUsage(
-    sessionId: string,
+    sessionId: string, 
     tokenUsage: { inputTokens: number; outputTokens?: number; totalTokens: number }
   ): void {
     this.setState(prev => {
@@ -1266,6 +1289,7 @@ export class FlowChatStore {
 
       const updatedSession: Session = {
         ...session,
+        lastActiveAt: timestamp,
         lastFinishedAt: timestamp,
       };
 
@@ -1281,7 +1305,7 @@ export class FlowChatStore {
 
   public markSessionUnreadCompletion(
     sessionId: string,
-    completionKind: 'completed' | 'error'
+    completionKind: 'completed' | 'error' | 'interrupted'
   ): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
@@ -1297,9 +1321,11 @@ export class FlowChatStore {
 
       return { ...prev, sessions: newSessions };
     });
+    this.onPersistUnreadCompletion?.(sessionId, completionKind);
   }
 
   public clearSessionUnreadCompletion(sessionId: string): void {
+    let didClear = false;
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session || !session.hasUnreadCompletion) return prev;
@@ -1312,8 +1338,55 @@ export class FlowChatStore {
       const newSessions = new Map(prev.sessions);
       newSessions.set(sessionId, updatedSession);
 
+      didClear = true;
       return { ...prev, sessions: newSessions };
     });
+    if (didClear) {
+      this.onPersistUnreadCompletion?.(sessionId, undefined);
+    }
+  }
+
+  public setSessionNeedsAttention(
+    sessionId: string,
+    attentionKind: 'ask_user' | 'tool_confirm'
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const updatedSession: Session = {
+        ...session,
+        needsUserAttention: attentionKind,
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, updatedSession);
+
+      return { ...prev, sessions: newSessions };
+    });
+    this.onPersistUnreadCompletion?.(sessionId, undefined);
+  }
+
+  public clearSessionNeedsAttention(sessionId: string): void {
+    let didClear = false;
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session || !session.needsUserAttention) return prev;
+
+      const updatedSession: Session = {
+        ...session,
+        needsUserAttention: undefined,
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, updatedSession);
+
+      didClear = true;
+      return { ...prev, sessions: newSessions };
+    });
+    if (didClear) {
+      this.onPersistUnreadCompletion?.(sessionId, undefined);
+    }
   }
 
   public async updateSessionTitle(
@@ -1413,6 +1486,9 @@ export class FlowChatStore {
         log.warn('Session not found, skipping save', { sessionId, turnId });
         return;
       }
+      if (session.isTransient) {
+        return;
+      }
 
       const workspacePath = session.workspacePath;
       if (!workspacePath) {
@@ -1427,7 +1503,7 @@ export class FlowChatStore {
       }
 
       const turnIndex = session.dialogTurns.findIndex(t => t.id === turnId);
-
+      
       const turnData = {
         turnId,
         turnIndex,
@@ -1442,7 +1518,7 @@ export class FlowChatStore {
         },
         modelRounds: dialogTurn.modelRounds.map((round, roundIndex) => {
           const textItems = round.items
-            .filter(item => item.type === 'text')
+            .filter(item => item.type === 'text' && !(item as any).runtimeStatus)
             .map(item => ({
               id: item.id,
               content: (item as any).content || '',
@@ -1450,7 +1526,7 @@ export class FlowChatStore {
               timestamp: item.timestamp,
               status: item.status,
             }));
-
+          
           const toolItems = round.items
             .filter(item => item.type === 'tool')
             .map(item => ({
@@ -1463,11 +1539,11 @@ export class FlowChatStore {
               startTime: (item as any).startTime || item.timestamp,
               endTime: (item as any).endTime,
               status: item.status,
-              durationMs: (item as any).endTime
-                ? (item as any).endTime - (item as any).startTime
+              durationMs: (item as any).endTime 
+                ? (item as any).endTime - (item as any).startTime 
                 : undefined
             }));
-
+          
           const thinkingItems = round.items
             .filter(item => item.type === 'thinking')
             .map(item => ({
@@ -1478,12 +1554,13 @@ export class FlowChatStore {
               timestamp: item.timestamp,
               status: item.status,
             }));
-
+          
           return {
             id: round.id,
             turnId,
             roundIndex,
             timestamp: round.startTime,
+            renderHints: round.renderHints,
             textItems,
             toolItems,
             thinkingItems,
@@ -1527,10 +1604,13 @@ export class FlowChatStore {
       sessions.forEach(metadata => {
         stateMachineManager.getOrCreate(metadata.sessionId);
       });
-
+      
       const processSession = async (metadata: any) => {
         const existingSession = this.state.sessions.get(metadata.sessionId);
         if (existingSession) {
+          return;
+        }
+        if (isLegacyPersistedBtwSession(metadata)) {
           return;
         }
 
@@ -1538,18 +1618,18 @@ export class FlowChatStore {
         try {
           const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
           const models = await configManager.getConfig<any[]>('ai.models') || [];
-
+          
           if (metadata.modelName) {
             const model = models.find((m: any) => m.name === metadata.modelName || m.id === metadata.modelName);
             if (model?.context_window) {
               maxContextTokens = model.context_window;
             }
           }
-
+          
           if (maxContextTokens === 128128) {
             const defaultModels = await configManager.getConfig<Record<string, string>>('ai.default_models');
             const primaryModelId = defaultModels?.primary;
-
+            
             if (primaryModelId) {
               const primaryModel = models.find((m: any) => m.id === primaryModelId);
               if (primaryModel?.context_window) {
@@ -1560,7 +1640,7 @@ export class FlowChatStore {
         } catch (error) {
           log.warn('Failed to get model context window size, using default', { sessionId: metadata.sessionId, error });
         }
-
+        
         const relationship = deriveSessionRelationshipFromMetadata(metadata);
         const lastFinishedAt = deriveLastFinishedAtFromMetadata(metadata);
         const titleState = deriveSessionTitleStateFromMetadata(metadata);
@@ -1571,14 +1651,13 @@ export class FlowChatStore {
             return prev;
           }
 
-          const VALID_AGENT_TYPES = ['agentic', 'debug', 'Plan', 'Cowork', 'Claw', 'Team', 'DeepResearch'];
           const rawAgentType = metadata.agentType || 'agentic';
-          const validatedAgentType = VALID_AGENT_TYPES.includes(rawAgentType) ? rawAgentType : 'agentic';
-
+          const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+          
           if (rawAgentType !== validatedAgentType) {
             log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
           }
-
+          
           const session: Session = {
             sessionId: metadata.sessionId,
             title: titleState.title,
@@ -1608,18 +1687,21 @@ export class FlowChatStore {
             sessionKind: relationship.sessionKind,
             btwThreads: [],
             btwOrigin: relationship.btwOrigin,
+            hasUnreadCompletion: metadata.unreadCompletion,
+            needsUserAttention: metadata.needsUserAttention,
+            isTransient: false,
           };
-
+          
           const newSessions = new Map(prev.sessions);
           newSessions.set(metadata.sessionId, session);
-
+          
           return {
             ...prev,
             sessions: newSessions,
           };
         });
       };
-
+      
       await Promise.all(sessions.map(processSession));
     } catch (error) {
       log.error('Failed to load persisted sessions', error);
@@ -1639,14 +1721,19 @@ export class FlowChatStore {
     try {
       const { stateMachineManager } = await import('../state-machine');
       stateMachineManager.getOrCreate(sessionId);
-
-      try {
-        const { agentAPI } = await import('@/infrastructure/api');
-        await agentAPI.restoreSession(sessionId, workspacePath, remoteConnectionId, remoteSshHost);
-      } catch (error) {
-        log.warn('Backend session restore failed (may be new session)', { sessionId, error });
+      
+      const existingSession = this.state.sessions.get(sessionId);
+      const isAcpSession = existingSession?.mode?.startsWith('acp:') ||
+        existingSession?.config.agentType?.startsWith('acp:');
+      if (!isAcpSession) {
+        try {
+          const { agentAPI } = await import('@/infrastructure/api');
+          await agentAPI.restoreSession(sessionId, workspacePath, remoteConnectionId, remoteSshHost);
+        } catch (error) {
+          log.warn('Backend session restore failed (may be new session)', { sessionId, error });
+        }
       }
-
+      
       const { sessionAPI } = await import('@/infrastructure/api');
       const turns = await sessionAPI.loadSessionTurns(
         sessionId,
@@ -1655,27 +1742,31 @@ export class FlowChatStore {
         remoteConnectionId,
         remoteSshHost
       );
-
+      
       const dialogTurns = this.convertToDialogTurns(turns);
-
+      
       this.setState(prev => {
         const session = prev.sessions.get(sessionId);
         if (!session) return prev;
-
+        
         const updatedSession = {
           ...session,
           dialogTurns,
           isHistorical: false,
         };
-
+        
         const newSessions = new Map(prev.sessions);
         newSessions.set(sessionId, updatedSession);
-
+        
         return {
           ...prev,
           sessions: newSessions,
         };
       });
+
+      // Reset state machine to IDLE after loading history
+      // This handles the case where restoreSession triggered events that left the state machine in PROCESSING
+      stateMachineManager.reset(sessionId);
     } catch (error) {
       log.error('Failed to load session history', { sessionId, error });
       throw error;
@@ -1707,12 +1798,12 @@ export class FlowChatStore {
       const hasImages = Array.isArray(metaImages) && metaImages.length > 0;
       const images = hasImages
         ? metaImages.map((img: any) => ({
-          id: img.id || img.name || `img-${Date.now()}`,
-          name: img.name || 'image',
-          dataUrl: img.data_url,
-          imagePath: img.image_path,
-          mimeType: img.mime_type,
-        }))
+            id: img.id || img.name || `img-${Date.now()}`,
+            name: img.name || 'image',
+            dataUrl: img.data_url,
+            imagePath: img.image_path,
+            mimeType: img.mime_type,
+          }))
         : undefined;
 
       const displayContent =
@@ -1720,99 +1811,100 @@ export class FlowChatStore {
       const normalizedTurnStatus = normalizeRecoveredTurnStatus(turn.status, { error: undefined });
 
       return {
-        id: turn.turnId,
-        sessionId: turn.sessionId,
-        kind: turn.kind || 'user_dialog',
-        userMessage: {
-          id: turn.userMessage.id,
-          type: 'user' as const,
-          content: displayContent,
-          timestamp: turn.userMessage.timestamp,
-          hasImages,
-          metadata,
-          images,
-        },
-        modelRounds: turn.modelRounds.map((round: any) => {
-          const normalizedRoundStatus = normalizeRecoveredRoundStatus(round.status, normalizedTurnStatus);
+      id: turn.turnId,
+      sessionId: turn.sessionId,
+      kind: turn.kind || 'user_dialog',
+      userMessage: {
+        id: turn.userMessage.id,
+        type: 'user' as const,
+        content: displayContent,
+        timestamp: turn.userMessage.timestamp,
+        hasImages,
+        metadata,
+        images,
+      },
+      modelRounds: turn.modelRounds.map((round: any) => {
+        const normalizedRoundStatus = normalizeRecoveredRoundStatus(round.status, normalizedTurnStatus);
 
-          return {
-            id: round.id,
-            turnId: round.turnId,
-            index: round.roundIndex ?? 0,
-            items: [
-              ...round.textItems.map((text: any) => ({
-                id: text.id,
-                type: 'text' as const,
-                content: text.content,
-                isStreaming: false,
-                isMarkdown: text.isMarkdown !== undefined ? text.isMarkdown : true,
-                timestamp: text.timestamp,
-                status: normalizeRecoveredTextStatus(text.status, normalizedTurnStatus),
-                orderIndex: text.orderIndex,
-                isSubagentItem: text.isSubagentItem,
-                parentTaskToolId: text.parentTaskToolId,
-                subagentSessionId: text.subagentSessionId,
-              })),
-              ...round.toolItems.map((tool: any) => ({
-                id: tool.id,
-                type: 'tool' as const,
-                toolName: tool.toolName,
-                interruptionReason:
-                  tool.interruptionReason === 'app_restart'
+        return {
+          id: round.id,
+          turnId: round.turnId,
+          index: round.roundIndex ?? 0,
+          renderHints: round.renderHints,
+          items: [
+            ...round.textItems.map((text: any) => ({
+              id: text.id,
+              type: 'text' as const,
+              content: text.content,
+              isStreaming: false,
+              isMarkdown: text.isMarkdown !== undefined ? text.isMarkdown : true,
+              timestamp: text.timestamp,
+              status: normalizeRecoveredTextStatus(text.status, normalizedTurnStatus),
+              orderIndex: text.orderIndex,
+              isSubagentItem: text.isSubagentItem,
+              parentTaskToolId: text.parentTaskToolId,
+              subagentSessionId: text.subagentSessionId,
+            })),
+            ...round.toolItems.map((tool: any) => ({
+              id: tool.id,
+              type: 'tool' as const,
+              toolName: tool.toolName,
+              interruptionReason:
+                tool.interruptionReason === 'app_restart'
+                  ? 'app_restart'
+                  : isTransientToolStatus(tool.status)
                     ? 'app_restart'
-                    : isTransientToolStatus(tool.status)
-                      ? 'app_restart'
-                      : undefined,
-                toolCall: tool.toolCall,
-                toolResult: tool.toolResult,
-                aiIntent: tool.aiIntent,
-                startTime: tool.startTime,
-                endTime: tool.endTime,
-                timestamp: tool.startTime,
-                status: normalizeRecoveredToolStatus(
-                  tool.status,
-                  normalizedTurnStatus,
-                  tool.toolResult,
-                  { preservePendingConfirmation: true },
-                ),
-                orderIndex: tool.orderIndex,
-                isSubagentItem: tool.isSubagentItem,
-                parentTaskToolId: tool.parentTaskToolId,
-                subagentSessionId: tool.subagentSessionId,
-              })),
-              ...(round.thinkingItems || []).map((thinking: any) => ({
-                id: thinking.id,
-                type: 'thinking' as const,
-                content: thinking.content,
-                isStreaming: false,
-                isCollapsed: thinking.isCollapsed ?? true,
-                timestamp: thinking.timestamp,
-                status: normalizeRecoveredThinkingStatus(thinking.status, normalizedTurnStatus),
-                orderIndex: thinking.orderIndex,
-                isSubagentItem: thinking.isSubagentItem,
-                parentTaskToolId: thinking.parentTaskToolId,
-                subagentSessionId: thinking.subagentSessionId,
-              })),
-            ].sort((a: any, b: any) => {
-              const aIndex = a.orderIndex !== undefined ? a.orderIndex : a.timestamp || 0;
-              const bIndex = b.orderIndex !== undefined ? b.orderIndex : b.timestamp || 0;
-
-              return aIndex - bIndex;
-            }),
-            isStreaming: false,
-            isComplete: normalizedRoundStatus !== 'pending' && normalizedRoundStatus !== 'streaming',
-            status: normalizedRoundStatus,
-            startTime: round.startTime ?? round.timestamp,
-            endTime: round.endTime,
-            timestamp: round.timestamp,
-          };
-        }),
-        timestamp: turn.timestamp,
-        status: normalizedTurnStatus,
-        startTime: turn.startTime,
-        endTime: turn.endTime,
-        backendTurnIndex: turn.turnIndex,
-      };
+                    : undefined,
+              toolCall: tool.toolCall,
+              toolResult: tool.toolResult,
+              aiIntent: tool.aiIntent,
+              startTime: tool.startTime,
+              endTime: tool.endTime,
+              timestamp: tool.startTime,
+              status: normalizeRecoveredToolStatus(
+                tool.status,
+                normalizedTurnStatus,
+                tool.toolResult,
+                { preservePendingConfirmation: true },
+              ),
+              orderIndex: tool.orderIndex,
+              isSubagentItem: tool.isSubagentItem,
+              parentTaskToolId: tool.parentTaskToolId,
+              subagentSessionId: tool.subagentSessionId,
+            })),
+            ...(round.thinkingItems || []).map((thinking: any) => ({
+              id: thinking.id,
+              type: 'thinking' as const,
+              content: thinking.content,
+              isStreaming: false,
+              isCollapsed: thinking.isCollapsed ?? true,
+              timestamp: thinking.timestamp,
+              status: normalizeRecoveredThinkingStatus(thinking.status, normalizedTurnStatus),
+              orderIndex: thinking.orderIndex,
+              isSubagentItem: thinking.isSubagentItem,
+              parentTaskToolId: thinking.parentTaskToolId,
+              subagentSessionId: thinking.subagentSessionId,
+            })),
+          ].sort((a: any, b: any) => {
+            const aIndex = a.orderIndex !== undefined ? a.orderIndex : a.timestamp || 0;
+            const bIndex = b.orderIndex !== undefined ? b.orderIndex : b.timestamp || 0;
+            
+            return aIndex - bIndex;
+          }),
+          isStreaming: false,
+          isComplete: normalizedRoundStatus !== 'pending' && normalizedRoundStatus !== 'streaming',
+          status: normalizedRoundStatus,
+          startTime: round.startTime ?? round.timestamp,
+          endTime: round.endTime,
+          timestamp: round.timestamp,
+        };
+      }),
+      timestamp: turn.timestamp,
+      status: normalizedTurnStatus,
+      startTime: turn.startTime,
+      endTime: turn.endTime,
+      backendTurnIndex: turn.turnIndex,
+    };
     });
   }
 
@@ -1859,7 +1951,7 @@ export class FlowChatStore {
     const turn = session.dialogTurns.find(t => t.id === turnId);
     return turn?.todos || [];
   }
-
+  
   public deleteTodo(sessionId: string, todoId: string): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
@@ -1874,7 +1966,6 @@ export class FlowChatStore {
       const updatedSession = {
         ...session,
         todos: updatedTodos,
-        lastActiveAt: Date.now()
       };
 
       const newSessions = new Map(prev.sessions);
@@ -1919,7 +2010,6 @@ export class FlowChatStore {
       const updatedSession = {
         ...session,
         todos: [...todos],
-        lastActiveAt: Date.now()
       };
 
       const newSessions = new Map(prev.sessions);
