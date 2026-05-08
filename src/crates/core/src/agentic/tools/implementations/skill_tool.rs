@@ -9,10 +9,10 @@ use crate::agentic::tools::framework::{
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use log::debug;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 // Use skills module
-use super::skills::{SkillLocation, get_skill_registry};
+use super::skills::{get_skill_registry, SkillLocation};
 
 /// Skill tool
 pub struct SkillTool;
@@ -74,10 +74,7 @@ Important:
                         .await
                 } else {
                     registry
-                        .get_resolved_skills_xml_for_workspace(
-                            ctx.workspace_root(),
-                            ctx.agent_type.as_deref(),
-                        )
+                        .get_resolved_skills_xml_for_workspace(None, ctx.agent_type.as_deref())
                         .await
                 }
             }
@@ -119,7 +116,7 @@ impl Tool for SkillTool {
             && context.and_then(|c| c.ws_fs()).is_none()
         {
             s.push_str(
-                "\n\n**Remote workspace:** Project-level skills on the server could not be indexed (workspace I/O unavailable). Use **Read** / **Glob** on the remote tree if needed.",
+                "\n\n**Remote workspace:** Project-level skills on the server could not be indexed because workspace I/O is unavailable. Only user-level skills are shown; BitFun will not fall back to scanning the remote path on the local filesystem.",
             );
         }
         Ok(s)
@@ -218,7 +215,7 @@ impl Tool for SkillTool {
                 registry
                     .find_and_load_skill_for_workspace(
                         skill_name,
-                        context.workspace_root(),
+                        None,
                         context.agent_type.as_deref(),
                     )
                     .await?
@@ -268,12 +265,12 @@ impl Default for SkillTool {
 #[cfg(test)]
 mod tests {
     use super::SkillTool;
-    use crate::agentic::WorkspaceBinding;
     use crate::agentic::tools::framework::Tool;
     use crate::agentic::workspace::{
         WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
         WorkspaceServices, WorkspaceShell,
     };
+    use crate::agentic::WorkspaceBinding;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use async_trait::async_trait;
     use std::path::PathBuf;

@@ -6,7 +6,6 @@ use async_trait::async_trait;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tokio::time::{timeout, Duration};
 use uuid::Uuid;
 
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
@@ -331,10 +330,9 @@ Usage notes:
             tool_id
         );
 
-        // 7. Wait for user answer (10 minute timeout)
-        let timeout_duration = Duration::from_secs(600); // 10 minutes
-        match timeout(timeout_duration, rx).await {
-            Ok(Ok(response)) => {
+        // 7. Wait for user answer until the user responds, cancels, or the turn is cancelled.
+        match rx.await {
+            Ok(response) => {
                 debug!(
                     "AskUserQuestion tool received user response, tool_id: {}",
                     tool_id
@@ -364,7 +362,7 @@ Usage notes:
                     image_attachments: None,
                 }])
             }
-            Ok(Err(_)) => {
+            Err(_) => {
                 warn!("AskUserQuestion tool channel closed, tool_id: {}", tool_id);
                 Ok(vec![ToolResult::Result {
                     data: json!({
@@ -372,24 +370,6 @@ Usage notes:
                         "status": "cancelled"
                     }),
                     result_for_assistant: Some("User input request was cancelled.".to_string()),
-                    image_attachments: None,
-                }])
-            }
-            Err(_) => {
-                warn!(
-                    "AskUserQuestion tool timeout after 600 seconds, tool_id: {}",
-                    tool_id
-                );
-                manager.cancel(&tool_id); // Clean up channel
-
-                Ok(vec![ToolResult::Result {
-                    data: json!({
-                        "questions_count": tool_input.questions.len(),
-                        "status": "timeout"
-                    }),
-                    result_for_assistant: Some(
-                        "User didn't answer your questions within 600 seconds.".to_string(),
-                    ),
                     image_attachments: None,
                 }])
             }

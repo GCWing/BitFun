@@ -48,7 +48,7 @@ Usage guidelines:
    - Be careful with recursive deletion as it will remove all contents
 
 3. **Path Requirements**:
-   - You can use either relative paths (e.g., "temp/data.txt"), absolute paths (e.g., "/workspace/temp/data.txt"), or exact `bitfun://runtime/...` URIs returned by another tool
+   - You can use either relative paths (e.g., "temp/data.txt"), absolute paths inside the current workspace, or exact `bitfun://runtime/...` URIs returned by another tool
    - Relative paths will be automatically resolved relative to the workspace directory
    - The path must exist in the filesystem
 
@@ -65,14 +65,14 @@ Usage guidelines:
 Example usage:
 ```json
 {
-  "path": "/workspace/old_file.txt"
+  "path": "old_file.txt"
 }
 ```
 
 Example for directory:
 ```json
 {
-  "path": "/workspace/temp_folder",
+  "path": "temp_folder",
   "recursive": true
 }
 ```
@@ -90,7 +90,7 @@ Important notes:
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "The absolute path to the file or directory to delete, or an exact bitfun://runtime URI returned by another tool"
+                    "description": "The file or directory to delete. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
                 },
                 "recursive": {
                     "type": "boolean",

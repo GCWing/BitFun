@@ -52,7 +52,8 @@ impl Tool for LSTool {
         Ok(r#"Recursively lists files and directories in a given path.
 
 Usage:
-- The path parameter must be either an absolute path or an exact `bitfun://runtime/...` URI returned by another tool
+- The path parameter must be relative to the current workspace, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool
+- Do not list host roots such as `/`, `/Users`, `/home`, or placeholder paths such as `/workspace`
 - Hidden files (files starting with '.') are automatically excluded
 - Results are sorted by modification time (newest first)"#
             .to_string())
@@ -64,7 +65,7 @@ Usage:
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "The absolute path to the directory to list, or an exact bitfun://runtime URI returned by another tool"
+                    "description": "Directory to list. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
                 },
                 "limit": {
                     "type": "number",

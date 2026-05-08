@@ -163,6 +163,14 @@ export interface ImageAnalysisEvent extends AgenticEvent {
   durationMs?: number;
 }
 
+export interface UserSteeringInjectedEvent extends AgenticEvent {
+  turnId: string;
+  roundIndex: number;
+  steeringId: string;
+  content: string;
+  displayContent: string;
+}
+
 export interface CompressionEvent extends AgenticEvent {
   compressionId: string;          
   
@@ -234,6 +242,28 @@ export class AgentAPI {
       await api.invoke<void>('cancel_dialog_turn', { request: { sessionId, dialogTurnId } });
     } catch (error) {
       throw createTauriCommandError('cancel_dialog_turn', error, { sessionId, dialogTurnId });
+    }
+  }
+
+  /**
+   * Inject a user "steering" message into the currently running dialog turn.
+   * Mirrors Codex CLI's Esc-to-steer behavior: the message is queued on the
+   * Rust side and consumed by the execution engine at the next round boundary
+   * without ending the current turn.
+   */
+  async steerDialogTurn(request: {
+    sessionId: string;
+    dialogTurnId: string;
+    content: string;
+    displayContent?: string;
+  }): Promise<{ success: boolean; steeringId: string }> {
+    try {
+      return await api.invoke<{ success: boolean; steeringId: string }>(
+        'steer_dialog_turn',
+        { request },
+      );
+    } catch (error) {
+      throw createTauriCommandError('steer_dialog_turn', error, request);
     }
   }
 
@@ -392,6 +422,12 @@ export class AgentAPI {
    
   onDialogTurnCompleted(callback: (event: AgenticEvent) => void): () => void {
     return api.listen<AgenticEvent>('agentic://dialog-turn-completed', callback);
+  }
+
+  onUserSteeringInjected(
+    callback: (event: UserSteeringInjectedEvent) => void,
+  ): () => void {
+    return api.listen<UserSteeringInjectedEvent>('agentic://user-steering-injected', callback);
   }
 
    

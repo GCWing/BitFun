@@ -3,7 +3,7 @@
 //! Responsible for session CRUD, lifecycle management, and resource association
 
 use crate::agentic::core::{
-    CompressionState, DialogTurn, Message, MessageSemanticKind, ProcessingPhase, Session,
+    new_turn_id, CompressionState, Message, MessageSemanticKind, ProcessingPhase, Session,
     SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::image_analysis::ImageContextData;
@@ -1461,13 +1461,7 @@ impl SessionManager {
             })?;
 
         let turn_index = session.dialog_turn_ids.len();
-        let turn = DialogTurn::new(
-            session_id.to_string(),
-            turn_index,
-            user_input.clone(),
-            turn_id,
-        );
-        let turn_id = turn.turn_id.clone();
+        let turn_id = new_turn_id(turn_id);
 
         if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.dialog_turn_ids.push(turn_id.clone());
@@ -1740,6 +1734,67 @@ impl SessionManager {
         debug!(
             "Dialog turn marked as failed: turn_id={}, turn_index={}, error={}",
             turn_id, turn.turn_index, error
+        );
+
+        Ok(())
+    }
+
+    /// Mark a dialog turn as cancelled and persist it. Unlike
+    /// `complete_dialog_turn`, this writes `TurnStatus::Cancelled` so the
+    /// frontend / persistence layer can distinguish a user-cancelled turn
+    /// from a fully-completed one. Any partial assistant content that was
+    /// already streamed is preserved in `model_rounds`.
+    pub async fn cancel_dialog_turn(&self, session_id: &str, turn_id: &str) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            debug!(
+                "Skipping dialog turn persistence for transient session cancellation: session_id={}, turn_id={}",
+                session_id, turn_id
+            );
+            return Ok(());
+        }
+
+        let workspace_path = self
+            .effective_session_workspace_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+        let turn_index = self
+            .sessions
+            .get(session_id)
+            .and_then(|session| session.dialog_turn_ids.iter().position(|id| id == turn_id))
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
+        let mut turn = self
+            .persistence_manager
+            .load_dialog_turn(&workspace_path, session_id, turn_index)
+            .await?
+            .ok_or_else(|| BitFunError::NotFound(format!("Dialog turn not found: {}", turn_id)))?;
+
+        turn.status = TurnStatus::Cancelled;
+        turn.end_time = Some(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
+        );
+
+        self.persist_context_snapshot_for_turn_best_effort(
+            session_id,
+            turn.turn_index,
+            "turn_cancelled",
+        )
+        .await;
+
+        self.persistence_manager
+            .save_dialog_turn(&workspace_path, &turn)
+            .await?;
+
+        debug!(
+            "Dialog turn marked as cancelled: turn_id={}, turn_index={}",
+            turn_id, turn.turn_index
         );
 
         Ok(())
@@ -2326,5 +2381,3 @@ impl SessionManager {
         debug!("Cleanup task started");
     }
 }
-
-

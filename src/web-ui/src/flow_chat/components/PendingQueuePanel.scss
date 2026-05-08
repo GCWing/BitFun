@@ -1,0 +1,272 @@
+@keyframes bitfun-pending-queue-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bitfun-pending-queue-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bitfun-pending-queue-panel {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 6px;
+  padding: 8px 10px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-accent-400) 5%, var(--color-bg-scene));
+  border: 1px solid color-mix(in srgb, var(--color-accent-400) 20%, transparent);
+  box-shadow:
+    0 1px 3px color-mix(in srgb, var(--color-accent-400) 10%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-accent-400) 6%, transparent);
+  max-height: 260px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  animation: bitfun-pending-queue-fade-in 180ms ease-out;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-text-muted) 24%, transparent);
+    border-radius: 3px;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px 2px;
+  }
+
+  &__header-icon {
+    color: var(--color-accent-400);
+    flex: 0 0 auto;
+  }
+
+  &__title {
+    flex: 1 1 auto;
+    font-size: var(--flowchat-font-size-xs, 11px);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+
+  &__hint {
+    font-size: var(--flowchat-font-size-xxs, 10px);
+    color: var(--color-text-muted);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--color-bg-scene);
+    border: 1px solid color-mix(in srgb, var(--color-text-muted) 14%, transparent);
+    transition:
+      background 140ms ease,
+      border-color 140ms ease,
+      box-shadow 140ms ease,
+      transform 140ms ease;
+    animation: bitfun-pending-queue-fade-in 160ms ease-out;
+    position: relative;
+
+    &:hover {
+      background: color-mix(in srgb, var(--color-accent-400) 4%, var(--color-bg-scene));
+      border-color: color-mix(in srgb, var(--color-accent-400) 28%, transparent);
+      box-shadow: 0 1px 6px color-mix(in srgb, var(--color-accent-400) 10%, transparent);
+
+      .bitfun-pending-queue-panel__actions {
+        opacity: 1;
+      }
+    }
+
+    &--editing {
+      background: color-mix(in srgb, var(--color-accent-400) 6%, var(--color-bg-scene));
+      border-color: color-mix(in srgb, var(--color-accent-400) 36%, transparent);
+      box-shadow: none;
+
+      .bitfun-pending-queue-panel__actions {
+        opacity: 1;
+      }
+    }
+
+    &--sending {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    &--failed {
+      background: color-mix(in srgb, var(--color-error, #ef4444) 6%, var(--color-bg-scene));
+      border-color: color-mix(in srgb, var(--color-error, #ef4444) 32%, transparent);
+
+      .bitfun-pending-queue-panel__index {
+        background: color-mix(in srgb, var(--color-error, #ef4444) 18%, transparent);
+        color: var(--color-error, #ef4444);
+      }
+    }
+  }
+
+  &__index {
+    flex: 0 0 auto;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    border-radius: 9px;
+    font-size: var(--flowchat-font-size-xxs, 10px);
+    font-weight: 700;
+    background: color-mix(in srgb, var(--color-accent-400) 18%, transparent);
+    color: var(--color-accent-400);
+    margin-top: 2px;
+    user-select: none;
+  }
+
+  &__content {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__preview {
+    font-size: var(--flowchat-font-size-base, 13px);
+    line-height: 1.45;
+    color: var(--color-text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    cursor: pointer;
+  }
+
+  &__preview-empty {
+    font-size: var(--flowchat-font-size-base, 13px);
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  &__sending-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--flowchat-font-size-xxs, 10px);
+    color: var(--color-accent-400);
+    font-weight: 500;
+
+    svg {
+      animation: bitfun-pending-queue-spin 720ms linear infinite;
+    }
+  }
+
+  &__failed-label {
+    font-size: var(--flowchat-font-size-xxs, 10px);
+    color: var(--color-error, #ef4444);
+    font-weight: 500;
+    margin-top: 2px;
+  }
+
+  &__editor {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    font-size: var(--flowchat-font-size-base, 13px);
+    font-family: inherit;
+    line-height: 1.45;
+    color: var(--color-text-primary);
+    border: 1px solid color-mix(in srgb, var(--color-accent-400) 28%, transparent);
+    border-radius: 6px;
+    background: var(--color-bg-scene);
+    resize: vertical;
+    min-height: 56px;
+
+    &:focus {
+      outline: none;
+      border-color: color-mix(in srgb, var(--color-accent-400) 28%, transparent);
+      box-shadow: none;
+    }
+  }
+
+  &__editor-hint {
+    font-size: var(--flowchat-font-size-xxs, 10px);
+    color: var(--color-text-muted);
+    margin-top: 2px;
+    user-select: none;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 2px;
+    flex: 0 0 auto;
+    align-items: center;
+    margin-top: -2px;
+    opacity: 0.55;
+    transition: opacity 140ms ease;
+  }
+
+  &__btn {
+    --icon-button-size: 26px;
+    color: var(--color-text-secondary);
+    border-radius: 6px;
+    transition:
+      background 140ms ease,
+      color 140ms ease,
+      transform 120ms ease;
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--color-text-muted) 14%, transparent);
+      color: var(--color-text-primary);
+    }
+
+    &--primary {
+      color: var(--color-accent-400);
+
+      &:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--color-accent-400) 16%, transparent);
+        color: var(--color-accent-400);
+        box-shadow: 0 0 12px color-mix(in srgb, var(--color-accent-400) 30%, transparent);
+        transform: translateY(-1px);
+      }
+    }
+
+    &--danger {
+      &:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--color-error, #ef4444) 14%, transparent);
+        color: var(--color-error, #ef4444);
+      }
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  }
+}

@@ -71,7 +71,7 @@ pub fn build_bridge_script(
       rename:     (o, n) => _call('fs.rename', {{ oldPath: o, newPath: n }}),
       appendFile: (p, data) => _call('fs.appendFile', {{ path: p, data: typeof data === 'string' ? data : String(data) }}),
     }},
-    shell: {{ exec: (cmd, opts) => _call('shell.exec', {{ command: cmd, ...(opts||{{}}) }}) }},
+    shell: {{ exec: (cmd, opts) => _call('shell.exec', Array.isArray(cmd) ? {{ args: cmd, ...(opts||{{}}) }} : {{ command: cmd, ...(opts||{{}}) }}) }},
     net:   {{ fetch: (url, opts) => _call('net.fetch', {{ url: typeof url === 'string' ? url : (url && url.url), ...(opts||{{}}) }}) }},
     os:    {{ info: () => _call('os.info', {{}}) }},
     storage: {{
@@ -280,5 +280,5 @@ pub fn scroll_boundary_script() -> &'static str {
 
 /// Default dark theme CSS variables for MiniApp iframe (avoids flash before host sends theme).
 pub fn build_miniapp_default_theme_css() -> &'static str {
-    r#"<style id="bitfun-theme-default">:root{--bitfun-bg:#121214;--bitfun-bg-secondary:#18181a;--bitfun-bg-tertiary:#121214;--bitfun-bg-elevated:#18181a;--bitfun-text:#e8e8e8;--bitfun-text-secondary:#b0b0b0;--bitfun-text-muted:#858585;--bitfun-accent:#60a5fa;--bitfun-accent-hover:#3b82f6;--bitfun-success:#34d399;--bitfun-warning:#f59e0b;--bitfun-error:#ef4444;--bitfun-info:#E1AB80;--bitfun-border:#2e2e32;--bitfun-border-subtle:#27272a;--bitfun-element-bg:#27272a;--bitfun-element-hover:#3f3f46;--bitfun-radius:6px;--bitfun-radius-lg:10px;--bitfun-font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;--bitfun-font-mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;--bitfun-scrollbar-thumb:rgba(255,255,255,0.12);}</style>"#
+    r#"<style id="bitfun-theme-default">:root{--bitfun-bg:#121214;--bitfun-bg-secondary:#18181a;--bitfun-bg-tertiary:#121214;--bitfun-bg-elevated:#18181a;--bitfun-text:#e8e8e8;--bitfun-text-secondary:#b0b0b0;--bitfun-text-muted:#858585;--bitfun-accent:#60a5fa;--bitfun-accent-hover:#3b82f6;--bitfun-success:#34d399;--bitfun-warning:#f59e0b;--bitfun-error:#ef4444;--bitfun-info:#E1AB80;--bitfun-border:#2e2e32;--bitfun-border-subtle:#27272a;--bitfun-element-bg:#27272a;--bitfun-element-hover:#3f3f46;--bitfun-radius:6px;--bitfun-radius-lg:10px;--bitfun-font-sans:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Segoe UI','Microsoft YaHei UI','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif;--bitfun-font-mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Monaco,'Cascadia Mono','Cascadia Code',Consolas,'Liberation Mono','Courier New',monospace;--bitfun-scrollbar-thumb:rgba(255,255,255,0.12);}</style>"#
 }

@@ -250,9 +250,7 @@ pub async fn set_mode_config(
     )
     .await
     {
-        Ok(_) => {
-            Ok(format!("Mode '{}' configuration set successfully", mode_id))
-        }
+        Ok(_) => Ok(format!("Mode '{}' configuration set successfully", mode_id)),
         Err(e) => {
             error!(
                 "Failed to set mode config: mode_id={}, error={}",
@@ -273,12 +271,10 @@ pub async fn reset_mode_config(
     )
     .await
     {
-        Ok(_) => {
-            Ok(format!(
-                "Mode '{}' configuration reset successfully",
-                mode_id
-            ))
-        }
+        Ok(_) => Ok(format!(
+            "Mode '{}' configuration reset successfully",
+            mode_id
+        )),
         Err(e) => {
             error!(
                 "Failed to reset mode config: mode_id={}, error={}",
@@ -348,12 +344,10 @@ pub async fn set_subagent_config(
     let config_value = to_json_value(&config, "subagent config")?;
 
     match config_service.set_config(&path, config_value).await {
-        Ok(_) => {
-            Ok(format!(
-                "SubAgent '{}' configuration set successfully",
-                subagent_id
-            ))
-        }
+        Ok(_) => Ok(format!(
+            "SubAgent '{}' configuration set successfully",
+            subagent_id
+        )),
         Err(e) => {
             error!(
                 "Failed to set subagent config: subagent_id={}, enabled={}, error={}",

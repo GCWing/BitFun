@@ -72,6 +72,10 @@ The terminal_session_id is returned inside <terminal_session_id>...</terminal_se
         false
     }
 
+    async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
+        !context.map(|ctx| ctx.is_remote()).unwrap_or(false)
+    }
+
     async fn validate_input(
         &self,
         input: &Value,

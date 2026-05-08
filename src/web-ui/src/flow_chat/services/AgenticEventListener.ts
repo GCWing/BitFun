@@ -15,6 +15,7 @@ import type {
   SessionTitleGeneratedEvent,
   SessionModelAutoMigratedEvent,
   ImageAnalysisEvent,
+  UserSteeringInjectedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -41,6 +42,7 @@ export interface AgenticEventCallbacks {
   onContextCompressionFailed?: (event: AgenticEvent) => void;
   onSessionTitleGenerated?: (event: SessionTitleGeneratedEvent) => void;
   onSessionModelAutoMigrated?: (event: SessionModelAutoMigratedEvent) => void;
+  onUserSteeringInjected?: (event: UserSteeringInjectedEvent) => void;
 }
 
 export class AgenticEventListener {
@@ -186,6 +188,14 @@ export class AgenticEventListener {
         const unlisten = agentAPI.onSessionTitleGenerated((event) => {
           logger.debug('Session title generated:', event);
           callbacks.onSessionTitleGenerated?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onUserSteeringInjected) {
+        const unlisten = agentAPI.onUserSteeringInjected((event) => {
+          logger.debug('User steering injected:', event);
+          callbacks.onUserSteeringInjected?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }

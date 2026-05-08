@@ -164,12 +164,36 @@ impl ToolUseContext {
     /// Resolve a user or model-supplied path for file/shell tools. Uses POSIX semantics when the
     /// workspace is remote SSH so Windows-hosted clients still resolve `/home/...` correctly.
     pub fn resolve_workspace_tool_path(&self, path: &str) -> BitFunResult<String> {
-        let workspace_root_owned = self.workspace.as_ref().map(|w| w.root_path_string());
-        crate::agentic::tools::workspace_paths::resolve_workspace_tool_path(
+        let workspace_root_owned = self
+            .workspace
+            .as_ref()
+            .map(|w| w.root_path_string())
+            .ok_or_else(|| {
+                crate::util::errors::BitFunError::tool(format!(
+                    "A workspace path is required to resolve tool path: {}",
+                    path
+                ))
+            })?;
+        let resolved_path = crate::agentic::tools::workspace_paths::resolve_workspace_tool_path(
             path,
-            workspace_root_owned.as_deref(),
+            Some(workspace_root_owned.as_str()),
             self.is_remote(),
-        )
+        )?;
+
+        let is_within_workspace = if self.is_remote() {
+            is_remote_posix_path_within_root(&resolved_path, &workspace_root_owned)
+        } else {
+            is_local_path_within_root(Path::new(&resolved_path), Path::new(&workspace_root_owned))?
+        };
+
+        if !is_within_workspace {
+            return Err(crate::util::errors::BitFunError::tool(format!(
+                "Path '{}' resolves outside current workspace '{}': {}",
+                path, workspace_root_owned, resolved_path
+            )));
+        }
+
+        Ok(resolved_path)
     }
 
     pub fn current_workspace_runtime_root(&self) -> BitFunResult<PathBuf> {
@@ -333,6 +357,81 @@ impl ToolUseContext {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::ToolUseContext;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    fn local_context(root: &str) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new(None, PathBuf::from(root))),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        }
+    }
+
+    fn context_without_workspace() -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: None,
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        }
+    }
+
+    #[test]
+    fn workspace_path_resolution_rejects_absolute_paths_outside_local_workspace() {
+        let context = local_context("/repo/project");
+
+        let err = context
+            .resolve_workspace_tool_path("/workspace")
+            .expect_err("placeholder absolute paths must not escape the current workspace");
+
+        assert!(err.to_string().contains("outside current workspace"));
+    }
+
+    #[test]
+    fn workspace_path_resolution_rejects_root_without_workspace() {
+        let context = context_without_workspace();
+
+        let err = context
+            .resolve_workspace_tool_path("/")
+            .expect_err("workspace tools must not scan the host root without a workspace");
+
+        assert!(err.to_string().contains("workspace path is required"));
+    }
+
+    #[test]
+    fn workspace_path_resolution_allows_paths_inside_local_workspace() {
+        let context = local_context("/repo/project");
+
+        let resolved = context
+            .resolve_workspace_tool_path("/repo/project/src/main.rs")
+            .expect("absolute paths inside the workspace remain valid");
+
+        assert_eq!(
+            PathBuf::from(resolved),
+            PathBuf::from("/repo/project/src/main.rs")
+        );
+    }
+}
+
 /// Validation result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationResult {
@@ -464,6 +563,11 @@ pub trait Tool: Send + Sync {
     /// Whether to enable
     async fn is_enabled(&self) -> bool {
         true
+    }
+
+    /// Whether this tool is available for a specific execution context.
+    async fn is_available_in_context(&self, _context: Option<&ToolUseContext>) -> bool {
+        self.is_enabled().await
     }
 
     /// Whether to be readonly

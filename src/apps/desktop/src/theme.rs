@@ -358,9 +358,8 @@ fn agent_companion_default_position(
         .as_ref()
         .map(|size| size.height)
         .unwrap_or(AGENT_COMPANION_WINDOW_MIN_SIZE);
-    let x = area_position.x + area_size.width
-        - window_width
-        - f64::from(AGENT_COMPANION_WINDOW_MARGIN);
+    let x =
+        area_position.x + area_size.width - window_width - f64::from(AGENT_COMPANION_WINDOW_MARGIN);
     let y = area_position.y + area_size.height
         - window_height
         - f64::from(AGENT_COMPANION_WINDOW_MARGIN);

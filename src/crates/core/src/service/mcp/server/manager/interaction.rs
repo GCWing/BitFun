@@ -31,12 +31,6 @@ impl MCPServerManager {
             }
         }
 
-        if candidate_roots.is_empty() {
-            if let Ok(current_dir) = std::env::current_dir() {
-                candidate_roots.push(current_dir);
-            }
-        }
-
         let mut seen_uris = HashSet::new();
         let mut roots = Vec::new();
         for root in candidate_roots {
@@ -160,15 +154,14 @@ impl MCPServerManager {
             );
         }
 
-        let wait_timeout = Duration::from_secs(600);
-        let decision = tokio::time::timeout(wait_timeout, rx).await;
+        let decision = rx.await;
         {
             let mut pending = self.pending_interactions.write().await;
             pending.remove(&interaction_id);
         }
 
         match decision {
-            Ok(Ok(MCPInteractionDecision::Accept { result })) => {
+            Ok(MCPInteractionDecision::Accept { result }) => {
                 if let Err(e) = connection.send_response(request_id, result).await {
                     warn!(
                         "Failed to send interactive MCP response: server_name={} server_id={} method={} error={}",
@@ -181,7 +174,7 @@ impl MCPServerManager {
                     );
                 }
             }
-            Ok(Ok(MCPInteractionDecision::Reject { error })) => {
+            Ok(MCPInteractionDecision::Reject { error }) => {
                 if let Err(e) = connection.send_error(request_id, error).await {
                     warn!(
                         "Failed to send interactive MCP rejection: server_name={} server_id={} method={} error={}",
@@ -194,7 +187,7 @@ impl MCPServerManager {
                     );
                 }
             }
-            Ok(Err(_)) => {
+            Err(_) => {
                 let error = MCPError::internal_error(format!(
                     "MCP interaction channel closed before response: {}",
                     method
@@ -203,23 +196,6 @@ impl MCPServerManager {
                     warn!(
                         "Failed to send interaction channel-closed error: server_name={} server_id={} method={} error={}",
                         server_name, server_id, method, e
-                    );
-                }
-            }
-            Err(_) => {
-                let error = MCPError::internal_error(format!(
-                    "Timed out waiting for user interaction response for method: {}",
-                    method
-                ));
-                if let Err(e) = connection.send_error(request_id, error).await {
-                    warn!(
-                        "Failed to send interaction timeout error: server_name={} server_id={} method={} error={}",
-                        server_name, server_id, method, e
-                    );
-                } else {
-                    warn!(
-                        "Timed out waiting for interactive MCP request: server_name={} server_id={} method={} timeout={}s",
-                        server_name, server_id, method, wait_timeout.as_secs()
                     );
                 }
             }
@@ -399,5 +375,24 @@ impl MCPServerManager {
         if let Some(handle) = tasks.remove(server_id) {
             handle.abort();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MCPServerManager;
+
+    #[test]
+    fn roots_list_does_not_fallback_to_process_current_dir_without_workspace() {
+        let result = MCPServerManager::build_roots_list_result();
+        let roots = result
+            .get("roots")
+            .and_then(|value| value.as_array())
+            .expect("roots should be an array");
+
+        assert!(
+            roots.is_empty(),
+            "MCP roots/list must not expose the process current directory when no workspace is active"
+        );
     }
 }

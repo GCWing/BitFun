@@ -32,7 +32,7 @@ The configured manifest may also include an **execution policy** with reviewer t
 When the review target contains many files, running a single reviewer instance per role may cause timeouts or shallow coverage. The execution policy provides two fields to control this:
 
 - **`reviewer_file_split_threshold`** — minimum number of target files that triggers file splitting (default 20; set 0 to disable)
-- **`max_same_role_instances`** — maximum number of same-role reviewer instances allowed per review turn (default 3, max 8)
+- **`max_same_role_instances`** — maximum number of same-role reviewer instances allowed per review turn (default 3; configure a larger value when a review needs more parallel shards)
 
 When the file count exceeds `reviewer_file_split_threshold` and `max_same_role_instances > 1`:
 
@@ -130,7 +130,7 @@ Each reviewer Task prompt must include:
 - a request for concrete findings only
 - a strict output format that is easy to verify later
 - for split instances: an explicit list of the files this instance is responsible for, and an instruction not to review files outside the assigned group unless a cross-file dependency is critical
-- a time-awareness reminder: "You have a strict timeout. Prioritize: (1) Inspect the diff first, then read only files the diff directly references. (2) Confirm or dismiss each hypothesis before opening a new investigation path. (3) Write your findings early — a partial report with confirmed findings is more valuable than no report at all."
+- if `reviewer_timeout_seconds > 0`, a time-awareness reminder: "You have a strict timeout. Prioritize: (1) Inspect the diff first, then read only files the diff directly references. (2) Confirm or dismiss each hypothesis before opening a new investigation path. (3) Write your findings early — a partial report with confirmed findings is more valuable than no report at all."
 
 Strategy guidance (fallback only; the configured `prompt_directive` is the source of truth):
 
@@ -165,7 +165,7 @@ After the reviewer batch finishes, launch `ReviewJudge` with:
 - the team strategy level, so the judge can adjust its validation depth accordingly:
   - `quick`: "This was a quick review. Focus on confirming or rejecting each finding efficiently. If a finding's evidence is thin, reject it rather than spending time verifying."
   - `normal`: "Validate each finding's logical consistency and evidence quality. Spot-check code only when a claim needs verification."
-  - `deep`: "This was a deep review with potentially complex findings. Cross-validate findings across reviewers for consistency. For each finding, verify the evidence supports the conclusion and the suggested fix is safe. Pay extra attention to overlapping findings across reviewers or same-role instances. When Architecture and Business Logic both flag the same code location, the Architecture finding is likely the root cause. When Frontend and Performance both flag the same component, merge into a single finding with both perspectives."ances."
+  - `deep`: "This was a deep review with potentially complex findings. Cross-validate findings across reviewers for consistency. For each finding, verify the evidence supports the conclusion and the suggested fix is safe. Pay extra attention to overlapping findings across reviewers or same-role instances. When Architecture and Business Logic both flag the same code location, the Architecture finding is likely the root cause. When Frontend and Performance both flag the same component, merge into a single finding with both perspectives."
 
 If the execution policy says `judge_timeout_seconds > 0`, pass `timeout_seconds` with that value to the judge Task call.
 

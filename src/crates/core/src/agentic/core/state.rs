@@ -89,34 +89,8 @@ pub struct ToolStats {
     pub cancelled: usize,
 }
 
-// ============ Dialog Turn State ============
-
-/// Dialog turn state
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum DialogTurnState {
-    Active {
-        current_round_index: usize,
-        pending_tool_count: usize,
-    },
-    Completed {
-        final_response: String,
-        total_rounds: usize,
-    },
-    Cancelled,
-    Failed {
-        error: String,
-    },
-}
-
-// ============ Model Round State ============
-
-/// Model round state
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ModelRoundState {
-    Pending,
-    WaitingForAI,
-    Streaming,
-    ExecutingTools,
-    Completed,
-    Failed { error: String },
-}
+// Note: DialogTurnState and ModelRoundState used to live here as a second
+// (and divergent) copy of the same names found in `dialog_turn.rs` /
+// `model_round.rs`. Both copies were dead code: turn / round lifecycle is
+// tracked via `SessionState::Processing` + `TurnStatus` for persistence.
+// Removed to avoid future ambiguity.

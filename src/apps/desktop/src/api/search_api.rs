@@ -49,7 +49,9 @@ async fn workspace_search_unavailable_message(root_path: &str) -> Option<String>
 }
 
 pub(crate) async fn should_use_workspace_search(root_path: &str) -> bool {
-    workspace_search_unavailable_message(root_path).await.is_none()
+    workspace_search_unavailable_message(root_path)
+        .await
+        .is_none()
 }
 
 pub(crate) async fn search_file_contents_via_workspace_search(

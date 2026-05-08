@@ -1,4 +1,5 @@
 use crate::infrastructure::{FileSearchOutcome, FileSearchResult, SearchMatchType};
+use crate::service::bootstrap::ensure_workspace_gitignore_ignores_bitfun;
 use crate::service::config::{get_global_config_service, types::WorkspaceConfig};
 use crate::service::search::flashgrep::{
     ConsistencyMode, GlobRequest, ManagedClient, OpenRepoParams, PathScope, QuerySpec,
@@ -324,6 +325,13 @@ impl WorkspaceSearchService {
         }
 
         let repo_config = repo_config_for_workspace_search().await;
+        if let Err(error) = ensure_workspace_gitignore_ignores_bitfun(&repo_root).await {
+            log::warn!(
+                "Failed to ensure workspace .gitignore ignores .bitfun before search warmup: path={}, error={}",
+                repo_root.display(),
+                error
+            );
+        }
         let params = OpenRepoParams {
             repo_path: repo_root.clone(),
             storage_root: Some(default_storage_root(&repo_root)),

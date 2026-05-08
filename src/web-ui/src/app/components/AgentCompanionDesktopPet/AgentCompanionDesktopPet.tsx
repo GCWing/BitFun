@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -10,7 +10,9 @@ import { createLogger } from '@/shared/utils/logger';
 import './AgentCompanionDesktopPet.scss';
 
 const log = createLogger('AgentCompanionDesktopPet');
-const PET_SIZE = 96;
+const DEFAULT_PET_SIZE = 96;
+const DEFAULT_PETDEX_DISPLAY_SIZE = { width: 96, height: 104 };
+const PETDEX_DESKTOP_SCALE = 0.5;
 const WINDOW_MAX_WIDTH = 360;
 const WINDOW_MAX_HEIGHT = 240;
 const WINDOW_HORIZONTAL_GAP = 8;
@@ -29,9 +31,15 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   const [tasks, setTasks] = useState<AgentCompanionTaskStatus[]>([]);
   const [isHoveringPet, setIsHoveringPet] = useState(false);
   const [isDraggingPet, setIsDraggingPet] = useState(false);
+  const [petFrameSize, setPetFrameSize] = useState<{ width: number; height: number } | null>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const bubblesRef = useRef<HTMLDivElement>(null);
   const displayTasks = [...tasks].reverse();
+  const activePetSize = pet && petFrameSize
+    ? petFrameSize
+    : pet
+      ? DEFAULT_PETDEX_DISPLAY_SIZE
+      : { width: DEFAULT_PET_SIZE, height: DEFAULT_PET_SIZE };
 
   useEffect(() => {
     document.documentElement.classList.add('bitfun-agent-companion-window-root');
@@ -39,6 +47,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
 
     const applySettings = (settings: AIExperienceSettings) => {
       setPet(settings.agent_companion_pet ?? null);
+      setPetFrameSize(null);
     };
 
     void aiExperienceConfigService.getSettingsAsync().then(settings => {
@@ -85,8 +94,8 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       ? visibleBubbleHeight
       : measuredBubbleHeight;
     const nextHeight = bubbleCount > 0
-      ? Math.max(PET_SIZE, Math.min(WINDOW_MAX_HEIGHT, targetBubbleHeight))
-      : PET_SIZE;
+      ? Math.max(activePetSize.height, Math.min(WINDOW_MAX_HEIGHT, targetBubbleHeight))
+      : activePetSize.height;
     const measuredBubbleWidth = bubbleCount > 0
       ? Math.min(
         BUBBLE_MAX_WIDTH,
@@ -102,14 +111,14 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       )
       : 0;
     const measuredDockWidth = bubbleCount > 0
-      ? measuredBubbleWidth + WINDOW_HORIZONTAL_GAP + PET_SIZE + WINDOW_EDGE_BUFFER
+      ? measuredBubbleWidth + WINDOW_HORIZONTAL_GAP + activePetSize.width + WINDOW_EDGE_BUFFER
       : Math.max(
-        PET_SIZE,
+        activePetSize.width,
         dockRef.current?.scrollWidth ?? 0,
         dockRef.current?.getBoundingClientRect().width ?? 0,
       );
     const nextWidth = Math.max(
-      PET_SIZE,
+      activePetSize.width,
       Math.min(WINDOW_MAX_WIDTH, Math.ceil(measuredDockWidth)),
     );
 
@@ -121,7 +130,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       .catch(error => {
         log.warn('Failed to resize Agent companion window', error);
       });
-  }, [tasks]);
+  }, [activePetSize.height, activePetSize.width, tasks]);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
@@ -161,8 +170,13 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     }
   };
 
+  const handlePetFrameSizeChange = useCallback((size: { width: number; height: number } | null) => {
+    setPetFrameSize(size);
+  }, []);
+
   const dockVars = {
-    '--bitfun-agent-companion-pet-size': `${PET_SIZE}px`,
+    '--bitfun-agent-companion-pet-width': `${activePetSize.width}px`,
+    '--bitfun-agent-companion-pet-height': `${activePetSize.height}px`,
     '--bitfun-agent-companion-gap': `${WINDOW_HORIZONTAL_GAP}px`,
   } as React.CSSProperties;
 
@@ -208,6 +222,9 @@ export const AgentCompanionDesktopPet: React.FC = () => {
           <ChatInputPixelPet
             mood={displayMood}
             pet={pet}
+            nativePetdexSize
+            petdexScale={PETDEX_DESKTOP_SCALE}
+            onPetFrameSizeChange={handlePetFrameSizeChange}
             className="bitfun-agent-companion-window__pet"
           />
         </div>

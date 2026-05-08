@@ -329,18 +329,29 @@ async fn dispatch_shell(
             name
         )));
     }
+    // Two input shapes are supported:
+    //   1. `{ command: "git status" }` — runs through the platform shell (sh -c / cmd /C).
+    //   2. `{ args: ["git", "rev-parse", "--is-inside-work-tree"] }` — spawns the program
+    //      directly with no shell. This is the cross-platform safe form: callers no longer
+    //      need to worry about per-shell quoting (single quotes from sh do not work under
+    //      cmd.exe on Windows, which previously broke `builtin-coding-selfie` git scans).
+    let argv: Option<Vec<String>> = params.get("args").and_then(|v| v.as_array()).map(|a| {
+        a.iter()
+            .filter_map(|x| x.as_str().map(str::to_string))
+            .collect()
+    });
     let command = params
         .get("command")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .trim()
         .to_string();
-    if command.is_empty() {
+    if argv.as_ref().map(|a| a.is_empty()).unwrap_or(true) && command.is_empty() {
         return Err(BitFunError::parse("empty command"));
     }
 
-    // Allowlist check: take the program name (basename of the first whitespace-
-    // separated token, sans extension) and require it to be in `policy.shell.allow`.
+    // Allowlist check: take the program name (basename of the first token, sans
+    // extension) and require it to be in `policy.shell.allow`.
     let allow: Vec<String> = policy
         .get("shell")
         .and_then(|v| v.get("allow"))
@@ -351,7 +362,10 @@ async fn dispatch_shell(
                 .collect()
         })
         .unwrap_or_default();
-    let first_token = command.split_whitespace().next().unwrap_or("");
+    let first_token = match argv.as_ref() {
+        Some(a) => a.first().map(String::as_str).unwrap_or(""),
+        None => command.split_whitespace().next().unwrap_or(""),
+    };
     let base = Path::new(first_token)
         .file_stem()
         .and_then(|s| s.to_str())
@@ -374,17 +388,25 @@ async fn dispatch_shell(
         .and_then(|v| v.as_u64())
         .unwrap_or(30_000);
 
-    #[cfg(target_os = "windows")]
-    let mut cmd = {
-        let mut c = crate::util::process_manager::create_tokio_command("cmd");
-        c.args(["/C", &command]);
+    let mut cmd = if let Some(argv) = argv.as_ref() {
+        let mut c = crate::util::process_manager::create_tokio_command(&argv[0]);
+        if argv.len() > 1 {
+            c.args(&argv[1..]);
+        }
         c
-    };
-    #[cfg(not(target_os = "windows"))]
-    let mut cmd = {
-        let mut c = crate::util::process_manager::create_tokio_command("sh");
-        c.args(["-c", &command]);
-        c
+    } else {
+        #[cfg(target_os = "windows")]
+        {
+            let mut c = crate::util::process_manager::create_tokio_command("cmd");
+            c.args(["/C", &command]);
+            c
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut c = crate::util::process_manager::create_tokio_command("sh");
+            c.args(["-c", &command]);
+            c
+        }
     };
     cmd.current_dir(&cwd);
     // Match worker_host.js: never let git prompt for credentials, force C locale so

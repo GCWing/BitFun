@@ -357,6 +357,13 @@ impl Tool for WrappedTool {
         Ok(self.original_tool.description().await?)
     }
 
+    async fn description_with_context(
+        &self,
+        context: Option<&ToolUseContext>,
+    ) -> crate::util::errors::BitFunResult<String> {
+        self.original_tool.description_with_context(context).await
+    }
+
     fn input_schema(&self) -> Value {
         self.original_tool.input_schema()
     }
@@ -384,6 +391,10 @@ impl Tool for WrappedTool {
 
     async fn is_enabled(&self) -> bool {
         self.original_tool.is_enabled().await
+    }
+
+    async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
+        self.original_tool.is_available_in_context(context).await
     }
 
     fn is_readonly(&self) -> bool {

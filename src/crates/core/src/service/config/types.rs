@@ -421,16 +421,12 @@ pub struct ReviewTeamConfig {
     pub strategy_level: String,
     /// Per-reviewer review depth overrides keyed by subagent ID.
     pub member_strategy_overrides: HashMap<String, String>,
-    /// Hard timeout applied to reviewer Task calls. 0 disables the cap.
+    /// Optional timeout applied to reviewer Task calls. 0 disables the cap.
     pub reviewer_timeout_seconds: u64,
-    /// Hard timeout applied to ReviewJudge Task calls. 0 disables the cap.
+    /// Optional timeout applied to ReviewJudge Task calls. 0 disables the cap.
     pub judge_timeout_seconds: u64,
     /// Whether ReviewFixer may be launched by DeepReview.
     pub auto_fix_enabled: bool,
-    /// Maximum number of ReviewFixer rounds in a parent DeepReview turn.
-    pub auto_fix_max_rounds: usize,
-    /// Prompt-level stalled-round guard used by DeepReview orchestration.
-    pub auto_fix_max_stalled_rounds: usize,
     /// Minimum number of target files that triggers same-role reviewer splitting.
     /// 0 disables file splitting.
     pub reviewer_file_split_threshold: usize,
@@ -444,11 +440,9 @@ impl Default for ReviewTeamConfig {
             extra_subagent_ids: Vec::new(),
             strategy_level: "normal".to_string(),
             member_strategy_overrides: HashMap::new(),
-            reviewer_timeout_seconds: 300,
-            judge_timeout_seconds: 240,
+            reviewer_timeout_seconds: 0,
+            judge_timeout_seconds: 0,
             auto_fix_enabled: false,
-            auto_fix_max_rounds: 2,
-            auto_fix_max_stalled_rounds: 1,
             reviewer_file_split_threshold: 20,
             max_same_role_instances: 3,
         }
@@ -524,10 +518,6 @@ pub struct AIConfig {
     /// Allow Computer use (desktop automation) when the desktop host is available (all session modes).
     #[serde(default)]
     pub computer_use_enabled: bool,
-
-    /// Maximum number of rounds per dialog turn before soft-pausing.
-    #[serde(default = "default_max_rounds")]
-    pub max_rounds: usize,
 }
 
 impl AIConfig {
@@ -669,12 +659,6 @@ fn default_skip_tool_confirmation() -> bool {
 
 fn default_subagent_max_concurrency() -> usize {
     5
-}
-
-pub const DEFAULT_MAX_ROUNDS: usize = 200;
-
-fn default_max_rounds() -> usize {
-    DEFAULT_MAX_ROUNDS
 }
 
 impl Default for ModeConfig {
@@ -1482,7 +1466,6 @@ impl Default for AIConfig {
             skip_tool_confirmation: true,
             debug_mode_config: DebugModeConfig::default(),
             computer_use_enabled: false,
-            max_rounds: default_max_rounds(),
         }
     }
 }
@@ -1737,10 +1720,7 @@ mod tests {
         assert_eq!(config.agent_companion_display_mode, "desktop");
 
         let serialized = serde_json::to_value(&config).expect("config should serialize");
-        assert_eq!(
-            serialized["agent_companion_pet"]["displayName"],
-            "Boxcat"
-        );
+        assert_eq!(serialized["agent_companion_pet"]["displayName"], "Boxcat");
         assert_eq!(
             serialized["agent_companion_pet"]["spritesheetPath"],
             "/agent-companion-pets/boxcat/spritesheet.webp"
@@ -1820,11 +1800,9 @@ mod tests {
             .review_teams
             .get("default")
             .expect("default review team config should exist");
-        assert_eq!(review_team.reviewer_timeout_seconds, 300);
-        assert_eq!(review_team.judge_timeout_seconds, 240);
+        assert_eq!(review_team.reviewer_timeout_seconds, 0);
+        assert_eq!(review_team.judge_timeout_seconds, 0);
         assert!(!review_team.auto_fix_enabled);
-        assert_eq!(review_team.auto_fix_max_rounds, 2);
-        assert_eq!(review_team.auto_fix_max_stalled_rounds, 1);
         assert_eq!(review_team.strategy_level, "normal");
         assert!(review_team.member_strategy_overrides.is_empty());
     }
@@ -1889,9 +1867,7 @@ mod tests {
                         "ReviewSecurity": "quick",
                         "ExtraReviewer": "normal"
                     },
-                    "auto_fix_enabled": false,
-                    "auto_fix_max_rounds": 1,
-                    "auto_fix_max_stalled_rounds": 1
+                    "auto_fix_enabled": false
                 }
             },
             "proxy": {

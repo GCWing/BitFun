@@ -848,7 +848,7 @@ When creating commits, use this format for the commit message:
                 },
                 "working_directory": {
                     "type": "string",
-                    "description": "The directory to run the Git command in (defaults to current workspace)"
+                    "description": "Optional directory to run the Git command in. Omit to use the current workspace. If provided, use a workspace-relative path or an absolute path inside the current workspace; never use placeholder paths such as /workspace."
                 }
             },
             "required": ["operation"],

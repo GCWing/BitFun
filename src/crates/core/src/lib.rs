@@ -27,7 +27,11 @@ pub use infrastructure::{ai::AIClient, events::BackendEventManager};
 
 // Export Agentic service core types
 pub use agentic::{
-    core::{DialogTurn, Message, ModelRound, Session},
+    core::{Message, Session},
+    // NOTE: agentic::core::DialogTurn / ModelRound used to be re-exported here
+    // but were dead code (never persisted, never read). On-disk shape lives in
+    // service::session::{DialogTurnData, ModelRoundData}; lifecycle state is
+    // tracked through SessionState + TurnStatus.
     events::{AgenticEvent, EventQueue, EventRouter},
     execution::{ExecutionEngine, StreamProcessor},
     tools::{Tool, ToolPipeline},

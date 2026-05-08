@@ -158,6 +158,26 @@ pub struct CancelDialogTurnRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SteerDialogTurnRequest {
+    pub session_id: String,
+    pub dialog_turn_id: String,
+    /// Rendered content delivered to the model. When omitted by the caller this
+    /// equals the displayed user text.
+    pub content: String,
+    /// Original user text for UI rendering (defaults to `content`).
+    #[serde(default)]
+    pub display_content: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SteerDialogTurnResponse {
+    pub success: bool,
+    pub steering_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CancelSessionRequest {
     pub session_id: String,
 }
@@ -613,6 +633,40 @@ pub async fn cancel_dialog_turn(
             );
             format!("Failed to cancel dialog turn: {}", e)
         })
+}
+
+#[tauri::command]
+pub async fn steer_dialog_turn(
+    scheduler: State<'_, Arc<DialogScheduler>>,
+    request: SteerDialogTurnRequest,
+) -> Result<SteerDialogTurnResponse, String> {
+    let SteerDialogTurnRequest {
+        session_id,
+        dialog_turn_id,
+        content,
+        display_content,
+    } = request;
+
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return Err("Steering content cannot be empty".to_string());
+    }
+
+    let outcome = scheduler
+        .submit_steering(session_id, dialog_turn_id, content, display_content)
+        .await
+        .map_err(|e| format!("Failed to steer dialog turn: {}", e))?;
+
+    let steering_id = match outcome {
+        bitfun_core::agentic::coordination::DialogSteerOutcome::Buffered {
+            steering_id, ..
+        } => steering_id,
+    };
+
+    Ok(SteerDialogTurnResponse {
+        success: true,
+        steering_id,
+    })
 }
 
 #[tauri::command]

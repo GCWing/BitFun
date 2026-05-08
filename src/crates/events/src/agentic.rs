@@ -15,8 +15,6 @@ pub enum ErrorCategory {
     RateLimit,
     /// Conversation exceeds model context window
     ContextOverflow,
-    /// Consecutive identical tool calls detected
-    LoopDetected,
     /// Model response timed out
     Timeout,
     /// Provider/account quota, balance, or resource package is exhausted
@@ -142,11 +140,10 @@ pub enum AgenticEvent {
         /// recovery (stream aborted mid-way). Contains a human-readable reason.
         #[serde(skip_serializing_if = "Option::is_none")]
         partial_recovery_reason: Option<String>,
-        /// Whether the turn completed successfully (false for loop_detected or
-        /// max_rounds).
+        /// Whether the turn completed successfully.
         #[serde(skip_serializing_if = "Option::is_none")]
         success: Option<bool>,
-        /// Why the turn finished: "complete", "loop_detected", or "max_rounds".
+        /// Why the turn finished.
         #[serde(skip_serializing_if = "Option::is_none")]
         finish_reason: Option<String>,
     },
@@ -257,6 +254,20 @@ pub enum AgenticEvent {
         session_id: Option<String>,
         error: String,
         recoverable: bool,
+    },
+
+    /// User "steering" message injected into a running dialog turn at a model
+    /// round boundary (Codex-style mid-turn injection). The frontend renders
+    /// this as a synthetic record inside the current turn so the user can see
+    /// the message they just steered with.
+    UserSteeringInjected {
+        session_id: String,
+        turn_id: String,
+        round_index: usize,
+        steering_id: String,
+        content: String,
+        display_content: String,
+        subagent_parent_info: Option<SubagentParentInfo>,
     },
 
     /// A session's bound model has been automatically migrated because the
@@ -419,6 +430,7 @@ impl AgenticEvent {
             | Self::ThinkingChunk { session_id, .. }
             | Self::ModelRoundCompleted { session_id, .. }
             | Self::ToolEvent { session_id, .. }
+            | Self::UserSteeringInjected { session_id, .. }
             | Self::SessionModelAutoMigrated { session_id, .. } => Some(session_id),
             Self::SystemError { session_id, .. } => session_id.as_deref(),
         }
@@ -445,6 +457,7 @@ impl AgenticEvent {
             | Self::TokenUsageUpdated { .. }
             | Self::DialogTurnCompleted { .. }
             | Self::ContextCompressionStarted { .. }
+            | Self::UserSteeringInjected { .. }
             | Self::ContextCompressionCompleted { .. } => AgenticEventPriority::Normal,
 
             Self::ToolEvent { tool_event, .. } => tool_event.default_priority(),

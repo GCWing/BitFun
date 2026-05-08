@@ -104,10 +104,6 @@
   "loading": {
     "text": "加载配置中..."
   },
-  "maxRounds": {
-    "label": "最大对话轮次",
-    "description": "单次对话中 AI 的最大执行轮次，达到后会暂停。复杂任务可适当提高。"
-  },
   "messages": {
     "saveSuccess": "设置已保存",
     "saveFailed": "保存失败",

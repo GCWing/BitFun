@@ -88,16 +88,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     virtualListRef,
   });
 
-  const handleContinueTurn = useCallback(async (sessionId: string, _turnId: string) => {
-    try {
-      const manager = FlowChatManager.getInstance();
-      await manager.continueDialogTurn(sessionId);
-    } catch (_e) {
-      const { notificationService } = await import('@/shared/notification-system');
-      notificationService.error('Failed to continue turn. Please try starting a new dialog.', { duration: 3000 });
-    }
-  }, []);
-
   const contextValue: FlowChatContextValue = useMemo(() => ({
     onFileViewRequest: handleFileViewRequest,
     onTabOpen,
@@ -125,7 +115,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchQuery,
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
-    onContinueTurn: handleContinueTurn,
   }), [
     handleFileViewRequest,
     onTabOpen,
@@ -144,7 +133,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchQuery,
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
-    handleContinueTurn,
   ]);
 
   const turnSummaries = useMemo<FlowChatHeaderTurnSummary[]>(() => {

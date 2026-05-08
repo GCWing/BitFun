@@ -57,9 +57,6 @@ export interface FlowChatContextValue {
   searchQuery?: string;
   searchMatchIndices?: ReadonlySet<number>;
   searchCurrentMatchVirtualIndex?: number;
-
-  // Continue dialog turn when max_rounds is reached
-  onContinueTurn?: (sessionId: string, turnId: string) => void;
 }
 
 export const FlowChatContext = createContext<FlowChatContextValue>({});

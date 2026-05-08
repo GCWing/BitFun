@@ -32,29 +32,23 @@ fn loop_tracker_observe(
     target_sig: &str,
     before_digest: &str,
     after_digest: &str,
-) -> (Option<String>, bool) {
-    let pid = match pid {
-        Some(p) => p,
-        None => return (None, false),
-    };
+) -> Option<String> {
+    let pid = pid?;
     // A digest change means the action mutated the tree — that is real
     // progress and resets the streak even if the model picks the same
     // target name on purpose (e.g. clicking "Next" repeatedly).
     let progressed = before_digest != after_digest;
     let sig = format!("{action}:{target_sig}");
-    let mut guard = match APP_LOOP_TRACKER
+    let mut guard = APP_LOOP_TRACKER
         .get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
         .lock()
-    {
-        Ok(g) => g,
-        Err(_) => return (None, false),
-    };
+        .ok()?;
     let entry = guard
         .entry(pid)
         .or_insert_with(|| (String::new(), String::new(), 0));
     if progressed {
         *entry = (sig, after_digest.to_string(), 1);
-        return (None, false);
+        return None;
     }
     if entry.0 == sig && entry.1 == before_digest {
         entry.2 = entry.2.saturating_add(1);
@@ -62,14 +56,12 @@ fn loop_tracker_observe(
         *entry = (sig, before_digest.to_string(), 1);
     }
     if entry.2 >= 2 {
-        let warning = Some(format!(
-            "Detected {} consecutive `{}` calls on the same target ({}) without any AX tree mutation (digest unchanged). The target is almost certainly invisible / disabled / in a Canvas-WebGL surface that AX cannot describe. NEXT TURN you MUST: (1) run `desktop.screenshot {{ screenshot_window: false }}` to see the full display, (2) switch tactic — different `node_idx`, different `ocr_text` needle, or a keyboard shortcut. Do NOT retry this same target a third time.",
+        Some(format!(
+            "Detected {} consecutive `{}` calls on the same target ({}) without any AX tree mutation (digest unchanged). The target is almost certainly invisible / disabled / in a Canvas-WebGL surface that AX cannot describe. NEXT TURN you MUST: (1) run `desktop.screenshot {{ screenshot_window: false }}` to see the full display, (2) switch tactic — different `node_idx`, different `ocr_text` needle, or a keyboard shortcut.",
             entry.2, action, target_sig
-        ));
-        let terminated = entry.2 >= 3;
-        (warning, terminated)
+        ))
     } else {
-        (None, false)
+        None
     }
 }
 
@@ -972,18 +964,15 @@ impl ComputerUseActions {
                     })
                     .await?;
 
-                let mut loop_terminated = false;
                 if after.loop_warning.is_none() {
                     let target_sig = serde_json::to_string(&target).unwrap_or_default();
-                    let (warning, terminated) = loop_tracker_observe(
+                    after.loop_warning = loop_tracker_observe(
                         app.pid,
                         "app_click",
                         &target_sig,
                         before.as_deref().unwrap_or(""),
                         &after.digest,
                     );
-                    after.loop_warning = warning;
-                    loop_terminated = terminated;
                 }
 
                 let data = json!({
@@ -994,7 +983,6 @@ impl ComputerUseActions {
                     "app_state": snap_state_json(&after),
                     "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
-                    "loop_terminated": loop_terminated,
                 });
                 Ok(vec![snap_result(data, Some("clicked".to_string()), &after)])
             }
@@ -1021,22 +1009,19 @@ impl ComputerUseActions {
                 let mut after = host
                     .app_type_text(app.clone(), &text, focus.clone())
                     .await?;
-                let mut loop_terminated = false;
                 if after.loop_warning.is_none() {
                     let target_sig = format!(
                         "focus={};len={}",
                         serde_json::to_string(&focus).unwrap_or_default(),
                         text.chars().count()
                     );
-                    let (warning, terminated) = loop_tracker_observe(
+                    after.loop_warning = loop_tracker_observe(
                         app.pid,
                         "app_type_text",
                         &target_sig,
                         before.as_deref().unwrap_or(""),
                         &after.digest,
                     );
-                    after.loop_warning = warning;
-                    loop_terminated = terminated;
                 }
                 let data = json!({
                     "target_app": app,
@@ -1047,7 +1032,6 @@ impl ComputerUseActions {
                     "app_state": snap_state_json(&after),
                     "app_state_nodes": after.nodes,
                     "loop_warning": after.loop_warning,
-                    "loop_terminated": loop_terminated,
                 });
                 Ok(vec![snap_result(
                     data,
@@ -1490,13 +1474,12 @@ impl ComputerUseActions {
                     .get("script_type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("applescript");
-                // Phase 4: bound the runtime so a hung script can never wedge
-                // the agent. Default 30 s, capped at 5 min to keep it sane.
+                // Optional caller-provided runtime bound. Omit or set to 0 to wait
+                // for script completion without an internal cap.
                 let timeout_ms = params
                     .get("timeout_ms")
                     .and_then(|v| v.as_u64())
-                    .unwrap_or(30_000)
-                    .clamp(100, 5 * 60 * 1000);
+                    .filter(|value| *value > 0);
                 // Phase 4: keep output payloads bounded — model context is
                 // expensive and most scripts are happy with the head + tail.
                 let max_output_bytes = params
@@ -1657,43 +1640,52 @@ impl ComputerUseActions {
                     })?;
 
                 let wait = child.wait_with_output();
-                let output = match tokio::time::timeout(
-                    std::time::Duration::from_millis(timeout_ms),
-                    wait,
-                )
-                .await
-                {
-                    Err(_) => {
-                        // Best-effort kill. `kill_on_drop(true)` above also
-                        // ensures the OS reaps the process when `child`
-                        // drops, but we issue an explicit SIGKILL first so
-                        // it terminates immediately rather than after the
-                        // tokio task tear-down race.
-                        // NOTE: `wait_with_output` consumed `child`, so we
-                        // can no longer call `child.kill()` directly here;
-                        // the `kill_on_drop` flag handles it for us.
-                        return Ok(err_response(
-                            "system",
-                            "run_script",
-                            ControlHubError::new(
-                                ErrorCode::Timeout,
-                                format!(
-                                    "run_script timed out after {} ms (script_type={}); child process killed",
-                                    timeout_ms, script_type
+                let output = if let Some(timeout_ms) = timeout_ms {
+                    match tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), wait)
+                        .await
+                    {
+                        Err(_) => {
+                            // Best-effort kill. `kill_on_drop(true)` above also
+                            // ensures the OS reaps the process when `child`
+                            // drops, but we issue an explicit SIGKILL first so
+                            // it terminates immediately rather than after the
+                            // tokio task tear-down race.
+                            // NOTE: `wait_with_output` consumed `child`, so we
+                            // can no longer call `child.kill()` directly here;
+                            // the `kill_on_drop` flag handles it for us.
+                            return Ok(err_response(
+                                "system",
+                                "run_script",
+                                ControlHubError::new(
+                                    ErrorCode::Timeout,
+                                    format!(
+                                        "run_script timed out after {} ms (script_type={}); child process killed",
+                                        timeout_ms, script_type
+                                    ),
+                                )
+                                .with_hint(
+                                    "Increase 'timeout_ms', set it to 0, or omit it to wait without a timeout",
                                 ),
-                            )
-                            .with_hint(
-                                "Increase 'timeout_ms', or split the script into shorter steps",
-                            ),
-                        ));
+                            ));
+                        }
+                        Ok(Err(e)) => {
+                            return Err(BitFunError::tool(format!(
+                                "Failed to wait for run_script ({}): {}",
+                                script_type, e
+                            )));
+                        }
+                        Ok(Ok(o)) => o,
                     }
-                    Ok(Err(e)) => {
-                        return Err(BitFunError::tool(format!(
-                            "Failed to wait for run_script ({}): {}",
-                            script_type, e
-                        )));
+                } else {
+                    match wait.await {
+                        Ok(o) => o,
+                        Err(e) => {
+                            return Err(BitFunError::tool(format!(
+                                "Failed to wait for run_script ({}): {}",
+                                script_type, e
+                            )));
+                        }
                     }
-                    Ok(Ok(o)) => o,
                 };
 
                 let elapsed_ms = elapsed_ms_u64(started);

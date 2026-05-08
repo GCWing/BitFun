@@ -413,6 +413,8 @@ impl RoundExecutor {
                 usage: stream_result.usage.clone(),
                 provider_metadata: stream_result.provider_metadata.clone(),
                 partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
+                had_assistant_text: !stream_result.full_text.is_empty(),
+                had_thinking_content: !stream_result.full_thinking.is_empty(),
             });
         }
 
@@ -443,6 +445,7 @@ impl RoundExecutor {
                 subagent_parent_info,
                 allowed_tools: context.available_tools.clone(),
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
+                steering_interrupt: context.steering_interrupt.clone(),
                 workspace_services: context.workspace_services.clone(),
             };
 
@@ -587,15 +590,7 @@ impl RoundExecutor {
             })
             .collect();
 
-        // P4: Check if any tool result signals loop termination
-        let loop_terminated = tool_results.iter().any(|r| {
-            r.result
-                .get("loop_terminated")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        });
-
-        let has_more_rounds = !tool_result_messages.is_empty() && !loop_terminated;
+        let has_more_rounds = !tool_result_messages.is_empty();
 
         debug!(
             "Returning RoundResult: has_more_rounds={}, tool_result_messages={}",
@@ -626,9 +621,7 @@ impl RoundExecutor {
             tool_calls: stream_result.tool_calls.clone(),
             tool_result_messages,
             has_more_rounds,
-            finish_reason: if loop_terminated {
-                FinishReason::LoopDetected
-            } else if has_more_rounds {
+            finish_reason: if has_more_rounds {
                 FinishReason::ToolCalls
             } else {
                 FinishReason::Complete
@@ -636,6 +629,8 @@ impl RoundExecutor {
             usage: stream_result.usage.clone(),
             provider_metadata: stream_result.provider_metadata.clone(),
             partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
+            had_assistant_text: !stream_result.full_text.is_empty(),
+            had_thinking_content: !stream_result.full_thinking.is_empty(),
         })
     }
 

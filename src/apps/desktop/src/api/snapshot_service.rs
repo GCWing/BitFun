@@ -3,8 +3,8 @@
 use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::snapshot::{
-    OperationType, SnapshotConfig, SnapshotManager, ensure_snapshot_manager_for_workspace,
-    get_snapshot_manager_for_workspace, initialize_snapshot_manager_for_workspace,
+    ensure_snapshot_manager_for_workspace, get_snapshot_manager_for_workspace,
+    initialize_snapshot_manager_for_workspace, OperationType, SnapshotConfig, SnapshotManager,
 };
 use log::{info, warn};
 use serde::{Deserialize, Serialize};

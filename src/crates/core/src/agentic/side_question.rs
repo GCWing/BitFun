@@ -65,12 +65,7 @@ impl SideQuestionRuntime {
         btw_turns.remove(request_id);
     }
 
-    pub async fn register_btw_turn(
-        &self,
-        request_id: String,
-        session_id: String,
-        turn_id: String,
-    ) {
+    pub async fn register_btw_turn(&self, request_id: String, session_id: String, turn_id: String) {
         let mut guard = self.btw_turns.lock().await;
         guard.insert(
             request_id,

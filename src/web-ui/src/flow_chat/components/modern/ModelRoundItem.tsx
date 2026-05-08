@@ -20,6 +20,7 @@ import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { ExportImageButton } from './ExportImageButton';
 import { ForkSessionButton } from './ForkSessionButton';
+import { buildModelRoundItemGroups } from './modelRoundItemGrouping';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import './ModelRoundItem.scss';
@@ -31,15 +32,6 @@ interface ModelRoundItemProps {
   round: ModelRound;
   turnId: string;
   isLastRound?: boolean;
-}
-
-function hasActiveStreamingNarrative(items: FlowItem[]): boolean {
-  return items.some(item => {
-    if (item.type !== 'text' && item.type !== 'thinking') return false;
-    const maybeStreaming = item as { isStreaming?: boolean; status?: string };
-    return maybeStreaming.isStreaming === true &&
-      (maybeStreaming.status === 'streaming' || maybeStreaming.status === 'running');
-  });
 }
 
 function useTaskCollapsed(toolId: string): boolean {
@@ -136,131 +128,16 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       [round.items]
     );
     
-    type ItemGroup = 
-      | { type: 'explore'; items: FlowItem[]; isLast: boolean }
-      | { type: 'critical'; item: FlowItem }
-      | { type: 'subagent'; parentTaskToolId: string; items: FlowItem[] };
-    
     // Group items in two passes:
     // 1) group subagent items
     // 2) group normal items into explore/critical via anchor tool
     const groupedItems = useMemo(() => {
-      const deferExploreGrouping =
-        round.renderHints?.disableExploreGrouping === true ||
-        (round.isStreaming && hasActiveStreamingNarrative(sortedItems));
-      const intermediateGroups: Array<{ type: 'normal', item: FlowItem } | { type: 'subagent', parentTaskToolId: string, items: FlowItem[] }> = [];
-      let currentSubagentGroup: { parentTaskToolId: string, items: FlowItem[] } | null = null;
-      
-      for (const item of sortedItems) {
-        const isSubagentItemFlag = (item as any).isSubagentItem === true;
-        const parentTaskToolId = (item as any).parentTaskToolId;
-        
-        if (isSubagentItemFlag && parentTaskToolId) {
-          if (currentSubagentGroup && currentSubagentGroup.parentTaskToolId === parentTaskToolId) {
-            currentSubagentGroup.items.push(item);
-          } else {
-            if (currentSubagentGroup) {
-              intermediateGroups.push({ type: 'subagent', ...currentSubagentGroup });
-            }
-            currentSubagentGroup = { parentTaskToolId, items: [item] };
-          }
-        } else {
-          if (currentSubagentGroup) {
-            intermediateGroups.push({ type: 'subagent', ...currentSubagentGroup });
-            currentSubagentGroup = null;
-          }
-          intermediateGroups.push({ type: 'normal', item });
-        }
-      }
-      
-      if (currentSubagentGroup) {
-        intermediateGroups.push({ type: 'subagent', ...currentSubagentGroup });
-      }
-      
-      // Core idea: text/thinking collapse is decided by the next "anchor tool".
-      // - Anchor tool = look forward, skip text/thinking, take the first tool.
-      // - If anchor tool is collapsible -> collapse text/thinking with the tool.
-      // - If anchor tool is critical -> show text/thinking with the tool.
-      
-      const finalGroups: ItemGroup[] = [];
-      let exploreBuffer: FlowItem[] = [];
-      let pendingBuffer: FlowItem[] = [];
-      
-      const normalItems: FlowItem[] = [];
-      for (let i = 0; i < intermediateGroups.length; i++) {
-        if (intermediateGroups[i].type === 'normal') {
-          normalItems.push((intermediateGroups[i] as any).item);
-        }
-      }
-      
-      const flushExploreBuffer = (isLast: boolean) => {
-        if (exploreBuffer.length > 0) {
-          finalGroups.push({ type: 'explore', items: [...exploreBuffer], isLast });
-          exploreBuffer = [];
-        }
-      };
-      
-      const flushPendingAsCritical = () => {
-        for (const item of pendingBuffer) {
-          finalGroups.push({ type: 'critical', item });
-        }
-        pendingBuffer = [];
-      };
-      
-      let normalItemIndex = 0;
-      
-      for (let i = 0; i < intermediateGroups.length; i++) {
-        const group = intermediateGroups[i];
-        const isLastGroup = i === intermediateGroups.length - 1;
-        
-        if (group.type === 'subagent') {
-          flushExploreBuffer(false);
-          flushPendingAsCritical();
-          finalGroups.push(group);
-        } else {
-          const item = group.item;
-          const isLastNormalItem = normalItemIndex === normalItems.length - 1;
-          
-          if (item.type === 'text' || item.type === 'thinking') {
-            pendingBuffer.push(item);
-            
-            if (isLastNormalItem) {
-              flushExploreBuffer(false);
-              flushPendingAsCritical();
-            }
-          } else if (item.type === 'tool') {
-            const toolName = (item as FlowToolItem).toolName;
-            const isExploreTool = isCollapsibleTool(toolName);
-            
-            if (isExploreTool) {
-              if (deferExploreGrouping) {
-                flushExploreBuffer(false);
-                flushPendingAsCritical();
-                finalGroups.push({ type: 'critical', item });
-                normalItemIndex++;
-                continue;
-              }
-              exploreBuffer.push(...pendingBuffer, item);
-              pendingBuffer = [];
-              
-              if (isLastNormalItem || isLastGroup) {
-                flushExploreBuffer(true);
-              }
-            } else {
-              flushExploreBuffer(false);
-              flushPendingAsCritical();
-              finalGroups.push({ type: 'critical', item });
-            }
-          }
-          
-          normalItemIndex++;
-        }
-      }
-      
-      flushExploreBuffer(true);
-      flushPendingAsCritical();
-      
-      return finalGroups;
+      return buildModelRoundItemGroups({
+        items: sortedItems,
+        isStreaming: round.isStreaming,
+        disableExploreGrouping: round.renderHints?.disableExploreGrouping === true,
+        isCollapsibleTool,
+      });
     }, [round.isStreaming, round.renderHints?.disableExploreGrouping, sortedItems]);
 
     const extractDialogTurnContent = useCallback(() => {

@@ -33,12 +33,17 @@ export interface ChatInputPixelPetProps {
   className?: string;
   layout?: 'center' | 'stopRight';
   pet?: AgentCompanionPetSelection | null;
+  nativePetdexSize?: boolean;
+  petdexScale?: number;
+  onPetFrameSizeChange?: (size: { width: number; height: number } | null) => void;
 }
 
 export type ChatInputPixelPetMood = ChatInputPetMood | 'hover' | 'dragging';
 
 const VIEW_W = 320;
 const VIEW_H = 204;
+const PETDEX_COLUMNS = 8;
+const PETDEX_ROWS = 9;
 
 /* ---------- Static silhouette (verbatim from user's panda.svg) ---------- */
 
@@ -284,19 +289,66 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
   className = '',
   layout = 'center',
   pet = null,
+  nativePetdexSize = false,
+  petdexScale = 1,
+  onPetFrameSizeChange,
 }) => {
   const layoutMod =
     layout === 'stopRight' ? ' bitfun-chat-input-pixel-pet--layout-stop-right' : '';
 
   const [petSrc, setPetSrc] = useState<string | null>(null);
+  const [petFrameSize, setPetFrameSize] = useState<{ width: number; height: number } | null>(null);
   useEffect(() => {
-    if (!pet) { setPetSrc(null); return; }
+    if (!pet) {
+      setPetSrc(null);
+      setPetFrameSize(null);
+      onPetFrameSizeChange?.(null);
+      return;
+    }
     let cancelled = false;
     void resolveAgentCompanionPetSrc(pet).then(src => {
       if (!cancelled) setPetSrc(src || null);
     });
     return () => { cancelled = true; };
-  }, [pet]);
+  }, [onPetFrameSizeChange, pet]);
+
+  useEffect(() => {
+    if (!petSrc || !nativePetdexSize) {
+      setPetFrameSize(null);
+      onPetFrameSizeChange?.(null);
+      return;
+    }
+
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (cancelled) return;
+      const width = Math.round(image.naturalWidth / PETDEX_COLUMNS);
+      const height = Math.round(image.naturalHeight / PETDEX_ROWS);
+      if (width <= 0 || height <= 0) {
+        setPetFrameSize(null);
+        onPetFrameSizeChange?.(null);
+        return;
+      }
+      const scale = Number.isFinite(petdexScale) && petdexScale > 0 ? petdexScale : 1;
+      const nextSize = {
+        width: Math.max(1, Math.round(width * scale)),
+        height: Math.max(1, Math.round(height * scale)),
+      };
+      setPetFrameSize(nextSize);
+      onPetFrameSizeChange?.(nextSize);
+    };
+    image.onerror = () => {
+      if (cancelled) return;
+      setPetFrameSize(null);
+      onPetFrameSizeChange?.(null);
+    };
+    image.src = petSrc;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [nativePetdexSize, onPetFrameSizeChange, petSrc, petdexScale]);
 
   const [transitioning, setTransitioning] = useState(false);
   const prevMoodRef = useRef<ChatInputPixelPetMood>(mood);
@@ -364,8 +416,18 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
       waiting: 6,
       working: 7,
     };
+    const nativePetdexStyle = nativePetdexSize && petFrameSize
+      ? {
+        '--bitfun-petdex-width': `${petFrameSize.width}px`,
+        '--bitfun-petdex-height': `${petFrameSize.height}px`,
+      }
+      : {};
     return (
-      <div className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()} aria-hidden>
+      <div
+        className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()}
+        style={nativePetdexStyle as React.CSSProperties}
+        aria-hidden
+      >
         <div
           className={`bitfun-chat-input-pixel-pet__petdex bitfun-chat-input-pixel-pet__petdex--${mood}`}
           style={{

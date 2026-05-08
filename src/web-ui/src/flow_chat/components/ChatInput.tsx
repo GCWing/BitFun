@@ -43,6 +43,7 @@ import {
 } from '../services/DeepReviewService';
 import { createLogger } from '@/shared/utils/logger';
 import { Tooltip, IconButton } from '@/component-library';
+import { PendingQueuePanel } from './PendingQueuePanel';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { openBtwSessionInAuxPane, selectActiveBtwSessionTab } from '../services/openBtwSession';
 import { resolveSessionRelationship } from '../utils/sessionMetadata';
@@ -2414,6 +2415,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             className="bitfun-chat-input__recommendations"
           />
         )}
+
+        <PendingQueuePanel sessionId={effectiveTargetSessionId || undefined} />
 
         <div className="bitfun-chat-input__container">
           <div className={`bitfun-chat-input__box ${inputState.isExpanded ? 'bitfun-chat-input__box--expanded' : ''}`}>

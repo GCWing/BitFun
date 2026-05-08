@@ -1,7 +1,9 @@
 //! Execution Engine Type Definitions
 
 use crate::agentic::core::Message;
-use crate::agentic::round_preempt::DialogRoundPreemptSource;
+use crate::agentic::round_preempt::{
+    DialogRoundPreemptSource, DialogRoundSteeringInterrupt, DialogRoundSteeringSource,
+};
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
@@ -27,6 +29,9 @@ pub struct ExecutionContext {
     pub workspace_services: Option<WorkspaceServices>,
     /// When set, engine may end the turn after a full model round if a user message was queued.
     pub round_preempt: Option<Arc<dyn DialogRoundPreemptSource>>,
+    /// When set, engine drains pending user steering messages at each round boundary
+    /// and injects them into the dialog history without ending the turn.
+    pub round_steering: Option<Arc<dyn DialogRoundSteeringSource>>,
 }
 
 /// Round context
@@ -44,6 +49,9 @@ pub struct RoundContext {
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
+    /// Cooperative interrupt checked by tool execution so user steering can be
+    /// applied after the currently running atomic tool/batch finishes.
+    pub steering_interrupt: Option<DialogRoundSteeringInterrupt>,
     pub cancellation_token: CancellationToken,
     pub workspace_services: Option<WorkspaceServices>,
 }
@@ -63,6 +71,14 @@ pub struct RoundResult {
     /// When set, this round's stream was partially recovered (aborted mid-way
     /// but some output was already received). Contains a human-readable reason.
     pub partial_recovery_reason: Option<String>,
+    /// True when the model emitted any non-empty assistant text in this round.
+    /// Used by the execution engine to distinguish "model gave a final answer"
+    /// (text-only round, end the turn) from "model stalled with thinking-only"
+    /// (no text, no tool_call — needs rescue).
+    pub had_assistant_text: bool,
+    /// True when the model emitted any non-empty thinking / reasoning content
+    /// in this round.
+    pub had_thinking_content: bool,
 }
 
 /// Finish reason
@@ -72,14 +88,10 @@ pub enum FinishReason {
     Complete,
     /// Need to execute tools
     ToolCalls,
-    /// Reached maximum rounds
-    MaxRounds,
     /// User cancelled
     Cancelled,
     /// Error
     Error,
-    /// Loop detected: consecutive rounds with identical tool call signatures
-    LoopDetected,
 }
 
 impl std::fmt::Display for FinishReason {
@@ -87,10 +99,8 @@ impl std::fmt::Display for FinishReason {
         match self {
             FinishReason::Complete => write!(f, "complete"),
             FinishReason::ToolCalls => write!(f, "tool_calls"),
-            FinishReason::MaxRounds => write!(f, "max_rounds"),
             FinishReason::Cancelled => write!(f, "cancelled"),
             FinishReason::Error => write!(f, "error"),
-            FinishReason::LoopDetected => write!(f, "loop_detected"),
         }
     }
 }

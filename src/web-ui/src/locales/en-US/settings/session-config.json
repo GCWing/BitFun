@@ -104,10 +104,6 @@
   "loading": {
     "text": "Loading configuration..."
   },
-  "maxRounds": {
-    "label": "Maximum dialog rounds",
-    "description": "Maximum number of AI rounds per dialog turn before pausing. Increase for complex tasks."
-  },
   "messages": {
     "saveSuccess": "Settings saved",
     "saveFailed": "Save failed",

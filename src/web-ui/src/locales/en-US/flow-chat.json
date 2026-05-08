@@ -1462,5 +1462,33 @@
   "subagent": {
     "showingLines": "Showing {{shown}} of {{total}} lines",
     "showAll": "Show all"
+  },
+  "pendingQueue": {
+    "title": "Queued ({{count}})",
+    "hint": "Will auto-send in order when the current turn finishes",
+    "editorHint": "⌘/Ctrl+Enter to save · Esc to cancel",
+    "emptyPlaceholder": "(empty message)",
+    "statusSending": "Steering…",
+    "statusFailed": "Send failed — edit / send now / delete to clear",
+    "actions": {
+      "edit": "Edit",
+      "sendNow": "Send now (steer)",
+      "delete": "Delete",
+      "saveEdit": "Save (⌘/Ctrl+Enter)",
+      "cancelEdit": "Cancel (Esc)"
+    },
+    "tooltip": {
+      "sendNow": "Inject this message into the running turn as a steering prompt"
+    },
+    "errors": {
+      "emptyContent": "Message content cannot be empty",
+      "sendNowFailed": "Send now failed; please try again"
+    }
+  },
+  "steering": {
+    "title": "Steer",
+    "injectedAt": "Injected before round {{round}}",
+    "statusPending": "Will inject after current step",
+    "statusInjected": "Injected at round {{round}}"
   }
 }

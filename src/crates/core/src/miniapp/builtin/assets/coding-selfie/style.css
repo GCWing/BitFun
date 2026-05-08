@@ -51,8 +51,8 @@
 
   --cs-radius:    var(--bitfun-radius-lg, 12px);
   --cs-radius-sm: var(--bitfun-radius,    8px);
-  --cs-mono: var(--bitfun-font-mono, ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace);
-  --cs-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif);
+  --cs-mono: var(--bitfun-font-mono, 'JetBrains Mono', 'FiraCode', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Liberation Mono', 'Courier New', monospace);
+  --cs-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif);
 }
 
 [data-theme-type="light"] {
@@ -78,8 +78,8 @@ html, body {
   background: var(--cs-bg-grad);
   color: var(--cs-text);
   font-family: var(--cs-sans);
-  font-size: clamp(10.5px, 1.7vh, 13px);
-  line-height: 1.4;
+  font-size: clamp(12px, 1.8vh, 14.5px);
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: 'cv11', 'ss01';
@@ -144,7 +144,7 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: clamp(9px, 1.3vh, 10.5px);
+  font-size: clamp(10.5px, 1.4vh, 12px);
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -161,7 +161,7 @@ html, body {
 .cs-tile-head-left { display: inline-flex; align-items: center; gap: 6px; }
 .cs-tile-ic { color: var(--cs-accent); flex-shrink: 0; }
 .cs-tile-hint {
-  font-size: clamp(9.5px, 1.25vh, 11px);
+  font-size: clamp(11px, 1.3vh, 12.5px);
   color: var(--cs-text-muted);
   text-transform: none;
   letter-spacing: 0;
@@ -204,7 +204,7 @@ html, body {
 .cs-hero-subtitle {
   margin: 0;
   color: var(--cs-text-2);
-  font-size: clamp(10.5px, 1.55vh, 13px);
+  font-size: clamp(12px, 1.65vh, 14.5px);
   max-width: 60ch;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -215,7 +215,7 @@ html, body {
 }
 .cs-hero-author {
   margin-top: clamp(4px, 0.8vh, 10px);
-  font-size: clamp(9.5px, 1.3vh, 11.5px);
+  font-size: clamp(11px, 1.4vh, 13px);
   color: var(--cs-text-muted);
   font-family: var(--cs-mono);
   overflow: hidden;
@@ -238,7 +238,7 @@ html, body {
   background: var(--cs-card-2);
   color: var(--cs-text-2);
   font: inherit;
-  font-size: clamp(10px, 1.4vh, 12px);
+  font-size: clamp(11px, 1.5vh, 13.5px);
   font-weight: 500;
   padding: clamp(3px, 0.6vh, 6px) clamp(8px, 1vw, 12px);
   border-radius: 999px;
@@ -268,7 +268,7 @@ html, body {
   color: var(--cs-text);
   font: inherit;
   font-family: var(--cs-mono);
-  font-size: clamp(10px, 1.35vh, 11.5px);
+  font-size: clamp(11px, 1.45vh, 13px);
   padding: 2px 6px;
   border-radius: var(--cs-radius-sm);
   color-scheme: dark light;
@@ -277,7 +277,7 @@ html, body {
   outline: none;
   border-color: rgba(var(--cs-accent-rgb), 0.55);
 }
-.cs-range-sep { color: var(--cs-text-muted); font-size: 11px; }
+.cs-range-sep { color: var(--cs-text-muted); font-size: 12px; }
 
 /* ─── Bottom meta footer (replaces in-hero chips) ─── */
 .cs-meta-footer {
@@ -347,7 +347,7 @@ html, body {
   grid-column: 2;
   grid-row: 2;
   font-family: var(--cs-mono);
-  font-size: clamp(8.5px, 1.05vh, 10px);
+  font-size: clamp(9.5px, 1.15vh, 11.5px);
   letter-spacing: 0.18em;
   color: var(--cs-text-muted);
   white-space: nowrap;
@@ -358,7 +358,7 @@ html, body {
   grid-column: 1 / -1;
   grid-row: 3;
   margin-left: 0;
-  font-size: clamp(9.5px, 1.2vh, 11px);
+  font-size: clamp(10.5px, 1.3vh, 12.5px);
   color: var(--cs-text-2);
   text-align: left;
   max-width: 100%;
@@ -393,7 +393,7 @@ html, body {
 .cs-stat-foot {
   margin-top: auto;
   padding-top: clamp(2px, 0.5vh, 6px);
-  font-size: clamp(9.5px, 1.3vh, 11px);
+  font-size: clamp(10.5px, 1.4vh, 12.5px);
   color: var(--cs-text-muted);
   font-family: var(--cs-mono);
   display: flex;
@@ -440,7 +440,7 @@ html, body {
   color: var(--cs-text);
 }
 .cs-donut-label {
-  font-size: clamp(7px, 0.95vh, 9px);
+  font-size: clamp(8.5px, 1.05vh, 10.5px);
   letter-spacing: 0.12em;
   color: var(--cs-text-muted);
   text-transform: uppercase;
@@ -467,7 +467,7 @@ html, body {
   grid-template-columns: 8px minmax(0, 1fr) minmax(40px, 1.4fr) auto;
   gap: 8px;
   align-items: center;
-  font-size: clamp(10px, 1.45vh, 12px);
+  font-size: clamp(11px, 1.55vh, 13.5px);
   color: var(--cs-text-2);
   min-width: 0;
 }
@@ -496,7 +496,7 @@ html, body {
 .cs-legend-pct {
   font-family: var(--cs-mono);
   color: var(--cs-text-muted);
-  font-size: clamp(9.5px, 1.3vh, 11px);
+  font-size: clamp(10.5px, 1.4vh, 12.5px);
 }
 
 /* ─── Hours Tile (6 cols ~ 1/2 width) ──────────────── */
@@ -534,7 +534,7 @@ html, body {
   display: flex;
   justify-content: space-between;
   margin-top: 3px;
-  font-size: clamp(8.5px, 1.1vh, 10px);
+  font-size: clamp(9.5px, 1.2vh, 11.5px);
   color: var(--cs-text-muted);
   flex-shrink: 0;
 }
@@ -544,7 +544,7 @@ html, body {
   border-radius: var(--cs-radius-sm);
   background: var(--cs-card-2);
   border: 1px solid var(--cs-border);
-  font-size: clamp(10px, 1.4vh, 12px);
+  font-size: clamp(11px, 1.5vh, 13.5px);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -553,7 +553,7 @@ html, body {
 }
 .cs-style-badge-label {
   color: var(--cs-text-muted);
-  font-size: clamp(8.5px, 1.1vh, 10px);
+  font-size: clamp(9.5px, 1.2vh, 11.5px);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -622,8 +622,8 @@ html, body {
   border: 1px solid var(--cs-border-strong);
   color: var(--cs-text);
   font-family: var(--cs-mono);
-  font-size: 11.5px;
-  line-height: 1.3;
+  font-size: 12.5px;
+  line-height: 1.35;
   white-space: nowrap;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
@@ -633,7 +633,7 @@ html, body {
   align-items: center;
   gap: 4px;
   margin-top: clamp(3px, 0.6vh, 6px);
-  font-size: clamp(9.5px, 1.25vh, 10.5px);
+  font-size: clamp(10.5px, 1.35vh, 12px);
   color: var(--cs-text-muted);
   flex-shrink: 0;
 }
@@ -674,7 +674,7 @@ html, body {
   border-color: var(--cs-border);
 }
 .cs-commit-hash {
-  font-size: clamp(9.5px, 1.3vh, 11px);
+  font-size: clamp(10.5px, 1.4vh, 12.5px);
   color: var(--cs-accent);
   background: var(--cs-accent-soft);
   padding: 2px 6px;
@@ -683,7 +683,7 @@ html, body {
   font-weight: 500;
 }
 .cs-commit-subject {
-  font-size: clamp(11px, 1.55vh, 13px);
+  font-size: clamp(12px, 1.65vh, 14.5px);
   color: var(--cs-text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -691,13 +691,13 @@ html, body {
   min-width: 0;
 }
 .cs-commit-time {
-  font-size: clamp(9.5px, 1.25vh, 11px);
+  font-size: clamp(10.5px, 1.35vh, 12.5px);
   color: var(--cs-text-muted);
   font-family: var(--cs-mono);
   white-space: nowrap;
 }
 .cs-commit-stat {
-  font-size: clamp(9.5px, 1.3vh, 11px);
+  font-size: clamp(10.5px, 1.4vh, 12.5px);
   font-family: var(--cs-mono);
   display: flex;
   gap: 6px;
@@ -709,7 +709,7 @@ html, body {
   text-align: center;
   padding: 14px 12px;
   color: var(--cs-text-muted);
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 /* ─── Empty / loading state ───────────────────────── */
@@ -742,14 +742,14 @@ html, body {
 .cs-empty-text { min-width: 0; flex: 1; }
 .cs-empty-title {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--cs-text);
 }
 .cs-empty-desc {
   margin: 3px 0 0;
   color: var(--cs-text-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-family: var(--cs-mono);
   overflow: hidden;
   text-overflow: ellipsis;

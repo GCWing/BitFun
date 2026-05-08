@@ -308,8 +308,6 @@ fn classify_ai_error(msg: &str) -> ErrorCategory {
         ],
     ) {
         ErrorCategory::InvalidRequest
-    } else if m.contains("loop detected") || m.contains("consecutive same tool") {
-        ErrorCategory::LoopDetected
     } else if m.contains("timeout") || m.contains("timed out") {
         ErrorCategory::Timeout
     } else if m.contains("stream closed")
@@ -352,9 +350,7 @@ fn action_hints_for_category(category: &ErrorCategory) -> Vec<String> {
         ErrorCategory::Network | ErrorCategory::Timeout => {
             &["retry", "switch_model", "copy_diagnostics"]
         }
-        ErrorCategory::ContentPolicy
-        | ErrorCategory::InvalidRequest
-        | ErrorCategory::LoopDetected => &["copy_diagnostics"],
+        ErrorCategory::ContentPolicy | ErrorCategory::InvalidRequest => &["copy_diagnostics"],
         ErrorCategory::ModelError | ErrorCategory::Unknown => {
             &["retry", "switch_model", "copy_diagnostics"]
         }

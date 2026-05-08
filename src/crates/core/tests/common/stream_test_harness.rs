@@ -47,6 +47,7 @@ impl Default for StreamFixtureRunOptions {
     }
 }
 
+#[allow(dead_code)]
 pub async fn run_stream_fixture(
     provider: StreamFixtureProvider,
     fixture_relative_path: &str,

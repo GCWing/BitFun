@@ -1463,5 +1463,33 @@
   "subagent": {
     "showingLines": "當前僅顯示 {{shown}} / {{total}} 行",
     "showAll": "顯示全部"
+  },
+  "pendingQueue": {
+    "title": "待發送 ({{count}})",
+    "hint": "當前對話結束後會按順序自動發送",
+    "editorHint": "⌘/Ctrl+Enter 儲存 · Esc 取消",
+    "emptyPlaceholder": "（空訊息）",
+    "statusSending": "正在引導…",
+    "statusFailed": "發送失敗 — 請編輯 / 立即發送 / 刪除以清除該項",
+    "actions": {
+      "edit": "編輯",
+      "sendNow": "立即發送（引導）",
+      "delete": "刪除",
+      "saveEdit": "儲存（⌘/Ctrl+Enter）",
+      "cancelEdit": "取消（Esc）"
+    },
+    "tooltip": {
+      "sendNow": "立即作為引導訊息插入當前對話"
+    },
+    "errors": {
+      "emptyContent": "訊息內容不能為空",
+      "sendNowFailed": "立即發送失敗，請稍後重試"
+    }
+  },
+  "steering": {
+    "title": "立即引導",
+    "injectedAt": "已在第 {{round}} 輪前插入",
+    "statusPending": "當前操作完成後注入",
+    "statusInjected": "已在第 {{round}} 輪注入"
   }
 }

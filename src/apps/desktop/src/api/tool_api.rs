@@ -6,10 +6,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use bitfun_core::agentic::{
-    WorkspaceBinding,
     tools::framework::ToolUseContext,
     tools::{get_all_tools, get_readonly_tools},
     workspace::{local_workspace_services, remote_workspace_services},
+    WorkspaceBinding,
 };
 use bitfun_core::service::remote_ssh::workspace_state::{
     get_remote_workspace_manager, lookup_remote_connection, resolve_workspace_session_identity,

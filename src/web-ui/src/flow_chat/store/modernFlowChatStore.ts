@@ -7,7 +7,7 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { immer } from 'zustand/middleware/immer';
-import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem } from '../types/flow-chat';
+import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowUserSteeringItem } from '../types/flow-chat';
 import { isCollapsibleTool, READ_TOOL_NAMES, SEARCH_TOOL_NAMES, COMMAND_TOOL_NAMES } from '../tool-cards';
 import { flowChatStore } from './FlowChatStore';
 
@@ -39,10 +39,10 @@ export interface ExploreGroupData {
  */
 export type VirtualItem =
   | { type: 'user-message'; data: DialogTurn['userMessage']; turnId: string }
+  | { type: 'user-steering-message'; data: NonNullable<DialogTurn['userMessage']>; turnId: string; steeringId: string }
   | { type: 'model-round'; data: ModelRound; turnId: string; isLastRound: boolean }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
-  | { type: 'image-analyzing'; turnId: string }
-  | { type: 'turn-stopped'; turnId: string; finishReason: string };
+  | { type: 'image-analyzing'; turnId: string };
 
 /**
  * Currently visible turn information
@@ -136,6 +136,14 @@ function computeRoundStats(round: ModelRound): ExploreGroupStats {
   return { readCount, searchCount, commandCount };
 }
 
+function steeringItemToUserMessage(item: FlowUserSteeringItem): NonNullable<DialogTurn['userMessage']> {
+  return {
+    id: `user_steering_${item.steeringId}`,
+    content: item.content,
+    timestamp: item.timestamp,
+  };
+}
+
 let cachedSession: Session | null = null;
 let cachedDialogTurnsRef: DialogTurn[] | null = null;
 let cachedVirtualItems: VirtualItem[] = [];
@@ -185,105 +193,143 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       return;
     }
 
-    const nonEmptyRounds = turn.modelRounds
-      .filter(round => round.items && round.items.length > 0);
-    
-    interface TempExploreGroup {
-      rounds: ModelRound[];
-      allItems: FlowItem[];
-      readCount: number;
-      searchCount: number;
-      commandCount: number;
-      startIndex: number;
-      endIndex: number;
-    }
-    
-    const tempGroups: TempExploreGroup[] = [];
-    let currentGroup: TempExploreGroup | null = null;
-    
-    nonEmptyRounds.forEach((round, index) => {
-      const exploreOnly = isExploreOnlyRound(round);
-      if (exploreOnly) {
-        const stats = computeRoundStats(round);
-        if (currentGroup) {
-          currentGroup.rounds.push(round);
-          currentGroup.allItems.push(...round.items);
-          currentGroup.readCount += stats.readCount;
-          currentGroup.searchCount += stats.searchCount;
-          currentGroup.commandCount += stats.commandCount;
-          currentGroup.endIndex = index;
-        } else {
-          currentGroup = {
-            rounds: [round],
-            allItems: [...round.items],
-            readCount: stats.readCount,
-            searchCount: stats.searchCount,
-            commandCount: stats.commandCount,
-            startIndex: index,
-            endIndex: index,
-          };
-        }
-      } else {
-        if (currentGroup) {
-          tempGroups.push(currentGroup);
-          currentGroup = null;
-        }
-      }
-    });
-    if (currentGroup) {
-      tempGroups.push(currentGroup);
-    }
-    
-    let roundIndex = 0;
-    let groupIndex = 0;
-    
-    while (roundIndex < nonEmptyRounds.length) {
-      const round = nonEmptyRounds[roundIndex];
-      const group = tempGroups[groupIndex];
-      
-      if (group && group.startIndex === roundIndex) {
-        const isLastGroup = groupIndex === tempGroups.length - 1;
-        const isGroupStreaming = group.rounds.some(r => r.isStreaming);
-        
-        items.push({
-          type: 'explore-group',
-          turnId: turn.id,
-          data: {
-            groupId: group.rounds.map(r => r.id).join('-'),
-            rounds: group.rounds,
-            allItems: group.allItems,
-            stats: {
-              readCount: group.readCount,
-              searchCount: group.searchCount,
-              commandCount: group.commandCount,
-            },
-            isGroupStreaming,
-            isLastGroupInTurn: isLastGroup,
-          }
-        });
-        
-        roundIndex = group.endIndex + 1;
-        groupIndex++;
-      } else {
-        const isLastRound = roundIndex === nonEmptyRounds.length - 1;
-        items.push({
-          type: 'model-round',
-          data: round,
-          turnId: turn.id,
-          isLastRound,
-        });
-        roundIndex++;
-      }
-    }
+    const renderEntries: Array<
+      | { type: 'round'; round: ModelRound }
+      | { type: 'steering'; item: FlowUserSteeringItem }
+    > = [];
 
-    // If the turn was stopped abnormally, add a turn-stopped indicator
-    if (turn.finishReason && turn.finishReason !== 'complete' && turn.status === 'completed') {
-      items.push({
-        type: 'turn-stopped',
-        turnId: turn.id,
-        finishReason: turn.finishReason,
+    turn.modelRounds.forEach(round => {
+      if (!round.items || round.items.length === 0) return;
+      const nonSteeringItems = round.items.filter(item => item.type !== 'user-steering');
+      if (nonSteeringItems.length > 0) {
+        renderEntries.push({
+          type: 'round',
+          round: nonSteeringItems.length === round.items.length
+            ? round
+            : { ...round, items: nonSteeringItems },
+        });
+      }
+      round.items
+        .filter((item): item is FlowUserSteeringItem => item.type === 'user-steering')
+        .forEach(item => {
+          renderEntries.push({ type: 'steering', item });
+        });
+    });
+    
+    const flushRoundEntries = (rounds: ModelRound[]) => {
+      if (rounds.length === 0) return;
+
+      interface TempExploreGroup {
+        rounds: ModelRound[];
+        allItems: FlowItem[];
+        readCount: number;
+        searchCount: number;
+        commandCount: number;
+        startIndex: number;
+        endIndex: number;
+      }
+
+      const tempGroups: TempExploreGroup[] = [];
+      let currentGroup: TempExploreGroup | null = null;
+
+      rounds.forEach((round, index) => {
+        const exploreOnly = isExploreOnlyRound(round);
+        if (exploreOnly) {
+          const stats = computeRoundStats(round);
+          if (currentGroup) {
+            currentGroup.rounds.push(round);
+            currentGroup.allItems.push(...round.items);
+            currentGroup.readCount += stats.readCount;
+            currentGroup.searchCount += stats.searchCount;
+            currentGroup.commandCount += stats.commandCount;
+            currentGroup.endIndex = index;
+          } else {
+            currentGroup = {
+              rounds: [round],
+              allItems: [...round.items],
+              readCount: stats.readCount,
+              searchCount: stats.searchCount,
+              commandCount: stats.commandCount,
+              startIndex: index,
+              endIndex: index,
+            };
+          }
+        } else {
+          if (currentGroup) {
+            tempGroups.push(currentGroup);
+            currentGroup = null;
+          }
+        }
       });
-    }
+
+      if (currentGroup) {
+        tempGroups.push(currentGroup);
+      }
+
+      let roundIndex = 0;
+      let groupIndex = 0;
+
+      while (roundIndex < rounds.length) {
+        const round = rounds[roundIndex];
+        const group = tempGroups[groupIndex];
+
+        if (group && group.startIndex === roundIndex) {
+          const isLastGroup = groupIndex === tempGroups.length - 1;
+          const isGroupStreaming = group.rounds.some(r => r.isStreaming);
+
+          items.push({
+            type: 'explore-group',
+            turnId: turn.id,
+            data: {
+              groupId: group.rounds.map(r => r.id).join('-'),
+              rounds: group.rounds,
+              allItems: group.allItems,
+              stats: {
+                readCount: group.readCount,
+                searchCount: group.searchCount,
+                commandCount: group.commandCount,
+              },
+              isGroupStreaming,
+              isLastGroupInTurn: isLastGroup,
+            },
+          });
+
+          roundIndex = group.endIndex + 1;
+          groupIndex++;
+        } else {
+          const isLastRound = roundIndex === rounds.length - 1;
+          items.push({
+            type: 'model-round',
+            data: round,
+            turnId: turn.id,
+            isLastRound,
+          });
+          roundIndex++;
+        }
+      }
+    };
+
+    let pendingRounds: ModelRound[] = [];
+
+    renderEntries.forEach(entry => {
+      if (entry.type === 'round') {
+        pendingRounds.push(entry.round);
+        return;
+      }
+
+      flushRoundEntries(pendingRounds);
+      pendingRounds = [];
+
+      items.push({
+        type: 'user-steering-message',
+        data: steeringItemToUserMessage(entry.item),
+        turnId: turn.id,
+        steeringId: entry.item.steeringId,
+      });
+    });
+
+    flushRoundEntries(pendingRounds);
+
   });
 
   cachedVirtualItems = items;

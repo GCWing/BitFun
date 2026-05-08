@@ -33,6 +33,8 @@ import {
   cleanupSessionBuffers,
   sendMessage as sendMessageModule,
   cancelCurrentTask as cancelCurrentTaskModule,
+  installPendingQueueDrainListener,
+  drainPendingQueue,
   initializeEventListeners,
   processBatchedEvents,
   addDialogTurn as addDialogTurnModule,
@@ -69,10 +71,17 @@ export class FlowChatManager {
       turnSavePending: new Set(),
       runtimeStatusTimers: new Map(),
       userCancelledSessionIds: new Set(),
+      handledTerminalTurnEvents: new Set(),
       currentWorkspacePath: null
     };
     
     this.agentService = AgentService.getInstance();
+    installPendingQueueDrainListener(this.context);
+  }
+
+  /** Public hook used by the queue panel "send now" fallback to drain head item. */
+  async drainPendingQueueForSession(sessionId: string): Promise<void> {
+    return drainPendingQueue(this.context, sessionId);
   }
 
   public static getInstance(): FlowChatManager {
@@ -380,21 +389,6 @@ export class FlowChatManager {
 
   async cancelCurrentTask(): Promise<boolean> {
     return cancelCurrentTaskModule(this.context);
-  }
-
-  /**
-   * Continue a dialog turn that was paused due to max_rounds being reached.
-   * Sends a continuation message that instructs the AI to resume where it left off.
-   */
-  async continueDialogTurn(sessionId: string): Promise<void> {
-    return sendMessageModule(
-      this.context,
-      '[Continue execution from where you left off. The previous turn was paused because the round limit was reached. Please continue the task.]',
-      sessionId,
-      undefined,
-      undefined,
-      undefined
-    );
   }
 
   public async saveAllInProgressTurns(): Promise<void> {

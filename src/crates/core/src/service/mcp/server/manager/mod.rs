@@ -38,7 +38,6 @@ struct ReconnectPolicy {
     poll_interval: Duration,
     base_delay: Duration,
     max_delay: Duration,
-    max_attempts: u32,
 }
 
 impl Default for ReconnectPolicy {
@@ -47,7 +46,6 @@ impl Default for ReconnectPolicy {
             poll_interval: Duration::from_secs(5),
             base_delay: Duration::from_secs(2),
             max_delay: Duration::from_secs(60),
-            max_attempts: 6,
         }
     }
 }
@@ -56,7 +54,6 @@ impl Default for ReconnectPolicy {
 struct ReconnectAttemptState {
     attempts: u32,
     next_retry_at: Instant,
-    exhausted_logged: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -87,7 +84,6 @@ impl ReconnectAttemptState {
         Self {
             attempts: 0,
             next_retry_at: now,
-            exhausted_logged: false,
         }
     }
 }

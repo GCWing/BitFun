@@ -47,7 +47,7 @@ pub enum MCPConnectionEvent {
 pub struct MCPConnection {
     transport: TransportType,
     pending_requests: Arc<RwLock<HashMap<u64, ResponseWaiter>>>,
-    request_timeout: Duration,
+    request_timeout: Option<Duration>,
     event_tx: broadcast::Sender<MCPConnectionEvent>,
 }
 
@@ -67,7 +67,7 @@ impl MCPConnection {
         Self {
             transport: TransportType::Local(transport),
             pending_requests,
-            request_timeout: Duration::from_secs(180),
+            request_timeout: None,
             event_tx,
         }
     }
@@ -79,7 +79,7 @@ impl MCPConnection {
         headers: HashMap<String, String>,
         oauth_enabled: bool,
     ) -> BitFunResult<Self> {
-        let request_timeout = Duration::from_secs(180);
+        let request_timeout = None;
         let transport = Arc::new(
             RemoteMCPTransport::new(server_id, url, headers, request_timeout, oauth_enabled)
                 .await?,
@@ -101,6 +101,11 @@ impl MCPConnection {
             TransportType::Remote(transport) => transport.get_auth_token().await,
             TransportType::Local(_) => None,
         }
+    }
+
+    /// Whether this MCP server runs as a local stdio child process.
+    pub fn is_local_stdio(&self) -> bool {
+        matches!(self.transport, TransportType::Local(_))
     }
 
     /// Backward-compatible constructor (local connection).
@@ -168,14 +173,20 @@ impl MCPConnection {
                     pending.insert(request_id, tx);
                 }
 
-                match tokio::time::timeout(self.request_timeout, rx).await {
-                    Ok(Ok(response)) => Ok(response),
-                    Ok(Err(_)) => Err(BitFunError::MCPError(format!(
+                let response = if let Some(request_timeout) = self.request_timeout {
+                    tokio::time::timeout(request_timeout, rx)
+                        .await
+                        .map_err(|_| {
+                            BitFunError::Timeout(format!("Request timeout for method: {}", method))
+                        })?
+                } else {
+                    rx.await
+                };
+
+                match response {
+                    Ok(response) => Ok(response),
+                    Err(_) => Err(BitFunError::MCPError(format!(
                         "Request channel closed for method: {}",
-                        method
-                    ))),
-                    Err(_) => Err(BitFunError::Timeout(format!(
-                        "Request timeout for method: {}",
                         method
                     ))),
                 }

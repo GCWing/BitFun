@@ -1023,7 +1023,10 @@ fn aggregate_operations_diff_summary_for_file(
     out
 }
 
-fn change_kind_for_aggregate_path(file_created_in_session: bool, path_exists: bool) -> &'static str {
+fn change_kind_for_aggregate_path(
+    file_created_in_session: bool,
+    path_exists: bool,
+) -> &'static str {
     if file_created_in_session {
         "create"
     } else if !path_exists {

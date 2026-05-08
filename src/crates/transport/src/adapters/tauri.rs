@@ -402,6 +402,28 @@ impl TransportAdapter for TauriTransportAdapter {
                     }),
                 )?;
             }
+            AgenticEvent::UserSteeringInjected {
+                session_id,
+                turn_id,
+                round_index,
+                steering_id,
+                content,
+                display_content,
+                subagent_parent_info,
+            } => {
+                self.app_handle.emit(
+                    "agentic://user-steering-injected",
+                    json!({
+                        "sessionId": session_id,
+                        "turnId": turn_id,
+                        "roundIndex": round_index,
+                        "steeringId": steering_id,
+                        "content": content,
+                        "displayContent": display_content,
+                        "subagentParentInfo": subagent_parent_info,
+                    }),
+                )?;
+            }
             _ => {
                 warn!("Unhandled AgenticEvent type in TauriAdapter");
             }

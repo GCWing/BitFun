@@ -1091,14 +1091,14 @@ function basenameOf(p) {
   return segs.length ? segs[segs.length - 1] : p;
 }
 
-function shq(s) {
-  if (s == null) return "''";
-  return `'${String(s).replace(/'/g, "'\\''")}'`;
-}
-
 async function gitRun(cwd, argv, opts = {}) {
-  const cmd = ['git', ...argv.map(shq)].join(' ');
-  const res = await window.app.shell.exec(cmd, { cwd, timeout: opts.timeout || 30000 });
+  // Pass argv as an array so the host spawns git directly (no shell). This is the
+  // only cross-platform safe form: previously we joined the args into a shell
+  // command using single-quote escaping, which works under sh on macOS/Linux but
+  // breaks under cmd.exe on Windows (cmd.exe does not understand single quotes,
+  // so git received literal `'rev-parse'` etc and the workspace was misreported
+  // as "not a git repo").
+  const res = await window.app.shell.exec(['git', ...argv], { cwd, timeout: opts.timeout || 30000 });
   return res.stdout || '';
 }
 

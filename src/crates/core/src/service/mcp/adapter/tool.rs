@@ -82,6 +82,10 @@ impl MCPToolWrapper {
             char_count
         )
     }
+
+    fn is_blocked_in_context(&self, context: Option<&ToolUseContext>) -> bool {
+        context.map(|ctx| ctx.is_remote()).unwrap_or(false) && self.connection.is_local_stdio()
+    }
 }
 
 #[async_trait]
@@ -128,6 +132,10 @@ impl Tool for MCPToolWrapper {
         true
     }
 
+    async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
+        !self.is_blocked_in_context(context)
+    }
+
     fn is_readonly(&self) -> bool {
         self.annotations().read_only_hint.unwrap_or(false)
     }
@@ -143,8 +151,20 @@ impl Tool for MCPToolWrapper {
     async fn validate_input(
         &self,
         input: &Value,
-        _context: Option<&ToolUseContext>,
+        context: Option<&ToolUseContext>,
     ) -> ValidationResult {
+        if self.is_blocked_in_context(context) {
+            return ValidationResult {
+                result: false,
+                message: Some(format!(
+                    "MCP server '{}' runs locally and is unavailable in remote workspace sessions",
+                    self.server_name
+                )),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
         if !input.is_object() {
             return ValidationResult {
                 result: false,
@@ -238,8 +258,15 @@ impl Tool for MCPToolWrapper {
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
+        if self.is_blocked_in_context(Some(context)) {
+            return Err(crate::util::errors::BitFunError::tool(format!(
+                "MCP server '{}' runs locally; refusing to invoke it from a remote workspace session.",
+                self.server_name
+            )));
+        }
+
         info!(
             "Calling MCP tool: {} from server: {}",
             self.tool_title(),

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { FlowTextItem, FlowToolItem, ModelRound, Session } from '../types/flow-chat';
+import type { FlowTextItem, FlowToolItem, FlowUserSteeringItem, ModelRound, Session } from '../types/flow-chat';
 
 vi.mock('./FlowChatStore', () => ({
   flowChatStore: {
@@ -46,6 +46,18 @@ function makeReadTool(id: string): FlowToolItem {
       result: 'file contents',
       success: true,
     },
+  };
+}
+
+function makeSteeringItem(id: string, content = 'Steer now'): FlowUserSteeringItem {
+  return {
+    id: `steering_${id}`,
+    type: 'user-steering',
+    steeringId: id,
+    content,
+    roundIndex: 0,
+    timestamp: 1100,
+    status: 'pending',
   };
 }
 
@@ -133,5 +145,72 @@ describe('sessionToVirtualItems explore grouping', () => {
     const items = sessionToVirtualItems(session);
 
     expect(items.map(item => item.type)).toEqual(['user-message', 'model-round']);
+  });
+
+  it('does not render a stopped indicator for non-complete finish reasons', () => {
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [makeRound()],
+        status: 'completed',
+        startTime: 900,
+        finishReason: 'interrupted',
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+  });
+
+  it('renders user steering as a top-level user message item', () => {
+    const steeringItem = makeSteeringItem('steer-1', 'Handle this queued request now');
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Initial request',
+          timestamp: 900,
+        },
+        modelRounds: [
+          makeRound({ id: 'round-1' }),
+          makeRound({
+            id: 'round-2',
+            items: [steeringItem],
+            isStreaming: true,
+            isComplete: false,
+            status: 'streaming',
+          }),
+        ],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual([
+      'user-message',
+      'explore-group',
+      'user-steering-message',
+    ]);
+    expect(items[2]).toMatchObject({
+      type: 'user-steering-message',
+      data: {
+        id: 'user_steering_steer-1',
+        content: 'Handle this queued request now',
+        timestamp: 1100,
+      },
+      turnId: 'turn-1',
+      steeringId: 'steer-1',
+    });
   });
 });

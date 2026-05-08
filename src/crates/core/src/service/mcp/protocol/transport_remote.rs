@@ -38,6 +38,7 @@ use rmcp::RoleClient;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::future::Future;
 use std::str::FromStr;
 use std::sync::Arc as StdArc;
 use std::sync::Arc;
@@ -309,7 +310,7 @@ pub struct RemoteMCPTransport {
     url: String,
     default_headers: HeaderMap,
     oauth_manager: Option<Arc<Mutex<AuthorizationManager>>>,
-    request_timeout: Duration,
+    request_timeout: Option<Duration>,
     state: Mutex<ClientState>,
 }
 
@@ -379,7 +380,7 @@ impl RemoteMCPTransport {
         server_id: &str,
         url: String,
         headers: HashMap<String, String>,
-        request_timeout: Duration,
+        request_timeout: Option<Duration>,
         oauth_enabled: bool,
     ) -> BitFunResult<Self> {
         let default_headers = Self::build_default_headers(&headers);
@@ -428,6 +429,23 @@ impl RemoteMCPTransport {
                 transport: Some(transport),
             }),
         })
+    }
+
+    async fn await_with_optional_timeout<F, T>(
+        timeout: Option<Duration>,
+        future: F,
+        timeout_message: impl Into<String>,
+    ) -> BitFunResult<T>
+    where
+        F: Future<Output = T>,
+    {
+        if let Some(timeout) = timeout {
+            tokio::time::timeout(timeout, future)
+                .await
+                .map_err(|_| BitFunError::Timeout(timeout_message.into()))
+        } else {
+            Ok(future.await)
+        }
     }
 
     /// Returns the auth token header value (if present).
@@ -511,15 +529,13 @@ impl RemoteMCPTransport {
                 drop(guard);
 
                 let transport_fut = rmcp::serve_client(handler.clone(), transport);
-                let service = tokio::time::timeout(self.request_timeout, transport_fut)
-                    .await
-                    .map_err(|_| {
-                        BitFunError::Timeout(format!(
-                            "Timed out handshaking with MCP server after {:?}: {}",
-                            self.request_timeout, self.url
-                        ))
-                    })?
-                    .map_err(|e| BitFunError::MCPError(format!("Handshake failed: {}", e)))?;
+                let service = Self::await_with_optional_timeout(
+                    self.request_timeout,
+                    transport_fut,
+                    format!("Timed out handshaking with MCP server: {}", self.url),
+                )
+                .await?
+                .map_err(|e| BitFunError::MCPError(format!("Handshake failed: {}", e)))?;
 
                 let service = Arc::new(service);
                 let info = service.peer().peer_info().ok_or_else(|| {
@@ -542,10 +558,13 @@ impl RemoteMCPTransport {
         let fut = service.send_request(rmcp::model::ClientRequest::PingRequest(
             RequestNoParam::default(),
         ));
-        let result = tokio::time::timeout(self.request_timeout, fut)
-            .await
-            .map_err(|_| BitFunError::Timeout("MCP ping timeout".to_string()))?
-            .map_err(|e| BitFunError::MCPError(format!("MCP ping failed: {}", e)))?;
+        let result = Self::await_with_optional_timeout(
+            self.request_timeout,
+            fut,
+            "MCP ping timeout".to_string(),
+        )
+        .await?
+        .map_err(|e| BitFunError::MCPError(format!("MCP ping failed: {}", e)))?;
 
         match result {
             rmcp::model::ServerResult::EmptyResult(_) => Ok(()),
@@ -564,10 +583,13 @@ impl RemoteMCPTransport {
         let fut = service
             .peer()
             .list_resources(Some(PaginatedRequestParam { cursor }));
-        let result = tokio::time::timeout(self.request_timeout, fut)
-            .await
-            .map_err(|_| BitFunError::Timeout("MCP resources/list timeout".to_string()))?
-            .map_err(|e| BitFunError::MCPError(format!("MCP resources/list failed: {}", e)))?;
+        let result = Self::await_with_optional_timeout(
+            self.request_timeout,
+            fut,
+            "MCP resources/list timeout".to_string(),
+        )
+        .await?
+        .map_err(|e| BitFunError::MCPError(format!("MCP resources/list failed: {}", e)))?;
         Ok(ResourcesListResult {
             resources: result.resources.into_iter().map(map_resource).collect(),
             next_cursor: result.next_cursor,
@@ -579,10 +601,13 @@ impl RemoteMCPTransport {
         let fut = service.peer().read_resource(ReadResourceRequestParam {
             uri: uri.to_string(),
         });
-        let result = tokio::time::timeout(self.request_timeout, fut)
-            .await
-            .map_err(|_| BitFunError::Timeout("MCP resources/read timeout".to_string()))?
-            .map_err(|e| BitFunError::MCPError(format!("MCP resources/read failed: {}", e)))?;
+        let result = Self::await_with_optional_timeout(
+            self.request_timeout,
+            fut,
+            "MCP resources/read timeout".to_string(),
+        )
+        .await?
+        .map_err(|e| BitFunError::MCPError(format!("MCP resources/read failed: {}", e)))?;
         Ok(ResourcesReadResult {
             contents: result
                 .contents
@@ -597,10 +622,13 @@ impl RemoteMCPTransport {
         let fut = service
             .peer()
             .list_prompts(Some(PaginatedRequestParam { cursor }));
-        let result = tokio::time::timeout(self.request_timeout, fut)
-            .await
-            .map_err(|_| BitFunError::Timeout("MCP prompts/list timeout".to_string()))?
-            .map_err(|e| BitFunError::MCPError(format!("MCP prompts/list failed: {}", e)))?;
+        let result = Self::await_with_optional_timeout(
+            self.request_timeout,
+            fut,
+            "MCP prompts/list timeout".to_string(),
+        )
+        .await?
+        .map_err(|e| BitFunError::MCPError(format!("MCP prompts/list failed: {}", e)))?;
         Ok(PromptsListResult {
             prompts: result.prompts.into_iter().map(map_prompt).collect(),
             next_cursor: result.next_cursor,
@@ -626,10 +654,13 @@ impl RemoteMCPTransport {
             name: name.to_string(),
             arguments,
         });
-        let result = tokio::time::timeout(self.request_timeout, fut)
-            .await
-            .map_err(|_| BitFunError::Timeout("MCP prompts/get timeout".to_string()))?
-            .map_err(|e| BitFunError::MCPError(format!("MCP prompts/get failed: {}", e)))?;
+        let result = Self::await_with_optional_timeout(
+            self.request_timeout,
+            fut,
+            "MCP prompts/get timeout".to_string(),
+        )
+        .await?
+        .map_err(|e| BitFunError::MCPError(format!("MCP prompts/get failed: {}", e)))?;
 
         Ok(PromptsGetResult {
             description: result.description,
@@ -646,10 +677,13 @@ impl RemoteMCPTransport {
         let fut = service
             .peer()
             .list_tools(Some(PaginatedRequestParam { cursor }));
-        let result = tokio::time::timeout(self.request_timeout, fut)
-            .await
-            .map_err(|_| BitFunError::Timeout("MCP tools/list timeout".to_string()))?
-            .map_err(|e| BitFunError::MCPError(format!("MCP tools/list failed: {}", e)))?;
+        let result = Self::await_with_optional_timeout(
+            self.request_timeout,
+            fut,
+            "MCP tools/list timeout".to_string(),
+        )
+        .await?
+        .map_err(|e| BitFunError::MCPError(format!("MCP tools/list failed: {}", e)))?;
 
         Ok(ToolsListResult {
             tools: result.tools.into_iter().map(map_tool).collect(),
@@ -679,10 +713,13 @@ impl RemoteMCPTransport {
             name: name.to_string().into(),
             arguments,
         });
-        let result = tokio::time::timeout(self.request_timeout, fut)
-            .await
-            .map_err(|_| BitFunError::Timeout("MCP tools/call timeout".to_string()))?
-            .map_err(|e| BitFunError::MCPError(format!("MCP tools/call failed: {}", e)))?;
+        let result = Self::await_with_optional_timeout(
+            self.request_timeout,
+            fut,
+            "MCP tools/call timeout".to_string(),
+        )
+        .await?
+        .map_err(|e| BitFunError::MCPError(format!("MCP tools/call failed: {}", e)))?;
 
         Ok(map_tool_result(result))
     }

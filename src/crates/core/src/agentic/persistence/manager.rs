@@ -1227,10 +1227,7 @@ impl PersistenceManager {
         Ok(metadata_list)
     }
 
-    async fn count_session_metadata_dirs(
-        &self,
-        workspace_path: &Path,
-    ) -> BitFunResult<usize> {
+    async fn count_session_metadata_dirs(&self, workspace_path: &Path) -> BitFunResult<usize> {
         let Some(sessions_root) = self.existing_project_sessions_dir(workspace_path) else {
             return Ok(0);
         };
@@ -1251,10 +1248,7 @@ impl PersistenceManager {
             }
 
             let session_id = entry.file_name().to_string_lossy().to_string();
-            if self
-                .metadata_path(workspace_path, &session_id)
-                .exists()
-            {
+            if self.metadata_path(workspace_path, &session_id).exists() {
                 count += 1;
             }
         }

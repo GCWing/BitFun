@@ -84,20 +84,12 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
         tool_pipeline.clone(),
     ));
     
-    // Get execution config from global settings
-    let global_config: bitfun_core::service::config::types::GlobalConfig =
-        config_service.get_config(None).await.map_err(|e| anyhow::anyhow!("Failed to load config: {}", e))?;
-    let exec_config = execution::ExecutionEngineConfig {
-        max_rounds: global_config.ai.max_rounds,
-        ..Default::default()
-    };
-    
     let execution_engine = Arc::new(execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
         session_manager.clone(),
         context_compressor,
-        exec_config,
+        execution::ExecutionEngineConfig::default(),
     ));
 
     let coordinator = Arc::new(coordination::ConversationCoordinator::new(
@@ -123,6 +115,7 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
         coordination::DialogScheduler::new(coordinator.clone(), session_manager.clone());
     coordinator.set_scheduler_notifier(scheduler.outcome_sender());
     coordinator.set_round_preempt_source(scheduler.preempt_monitor());
+    coordinator.set_round_steering_source(scheduler.steering_monitor());
     coordination::set_global_scheduler(scheduler.clone());
 
     // Cron service

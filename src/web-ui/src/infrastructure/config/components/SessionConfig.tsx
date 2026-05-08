@@ -81,7 +81,6 @@ const SessionConfig: React.FC = () => {
   const [skipToolConfirmation, setSkipToolConfirmation] = useState(true);
   const [executionTimeout, setExecutionTimeout] = useState('');
   const [confirmationTimeout, setConfirmationTimeout] = useState('');
-  const [maxRounds, setMaxRounds] = useState<number>(200);
   const [toolExecConfigLoading, setToolExecConfigLoading] = useState(false);
 
   const [computerUseEnabled, setComputerUseEnabled] = useState(false);
@@ -177,7 +176,6 @@ const SessionConfig: React.FC = () => {
         confirmTimeout,
         debugConfigData,
         computerUseCfg,
-        maxRoundsValue,
         loadedCompanionPets,
       ] = await Promise.all([
         aiExperienceConfigService.getSettingsAsync(),
@@ -188,7 +186,6 @@ const SessionConfig: React.FC = () => {
         configManager.getConfig<number | null>('ai.tool_confirmation_timeout_secs'),
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
-        configManager.getConfig<number>('ai.max_rounds'),
         listAgentCompanionPets(),
       ]);
 
@@ -199,7 +196,6 @@ const SessionConfig: React.FC = () => {
       setSkipToolConfirmation(skipConfirm ?? true);
       setExecutionTimeout(execTimeout != null ? String(execTimeout) : '');
       setConfirmationTimeout(confirmTimeout != null ? String(confirmTimeout) : '');
-      setMaxRounds(maxRoundsValue ?? 200);
       if (debugConfigData) setDebugConfig(debugConfigData);
 
       refreshDesktopStatus(computerUseCfg);
@@ -523,22 +519,6 @@ const SessionConfig: React.FC = () => {
     } catch (error) {
       log.error('Failed to save tool timeout config', { type, error });
       notificationService.error(tTools('messages.saveFailed'));
-    }
-  };
-
-  const handleMaxRoundsChange = async (value: string) => {
-    const trimmedValue = value.trim();
-    if (trimmedValue !== '') {
-      const numValue = parseInt(trimmedValue, 10);
-      if (Number.isNaN(numValue) || numValue < 1) return;
-      setMaxRounds(numValue);
-      try {
-        await configManager.setConfig('ai.max_rounds', numValue);
-        notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
-      } catch (error) {
-        log.error('Failed to save max_rounds config', error);
-        notificationService.error(t('messages.saveFailed'));
-      }
     }
   };
 
@@ -917,19 +897,6 @@ const SessionConfig: React.FC = () => {
                 max={3600}
                 step={5}
                 unit={tTools('config.seconds')}
-                size="small"
-                variant="compact"
-              />
-            </div>
-          </ConfigPageRow>
-          <ConfigPageRow label={t('maxRounds.label')} description={t('maxRounds.description')} align="center">
-            <div className="bitfun-func-agent-config__row-control">
-              <NumberInput
-                value={maxRounds}
-                onChange={(val) => handleMaxRoundsChange(String(val))}
-                min={1}
-                max={10000}
-                step={10}
                 size="small"
                 variant="compact"
               />

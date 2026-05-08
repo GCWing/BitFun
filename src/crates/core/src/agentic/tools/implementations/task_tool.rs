@@ -1,8 +1,6 @@
 use crate::agentic::agents::{get_agent_registry, AgentInfo};
 use crate::agentic::coordination::get_global_coordinator;
-use crate::agentic::deep_review_policy::{
-    load_default_deep_review_policy, record_deep_review_task_budget, DEEP_REVIEW_AGENT_TYPE,
-};
+use crate::agentic::deep_review_policy::{load_default_deep_review_policy, DEEP_REVIEW_AGENT_TYPE};
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -466,14 +464,6 @@ impl Tool for TaskTool {
                     })
                 )));
             }
-            record_deep_review_task_budget(&dialog_turn_id, &policy, role).map_err(
-                |violation| {
-                    BitFunError::tool(format!(
-                        "DeepReview Task policy violation: {}",
-                        violation.to_tool_error_message()
-                    ))
-                },
-            )?;
             timeout_seconds = policy.effective_timeout_seconds(role, timeout_seconds);
         }
 
@@ -515,9 +505,7 @@ impl Tool for TaskTool {
 #[cfg(test)]
 mod tests {
     use super::TaskTool;
-    use crate::agentic::deep_review_policy::{
-        DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewSubagentRole,
-    };
+    use crate::agentic::deep_review_policy::{DeepReviewExecutionPolicy, DeepReviewSubagentRole};
     use crate::agentic::tools::framework::Tool;
     use serde_json::json;
 
@@ -581,33 +569,5 @@ mod tests {
             policy.effective_timeout_seconds(DeepReviewSubagentRole::Judge, Some(900)),
             Some(240)
         );
-    }
-
-    #[test]
-    fn deep_review_policy_saturates_oversized_numeric_limits() {
-        let policy = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
-            "reviewer_timeout_seconds": u64::MAX,
-            "judge_timeout_seconds": u64::MAX
-        })));
-
-        assert_eq!(policy.reviewer_timeout_seconds, 3600);
-        assert_eq!(policy.judge_timeout_seconds, 3600);
-    }
-
-    #[test]
-    fn deep_review_budget_tracker_caps_judge_per_turn() {
-        let policy = DeepReviewExecutionPolicy::default();
-        let tracker = DeepReviewBudgetTracker::default();
-
-        tracker
-            .record_task("turn-1", &policy, DeepReviewSubagentRole::Judge)
-            .unwrap();
-        assert!(tracker
-            .record_task("turn-1", &policy, DeepReviewSubagentRole::Judge)
-            .is_err());
-
-        tracker
-            .record_task("turn-2", &policy, DeepReviewSubagentRole::Judge)
-            .unwrap();
     }
 }

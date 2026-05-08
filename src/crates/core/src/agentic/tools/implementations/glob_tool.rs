@@ -416,11 +416,12 @@ impl Tool for GlobTool {
 - Supports glob patterns like "**/*.js" or "src/**/*.ts"
 - Returns matching file paths
 - Use this tool when you need to find files by name patterns
-- The path parameter may be an absolute path or an exact `bitfun://runtime/...` URI returned by another tool
+- The path parameter may be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool
+- Omit path to search the current workspace. Do not use host roots or placeholder paths such as `/workspace`.
 - You can call multiple tools in a single response. It is always better to speculatively perform multiple searches in parallel if they are potentially useful.
 <example>
-- List files in path: path = "/path/to/search", pattern = "*"
-- Search all markdown files in path recursively: path = "/path/to/search", pattern = "**/*.md"
+- List files in current workspace: pattern = "*"
+- Search all markdown files in src recursively: path = "src", pattern = "**/*.md"
 </example>
 "#.to_string())
     }
@@ -435,7 +436,7 @@ impl Tool for GlobTool {
                 },
                 "path": {
                     "type": "string",
-                    "description": "The directory to search in. If not specified, the current working directory will be used. IMPORTANT: Omit this field to use the default directory. DO NOT enter \"undefined\" or \"null\" - simply omit it for the default behavior. Must be a valid absolute path or exact bitfun://runtime URI if provided."
+                    "description": "The directory to search in. Omit this field to search the current workspace. If provided, use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI. Do not enter \"undefined\", \"null\", host roots, or placeholder paths such as /workspace."
                 },
                 "limit": {
                     "type": "number",

@@ -203,10 +203,92 @@ fn elapsed_ms_since(time: SystemTime) -> u64 {
         .unwrap_or(0)
 }
 
+/// Maximum length of `provided_arguments` echoed back to the model in a tool
+/// error result. Larger payloads are truncated with an ellipsis marker so the
+/// signal remains actionable without bloating the prompt.
+const TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES: usize = 1024;
+
+const TOOL_ERROR_NEXT_STEP_HINT: &str = "Inspect the error and the arguments you sent, then either (a) retry with corrected arguments, (b) call a different tool, or (c) report the failure to the user. Do not repeat the same call without changes.";
+const USER_STEERING_INTERRUPTED_MESSAGE: &str = "Tool execution skipped because the user sent a new steering message for the running turn. Stop the remaining old tool plan and handle the new user message next.";
+
+fn truncate_arguments_preview(value: &serde_json::Value) -> String {
+    let raw = serde_json::to_string(value).unwrap_or_default();
+    if raw.len() <= TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES {
+        return raw;
+    }
+    // Truncate at a UTF-8 char boundary then append an ellipsis marker.
+    let mut cut = TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES;
+    while cut > 0 && !raw.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    format!("{}…[truncated, total {} bytes]", &raw[..cut], raw.len())
+}
+
+fn classify_tool_error(error: &BitFunError) -> &'static str {
+    match error {
+        BitFunError::Validation(_) => "invalid_arguments",
+        BitFunError::Cancelled(_) => "cancelled",
+        BitFunError::Timeout(_) => "timeout",
+        BitFunError::NotFound(_) => "not_found",
+        _ => "execution_error",
+    }
+}
+
 fn build_error_execution_result(
     task_id: &str,
     task: Option<ToolTask>,
     error: &BitFunError,
+) -> ToolExecutionResult {
+    let (tool_id, tool_name, execution_time_ms, provided_arguments) = if let Some(task) = task {
+        let preview = truncate_arguments_preview(&task.tool_call.arguments);
+        (
+            task.tool_call.tool_id,
+            task.tool_call.tool_name,
+            elapsed_ms_since(task.created_at),
+            Some(preview),
+        )
+    } else {
+        warn!("Task not found in state manager: {}", task_id);
+        (task_id.to_string(), "unknown".to_string(), 0, None)
+    };
+    let error_message = error.to_string();
+    let category = classify_tool_error(error);
+
+    let mut result_json = serde_json::json!({
+        "error": error_message,
+        "category": category,
+        "tool_name": tool_name,
+        "next_step_hint": TOOL_ERROR_NEXT_STEP_HINT,
+        "message": format!("Tool '{}' failed ({}): {}", tool_name, category, error_message),
+    });
+    if let Some(args_preview) = provided_arguments {
+        result_json["provided_arguments"] = serde_json::Value::String(args_preview);
+    }
+
+    let assistant_text = format!(
+        "Tool '{}' failed ({}): {}\n{}",
+        tool_name, category, error_message, TOOL_ERROR_NEXT_STEP_HINT
+    );
+
+    ToolExecutionResult {
+        tool_id: tool_id.clone(),
+        tool_name: tool_name.clone(),
+        result: ModelToolResult {
+            tool_id,
+            tool_name,
+            result: result_json,
+            result_for_assistant: Some(assistant_text),
+            is_error: true,
+            duration_ms: Some(execution_time_ms),
+            image_attachments: None,
+        },
+        execution_time_ms,
+    }
+}
+
+fn build_user_steering_interrupted_result(
+    task_id: &str,
+    task: Option<ToolTask>,
 ) -> ToolExecutionResult {
     let (tool_id, tool_name, execution_time_ms) = if let Some(task) = task {
         (
@@ -215,22 +297,26 @@ fn build_error_execution_result(
             elapsed_ms_since(task.created_at),
         )
     } else {
-        warn!("Task not found in state manager: {}", task_id);
+        warn!(
+            "Task not found while building steering-interrupted result: {}",
+            task_id
+        );
         (task_id.to_string(), "unknown".to_string(), 0)
     };
-    let error_message = error.to_string();
 
     ToolExecutionResult {
         tool_id: tool_id.clone(),
         tool_name: tool_name.clone(),
         result: ModelToolResult {
             tool_id,
-            tool_name,
+            tool_name: tool_name.clone(),
             result: serde_json::json!({
-                "error": error_message,
-                "message": format!("Tool execution failed: {}", error_message)
+                "status": "skipped",
+                "category": "user_steering_interrupted",
+                "tool_name": tool_name,
+                "message": USER_STEERING_INTERRUPTED_MESSAGE,
             }),
-            result_for_assistant: Some(format!("Tool execution failed: {}", error_message)),
+            result_for_assistant: Some(USER_STEERING_INTERRUPTED_MESSAGE.to_string()),
             is_error: true,
             duration_ms: Some(execution_time_ms),
             image_attachments: None,
@@ -287,6 +373,34 @@ impl ToolPipeline {
 
     pub fn computer_use_host(&self) -> Option<ComputerUseHostRef> {
         self.computer_use_host.clone()
+    }
+
+    fn should_interrupt_for_steering(&self, context: &ToolExecutionContext) -> bool {
+        context
+            .steering_interrupt
+            .as_ref()
+            .map(|interrupt| interrupt.should_interrupt())
+            .unwrap_or(false)
+    }
+
+    async fn build_steering_interrupted_results(
+        &self,
+        task_ids: impl IntoIterator<Item = String>,
+    ) -> Vec<ToolExecutionResult> {
+        let mut results = Vec::new();
+        for task_id in task_ids {
+            let task = self.state_manager.get_task(&task_id);
+            self.state_manager
+                .update_state(
+                    &task_id,
+                    ToolExecutionState::Cancelled {
+                        reason: USER_STEERING_INTERRUPTED_MESSAGE.to_string(),
+                    },
+                )
+                .await;
+            results.push(build_user_steering_interrupted_result(&task_id, task));
+        }
+        results
     }
 
     /// Execute multiple tool calls using partitioned mixed scheduling.
@@ -356,15 +470,6 @@ impl ToolPipeline {
             tool_names.join(", ")
         );
 
-        if batches.len() == 1 {
-            let batch = &batches[0];
-            if batch.is_concurrent {
-                return self.execute_parallel(batch.task_ids.clone()).await;
-            } else {
-                return self.execute_sequential(batch.task_ids.clone()).await;
-            }
-        }
-
         debug!(
             "Partitioned {} tools into {} batches for mixed execution",
             task_ids.len(),
@@ -372,7 +477,28 @@ impl ToolPipeline {
         );
 
         let mut all_results = Vec::with_capacity(task_ids.len());
-        for (batch_idx, batch) in batches.into_iter().enumerate() {
+        let mut batch_iter = batches.into_iter().enumerate().peekable();
+        while let Some((batch_idx, batch)) = batch_iter.next() {
+            let batch_context = batch
+                .task_ids
+                .first()
+                .and_then(|task_id| self.state_manager.get_task(task_id))
+                .map(|task| task.context);
+            if batch_context
+                .as_ref()
+                .is_some_and(|context| self.should_interrupt_for_steering(context))
+            {
+                let remaining_task_ids = batch
+                    .task_ids
+                    .into_iter()
+                    .chain(batch_iter.flat_map(|(_, batch)| batch.task_ids.into_iter()));
+                all_results.extend(
+                    self.build_steering_interrupted_results(remaining_task_ids)
+                        .await,
+                );
+                break;
+            }
+
             debug!(
                 "Executing batch {}: {} tool(s), concurrent={}",
                 batch_idx,
@@ -454,7 +580,21 @@ impl ToolPipeline {
     ) -> BitFunResult<Vec<ToolExecutionResult>> {
         let mut results = Vec::new();
 
-        for task_id in task_ids {
+        let mut task_iter = task_ids.into_iter().peekable();
+        while let Some(task_id) = task_iter.next() {
+            let task = self.state_manager.get_task(&task_id);
+            if task
+                .as_ref()
+                .is_some_and(|task| self.should_interrupt_for_steering(&task.context))
+            {
+                let remaining_task_ids = std::iter::once(task_id).chain(task_iter);
+                results.extend(
+                    self.build_steering_interrupted_results(remaining_task_ids)
+                        .await,
+                );
+                break;
+            }
+
             match self.execute_single_tool(task_id.clone()).await {
                 Ok(result) => results.push(result),
                 Err(e) => {
@@ -1218,5 +1358,55 @@ impl ToolPipeline {
 
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    fn test_tool_task(tool_id: &str, tool_name: &str) -> ToolTask {
+        ToolTask::new(
+            ToolCall {
+                tool_id: tool_id.to_string(),
+                tool_name: tool_name.to_string(),
+                arguments: json!({ "path": "src/main.rs" }),
+                is_error: false,
+            },
+            ToolExecutionContext {
+                session_id: "session_1".to_string(),
+                dialog_turn_id: "turn_1".to_string(),
+                agent_type: "agent".to_string(),
+                workspace: None,
+                context_vars: HashMap::new(),
+                subagent_parent_info: None,
+                allowed_tools: Vec::new(),
+                runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+                steering_interrupt: None,
+                workspace_services: None,
+            },
+            ToolExecutionOptions::default(),
+        )
+    }
+
+    #[test]
+    fn steering_interrupted_result_preserves_tool_call_identity() {
+        let task = test_tool_task("tool_1", "Read");
+        let result = build_user_steering_interrupted_result("tool_1", Some(task));
+
+        assert_eq!(result.tool_id, "tool_1");
+        assert_eq!(result.tool_name, "Read");
+        assert!(result.result.is_error);
+        assert_eq!(
+            result.result.result["category"],
+            serde_json::Value::String("user_steering_interrupted".to_string())
+        );
+        assert_eq!(
+            result.result.result_for_assistant.as_deref(),
+            Some(USER_STEERING_INTERRUPTED_MESSAGE)
+        );
     }
 }

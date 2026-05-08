@@ -35,18 +35,18 @@
   }
 
   &__pet {
-    width: min(96px, 100vw);
-    height: min(96px, 100vh);
-    max-width: 96px;
-    max-height: 96px;
+    width: min(var(--bitfun-agent-companion-pet-width, 96px), 100vw);
+    height: min(var(--bitfun-agent-companion-pet-height, 96px), 100vh);
+    max-width: var(--bitfun-agent-companion-pet-width, 96px);
+    max-height: var(--bitfun-agent-companion-pet-height, 96px);
     transform-origin: center bottom;
   }
 
   &__pet-hitbox {
     position: relative;
     flex-shrink: 0;
-    width: min(96px, 100vw);
-    height: min(96px, 100vh);
+    width: min(var(--bitfun-agent-companion-pet-width, 96px), 100vw);
+    height: min(var(--bitfun-agent-companion-pet-height, 96px), 100vh);
     display: grid;
     place-items: center;
     cursor: grab;
@@ -148,8 +148,8 @@
   }
 
   .bitfun-chat-input-pixel-pet {
-    --bitfun-petdex-width: min(88px, 91.4vw);
-    --bitfun-petdex-height: min(96px, 100vh);
+    --bitfun-petdex-width: min(var(--bitfun-agent-companion-pet-width, 96px), 100vw);
+    --bitfun-petdex-height: min(var(--bitfun-agent-companion-pet-height, 96px), 100vh);
     --bitfun-petdex-margin-top: 0;
 
     pointer-events: none;

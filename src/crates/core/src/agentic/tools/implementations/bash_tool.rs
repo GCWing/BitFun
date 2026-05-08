@@ -595,73 +595,77 @@ Usage notes:
 
         // Remote workspace: execute via injected workspace shell
         if context.is_remote() {
-            if let Some(ws_shell) = context.ws_shell() {
-                info!(
-                    "Executing command on remote workspace via SSH: {}",
-                    command_str
-                );
+            let Some(ws_shell) = context.ws_shell() else {
+                return Err(BitFunError::tool(
+                    "Remote workspace shell is unavailable; refusing to run Bash locally for a remote session.".to_string(),
+                ));
+            };
 
-                let timeout_ms = input
-                    .get("timeout_ms")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(120_000);
+            info!(
+                "Executing command on remote workspace via SSH: {}",
+                command_str
+            );
 
-                let exec_result = ws_shell
-                    .exec_with_options(
-                        command_str,
-                        WorkspaceCommandOptions {
-                            timeout_ms: Some(timeout_ms),
-                            cancellation_token: context.cancellation_token.clone(),
-                        },
+            let timeout_ms = input
+                .get("timeout_ms")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(120_000);
+
+            let exec_result = ws_shell
+                .exec_with_options(
+                    command_str,
+                    WorkspaceCommandOptions {
+                        timeout_ms: Some(timeout_ms),
+                        cancellation_token: context.cancellation_token.clone(),
+                    },
+                )
+                .await
+                .map_err(|e| {
+                    BitFunError::tool(format!("Remote command execution failed: {}", e))
+                })?;
+
+            let output = exec_result.combined_output();
+
+            let execution_time_ms = elapsed_ms_u64(start_time);
+            let working_directory = context
+                .workspace_root()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            let result = ToolResult::Result {
+                data: json!({
+                    "success": exec_result.exit_code == 0,
+                    "command": command_str,
+                    "stdout": exec_result.stdout,
+                    "stderr": exec_result.stderr,
+                    "output": output,
+                    "exit_code": exec_result.exit_code,
+                    "interrupted": exec_result.interrupted,
+                    "timed_out": exec_result.timed_out,
+                    "working_directory": working_directory,
+                    "execution_time_ms": execution_time_ms,
+                    "duration_ms": execution_time_ms,
+                    "is_remote": true
+                }),
+                result_for_assistant: Some(if exec_result.timed_out {
+                    format!(
+                        "[Remote SSH] Command timed out on remote server:\n{}\n\nExit code: {}",
+                        output, exec_result.exit_code
                     )
-                    .await
-                    .map_err(|e| {
-                        BitFunError::tool(format!("Remote command execution failed: {}", e))
-                    })?;
-
-                let output = exec_result.combined_output();
-
-                let execution_time_ms = elapsed_ms_u64(start_time);
-                let working_directory = context
-                    .workspace_root()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_default();
-
-                let result = ToolResult::Result {
-                    data: json!({
-                        "success": exec_result.exit_code == 0,
-                        "command": command_str,
-                        "stdout": exec_result.stdout,
-                        "stderr": exec_result.stderr,
-                        "output": output,
-                        "exit_code": exec_result.exit_code,
-                        "interrupted": exec_result.interrupted,
-                        "timed_out": exec_result.timed_out,
-                        "working_directory": working_directory,
-                        "execution_time_ms": execution_time_ms,
-                        "duration_ms": execution_time_ms,
-                        "is_remote": true
-                    }),
-                    result_for_assistant: Some(if exec_result.timed_out {
-                        format!(
-                            "[Remote SSH] Command timed out on remote server:\n{}\n\nExit code: {}",
-                            output, exec_result.exit_code
-                        )
-                    } else if exec_result.interrupted {
-                        format!(
-                            "[Remote SSH] Command was cancelled on remote server:\n{}\n\nExit code: {}",
-                            output, exec_result.exit_code
-                        )
-                    } else {
-                        format!(
-                            "[Remote SSH] Command executed on remote server:\n{}\n\nExit code: {}",
-                            output, exec_result.exit_code
-                        )
-                    }),
-                    image_attachments: None,
-                };
-                return Ok(vec![result]);
-            }
+                } else if exec_result.interrupted {
+                    format!(
+                        "[Remote SSH] Command was cancelled on remote server:\n{}\n\nExit code: {}",
+                        output, exec_result.exit_code
+                    )
+                } else {
+                    format!(
+                        "[Remote SSH] Command executed on remote server:\n{}\n\nExit code: {}",
+                        output, exec_result.exit_code
+                    )
+                }),
+                image_attachments: None,
+            };
+            return Ok(vec![result]);
         }
 
         let run_in_background = input

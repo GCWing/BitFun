@@ -1,11 +1,8 @@
 use crate::service::config::global::GlobalConfigManager;
 use crate::util::errors::{BitFunError, BitFunResult};
-use dashmap::DashMap;
 use log::warn;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
-use std::sync::LazyLock;
-use std::time::{Duration, Instant};
 
 pub const DEEP_REVIEW_AGENT_TYPE: &str = "DeepReview";
 pub const REVIEW_JUDGE_AGENT_TYPE: &str = "ReviewJudge";
@@ -24,14 +21,10 @@ pub const CORE_REVIEWER_AGENT_TYPES: [&str; 5] = [
 ];
 const DEFAULT_REVIEW_TEAM_CONFIG_PATH: &str = "ai.review_teams.default";
 
-const DEFAULT_REVIEWER_TIMEOUT_SECONDS: u64 = 600;
-const DEFAULT_JUDGE_TIMEOUT_SECONDS: u64 = 600;
-const MAX_TIMEOUT_SECONDS: u64 = 3600;
+const DEFAULT_REVIEWER_TIMEOUT_SECONDS: u64 = 0;
+const DEFAULT_JUDGE_TIMEOUT_SECONDS: u64 = 0;
 const DEFAULT_REVIEWER_FILE_SPLIT_THRESHOLD: usize = 20;
 const DEFAULT_MAX_SAME_ROLE_INSTANCES: usize = 3;
-const MAX_SAME_ROLE_INSTANCES: usize = 8;
-const BUDGET_TTL: Duration = Duration::from_secs(60 * 60);
-const PRUNE_INTERVAL: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeepReviewSubagentRole {
@@ -133,13 +126,13 @@ impl DeepReviewExecutionPolicy {
             reviewer_timeout_seconds: clamp_u64(
                 config.get("reviewer_timeout_seconds"),
                 0,
-                MAX_TIMEOUT_SECONDS,
+                u64::MAX,
                 DEFAULT_REVIEWER_TIMEOUT_SECONDS,
             ),
             judge_timeout_seconds: clamp_u64(
                 config.get("judge_timeout_seconds"),
                 0,
-                MAX_TIMEOUT_SECONDS,
+                u64::MAX,
                 DEFAULT_JUDGE_TIMEOUT_SECONDS,
             ),
             reviewer_file_split_threshold: clamp_usize(
@@ -151,7 +144,7 @@ impl DeepReviewExecutionPolicy {
             max_same_role_instances: clamp_usize(
                 config.get("max_same_role_instances"),
                 1,
-                MAX_SAME_ROLE_INSTANCES,
+                usize::MAX,
                 DEFAULT_MAX_SAME_ROLE_INSTANCES,
             ),
         }
@@ -234,117 +227,6 @@ impl DeepReviewExecutionPolicy {
     }
 }
 
-#[derive(Debug)]
-struct DeepReviewTurnBudget {
-    judge_calls: usize,
-    /// Tracks total reviewer calls (across all roles) per turn.
-    /// Capped by `max_same_role_instances * CORE_REVIEWER_AGENT_TYPES.len() +
-    /// extra_subagent_ids.len()` so the orchestrator cannot spawn an
-    /// unbounded number of same-role instances.
-    reviewer_calls: usize,
-    updated_at: Instant,
-}
-
-impl DeepReviewTurnBudget {
-    fn new(now: Instant) -> Self {
-        Self {
-            judge_calls: 0,
-            reviewer_calls: 0,
-            updated_at: now,
-        }
-    }
-}
-
-pub struct DeepReviewBudgetTracker {
-    turns: DashMap<String, DeepReviewTurnBudget>,
-    last_pruned_at: std::sync::Mutex<Instant>,
-}
-
-impl Default for DeepReviewBudgetTracker {
-    fn default() -> Self {
-        Self {
-            turns: DashMap::new(),
-            last_pruned_at: std::sync::Mutex::new(Instant::now()),
-        }
-    }
-}
-
-impl DeepReviewBudgetTracker {
-    pub fn record_task(
-        &self,
-        parent_dialog_turn_id: &str,
-        policy: &DeepReviewExecutionPolicy,
-        role: DeepReviewSubagentRole,
-    ) -> Result<(), DeepReviewPolicyViolation> {
-        let now = Instant::now();
-        if let Ok(last_pruned) = self.last_pruned_at.lock() {
-            if now.saturating_duration_since(*last_pruned) >= PRUNE_INTERVAL {
-                drop(last_pruned);
-                self.prune_stale(now);
-            }
-        }
-
-        let mut budget = self
-            .turns
-            .entry(parent_dialog_turn_id.to_string())
-            .or_insert_with(|| DeepReviewTurnBudget::new(now));
-
-        match role {
-            DeepReviewSubagentRole::Reviewer => {
-                let max_reviewer_calls = policy.max_same_role_instances
-                    * (CORE_REVIEWER_AGENT_TYPES.len() + policy.extra_subagent_ids.len());
-                if budget.reviewer_calls >= max_reviewer_calls {
-                    return Err(DeepReviewPolicyViolation::new(
-                        "deep_review_reviewer_budget_exhausted",
-                        format!(
-                            "Reviewer launch budget exhausted for this DeepReview turn (max calls: {})",
-                            max_reviewer_calls
-                        ),
-                    ));
-                }
-                budget.reviewer_calls += 1;
-            }
-            DeepReviewSubagentRole::Judge => {
-                let max_judge_calls = 1;
-                if budget.judge_calls >= max_judge_calls {
-                    return Err(DeepReviewPolicyViolation::new(
-                        "deep_review_judge_budget_exhausted",
-                        format!(
-                            "ReviewJudge launch budget exhausted for this DeepReview turn (max calls: {})",
-                            max_judge_calls
-                        ),
-                    ));
-                }
-
-                budget.judge_calls += 1;
-            }
-        }
-
-        budget.updated_at = now;
-        Ok(())
-    }
-
-    fn prune_stale(&self, now: Instant) {
-        self.turns
-            .retain(|_, budget| now.saturating_duration_since(budget.updated_at) <= BUDGET_TTL);
-        if let Ok(mut last_pruned) = self.last_pruned_at.lock() {
-            *last_pruned = now;
-        }
-    }
-
-    /// Explicitly clean up all budget tracking data.
-    /// Call this when the application is shutting down or when the review session ends.
-    pub fn cleanup(&self) {
-        self.turns.clear();
-        if let Ok(mut last_pruned) = self.last_pruned_at.lock() {
-            *last_pruned = Instant::now();
-        }
-    }
-}
-
-static GLOBAL_DEEP_REVIEW_BUDGET_TRACKER: LazyLock<DeepReviewBudgetTracker> =
-    LazyLock::new(DeepReviewBudgetTracker::default);
-
 pub async fn load_default_deep_review_policy() -> BitFunResult<DeepReviewExecutionPolicy> {
     let config_service = GlobalConfigManager::get_service().await.map_err(|error| {
         BitFunError::config(format!(
@@ -381,14 +263,6 @@ pub async fn load_default_deep_review_policy() -> BitFunResult<DeepReviewExecuti
 pub fn is_missing_default_review_team_config_error(error: &BitFunError) -> bool {
     matches!(error, BitFunError::NotFound(message)
         if message == &format!("Config path '{}' not found", DEFAULT_REVIEW_TEAM_CONFIG_PATH))
-}
-
-pub fn record_deep_review_task_budget(
-    parent_dialog_turn_id: &str,
-    policy: &DeepReviewExecutionPolicy,
-    role: DeepReviewSubagentRole,
-) -> Result<(), DeepReviewPolicyViolation> {
-    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_task(parent_dialog_turn_id, policy, role)
 }
 
 fn normalize_extra_subagent_ids(raw: Option<&Value>) -> Vec<String> {
@@ -483,9 +357,8 @@ fn number_as_i64(value: &Value) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_missing_default_review_team_config_error, DeepReviewBudgetTracker,
-        DeepReviewExecutionPolicy, DeepReviewStrategyLevel, DeepReviewSubagentRole,
-        REVIEW_FIXER_AGENT_TYPE,
+        is_missing_default_review_team_config_error, DeepReviewExecutionPolicy,
+        DeepReviewStrategyLevel, DeepReviewSubagentRole, REVIEW_FIXER_AGENT_TYPE,
     };
     use crate::util::errors::BitFunError;
     use serde_json::json;
@@ -579,8 +452,7 @@ mod tests {
 
         let policy_with_legacy_config =
             DeepReviewExecutionPolicy::from_config_value(Some(&json!({
-                "auto_fix_enabled": true,
-                "auto_fix_max_rounds": 2
+                "auto_fix_enabled": true
             })));
         let result2 = policy_with_legacy_config.classify_subagent(REVIEW_FIXER_AGENT_TYPE);
         assert!(result2.is_err());
@@ -611,25 +483,6 @@ mod tests {
         assert!(!policy
             .extra_subagent_ids
             .contains(&"DeepReview".to_string()));
-    }
-
-    #[test]
-    fn budget_tracker_caps_judge_calls_per_turn() {
-        let policy = DeepReviewExecutionPolicy::default();
-        let tracker = DeepReviewBudgetTracker::default();
-
-        // turn-1: one judge call allowed
-        tracker
-            .record_task("turn-1", &policy, DeepReviewSubagentRole::Judge)
-            .unwrap();
-        assert!(tracker
-            .record_task("turn-1", &policy, DeepReviewSubagentRole::Judge)
-            .is_err());
-
-        // turn-2: fresh budget, should succeed
-        tracker
-            .record_task("turn-2", &policy, DeepReviewSubagentRole::Judge)
-            .unwrap();
     }
 
     #[test]
@@ -710,36 +563,17 @@ mod tests {
     }
 
     #[test]
-    fn budget_tracker_caps_reviewer_calls_by_max_same_role_instances() {
-        let policy = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
-            "max_same_role_instances": 2
-        })));
-        let tracker = DeepReviewBudgetTracker::default();
-
-        // Default policy: 5 core reviewers * 2 max instances = 10 reviewer calls allowed
-        for _ in 0..10 {
-            tracker
-                .record_task("turn-1", &policy, DeepReviewSubagentRole::Reviewer)
-                .unwrap();
-        }
-        // 11th reviewer call should be rejected
-        assert!(tracker
-            .record_task("turn-1", &policy, DeepReviewSubagentRole::Reviewer)
-            .is_err());
-    }
-
-    #[test]
-    fn max_same_role_instances_clamped_to_range() {
+    fn max_same_role_instances_only_enforces_positive_minimum() {
         // Value 0 should be clamped to 1
         let policy = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
             "max_same_role_instances": 0
         })));
         assert_eq!(policy.max_same_role_instances, 1);
 
-        // Value above max (8) should be clamped to 8
+        // Large values are preserved so the config does not impose a hidden cap.
         let policy = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
             "max_same_role_instances": 100
         })));
-        assert_eq!(policy.max_same_role_instances, 8);
+        assert_eq!(policy.max_same_role_instances, 100);
     }
 }

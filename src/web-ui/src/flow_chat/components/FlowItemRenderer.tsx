@@ -5,10 +5,11 @@
  */
 
 import React from 'react';
-import { FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem } from '../types/flow-chat';
+import { FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, FlowUserSteeringItem } from '../types/flow-chat';
 import { FlowTextBlock } from './FlowTextBlock';
 import { FlowToolCard } from './FlowToolCard';
 import { ModelThinkingDisplay } from '../tool-cards/ModelThinkingDisplay';
+import { UserSteeringBubble } from './UserSteeringBubble';
 
 interface FlowItemRendererProps {
   item: FlowItem;
@@ -36,6 +37,10 @@ const FlowItemRendererComponent: React.FC<FlowItemRendererProps> = ({
     return <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} />;
   }
   
+  if (item.type === 'user-steering') {
+    return <UserSteeringBubble item={item as FlowUserSteeringItem} />;
+  }
+
   if (item.type === 'tool') {
     const toolItem = item as FlowToolItem;
     return (

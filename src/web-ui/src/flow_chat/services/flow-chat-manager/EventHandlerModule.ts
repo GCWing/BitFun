@@ -57,6 +57,7 @@ import {
   completeActiveTextItems,
   cleanupSessionBuffers
 } from './TextChunkModule';
+import { pendingQueueManager } from './PendingQueueModule';
 import { 
   processToolEvent, 
   processToolParamsPartialInternal,
@@ -419,6 +420,9 @@ export async function initializeEventListeners(
     },
     onSessionModelAutoMigrated: (event) => {
       handleSessionModelAutoMigrated(event);
+    },
+    onUserSteeringInjected: (event) => {
+      handleUserSteeringInjected(context, event);
     }
   };
 
@@ -760,6 +764,114 @@ function handleSessionModelAutoMigrated(event: SessionModelAutoMigratedEvent): v
       reason,
       newModelId,
     },
+  });
+}
+
+/**
+ * Upsert a `user-steering` flow item into the latest model round of the given
+ * dialog turn. Used both by the optimistic client-side path (right after
+ * `steerDialogTurn` succeeds, status `pending`) and by the
+ * `UserSteeringInjected` event handler (status `completed`). Dedupes by
+ * `steering_${steeringId}`. If the item already exists, its status/roundIndex
+ * is upgraded in place.
+ *
+ * Returns true if the item was inserted (newly added), false if it already
+ * existed (status was upgraded if applicable) or the target turn/round is not
+ * yet available.
+ */
+export function insertSteeringItemIfAbsent(params: {
+  sessionId: string;
+  turnId: string;
+  steeringId: string;
+  content: string;
+  roundIndex?: number;
+  status?: 'pending' | 'completed';
+}): boolean {
+  const { sessionId, turnId, steeringId, content } = params;
+  const roundIndex = typeof params.roundIndex === 'number' ? params.roundIndex : 0;
+  const status = params.status ?? 'completed';
+
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
+  if (!session) return false;
+  const dialogTurn = session.dialogTurns.find(turn => turn.id === turnId);
+  if (!dialogTurn) return false;
+
+  const itemId = `steering_${steeringId}`;
+  const existing = dialogTurn.modelRounds
+    .flatMap(round => round.items)
+    .find(it => it.id === itemId) as
+      | { status: string; roundIndex?: number }
+      | undefined;
+  if (existing) {
+    // Upgrade pending -> completed when the backend confirms injection.
+    if (existing.status !== 'completed' && status === 'completed') {
+      store.updateModelRoundItem(sessionId, turnId, itemId, {
+        status: 'completed',
+        roundIndex,
+      } as any);
+    }
+    return false;
+  }
+
+  const item = {
+    id: itemId,
+    type: 'user-steering' as const,
+    timestamp: Date.now(),
+    status,
+    steeringId,
+    content,
+    roundIndex,
+  };
+
+  const lastModelRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
+  if (!lastModelRound) {
+    const modelRound: ModelRound = {
+      id: `steering_round_${steeringId}`,
+      index: roundIndex,
+      items: [item as any],
+      isStreaming: true,
+      isComplete: false,
+      status: 'streaming',
+      startTime: Date.now(),
+    };
+    store.updateDialogTurn(sessionId, turnId, turn => ({
+      ...turn,
+      modelRounds: [...turn.modelRounds, modelRound],
+      status: 'processing',
+    }));
+    return true;
+  }
+
+  store.addModelRoundItem(sessionId, turnId, item as any, lastModelRound.id);
+  return true;
+}
+
+/**
+ * Handle the `UserSteeringInjected` event: render an inline `user-steering`
+ * item inside the latest model round of the running dialog turn so the user
+ * can see the steering message they just submitted. Idempotent — if the
+ * client-side optimistic path already added the item, this is a no-op.
+ */
+function handleUserSteeringInjected(_context: FlowChatContext, event: any): void {
+  const sessionId: string | undefined = event?.sessionId;
+  const turnId: string | undefined = event?.turnId;
+  const steeringId: string | undefined = event?.steeringId;
+  const content: string | undefined = event?.displayContent ?? event?.content;
+  const roundIndex: number =
+    typeof event?.roundIndex === 'number' ? event.roundIndex : 0;
+
+  if (!sessionId || !turnId || !steeringId || !content) {
+    log.warn('UserSteeringInjected: missing fields', { event });
+    return;
+  }
+
+  insertSteeringItemIfAbsent({
+    sessionId,
+    turnId,
+    steeringId,
+    content,
+    roundIndex,
   });
 }
 
@@ -1579,6 +1691,16 @@ function handleDialogTurnComplete(
     return;
   }
 
+  // P1-11: Idempotent terminal-event handling. The backend may emit
+  // DialogTurnCompleted only once for a turn, but if a future change adds a
+  // duplicate emit path, we want this handler to be a no-op the second time.
+  const terminalKey = `${sessionId}:${turnId}`;
+  if (context.handledTerminalTurnEvents.has(terminalKey)) {
+    log.debug('Ignoring duplicate DialogTurnCompleted', { sessionId, turnId });
+    return;
+  }
+  context.handledTerminalTurnEvents.add(terminalKey);
+
   const machine = stateMachineManager.get(sessionId);
   if (machine) {
     const ctx = machine.getContext();
@@ -1727,7 +1849,17 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
     }
     return;
   }
-  
+
+  // P1-11: Idempotent terminal-event handling.
+  if (sessionId && turnId) {
+    const terminalKey = `${sessionId}:${turnId}`;
+    if (context.handledTerminalTurnEvents.has(terminalKey)) {
+      log.debug('Ignoring duplicate DialogTurnFailed', { sessionId, turnId });
+      return;
+    }
+    context.handledTerminalTurnEvents.add(terminalKey);
+  }
+
   log.error('Dialog turn failed', { sessionId, turnId, error, errorDetail });
   clearPendingTurnCompletion(context, sessionId, turnId);
   clearRuntimeStatus(context, sessionId, turnId);
@@ -1784,12 +1916,29 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
     });
   } else {
     if (dialogTurn?.userMessage?.content) {
-      const machine = stateMachineManager.get(sessionId);
-      if (machine) {
-        machine.setQueuedInput(dialogTurn.userMessage.content);
+      try {
+        // B-policy: restore the failed turn's user content into the pending
+        // queue exactly once, marked `failed` and `retryCount=1`. The auto-drain
+        // listener skips items with `retryCount > 0`, so the user must
+        // explicitly edit / send-now / delete to clear the entry. This prevents
+        // the previous behaviour where a hard error (auth, rate-limit, bad
+        // tool args) would auto-resend in a tight loop.
+        pendingQueueManager.enqueue({
+          sessionId,
+          content: dialogTurn.userMessage.content,
+          displayMessage: dialogTurn.userMessage.content,
+          retryCount: 1,
+          initialStatus: 'failed',
+        });
+      } catch (err) {
+        log.warn('Failed to restore failed turn into pending queue', {
+          sessionId,
+          turnId,
+          err,
+        });
       }
     }
-    
+
     context.flowChatStore.deleteDialogTurn(sessionId, turnId);
     updateSessionMetadata(context, sessionId).catch(err => {
       log.warn('Failed to update failed session metadata', { sessionId, error: err });
@@ -1847,7 +1996,21 @@ function handleDialogTurnCancelled(
     }
     return;
   }
-  
+
+  // P1-11: Idempotent terminal-event handling. The execution engine may emit
+  // DialogTurnCancelled when it detects cancellation between rounds, and the
+  // coordinator wrapper unconditionally re-emits one when the turn returns
+  // BitFunError::Cancelled. Both paths can fire on the same turn — make
+  // sure we only run the visible side-effects once.
+  if (sessionId && turnId) {
+    const terminalKey = `${sessionId}:${turnId}`;
+    if (context.handledTerminalTurnEvents.has(terminalKey)) {
+      log.debug('Ignoring duplicate DialogTurnCancelled', { sessionId, turnId });
+      return;
+    }
+    context.handledTerminalTurnEvents.add(terminalKey);
+  }
+
   log.info('Dialog turn cancelled', { sessionId, turnId });
   clearPendingTurnCompletion(context, sessionId, turnId);
   clearRuntimeStatus(context, sessionId, turnId);

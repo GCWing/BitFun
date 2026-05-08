@@ -104,10 +104,6 @@
   "loading": {
     "text": "加載配置中..."
   },
-  "maxRounds": {
-    "label": "最大對話輪次",
-    "description": "單次對話中 AI 的最大執行輪次，達到後會暫停。複雜任務可適當提高。"
-  },
   "messages": {
     "saveSuccess": "設置已保存",
     "saveFailed": "保存失敗",

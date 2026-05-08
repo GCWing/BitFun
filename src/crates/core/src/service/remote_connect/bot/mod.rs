@@ -617,10 +617,7 @@ mod tests {
     fn make_temp_workspace() -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
         let base = std::env::temp_dir().join(format!(
             "bitfun-remote-connect-test-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
+            uuid::Uuid::new_v4()
         ));
         let workspace = base.join("workspace");
         let artifacts = workspace.join("artifacts");

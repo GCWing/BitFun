@@ -16,7 +16,7 @@ use crate::agentic::fork_agent::{
     ForkAgentContextSnapshot, ForkAgentExecutionRequest, ForkAgentExecutionResult,
 };
 use crate::agentic::image_analysis::ImageContextData;
-use crate::agentic::round_preempt::DialogRoundPreemptSource;
+use crate::agentic::round_preempt::{DialogRoundPreemptSource, DialogRoundSteeringSource};
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
@@ -27,9 +27,11 @@ use crate::service::bootstrap::{
 };
 use crate::service::config::global::GlobalConfigManager;
 use crate::util::errors::{BitFunError, BitFunResult};
+use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::sync::OnceLock;
 use tokio::sync::{mpsc, watch, OwnedSemaphorePermit, RwLock, Semaphore};
@@ -260,6 +262,14 @@ pub struct ConversationCoordinator {
     scheduler_notify_tx: OnceLock<mpsc::Sender<(String, TurnOutcome)>>,
     /// Round-boundary yield (same source as scheduler's yield flags); injected after construction
     round_preempt_source: OnceLock<Arc<dyn DialogRoundPreemptSource>>,
+    /// Round-boundary user steering source (mid-turn user message injection); injected after construction
+    round_steering_source: OnceLock<Arc<dyn DialogRoundSteeringSource>>,
+    /// In-flight dialog turn tracker per session, used to serialize cancel→start
+    /// transitions so a new turn never starts touching the in-memory message
+    /// list while the previous (cancelled) turn's spawn task is still draining.
+    /// Map value is a counter shared between the coordinator and the spawn
+    /// task; spawn task increments on entry and decrements on exit.
+    active_turns_per_session: Arc<DashMap<String, Arc<AtomicUsize>>>,
 }
 
 impl ConversationCoordinator {
@@ -568,6 +578,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             subagent_timeout_registry: Arc::new(RwLock::new(HashMap::new())),
             scheduler_notify_tx: OnceLock::new(),
             round_preempt_source: OnceLock::new(),
+            round_steering_source: OnceLock::new(),
+            active_turns_per_session: Arc::new(DashMap::new()),
         }
     }
 
@@ -580,6 +592,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     /// Wire round-boundary preempt (typically the scheduler's [`SessionRoundYieldFlags`](crate::agentic::round_preempt::SessionRoundYieldFlags)).
     pub fn set_round_preempt_source(&self, source: Arc<dyn DialogRoundPreemptSource>) {
         let _ = self.round_preempt_source.set(source);
+    }
+
+    /// Wire round-boundary user-steering source (typically the scheduler's
+    /// [`SessionSteeringBuffer`](crate::agentic::round_preempt::SessionSteeringBuffer)).
+    pub fn set_round_steering_source(&self, source: Arc<dyn DialogRoundSteeringSource>) {
+        let _ = self.round_steering_source.set(source);
     }
 
     /// Dynamically adjust a running subagent's timeout.
@@ -1376,6 +1394,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             session_id, session.state
         );
 
+        // P0-8: Even when SessionState is Idle, a previously cancelled turn's
+        // spawn task may still be draining (writing tail messages into the
+        // in-memory context cache). Wait briefly for it to finish so the new
+        // turn does not race with it. This is a no-op when no turn is in flight.
+        let pending = self
+            .wait_session_drained(&session_id, Duration::from_millis(800))
+            .await;
+        if pending > 0 {
+            warn!(
+                "Starting new dialog while previous turn still draining: session_id={}, pending={}",
+                session_id, pending
+            );
+        }
+
         // Check session state
         // Allow Idle or any error state (user can retry after error)
         // If Processing, cancel request hasn't arrived yet, reject new dialog
@@ -1658,6 +1690,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services,
             round_preempt: self.round_preempt_source.get().cloned(),
+            round_steering: self.round_steering_source.get().cloned(),
         };
 
         // Auto-generate session title on first message
@@ -1713,7 +1746,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let user_message_metadata_clone = user_message_metadata;
         let scheduler_notify_tx = self.scheduler_notify_tx.get().cloned();
 
+        // P0-8: register this turn as in-flight so a subsequent cancel→start
+        // sequence can wait for the spawn task to actually drain before the
+        // new turn touches the in-memory message cache.
+        let active_counter = self
+            .active_turns_per_session
+            .entry(session_id.clone())
+            .or_insert_with(|| Arc::new(AtomicUsize::new(0)))
+            .clone();
+        active_counter.fetch_add(1, Ordering::SeqCst);
+        let active_counter_for_spawn = active_counter.clone();
+
         tokio::spawn(async move {
+            // RAII-style decrement on every exit path of the spawn body.
+            struct DropGuard {
+                counter: Arc<AtomicUsize>,
+            }
+            impl Drop for DropGuard {
+                fn drop(&mut self) {
+                    self.counter.fetch_sub(1, Ordering::SeqCst);
+                }
+            }
+            let _drop_guard = DropGuard {
+                counter: active_counter_for_spawn,
+            };
+
             // Note: Don't check cancellation here as cancel token hasn't been created yet
             // Cancel token is created in execute_dialog_turn -> execute_round
             // execute_dialog_turn has proper cancellation checks internally
@@ -1797,21 +1854,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             )
                             .await;
 
-                        // Mark the turn as completed in persistence so its partial
+                        // Mark the turn as cancelled in persistence so its partial
                         // content appears in historical messages (turns_to_chat_messages
-                        // skips InProgress turns).
+                        // skips InProgress turns) and the frontend can distinguish a
+                        // cancellation from a normal completion.
                         let _ = session_manager
-                            .complete_dialog_turn(
-                                &session_id_clone,
-                                &turn_id_clone,
-                                String::new(),
-                                TurnStats {
-                                    total_rounds: 0,
-                                    total_tools: 0,
-                                    total_tokens: 0,
-                                    duration_ms: 0,
-                                },
-                            )
+                            .cancel_dialog_turn(&session_id_clone, &turn_id_clone)
                             .await;
 
                         let _ = session_manager
@@ -1903,6 +1951,30 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(())
     }
 
+    /// P0-8: Wait until all in-flight spawn tasks for this session have
+    /// drained, or until `deadline` is reached. Returns the number of
+    /// in-flight turns still running (0 means fully drained). This is used to
+    /// serialize cancel→start so a new turn does not start mutating the
+    /// in-memory context cache while a cancelled turn's spawn task is still
+    /// finishing its tail.
+    async fn wait_session_drained(&self, session_id: &str, max_wait: Duration) -> usize {
+        let counter = match self.active_turns_per_session.get(session_id) {
+            Some(entry) => entry.value().clone(),
+            None => return 0,
+        };
+        let deadline = Instant::now() + max_wait;
+        loop {
+            let pending = counter.load(Ordering::SeqCst);
+            if pending == 0 {
+                return 0;
+            }
+            if Instant::now() >= deadline {
+                return pending;
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+    }
+
     /// Cancel dialog turn execution
     /// Immediately set state to Idle to allow new dialog, old turn ends naturally via cancel token
     pub async fn cancel_dialog_turn(
@@ -1943,33 +2015,44 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await;
         debug!("Session state change event sent");
 
-        // Step 3: Async cleanup of old turn (let it end naturally via cancel token, non-blocking)
-        let execution_engine = self.execution_engine.clone();
-        let tool_pipeline = self.tool_pipeline.clone();
-        let dialog_turn_id_clone = dialog_turn_id.to_string();
+        // Step 3: Trigger cancellation tokens so the running turn unwinds. We
+        // do this synchronously (not spawn) because the calls themselves are
+        // cheap (just signalling tokens); the actual long-running work
+        // (waiting for the spawn task to drain) is handled via
+        // `wait_session_drained` below.
+        if let Err(e) = self
+            .execution_engine
+            .cancel_dialog_turn(dialog_turn_id)
+            .await
+        {
+            warn!("Failed to cancel execution engine: {}", e);
+        }
+        if let Err(e) = self
+            .tool_pipeline
+            .cancel_dialog_turn_tools(dialog_turn_id)
+            .await
+        {
+            warn!("Failed to cancel tool execution: {}", e);
+        }
 
-        tokio::spawn(async move {
-            debug!(
-                "Starting async cleanup for cancelled turn: {}",
-                dialog_turn_id_clone
+        // Step 4: Wait briefly for the spawn task that owns this turn to drain
+        // its in-memory message writes before returning. Capped so the RPC
+        // never blocks longer than ~1.5s — beyond that we let the new turn
+        // proceed and rely on the cancellation token already being signalled.
+        let pending = self
+            .wait_session_drained(session_id, Duration::from_millis(1500))
+            .await;
+        if pending > 0 {
+            warn!(
+                "Cancelled turn did not fully drain within 1500ms: session_id={}, dialog_turn_id={}, pending={}",
+                session_id, dialog_turn_id, pending
             );
-
-            if let Err(e) = execution_engine
-                .cancel_dialog_turn(&dialog_turn_id_clone)
-                .await
-            {
-                warn!("Failed to cancel execution engine: {}", e);
-            }
-
-            if let Err(e) = tool_pipeline
-                .cancel_dialog_turn_tools(&dialog_turn_id_clone)
-                .await
-            {
-                warn!("Failed to cancel tool execution: {}", e);
-            }
-
-            debug!("Async cleanup completed: {}", dialog_turn_id_clone);
-        });
+        } else {
+            debug!(
+                "Cancelled turn fully drained: session_id={}, dialog_turn_id={}",
+                session_id, dialog_turn_id
+            );
+        }
 
         Ok(())
     }
@@ -2376,7 +2459,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             original_user_input: None,
             user_message_metadata: None,
             subagent_parent_info: subagent_parent_info.clone().map(Into::into),
-        }).await;
+        })
+        .await;
 
         let subagent_workspace = Self::build_workspace_binding(&session.config).await;
         let subagent_services = Self::build_workspace_services(&subagent_workspace).await;
@@ -2395,6 +2479,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions,
             workspace_services: subagent_services,
             round_preempt: self.round_preempt_source.get().cloned(),
+            // Subagents are autonomous; user steering is targeted at top-level
+            // dialog turns only. Leave None so we don't intercept buffer entries
+            // that belong to a different (parent) session/turn.
+            round_steering: None,
         };
 
         let execution_engine = self.execution_engine.clone();
@@ -2739,7 +2827,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .ensure_hidden_btw_session(parent_session_id, child_session_id, child_session_name)
             .await?;
 
-        if let Some(model_id) = model_id.map(str::trim).filter(|model_id| !model_id.is_empty()) {
+        if let Some(model_id) = model_id
+            .map(str::trim)
+            .filter(|model_id| !model_id.is_empty())
+        {
             self.session_manager
                 .update_session_model_id(child_session_id, model_id)
                 .await?;

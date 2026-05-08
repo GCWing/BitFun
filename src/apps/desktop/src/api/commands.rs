@@ -2028,8 +2028,8 @@ fn load_pet_manifest_from_bytes(bytes: &[u8]) -> Result<(serde_json::Value, Path
 fn load_pet_package_source(source_path: &Path) -> Result<PetPackageSource, String> {
     if source_path.is_dir() {
         let pet_json_path = source_path.join("pet.json");
-        let pet_json = std::fs::read(&pet_json_path)
-            .map_err(|e| format!("Failed to read pet.json: {}", e))?;
+        let pet_json =
+            std::fs::read(&pet_json_path).map_err(|e| format!("Failed to read pet.json: {}", e))?;
         let (_, spritesheet_name) = load_pet_manifest_from_bytes(&pet_json)?;
         let spritesheet_path = source_path.join(&spritesheet_name);
         let spritesheet = std::fs::read(&spritesheet_path)
@@ -2043,8 +2043,8 @@ fn load_pet_package_source(source_path: &Path) -> Result<PetPackageSource, Strin
 
     let file = std::fs::File::open(source_path)
         .map_err(|e| format!("Failed to open pet zip package: {}", e))?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| format!("Failed to read pet zip package: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("Failed to read pet zip package: {}", e))?;
 
     let mut manifest_index = None;
     for index in 0..archive.len() {
@@ -2098,7 +2098,10 @@ fn companion_user_packages_dir(state: &AppState) -> PathBuf {
         .join("agent-companions")
 }
 
-fn pet_package_dto_from_dir(dir: &Path, source: &str) -> Result<AgentCompanionPetPackageDto, String> {
+fn pet_package_dto_from_dir(
+    dir: &Path,
+    source: &str,
+) -> Result<AgentCompanionPetPackageDto, String> {
     let pet_json_path = dir.join("pet.json");
     let pet_json = std::fs::read(&pet_json_path)
         .map_err(|e| format!("Failed to read {}: {}", pet_json_path.display(), e))?;
@@ -2106,7 +2109,11 @@ fn pet_package_dto_from_dir(dir: &Path, source: &str) -> Result<AgentCompanionPe
     let raw_id = manifest
         .get("id")
         .and_then(|value| value.as_str())
-        .unwrap_or_else(|| dir.file_name().and_then(|name| name.to_str()).unwrap_or("pet"));
+        .unwrap_or_else(|| {
+            dir.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("pet")
+        });
     let display_name = manifest
         .get("displayName")
         .and_then(|value| value.as_str())
@@ -2121,7 +2128,10 @@ fn pet_package_dto_from_dir(dir: &Path, source: &str) -> Result<AgentCompanionPe
         .filter(|value| !value.is_empty());
     let spritesheet_path = dir.join(&spritesheet_rel_path);
     if !spritesheet_path.is_file() {
-        return Err(format!("Spritesheet not found: {}", spritesheet_path.display()));
+        return Err(format!(
+            "Spritesheet not found: {}",
+            spritesheet_path.display()
+        ));
     }
     let spritesheet_file_name = spritesheet_rel_path
         .file_name()
@@ -2154,7 +2164,11 @@ fn scan_pet_package_dirs(root: &Path, source: &str) -> Vec<AgentCompanionPetPack
             Err(err) => warn!("Skipping invalid Agent companion pet package: {}", err),
         }
     }
-    pets.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+    pets.sort_by(|a, b| {
+        a.display_name
+            .to_lowercase()
+            .cmp(&b.display_name.to_lowercase())
+    });
     pets
 }
 
@@ -2262,7 +2276,9 @@ pub async fn delete_agent_companion_pet_package(
         .map_err(|e| format!("Pet package path not found: {}", e))?;
 
     if !resolved.starts_with(&root) {
-        return Err("Refusing to delete path outside imported Agent companion packages".to_string());
+        return Err(
+            "Refusing to delete path outside imported Agent companion packages".to_string(),
+        );
     }
     if !resolved.is_dir() {
         return Err("Pet package is not a directory".to_string());

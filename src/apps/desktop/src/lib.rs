@@ -141,7 +141,8 @@ pub async fn run() {
     }
     startup_timings.record_elapsed("init_function_agents", step_started);
 
-    let workspace_search_enabled = bitfun_core::service::search::workspace_search_feature_enabled().await;
+    let workspace_search_enabled =
+        bitfun_core::service::search::workspace_search_feature_enabled().await;
     let startup_flashgrep_path = configure_workspace_search_daemon_env();
 
     let step_started = Instant::now();
@@ -395,6 +396,7 @@ pub async fn run() {
             api::agentic_api::compact_session,
             api::agentic_api::ensure_assistant_bootstrap,
             api::agentic_api::cancel_dialog_turn,
+            api::agentic_api::steer_dialog_turn,
             api::agentic_api::cancel_session,
             api::agentic_api::set_subagent_timeout,
             api::agentic_api::delete_session,
@@ -870,7 +872,6 @@ async fn init_agentic_system() -> anyhow::Result<(
     Arc<bitfun_core::service::token_usage::TokenUsageService>,
 )> {
     use bitfun_core::agentic::*;
-    use bitfun_core::service::config::get_global_config_service;
 
     let ai_client_factory = AIClientFactory::get_global().await?;
 
@@ -908,27 +909,13 @@ async fn init_agentic_system() -> anyhow::Result<(
         event_queue.clone(),
         tool_pipeline.clone(),
     ));
-    
-    // Get execution config from global settings
-    let exec_config = match get_global_config_service().await {
-        Ok(config_service) => {
-            match config_service.get_config::<bitfun_core::service::config::types::GlobalConfig>(None).await {
-                Ok(global_config) => execution::ExecutionEngineConfig {
-                    max_rounds: global_config.ai.max_rounds,
-                    ..Default::default()
-                },
-                Err(_) => Default::default(),
-            }
-        },
-        Err(_) => Default::default(),
-    };
-    
+
     let execution_engine = Arc::new(execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
         session_manager.clone(),
         context_compressor,
-        exec_config,
+        execution::ExecutionEngineConfig::default(),
     ));
 
     let coordinator = Arc::new(coordination::ConversationCoordinator::new(
@@ -959,6 +946,7 @@ async fn init_agentic_system() -> anyhow::Result<(
         coordination::DialogScheduler::new(coordinator.clone(), session_manager.clone());
     coordinator.set_scheduler_notifier(scheduler.outcome_sender());
     coordinator.set_round_preempt_source(scheduler.preempt_monitor());
+    coordinator.set_round_steering_source(scheduler.steering_monitor());
     coordination::set_global_scheduler(scheduler.clone());
 
     let cron_service =
