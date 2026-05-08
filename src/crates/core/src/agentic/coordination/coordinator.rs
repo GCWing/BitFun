@@ -314,6 +314,30 @@ impl ConversationCoordinator {
         Some(binding)
     }
 
+    async fn build_session_config_for_workspace(
+        workspace_path: String,
+        model_id: Option<String>,
+    ) -> SessionConfig {
+        let remote_entry =
+            crate::service::remote_ssh::workspace_state::lookup_remote_connection(&workspace_path)
+                .await;
+
+        let mut config = SessionConfig {
+            workspace_path: Some(workspace_path),
+            model_id,
+            ..SessionConfig::default()
+        };
+
+        if let Some(entry) = remote_entry {
+            config.remote_connection_id = Some(entry.connection_id);
+            if !entry.ssh_host.trim().is_empty() {
+                config.remote_ssh_host = Some(entry.ssh_host);
+            }
+        }
+
+        config
+    }
+
     /// Build `WorkspaceServices` from a resolved `WorkspaceBinding`.
     /// For remote bindings, wires up SSH-backed FS/shell; for local ones,
     /// returns local implementations.
@@ -2949,11 +2973,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             HiddenSubagentExecutionRequest {
                 session_name: format!("Subagent: {}", task_description),
                 agent_type,
-                session_config: SessionConfig {
-                    workspace_path: Some(workspace_path),
-                    model_id,
-                    ..SessionConfig::default()
-                },
+                session_config: Self::build_session_config_for_workspace(workspace_path, model_id)
+                    .await,
                 initial_messages: vec![Message::user(task_description)],
                 created_by: Some(format!("session-{}", subagent_parent_info.session_id)),
                 subagent_parent_info: Some(subagent_parent_info),
@@ -3202,12 +3223,46 @@ pub fn get_global_coordinator() -> Option<Arc<ConversationCoordinator>> {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_subagent_max_concurrency;
+    use super::{normalize_subagent_max_concurrency, ConversationCoordinator};
+    use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
 
     #[test]
     fn clamps_subagent_max_concurrency_into_safe_range() {
         assert_eq!(normalize_subagent_max_concurrency(0), 1);
         assert_eq!(normalize_subagent_max_concurrency(5), 5);
         assert_eq!(normalize_subagent_max_concurrency(usize::MAX), 64);
+    }
+
+    #[tokio::test]
+    async fn subagent_session_config_preserves_registered_remote_workspace_identity() {
+        let manager = init_remote_workspace_manager();
+        manager
+            .register_remote_workspace(
+                "/remote/subagent-test".to_string(),
+                "conn-subagent-test".to_string(),
+                "Remote Test".to_string(),
+                "remote-host".to_string(),
+            )
+            .await;
+        manager
+            .set_active_connection_hint(Some("conn-subagent-test".to_string()))
+            .await;
+
+        let config = ConversationCoordinator::build_session_config_for_workspace(
+            "/remote/subagent-test/project".to_string(),
+            Some("model-fast".to_string()),
+        )
+        .await;
+
+        assert_eq!(
+            config.workspace_path.as_deref(),
+            Some("/remote/subagent-test/project")
+        );
+        assert_eq!(
+            config.remote_connection_id.as_deref(),
+            Some("conn-subagent-test")
+        );
+        assert_eq!(config.remote_ssh_host.as_deref(), Some("remote-host"));
+        assert_eq!(config.model_id.as_deref(), Some("model-fast"));
     }
 }

@@ -141,6 +141,28 @@ fn arg_path(params: &Value, key: &str) -> BitFunResult<PathBuf> {
         .ok_or_else(|| BitFunError::parse(format!("missing param: {}", key)))
 }
 
+fn command_basename_for_allowlist(command: &str) -> String {
+    let file_name = command
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or(command);
+    Path::new(file_name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(file_name)
+        .to_lowercase()
+}
+
+fn resolve_shell_program(command: &str) -> PathBuf {
+    let has_path_separator = command.contains('/') || command.contains('\\');
+    if has_path_separator {
+        return PathBuf::from(command);
+    }
+
+    which::which(command).unwrap_or_else(|_| PathBuf::from(command))
+}
+
 async fn dispatch_fs(policy: &Value, name: &str, params: &Value) -> BitFunResult<Value> {
     // Common path arg ("path" or legacy "p").
     let path_param = params
@@ -366,11 +388,7 @@ async fn dispatch_shell(
         Some(a) => a.first().map(String::as_str).unwrap_or(""),
         None => command.split_whitespace().next().unwrap_or(""),
     };
-    let base = Path::new(first_token)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or(first_token)
-        .to_lowercase();
+    let base = command_basename_for_allowlist(first_token);
     if !allow.is_empty() && !allow.iter().any(|a| a.to_lowercase() == base) {
         return Err(deny(format!("Command not in allowlist: {}", base)));
     }
@@ -389,7 +407,8 @@ async fn dispatch_shell(
         .unwrap_or(30_000);
 
     let mut cmd = if let Some(argv) = argv.as_ref() {
-        let mut c = crate::util::process_manager::create_tokio_command(&argv[0]);
+        let program = resolve_shell_program(&argv[0]);
+        let mut c = crate::util::process_manager::create_tokio_command(program.as_os_str());
         if argv.len() > 1 {
             c.args(&argv[1..]);
         }
@@ -538,4 +557,56 @@ async fn dispatch_net(policy: &Value, name: &str, params: &Value) -> BitFunResul
         "headers": Value::Object(headers_out),
         "body": body,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::miniapp::types::{MiniAppPermissions, ShellPermissions};
+
+    #[test]
+    fn command_basename_allows_windows_git_executable_paths() {
+        assert_eq!(
+            command_basename_for_allowlist(r"C:\Program Files\Git\cmd\git.exe"),
+            "git"
+        );
+        assert_eq!(command_basename_for_allowlist("git.exe"), "git");
+        assert_eq!(command_basename_for_allowlist("/usr/bin/git"), "git");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn host_shell_exec_runs_git_with_workspace_cwd() {
+        let workspace_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let perms = MiniAppPermissions {
+            shell: Some(ShellPermissions {
+                allow: Some(vec!["git".to_string()]),
+            }),
+            ..Default::default()
+        };
+
+        let result = dispatch_host(
+            &perms,
+            "builtin-coding-selfie",
+            workspace_dir,
+            Some(workspace_dir),
+            &[],
+            "shell.exec",
+            json!({
+                "args": ["git", "rev-parse", "--is-inside-work-tree"],
+                "cwd": workspace_dir.to_string_lossy(),
+                "timeout": 8000,
+            }),
+        )
+        .await
+        .expect("git rev-parse should run in the repository workspace");
+
+        assert_eq!(
+            result
+                .get("stdout")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim(),
+            "true"
+        );
+    }
 }

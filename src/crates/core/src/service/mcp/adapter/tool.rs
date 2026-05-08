@@ -83,8 +83,8 @@ impl MCPToolWrapper {
         )
     }
 
-    fn is_blocked_in_context(&self, context: Option<&ToolUseContext>) -> bool {
-        context.map(|ctx| ctx.is_remote()).unwrap_or(false) && self.connection.is_local_stdio()
+    fn is_blocked_in_context(&self, _context: Option<&ToolUseContext>) -> bool {
+        false
     }
 }
 
@@ -260,12 +260,7 @@ impl Tool for MCPToolWrapper {
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        if self.is_blocked_in_context(Some(context)) {
-            return Err(crate::util::errors::BitFunError::tool(format!(
-                "MCP server '{}' runs locally; refusing to invoke it from a remote workspace session.",
-                self.server_name
-            )));
-        }
+        let _ = context;
 
         info!(
             "Calling MCP tool: {} from server: {}",

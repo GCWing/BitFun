@@ -1,6 +1,6 @@
 mod common;
 
-use bitfun_ai_adapters::providers::{AnthropicMessageConverter, openai::OpenAIMessageConverter};
+use bitfun_ai_adapters::providers::{openai::OpenAIMessageConverter, AnthropicMessageConverter};
 use bitfun_core::agentic::core::Message as CoreMessage;
 use bitfun_core::agentic::events::{AgenticEvent, ToolEventData};
 use bitfun_core::util::types::Message as AIMessage;
@@ -49,7 +49,10 @@ async fn replays_structurally_empty_openai_reasoning_content_with_tool_call() {
     assert_eq!(result.tool_calls.len(), 1);
     assert_eq!(result.tool_calls[0].tool_id, "call_ds_1");
     assert_eq!(result.tool_calls[0].tool_name, "lookup_status");
-    assert_eq!(result.tool_calls[0].arguments, json!({ "ticket_id": "BF-123" }));
+    assert_eq!(
+        result.tool_calls[0].arguments,
+        json!({ "ticket_id": "BF-123" })
+    );
     assert!(!result.tool_calls[0].is_error);
     assert_eq!(
         result.usage.as_ref().map(|usage| usage.total_token_count),
@@ -87,14 +90,20 @@ async fn replays_structurally_empty_openai_reasoning_content_with_tool_call() {
         .collect();
     assert_eq!(
         tool_events,
-        vec![("call_ds_1", "{\"ticket_id\":\"BF-"), ("call_ds_1", "123\"}")]
+        vec![
+            ("call_ds_1", "{\"ticket_id\":\"BF-"),
+            ("call_ds_1", "123\"}")
+        ]
     );
 
     let replay_message: AIMessage = build_replay_assistant_message(&result).into();
     let openai_payload = OpenAIMessageConverter::convert_messages(vec![replay_message]);
 
     assert_eq!(openai_payload.len(), 1);
-    assert_eq!(openai_payload[0]["content"], json!("Let me check that for you."));
+    assert_eq!(
+        openai_payload[0]["content"],
+        json!("Let me check that for you.")
+    );
     assert_eq!(openai_payload[0]["reasoning_content"], json!(""));
     assert_eq!(openai_payload[0]["tool_calls"][0]["id"], json!("call_ds_1"));
     assert_eq!(
@@ -127,7 +136,10 @@ async fn replays_structurally_empty_anthropic_thinking_with_signature_and_tool_u
     assert_eq!(result.tool_calls.len(), 1);
     assert_eq!(result.tool_calls[0].tool_id, "toolu_ds_1");
     assert_eq!(result.tool_calls[0].tool_name, "lookup_status");
-    assert_eq!(result.tool_calls[0].arguments, json!({ "ticket_id": "BF-123" }));
+    assert_eq!(
+        result.tool_calls[0].arguments,
+        json!({ "ticket_id": "BF-123" })
+    );
     assert!(!result.tool_calls[0].is_error);
     assert_eq!(result.thinking_signature.as_deref(), Some("sig_empty_123"));
     assert_eq!(
@@ -159,7 +171,10 @@ async fn replays_structurally_empty_anthropic_thinking_with_signature_and_tool_u
             } if tool_id == "toolu_ds_1" && tool_name == "lookup_status"
         )
     });
-    assert!(early_detected, "expected tool_use block to trigger early detection");
+    assert!(
+        early_detected,
+        "expected tool_use block to trigger early detection"
+    );
 
     let replay_message: AIMessage = build_replay_assistant_message(&result).into();
     let (_, anthropic_messages) = AnthropicMessageConverter::convert_messages(vec![replay_message]);

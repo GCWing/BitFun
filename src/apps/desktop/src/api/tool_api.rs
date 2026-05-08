@@ -12,7 +12,7 @@ use bitfun_core::agentic::{
     WorkspaceBinding,
 };
 use bitfun_core::service::remote_ssh::workspace_state::{
-    get_remote_workspace_manager, lookup_remote_connection, resolve_workspace_session_identity,
+    get_remote_workspace_manager, lookup_remote_connection, workspace_session_identity,
 };
 use bitfun_core::util::elapsed_ms_u64;
 
@@ -92,26 +92,31 @@ async fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
         .filter(|path| !path.is_empty());
 
     let workspace = match normalized_workspace_path {
-        Some(path) => match resolve_workspace_session_identity(path, None, None).await {
-            Some(identity) => {
-                if let Some(connection_id) = identity.remote_connection_id.as_deref() {
-                    let connection_name = lookup_remote_connection(path)
-                        .await
-                        .map(|entry| entry.connection_name)
-                        .unwrap_or_else(|| connection_id.to_string());
-                    Some(WorkspaceBinding::new_remote(
-                        None,
-                        PathBuf::from(path),
-                        connection_id.to_string(),
-                        connection_name,
-                        identity,
-                    ))
-                } else {
-                    Some(WorkspaceBinding::new(None, PathBuf::from(path)))
-                }
+        Some(path) => {
+            if let Some(entry) = lookup_remote_connection(path).await {
+                let identity = workspace_session_identity(
+                    path,
+                    Some(&entry.connection_id),
+                    Some(&entry.ssh_host),
+                )
+                .unwrap_or_else(|| {
+                    bitfun_core::service::remote_ssh::workspace_state::WorkspaceSessionIdentity {
+                        hostname: entry.ssh_host.clone(),
+                        logical_workspace_path: entry.remote_root.clone(),
+                        remote_connection_id: Some(entry.connection_id.clone()),
+                    }
+                });
+                Some(WorkspaceBinding::new_remote(
+                    None,
+                    PathBuf::from(path),
+                    entry.connection_id,
+                    entry.connection_name,
+                    identity,
+                ))
+            } else {
+                Some(WorkspaceBinding::new(None, PathBuf::from(path)))
             }
-            None => Some(WorkspaceBinding::new(None, PathBuf::from(path))),
-        },
+        }
         None => None,
     };
 

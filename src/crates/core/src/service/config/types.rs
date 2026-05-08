@@ -41,6 +41,9 @@ pub struct GlobalConfig {
     pub terminal: TerminalConfig,
     pub workspace: WorkspaceConfig,
     pub ai: AIConfig,
+    /// Project-scoped overlays stored in the shared config document.
+    #[serde(default, skip_serializing_if = "ProjectConfig::is_empty")]
+    pub project: ProjectConfig,
     /// MCP server configuration (stored uniformly; supports both JSON and structured formats).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_servers: Option<serde_json::Value>,
@@ -56,6 +59,21 @@ pub struct GlobalConfig {
     pub version: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub last_modified: chrono::DateTime<chrono::Utc>,
+}
+
+/// Project-scoped configuration overlay.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProjectConfig {
+    /// Project-level MCP server configuration.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_servers: Option<serde_json::Value>,
+}
+
+impl ProjectConfig {
+    fn is_empty(&self) -> bool {
+        self.mcp_servers.is_none()
+    }
 }
 
 /// App configuration.
@@ -1192,6 +1210,7 @@ impl Default for GlobalConfig {
             terminal: TerminalConfig::default(),
             workspace: WorkspaceConfig::default(),
             ai: AIConfig::default(),
+            project: ProjectConfig::default(),
             mcp_servers: None,
             acp_clients: None,
             themes: Some(ThemesConfig::default()),
@@ -1670,7 +1689,7 @@ impl AIModelConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{AIConfig, AIExperienceConfig, AIModelConfig, ReasoningMode};
+    use super::{AIConfig, AIExperienceConfig, AIModelConfig, GlobalConfig, ReasoningMode};
 
     #[test]
     fn deserializes_compatibility_thinking_flag_into_reasoning_mode() {
@@ -1688,6 +1707,40 @@ mod tests {
 
         assert_eq!(config.reasoning_mode, Some(ReasoningMode::Enabled));
         assert!(config.enable_thinking_process);
+    }
+
+    #[test]
+    fn global_config_preserves_project_mcp_servers() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "project": {
+                "mcp_servers": [
+                    {
+                        "id": "project-docs",
+                        "name": "Project Docs",
+                        "server_type": "local",
+                        "command": "docs-mcp",
+                        "args": []
+                    }
+                ]
+            }
+        }))
+        .expect("project scoped MCP config should deserialize");
+
+        assert_eq!(
+            config
+                .project
+                .mcp_servers
+                .as_ref()
+                .and_then(|value| value.as_array())
+                .map(Vec::len),
+            Some(1)
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["project"]["mcp_servers"][0]["id"],
+            "project-docs"
+        );
     }
 
     #[test]

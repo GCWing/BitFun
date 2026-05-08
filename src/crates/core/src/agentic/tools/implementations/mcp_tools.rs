@@ -64,22 +64,12 @@ async fn list_prompts_for_server(
 async fn ensure_mcp_server_available_for_context(
     manager: &Arc<MCPServerManager>,
     server_id: &str,
-    context: &ToolUseContext,
+    _context: &ToolUseContext,
 ) -> BitFunResult<()> {
-    if !context.is_remote() {
-        return Ok(());
-    }
-
-    let connection = manager
+    manager
         .get_connection(server_id)
         .await
         .ok_or_else(|| tool_error(format!("MCP server not connected: {}", server_id)))?;
-    if connection.is_local_stdio() {
-        return Err(tool_error(format!(
-            "MCP server '{}' runs locally and is unavailable in remote workspace sessions",
-            server_id
-        )));
-    }
 
     Ok(())
 }

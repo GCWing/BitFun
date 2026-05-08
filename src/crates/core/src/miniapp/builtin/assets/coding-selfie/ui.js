@@ -1110,6 +1110,15 @@ async function gitRunOptional(cwd, argv, fallback = '', opts = {}) {
   }
 }
 
+function isGitNotRepositoryError(error) {
+  const message = String(error && error.message ? error.message : error || '').toLowerCase();
+  return (
+    message.includes('not a git repository') ||
+    message.includes('not a git directory') ||
+    message.includes('outside repository')
+  );
+}
+
 function dayKey(d) {
   const dt = new Date(d);
   return (
@@ -1127,8 +1136,15 @@ async function scanGitWorkspace(cwd) {
   let inside;
   try {
     inside = (await gitRun(cwd, ['rev-parse', '--is-inside-work-tree'], { timeout: 8000 })).trim();
-  } catch (_e) {
-    return { ok: false, reason: 'not-a-git-repo' };
+  } catch (e) {
+    if (isGitNotRepositoryError(e)) {
+      return { ok: false, reason: 'not-a-git-repo' };
+    }
+    return {
+      ok: false,
+      reason: 'git-probe-failed',
+      message: String(e && e.message ? e.message : e),
+    };
   }
   if (inside !== 'true') return { ok: false, reason: 'not-a-git-repo' };
 
