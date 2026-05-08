@@ -5,21 +5,21 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext};
 use crate::agentic::agents::{
-    get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
+    PromptBuilder, PromptBuilderContext, RemoteExecutionHints, get_agent_registry,
 };
 use crate::agentic::core::{
-    render_system_reminder, Message, MessageContent, MessageHelper, MessageRole,
-    MessageSemanticKind, RequestReasoningTokenPolicy, Session,
+    Message, MessageContent, MessageHelper, MessageRole, MessageSemanticKind,
+    RequestReasoningTokenPolicy, Session, render_system_reminder,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::execution::types::FinishReason;
 use crate::agentic::image_analysis::{
-    build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
-    ImageLimits,
+    ImageContextData, ImageLimits, build_multimodal_message_with_images,
+    process_image_contexts_for_provider,
 };
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
 use crate::agentic::tools::{
-    get_all_registered_tools, SubagentParentInfo, ToolRuntimeRestrictions,
+    SubagentParentInfo, ToolRuntimeRestrictions, get_all_registered_tools,
 };
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
@@ -1272,6 +1272,7 @@ impl ExecutionEngine {
             self.get_available_tools_and_definitions(
                 &allowed_tools,
                 context.workspace.as_ref(),
+                context.workspace_services.as_ref(),
                 &agent_type,
                 primary_supports_image_understanding,
             )
@@ -1870,6 +1871,7 @@ impl ExecutionEngine {
         &self,
         mode_allowed_tools: &[String],
         workspace: Option<&crate::agentic::WorkspaceBinding>,
+        workspace_services: Option<&crate::agentic::workspace::WorkspaceServices>,
         agent_type: &str,
         primary_supports_image_understanding: bool,
     ) -> (Vec<String>, Option<Vec<ToolDefinition>>) {
@@ -1893,7 +1895,7 @@ impl ExecutionEngine {
             computer_use_host: None,
             cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            workspace_services: workspace_services.cloned(),
         };
         for tool in &all_tools {
             if !tool.is_enabled().await {

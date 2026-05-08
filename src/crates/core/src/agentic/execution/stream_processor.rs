@@ -430,8 +430,7 @@ impl StreamProcessor {
         for tool_call in tool_calls {
             trace!(
                 "Cleaning up tool: {} ({})",
-                tool_call.tool_name,
-                tool_call.tool_id
+                tool_call.tool_name, tool_call.tool_id
             );
 
             let tool_event = if is_user_cancellation {
@@ -583,8 +582,10 @@ impl StreamProcessor {
 
     /// Handle text chunk
     async fn handle_text_chunk(&self, ctx: &mut StreamContext, text: String) {
-        ctx.has_effective_output = true;
-        ctx.mark_first_visible_output();
+        if !text.trim().is_empty() {
+            ctx.has_effective_output = true;
+            ctx.mark_first_visible_output();
+        }
         ctx.full_text.push_str(&text);
         ctx.text_chunks_count += 1;
 
@@ -974,6 +975,34 @@ mod tests {
         assert_eq!(result.tool_calls[0].arguments, json!({"a": 1}));
         assert!(!result.tool_calls[0].is_error);
         assert_eq!(result.usage.as_ref().map(|u| u.total_token_count), Some(7));
+    }
+
+    #[tokio::test]
+    async fn whitespace_only_text_is_not_effective_output() {
+        let processor = build_processor();
+        let stream = iter(vec![Ok(UnifiedResponse {
+            text: Some("\n\n ".to_string()),
+            ..Default::default()
+        })])
+        .boxed();
+
+        let result = processor
+            .process_stream(
+                stream,
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                None,
+                &CancellationToken::new(),
+            )
+            .await
+            .expect("stream result");
+
+        assert_eq!(result.full_text, "\n\n ");
+        assert!(!result.has_effective_output);
+        assert_eq!(result.first_visible_output_ms, None);
     }
 
     #[tokio::test]

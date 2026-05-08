@@ -9,10 +9,10 @@ use crate::agentic::tools::framework::{
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use log::debug;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 // Use skills module
-use super::skills::{get_skill_registry, SkillLocation};
+use super::skills::{SkillLocation, get_skill_registry};
 
 /// Skill tool
 pub struct SkillTool;
@@ -262,5 +262,137 @@ impl Tool for SkillTool {
 impl Default for SkillTool {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SkillTool;
+    use crate::agentic::WorkspaceBinding;
+    use crate::agentic::tools::framework::Tool;
+    use crate::agentic::workspace::{
+        WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
+        WorkspaceServices, WorkspaceShell,
+    };
+    use crate::service::remote_ssh::workspace_state::workspace_session_identity;
+    use async_trait::async_trait;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    struct FakeRemoteFs;
+
+    #[async_trait]
+    impl WorkspaceFileSystem for FakeRemoteFs {
+        async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
+            Ok(self.read_file_text(path).await?.into_bytes())
+        }
+
+        async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
+            if path == "/remote/project/.bitfun/skills/remote-only/SKILL.md" {
+                return Ok(r#"---
+name: remote-only-skill-for-test
+description: Remote project skill visible only through workspace services.
+---
+
+Use the remote project skill.
+"#
+                .to_string());
+            }
+            anyhow::bail!("not found: {}", path)
+        }
+
+        async fn write_file(&self, _path: &str, _contents: &[u8]) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn exists(&self, path: &str) -> anyhow::Result<bool> {
+            Ok(matches!(
+                path,
+                "/remote/project/.bitfun/skills"
+                    | "/remote/project/.bitfun/skills/remote-only"
+                    | "/remote/project/.bitfun/skills/remote-only/SKILL.md"
+            ))
+        }
+
+        async fn is_file(&self, path: &str) -> anyhow::Result<bool> {
+            Ok(path == "/remote/project/.bitfun/skills/remote-only/SKILL.md")
+        }
+
+        async fn is_dir(&self, path: &str) -> anyhow::Result<bool> {
+            Ok(matches!(
+                path,
+                "/remote/project/.bitfun/skills" | "/remote/project/.bitfun/skills/remote-only"
+            ))
+        }
+
+        async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+            if path == "/remote/project/.bitfun/skills" {
+                return Ok(vec![WorkspaceDirEntry {
+                    name: "remote-only".to_string(),
+                    path: "/remote/project/.bitfun/skills/remote-only".to_string(),
+                    is_dir: true,
+                    is_symlink: false,
+                }]);
+            }
+            Ok(vec![])
+        }
+    }
+
+    struct FakeShell;
+
+    #[async_trait]
+    impl WorkspaceShell for FakeShell {
+        async fn exec_with_options(
+            &self,
+            _command: &str,
+            _options: WorkspaceCommandOptions,
+        ) -> anyhow::Result<WorkspaceCommandResult> {
+            Ok(WorkspaceCommandResult {
+                stdout: String::new(),
+                stderr: String::new(),
+                exit_code: 0,
+                interrupted: false,
+                timed_out: false,
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_description_indexes_project_skills_through_workspace_services() {
+        let identity =
+            workspace_session_identity("/remote/project", Some("conn-1"), Some("remote-host"))
+                .expect("remote identity");
+        let workspace = WorkspaceBinding::new_remote(
+            Some("remote-workspace".to_string()),
+            PathBuf::from("/remote/project"),
+            "conn-1".to_string(),
+            "Remote".to_string(),
+            identity,
+        );
+        let context = crate::agentic::tools::framework::ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(workspace),
+            custom_data: Default::default(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: Default::default(),
+            workspace_services: Some(WorkspaceServices {
+                fs: Arc::new(FakeRemoteFs),
+                shell: Arc::new(FakeShell),
+            }),
+        };
+
+        let description = SkillTool::new()
+            .description_with_context(Some(&context))
+            .await
+            .expect("description");
+
+        assert!(description.contains("remote-only-skill-for-test"));
+        assert!(
+            description.contains("Remote project skill visible only through workspace services.")
+        );
     }
 }
