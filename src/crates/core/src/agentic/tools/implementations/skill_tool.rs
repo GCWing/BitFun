@@ -9,10 +9,10 @@ use crate::agentic::tools::framework::{
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use log::debug;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 // Use skills module
-use super::skills::{get_skill_registry, SkillLocation};
+use super::skills::{SkillLocation, get_skill_registry};
 
 /// Skill tool
 pub struct SkillTool;
@@ -265,14 +265,15 @@ impl Default for SkillTool {
 #[cfg(test)]
 mod tests {
     use super::SkillTool;
-    use crate::agentic::tools::framework::Tool;
+    use crate::agentic::WorkspaceBinding;
+    use crate::agentic::tools::framework::{Tool, ToolResult};
     use crate::agentic::workspace::{
         WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
         WorkspaceServices, WorkspaceShell,
     };
-    use crate::agentic::WorkspaceBinding;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use async_trait::async_trait;
+    use serde_json::json;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -390,6 +391,52 @@ Use the remote project skill.
         assert!(description.contains("remote-only-skill-for-test"));
         assert!(
             description.contains("Remote project skill visible only through workspace services.")
+        );
+    }
+
+    #[tokio::test]
+    async fn remote_call_loads_default_hidden_builtin_team_skill_when_explicitly_invoked() {
+        let identity =
+            workspace_session_identity("/remote/project", Some("conn-1"), Some("remote-host"))
+                .expect("remote identity");
+        let workspace = WorkspaceBinding::new_remote(
+            Some("remote-workspace".to_string()),
+            PathBuf::from("/remote/project"),
+            "conn-1".to_string(),
+            "Remote".to_string(),
+            identity,
+        );
+        let context = crate::agentic::tools::framework::ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some("agentic".to_string()),
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(workspace),
+            custom_data: Default::default(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: Default::default(),
+            workspace_services: Some(WorkspaceServices {
+                fs: Arc::new(FakeRemoteFs),
+                shell: Arc::new(FakeShell),
+            }),
+        };
+
+        let results = SkillTool::new()
+            .call_impl(&json!({ "command": "cso" }), &context)
+            .await
+            .expect("explicit cso invocation should load the local built-in skill");
+
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("expected result payload");
+        };
+        assert_eq!(data["skill_name"], "cso");
+        assert_eq!(data["location"], "user");
+        assert!(
+            data["content"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("# /cso")
         );
     }
 }

@@ -2,7 +2,7 @@ import { FlowChatStore } from '../store/FlowChatStore';
 import { stateMachineManager } from '../state-machine/SessionStateMachineManager';
 import { ProcessingPhase, type SessionStateMachine } from '../state-machine/types';
 import { deriveChatInputPetMood, type ChatInputPetMood } from './chatInputPetMood';
-import type { Session } from '../types/flow-chat';
+import type { DialogTurn, Session } from '../types/flow-chat';
 
 export type AgentCompanionTaskState =
   | 'running'
@@ -35,6 +35,13 @@ const EMPTY_ACTIVITY: AgentCompanionActivityPayload = {
 
 const taskOrderBySessionId = new Map<string, number>();
 let nextTaskOrder = 0;
+const TRANSIENT_TURN_STATUSES = new Set<DialogTurn['status']>([
+  'pending',
+  'image_analyzing',
+  'processing',
+  'finishing',
+  'cancelling',
+]);
 
 function ensureTaskOrder(sessionId: string): number {
   const existingOrder = taskOrderBySessionId.get(sessionId);
@@ -59,6 +66,30 @@ function pruneTaskOrder(activeTasks: AgentCompanionTaskStatus[]): void {
 
 function sessionTitle(session: Session): string {
   return session.title?.trim() || 'Session';
+}
+
+function trackedDialogTurn(
+  session: Session,
+  snapshot: SessionStateMachine | null,
+): DialogTurn | undefined {
+  const trackedTurnId = snapshot?.context.currentDialogTurnId;
+  if (trackedTurnId) {
+    return session.dialogTurns.find(turn => turn.id === trackedTurnId);
+  }
+
+  return session.dialogTurns[session.dialogTurns.length - 1];
+}
+
+function hasActiveTrackedTurn(
+  session: Session,
+  snapshot: SessionStateMachine | null,
+): boolean {
+  if (!snapshot) {
+    return false;
+  }
+
+  const turn = trackedDialogTurn(session, snapshot);
+  return !!turn && TRANSIENT_TURN_STATUSES.has(turn.status);
 }
 
 function runningLabel(snapshot: SessionStateMachine | null): {
@@ -211,7 +242,9 @@ export function buildAgentCompanionActivity(): AgentCompanionActivityPayload {
 
   sessions.forEach(session => {
     const snapshot = stateMachineManager.getSnapshot(session.sessionId);
-    const mood = deriveChatInputPetMood(snapshot);
+    const mood = hasActiveTrackedTurn(session, snapshot)
+      ? deriveChatInputPetMood(snapshot)
+      : 'rest';
 
     if (mood !== 'rest') {
       const label = runningLabel(snapshot);

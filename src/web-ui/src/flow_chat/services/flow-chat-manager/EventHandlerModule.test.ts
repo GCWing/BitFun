@@ -2,13 +2,15 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { normalizeSubagentParentInfo } from './subagentParentInfo';
 import {
   formatDialogErrorForNotification,
+  handleSessionStateChanged,
   insertSteeringItemIfAbsent,
   shouldProcessEvent,
 } from './EventHandlerModule';
 import { stateMachineManager } from '../../state-machine';
-import { SessionExecutionState } from '../../state-machine/types';
+import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { FlowChatStore } from '../../store/FlowChatStore';
-import type { DialogTurn, FlowUserSteeringItem, ModelRound } from '../../types/flow-chat';
+import type { DialogTurn, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
+import type { FlowChatContext } from './types';
 
 vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
   i18nService: {
@@ -180,6 +182,80 @@ function createSessionWithTurn(turn: DialogTurn): void {
   store.addDialogTurn('session-1', turn);
 }
 
+function createFinishingTurn(): DialogTurn {
+  return {
+    id: 'turn-1',
+    sessionId: 'session-1',
+    userMessage: {
+      id: 'user-1',
+      content: 'Initial request',
+      timestamp: 900,
+    },
+    modelRounds: [{
+      ...makeRound('round-1'),
+      items: [],
+    }],
+    status: 'finishing',
+    startTime: 900,
+  };
+}
+
+function createFinishingSession(): Session {
+  return {
+    sessionId: 'session-1',
+    title: 'Session 1',
+    dialogTurns: [createFinishingTurn()],
+    status: 'idle',
+    config: { agentType: 'agentic' },
+    createdAt: 800,
+    lastActiveAt: 1000,
+    error: null,
+    isTransient: true,
+  };
+}
+
+function createFlowChatContext(): FlowChatContext {
+  return {
+    flowChatStore: FlowChatStore.getInstance(),
+    processingManager: {
+      clearSessionStatus: vi.fn(),
+    } as any,
+    eventBatcher: {
+      getBufferSize: vi.fn(() => 0),
+      flushNow: vi.fn(),
+      clear: vi.fn(),
+    } as any,
+    pendingTurnCompletions: new Map(),
+    pendingHistoryLoads: new Map(),
+    contentBuffers: new Map(),
+    activeTextItems: new Map(),
+    saveDebouncers: new Map(),
+    lastSaveTimestamps: new Map(),
+    lastSaveHashes: new Map(),
+    turnSaveInFlight: new Map(),
+    turnSavePending: new Set(),
+    runtimeStatusTimers: new Map(),
+    userCancelledSessionIds: new Set(),
+    handledTerminalTurnEvents: new Set(),
+    currentWorkspacePath: null,
+  };
+}
+
+async function setFinishingMachine(): Promise<void> {
+  await stateMachineManager.transition('session-1', SessionExecutionEvent.START, {
+    taskId: 'session-1',
+    dialogTurnId: 'turn-1',
+  });
+  await stateMachineManager.transition('session-1', SessionExecutionEvent.BACKEND_STREAM_COMPLETED);
+}
+
+function putFinishingSessionInStore(): void {
+  FlowChatStore.getInstance().setState(() => ({
+    sessions: new Map([['session-1', createFinishingSession()]]),
+    activeSessionId: 'session-1',
+  }));
+}
+
 describe('insertSteeringItemIfAbsent', () => {
   beforeEach(() => {
     resetFlowChatStore();
@@ -277,5 +353,54 @@ describe('insertSteeringItemIfAbsent', () => {
       status: 'completed',
       roundIndex: 1,
     });
+  });
+});
+
+describe('handleSessionStateChanged', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('finalizes pending turn completion when backend reports idle during finishing', async () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+    context.pendingTurnCompletions.set('session-1', {
+      turnId: 'turn-1',
+      lastActivityAt: Date.now(),
+      timer: null,
+    });
+    await setFinishingMachine();
+
+    handleSessionStateChanged(context, { sessionId: 'session-1', newState: 'Idle' });
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0];
+    expect(turn?.status).toBe('completed');
+    expect(context.pendingTurnCompletions.has('session-1')).toBe(false);
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
+  });
+
+  it('finalizes a finishing turn even if the pending completion record was lost', async () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+    await setFinishingMachine();
+
+    handleSessionStateChanged(context, { sessionId: 'session-1', newState: 'Idle' });
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0];
+    expect(turn?.status).toBe('completed');
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
   });
 });

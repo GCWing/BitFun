@@ -35,6 +35,10 @@ impl RoundExecutor {
     const MAX_RETRIES_WITHOUT_OUTPUT: usize = 1;
     const RETRY_BASE_DELAY_MS: u64 = 500;
 
+    fn has_user_visible_assistant_text(text: &str) -> bool {
+        !text.trim().is_empty()
+    }
+
     pub fn new(
         stream_processor: Arc<StreamProcessor>,
         event_queue: Arc<EventQueue>,
@@ -417,7 +421,7 @@ impl RoundExecutor {
                 usage: stream_result.usage.clone(),
                 provider_metadata: stream_result.provider_metadata.clone(),
                 partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
-                had_assistant_text: !stream_result.full_text.is_empty(),
+                had_assistant_text: Self::has_user_visible_assistant_text(&stream_result.full_text),
                 had_thinking_content: !stream_result.full_thinking.is_empty(),
             });
         }
@@ -637,7 +641,7 @@ impl RoundExecutor {
             usage: stream_result.usage.clone(),
             provider_metadata: stream_result.provider_metadata.clone(),
             partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
-            had_assistant_text: !stream_result.full_text.is_empty(),
+            had_assistant_text: Self::has_user_visible_assistant_text(&stream_result.full_text),
             had_thinking_content: !stream_result.full_thinking.is_empty(),
         })
     }
@@ -877,5 +881,13 @@ mod tests {
         };
 
         assert!(!RoundExecutor::is_interrupted_invalid_tool_only(&result));
+    }
+
+    #[test]
+    fn whitespace_only_text_is_not_user_visible_assistant_text() {
+        assert!(!RoundExecutor::has_user_visible_assistant_text("\n\n "));
+        assert!(RoundExecutor::has_user_visible_assistant_text(
+            "I can help with that."
+        ));
     }
 }

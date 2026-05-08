@@ -5,10 +5,10 @@
 use super::builtin::{
     builtin_skill_group_key, ensure_builtin_skills_installed, is_builtin_skill_dir_name,
 };
-use super::default_profiles::is_skill_enabled_for_mode;
+use super::default_profiles::{is_enabled_by_default_for_mode, is_skill_enabled_for_mode};
 use super::mode_overrides::{
-    load_disabled_mode_skills_local, load_disabled_mode_skills_remote,
-    load_user_mode_skill_overrides, UserModeSkillOverrides,
+    UserModeSkillOverrides, load_disabled_mode_skills_local, load_disabled_mode_skills_remote,
+    load_user_mode_skill_overrides,
 };
 use super::types::{SkillData, SkillInfo, SkillLocation};
 use crate::agentic::workspace::WorkspaceFileSystem;
@@ -519,6 +519,91 @@ impl SkillRegistry {
             .collect()
     }
 
+    fn find_default_hidden_builtin_for_explicit_invocation(
+        skill_name: &str,
+        candidates: Vec<SkillCandidate>,
+        agent_type: Option<&str>,
+    ) -> BitFunResult<SkillInfo> {
+        let Some(mode_id) = agent_type.map(str::trim).filter(|value| !value.is_empty()) else {
+            return Err(BitFunError::tool(format!(
+                "Skill '{}' not found",
+                skill_name
+            )));
+        };
+
+        let info = resolve_visible_skills(candidates)
+            .into_iter()
+            .find(|skill| skill.name == skill_name)
+            .ok_or_else(|| BitFunError::tool(format!("Skill '{}' not found", skill_name)))?;
+
+        if info.level == SkillLocation::User
+            && info.is_builtin
+            && info.group_key.as_deref() == Some("team")
+            && !is_enabled_by_default_for_mode(&info, mode_id)
+        {
+            return Ok(info);
+        }
+
+        Err(BitFunError::tool(format!(
+            "Skill '{}' is disabled for mode '{}'. Enable it in mode skill settings or switch to a mode where it is enabled.",
+            skill_name, mode_id
+        )))
+    }
+
+    async fn find_skill_info_for_explicit_invocation_workspace(
+        &self,
+        skill_name: &str,
+        workspace_root: Option<&Path>,
+        agent_type: Option<&str>,
+    ) -> BitFunResult<SkillInfo> {
+        let candidates = self
+            .scan_skill_candidates_for_workspace(workspace_root)
+            .await;
+        let filtered = self
+            .apply_mode_filters_for_workspace(candidates.clone(), workspace_root, agent_type)
+            .await;
+        if let Some(info) = resolve_visible_skills(filtered)
+            .into_iter()
+            .find(|skill| skill.name == skill_name)
+        {
+            return Ok(info);
+        }
+
+        Self::find_default_hidden_builtin_for_explicit_invocation(
+            skill_name, candidates, agent_type,
+        )
+    }
+
+    async fn find_skill_info_for_explicit_invocation_remote_workspace(
+        &self,
+        skill_name: &str,
+        fs: &dyn WorkspaceFileSystem,
+        remote_root: &str,
+        agent_type: Option<&str>,
+    ) -> BitFunResult<SkillInfo> {
+        let candidates = self
+            .scan_skill_candidates_for_remote_workspace(fs, remote_root)
+            .await;
+        let filtered = self
+            .apply_mode_filters_for_remote_workspace(
+                candidates.clone(),
+                fs,
+                remote_root,
+                agent_type,
+            )
+            .await;
+        if let Some(info) = resolve_visible_skills(filtered)
+            .into_iter()
+            .find(|skill| skill.name == skill_name)
+        {
+            return Ok(info);
+        }
+
+        Self::find_default_hidden_builtin_for_explicit_invocation(
+            skill_name, candidates, agent_type,
+        )
+    }
+
     async fn ensure_loaded(&self) {
         let cache = self.cache.read().await;
         if cache.is_empty() {
@@ -625,11 +710,12 @@ impl SkillRegistry {
         agent_type: Option<&str>,
     ) -> BitFunResult<SkillData> {
         let info = self
-            .get_resolved_skills_for_workspace(workspace_root, agent_type)
-            .await
-            .into_iter()
-            .find(|skill| skill.name == skill_name)
-            .ok_or_else(|| BitFunError::tool(format!("Skill '{}' not found", skill_name)))?;
+            .find_skill_info_for_explicit_invocation_workspace(
+                skill_name,
+                workspace_root,
+                agent_type,
+            )
+            .await?;
 
         let skill_md_path = PathBuf::from(&info.path).join("SKILL.md");
         let content = fs::read_to_string(&skill_md_path)
@@ -651,11 +737,13 @@ impl SkillRegistry {
         agent_type: Option<&str>,
     ) -> BitFunResult<SkillData> {
         let info = self
-            .get_resolved_skills_for_remote_workspace(fs, remote_root, agent_type)
-            .await
-            .into_iter()
-            .find(|skill| skill.name == skill_name)
-            .ok_or_else(|| BitFunError::tool(format!("Skill '{}' not found", skill_name)))?;
+            .find_skill_info_for_explicit_invocation_remote_workspace(
+                skill_name,
+                fs,
+                remote_root,
+                agent_type,
+            )
+            .await?;
 
         let content = Self::read_skill_md_for_remote_merge(&info, fs).await?;
         let mut data = SkillData::from_markdown(info.path.clone(), &content, info.level, true)?;

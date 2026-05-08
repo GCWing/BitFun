@@ -374,7 +374,7 @@ export async function initializeEventListeners(
       handleSessionDeleted(context, event);
     },
     onSessionStateChanged: (event) => {
-      handleSessionStateChanged(event);
+      handleSessionStateChanged(context, event);
     },
     onImageAnalysisStarted: (event) => {
       handleImageAnalysisStarted(context, event as ImageAnalysisEvent);
@@ -726,6 +726,27 @@ function finalizePendingTurnCompletionNow(context: FlowChatContext, sessionId: s
   finalizeTurnCompletionState(context, sessionId, pending.turnId);
 }
 
+function findFinishingTurnForBackendIdle(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId?: string | null
+): string | null {
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  if (!session) {
+    return null;
+  }
+
+  if (turnId) {
+    const trackedTurn = session.dialogTurns.find(turn => turn.id === turnId);
+    if (trackedTurn?.status === 'finishing') {
+      return trackedTurn.id;
+    }
+  }
+
+  const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
+  return latestTurn?.status === 'finishing' ? latestTurn.id : null;
+}
+
 /**
  * Handle session title generated event (AI or fallback auto-generation)
  */
@@ -900,7 +921,7 @@ function handleSessionDeleted(context: FlowChatContext, event: any): void {
 /**
  * Handle backend session state sync event
  */
-function handleSessionStateChanged(event: any): void {
+export function handleSessionStateChanged(context: FlowChatContext, event: any): void {
   const { sessionId, newState } = event;
   
   const machine = stateMachineManager.get(sessionId);
@@ -915,8 +936,29 @@ function handleSessionStateChanged(event: any): void {
     currentFrontendState === SessionExecutionState.FINISHING &&
     frontendState === SessionExecutionState.IDLE;
   
-  const context = machine.getContext();
-  (context as any).backendSyncedAt = Date.now();
+  const machineContext = machine.getContext();
+  machineContext.backendSyncedAt = Date.now();
+
+  if (isExpectedFinishingDrift) {
+    finalizePendingTurnCompletionNow(context, sessionId);
+    if (stateMachineManager.getCurrentState(sessionId) === SessionExecutionState.FINISHING) {
+      const finishingTurnId = findFinishingTurnForBackendIdle(
+        context,
+        sessionId,
+        machineContext.currentDialogTurnId,
+      );
+      if (finishingTurnId) {
+        finalizeTurnCompletionState(context, sessionId, finishingTurnId);
+      } else {
+        void stateMachineManager
+          .transition(sessionId, SessionExecutionEvent.FINISHING_SETTLED)
+          .catch(error => {
+            log.error('State machine transition failed on backend idle sync', { sessionId, error });
+          });
+      }
+    }
+    return;
+  }
   
   if (currentFrontendState !== frontendState && !isExpectedFinishingDrift) {
     log.warn('Frontend and backend state mismatch', {
