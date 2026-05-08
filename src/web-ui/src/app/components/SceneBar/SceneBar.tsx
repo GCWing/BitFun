@@ -13,7 +13,6 @@ import { useCurrentSessionTitle } from '../../hooks/useCurrentSessionTitle';
 import { useCurrentSettingsTabTitle } from '../../hooks/useCurrentSettingsTabTitle';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { createLogger } from '@/shared/utils/logger';
-import { supportsNativeWindowDragging } from '@/infrastructure/runtime';
 import './SceneBar.scss';
 import { workspaceAPI } from '@/infrastructure';
 
@@ -44,35 +43,30 @@ const SceneBar: React.FC<SceneBarProps> = ({
   const hasWindowControls = !!(onMinimize && onMaximize && onClose);
   const sceneBarClassName = `bitfun-scene-bar ${!hasWindowControls ? 'bitfun-scene-bar--no-controls' : ''} ${className}`.trim();
   const isSingleTab = openTabs.length <= 1;
-  const canDragWindow = supportsNativeWindowDragging();
   const tabCount = Math.max(openTabs.length, 1);
   const tabsStyle = {
     ['--scene-tab-count' as string]: tabCount,
   } as React.CSSProperties;
-  const lastMouseDownTimeRef = useRef<number>(0);
+  const isDraggingRef = useRef(false);
 
-  const handleBarMouseDown = useCallback((e: React.MouseEvent) => {
-    if (!canDragWindow) return;
-    if (!isSingleTab) return;
+  const handleBarMouseDown = (() => {
+    isDraggingRef.current = true;
+  })
 
-    const now = Date.now();
-    const timeSinceLastMouseDown = now - lastMouseDownTimeRef.current;
-    lastMouseDownTimeRef.current = now;
-
-    if (e.button !== 0) return;
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
-    if (target.closest(INTERACTIVE_SELECTOR)) return;
-    if (timeSinceLastMouseDown < 500 && timeSinceLastMouseDown > 50) return;
-
-    void (async () => {
+  const handleBarMouseMove = async () => {
+    if (isDraggingRef.current) {
       try {
         await workspaceAPI.window_start_dragging();
       } catch (error) {
         log.debug('startDragging failed', error);
       }
-    })();
-  }, [canDragWindow, isSingleTab]);
+    }
+
+  };
+
+  const handlebarMouseUp = (() => {
+    isDraggingRef.current = false;
+  });
 
   const handleBarDoubleClick = useCallback((e: React.MouseEvent) => {
     if (!isSingleTab) return;
@@ -88,6 +82,8 @@ const SceneBar: React.FC<SceneBarProps> = ({
       role="tablist"
       aria-label="Scene tabs"
       onMouseDown={handleBarMouseDown}
+      onMouseMove={handleBarMouseMove}
+      onMouseUp={handlebarMouseUp}
       onDoubleClick={handleBarDoubleClick}
     >
       <div className="bitfun-scene-bar__tabs" style={tabsStyle}>
