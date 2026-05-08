@@ -14,8 +14,11 @@ const PET_SIZE = 96;
 const WINDOW_MAX_WIDTH = 360;
 const WINDOW_MAX_HEIGHT = 240;
 const WINDOW_HORIZONTAL_GAP = 8;
-const MAX_VISIBLE_BUBBLES = 3;
+const MAX_VISIBLE_BUBBLES = 2;
 const BUBBLE_GAP = 6;
+const BUBBLE_MIN_WIDTH = 132;
+const BUBBLE_MAX_WIDTH = 252;
+const WINDOW_EDGE_BUFFER = 4;
 
 export const AgentCompanionDesktopPet: React.FC = () => {
   const { t } = useTranslation('flow-chat');
@@ -84,12 +87,27 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     const nextHeight = bubbleCount > 0
       ? Math.max(PET_SIZE, Math.min(WINDOW_MAX_HEIGHT, targetBubbleHeight))
       : PET_SIZE;
-    const measuredDockWidth = dockRef.current
-      ? Math.max(
-        dockRef.current.scrollWidth,
-        dockRef.current.getBoundingClientRect().width,
+    const measuredBubbleWidth = bubbleCount > 0
+      ? Math.min(
+        BUBBLE_MAX_WIDTH,
+        Math.max(
+          BUBBLE_MIN_WIDTH,
+          bubblesRef.current?.scrollWidth ?? 0,
+          bubblesRef.current?.getBoundingClientRect().width ?? 0,
+          ...Array.from(bubblesRef.current?.children ?? []).map(child => {
+            const element = child as HTMLElement;
+            return Math.max(element.scrollWidth, element.getBoundingClientRect().width);
+          }),
+        ),
       )
-      : PET_SIZE;
+      : 0;
+    const measuredDockWidth = bubbleCount > 0
+      ? measuredBubbleWidth + WINDOW_HORIZONTAL_GAP + PET_SIZE + WINDOW_EDGE_BUFFER
+      : Math.max(
+        PET_SIZE,
+        dockRef.current?.scrollWidth ?? 0,
+        dockRef.current?.getBoundingClientRect().width ?? 0,
+      );
     const nextWidth = Math.max(
       PET_SIZE,
       Math.min(WINDOW_MAX_WIDTH, Math.ceil(measuredDockWidth)),
