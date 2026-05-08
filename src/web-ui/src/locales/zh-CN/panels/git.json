@@ -33,7 +33,7 @@
     "commitWithCount": "提交 ({{count}})",
     "aiGenerateCommit": "AI 生成提交信息",
     "cancelGenerate": "取消生成",
-    "aiCodeReview": "AI 代码审查",
+    "aiCodeReview": "AI 代码审核",
     "viewAllDiff": "查看所有差异",
     "discardFile": "恢复此文件",
     "deleteFile": "删除此文件",
@@ -139,10 +139,10 @@
     }
   },
   "review": {
-    "noFilesToReview": "没有文件变更，无法进行代码审查",
-    "displayMessage": "审查 Git 变更文件：\n{{files}}",
-    "requestMessage": "请审查以下 Git 变更文件：\n\n{{files}}",
-    "sendFailed": "发送代码审查请求失败"
+    "noFilesToReview": "没有文件变更，无法进行代码审核",
+    "displayMessage": "审核 Git 变更文件：\n{{files}}",
+    "requestMessage": "请审核以下 Git 变更文件：\n\n{{files}}",
+    "sendFailed": "发送代码审核请求失败"
   },
   "relativeTime": {
     "justNow": "刚刚",

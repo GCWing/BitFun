@@ -3,6 +3,7 @@
 
 //! Application state management
 
+use crate::api::workspace_activation::spawn_workspace_background_warmup;
 use bitfun_core::agentic::side_question::SideQuestionRuntime;
 use bitfun_core::agentic::{agents, tools};
 use bitfun_core::infrastructure::ai::{AIClient, AIClientFactory};
@@ -13,7 +14,7 @@ use bitfun_core::service::remote_ssh::{
     init_remote_workspace_manager, RemoteFileService, RemoteTerminalManager, SSHConnectionManager,
 };
 use bitfun_core::service::{
-    ai_rules, announcement, config, filesystem, mcp, token_usage, workspace,
+    ai_rules, announcement, config, filesystem, mcp, search, token_usage, workspace,
 };
 use bitfun_core::util::errors::*;
 
@@ -72,9 +73,11 @@ pub struct AppState {
     pub workspace_path: Arc<RwLock<Option<std::path::PathBuf>>>,
     pub config_service: Arc<config::ConfigService>,
     pub filesystem_service: Arc<filesystem::FileSystemService>,
+    pub workspace_search_service: Arc<search::WorkspaceSearchService>,
     pub ai_rules_service: Arc<ai_rules::AIRulesService>,
     pub agent_registry: Arc<agents::AgentRegistry>,
     pub mcp_service: Option<Arc<mcp::MCPService>>,
+    pub acp_client_service: Option<Arc<bitfun_acp::AcpClientService>>,
     pub token_usage_service: Arc<token_usage::TokenUsageService>,
     pub miniapp_manager: Arc<MiniAppManager>,
     pub js_worker_pool: Option<Arc<JsWorkerPool>>,
@@ -118,6 +121,8 @@ impl AppState {
         );
         workspace::set_global_workspace_service(workspace_service.clone());
         let filesystem_service = Arc::new(filesystem::FileSystemServiceFactory::create_default());
+        let workspace_search_service = Arc::new(search::WorkspaceSearchService::new());
+        search::set_global_workspace_search_service(workspace_search_service.clone());
 
         ai_rules::initialize_global_ai_rules_service()
             .await
@@ -143,6 +148,12 @@ impl AppState {
             }
         };
         let path_manager = workspace_service.path_manager().clone();
+        let acp_client_service = Some(
+            bitfun_acp::AcpClientService::new(config_service.clone(), path_manager.clone())
+                .map_err(|e| {
+                    BitFunError::service(format!("Failed to initialize ACP client service: {}", e))
+                })?,
+        );
 
         let announcement_scheduler = Arc::new(
             announcement::AnnouncementScheduler::new(&path_manager)
@@ -194,35 +205,6 @@ impl AppState {
             .map(|workspace| workspace.root_path.clone());
 
         if let Some(workspace_path) = initial_workspace_path.clone() {
-            let skip_startup_snapshot_restore = initial_workspace
-                .as_ref()
-                .map(|workspace| {
-                    matches!(
-                        workspace.workspace_kind,
-                        bitfun_core::service::workspace::WorkspaceKind::Remote
-                    )
-                })
-                .unwrap_or(false);
-            if skip_startup_snapshot_restore {
-                log::debug!(
-                    "Skipping snapshot restore on startup for remote workspace: path={}",
-                    workspace_path.display()
-                );
-            } else {
-                if let Err(e) =
-                    bitfun_core::service::snapshot::initialize_snapshot_manager_for_workspace(
-                        workspace_path.clone(),
-                        None,
-                    )
-                    .await
-                {
-                    log::warn!(
-                        "Failed to restore snapshot system on startup: path={}, error={}",
-                        workspace_path.display(),
-                        e
-                    );
-                }
-            }
             if let Err(e) = ai_rules_service.set_workspace(workspace_path).await {
                 log::warn!("Failed to restore AI rules workspace on startup: {}", e);
             }
@@ -316,9 +298,11 @@ impl AppState {
             workspace_path: Arc::new(RwLock::new(initial_workspace_path)),
             config_service,
             filesystem_service,
+            workspace_search_service,
             ai_rules_service,
             agent_registry,
             mcp_service,
+            acp_client_service,
             token_usage_service,
             miniapp_manager,
             js_worker_pool,
@@ -334,6 +318,10 @@ impl AppState {
             announcement_scheduler,
         };
 
+        if let Some(workspace_info) = initial_workspace {
+            spawn_workspace_background_warmup(&app_state, workspace_info);
+        }
+
         log::info!("AppState initialized successfully");
         Ok(app_state)
     }
@@ -347,6 +335,7 @@ impl AppState {
         services.insert("workspace_service".to_string(), true);
         services.insert("config_service".to_string(), true);
         services.insert("filesystem_service".to_string(), true);
+        services.insert("workspace_search_service".to_string(), true);
 
         let all_healthy = services.values().all(|&status| status);
 

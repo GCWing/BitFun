@@ -62,6 +62,19 @@ pub struct DiffSummary {
     pub lines_modified: usize,
 }
 
+/// Line-level diff stats for a session file (badge / toolbars), without full file contents.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionFileDiffStats {
+    pub file_path: String,
+    pub lines_added: usize,
+    pub lines_removed: usize,
+    /// True when stats were derived from per-operation summaries instead of a full baseline vs disk diff.
+    pub approximate: bool,
+    /// `create`, `modify`, or `delete` for UI mapping.
+    pub change_kind: String,
+}
+
 /// File modification status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum FileModificationStatus {

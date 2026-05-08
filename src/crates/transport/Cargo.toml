@@ -30,4 +30,3 @@ default = []
 tauri-adapter = ["tauri"]
 cli-adapter = []
 websocket-adapter = []
-

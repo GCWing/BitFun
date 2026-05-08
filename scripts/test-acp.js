@@ -1,98 +1,101 @@
-// Simple test client for BitFun ACP server
+// Simple test client for BitFun ACP server.
 // Run with: node scripts/test-acp.js
 
-const { spawn } = require('child_process');
-const path = require('path');
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-// Check if bitfun-cli exists
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cliPath = path.join(__dirname, '..', 'target', 'debug', 'bitfun-cli');
 const cliReleasePath = path.join(__dirname, '..', 'target', 'release', 'bitfun-cli');
+const usePath = fs.existsSync(cliPath)
+  ? cliPath
+  : fs.existsSync(cliReleasePath)
+    ? cliReleasePath
+    : 'bitfun-cli';
 
-const usePath = require('fs').existsSync(cliPath) ? cliPath : 
-                require('fs').existsSync(cliReleasePath) ? cliReleasePath : 
-                'bitfun-cli';
+const cwd = '/tmp/test-acp-node';
+fs.mkdirSync(cwd, { recursive: true });
 
 console.log('=== BitFun ACP Server Test (Node.js) ===\n');
 
-// Test requests
-const testRequests = [
-  {
-    name: 'Initialize',
-    request: {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'initialize',
-      params: {
-        protocolVersion: 1,
-        clientCapabilities: {
-          fs: { readTextFile: true, writeTextFile: true },
-          terminal: true
-        },
-        clientInfo: { name: 'NodeTestClient', version: '1.0' }
-      }
-    }
-  },
-  {
-    name: 'Create Session',
-    request: {
-      jsonrpc: '2.0',
-      id: 2,
-      method: 'session/new',
-      params: {
-        cwd: '/tmp/test-acp-node'
-      }
-    }
-  },
-  {
-    name: 'List Tools',
-    request: {
-      jsonrpc: '2.0',
-      id: 3,
-      method: 'tools/list'
-    }
-  }
-];
+const child = spawn(usePath, ['acp'], {
+  stdio: ['pipe', 'pipe', 'inherit'],
+});
 
-// Run individual tests
-async function runTest(test) {
-  console.log(`Test: ${test.name}`);
-  console.log('Request:', JSON.stringify(test.request, null, 2));
-  
-  const child = spawn(usePath, ['acp'], {
-    stdio: ['pipe', 'pipe', 'inherit']
-  });
-  
-  let output = '';
-  
-  child.stdout.on('data', (data) => {
-    output += data.toString();
-  });
-  
-  child.stdin.write(JSON.stringify(test.request) + '\n');
+let buffer = '';
+let sessionId = null;
+
+function send(request) {
+  child.stdin.write(`${JSON.stringify(request)}\n`);
+}
+
+function stopChild() {
   child.stdin.end();
-  
-  return new Promise((resolve) => {
-    child.on('close', (code) => {
-      console.log('Response:', output);
-      try {
-        const response = JSON.parse(output);
-        console.log('Parsed:', JSON.stringify(response, null, 2));
-      } catch (e) {
-        console.log('Parse error:', e.message);
-      }
-      console.log('\n');
-      resolve();
-    });
-  });
+  setTimeout(() => {
+    if (!child.killed) {
+      child.kill('SIGTERM');
+    }
+  }, 500);
 }
 
-// Run all tests sequentially
-async function runAllTests() {
-  for (const test of testRequests) {
-    await runTest(test);
+child.stdout.on('data', (data) => {
+  buffer += data.toString();
+  const lines = buffer.split(/\n/);
+  buffer = lines.pop();
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const message = JSON.parse(line);
+    console.log(JSON.stringify(message, null, 2));
+
+    if (message.id === 2) {
+      sessionId = message.result.sessionId;
+      send({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'session/list',
+        params: { cwd },
+      });
+    } else if (message.id === 3) {
+      send({
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'session/prompt',
+        params: {
+          sessionId,
+          prompt: [{ type: 'text', text: '你好' }],
+        },
+      });
+    } else if (message.id === 4) {
+      stopChild();
+    }
   }
-  
-  console.log('=== Tests Complete ===');
-}
+});
 
-runAllTests().catch(console.error);
+child.on('close', (code) => {
+  console.log(`\n=== Tests Complete: exit ${code} ===`);
+  process.exit(code);
+});
+
+send({
+  jsonrpc: '2.0',
+  id: 1,
+  method: 'initialize',
+  params: {
+    protocolVersion: 1,
+    clientCapabilities: {
+      fs: { readTextFile: true, writeTextFile: true },
+      terminal: true,
+    },
+    clientInfo: { name: 'NodeTestClient', version: '1.0' },
+  },
+});
+
+send({
+  jsonrpc: '2.0',
+  id: 2,
+  method: 'session/new',
+  params: { cwd, mcpServers: [] },
+});

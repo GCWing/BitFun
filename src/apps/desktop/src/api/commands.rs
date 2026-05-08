@@ -8,6 +8,11 @@ use crate::api::path_target::{
     get_path_metadata, path_exists, read_text_file, rename_path, resolve_desktop_path_target,
     write_text_file, DesktopPathTarget,
 };
+use crate::api::search_api::{
+    group_search_results, search_file_contents_via_workspace_search,
+    search_metadata_from_content_result, should_use_workspace_search, SearchMetadataResponse,
+};
+use crate::api::workspace_activation::spawn_workspace_background_warmup;
 use bitfun_core::infrastructure::{
     BatchedFileSearchProgressSink, FileSearchResult, FileSearchResultGroup, FileTreeNode,
     SearchMatchType,
@@ -20,7 +25,7 @@ use bitfun_core::service::workspace::{
 };
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -204,6 +209,8 @@ struct SearchCompleteEvent {
     limit: usize,
     truncated: bool,
     total_results: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    search_metadata: Option<SearchMetadataResponse>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -262,6 +269,7 @@ fn emit_search_complete(
     limit: usize,
     truncated: bool,
     total_results: usize,
+    search_metadata: Option<SearchMetadataResponse>,
 ) {
     if let Err(error) = app_handle.emit(
         FILE_SEARCH_COMPLETE_EVENT,
@@ -271,6 +279,7 @@ fn emit_search_complete(
             limit,
             truncated,
             total_results,
+            search_metadata,
         },
     ) {
         warn!(
@@ -311,18 +320,24 @@ struct SearchCommandResponse {
     results: Vec<serde_json::Value>,
     limit: usize,
     truncated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    search_metadata: Option<SearchMetadataResponse>,
 }
 
 fn serialize_search_response(
     outcome: bitfun_core::infrastructure::FileSearchOutcome,
     limit: usize,
+    search_metadata: Option<SearchMetadataResponse>,
 ) -> serde_json::Value {
     serde_json::to_value(SearchCommandResponse {
         results: serialize_search_results(outcome.results),
         limit,
         truncated: outcome.truncated,
+        search_metadata,
     })
-    .unwrap_or_else(|_| serde_json::json!({ "results": [], "limit": limit, "truncated": false }))
+    .unwrap_or_else(|_| {
+        serde_json::json!({ "results": [], "limit": limit, "truncated": false, "searchMetadata": null })
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -416,6 +431,36 @@ pub struct ReadFileContentRequest {
     pub encoding: Option<String>,
     #[serde(default, rename = "remoteConnectionId")]
     pub remote_connection_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportAgentCompanionPetPackageRequest {
+    pub path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteAgentCompanionPetPackageRequest {
+    pub package_path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCompanionPetPackageDto {
+    pub id: String,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub source: String,
+    pub package_path: String,
+    pub spritesheet_path: String,
+    pub spritesheet_mime_type: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListAgentCompanionPetsResponse {
+    pub pets: Vec<AgentCompanionPetPackageDto>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -594,7 +639,17 @@ async fn clear_active_workspace_context(state: &State<'_, AppState>, app: &AppHa
     #[cfg(not(target_os = "macos"))]
     let _ = app;
 
+    let previous_workspace_path = state.workspace_path.read().await.clone();
     *state.workspace_path.write().await = None;
+
+    if let Some(previous_workspace_path) = previous_workspace_path {
+        let root_str = previous_workspace_path.to_string_lossy().to_string();
+        if !is_remote_path(root_str.trim()).await {
+            state
+                .workspace_search_service
+                .schedule_repo_release(previous_workspace_path);
+        }
+    }
 
     if let Some(ref pool) = state.js_worker_pool {
         pool.stop_all().await;
@@ -635,34 +690,6 @@ async fn apply_active_workspace_context(
     // Remote workspace roots are POSIX paths on the SSH host — not writable local directories on
     // Windows. Snapshot hooks already skip file tracking for registered remote paths; avoid
     // creating `/.bitfun` (or drive root) here which fails with access denied.
-    let root_str = workspace_info.root_path.to_string_lossy().to_string();
-    let skip_local_snapshot = workspace_info.workspace_kind == WorkspaceKind::Remote
-        || is_remote_path(root_str.trim()).await;
-    if !skip_local_snapshot {
-        if let Err(e) = bitfun_core::service::snapshot::initialize_snapshot_manager_for_workspace(
-            workspace_info.root_path.clone(),
-            None,
-        )
-        .await
-        {
-            warn!(
-                "Failed to initialize snapshot system: path={}, error={}",
-                workspace_info.root_path.display(),
-                e
-            );
-        }
-    } else {
-        debug!(
-            "Skipping local snapshot manager init for remote/non-local workspace root_path={}",
-            workspace_info.root_path.display()
-        );
-    }
-
-    state
-        .agent_registry
-        .load_custom_subagents(&workspace_info.root_path)
-        .await;
-
     if let Err(e) = state
         .ai_rules_service
         .set_workspace(workspace_info.root_path.clone())
@@ -674,6 +701,8 @@ async fn apply_active_workspace_context(
             e
         );
     }
+
+    spawn_workspace_background_warmup(&*state, workspace_info.clone());
 
     #[cfg(target_os = "macos")]
     {
@@ -1944,6 +1973,311 @@ pub async fn read_file_content(
     .await
 }
 
+struct PetPackageSource {
+    pet_json: Vec<u8>,
+    spritesheet_name: PathBuf,
+    spritesheet: Vec<u8>,
+}
+
+fn sanitize_pet_id(id: &str) -> String {
+    let sanitized: String = id
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let trimmed = sanitized.trim_matches('-');
+    if trimmed.is_empty() {
+        "custom-pet".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn spritesheet_mime_type(file_name: &str) -> &'static str {
+    match Path::new(file_name)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        _ => "image/webp",
+    }
+}
+
+fn load_pet_manifest_from_bytes(bytes: &[u8]) -> Result<(serde_json::Value, PathBuf), String> {
+    let manifest: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|e| format!("Failed to parse pet.json: {}", e))?;
+    let spritesheet_path = manifest
+        .get("spritesheetPath")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| "pet.json is missing spritesheetPath".to_string())?
+        .to_string();
+    Ok((manifest, PathBuf::from(spritesheet_path)))
+}
+
+fn load_pet_package_source(source_path: &Path) -> Result<PetPackageSource, String> {
+    if source_path.is_dir() {
+        let pet_json_path = source_path.join("pet.json");
+        let pet_json = std::fs::read(&pet_json_path)
+            .map_err(|e| format!("Failed to read pet.json: {}", e))?;
+        let (_, spritesheet_name) = load_pet_manifest_from_bytes(&pet_json)?;
+        let spritesheet_path = source_path.join(&spritesheet_name);
+        let spritesheet = std::fs::read(&spritesheet_path)
+            .map_err(|e| format!("Failed to read spritesheet: {}", e))?;
+        return Ok(PetPackageSource {
+            pet_json,
+            spritesheet_name,
+            spritesheet,
+        });
+    }
+
+    let file = std::fs::File::open(source_path)
+        .map_err(|e| format!("Failed to open pet zip package: {}", e))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| format!("Failed to read pet zip package: {}", e))?;
+
+    let mut manifest_index = None;
+    for index in 0..archive.len() {
+        let entry = archive
+            .by_index(index)
+            .map_err(|e| format!("Failed to inspect pet zip package: {}", e))?;
+        if Path::new(entry.name()).file_name().and_then(|n| n.to_str()) == Some("pet.json") {
+            manifest_index = Some(index);
+            break;
+        }
+    }
+    let manifest_index =
+        manifest_index.ok_or_else(|| "Pet package must contain pet.json".to_string())?;
+
+    let mut pet_json = Vec::new();
+    let manifest_name = {
+        let mut manifest_file = archive
+            .by_index(manifest_index)
+            .map_err(|e| format!("Failed to open pet.json in zip package: {}", e))?;
+        std::io::copy(&mut manifest_file, &mut pet_json)
+            .map_err(|e| format!("Failed to read pet.json from zip package: {}", e))?;
+        PathBuf::from(manifest_file.name())
+    };
+    let (_, spritesheet_name) = load_pet_manifest_from_bytes(&pet_json)?;
+    let spritesheet_zip_path = manifest_name
+        .parent()
+        .unwrap_or_else(|| Path::new(""))
+        .join(&spritesheet_name)
+        .to_string_lossy()
+        .replace('\\', "/");
+
+    let mut spritesheet = Vec::new();
+    let mut spritesheet_file = archive
+        .by_name(&spritesheet_zip_path)
+        .map_err(|e| format!("Failed to open spritesheet in zip package: {}", e))?;
+    std::io::copy(&mut spritesheet_file, &mut spritesheet)
+        .map_err(|e| format!("Failed to read spritesheet from zip package: {}", e))?;
+
+    Ok(PetPackageSource {
+        pet_json,
+        spritesheet_name,
+        spritesheet,
+    })
+}
+
+fn companion_user_packages_dir(state: &AppState) -> PathBuf {
+    state
+        .workspace_service
+        .path_manager()
+        .user_data_dir()
+        .join("agent-companions")
+}
+
+fn pet_package_dto_from_dir(dir: &Path, source: &str) -> Result<AgentCompanionPetPackageDto, String> {
+    let pet_json_path = dir.join("pet.json");
+    let pet_json = std::fs::read(&pet_json_path)
+        .map_err(|e| format!("Failed to read {}: {}", pet_json_path.display(), e))?;
+    let (manifest, spritesheet_rel_path) = load_pet_manifest_from_bytes(&pet_json)?;
+    let raw_id = manifest
+        .get("id")
+        .and_then(|value| value.as_str())
+        .unwrap_or_else(|| dir.file_name().and_then(|name| name.to_str()).unwrap_or("pet"));
+    let display_name = manifest
+        .get("displayName")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or(raw_id)
+        .trim()
+        .to_string();
+    let description = manifest
+        .get("description")
+        .and_then(|value| value.as_str())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let spritesheet_path = dir.join(&spritesheet_rel_path);
+    if !spritesheet_path.is_file() {
+        return Err(format!("Spritesheet not found: {}", spritesheet_path.display()));
+    }
+    let spritesheet_file_name = spritesheet_rel_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("spritesheet.webp");
+
+    Ok(AgentCompanionPetPackageDto {
+        id: sanitize_pet_id(raw_id),
+        display_name,
+        description,
+        source: source.to_string(),
+        package_path: dir.to_string_lossy().to_string(),
+        spritesheet_path: spritesheet_path.to_string_lossy().to_string(),
+        spritesheet_mime_type: spritesheet_mime_type(spritesheet_file_name).to_string(),
+    })
+}
+
+fn scan_pet_package_dirs(root: &Path, source: &str) -> Vec<AgentCompanionPetPackageDto> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut pets = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() || !path.join("pet.json").is_file() {
+            continue;
+        }
+        match pet_package_dto_from_dir(&path, source) {
+            Ok(dto) => pets.push(dto),
+            Err(err) => warn!("Skipping invalid Agent companion pet package: {}", err),
+        }
+    }
+    pets.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+    pets
+}
+
+#[tauri::command]
+pub async fn list_agent_companion_pets(
+    state: State<'_, AppState>,
+) -> Result<ListAgentCompanionPetsResponse, String> {
+    let pets = scan_pet_package_dirs(&companion_user_packages_dir(&state), "user");
+    Ok(ListAgentCompanionPetsResponse { pets })
+}
+
+#[tauri::command]
+pub async fn import_agent_companion_pet_package(
+    state: State<'_, AppState>,
+    request: ImportAgentCompanionPetPackageRequest,
+) -> Result<AgentCompanionPetPackageDto, String> {
+    let source_path = PathBuf::from(request.path);
+    let source = load_pet_package_source(&source_path)?;
+    let (pet_json, _) = load_pet_manifest_from_bytes(&source.pet_json)?;
+
+    let raw_id = pet_json
+        .get("id")
+        .and_then(|value| value.as_str())
+        .unwrap_or("custom-pet");
+    let id = sanitize_pet_id(raw_id);
+    let display_name = pet_json
+        .get("displayName")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or(raw_id)
+        .trim()
+        .to_string();
+    let description = pet_json
+        .get("description")
+        .and_then(|value| value.as_str())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    let package_dir = state
+        .workspace_service
+        .path_manager()
+        .user_data_dir()
+        .join("agent-companions")
+        .join(format!("{}-{}", id, uuid::Uuid::new_v4().simple()));
+
+    std::fs::create_dir_all(&package_dir)
+        .map_err(|e| format!("Failed to create pet package directory: {}", e))?;
+
+    let spritesheet_file_name = source
+        .spritesheet_name
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("spritesheet.webp")
+        .to_string();
+    let spritesheet_path = package_dir.join(&spritesheet_file_name);
+
+    let mut normalized_manifest = pet_json;
+    if let Some(obj) = normalized_manifest.as_object_mut() {
+        obj.insert(
+            "spritesheetPath".to_string(),
+            serde_json::Value::String(spritesheet_file_name.clone()),
+        );
+    }
+
+    let manifest_bytes = serde_json::to_vec_pretty(&normalized_manifest)
+        .map_err(|e| format!("Failed to serialize pet.json: {}", e))?;
+    std::fs::write(package_dir.join("pet.json"), manifest_bytes)
+        .map_err(|e| format!("Failed to write pet.json: {}", e))?;
+    std::fs::write(&spritesheet_path, source.spritesheet)
+        .map_err(|e| format!("Failed to write spritesheet: {}", e))?;
+
+    info!(
+        "Imported Agent companion pet package '{}' into {}",
+        id,
+        package_dir.display()
+    );
+
+    Ok(AgentCompanionPetPackageDto {
+        id,
+        display_name,
+        description,
+        source: "user".to_string(),
+        package_path: package_dir.to_string_lossy().to_string(),
+        spritesheet_path: spritesheet_path.to_string_lossy().to_string(),
+        spritesheet_mime_type: spritesheet_mime_type(&spritesheet_file_name).to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn delete_agent_companion_pet_package(
+    state: State<'_, AppState>,
+    request: DeleteAgentCompanionPetPackageRequest,
+) -> Result<(), String> {
+    let root = companion_user_packages_dir(&state);
+    if !root.exists() {
+        return Err("Agent companion packages directory does not exist".to_string());
+    }
+    let root = root
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve Agent companion packages root: {}", e))?;
+
+    let candidate = PathBuf::from(&request.package_path);
+    let resolved = candidate
+        .canonicalize()
+        .map_err(|e| format!("Pet package path not found: {}", e))?;
+
+    if !resolved.starts_with(&root) {
+        return Err("Refusing to delete path outside imported Agent companion packages".to_string());
+    }
+    if !resolved.is_dir() {
+        return Err("Pet package is not a directory".to_string());
+    }
+
+    std::fs::remove_dir_all(&resolved)
+        .map_err(|e| format!("Failed to delete pet package: {}", e))?;
+
+    info!(
+        "Deleted Agent companion pet package at {}",
+        resolved.display()
+    );
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn write_file_content(
     state: State<'_, AppState>,
@@ -2301,6 +2635,8 @@ pub async fn search_files(
         include_directories: request.include_directories,
     };
 
+    let use_workspace_search =
+        request.search_content && should_use_workspace_search(&request.root_path).await;
     let result = if request.search_content {
         let filename_outcome = state
             .filesystem_service
@@ -2320,20 +2656,35 @@ pub async fn search_files(
         if filename_results.len() >= max_results {
             Ok(filename_results)
         } else {
-            let mut content_outcome = state
-                .filesystem_service
-                .search_file_contents(
+            let remaining = max_results - filename_results.len();
+            let mut content_outcome = if use_workspace_search {
+                search_file_contents_via_workspace_search(
+                    &state,
                     &request.root_path,
                     &request.pattern,
-                    FileSearchOptions {
-                        include_content: true,
-                        include_directories: false,
-                        max_results: Some(max_results - filename_results.len()),
-                        ..options
-                    },
-                    cancel_flag,
+                    request.case_sensitive,
+                    request.use_regex,
+                    request.whole_word,
+                    remaining,
                 )
-                .await?;
+                .await
+                .map(|result| result.outcome)?
+            } else {
+                state
+                    .filesystem_service
+                    .search_file_contents(
+                        &request.root_path,
+                        &request.pattern,
+                        FileSearchOptions {
+                            include_content: true,
+                            include_directories: false,
+                            max_results: Some(remaining),
+                            ..options
+                        },
+                        cancel_flag,
+                    )
+                    .await?
+            };
             if filename_outcome.truncated || content_outcome.truncated {
                 debug!(
                     "Legacy search truncated: root_path={}, pattern={}, search_content={}, limit={}",
@@ -2412,7 +2763,7 @@ pub async fn search_filenames(
                 limit,
                 outcome.truncated
             );
-            Ok(serialize_search_response(outcome, limit))
+            Ok(serialize_search_response(outcome, limit, None))
         }
         Err(error) => {
             error!(
@@ -2444,14 +2795,33 @@ pub async fn search_file_contents(
         include_directories: false,
     };
 
-    let result = state
-        .filesystem_service
-        .search_file_contents(&request.root_path, &request.pattern, options, cancel_flag)
-        .await;
+    let result = if should_use_workspace_search(&request.root_path).await {
+        search_file_contents_via_workspace_search(
+            &state,
+            &request.root_path,
+            &request.pattern,
+            request.case_sensitive,
+            request.use_regex,
+            request.whole_word,
+            limit,
+        )
+        .await
+        .map(|result| {
+            let search_metadata = search_metadata_from_content_result(&result);
+            (result.outcome, Some(search_metadata))
+        })
+    } else {
+        state
+            .filesystem_service
+            .search_file_contents(&request.root_path, &request.pattern, options, cancel_flag)
+            .await
+            .map(|outcome| (outcome, None))
+            .map_err(|error| format!("Failed to search file contents: {}", error))
+    };
     unregister_search(&state, search_id.as_deref());
 
     match result {
-        Ok(outcome) => {
+        Ok((outcome, search_metadata)) => {
             info!(
                 "Content search completed: root_path={}, pattern={}, results_count={}, limit={}, truncated={}",
                 request.root_path,
@@ -2460,7 +2830,7 @@ pub async fn search_file_contents(
                 limit,
                 outcome.truncated
             );
-            Ok(serialize_search_response(outcome, limit))
+            Ok(serialize_search_response(outcome, limit, search_metadata))
         }
         Err(error) => {
             error!(
@@ -2543,6 +2913,7 @@ pub async fn start_search_filenames_stream(
                     limit,
                     outcome.truncated,
                     count_search_result_groups(&outcome.results),
+                    None,
                 );
             }
             Err(error) => {
@@ -2590,9 +2961,14 @@ pub async fn start_search_file_contents_stream(
     };
 
     let filesystem_service = state.filesystem_service.clone();
+    let workspace_search_service = state.workspace_search_service.clone();
     let active_searches = state.active_searches.clone();
     let root_path = request.root_path.clone();
     let pattern = request.pattern.clone();
+    let case_sensitive = request.case_sensitive;
+    let use_regex = request.use_regex;
+    let whole_word = request.whole_word;
+    let use_workspace_search = should_use_workspace_search(&root_path).await;
     let response_search_id = search_id.clone();
     let progress_search_id = search_id.clone();
     let progress_app_handle = app_handle.clone();
@@ -2610,20 +2986,77 @@ pub async fn start_search_file_contents_stream(
     ));
 
     tokio::spawn(async move {
-        let result = filesystem_service
-            .search_file_contents_with_progress(
-                &root_path,
-                &pattern,
-                options,
-                cancel_flag,
-                Some(progress_sink),
-            )
-            .await;
+        let result = if use_workspace_search {
+            let result = workspace_search_service
+                .search_content(bitfun_core::service::search::ContentSearchRequest {
+                    repo_root: root_path.clone().into(),
+                    search_path: None,
+                    pattern: pattern.clone(),
+                    output_mode: bitfun_core::service::search::ContentSearchOutputMode::Content,
+                    case_sensitive,
+                    use_regex,
+                    whole_word,
+                    multiline: false,
+                    before_context: 0,
+                    after_context: 0,
+                    max_results: Some(limit),
+                    globs: Vec::new(),
+                    file_types: Vec::new(),
+                    exclude_file_types: Vec::new(),
+                })
+                .await
+                .map(|result| {
+                    let search_metadata = search_metadata_from_content_result(&result);
+                    (result.outcome, Some(search_metadata))
+                });
+
+            if let Ok((outcome, _)) = &result {
+                if !cancel_flag
+                    .as_ref()
+                    .is_some_and(|flag| flag.load(Ordering::Relaxed))
+                {
+                    for group in group_search_results(outcome.results.clone()) {
+                        bitfun_core::infrastructure::FileSearchProgressSink::report(
+                            progress_sink.as_ref(),
+                            group,
+                        );
+                    }
+                    bitfun_core::infrastructure::FileSearchProgressSink::flush(
+                        progress_sink.as_ref(),
+                    );
+                }
+            }
+
+            result.map_err(|error| {
+                bitfun_core::util::errors::BitFunError::service(format!(
+                    "Failed to search file contents via workspace search: {}",
+                    error
+                ))
+            })
+        } else {
+            filesystem_service
+                .search_file_contents_with_progress(
+                    &root_path,
+                    &pattern,
+                    options,
+                    cancel_flag.clone(),
+                    Some(progress_sink),
+                )
+                .await
+                .map(|outcome| (outcome, None))
+        };
 
         unregister_search_registry(&active_searches, Some(&search_id));
 
+        if cancel_flag
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::Relaxed))
+        {
+            return;
+        }
+
         match result {
-            Ok(outcome) => {
+            Ok((outcome, search_metadata)) => {
                 info!(
                     "Content search stream completed: root_path={}, pattern={}, results_count={}, limit={}, truncated={}",
                     root_path,
@@ -2639,6 +3072,7 @@ pub async fn start_search_file_contents_stream(
                     limit,
                     outcome.truncated,
                     count_search_result_groups(&outcome.results),
+                    search_metadata,
                 );
             }
             Err(error) => {

@@ -1,11 +1,10 @@
 /// Agent integration module
 ///
 /// Wraps interaction with bitfun-core's Agent system
-pub mod agentic_system;
 pub mod core_adapter;
 
 // Re-export AgenticSystem for use in other modules
-pub use agentic_system::AgenticSystem;
+pub use bitfun_core::agentic::system::AgenticSystem;
 
 use anyhow::Result;
 use tokio::sync::mpsc;

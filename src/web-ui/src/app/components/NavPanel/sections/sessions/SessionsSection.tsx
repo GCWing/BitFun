@@ -24,7 +24,7 @@ import {
 } from '@/flow_chat/services/openBtwSession';
 import { resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
 import {
-  compareSessionsForDisplay,
+  compareSessionsForNavStable,
   sessionBelongsToWorkspaceNavRow,
 } from '@/flow_chat/utils/sessionOrdering';
 import { stateMachineManager } from '@/flow_chat/state-machine';
@@ -183,6 +183,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           flowChatStore.clearSessionUnreadCompletion(sessionId);
+          flowChatStore.clearSessionNeedsAttention(sessionId);
         });
       });
     };
@@ -195,12 +196,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     () =>
       Array.from(flowChatState.sessions.values())
         .filter((s: Session) => {
+          if (s.isTransient) {
+            return false;
+          }
           if (workspacePath) {
             return sessionBelongsToWorkspaceNavRow(s, workspacePath, remoteConnectionId, remoteSshHost);
           }
           return !s.workspacePath;
         })
-        .sort(compareSessionsForDisplay),
+        .sort(compareSessionsForNavStable),
     [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost]
   );
 
@@ -222,11 +226,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     }
 
     for (const [pid, list] of childMap) {
-      childMap.set(pid, [...list].sort(compareSessionsForDisplay));
+      childMap.set(pid, [...list].sort(compareSessionsForNavStable));
     }
 
     return {
-      topLevelSessions: [...parents].sort(compareSessionsForDisplay),
+      topLevelSessions: [...parents].sort(compareSessionsForNavStable),
       childrenByParent: childMap,
     };
   }, [sessions]);
@@ -477,7 +481,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   : Bot
                 : Code2;
           const isRunning = runningSessionIds.has(session.sessionId);
-          const isUnreadCompleted = !isRunning && session.hasUnreadCompletion;
           const isRowActive = isSessionNavRowActive({
             rowSessionId: session.sessionId,
             activeTabId,
@@ -485,6 +488,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             activeChildSessionId: activeBtwSessionData?.childSessionId,
             activeChildParentSessionId: activeBtwSessionData?.parentSessionId,
           });
+          // Determine the notification state for this session row.
+          // Priority: needsUserAttention > hasUnreadCompletion.
+          const attentionKind = !isRunning && !isRowActive
+            ? (session.needsUserAttention || session.hasUnreadCompletion || undefined)
+            : undefined;
+          const isHighPriority = !!session.needsUserAttention;
           const row = (
             <div
               className={[
@@ -493,6 +502,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 isChildSession && 'is-btw-child',
                 isRowActive && 'is-active',
                 isEditing && 'is-editing',
+                openMenuSessionId === session.sessionId && 'is-menu-open',
               ]
                 .filter(Boolean)
                 .join(' ')}
@@ -521,16 +531,26 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       ].join(' ')}
                     />
                   )}
-                  {isUnreadCompleted ? (
+                  {attentionKind ? (
                     <span
                       className={[
                         'bitfun-nav-panel__inline-item-unread-dot',
-                        session.hasUnreadCompletion === 'error' && 'is-error',
+                        attentionKind === 'error' && 'is-error',
+                        attentionKind === 'interrupted' && 'is-interrupted',
+                        attentionKind === 'ask_user' && 'is-ask-user',
+                        attentionKind === 'tool_confirm' && 'is-tool-confirm',
+                        isHighPriority && 'is-high-priority',
                       ].filter(Boolean).join(' ')}
                       aria-label={
-                        session.hasUnreadCompletion === 'error'
+                        attentionKind === 'error'
                           ? t('nav.sessions.unreadError')
-                          : t('nav.sessions.unreadCompleted')
+                          : attentionKind === 'interrupted'
+                            ? t('nav.sessions.unreadInterrupted')
+                            : attentionKind === 'ask_user'
+                              ? t('nav.sessions.needsUserInput')
+                              : attentionKind === 'tool_confirm'
+                                ? t('nav.sessions.needsToolConfirm')
+                                : t('nav.sessions.unreadCompleted')
                       }
                     />
                   ) : null}
@@ -577,6 +597,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     {isChildSession ? (
                       <span className="bitfun-nav-panel__inline-item-btw-badge">{childSessionBadge}</span>
                     ) : null}
+                    {attentionKind === 'ask_user' || attentionKind === 'tool_confirm' ? (
+                      <span className="bitfun-nav-panel__inline-item-attention-badge">
+                        {attentionKind === 'ask_user'
+                          ? t('nav.sessions.badgeNeedsInput')
+                          : t('nav.sessions.badgeNeedsConfirm')}
+                      </span>
+                    ) : null}
                     {reviewActivityKind ? (
                       <span className="bitfun-nav-panel__inline-item-review-badge">
                         <Loader2 size={9} aria-hidden />
@@ -584,13 +611,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       </span>
                     ) : null}
                   </span>
-                  <div className="bitfun-nav-panel__inline-item-actions">
+                  <div
+                    className={`bitfun-nav-panel__inline-item-actions${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
+                  >
                     <button
                       type="button"
                       className={`bitfun-nav-panel__inline-item-action-btn${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
                       onClick={e => handleMenuOpen(e, session.sessionId)}
                     >
-                      <MoreHorizontal size={12} />
+                      <MoreHorizontal size="var(--bitfun-nav-row-action-icon-size)" />
                     </button>
                   </div>
                   {openMenuSessionId === session.sessionId && sessionMenuPosition && createPortal(

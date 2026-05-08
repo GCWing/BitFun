@@ -20,24 +20,8 @@ If a change affects shared product behavior across runtimes, the implementation 
 
 ## Local rules
 
-- Keep Tauri commands consistent: `snake_case` names, structured `request`
 - Keep desktop-only integrations here; do not move them into shared core
-- For local temporary debugging, prefer `pnpm run desktop:preview:debug` for both frontend-only shared-UI changes and Rust / Tauri changes. It reuses the existing debug binary when it is still current and auto-rebuilds before preview when desktop-side inputs are newer or the binary is missing. Use `pnpm run desktop:dev` only when you need the full Tauri dev watcher or are debugging startup/build integration itself
-- When the wording mixes "build/debug version" with "quickly inspect the effect", treat the higher-level intent as preview and use the preview commands instead of `pnpm run desktop:build:fast`
-
-Preferred command shape:
-
-```rust
-#[tauri::command]
-pub async fn your_command(
-    state: State<'_, AppState>,
-    request: YourRequest,
-) -> Result<YourResponse, String>
-```
-
-```ts
-await api.invoke('your_command', { request: { ... } });
-```
+- For packaging or release asks, see the top-level `AGENTS.md`
 
 ## Commands
 
@@ -50,6 +34,25 @@ cargo build -p bitfun-desktop
 pnpm run desktop:build:fast
 ```
 
+## Fast builds
+
+| Command | When to use |
+|---|---|
+| `pnpm run desktop:build:fast` | Debug build without bundling; fastest compile for manual testing |
+| `pnpm run desktop:build:release-fast` | Release-like build with reduced LTO; use when you need release behavior but can't wait for full LTO |
+| `pnpm run desktop:build:nsis:fast` | Windows installer using `release-fast` profile; for quick installer validation |
+
+`release-fast` profile (`Cargo.toml`): inherits `release` but disables LTO, increases `codegen-units` to 16, enables incremental compilation. Significantly faster at the cost of binary size and marginal runtime performance.
+
+## DevTools feature (model rule)
+
+The `devtools` Cargo feature exists for debugging UI/UX in the desktop app. When adding or modifying debug-related code:
+
+- Guard all debug-only APIs and commands with `#[cfg(any(debug_assertions, feature = "devtools"))]`
+- Provide no-op stubs under `#[cfg(not(any(debug_assertions, feature = "devtools")))]` so commands can always be registered in `invoke_handler`
+- The feature is enabled automatically in `dev` builds and `release-fast` profile builds via `--features devtools`
+- Never enable in `release` profile builds intended for end users
+
 ## Verification
 
 ```bash
@@ -61,15 +64,3 @@ If the change affects startup, WebDriver, browser/computer-use, or packaged beha
 ```bash
 cargo build -p bitfun-desktop
 ```
-
-The preview commands above are iteration shortcuts only; keep using the minimum Rust checks and any required build / E2E verification before finishing.
-
-Use `pnpm run desktop:preview:debug -- --force-rebuild` only when you explicitly want to rebuild before preview even if the timestamp check says the binary is current.
-
-Use `pnpm run desktop:build:fast` only when the user explicitly wants a debug build artifact without launching the app.
-
-For packaging or release asks:
-
-- Confirm the package form when the user did not specify whether they want a local fast artifact, a standalone executable, or an installer.
-- Do not substitute preview/debug outputs for a real release deliverable.
-- On Windows, prefer `pnpm run desktop:build:nsis` for installer-style delivery and `pnpm run desktop:build:exe` only when the user explicitly wants a standalone executable.

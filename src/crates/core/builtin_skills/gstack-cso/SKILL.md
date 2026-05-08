@@ -18,6 +18,16 @@ The real attack surface isn't your code — it's your dependencies. Most teams a
 
 You do NOT make code changes. You produce a **Security Posture Report** with concrete findings, severity ratings, and remediation plans.
 
+## BitFun Team Mode Dispatch
+
+When this skill is invoked by BitFun Team Mode, this skill supplies the security-review lens. Use existing Task sub-agents for independent security evidence gathering, then make final severity and remediation calls in the main Team session.
+
+- Do not assume a CSO sub-agent exists. Choose only from the Task tool's available agents.
+- Prefer a matching custom security sub-agent if available; otherwise use `ReviewSecurity` for diff-focused review when available, `Explore` for broader code/config mapping, and `FileFinder` for security-sensitive files.
+- Keep Task work read-only. Ask for concrete evidence: file paths, trust boundaries, inputs, auth/data flows, exploit preconditions, and confidence.
+- In parallel batches, return a compact Security brief: `critical/high findings`, `trust-boundary risks`, `false-positive notes`, `required fixes`, `verification`.
+- The main Team orchestrator decides what blocks Build/Ship and asks the user for risk acceptance when needed.
+
 ## User-invocable
 When the user types `/cso`, run this skill.
 
@@ -44,7 +54,7 @@ When the user types `/cso`, run this skill.
 
 ## Important: Use the Grep tool for all code searches
 
-The bash blocks throughout this skill show WHAT patterns to search for, not HOW to run them. Use Claude Code's Grep tool (which handles permissions and access correctly) rather than raw bash grep. The bash blocks are illustrative examples — do NOT copy-paste them into a terminal. Do NOT use `| head` to truncate results.
+The bash blocks throughout this skill show WHAT patterns to search for, not HOW to run them. Use BitFun's Grep tool (which handles permissions and access correctly) rather than raw bash grep. The bash blocks are illustrative examples — do NOT copy-paste them into a terminal. Do NOT use `| head` to truncate results.
 
 ## Instructions
 
@@ -82,7 +92,7 @@ grep -q "laravel" composer.json 2>/dev/null && echo "FRAMEWORK: Laravel"
 **Soft gate, not hard gate:** Stack detection determines scan PRIORITY, not scan SCOPE. In subsequent phases, PRIORITIZE scanning for detected languages/frameworks first and most thoroughly. However, do NOT skip undetected languages entirely — after the targeted scan, run a brief catch-all pass with high-signal patterns (SQL injection, command injection, hardcoded secrets, SSRF) across ALL file types. A Python service nested in `ml/` that wasn't detected at root still gets basic coverage.
 
 **Mental model:**
-- Read CLAUDE.md, README, key config files
+- Read AGENTS.md, README, key config files
 - Map the application architecture: what components exist, how they connect, where trust boundaries are
 - Identify the data flow: where does user input enter? Where does it exit? What transformations happen?
 - Document invariants and assumptions the code relies on
@@ -92,41 +102,7 @@ This is NOT a checklist — it's a reasoning phase. The output is understanding,
 
 ## Prior Learnings
 
-Search for relevant learnings from previous sessions:
-
-```bash
-_CROSS_PROJ=$(~/.claude/skills/gstack/bin/gstack-config get cross_project_learnings 2>/dev/null || echo "unset")
-echo "CROSS_PROJECT: $_CROSS_PROJ"
-if [ "$_CROSS_PROJ" = "true" ]; then
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 --cross-project 2>/dev/null || true
-else
-  ~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10 2>/dev/null || true
-fi
-```
-
-If `CROSS_PROJECT` is `unset` (first time): Use AskUserQuestion:
-
-> gstack can search learnings from your other projects on this machine to find
-> patterns that might apply here. This stays local (no data leaves your machine).
-> Recommended for solo developers. Skip if you work on multiple client codebases
-> where cross-contamination would be a concern.
-
-Options:
-- A) Enable cross-project learnings (recommended)
-- B) Keep learnings project-scoped only
-
-If A: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings true`
-If B: run `~/.claude/skills/gstack/bin/gstack-config set cross_project_learnings false`
-
-Then re-run the search with the appropriate flag.
-
-If learnings are found, incorporate them into your analysis. When a review finding
-matches a past learning, display:
-
-**"Prior learning applied: [key] (confidence N/10, from [date])"**
-
-This makes the compounding visible. The user should see that gstack is getting
-smarter on their codebase over time.
+Use only BitFun in-session memory, project docs, `.bitfun/team/` artifacts, git history, TODO files, and prior design/review artifacts. Do not run external learning or config helpers, and do not ask the user to enable cross-project learning. If a relevant prior artifact is found, cite it as: `Prior BitFun context applied: <source>`.
 
 ### Phase 1: Attack Surface Census
 
@@ -290,12 +266,12 @@ Use Grep to search for these patterns:
 
 ### Phase 8: Skill Supply Chain
 
-Scan installed Claude Code skills for malicious patterns. 36% of published skills have security flaws, 13.4% are outright malicious (Snyk ToxicSkills research).
+Scan installed BitFun skills for malicious patterns. 36% of published skills have security flaws, 13.4% are outright malicious (Snyk ToxicSkills research).
 
 **Tier 1 — repo-local (automatic):** Scan the repo's local skills directory for suspicious patterns:
 
 ```bash
-ls -la .claude/skills/ 2>/dev/null
+Use Skill/FileFinder context to inspect bundled skill definitions when relevant
 ```
 
 Use Grep to search all local skill SKILL.md files for suspicious patterns:
@@ -486,7 +462,7 @@ When a finding is VERIFIED, search the entire codebase for the same vulnerabilit
 
 **Parallel Finding Verification:**
 
-For each candidate finding, launch an independent verification sub-task using the Agent tool. The verifier has fresh context and cannot see the initial scan's reasoning — only the finding itself and the FP filtering rules.
+For each candidate finding, launch an independent verification sub-task using the Task tool. The verifier has fresh context and cannot see the initial scan's reasoning — only the finding itself and the FP filtering rules.
 
 Prompt each verifier with:
 - The file path and line number ONLY (avoid anchoring)
@@ -495,7 +471,7 @@ Prompt each verifier with:
 
 Launch all verifiers in parallel. Discard findings where the verifier scores below 8 (daily mode) or below 2 (comprehensive mode).
 
-If the Agent tool is unavailable, self-verify by re-reading code with a skeptic's eye. Note: "Self-verified — independent sub-task unavailable."
+If the Task tool is unavailable, self-verify by re-reading code with a skeptic's eye. Note: "Self-verified — independent sub-task unavailable."
 
 ### Phase 13: Findings Report + Trend Tracking + Remediation
 
@@ -561,7 +537,7 @@ For each finding:
 5. **Audit exposure window** — when committed? When removed? Was repo public?
 6. **Check for abuse** — review provider's audit logs
 
-**Trend Tracking:** If prior reports exist in `.gstack/security-reports/`:
+**Trend Tracking:** If prior reports exist in `.bitfun/team/security-reports/`:
 ```
 SECURITY POSTURE TREND
 ══════════════════════
@@ -589,10 +565,10 @@ Match findings across reports using the `fingerprint` field (sha256 of category 
 ### Phase 14: Save Report
 
 ```bash
-mkdir -p .gstack/security-reports
+mkdir -p .bitfun/team/security-reports
 ```
 
-Write findings to `.gstack/security-reports/{date}-{HHMMSS}.json` using this schema:
+Write findings to `.bitfun/team/security-reports/{date}-{HHMMSS}.json` using this schema:
 
 ```json
 {
@@ -645,7 +621,7 @@ Write findings to `.gstack/security-reports/{date}-{HHMMSS}.json` using this sch
 }
 ```
 
-If `.gstack/` is not in `.gitignore`, note it in findings — security reports should stay local.
+If `.bitfun/team/` is not in `.gitignore`, note it in findings — security reports should stay local.
 
 ## Capture Learnings
 
@@ -653,7 +629,7 @@ If you discovered a non-obvious pattern, pitfall, or architectural insight durin
 this session, log it for future sessions:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-learnings-log '{"skill":"cso","type":"TYPE","key":"SHORT_KEY","insight":"DESCRIPTION","confidence":N,"source":"SOURCE","files":["path/to/relevant/file"]}'
+true # BitFun Team Mode has no external telemetry helper
 ```
 
 **Types:** `pattern` (reusable approach), `pitfall` (what NOT to do), `preference`
@@ -661,7 +637,7 @@ this session, log it for future sessions:
 `operational` (project environment/CLI/workflow knowledge).
 
 **Sources:** `observed` (you found this in the code), `user-stated` (user told you),
-`inferred` (AI deduction), `cross-model` (both Claude and Codex agree).
+`inferred` (AI deduction), `cross-model` (both BitFun and outside-voice sub-agent agree).
 
 **Confidence:** 1-10. Be honest. An observed pattern you verified in the code is 8-9.
 An inference you're not sure about is 4-5. A user preference they explicitly stated is 10.

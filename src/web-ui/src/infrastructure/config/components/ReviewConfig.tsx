@@ -264,7 +264,22 @@ const ReviewConfig: React.FC = () => {
   }, [loadData, notifyError, notifySuccess, t, team]);
 
   const handleModelChange = useCallback(async (member: ReviewTeamMember, modelId: string) => {
+    if (!team) return;
+
     setSavingMemberId(member.id);
+    const nextTeam: ReviewTeam = {
+      ...team,
+      members: team.members.map((m) =>
+        m.id === member.id ? { ...m, model: modelId } : m,
+      ),
+      coreMembers: team.coreMembers.map((m) =>
+        m.id === member.id ? { ...m, model: modelId } : m,
+      ),
+      extraMembers: team.extraMembers.map((m) =>
+        m.id === member.id ? { ...m, model: modelId } : m,
+      ),
+    };
+    setTeam(nextTeam);
     try {
       await SubagentAPI.updateSubagentConfig({
         subagentId: member.subagentId,
@@ -272,14 +287,14 @@ const ReviewConfig: React.FC = () => {
         model: modelId,
         workspacePath: workspacePath || undefined,
       });
-      await loadData();
       notifySuccess(t('messages.saved'));
     } catch (error) {
+      await loadData();
       notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
     } finally {
       setSavingMemberId(null);
     }
-  }, [loadData, notifyError, notifySuccess, t, workspacePath]);
+  }, [loadData, notifyError, notifySuccess, t, team, workspacePath]);
 
   const handleAddMember = useCallback(async () => {
     if (!candidateId) return;
@@ -430,6 +445,7 @@ const ReviewConfig: React.FC = () => {
         </ConfigPageSection>
 
         <ConfigPageSection
+          className="review-config__members-section"
           title={t('members.title')}
           description={t('members.description')}
           titleSuffix={<Badge variant="neutral">{t('members.count', { count: team.members.length })}</Badge>}

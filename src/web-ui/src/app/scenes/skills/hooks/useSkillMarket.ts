@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { configAPI } from '@/infrastructure/api';
-import type { SkillMarketItem } from '@/infrastructure/config/types';
+import type { SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import { useWorkspaceManagerSync } from '@/infrastructure/hooks/useWorkspaceManagerSync';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -129,21 +129,18 @@ export function useSkillMarket({
     }
   }, [currentPage, displayMarketSkills.length, fetchSkills, hasMore, pageSize, searchQuery]);
 
-  const handleDownload = useCallback(async (skill: SkillMarketItem) => {
-    if (!hasWorkspace) {
+  const handleDownload = useCallback(async (skill: SkillMarketItem, targetLevel: SkillLevel = 'project') => {
+    const resolvedLevel: SkillLevel = isRemoteWorkspace ? 'user' : targetLevel;
+    if (resolvedLevel === 'project' && !hasWorkspace) {
       notification.warning(t('messages.noWorkspace'));
-      return;
-    }
-    if (isRemoteWorkspace) {
-      notification.warning('Remote workspaces do not support project skill downloads yet.');
       return;
     }
     try {
       setDownloadingPackage(skill.installId);
       const result = await configAPI.downloadSkillMarket({
         packageId: skill.installId,
-        level: 'project',
-        workspacePath: workspacePath || undefined,
+        level: resolvedLevel,
+        workspacePath: resolvedLevel === 'project' ? workspacePath || undefined : undefined,
       });
       const installedName = result.installedSkills[0] ?? skill.name;
       notification.success(t('messages.marketDownloadSuccess', { name: installedName }));

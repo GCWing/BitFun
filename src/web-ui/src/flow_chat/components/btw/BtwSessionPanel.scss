@@ -136,19 +136,30 @@
     padding: 12px 16px;
     display: block;
 
-    &::after {
-      content: '';
-      display: block;
-      height: 140px;
-      min-height: 140px;
-      width: 100%;
-      pointer-events: none;
-    }
-
     .virtual-item-wrapper {
       width: 100%;
       display: block;
     }
+  }
+
+  &__action-bar-wrapper {
+    position: absolute;
+    inset: 0;
+    z-index: 13;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: 0;
+    padding: 56px 14px 14px;
+    box-sizing: border-box;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  &__action-bar-wrapper > .deep-review-action-bar {
+    width: 100%;
+    max-height: 100%;
+    pointer-events: auto;
   }
 
   &__empty-state {
@@ -173,5 +184,54 @@
   // Action bar is now a floating card above the bottom, so no extra scroll padding needed.
   &--has-action-bar &__scroll-to-bottom {
     bottom: 140px;
+  }
+
+  /* Minimized review action bar indicator */
+  &__minimized-indicator {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    z-index: 11;
+    pointer-events: auto;
+  }
+
+  &__minimized-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--border-base);
+    color: var(--color-text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    svg {
+      flex-shrink: 0;
+      color: var(--color-accent-500);
+    }
+  }
+
+  &__minimized-text {
+    white-space: nowrap;
+  }
+
+  &__minimized-count {
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--element-bg-soft);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
   }
 }

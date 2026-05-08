@@ -133,6 +133,14 @@ pub struct GetOperationDiffRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetSessionFileDiffStatsRequest {
+    pub sessionId: String,
+    pub filePath: String,
+    #[serde(alias = "workspacePath")]
+    pub workspace_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetOperationSummaryRequest {
     pub sessionId: String,
     pub operationId: String,
@@ -666,6 +674,20 @@ pub async fn get_operation_diff(
         "modifiedContent": modified.to_string(),
         "anchorLine": diff.get("anchor_line").and_then(|v| v.as_u64()),
     }))
+}
+
+#[tauri::command]
+pub async fn get_session_file_diff_stats(
+    request: GetSessionFileDiffStatsRequest,
+) -> Result<serde_json::Value, String> {
+    let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
+
+    let stats = manager
+        .get_session_file_diff_stats(&request.sessionId, &request.filePath)
+        .await
+        .map_err(|e| format!("Failed to get session file diff stats: {}", e))?;
+
+    serde_json::to_value(&stats).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

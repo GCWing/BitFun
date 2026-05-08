@@ -138,6 +138,17 @@ pub enum AgenticEvent {
         total_tools: usize,
         duration_ms: u64,
         subagent_parent_info: Option<SubagentParentInfo>,
+        /// When set, the turn finished but the last model round was a partial
+        /// recovery (stream aborted mid-way). Contains a human-readable reason.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        partial_recovery_reason: Option<String>,
+        /// Whether the turn completed successfully (false for loop_detected or
+        /// max_rounds).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        success: Option<bool>,
+        /// Why the turn finished: "complete", "loop_detected", or "max_rounds".
+        #[serde(skip_serializing_if = "Option::is_none")]
+        finish_reason: Option<String>,
     },
 
     DialogTurnCancelled {
@@ -291,6 +302,8 @@ pub enum ToolEventData {
         tool_id: String,
         tool_name: String,
         params: serde_json::Value,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        timeout_seconds: Option<u64>,
     },
     Progress {
         tool_id: String,

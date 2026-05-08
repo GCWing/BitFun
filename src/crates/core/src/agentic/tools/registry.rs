@@ -71,17 +71,24 @@ impl ToolRegistry {
     /// Remove all tools from the MCP server
     pub fn unregister_mcp_server_tools(&mut self, server_id: &str) {
         let prefix = format!("mcp__{}__", server_id);
+        self.unregister_tools_by_prefix(&prefix);
+    }
+
+    /// Remove all tools whose registry name starts with the given prefix.
+    pub fn unregister_tools_by_prefix(&mut self, prefix: &str) -> usize {
         let to_remove: Vec<String> = self
             .tools
             .keys()
-            .filter(|k| k.starts_with(&prefix))
+            .filter(|k| k.starts_with(prefix))
             .cloned()
             .collect();
+        let count = to_remove.len();
 
         for key in to_remove {
-            info!("Unregistering MCP tool: tool_name={}", key);
+            info!("Unregistering dynamic tool: tool_name={}", key);
             self.tools.shift_remove(&key);
         }
+        count
     }
 
     /// Register all tools

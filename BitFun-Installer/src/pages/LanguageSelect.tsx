@@ -72,7 +72,7 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
             opacity: 0.6,
             letterSpacing: '0.5px',
           }}>
-            Version 0.2.4
+            Version 0.2.5
           </div>
         </div>
       </div>

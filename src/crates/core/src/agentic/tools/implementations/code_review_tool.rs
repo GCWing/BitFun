@@ -245,7 +245,41 @@ impl CodeReviewTool {
                                 },
                                 "needs_decision": {
                                     "type": "array",
-                                    "items": { "type": "string" }
+                                    "description": "Items needing user/product judgment. Each item should be an object with a 'question' and 'plan'.",
+                                    "items": {
+                                        "oneOf": [
+                                            {
+                                                "type": "object",
+                                                "properties": {
+                                                    "question": {
+                                                        "type": "string",
+                                                        "description": "The specific decision the user needs to make"
+                                                    },
+                                                    "plan": {
+                                                        "type": "string",
+                                                        "description": "The remediation plan text to execute if the user approves"
+                                                    },
+                                                    "options": {
+                                                        "type": "array",
+                                                        "description": "2-4 possible choices or approaches",
+                                                        "items": { "type": "string" }
+                                                    },
+                                                    "tradeoffs": {
+                                                        "type": "string",
+                                                        "description": "Brief explanation of trade-offs between options"
+                                                    },
+                                                    "recommendation": {
+                                                        "type": "integer",
+                                                        "description": "Index of the recommended option (0-based), if any"
+                                                    }
+                                                },
+                                                "required": ["question", "plan"]
+                                            },
+                                            {
+                                                "type": "string"
+                                            }
+                                        ]
+                                    }
                                 },
                                 "verification": {
                                     "type": "array",

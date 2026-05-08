@@ -70,11 +70,7 @@
     }
   }
 
-  /*
-   * Git 轨道在 ToolCardHeader 里位于 .tool-card-extra 内；默认 extra 高度跟子项走，轨道只有图标高，
-   * 竖线与悬停底无法贴齐头部上下内边距、也无法铺到右侧 padding。与头部行同高后再用负 inset 顶满。
-   */
-  .base-tool-card-header .tool-card-extra:has(.file-op-git-rail) {
+  .base-tool-card-header .tool-card-extra:has(.file-op-open-full-button) {
     align-self: stretch;
     display: flex;
     flex-direction: row;
@@ -85,6 +81,11 @@
 }
 
 .file-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 500;
   color: var(--color-text-primary);
 
@@ -92,6 +93,14 @@
     color: var(--color-text-muted);
     font-weight: 400;
   }
+}
+
+.file-error-message-inline {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .params-streaming-indicator {
@@ -122,16 +131,42 @@
   color: var(--color-text-muted);
 }
 
-.diff-preview-group {
-  display: flex;
+.file-op-diff-pill {
+  display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   flex-shrink: 0;
+  margin-left: 2px;
+  padding: 2px 5px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
   font-family: var(--tool-card-font-mono);
   font-size: 10px;
   font-weight: 600;
   color: var(--color-text-muted);
   line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover:not(.file-op-diff-pill--disabled) {
+    background-color: var(--tool-card-bg-hover, var(--color-bg-hover, rgba(255, 255, 255, 0.09)));
+    color: var(--color-text-primary);
+  }
+
+  &--disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    stroke: currentColor;
+  }
 
   .additions {
     color: var(--color-success);
@@ -142,24 +177,30 @@
   }
 }
 
-/* Right rail for “查看 Git diff” — aligned with Task tool header rail (TaskToolDisplay). */
-.file-op-git-rail {
+.file-op-open-full-button {
   position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   align-self: stretch;
   flex-shrink: 0;
-  min-width: 32px;
-  padding: 0 0 0 8px;
+  width: var(--tool-card-header-icon-slot, 34px);
+  padding: 0;
   margin-left: 4px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
+  transition: color 0.15s ease;
 
   &::before {
     content: '';
     position: absolute;
     left: 0;
-    right: calc(-1 * var(--tool-card-header-pad-x, 10px));
+    right: calc(-1 * var(--tool-card-header-pad-right, 10px));
     top: calc(-1 * var(--tool-card-header-pad-y, 10px));
     bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
     background-color: transparent;
@@ -169,11 +210,11 @@
     z-index: 0;
   }
 
-  &:hover:not(.file-op-git-rail--disabled)::before {
+  &:hover::before {
     background-color: var(--tool-card-bg-hover, var(--color-bg-hover, rgba(255, 255, 255, 0.09)));
   }
 
-  &:hover:not(.file-op-git-rail--disabled) .file-op-git-rail__visual {
+  &:hover {
     color: var(--color-text-primary);
   }
 
@@ -189,46 +230,14 @@
     z-index: 1;
   }
 
-  &--disabled {
-    opacity: 0.45;
-
-    .file-op-git-rail__visual {
-      color: var(--color-text-muted);
-    }
-  }
-}
-
-.file-op-git-rail__hit {
-  position: absolute;
-  left: 0;
-  top: calc(-1 * var(--tool-card-header-pad-y, 10px));
-  right: calc(-1 * var(--tool-card-header-pad-x, 10px));
-  bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
-  z-index: 2;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  appearance: none;
-  font: inherit;
-
   &:focus-visible {
     outline: 2px solid var(--color-accent-500, #60a5fa);
     outline-offset: -2px;
   }
-}
-
-.file-op-git-rail__visual {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-muted);
-  pointer-events: none;
 
   svg {
+    position: relative;
+    z-index: 1;
     width: 16px;
     height: 16px;
     flex-shrink: 0;
@@ -338,4 +347,33 @@
   color: var(--color-text-muted);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.file-op-header-actions {
+  gap: 4px;
+}
+
+.file-op-header-action.icon-btn--xs {
+  width: 18px;
+  height: 18px;
+}
+
+.file-op-confirm-btn {
+  color: var(--color-success);
+
+  &:hover:not(:disabled) {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    box-shadow: 0 2px 8px var(--color-success-bg);
+  }
+}
+
+.file-op-reject-btn {
+  color: var(--color-error);
+
+  &:hover:not(:disabled) {
+    background: var(--color-error-bg);
+    color: var(--color-error);
+    box-shadow: 0 2px 8px var(--color-error-bg);
+  }
 }

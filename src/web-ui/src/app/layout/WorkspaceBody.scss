@@ -36,13 +36,14 @@ $_nav-collapsed-width: 80px;
   width: var(--nav-width, $_nav-width);
   flex-shrink: 0;
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   z-index: 3;
   transition: width $motion-base $easing-standard;
 
   &.is-collapsed {
     width: 0;
+    overflow: hidden;
     pointer-events: none;
   }
 }

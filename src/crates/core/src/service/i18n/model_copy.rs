@@ -16,7 +16,7 @@ pub struct CodeReviewCopy {
 }
 
 const CODE_REVIEW_ZH_CN: CodeReviewCopy = CodeReviewCopy {
-    description: "提交代码审查结果。完成审查分析后必须调用本工具提交结构化审查报告。所有用户可见的文本字段必须使用简体中文。",
+    description: "提交代码审核结果。完成审核分析后必须调用本工具提交结构化审核报告。所有用户可见的文本字段必须使用简体中文。",
     overall_assessment: "总体评价（2-3 句，使用简体中文）",
     confidence_note: "上下文局限说明（可选，使用简体中文）",
     issue_title: "问题标题（简体中文）",
@@ -26,7 +26,7 @@ const CODE_REVIEW_ZH_CN: CodeReviewCopy = CodeReviewCopy {
 };
 
 const CODE_REVIEW_ZH_TW: CodeReviewCopy = CodeReviewCopy {
-    description: "提交程式碼審查結果。完成審查分析後必須呼叫本工具提交結構化審查報告。所有使用者可見的文字欄位必須使用繁體中文。",
+    description: "提交程式碼審核結果。完成審核分析後必須呼叫本工具提交結構化審核報告。所有使用者可見的文字欄位必須使用繁體中文。",
     overall_assessment: "整體評價（2-3 句，使用繁體中文）",
     confidence_note: "上下文限制說明（可選，使用繁體中文）",
     issue_title: "問題標題（繁體中文）",

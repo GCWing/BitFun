@@ -1,6 +1,4 @@
-use crate::agent::{
-    agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter, Agent, AgentEvent,
-};
+use crate::agent::{core_adapter::CoreAgentAdapter, Agent, AgentEvent, AgenticSystem};
 use crate::config::CliConfig;
 /// Exec mode implementation
 ///

@@ -35,7 +35,7 @@ import {
 import { useAgentsList } from './hooks/useAgentsList';
 import { AGENT_ICON_MAP, CAPABILITY_ACCENT } from './agentsIcons';
 import { getCardGradient } from '@/shared/utils/cardGradients';
-import { getAgentBadge, getCapabilityLabel } from './utils';
+import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils';
 import './AgentsView.scss';
 import './AgentsScene.scss';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
@@ -540,28 +540,15 @@ const AgentsHomeView: React.FC = () => {
                 })}
                 subtitle={t('reviewTeams.default.summary', {
                   defaultValue:
-                    'A deep-review code team with locked logic, performance, security, and quality-gate roles.',
+                    'A deep-review code team with locked logic, performance, security, architecture, and quality-gate roles.',
                 })}
-                localOnlyLabel={t('reviewTeams.detail.localOnly', {
+                roleName={t('reviewTeams.detail.localOnly', {
                   defaultValue: 'Code review',
                 })}
-                qualityGateLabel={t('reviewTeams.detail.qualityGate', {
-                  defaultValue: 'Quality gate',
-                })}
-                membersLabel={t('reviewTeams.default.members', {
-                  count: reviewTeam.members.length,
-                  defaultValue: `${reviewTeam.members.length} members`,
-                })}
-                openLabel={t('reviewTeams.detail.open', {
-                  defaultValue: 'Open team',
-                })}
-                memberNames={reviewTeam.coreMembers.map((member) =>
-                  member.definitionKey
-                    ? t(`reviewTeams.members.${member.definitionKey}.role`, {
-                      defaultValue: member.roleName,
-                    })
-                    : member.displayName,
-                )}
+                tagNames={t('reviewTeams.default.tags', {
+                  returnObjects: true,
+                  defaultValue: ['Quality', 'Performance', 'Architecture'],
+                }) as string[]}
                 onOpen={openReviewTeam}
               />
             </GalleryGrid>
@@ -684,7 +671,9 @@ const AgentsHomeView: React.FC = () => {
             {selectedAgent.model ? <Badge variant="neutral">{selectedAgent.model}</Badge> : null}
           </>
         ) : null}
-        description={selectedAgent?.description}
+        description={selectedAgent
+          ? getAgentDescription(t, selectedAgent)
+          : undefined}
         meta={selectedAgent ? (
           <>
             <span>{t('agentCard.meta.tools', { count: selectedAgentToolCount })}</span>

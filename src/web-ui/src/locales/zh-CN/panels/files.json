@@ -7,7 +7,68 @@
     "modeFiles": "文件",
     "modeContent": "内容",
     "limitReachedFiles": "当前仅显示前 {{count}} 个文件匹配结果，请继续缩小查询范围。",
-    "limitReachedContent": "当前仅显示前 {{count}} 个内容匹配结果，请继续缩小查询范围。"
+    "limitReachedContent": "当前仅显示前 {{count}} 个内容匹配结果，请继续缩小查询范围。",
+    "backendSummary": "候选文档 {{candidateDocs}} 个，命中行 {{matchedLines}} 行，命中片段 {{matchedOccurrences}} 个。",
+    "backend": {
+      "indexed": "索引命中",
+      "indexed_workspace": "工作区索引",
+      "text_fallback": "文本回退",
+      "scan_fallback": "扫描回退"
+    },
+    "index": {
+      "actions": {
+        "build": "建立索引",
+        "rebuild": "重建索引",
+        "refresh": "刷新索引状态",
+        "running": "索引中..."
+      },
+      "badges": {
+        "rebuildRecommended": "建议重建"
+      },
+      "phase": {
+        "preparing": "准备中",
+        "needs_index": "未建索引",
+        "building": "建立中",
+        "ready": "索引可用",
+        "tracking_changes": "跟踪变更中",
+        "refreshing": "刷新中",
+        "limited": "受限",
+        "unknown": "未知"
+      },
+      "summary": {
+        "preparing": "正在准备托管搜索工作区。",
+        "needs_index": "当前搜索仍可通过 fallback 使用，建立索引后内容搜索会更快。",
+        "building": "正在为当前工作区建立索引。",
+        "ready": "索引已就绪，内容搜索可优先走索引后端。",
+        "tracking_changes": "索引当前可用，工作区变更正在被跟踪。只有出现建议重建时，才需要关注重建。",
+        "refreshing": "正在根据最新文件变更刷新索引。",
+        "limited": "索引能力受限。搜索仍可 fallback，但建议重建。",
+        "unavailable": "当前无法获取索引状态。"
+      },
+      "indicator": {
+        "label": "工作区索引状态",
+        "checking": "正在检查索引状态...",
+        "tones": {
+          "green": "索引正常",
+          "yellow": "索引需关注",
+          "gray": "尚未建索引",
+          "red": "需要重建索引"
+        },
+        "progressKnown": "{{processed}} / {{total}}",
+        "progressUnknown": "已处理 {{processed}} 项",
+        "dirtyFiles": "待同步变更：修改 {{modified}}，删除 {{deleted}}，新增 {{new}}",
+        "rebuildRecommended": "当前建议执行重建。",
+        "probeDegraded": "工作区探测状态异常，工作区索引视图可能不再持续跟进变更。",
+        "hoverTooltip": "Flashgrep 索引：{{status}}"
+      },
+      "taskState": {
+        "queued": "排队中",
+        "running": "执行中",
+        "completed": "已完成",
+        "failed": "失败",
+        "cancelled": "已取消"
+      }
+    }
   },
   "options": {
     "caseSensitive": "区分大小写 (Aa)",
@@ -65,6 +126,8 @@
     "pasteNoFiles": "剪贴板中没有文件",
     "pastingFiles": "正在粘贴 {{count}} 个文件到 {{target}}...",
     "openExplorerFailed": "打开文件管理器失败: {{error}}",
-    "selectWorkspaceFirst": "请先打开工作区"
+    "selectWorkspaceFirst": "请先打开工作区",
+    "searchIndexBuildStarted": "已开始建立工作区索引。",
+    "searchIndexRebuildStarted": "已开始重建工作区索引。"
   }
 }

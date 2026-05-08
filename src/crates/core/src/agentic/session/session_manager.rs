@@ -70,6 +70,164 @@ pub struct ResolvedSessionTitle {
     pub method: SessionTitleMethod,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{SessionManager, SessionManagerConfig};
+    use crate::agentic::core::{ProcessingPhase, Session, SessionConfig, SessionState};
+    use crate::agentic::persistence::PersistenceManager;
+    use crate::agentic::session::SessionContextStore;
+    use crate::infrastructure::PathManager;
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::time::Duration;
+    use uuid::Uuid;
+
+    struct TestWorkspace {
+        path: PathBuf,
+    }
+
+    impl TestWorkspace {
+        fn new() -> Self {
+            let path = std::env::temp_dir()
+                .join(format!("bitfun-session-restore-test-{}", Uuid::new_v4()));
+            std::fs::create_dir_all(&path).expect("test workspace should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn test_manager(persistence_manager: Arc<PersistenceManager>) -> SessionManager {
+        SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence_manager,
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: true,
+            },
+        )
+    }
+
+    #[tokio::test]
+    async fn restore_session_resets_processing_state_without_marking_unread_completion() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Legacy processing session".to_string(),
+            "agent".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+
+        persistence_manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+        persistence_manager
+            .save_session_state(workspace.path(), &session_id, &session.state)
+            .await
+            .expect("processing state should save");
+
+        let manager = test_manager(persistence_manager.clone());
+        let restored = manager
+            .restore_session(workspace.path(), &session_id)
+            .await
+            .expect("session should restore");
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+
+        assert!(matches!(restored.state, SessionState::Idle));
+        assert_eq!(metadata.unread_completion, None);
+    }
+
+    #[test]
+    fn build_messages_from_turns_skips_manual_compaction_turns() {
+        use crate::service::session::{DialogTurnData, DialogTurnKind, UserMessageData};
+
+        let turns = vec![
+            DialogTurnData::new(
+                "turn-1".to_string(),
+                0,
+                "session-1".to_string(),
+                UserMessageData {
+                    id: "user-1".to_string(),
+                    content: "hello".to_string(),
+                    timestamp: 1,
+                    metadata: None,
+                },
+            ),
+            DialogTurnData::new_with_kind(
+                DialogTurnKind::ManualCompaction,
+                "turn-2".to_string(),
+                1,
+                "session-1".to_string(),
+                UserMessageData {
+                    id: "user-2".to_string(),
+                    content: "/compact".to_string(),
+                    timestamp: 2,
+                    metadata: None,
+                },
+            ),
+        ];
+
+        let messages = SessionManager::build_messages_from_turns(&turns);
+
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].is_actual_user_message());
+    }
+
+    #[test]
+    fn fallback_session_title_uses_sentence_break_when_available() {
+        let title = SessionManager::fallback_session_title(
+            "Fix the flaky integration test. Add logging for retries.",
+            20,
+        );
+
+        assert_eq!(title, "Fix the flaky...");
+    }
+
+    #[test]
+    fn fallback_session_title_appends_ellipsis_when_truncated_without_sentence_break() {
+        let title = SessionManager::fallback_session_title(
+            "Implement session title generation fallback",
+            12,
+        );
+
+        assert_eq!(title, "Implement...");
+    }
+
+    #[test]
+    fn fallback_session_title_uses_default_for_blank_input() {
+        let title = SessionManager::fallback_session_title("   ", 20);
+
+        assert_eq!(title, "New Session");
+    }
+}
+
 /// Session manager
 pub struct SessionManager {
     /// Active sessions in memory
@@ -178,6 +336,23 @@ impl SessionManager {
 
     fn session_workspace_from_config(config: &SessionConfig) -> Option<PathBuf> {
         config.workspace_path.as_ref().map(PathBuf::from)
+    }
+
+    fn should_persist_session_kind(kind: SessionKind) -> bool {
+        !matches!(kind, SessionKind::Subagent)
+    }
+
+    fn should_persist_session(session: &Session) -> bool {
+        Self::should_persist_session_kind(session.kind)
+    }
+
+    pub fn should_persist_session_id(&self, session_id: &str) -> bool {
+        self.config.enable_persistence
+            && self
+                .sessions
+                .get(session_id)
+                .map(|session| Self::should_persist_session(&session))
+                .unwrap_or(true)
     }
 
     /// Resolve the effective storage path for a session's workspace.
@@ -345,7 +520,7 @@ impl SessionManager {
         turn_index: usize,
         reason: &str,
     ) {
-        if !self.config.enable_persistence {
+        if !self.should_persist_session_id(session_id) {
             return;
         }
 
@@ -673,7 +848,7 @@ impl SessionManager {
         self.context_store.create_session(&session_id);
 
         // 3. Persist to local path (handles remote workspaces correctly)
-        if self.config.enable_persistence {
+        if self.config.enable_persistence && Self::should_persist_session(&session) {
             if let Some(session) = self.sessions.get(&session_id) {
                 self.persistence_manager
                     .save_session(&session_storage_path, &session)
@@ -705,7 +880,7 @@ impl SessionManager {
             session.last_activity_at = SystemTime::now();
 
             // Persist state changes
-            if self.config.enable_persistence {
+            if self.config.enable_persistence && Self::should_persist_session(&session) {
                 if let Some(ref workspace_path) = effective_path {
                     self.persistence_manager
                         .save_session_state(workspace_path, session_id, &new_state)
@@ -744,7 +919,7 @@ impl SessionManager {
             session.last_activity_at = SystemTime::now();
         }
 
-        if self.config.enable_persistence {
+        if self.should_persist_session_id(session_id) {
             let Some(workspace_path) = workspace_path.as_ref() else {
                 return Err(BitFunError::Session(format!(
                     "Workspace path is unavailable for session {}",
@@ -815,7 +990,7 @@ impl SessionManager {
             )));
         }
 
-        if self.config.enable_persistence {
+        if self.should_persist_session_id(session_id) {
             let effective_path = self.effective_session_workspace_path(session_id).await;
             if let (Some(workspace_path), Some(session)) =
                 (effective_path, self.sessions.get(session_id))
@@ -865,7 +1040,7 @@ impl SessionManager {
             )));
         }
 
-        if self.config.enable_persistence {
+        if self.should_persist_session_id(session_id) {
             let effective_path = self.effective_session_workspace_path(session_id).await;
             if let (Some(workspace_path), Some(session)) =
                 (effective_path, self.sessions.get(session_id))
@@ -1008,13 +1183,14 @@ impl SessionManager {
             let trimmed = persisted_model_id.trim();
             let needs_migration = if trimmed.is_empty() {
                 false
-            } else if let Ok(ai_config) = get_global_config_service()
-                .await
-                .map_err(|e| BitFunError::config(e.to_string()))?
-                .get_config::<crate::service::config::types::AIConfig>(Some("ai"))
-                .await
-            {
-                !Self::is_session_model_id_usable(&ai_config, trimmed)
+            } else if let Ok(config_service) = get_global_config_service().await {
+                match config_service
+                    .get_config::<crate::service::config::types::AIConfig>(Some("ai"))
+                    .await
+                {
+                    Ok(ai_config) => !Self::is_session_model_id_usable(&ai_config, trimmed),
+                    Err(_) => false,
+                }
             } else {
                 false
             };
@@ -1042,7 +1218,8 @@ impl SessionManager {
 
         // Reset session state to Idle
         // After application restart, previous Processing state is invalid and must be reset
-        if !matches!(session.state, SessionState::Idle) {
+        let previous_state_was_not_idle = !matches!(session.state, SessionState::Idle);
+        if previous_state_was_not_idle {
             let old_state = session.state.clone();
             session.state = SessionState::Idle;
             debug!(
@@ -1159,6 +1336,11 @@ impl SessionManager {
             context_msg_count
         );
 
+        // Do not infer unread completion from persisted runtime state during restore.
+        // Older IDE versions could leave sessions in non-idle states on disk; treating those
+        // as completed would surface misleading unread indicators after an upgrade.
+        // Unread completion is now written only by runtime completion/persist paths.
+
         // 4. Add to memory (will overwrite if already exists)
         self.sessions
             .insert(session_id.to_string(), session.clone());
@@ -1208,7 +1390,7 @@ impl SessionManager {
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
 
-            if self.config.enable_persistence {
+            if Self::should_persist_session(&session) && self.config.enable_persistence {
                 self.persistence_manager
                     .save_session(workspace_path, &session)
                     .await?;
@@ -1302,7 +1484,7 @@ impl SessionManager {
                 .add_message(session_id, message.with_turn_id(turn_id.clone()));
         }
 
-        if self.config.enable_persistence {
+        if self.should_persist_session_id(session_id) {
             let turn_data = DialogTurnData::new_with_kind(
                 kind,
                 turn_id.clone(),
@@ -1405,6 +1587,17 @@ impl SessionManager {
         final_response: String,
         stats: TurnStats,
     ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            debug!(
+                "Skipping dialog turn persistence for transient session completion: session_id={}, turn_id={}, response_len={}, rounds={}",
+                session_id,
+                turn_id,
+                final_response.len(),
+                stats.total_rounds
+            );
+            return Ok(());
+        }
+
         let workspace_path = self
             .effective_session_workspace_path(session_id)
             .await
@@ -1474,7 +1667,7 @@ impl SessionManager {
         .await;
 
         // Persist
-        if self.config.enable_persistence {
+        if self.should_persist_session_id(session_id) {
             self.persistence_manager
                 .save_dialog_turn(&workspace_path, &turn)
                 .await?;
@@ -1496,6 +1689,14 @@ impl SessionManager {
         turn_id: &str,
         error: String,
     ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            debug!(
+                "Skipping dialog turn persistence for transient session failure: session_id={}, turn_id={}, error={}",
+                session_id, turn_id, error
+            );
+            return Ok(());
+        }
+
         let workspace_path = self
             .effective_session_workspace_path(session_id)
             .await
@@ -1530,7 +1731,7 @@ impl SessionManager {
             "turn_failed",
         )
         .await;
-        if self.config.enable_persistence {
+        if self.should_persist_session_id(session_id) {
             self.persistence_manager
                 .save_dialog_turn(&workspace_path, &turn)
                 .await?;
@@ -1552,6 +1753,17 @@ impl SessionManager {
         model_rounds: Vec<ModelRoundData>,
         duration_ms: u64,
     ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            debug!(
+                "Skipping maintenance turn persistence for transient session completion: session_id={}, turn_id={}, rounds={}, duration_ms={}",
+                session_id,
+                turn_id,
+                model_rounds.len(),
+                duration_ms
+            );
+            return Ok(());
+        }
+
         let workspace_path = self
             .effective_session_workspace_path(session_id)
             .await
@@ -1588,7 +1800,7 @@ impl SessionManager {
         )
         .await;
 
-        if self.config.enable_persistence {
+        if self.should_persist_session_id(session_id) {
             self.persistence_manager
                 .save_dialog_turn(&workspace_path, &turn)
                 .await?;
@@ -1605,6 +1817,17 @@ impl SessionManager {
         error: String,
         model_rounds: Vec<ModelRoundData>,
     ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            debug!(
+                "Skipping maintenance turn persistence for transient session failure: session_id={}, turn_id={}, rounds={}, error={}",
+                session_id,
+                turn_id,
+                model_rounds.len(),
+                error
+            );
+            return Ok(());
+        }
+
         let workspace_path = self
             .effective_session_workspace_path(session_id)
             .await
@@ -1641,7 +1864,7 @@ impl SessionManager {
         )
         .await;
 
-        if self.config.enable_persistence {
+        if self.should_persist_session_id(session_id) {
             self.persistence_manager
                 .save_dialog_turn(&workspace_path, &turn)
                 .await?;
@@ -1763,7 +1986,7 @@ impl SessionManager {
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
 
-            if self.config.enable_persistence {
+            if self.config.enable_persistence && Self::should_persist_session(&session) {
                 self.persistence_manager
                     .save_session(workspace_path, &session)
                     .await?;
@@ -1862,7 +2085,7 @@ impl SessionManager {
             session.compression_state = compression_state;
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
-            if self.config.enable_persistence {
+            if self.config.enable_persistence && Self::should_persist_session(&session) {
                 if let Some(ref workspace_path) = effective_path {
                     self.persistence_manager
                         .save_session(workspace_path, &session)
@@ -2029,6 +2252,9 @@ impl SessionManager {
 
                 for entry in sessions.iter() {
                     let session = entry.value();
+                    if !Self::should_persist_session(session) {
+                        continue;
+                    }
                     if let Some(workspace_path) =
                         Self::effective_workspace_path_from_config(&session.config).await
                     {
@@ -2078,6 +2304,11 @@ impl SessionManager {
                     // Save before deleting
                     if enable_persistence {
                         if let Some(session) = sessions.get(&session_id) {
+                            if !Self::should_persist_session(&session) {
+                                context_store.delete_session(&session_id);
+                                sessions.remove(&session_id);
+                                continue;
+                            }
                             if let Some(workspace_path) =
                                 Self::effective_workspace_path_from_config(&session.config).await
                             {
@@ -2096,69 +2327,4 @@ impl SessionManager {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::SessionManager;
-    use crate::service::session::{DialogTurnData, DialogTurnKind, UserMessageData};
 
-    #[test]
-    fn build_messages_from_turns_skips_manual_compaction_turns() {
-        let turns = vec![
-            DialogTurnData::new(
-                "turn-1".to_string(),
-                0,
-                "session-1".to_string(),
-                UserMessageData {
-                    id: "user-1".to_string(),
-                    content: "hello".to_string(),
-                    timestamp: 1,
-                    metadata: None,
-                },
-            ),
-            DialogTurnData::new_with_kind(
-                DialogTurnKind::ManualCompaction,
-                "turn-2".to_string(),
-                1,
-                "session-1".to_string(),
-                UserMessageData {
-                    id: "user-2".to_string(),
-                    content: "/compact".to_string(),
-                    timestamp: 2,
-                    metadata: None,
-                },
-            ),
-        ];
-
-        let messages = SessionManager::build_messages_from_turns(&turns);
-
-        assert_eq!(messages.len(), 1);
-        assert!(messages[0].is_actual_user_message());
-    }
-
-    #[test]
-    fn fallback_session_title_uses_sentence_break_when_available() {
-        let title = SessionManager::fallback_session_title(
-            "Fix the flaky integration test. Add logging for retries.",
-            20,
-        );
-
-        assert_eq!(title, "Fix the flaky...");
-    }
-
-    #[test]
-    fn fallback_session_title_appends_ellipsis_when_truncated_without_sentence_break() {
-        let title = SessionManager::fallback_session_title(
-            "Implement session title generation fallback",
-            12,
-        );
-
-        assert_eq!(title, "Implement...");
-    }
-
-    #[test]
-    fn fallback_session_title_uses_default_for_blank_input() {
-        let title = SessionManager::fallback_session_title("   ", 20);
-
-        assert_eq!(title, "New Session");
-    }
-}

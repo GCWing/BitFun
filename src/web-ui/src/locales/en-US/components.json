@@ -42,7 +42,12 @@
   },
   "markdown": {
     "copySuccess": "Copied",
-    "copyCode": "Copy code"
+    "copyCode": "Copy code",
+    "openInExplorer": "Open in Explorer",
+    "openInBrowser": "Open in browser",
+    "openInBuiltInBrowser": "Open in built-in browser",
+    "copyLink": "Copy link",
+    "copyFilePath": "Copy file path"
   },
   "mermaidBlock": {
     "renderFailed": "Diagram render failed",

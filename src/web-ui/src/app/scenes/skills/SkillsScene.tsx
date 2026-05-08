@@ -3,11 +3,12 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Download,
+  Filter,
   FolderOpen,
   Package,
   Plus,
   Puzzle,
+  ShieldAlert,
   Sparkles,
   Store,
   Trash2,
@@ -43,10 +44,12 @@ const SkillsScene: React.FC = () => {
     searchDraft,
     marketQuery,
     installedFilter,
+    hideDuplicates,
     isAddFormOpen,
     setSearchDraft,
     submitMarketQuery,
     setInstalledFilter,
+    setHideDuplicates,
     setAddFormOpen,
     toggleAddForm,
   } = useSkillsSceneStore();
@@ -115,7 +118,9 @@ const SkillsScene: React.FC = () => {
   const selectedInstalledSkill = selectedDetail?.type === 'installed' ? selectedDetail.skill : null;
   const selectedMarketSkill = selectedDetail?.type === 'market' ? selectedDetail.skill : null;
 
-  const installedFiltered = installed.filteredSkills;
+  const installedFiltered = hideDuplicates
+    ? installed.filteredSkills.filter((s) => !s.isShadowed)
+    : installed.filteredSkills;
   const installedTotalPages = Math.max(
     1,
     Math.ceil(installedFiltered.length / INSTALLED_PAGE_SIZE),
@@ -216,7 +221,6 @@ const SkillsScene: React.FC = () => {
               <div className="skills-split__market-grid">
                 {market.marketSkills.map((skill, index) => {
                   const isInstalled = installedSkillNames.has(skill.name);
-                  const isDownloading = market.downloadingPackage === skill.installId;
                   return (
                     <SkillCard
                       key={skill.installId}
@@ -237,19 +241,6 @@ const SkillsScene: React.FC = () => {
                           {skill.installs ?? 0}
                         </span>
                       )}
-                      actions={[
-                        {
-                          id: 'download',
-                          icon: isInstalled ? <CheckCircle2 size={13} /> : <Download size={13} />,
-                          ariaLabel: isInstalled ? t('market.item.installed') : t('market.item.downloadProject'),
-                          title: isDownloading
-                            ? t('market.item.downloading')
-                            : (isInstalled ? t('market.item.installedTooltip') : t('market.item.downloadProject')),
-                          disabled: isDownloading || !market.hasWorkspace || market.isRemoteWorkspace || isInstalled,
-                          tone: isInstalled ? 'success' : 'primary',
-                          onClick: () => market.handleDownload(skill),
-                        },
-                      ]}
                       onOpenDetails={() => setSelectedDetail({ type: 'market', skill })}
                     />
                   );
@@ -314,13 +305,24 @@ const SkillsScene: React.FC = () => {
                       <span className="skills-split__filter-count">{count}</span>
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    className={[
+                      'skills-split__filter-chip',
+                      hideDuplicates && 'is-active',
+                    ].filter(Boolean).join(' ')}
+                    onClick={() => setHideDuplicates(!hideDuplicates)}
+                  >
+                    <Filter size={13} />
+                    <span>{t('toolbar.hideDuplicates')}</span>
+                  </button>
                 </div>
                 <button
                   type="button"
                   className="skills-split__add-btn"
                   onClick={toggleAddForm}
                 >
-                  <Plus size={14} />
+                  <Plus size={13} />
                   <span>{t('toolbar.addTooltip')}</span>
                 </button>
               </div>
@@ -375,7 +377,10 @@ const SkillsScene: React.FC = () => {
               {!installed.loading && !installed.error && pagedInstalledSkills.map((skill, index) => (
               <div
                 key={skill.key}
-                className="skills-split__installed-row"
+                className={[
+                  'skills-split__installed-row',
+                  skill.isShadowed && 'is-shadowed',
+                ].filter(Boolean).join(' ')}
                 style={{ '--row-index': index } as React.CSSProperties}
                 onClick={() => setSelectedDetail({ type: 'installed', skill })}
                 role="button"
@@ -402,6 +407,14 @@ const SkillsScene: React.FC = () => {
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                 >
+                  {skill.isShadowed && (
+                    <span title={t('list.item.shadowedTooltip')}>
+                      <Badge variant="warning">
+                        <ShieldAlert size={11} />
+                        {t('list.item.shadowed')}
+                      </Badge>
+                    </span>
+                  )}
                   <Badge variant={skill.level === 'user' ? 'info' : 'purple'}>
                     {skill.level === 'user' ? t('list.item.user') : t('list.item.project')}
                   </Badge>
@@ -464,9 +477,19 @@ const SkillsScene: React.FC = () => {
         )}
         title={selectedInstalledSkill?.name ?? selectedMarketSkill?.name ?? ''}
         badges={selectedInstalledSkill ? (
-          <Badge variant={selectedInstalledSkill.level === 'user' ? 'info' : 'purple'}>
-            {selectedInstalledSkill.level === 'user' ? t('list.item.user') : t('list.item.project')}
-          </Badge>
+          <>
+            {selectedInstalledSkill.isShadowed && (
+              <span title={t('list.item.shadowedTooltip')}>
+                <Badge variant="warning">
+                  <ShieldAlert size={11} />
+                  {t('list.item.shadowed')}
+                </Badge>
+              </span>
+            )}
+            <Badge variant={selectedInstalledSkill.level === 'user' ? 'info' : 'purple'}>
+              {selectedInstalledSkill.level === 'user' ? t('list.item.user') : t('list.item.project')}
+            </Badge>
+          </>
         ) : selectedMarketSkill && installedSkillNames.has(selectedMarketSkill.name) ? (
           <Badge variant="success">
             <CheckCircle2 size={11} />
@@ -493,39 +516,62 @@ const SkillsScene: React.FC = () => {
             {t('deleteModal.delete')}
           </Button>
         ) : selectedMarketSkill ? (
-          <Button
-            variant={installedSkillNames.has(selectedMarketSkill.name) ? 'secondary' : 'primary'}
-            size="small"
-            onClick={() => void market.handleDownload(selectedMarketSkill)}
-            disabled={
-              market.downloadingPackage === selectedMarketSkill.installId
-              || !market.hasWorkspace
-              || market.isRemoteWorkspace
-              || installedSkillNames.has(selectedMarketSkill.name)
-            }
-          >
-            {installedSkillNames.has(selectedMarketSkill.name)
-              ? t('market.item.installed')
-              : t('market.item.downloadProject')}
-          </Button>
+          <>
+            {installedSkillNames.has(selectedMarketSkill.name) ? (
+              <Button variant="secondary" size="small" disabled>
+                {t('market.item.installed')}
+              </Button>
+            ) : (
+              <>
+                {!market.isRemoteWorkspace && (
+                  <Button
+                    variant="primary"
+                    size="small"
+                    onClick={() => void market.handleDownload(selectedMarketSkill, 'project')}
+                    disabled={market.downloadingPackage === selectedMarketSkill.installId || !market.hasWorkspace}
+                  >
+                    {t('market.item.downloadProject')}
+                  </Button>
+                )}
+                <Button
+                  variant={market.isRemoteWorkspace ? 'primary' : 'secondary'}
+                  size="small"
+                  onClick={() => void market.handleDownload(selectedMarketSkill, 'user')}
+                  disabled={market.downloadingPackage === selectedMarketSkill.installId}
+                >
+                  {t('market.item.downloadUser')}
+                </Button>
+              </>
+            )}
+          </>
         ) : null}
       >
         {selectedInstalledSkill ? (
-          <div className="bitfun-skills-scene__detail-row">
-            <span className="bitfun-skills-scene__detail-label">{t('list.item.pathLabel')}</span>
-            {canRevealSkillPath ? (
-              <button
-                type="button"
-                className="bitfun-skills-scene__detail-path-btn"
-                title={t('list.item.openPathInExplorer')}
-                onClick={() => void handleRevealSkillPath(selectedInstalledSkill.path)}
-              >
-                {selectedInstalledSkill.path}
-              </button>
-            ) : (
-              <code className="bitfun-skills-scene__detail-value">{selectedInstalledSkill.path}</code>
+          <>
+            {selectedInstalledSkill.isShadowed && (
+              <div className="bitfun-skills-scene__detail-row">
+                <span className="bitfun-skills-scene__detail-label">{t('list.item.shadowedLabel')}</span>
+                <span className="bitfun-skills-scene__detail-value">
+                  {t('list.item.shadowedDetail', { key: selectedInstalledSkill.shadowedByKey ?? '' })}
+                </span>
+              </div>
             )}
-          </div>
+            <div className="bitfun-skills-scene__detail-row">
+              <span className="bitfun-skills-scene__detail-label">{t('list.item.pathLabel')}</span>
+              {canRevealSkillPath ? (
+                <button
+                  type="button"
+                  className="bitfun-skills-scene__detail-path-btn"
+                  title={t('list.item.openPathInExplorer')}
+                  onClick={() => void handleRevealSkillPath(selectedInstalledSkill.path)}
+                >
+                  {selectedInstalledSkill.path}
+                </button>
+              ) : (
+                <code className="bitfun-skills-scene__detail-value">{selectedInstalledSkill.path}</code>
+              )}
+            </div>
+          </>
         ) : null}
 
         {selectedMarketSkill?.source ? (

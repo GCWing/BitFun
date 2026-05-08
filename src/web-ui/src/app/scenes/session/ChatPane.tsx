@@ -5,7 +5,7 @@
  * Renamed from panels/CenterPanel. All logic preserved.
  */
 
-import React, { useCallback, memo } from 'react';
+import React, { useCallback, memo, useEffect, useRef } from 'react';
 import { FlowChatContainer, ChatInput } from '../../../flow_chat';
 import { useCanvasStore } from '../../components/panels/content-canvas/stores/canvasStore';
 import type { LineRange } from '@/component-library';
@@ -16,6 +16,10 @@ import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import './ChatPane.scss';
 
 const log = createLogger('ChatPane');
+const TASK_DETAIL_PANEL_EXPAND_DEFER_MS = 520;
+const TASK_DETAIL_IDLE_TIMEOUT_MS = 300;
+
+const preloadTaskDetailPanel = () => import('@/flow_chat/components/TaskDetailPanel');
 
 interface ChatPaneProps {
   width: number;
@@ -33,6 +37,8 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
   showChatInput = false,
 }) => {
   const addTab = useCanvasStore(state => state.addTab);
+  const deferredTaskDetailTimersRef = useRef<number[]>([]);
+  const deferredTaskDetailIdleCallbacksRef = useRef<number[]>([]);
 
   const handleFileViewRequest = useCallback(async (
     filePath: string,
@@ -68,6 +74,68 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
     });
   }, [workspacePath]);
 
+  useEffect(() => {
+    return () => {
+      deferredTaskDetailTimersRef.current.forEach(timerId => window.clearTimeout(timerId));
+      deferredTaskDetailTimersRef.current = [];
+      if ('cancelIdleCallback' in window) {
+        deferredTaskDetailIdleCallbacksRef.current.forEach(id => {
+          window.cancelIdleCallback(id);
+        });
+      }
+      deferredTaskDetailIdleCallbacksRef.current = [];
+    };
+  }, []);
+
+  const addPanelTab = useCallback((tabInfo: any) => {
+    addTab({
+      type: tabInfo.type,
+      title: tabInfo.title || 'New Tab',
+      data: tabInfo.data,
+      metadata: tabInfo.metadata
+    });
+  }, [addTab]);
+
+  const handleTabOpen = useCallback((tabInfo: any) => {
+    log.info('Opening tab', { tabInfo });
+    if (!tabInfo || !tabInfo.type) {
+      return;
+    }
+
+    if (tabInfo.type !== 'task-detail') {
+      addPanelTab(tabInfo);
+      return;
+    }
+
+    void preloadTaskDetailPanel();
+    window.dispatchEvent(new CustomEvent('expand-right-panel'));
+
+    const timerId = window.setTimeout(() => {
+      deferredTaskDetailTimersRef.current = deferredTaskDetailTimersRef.current.filter(id => id !== timerId);
+
+      const mountDetail = () => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            addPanelTab(tabInfo);
+          });
+        });
+      };
+
+      if ('requestIdleCallback' in window) {
+        const idleId = window.requestIdleCallback(() => {
+          deferredTaskDetailIdleCallbacksRef.current = deferredTaskDetailIdleCallbacksRef.current.filter(id => id !== idleId);
+          mountDetail();
+        }, { timeout: TASK_DETAIL_IDLE_TIMEOUT_MS });
+        deferredTaskDetailIdleCallbacksRef.current.push(idleId);
+        return;
+      }
+
+      mountDetail();
+    }, TASK_DETAIL_PANEL_EXPAND_DEFER_MS);
+
+    deferredTaskDetailTimersRef.current.push(timerId);
+  }, [addPanelTab]);
+
   return (
     <div
       className="bitfun-chat-pane__content"
@@ -80,17 +148,7 @@ const ChatPaneInner: React.FC<ChatPaneProps> = ({
           log.info('Opening visualization', { type, data });
         }}
         onFileViewRequest={handleFileViewRequest}
-        onTabOpen={(tabInfo) => {
-          log.info('Opening tab', { tabInfo });
-          if (tabInfo && tabInfo.type) {
-            addTab({
-              type: tabInfo.type,
-              title: tabInfo.title || 'New Tab',
-              data: tabInfo.data,
-              metadata: tabInfo.metadata
-            });
-          }
-        }}
+        onTabOpen={handleTabOpen}
         onSwitchToChatPanel={() => {}}
         config={{
           enableMarkdown: true,

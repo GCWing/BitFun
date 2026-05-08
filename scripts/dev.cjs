@@ -165,13 +165,16 @@ function runCommand(command, cwd = ROOT_DIR) {
 /**
  * Spawn a command with explicit args array (no shell interpolation, safe for paths with spaces)
  */
-function spawnCommand(cmd, args, cwd = ROOT_DIR, env = process.env, shell = false) {
+function spawnCommand(cmd, args, cwd = ROOT_DIR, envOverrides = {}, shell = false) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
       cwd,
       stdio: 'inherit',
       shell,
-      env,
+      env: {
+        ...process.env,
+        ...envOverrides,
+      },
     });
 
     child.on('close', (code) => {
@@ -541,6 +544,57 @@ async function startDesktopPreview() {
   await new Promise(() => {});
 }
 
+function flashgrepBinaryNames() {
+  if (process.platform === 'win32' && process.arch === 'x64') {
+    return ['flashgrep-x86_64-pc-windows-msvc.exe'];
+  }
+  if (process.platform === 'win32' && process.arch === 'arm64') {
+    return ['flashgrep-aarch64-pc-windows-msvc.exe'];
+  }
+  if (process.platform === 'darwin' && process.arch === 'x64') {
+    return ['flashgrep-x86_64-apple-darwin'];
+  }
+  if (process.platform === 'darwin' && process.arch === 'arm64') {
+    return ['flashgrep-aarch64-apple-darwin'];
+  }
+  if (process.platform === 'linux' && process.arch === 'x64') {
+    return ['flashgrep-x86_64-unknown-linux-gnu'];
+  }
+  if (process.platform === 'linux' && process.arch === 'arm64') {
+    return ['flashgrep-aarch64-unknown-linux-gnu'];
+  }
+  return [process.platform === 'win32' ? 'flashgrep.exe' : 'flashgrep'];
+}
+
+function flashgrepBinaryName() {
+  return flashgrepBinaryNames()[0];
+}
+
+function ensureFlashgrepBinary() {
+  for (const binaryName of flashgrepBinaryNames()) {
+    const binaryPath = path.join(ROOT_DIR, 'resources', 'flashgrep', binaryName);
+    if (!fs.existsSync(binaryPath)) {
+      continue;
+    }
+    return { ok: true, binaryPath };
+  }
+
+  return {
+    ok: false,
+    error: new Error(
+      `flashgrep binary not found for ${process.platform}/${process.arch}. Expected one of: ${flashgrepBinaryNames()
+        .map((name) => `resources/flashgrep/${name}`)
+        .join(', ')}`
+    ),
+  };
+}
+
+async function ensureFlashgrepBundleResource() {
+  const helperUrl = pathToFileURL(path.join(__dirname, 'prepare-flashgrep-resource.mjs')).href;
+  const helper = await import(helperUrl);
+  return helper.ensureFlashgrepBinary();
+}
+
 /**
  * Main entry
  */
@@ -566,7 +620,7 @@ async function main() {
   printHeader(`BitFun ${modeLabel} Development`);
   printBlank();
 
-  const totalSteps = desktopMode ? 4 : 3;
+  const totalSteps = desktopMode ? 5 : 3;
   let currentStep = 1;
 
   // Step 1: Copy resources
@@ -617,6 +671,28 @@ async function main() {
     if (!mobileWebResult.ok) {
       process.exit(1);
     }
+
+    printStep(currentStep++, totalSteps, 'Build workspace search daemon');
+    const flashgrepResult = ensureFlashgrepBinary();
+    if (!flashgrepResult.ok) {
+      printError('Workspace search daemon is missing');
+      if (flashgrepResult.error && flashgrepResult.error.message) {
+        printError(flashgrepResult.error.message);
+      }
+      if (flashgrepResult.error && flashgrepResult.error.status !== undefined) {
+        printError(`Exit code: ${flashgrepResult.error.status}`);
+      }
+      process.exit(1);
+    }
+    process.env.FLASHGREP_DAEMON_BIN = flashgrepResult.binaryPath;
+
+    try {
+      await ensureFlashgrepBundleResource();
+    } catch (error) {
+      printError('Validate workspace search daemon failed');
+      printError(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
   }
 
   // Final step: Start dev server
@@ -632,7 +708,7 @@ async function main() {
     if (mode === 'desktop') {
       await ensureDesktopOpenSslIfNeeded();
       const desktopDir = path.join(ROOT_DIR, 'src/apps/desktop');
-      const tauriConfig = path.join(desktopDir, 'tauri.conf.json');
+      const tauriConfig = path.join(desktopDir, 'tauri.dev.conf.json');
       if (process.platform === 'win32') {
         // Running the generated .cmd shim directly via spawn is flaky on Windows.
         // Use cmd.exe with an explicit args array so the desktop app directory

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "BitFun",
+  "identifier": "com.bitfun.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm run dev:web",
+    "devUrl": "http://localhost:1422",
+    "beforeBuildCommand": "pnpm run build:web && pnpm run prepare:mobile-web",
+    "frontendDist": "../../../dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "resources": {
+      "../../mobile-web/dist": "mobile-web/dist",
+      "resources/worker_host.js": "resources/worker_host.js"
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0"
+        ],
+        "files": {
+          "/usr/share/icons/hicolor/16x16/apps/bitfun-desktop.png": "icons/hicolor/16x16/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/32x32/apps/bitfun-desktop.png": "icons/hicolor/32x32/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/48x48/apps/bitfun-desktop.png": "icons/hicolor/48x48/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/64x64/apps/bitfun-desktop.png": "icons/hicolor/64x64/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/96x96/apps/bitfun-desktop.png": "icons/hicolor/96x96/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/128x128/apps/bitfun-desktop.png": "icons/hicolor/128x128/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/256x256/apps/bitfun-desktop.png": "icons/hicolor/256x256/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/512x512/apps/bitfun-desktop.png": "icons/hicolor/512x512/apps/bitfun-desktop.png"
+        },
+        "postInstallScript": "scripts/post-install-icons.sh"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    },
+    "macOSPrivateApi": true,
+    "withGlobalTauri": true
+  }
+}

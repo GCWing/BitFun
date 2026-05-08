@@ -138,14 +138,14 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
     switch (status) {
       case 'running':
       case 'streaming':
-        return <Loader2 className="animate-spin" size={12} />;
+        return <Loader2 className="animate-spin" size={16} />;
       case 'completed':
-        return <Check size={12} className="icon-check-done" />;
+        return <Check size={16} className="icon-check-done" />;
       case 'cancelled':
       case 'error':
-        return <XCircle size={12} />;
+        return <XCircle size={16} />;
       default:
-        return <Clock size={12} />;
+        return <Clock size={16} />;
     }
   };
 
@@ -230,11 +230,11 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
         clickable={canExpand}
         header={
           <CompactToolCardHeader
-            statusIcon={getStatusIcon()}
+            icon={getStatusIcon()}
             action={config.displayName}
             content={getSummaryText()}
             extra={config.icon ? <span className="default-tool-card__icon-badge">{config.icon}</span> : undefined}
-            rightIcon={canExpand ? (isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : undefined}
+            rightStatusIcon={canExpand ? (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : undefined}
           />
         }
         expandedContent={canExpand ? (

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from '../types/flow-chat';
 import {
+  compareSessionMetadataForDisplay,
   compareSessionsForDisplay,
+  compareSessionsForNavStable,
+  getSessionMetadataSortTimestamp,
   getSessionSortTimestamp,
   sessionBelongsToWorkspaceNavRow,
 } from './sessionOrdering';
@@ -18,7 +21,7 @@ function createSession(overrides: Partial<Session> = {}): Session {
       agentType: 'agentic',
     },
     createdAt: 1000,
-    lastActiveAt: 1000,
+    lastActiveAt: undefined,
     lastFinishedAt: undefined,
     error: null,
     todos: [],
@@ -34,20 +37,26 @@ function createSession(overrides: Partial<Session> = {}): Session {
 }
 
 describe('sessionOrdering', () => {
-  it('uses createdAt for sessions without completed tasks', () => {
-    const session = createSession({ createdAt: 1234 });
+  it('uses lastFinishedAt when available', () => {
+    const session = createSession({ createdAt: 1234, lastActiveAt: 5678, lastFinishedAt: 9999 });
+    expect(getSessionSortTimestamp(session)).toBe(9999);
+  });
+
+  it('uses createdAt as fallback', () => {
+    const session = createSession({ createdAt: 1234, lastActiveAt: 5678 });
     expect(getSessionSortTimestamp(session)).toBe(1234);
   });
 
-  it('sorts sessions by lastFinishedAt before createdAt', () => {
+  it('does not move a switched or streaming session above newer display timestamps', () => {
     const sessions = [
       createSession({ sessionId: 'older-new', createdAt: 1000 }),
       createSession({ sessionId: 'completed', createdAt: 500, lastFinishedAt: 3000 }),
+      createSession({ sessionId: 'switched-or-streaming', createdAt: 200, lastActiveAt: 5000 }),
       createSession({ sessionId: 'newest-new', createdAt: 2000 }),
     ];
 
     const orderedIds = [...sessions].sort(compareSessionsForDisplay).map(session => session.sessionId);
-    expect(orderedIds).toEqual(['completed', 'newest-new', 'older-new']);
+    expect(orderedIds).toEqual(['completed', 'newest-new', 'older-new', 'switched-or-streaming']);
   });
 
   it('falls back to stable ordering when timestamps are equal', () => {
@@ -58,6 +67,27 @@ describe('sessionOrdering', () => {
 
     const orderedIds = [...sessions].sort(compareSessionsForDisplay).map(session => session.sessionId);
     expect(orderedIds).toEqual(['a', 'b']);
+  });
+
+  it('nav stable sort ignores lastActiveAt so order does not change on session switch', () => {
+    const sessions = [
+      createSession({ sessionId: 'first', createdAt: 3000, lastActiveAt: 100 }),
+      createSession({ sessionId: 'second', createdAt: 2000, lastActiveAt: 99999 }),
+    ];
+    const orderedIds = [...sessions].sort(compareSessionsForNavStable).map(s => s.sessionId);
+    expect(orderedIds).toEqual(['first', 'second']);
+  });
+
+  it('sorts persisted metadata by lastFinishedAt before createdAt without using lastActiveAt', () => {
+    const metadata = [
+      { sessionId: 'older-new', createdAt: 1000, lastActiveAt: 9000 },
+      { sessionId: 'completed', createdAt: 500, lastActiveAt: 600, customMetadata: { lastFinishedAt: 3000 } },
+      { sessionId: 'newest-new', createdAt: 2000, lastActiveAt: 2500 },
+    ];
+
+    expect(getSessionMetadataSortTimestamp(metadata[0])).toBe(1000);
+    const orderedIds = [...metadata].sort(compareSessionMetadataForDisplay).map(session => session.sessionId);
+    expect(orderedIds).toEqual(['completed', 'newest-new', 'older-new']);
   });
 
   it('remote SSH: same host but different remote root does not share nav row', () => {

@@ -5,34 +5,62 @@
 echo "=== BitFun ACP Server Test ==="
 echo ""
 
-# Check if bitfun-cli is built
-if ! command -v bitfun-cli &> /dev/null; then
-    echo "Error: bitfun-cli not found in PATH"
-    echo "Please build the CLI first: cargo build --package bitfun-cli"
-    exit 1
-fi
+BINARY="${BITFUN_CLI:-target/debug/bitfun-cli}"
+WORKSPACE="/tmp/test-acp"
+PIPE_DIR="$(mktemp -d /tmp/bitfun-acp-test-sh.XXXXXX)"
+ACP_IN="$PIPE_DIR/in"
+ACP_OUT="$PIPE_DIR/out"
+mkdir -p "$WORKSPACE"
+mkfifo "$ACP_IN" "$ACP_OUT"
+
+cleanup() {
+  exec 3>&- 2>/dev/null || true
+  exec 4<&- 2>/dev/null || true
+  if [[ -n "${ACP_PID:-}" ]]; then
+    kill "$ACP_PID" 2>/dev/null || true
+    wait "$ACP_PID" 2>/dev/null || true
+  fi
+  rm -rf "$PIPE_DIR"
+}
+trap cleanup EXIT
 
 echo "Test 1: Initialize"
-echo "Sending: initialize request"
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":true,"writeTextFile":true},"terminal":true},"clientInfo":{"name":"TestClient","version":"1.0"}}}' | bitfun-cli acp
-echo ""
-
 echo "Test 2: Create Session"
-echo "Sending: session/new request"
-echo '{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"/tmp/test-acp"}}' | bitfun-cli acp
-echo ""
+echo "Test 3: List Sessions"
+"$BINARY" acp <"$ACP_IN" >"$ACP_OUT" &
+ACP_PID="$!"
+exec 3>"$ACP_IN"
+exec 4<"$ACP_OUT"
 
-echo "Test 3: List Tools"
-echo "Sending: tools/list request"
-echo '{"jsonrpc":"2.0","id":3,"method":"tools/list"}' | bitfun-cli acp
-echo ""
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"fs":{"readTextFile":true,"writeTextFile":true},"terminal":true},"clientInfo":{"name":"TestClient","version":"1.0"}}}' \
+  >&3
 
-echo "Test 4: List Sessions"
-echo "Sending: session/list request"
-echo '{"jsonrpc":"2.0","id":4,"method":"session/list"}' | bitfun-cli acp
+responses=0
+while [[ "$responses" -lt 3 ]]; do
+  if ! IFS= read -r -t 15 line <&4; then
+    echo "Timed out waiting for ACP response" >&2
+    exit 1
+  fi
+
+  echo "$line"
+  if [[ "$line" == *'"id":'* ]]; then
+    responses=$((responses + 1))
+  fi
+
+  if [[ "$line" == *'"id":1'* ]]; then
+    printf '%s\n' \
+      "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"session/new\",\"params\":{\"cwd\":\"$WORKSPACE\",\"mcpServers\":[]}}" \
+      >&3
+  elif [[ "$line" == *'"id":2'* ]]; then
+    printf '%s\n' \
+      "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"session/list\",\"params\":{\"cwd\":\"$WORKSPACE\"}}" \
+      >&3
+  fi
+done
+exec 3>&-
 echo ""
 
 echo "=== Tests Complete ==="
 echo ""
-echo "Note: This is a basic test of the protocol layer."
-echo "Full agentic workflow execution is not yet implemented."
+echo "Note: This is a basic test of the typed ACP protocol layer."

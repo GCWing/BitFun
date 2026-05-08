@@ -12,6 +12,7 @@ import { useCanvasStore } from './stores';
 import { useTabLifecycle, useKeyboardShortcuts, usePanelTabCoordinator } from './hooks';
 import type { AnchorPosition } from './types';
 import { openMainSession, selectActiveBtwSessionTab } from '@/flow_chat/services/openBtwSession';
+import { isSamePath } from '@/shared/utils/pathUtils';
 import './ContentCanvas.scss';
 export interface ContentCanvasProps {
   /** Workspace path */
@@ -69,9 +70,17 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
       return;
     }
 
+    // Only sync when the BTW session belongs to the current workspace,
+    // preventing the wrong session from opening when switching workspaces.
+    const btwWorkspacePath = activeBtwSessionData.workspacePath;
+    if (workspacePath && btwWorkspacePath && !isSamePath(workspacePath, btwWorkspacePath)) {
+      lastSyncedBtwTabIdRef.current = activeBtwSessionTab.id;
+      return;
+    }
+
     lastSyncedBtwTabIdRef.current = activeBtwSessionTab.id;
     void openMainSession(activeBtwSessionData.parentSessionId);
-  }, [activeBtwSessionData?.parentSessionId, activeBtwSessionTab?.id, mode]);
+  }, [activeBtwSessionData?.parentSessionId, activeBtwSessionData?.workspacePath, activeBtwSessionTab?.id, mode, workspacePath]);
 
   // Check if primary group has visible tabs
   const hasPrimaryVisibleTabs = useMemo(() => {

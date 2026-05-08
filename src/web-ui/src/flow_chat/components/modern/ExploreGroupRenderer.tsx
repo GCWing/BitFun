@@ -105,13 +105,17 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   ]);
   
   // Auto-scroll to bottom during streaming.
+  // Use double requestAnimationFrame to ensure the browser has completed
+  // layout of newly added content before we measure scrollHeight.
   useEffect(() => {
     if (!isCollapsed && isGroupStreaming && containerRef.current) {
       requestAnimationFrame(() => {
-        if (containerRef.current) {
-          containerRef.current.scrollTop = containerRef.current.scrollHeight;
-          checkScrollState();
-        }
+        requestAnimationFrame(() => {
+          if (containerRef.current) {
+            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+            checkScrollState();
+          }
+        });
       });
     }
   }, [allItems, checkScrollState, isCollapsed, isGroupStreaming]);
@@ -146,17 +150,17 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   
   // Build summary text with i18n.
   const displaySummary = useMemo(() => {
-    const { readCount, searchCount, thinkingCount } = stats;
+    const { readCount, searchCount, commandCount } = stats;
     
     const parts: string[] = [];
-    if (thinkingCount > 0) {
-      parts.push(t('exploreRegion.thinkingCount', { count: thinkingCount }));
-    }
     if (readCount > 0) {
       parts.push(t('exploreRegion.readFiles', { count: readCount }));
     }
     if (searchCount > 0) {
       parts.push(t('exploreRegion.searchCount', { count: searchCount }));
+    }
+    if (commandCount > 0) {
+      parts.push(t('exploreRegion.commandCount', { count: commandCount }));
     }
     
     if (parts.length === 0) {

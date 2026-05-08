@@ -1,6 +1,7 @@
 use crate::service::snapshot::snapshot_system::FileSnapshotSystem;
 use crate::service::snapshot::types::{
-    DiffSummary, FileOperation, OperationType, SnapshotError, SnapshotResult, ToolContext,
+    DiffSummary, FileOperation, OperationType, SessionFileDiffStats, SnapshotError, SnapshotResult,
+    ToolContext,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeContext;
 use log::{debug, info, warn};
@@ -47,6 +48,9 @@ struct SessionHistory {
     created_at: SystemTime,
     last_updated: SystemTime,
 }
+
+/// Per-side size budget: above this we avoid loading baseline/disk texts for UI badge stats.
+const SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES: u64 = 512 * 1024;
 
 impl SessionHistory {
     fn new(session_id: String) -> Self {
@@ -570,6 +574,99 @@ impl SnapshotCore {
         Ok((before, after, mapped_anchor))
     }
 
+    /// Line insert/delete counts versus session baseline vs workspace, without returning file bodies.
+    /// Large files skip full reads and aggregate per-operation diff summaries (`approximate: true`).
+    pub async fn get_session_file_diff_stats(
+        &self,
+        session_id: &str,
+        file_path: &Path,
+    ) -> SnapshotResult<SessionFileDiffStats> {
+        let Some(session) = self.sessions.get(session_id) else {
+            return Err(SnapshotError::SessionNotFound(session_id.to_string()));
+        };
+
+        let file_created = session_file_created_in_session(session, file_path);
+
+        let workspace_bytes = if file_path.exists() {
+            tokio::fs::metadata(file_path)
+                .await
+                .map(|m| m.len())
+                .unwrap_or(SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES.saturating_add(1))
+        } else {
+            0
+        };
+
+        let before_bytes = if file_created {
+            0
+        } else {
+            let before_snapshot_id = if let Some(baseline_id) = self
+                .snapshot_system
+                .get_baseline_snapshot_id(file_path)
+                .await
+            {
+                Some(baseline_id)
+            } else {
+                session
+                    .all_operations_iter()
+                    .find(|op| op.file_path == file_path)
+                    .and_then(|op| op.before_snapshot_id.clone())
+            };
+
+            match before_snapshot_id {
+                None => 0,
+                Some(id) => self
+                    .snapshot_system
+                    .get_snapshot_recorded_size_bytes(&id)
+                    .await
+                    .unwrap_or(SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES.saturating_add(1)),
+            }
+        };
+
+        let too_large = workspace_bytes > SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES
+            || before_bytes > SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES;
+
+        let path_exists = file_path.exists();
+
+        if too_large {
+            let agg = aggregate_operations_diff_summary_for_file(session, file_path);
+            let change_kind = change_kind_for_aggregate_path(file_created, path_exists);
+            debug!(
+                "get_session_file_diff_stats: approximate session_id={} file_path={:?} workspace_bytes={} before_bytes={} lines_added={} lines_removed={}",
+                session_id,
+                file_path,
+                workspace_bytes,
+                before_bytes,
+                agg.lines_added,
+                agg.lines_removed
+            );
+            return Ok(SessionFileDiffStats {
+                file_path: file_path.to_string_lossy().to_string(),
+                lines_added: agg.lines_added,
+                lines_removed: agg.lines_removed,
+                approximate: true,
+                change_kind: change_kind.to_string(),
+            });
+        }
+
+        let (before, after) = self.get_file_diff(file_path, session_id).await?;
+        let summary = compute_diff_summary(&before, &after);
+        let change_kind = change_kind_from_diff_content(file_created, &before, &after);
+        debug!(
+            "get_session_file_diff_stats: exact session_id={} file_path={:?} lines_added={} lines_removed={}",
+            session_id,
+            file_path,
+            summary.lines_added,
+            summary.lines_removed
+        );
+        Ok(SessionFileDiffStats {
+            file_path: file_path.to_string_lossy().to_string(),
+            lines_added: summary.lines_added,
+            lines_removed: summary.lines_removed,
+            approximate: false,
+            change_kind: change_kind.to_string(),
+        })
+    }
+
     pub fn get_file_change_history(&self, file_path: &Path) -> Vec<FileChangeEntry> {
         let mut entries = Vec::new();
         for session in self.sessions.values() {
@@ -901,6 +998,53 @@ impl SnapshotCore {
             }
         }
     }
+}
+
+fn session_file_created_in_session(session: &SessionHistory, file_path: &Path) -> bool {
+    session
+        .all_operations_iter()
+        .find(|op| op.file_path == file_path)
+        .map(|op| op.before_snapshot_id.is_none())
+        .unwrap_or(false)
+}
+
+fn aggregate_operations_diff_summary_for_file(
+    session: &SessionHistory,
+    file_path: &Path,
+) -> DiffSummary {
+    let mut out = DiffSummary::default();
+    for op in session.all_operations_iter() {
+        if op.file_path.as_path() == file_path {
+            out.lines_added += op.diff_summary.lines_added;
+            out.lines_removed += op.diff_summary.lines_removed;
+            out.lines_modified += op.diff_summary.lines_modified;
+        }
+    }
+    out
+}
+
+fn change_kind_for_aggregate_path(file_created_in_session: bool, path_exists: bool) -> &'static str {
+    if file_created_in_session {
+        "create"
+    } else if !path_exists {
+        "delete"
+    } else {
+        "modify"
+    }
+}
+
+fn change_kind_from_diff_content(
+    file_created_in_session: bool,
+    before: &str,
+    after: &str,
+) -> &'static str {
+    if file_created_in_session {
+        return "create";
+    }
+    if !before.is_empty() && after.is_empty() {
+        return "delete";
+    }
+    "modify"
 }
 
 fn sanitize_id(id: &str) -> String {

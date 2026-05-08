@@ -42,7 +42,12 @@
   },
   "markdown": {
     "copySuccess": "复制成功",
-    "copyCode": "复制代码"
+    "copyCode": "复制代码",
+    "openInExplorer": "在资源管理器中打开",
+    "openInBrowser": "通过浏览器打开",
+    "openInBuiltInBrowser": "通过内置浏览器打开",
+    "copyLink": "复制链接",
+    "copyFilePath": "复制文件路径"
   },
   "mermaidBlock": {
     "renderFailed": "图表渲染失败",

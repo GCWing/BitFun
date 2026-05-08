@@ -8,6 +8,9 @@ use serde_json::{json, Value};
 
 pub struct GenerativeUITool;
 
+const LARGE_WIDGET_CODE_SOFT_LINE_LIMIT: usize = 260;
+const LARGE_WIDGET_CODE_SOFT_BYTE_LIMIT: usize = 28 * 1024;
+
 struct ThemePromptSnapshot {
     id: &'static str,
     theme_type: &'static str,
@@ -272,6 +275,7 @@ Input rules:
 4. Put CSS first, then HTML, then scripts last so the preview can stream progressively.
 5. Keep the first useful content visible early. Avoid giant style blocks.
 6. Prefer self-contained widgets. CDN scripts are allowed when needed, but keep them minimal.
+6a. Keep `widget_code` compact. The 260-line / 28KB guideline is a soft reliability threshold, not a hard cap. If the widget is larger, reduce repeated static DOM with data-driven loops, shared CSS classes, and simpler markup rather than truncating required behavior.
 7. If the user only needs text, do not use this tool.
 8. Prefer compact, scroll-light layouts. Avoid large CSS resets, fixed overlays, oversized app chrome, and nested scrolling.
 9. IMPORTANT sizing rule: the default target is an inline FlowChat card, not a full browser page. Build responsive widgets that fit a narrow card without horizontal scrolling.
@@ -328,7 +332,7 @@ Input rules:
                 "widget_code": {
                     "type": "string",
                     "description": format!(
-                        "Raw HTML fragment or raw SVG. No Markdown code fences. For HTML: no <!DOCTYPE>, <html>, <head>, or <body>. {} If the widget should match BitFun, rely on the host CSS variables instead of hard-coded colors or spacing. If the user asked for file navigation, do not finish this field until each clickable node has verified file metadata or is intentionally non-clickable.",
+                        "Raw HTML fragment or raw SVG. No Markdown code fences. For HTML: no <!DOCTYPE>, <html>, <head>, or <body>. The 260-line / 28KB guideline is a soft reliability threshold. For larger widgets, use data-driven loops, shared CSS classes, and simpler markup rather than truncating required behavior. {} If the widget should match BitFun, rely on the host CSS variables instead of hard-coded colors or spacing. If the user asked for file navigation, do not finish this field until each clickable node has verified file metadata or is intentionally non-clickable.",
                         Self::combined_reminder()
                     )
                 },
@@ -451,6 +455,28 @@ Input rules:
                 ),
                 error_code: Some(400),
                 meta: None,
+            };
+        }
+
+        let line_count = widget_code.lines().count();
+        let byte_count = widget_code.len();
+        if line_count > LARGE_WIDGET_CODE_SOFT_LINE_LIMIT
+            || byte_count > LARGE_WIDGET_CODE_SOFT_BYTE_LIMIT
+        {
+            return ValidationResult {
+                result: true,
+                message: Some(format!(
+                    "Large GenerativeUI widget_code: {} lines, {} bytes. This is allowed when necessary, but prefer a staged design approach: keep the first version compact, use data-driven loops/shared classes, and iterate rather than emitting a huge static widget payload.",
+                    line_count, byte_count
+                )),
+                error_code: None,
+                meta: Some(json!({
+                    "large_widget_code": true,
+                    "line_count": line_count,
+                    "byte_count": byte_count,
+                    "soft_line_limit": LARGE_WIDGET_CODE_SOFT_LINE_LIMIT,
+                    "soft_byte_limit": LARGE_WIDGET_CODE_SOFT_BYTE_LIMIT
+                })),
             };
         }
 

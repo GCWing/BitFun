@@ -36,7 +36,8 @@
   },
   "toolbar": {
     "searchPlaceholder": "搜索技能...",
-    "addTooltip": "添加技能"
+    "addTooltip": "添加技能",
+    "hideDuplicates": "重複項"
   },
   "filters": {
     "all": "全部",
@@ -70,7 +71,8 @@
       "downloadProject": "下載到項目",
       "installed": "已安裝",
       "installedTooltip": "該技能已安裝",
-      "downloading": "下載中..."
+      "downloading": "下載中...",
+      "downloadUser": "下載到使用者"
     },
     "pagination": {
       "prev": "上一頁",
@@ -124,7 +126,11 @@
       "deleteTooltip": "刪除",
       "pathLabel": "路徑:",
       "openPathInExplorer": "在資源管理器中打開此文件夾",
-      "revealPathUnavailableRemote": "遠程工作區無法在本地資源管理器中打開路徑"
+      "revealPathUnavailableRemote": "遠程工作區無法在本地資源管理器中打開路徑",
+      "shadowed": "重複",
+      "shadowedTooltip": "該技能被更高優先級的同名技能覆蓋，不會生效。",
+      "shadowedLabel": "被覆蓋自:",
+      "shadowedDetail": "技能 key {{key}}"
     }
   },
   "deleteModal": {

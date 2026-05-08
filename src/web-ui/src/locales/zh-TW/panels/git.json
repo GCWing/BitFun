@@ -33,7 +33,7 @@
     "commitWithCount": "提交 ({{count}})",
     "aiGenerateCommit": "AI 生成提交信息",
     "cancelGenerate": "取消生成",
-    "aiCodeReview": "AI 代碼審查",
+    "aiCodeReview": "AI 代碼審核",
     "viewAllDiff": "查看所有差異",
     "discardFile": "恢復此文件",
     "deleteFile": "刪除此文件",
@@ -139,10 +139,10 @@
     }
   },
   "review": {
-    "noFilesToReview": "沒有文件變更，無法進行代碼審查",
-    "displayMessage": "審查 Git 變更文件：\n{{files}}",
-    "requestMessage": "請審查以下 Git 變更文件：\n\n{{files}}",
-    "sendFailed": "發送代碼審查請求失敗"
+    "noFilesToReview": "沒有文件變更，無法進行代碼審核",
+    "displayMessage": "審核 Git 變更文件：\n{{files}}",
+    "requestMessage": "請審核以下 Git 變更文件：\n\n{{files}}",
+    "sendFailed": "發送代碼審核請求失敗"
   },
   "relativeTime": {
     "justNow": "剛剛",

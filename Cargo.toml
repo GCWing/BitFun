@@ -2,6 +2,7 @@
 members = [
     "src/crates/events",
     "src/crates/ai-adapters",
+    "src/crates/acp",
     "src/crates/core",
     "src/crates/transport",
     "src/crates/api-layer",
@@ -20,7 +21,7 @@ resolver = "2"
 
 # Shared package metadata — single source of truth for version
 [workspace.package]
-version = "0.2.4" # x-release-please-version
+version = "0.2.5" # x-release-please-version
 authors = ["BitFun Team"]
 edition = "2021"
 

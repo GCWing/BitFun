@@ -553,7 +553,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                   label={t('ssh.remote.host')}
                   value={formData.host}
                   onChange={(e) => handleInputChange('host', e.target.value)}
-                  placeholder="example.com"
+                  placeholder=""
                   prefix={<Server size={16} />}
                   size="medium"
                 />
@@ -575,7 +575,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                 label={t('ssh.remote.username')}
                 value={formData.username}
                 onChange={(e) => handleInputChange('username', e.target.value)}
-                placeholder="root"
+                placeholder=""
                 prefix={<User size={16} />}
                 size="medium"
               />
@@ -613,7 +613,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                   type="password"
                   value={formData.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
-                  placeholder={t('ssh.remote.password')}
+                  placeholder=""
                   prefix={<Lock size={16} />}
                   size="medium"
                 />

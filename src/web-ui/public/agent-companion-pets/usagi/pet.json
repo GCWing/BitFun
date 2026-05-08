@@ -1,0 +1,6 @@
+{
+  "id": "usagi",
+  "displayName": "Usagi",
+  "description": "A tiny cream rabbit companion based on the provided Usagi reference.",
+  "spritesheetPath": "spritesheet.webp"
+}

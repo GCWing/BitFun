@@ -13,6 +13,9 @@ use serde_json::{json, Value};
 /// Mermaid interactive diagram tool
 pub struct MermaidInteractiveTool;
 
+const LARGE_MERMAID_CODE_SOFT_LINE_LIMIT: usize = 220;
+const LARGE_MERMAID_CODE_SOFT_BYTE_LIMIT: usize = 18 * 1024;
+
 impl Default for MermaidInteractiveTool {
     fn default() -> Self {
         Self::new()
@@ -287,6 +290,7 @@ Key Rules:
 - file_path must be ABSOLUTE path that exists in the workspace
 - line_number must be a positive integer (1, 2, 3, ...), pointing to meaningful code location
 - For abstract/conceptual nodes (like "Database", "External API"), omit from node_metadata entirely - they will be non-clickable
+- Keep mermaid_code compact. The 220-line / 18KB guideline is a soft reliability threshold, not a hard cap. For large architecture maps, split the work into several focused diagrams by subsystem, flow, or layer instead of truncating important nodes.
 - Use style statements for colors: style NodeID fill:#color,stroke:#border,color:#text
 - Use highlights for execution state: {"executed": ["A"], "current": "B", "failed": ["E"]}
 
@@ -303,7 +307,7 @@ Mermaid Syntax:
             "properties": {
                 "mermaid_code": {
                     "type": "string",
-                    "description": "Mermaid diagram code. Use standard Mermaid syntax. Node IDs should match the keys in node_metadata for interactive features. Add style statements for custom colors."
+                    "description": "Mermaid diagram code. Use standard Mermaid syntax. Node IDs should match the keys in node_metadata for interactive features. Add style statements for custom colors. The 220-line / 18KB guideline is a soft reliability threshold; for larger maps, split into focused diagrams by subsystem, flow, or layer."
                 },
                 "title": {
                     "type": "string",
@@ -468,6 +472,28 @@ Mermaid Syntax:
                     "field": "mermaid_code",
                     "error_detail": error_message,
                     "suggestion": "Please fix the syntax errors and regenerate the Mermaid code. Common issues: missing diagram type, unclosed brackets, invalid node definitions, or malformed arrows."
+                })),
+            };
+        }
+
+        let line_count = mermaid_code.lines().count();
+        let byte_count = mermaid_code.len();
+        if line_count > LARGE_MERMAID_CODE_SOFT_LINE_LIMIT
+            || byte_count > LARGE_MERMAID_CODE_SOFT_BYTE_LIMIT
+        {
+            return ValidationResult {
+                result: true,
+                message: Some(format!(
+                    "Large Mermaid code: {} lines, {} bytes. This is allowed when necessary, but prefer a staged diagramming approach: split large architecture maps into focused diagrams by subsystem, flow, or layer instead of one huge diagram payload.",
+                    line_count, byte_count
+                )),
+                error_code: None,
+                meta: Some(json!({
+                    "large_mermaid_code": true,
+                    "line_count": line_count,
+                    "byte_count": byte_count,
+                    "soft_line_limit": LARGE_MERMAID_CODE_SOFT_LINE_LIMIT,
+                    "soft_byte_limit": LARGE_MERMAID_CODE_SOFT_BYTE_LIMIT
                 })),
             };
         }

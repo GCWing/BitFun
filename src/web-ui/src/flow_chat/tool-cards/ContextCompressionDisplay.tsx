@@ -66,7 +66,7 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
       case 'tool_batch':
         return t('toolCards.contextCompression.toolBatchComplete');
       case 'ai_response':
-        return 'After AI response';
+        return t('toolCards.contextCompression.afterAiResponse');
       case 'manual':
         return t('toolCards.contextCompression.manualTrigger');
       default:
@@ -111,16 +111,22 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
           {data.tokensBefore !== undefined && data.tokensAfter !== undefined ? (
             <>
               <span className="token-stat">
-                {data.tokensBefore.toLocaleString()} → {data.tokensAfter.toLocaleString()} tokens
+                {t('toolCards.contextCompression.tokenChange', {
+                  before: data.tokensBefore.toLocaleString(),
+                  after: data.tokensAfter.toLocaleString(),
+                })}
               </span>
               {savedTokens !== undefined && data.compressionRatio !== undefined && (
                 <span className="savings-tag">
-                  Saved {savedTokens.toLocaleString()} · Ratio {(data.compressionRatio * 100).toFixed(0)}%
+                  {t('toolCards.contextCompression.savingsTag', {
+                    saved: savedTokens.toLocaleString(),
+                    ratio: (data.compressionRatio * 100).toFixed(0),
+                  })}
                 </span>
               )}
             </>
           ) : (
-            <span className="processing-text">Compressing context...</span>
+            <span className="processing-text">{t('toolCards.contextCompression.compressingContext')}</span>
           )}
         </span>
       }
@@ -128,7 +134,7 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
         <>
           {data.status === 'completed' && data.compressionCount && (
             <span className="compression-meta">
-              {getTriggerText(data.trigger)} · Compression #{data.compressionCount}
+              {getTriggerText(data.trigger)} · {t('toolCards.contextCompression.compressionCount', { count: data.compressionCount })}
             </span>
           )}
         </>

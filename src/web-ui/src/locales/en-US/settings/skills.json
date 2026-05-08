@@ -29,7 +29,8 @@
       "downloadProject": "Download to Project",
       "installed": "Installed",
       "installedTooltip": "This Skill is already installed",
-      "downloading": "Downloading..."
+      "downloading": "Downloading...",
+      "downloadUser": "Download to User"
     }
   },
   "form": {

@@ -1032,6 +1032,8 @@ impl StartupPage {
         key: KeyEvent,
         page: &mut WorkspaceSelectPage,
     ) -> Result<()> {
+        page.custom_cursor = normalize_byte_cursor(&page.custom_input, page.custom_cursor);
+
         match key.code {
             KeyCode::Enter => {
                 // If input is empty, use current directory
@@ -1051,8 +1053,10 @@ impl StartupPage {
             }
             KeyCode::Backspace => {
                 if page.custom_cursor > 0 && page.custom_cursor <= page.custom_input.len() {
-                    page.custom_input.remove(page.custom_cursor - 1);
-                    page.custom_cursor -= 1;
+                    let prev_cursor =
+                        previous_char_boundary(&page.custom_input, page.custom_cursor);
+                    page.custom_input.remove(prev_cursor);
+                    page.custom_cursor = prev_cursor;
                 }
             }
             KeyCode::Delete => {
@@ -1062,12 +1066,13 @@ impl StartupPage {
             }
             KeyCode::Left => {
                 if page.custom_cursor > 0 {
-                    page.custom_cursor -= 1;
+                    page.custom_cursor =
+                        previous_char_boundary(&page.custom_input, page.custom_cursor);
                 }
             }
             KeyCode::Right => {
                 if page.custom_cursor < page.custom_input.len() {
-                    page.custom_cursor += 1;
+                    page.custom_cursor = next_char_boundary(&page.custom_input, page.custom_cursor);
                 }
             }
             KeyCode::Home => {
@@ -1078,7 +1083,7 @@ impl StartupPage {
             }
             KeyCode::Char(c) => {
                 page.custom_input.insert(page.custom_cursor, c);
-                page.custom_cursor += 1;
+                page.custom_cursor += c.len_utf8();
             }
             _ => {}
         }
@@ -1378,5 +1383,61 @@ impl StartupPage {
 
         self.config.save()?;
         Ok(())
+    }
+}
+
+fn normalize_byte_cursor(input: &str, cursor: usize) -> usize {
+    let mut cursor = cursor.min(input.len());
+    while cursor > 0 && !input.is_char_boundary(cursor) {
+        cursor -= 1;
+    }
+    cursor
+}
+
+fn previous_char_boundary(input: &str, cursor: usize) -> usize {
+    let mut cursor = normalize_byte_cursor(input, cursor);
+    if cursor == 0 {
+        return 0;
+    }
+    cursor -= 1;
+    normalize_byte_cursor(input, cursor)
+}
+
+fn next_char_boundary(input: &str, cursor: usize) -> usize {
+    let cursor = normalize_byte_cursor(input, cursor);
+    if cursor >= input.len() {
+        return input.len();
+    }
+
+    let mut next = cursor + 1;
+    while next < input.len() && !input.is_char_boundary(next) {
+        next += 1;
+    }
+    next
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workspace_cursor_moves_on_utf8_boundaries() {
+        let input = "a你b";
+
+        assert_eq!(next_char_boundary(input, 0), 1);
+        assert_eq!(next_char_boundary(input, 1), 4);
+        assert_eq!(next_char_boundary(input, 4), 5);
+        assert_eq!(previous_char_boundary(input, 5), 4);
+        assert_eq!(previous_char_boundary(input, 4), 1);
+        assert_eq!(previous_char_boundary(input, 1), 0);
+    }
+
+    #[test]
+    fn workspace_cursor_normalizes_invalid_byte_offsets() {
+        let input = "你";
+
+        assert_eq!(normalize_byte_cursor(input, 1), 0);
+        assert_eq!(normalize_byte_cursor(input, 2), 0);
+        assert_eq!(normalize_byte_cursor(input, 3), 3);
     }
 }

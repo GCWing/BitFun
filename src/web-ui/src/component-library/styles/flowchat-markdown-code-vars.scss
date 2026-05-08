@@ -1,7 +1,7 @@
 /**
  * Flow-chat markdown inline code / pre / blockquote palette for m-editor.
  * Values mirror component-library Markdown.scss (.markdown-renderer) defaults + light overrides.
- * Do not import this into Markdown.scss — flow chat styles stay unchanged.
+ * Light-theme blockquote tokens are referenced from Markdown.scss for .markdown-renderer.
  */
 :root {
   --flowchat-md-code-font-mono: 'Fira Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
@@ -50,7 +50,9 @@
   --flowchat-md-pre-hover-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
   --flowchat-md-pre-code-fg: var(--color-text-primary, #24292f);
 
-  --flowchat-md-bq-bg: rgba(0, 0, 0, 0.03);
-  --flowchat-md-bq-border: rgba(0, 0, 0, 0.12);
-  --flowchat-md-bq-fg: var(--color-text-muted, #57606a);
+  --flowchat-md-bq-bg: rgba(15, 23, 42, 0.07);
+  --flowchat-md-bq-border: rgba(15, 23, 42, 0.24);
+  --flowchat-md-bq-fg: var(--color-text-secondary, #475569);
+  --flowchat-md-bq-hover-bg: rgba(15, 23, 42, 0.1);
+  --flowchat-md-bq-hover-border: rgba(15, 23, 42, 0.34);
 }

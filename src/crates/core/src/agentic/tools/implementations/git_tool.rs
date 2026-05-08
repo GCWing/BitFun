@@ -6,8 +6,8 @@ use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::service::git::{
-    execute_git_command, GitAddParams, GitCommitParams, GitDiffParams, GitLogParams, GitPullParams,
-    GitPushParams, GitService,
+    execute_git_command, execute_git_command_raw, GitAddParams, GitCommitParams, GitDiffParams,
+    GitLogParams, GitPullParams, GitPushParams, GitService,
 };
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -247,6 +247,9 @@ impl GitTool {
             let refs = args_str[..sep_pos].trim();
             let files = args_str[sep_pos + GIT_DIFF_FILE_SEPARATOR.len()..].trim();
             (refs, Some(files))
+        } else if let Some(stripped) = args_str.strip_prefix("-- ") {
+            // Handle "-- file1 file2" (no leading space before --)
+            ("", Some(stripped.trim()))
         } else {
             (args_str.trim(), None)
         };
@@ -324,10 +327,19 @@ impl GitTool {
             .await
             .map_err(|e| BitFunError::tool(format!("Git diff failed: {}", e)))?;
 
+        // When there are no differences, git diff returns exit code 0 with an
+        // empty stdout. Return a friendly message so the model (and user) see
+        // a clear "no changes" indication instead of a bare empty string.
+        let stdout = if diff_output.trim().is_empty() {
+            "No differences found.".to_string()
+        } else {
+            diff_output
+        };
+
         Ok(json!({
             "success": true,
             "exit_code": 0,
-            "stdout": diff_output,
+            "stdout": stdout,
             "stderr": ""
         }))
     }
@@ -663,23 +675,38 @@ impl GitTool {
 
         let start_time = std::time::Instant::now();
 
-        match execute_git_command(repo_path, &cmd_args).await {
-            Ok(output) => {
+        // Use raw execution so we can distinguish git diff exit code 1 (has differences)
+        // from actual errors.
+        match execute_git_command_raw(repo_path, &cmd_args).await {
+            Ok(raw) => {
                 let duration = elapsed_ms_u64(start_time);
+
+                // git diff returns exit code 1 when there are differences, which is not an error.
+                // Other commands may also use exit code 1 for non-error conditions (e.g. grep with no matches).
+                // We treat exit code 0 and exit code 1 with non-empty stdout as success,
+                // but exit code >1 or exit code 1 with empty stdout and non-empty stderr as failure.
+                let is_diff_like = operation == "diff";
+                let success = if raw.exit_code == 0 {
+                    true
+                } else if is_diff_like && raw.exit_code == 1 && !raw.stdout.is_empty() {
+                    true
+                } else {
+                    false
+                };
+
                 Ok(json!({
-                    "success": true,
-                    "exit_code": 0,
-                    "stdout": output,
-                    "stderr": "",
+                    "success": success,
+                    "exit_code": raw.exit_code,
+                    "stdout": raw.stdout,
+                    "stderr": raw.stderr,
                     "execution_time_ms": duration
                 }))
             }
             Err(e) => {
                 let duration = elapsed_ms_u64(start_time);
-                // Git command failed but still return result
                 Ok(json!({
                     "success": false,
-                    "exit_code": 1,
+                    "exit_code": -1,
                     "stdout": "",
                     "stderr": e.to_string(),
                     "execution_time_ms": duration
@@ -761,6 +788,12 @@ This tool provides a safe and convenient way to execute Git commands. It support
    ```json
    {"operation": "switch", "args": "main"}
    ```
+
+## Important: `args` Field Rules
+
+- The `operation` field already specifies the Git subcommand (e.g. `diff`, `log`, `add`).
+- The `args` field must contain **only additional arguments** for that subcommand.
+- **Do NOT include the subcommand name itself in `args`.** For example, use `{"operation": "diff", "args": "HEAD~2..HEAD --stat"}` — NOT `{"operation": "diff", "args": "diff HEAD~2..HEAD --stat"}`.
 
 ## Safety Notes
 
@@ -1006,6 +1039,20 @@ When creating commits, use this format for the commit message:
             .ok_or_else(|| BitFunError::tool("operation is required".to_string()))?;
 
         let args = input.get("args").and_then(|v| v.as_str());
+
+        // Tolerance: strip a leading operation name from args if the model
+        // mistakenly includes it (e.g. "diff HEAD~2..HEAD --stat" when
+        // operation is already "diff"). This prevents commands like
+        // "git diff diff HEAD~2..HEAD --stat".
+        let args = args.map(|a| {
+            let trimmed = a.trim();
+            let prefix = format!("{} ", operation);
+            if trimmed.starts_with(&prefix) {
+                &trimmed[prefix.len()..]
+            } else {
+                trimmed
+            }
+        });
 
         let working_directory = input.get("working_directory").and_then(|v| v.as_str());
 

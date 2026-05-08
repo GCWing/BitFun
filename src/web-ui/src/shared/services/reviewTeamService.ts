@@ -11,8 +11,8 @@ export const DEFAULT_REVIEW_TEAM_MODEL = 'fast';
 export const DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL = 'normal' as const;
 export const DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL = 'inherit' as const;
 export const DEFAULT_REVIEW_TEAM_EXECUTION_POLICY = {
-  reviewerTimeoutSeconds: 300,
-  judgeTimeoutSeconds: 240,
+  reviewerTimeoutSeconds: 600,
+  judgeTimeoutSeconds: 600,
   reviewerFileSplitThreshold: 20,
   maxSameRoleInstances: 3,
 } as const;
@@ -26,6 +26,14 @@ export interface ReviewStrategyCommonRules {
   reviewerPromptRules: string[];
 }
 
+export type ReviewRoleDirectiveKey =
+  | 'ReviewBusinessLogic'
+  | 'ReviewPerformance'
+  | 'ReviewSecurity'
+  | 'ReviewArchitecture'
+  | 'ReviewFrontend'
+  | 'ReviewJudge';
+
 export interface ReviewStrategyProfile {
   level: ReviewStrategyLevel;
   label: string;
@@ -34,6 +42,9 @@ export interface ReviewStrategyProfile {
   runtimeImpact: string;
   defaultModelSlot: 'fast' | 'primary';
   promptDirective: string;
+  /** Per-role strategy directives. When a role key is present, its directive
+   *  overrides `promptDirective` for that reviewer or the judge. */
+  roleDirectives: Partial<Record<ReviewRoleDirectiveKey, string>>;
 }
 
 export const REVIEW_STRATEGY_LEVELS: ReviewStrategyLevel[] = [
@@ -64,6 +75,20 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     defaultModelSlot: 'fast',
     promptDirective:
       'Prefer a concise diff-focused pass. Report only high-confidence correctness, security, or regression risks and avoid speculative design rewrites.',
+    roleDirectives: {
+      ReviewBusinessLogic:
+        'Only trace logic paths directly changed by the diff. Do not follow call chains beyond one hop. Report only issues where the diff introduces a provably wrong behavior.',
+      ReviewPerformance:
+        'Scan the diff for known anti-patterns only: nested loops, repeated fetches, blocking calls on hot paths, unnecessary re-renders. Do not trace call chains or estimate impact beyond what the diff shows.',
+      ReviewSecurity:
+        'Scan the diff for direct security risks only: injection, secret exposure, unsafe commands, missing auth. Do not trace data flows beyond one hop.',
+      ReviewArchitecture:
+        'Only check imports directly changed by the diff. Flag violations of documented layer boundaries.',
+      ReviewFrontend:
+        'Only check i18n key completeness and direct platform boundary violations in changed frontend files.',
+      ReviewJudge:
+        'This was a quick review. Focus on confirming or rejecting each finding efficiently. If a finding\'s evidence is thin, reject it rather than spending time verifying.',
+    },
   },
   normal: {
     level: 'normal',
@@ -75,6 +100,20 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     defaultModelSlot: 'fast',
     promptDirective:
       'Perform the standard role-specific review. Balance coverage with precision and include concrete evidence for each issue.',
+    roleDirectives: {
+      ReviewBusinessLogic:
+        'Trace each changed function\'s direct callers and callees to verify business rules and state transitions. Stop investigating a path once you have enough evidence to confirm or dismiss it.',
+      ReviewPerformance:
+        'Inspect the diff for anti-patterns, then read surrounding code to confirm impact on hot paths. Report only issues likely to matter at realistic scale.',
+      ReviewSecurity:
+        'Trace each changed input path from entry point to usage. Check trust boundaries, auth assumptions, and data sanitization. Report only issues with a realistic threat narrative.',
+      ReviewArchitecture:
+        "Check the diff's imports plus one level of dependency direction. Verify API contract consistency.",
+      ReviewFrontend:
+        'Check i18n, React performance patterns, and accessibility in changed components. Verify frontend-backend API contract alignment.',
+      ReviewJudge:
+        'Validate each finding\'s logical consistency and evidence quality. Spot-check code only when a claim needs verification.',
+    },
   },
   deep: {
     level: 'deep',
@@ -86,6 +125,20 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     defaultModelSlot: 'primary',
     promptDirective:
       'Run a thorough role-specific pass. Inspect edge cases, cross-file interactions, failure modes, and remediation tradeoffs before finalizing findings.',
+    roleDirectives: {
+      ReviewBusinessLogic:
+        'Map full call chains for changed functions. Verify state transitions end-to-end, check rollback and error-recovery paths, and test edge cases in data shape and lifecycle assumptions. Prioritize findings by user-facing impact.',
+      ReviewPerformance:
+        'In addition to the normal pass, check for latent scaling risks — data structures that degrade at volume, or algorithms that are correct but unnecessarily expensive. Only report if you can estimate the impact. Do not speculate about edge cases or failure modes unrelated to performance.',
+      ReviewSecurity:
+        'In addition to the normal pass, trace data flows across trust boundaries end-to-end. Check for privilege escalation chains, indirect injection vectors, and failure modes that expose sensitive data. Report only issues with a complete threat narrative.',
+      ReviewArchitecture:
+        'Map the full dependency graph for changed modules. Check for structural anti-patterns, circular dependencies, and cross-cutting concerns.',
+      ReviewFrontend:
+        'Thorough React analysis: effect dependencies, memoization, virtualization. Full accessibility audit. State management pattern review. Cross-layer contract verification.',
+      ReviewJudge:
+        'This was a deep review with potentially complex findings. Cross-validate findings across reviewers for consistency. For each finding, verify the evidence supports the conclusion and the suggested fix is safe. Pay extra attention to overlapping findings across reviewers or same-role instances.',
+    },
   },
 };
 
@@ -102,6 +155,8 @@ export type ReviewTeamCoreRoleKey =
   | 'businessLogic'
   | 'performance'
   | 'security'
+  | 'architecture'
+  | 'frontend'
   | 'judge';
 
 export interface ReviewTeamCoreRoleDefinition {
@@ -112,6 +167,8 @@ export interface ReviewTeamCoreRoleDefinition {
   description: string;
   responsibilities: string[];
   accentColor: string;
+  /** If true, this reviewer is only included when the change contains relevant files. */
+  conditional?: boolean;
 }
 
 export interface ReviewTeamStoredConfig {
@@ -249,6 +306,35 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
       'Highlight concrete fixes that reduce risk without broad rewrites.',
     ],
     accentColor: '#dc2626',
+  },
+  {
+    key: 'architecture',
+    subagentId: 'ReviewArchitecture',
+    funName: 'Architecture Reviewer',
+    roleName: 'Architecture Reviewer',
+    description:
+      'A structural watchdog that checks module boundaries, dependency direction, API contract design, and abstraction integrity.',
+    responsibilities: [
+      'Detect layer boundary violations and wrong-direction imports.',
+      'Verify API contracts, tool schemas, and transport messages stay consistent.',
+      'Ensure platform-agnostic code does not leak platform-specific details.',
+    ],
+    accentColor: '#0891b2',
+  },
+  {
+    key: 'frontend',
+    subagentId: 'ReviewFrontend',
+    funName: 'Frontend Reviewer',
+    roleName: 'Frontend Reviewer',
+    description:
+      'A UI specialist that checks i18n synchronization, React performance patterns, accessibility, and frontend-backend contract alignment.',
+    responsibilities: [
+      'Verify i18n key completeness across all locales.',
+      'Check React performance patterns (memoization, virtualization, effect dependencies).',
+      'Flag accessibility violations and frontend-backend API contract drift.',
+    ],
+    accentColor: '#059669',
+    conditional: true,
   },
   {
     key: 'judge',
@@ -662,6 +748,39 @@ function buildExtraMember(
   };
 }
 
+/**
+ * Context information shown in the reviewer task card instead of the raw prompt.
+ * Keeps internal prompt directives private while giving the user a clear picture
+ * of what each reviewer is doing.
+ */
+export interface ReviewerContext {
+  definitionKey: ReviewTeamCoreRoleKey;
+  roleName: string;
+  description: string;
+  responsibilities: string[];
+  accentColor: string;
+}
+
+/**
+ * If `subagentId` belongs to a built-in review-team role, return the
+ * user-facing context for that role.  Otherwise return `null`.
+ */
+export function getReviewerContextBySubagentId(
+  subagentId: string,
+): ReviewerContext | null {
+  const coreRole = DEFAULT_REVIEW_TEAM_CORE_ROLES.find(
+    (role) => role.subagentId === subagentId,
+  );
+  if (!coreRole) return null;
+  return {
+    definitionKey: coreRole.key,
+    roleName: coreRole.roleName,
+    description: coreRole.description,
+    responsibilities: coreRole.responsibilities,
+    accentColor: coreRole.accentColor,
+  };
+}
+
 export function isReviewTeamCoreSubagent(subagentId: string): boolean {
   return CORE_ROLE_IDS.has(subagentId);
 }
@@ -703,7 +822,7 @@ export function resolveDefaultReviewTeam(
     id: DEFAULT_REVIEW_TEAM_ID,
     name: 'Code Review Team',
     description:
-      'A multi-reviewer team for deep code review with mandatory logic, performance, security, and quality-gate roles.',
+      'A multi-reviewer team for deep code review with mandatory logic, performance, security, architecture, conditional frontend, and quality-gate roles.',
     warning:
       'Deep review may take longer and usually consumes more tokens than a standard review.',
     strategyLevel: storedConfig.strategy_level,
@@ -779,6 +898,8 @@ function toManifestMember(
   reason?: ReviewTeamManifestMember['reason'],
 ): ReviewTeamManifestMember {
   const strategyProfile = getReviewStrategyProfile(member.strategyLevel);
+  const roleDirective =
+    strategyProfile.roleDirectives[member.subagentId as ReviewRoleDirectiveKey];
   return {
     subagentId: member.subagentId,
     displayName: member.displayName,
@@ -789,7 +910,7 @@ function toManifestMember(
     defaultModelSlot: strategyProfile.defaultModelSlot,
     strategyLevel: member.strategyLevel,
     strategySource: member.strategySource,
-    strategyDirective: strategyProfile.promptDirective,
+    strategyDirective: roleDirective || strategyProfile.promptDirective,
     locked: member.locked,
     source: member.source,
     subagentSource: member.subagentSource,
@@ -936,11 +1057,17 @@ export function buildReviewTeamPromptBlock(
   ].join('\n');
   const strategyRules = REVIEW_STRATEGY_LEVELS.map((level) => {
     const definition = getReviewStrategyProfile(level);
+    const roleEntries = Object.entries(definition.roleDirectives) as [ReviewRoleDirectiveKey, string][];
+    const roleLines = roleEntries.map(
+      ([role, directive]) => `    - ${role}: ${directive}`,
+    );
     return [
       `- ${level}: ${definition.summary}`,
       `  - ${formatStrategyImpact(level)}`,
       `  - Default model slot: ${definition.defaultModelSlot}`,
-      `  - Prompt directive: ${definition.promptDirective}`,
+      `  - Prompt directive (fallback): ${definition.promptDirective}`,
+      `  - Role-specific directives:`,
+      ...roleLines,
     ].join('\n');
   }).join('\n');
   const commonStrategyRules = REVIEW_STRATEGY_COMMON_RULES.reviewerPromptRules
@@ -954,9 +1081,10 @@ export function buildReviewTeamPromptBlock(
     'Execution policy:',
     executionPolicy,
     'Team execution rules:',
-    '- Always run the three locked reviewer roles first: ReviewBusinessLogic, ReviewPerformance, and ReviewSecurity.',
+    '- Always run the four locked core reviewer roles first: ReviewBusinessLogic, ReviewPerformance, ReviewSecurity, and ReviewArchitecture.',
     '- Run ReviewJudge only after the reviewer batch finishes, as the quality-gate pass.',
-    '- If extra reviewers are configured and enabled, run them in parallel with the three locked reviewers whenever possible.',
+    '- If the Frontend Reviewer is enabled, run it in parallel with the locked reviewers whenever the change contains frontend files (src/web-ui/, .tsx, .scss, .css, locales/).',
+    '- If other extra reviewers are configured and enabled, run them in parallel with the locked reviewers whenever possible.',
     '- When a configured member entry provides model_id, pass model_id with that value to the matching Task call.',
     '- If reviewer_timeout_seconds is greater than 0, pass timeout_seconds with that value to every reviewer Task call.',
     '- If judge_timeout_seconds is greater than 0, pass timeout_seconds with that value to the ReviewJudge Task call.',

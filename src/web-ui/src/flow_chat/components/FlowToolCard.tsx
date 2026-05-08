@@ -39,6 +39,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   const config = getToolCardConfig(toolItem.toolName);
   const CardComponent = getToolCardComponent(toolItem.toolName);
   const interruptionNote = getToolInterruptionNote(toolItem, t);
+  const cardHandlesInterruptionNote = toolItem.toolName === 'Task';
 
   const handleConfirm = React.useCallback((updatedInput?: any) => {
     log.debug('handleConfirm called', {
@@ -68,6 +69,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
         <CardComponent
           toolItem={toolItem}
           config={config}
+          interruptionNote={interruptionNote}
           onConfirm={handleConfirm}
           onReject={handleReject}
           onOpenInEditor={onOpenInEditor}
@@ -76,7 +78,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
           sessionId={sessionId}
         />
       </FlowToolCardErrorBoundary>
-      {interruptionNote && (
+      {interruptionNote && !cardHandlesInterruptionNote && (
         <div className="flow-tool-card-note" role="note">
           {interruptionNote}
         </div>
@@ -90,6 +92,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   
   return (
     prevProps.toolItem.id === nextProps.toolItem.id &&
+    prevProps.sessionId === nextProps.sessionId &&
     prevProps.toolItem.status === nextProps.toolItem.status &&
     prevProps.toolItem.interruptionReason === nextProps.toolItem.interruptionReason &&
     prevProps.toolItem.terminalSessionId === nextProps.toolItem.terminalSessionId &&

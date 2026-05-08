@@ -14,12 +14,12 @@ import type { ModelRound, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
-import { isCollapsibleTool, isTerminalCollapsibleTool } from '../../tool-cards';
+import { isCollapsibleTool } from '../../tool-cards';
 import { useFlowChatContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { ExportImageButton } from './ExportImageButton';
-import { TerminalGroupRenderer } from './TerminalGroupRenderer';
+import { ForkSessionButton } from './ForkSessionButton';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import './ModelRoundItem.scss';
@@ -42,9 +42,74 @@ function hasActiveStreamingNarrative(items: FlowItem[]): boolean {
   });
 }
 
+function useTaskCollapsed(toolId: string): boolean {
+  const [isCollapsed, setIsCollapsed] = useState(() =>
+    taskCollapseStateManager.isCollapsed(toolId)
+  );
+
+  useEffect(() => {
+    setIsCollapsed(taskCollapseStateManager.isCollapsed(toolId));
+
+    const unsubscribe = taskCollapseStateManager.addListener((changedToolId, collapsed) => {
+      if (changedToolId === toolId) {
+        setIsCollapsed(collapsed);
+      }
+    });
+
+    return unsubscribe;
+  }, [toolId]);
+
+  return isCollapsed;
+}
+
+interface TaskWithSubagentWrapperProps {
+  taskItem: FlowItem;
+  parentTaskToolId: string;
+  items: FlowItem[];
+  turnId: string;
+  roundId: string;
+}
+
+const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.memo(({
+  taskItem,
+  parentTaskToolId,
+  items,
+  turnId,
+  roundId,
+}) => {
+  const isCollapsed = useTaskCollapsed(parentTaskToolId);
+  const hasPrompt = Boolean(
+    taskItem.type === 'tool' &&
+    (taskItem as FlowToolItem).toolCall?.input?.prompt
+  );
+  const className = [
+    'task-with-subagent-wrapper',
+    !isCollapsed && 'task-with-subagent-wrapper--expanded',
+    hasPrompt && 'task-with-subagent-wrapper--has-prompt',
+  ].filter(Boolean).join(' ');
+
+  return (
+    <div className={className}>
+      <FlowItemRenderer
+        item={taskItem}
+        turnId={turnId}
+        roundId={roundId}
+        isLastItem={false}
+      />
+      <SubagentItemsContainer
+        parentTaskToolId={parentTaskToolId}
+        items={items}
+        turnId={turnId}
+        roundId={roundId}
+      />
+    </div>
+  );
+});
+
 export const ModelRoundItem = React.memo<ModelRoundItemProps>(
   ({ round, turnId, isLastRound = false }) => {
     const { t } = useTranslation('flow-chat');
+    const { sessionId } = useFlowChatContext();
     const [copied, setCopied] = useState(false);
     const copyButtonRef = useRef<HTMLButtonElement>(null);
     
@@ -73,7 +138,6 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     
     type ItemGroup = 
       | { type: 'explore'; items: FlowItem[]; isLast: boolean }
-      | { type: 'terminal'; items: FlowItem[]; isLast: boolean }
       | { type: 'critical'; item: FlowItem }
       | { type: 'subagent'; parentTaskToolId: string; items: FlowItem[] };
     
@@ -81,7 +145,9 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     // 1) group subagent items
     // 2) group normal items into explore/critical via anchor tool
     const groupedItems = useMemo(() => {
-      const deferExploreGrouping = round.isStreaming && hasActiveStreamingNarrative(sortedItems);
+      const deferExploreGrouping =
+        round.renderHints?.disableExploreGrouping === true ||
+        (round.isStreaming && hasActiveStreamingNarrative(sortedItems));
       const intermediateGroups: Array<{ type: 'normal', item: FlowItem } | { type: 'subagent', parentTaskToolId: string, items: FlowItem[] }> = [];
       let currentSubagentGroup: { parentTaskToolId: string, items: FlowItem[] } | null = null;
       
@@ -118,7 +184,6 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       
       const finalGroups: ItemGroup[] = [];
       let exploreBuffer: FlowItem[] = [];
-      let terminalBuffer: FlowItem[] = [];
       let pendingBuffer: FlowItem[] = [];
       
       const normalItems: FlowItem[] = [];
@@ -132,13 +197,6 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         if (exploreBuffer.length > 0) {
           finalGroups.push({ type: 'explore', items: [...exploreBuffer], isLast });
           exploreBuffer = [];
-        }
-      };
-      
-      const flushTerminalBuffer = (isLast: boolean) => {
-        if (terminalBuffer.length > 0) {
-          finalGroups.push({ type: 'terminal', items: [...terminalBuffer], isLast });
-          terminalBuffer = [];
         }
       };
       
@@ -157,7 +215,6 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         
         if (group.type === 'subagent') {
           flushExploreBuffer(false);
-          flushTerminalBuffer(false);
           flushPendingAsCritical();
           finalGroups.push(group);
         } else {
@@ -169,18 +226,15 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
             
             if (isLastNormalItem) {
               flushExploreBuffer(false);
-              flushTerminalBuffer(false);
               flushPendingAsCritical();
             }
           } else if (item.type === 'tool') {
             const toolName = (item as FlowToolItem).toolName;
             const isExploreTool = isCollapsibleTool(toolName);
-            const isTerminalTool = isTerminalCollapsibleTool(toolName);
             
             if (isExploreTool) {
               if (deferExploreGrouping) {
                 flushExploreBuffer(false);
-                flushTerminalBuffer(false);
                 flushPendingAsCritical();
                 finalGroups.push({ type: 'critical', item });
                 normalItemIndex++;
@@ -192,16 +246,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               if (isLastNormalItem || isLastGroup) {
                 flushExploreBuffer(true);
               }
-            } else if (isTerminalTool) {
-              terminalBuffer.push(...pendingBuffer, item);
-              pendingBuffer = [];
-              
-              if (isLastNormalItem || isLastGroup) {
-                flushTerminalBuffer(true);
-              }
             } else {
               flushExploreBuffer(false);
-              flushTerminalBuffer(false);
               flushPendingAsCritical();
               finalGroups.push({ type: 'critical', item });
             }
@@ -212,11 +258,10 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       }
       
       flushExploreBuffer(true);
-      flushTerminalBuffer(true);
       flushPendingAsCritical();
       
       return finalGroups;
-    }, [round.isStreaming, sortedItems]);
+    }, [round.isStreaming, round.renderHints?.disableExploreGrouping, sortedItems]);
 
     const extractDialogTurnContent = useCallback(() => {
       const flowChatStore = FlowChatStore.getInstance();
@@ -324,20 +369,6 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                 />
               ));
 
-            case 'terminal': {
-              const terminalItems = group.items.filter((it) => it.type === 'tool') as FlowToolItem[];
-              return (
-                <TerminalGroupRenderer
-                  key={`terminal-group-${groupIndex}`}
-                  items={terminalItems}
-                  turnId={turnId}
-                  roundId={round.id}
-                  isLast={isLast}
-                  isGroupStreaming={round.isStreaming}
-                />
-              );
-            }
-
             case 'critical': {
               // If next group is the matching subagent, skip here — rendered by subagent case.
               const nextGroup = groupedItems[groupIndex + 1];
@@ -375,15 +406,14 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               
               if (hasPairedTask) {
                 return (
-                  <div key={`task-with-subagent-${prevGroup.item.id}`} className="task-with-subagent-wrapper">
-                    <FlowItemRenderer
-                      item={prevGroup.item}
-                      turnId={turnId}
-                      roundId={round.id}
-                      isLastItem={false}
-                    />
-                    {subagentContainer}
-                  </div>
+                  <TaskWithSubagentWrapper
+                    key={`task-with-subagent-${prevGroup.item.id}`}
+                    taskItem={prevGroup.item}
+                    parentTaskToolId={group.parentTaskToolId}
+                    items={group.items}
+                    turnId={turnId}
+                    roundId={round.id}
+                  />
                 );
               }
               return subagentContainer;
@@ -396,6 +426,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         
         {isLastRound && hasContent && !round.isStreaming && (
           <div className="model-round-item__footer">
+            <ForkSessionButton sessionId={sessionId} turnId={turnId} />
+
             <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
               <button
                 ref={copyButtonRef}
@@ -490,59 +522,52 @@ const SubagentItemsContainer = React.memo<SubagentItemsContainerProps>(({
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
   }, [isCollapsed]);
-  
-  // Use MutationObserver for streaming auto-scroll with throttling.
+
+  const scrollSignal = useMemo(() => {
+    return items.map((item) => {
+      const itemAny = item as any;
+      const contentLength = typeof itemAny.content === 'string' ? itemAny.content.length : 0;
+      const paramsLength = itemAny.partialParams ? JSON.stringify(itemAny.partialParams).length : 0;
+      return `${item.id}:${item.status}:${contentLength}:${paramsLength}`;
+    }).join('|');
+  }, [items]);
+
+  // Auto-scroll only when the subagent item data changes. A MutationObserver on
+  // the whole subtree also reacts to layout-driven DOM churn while the right
+  // panel opens, which amplifies FlowChat reflow work.
+  // Use double requestAnimationFrame to ensure the browser has completed
+  // layout of newly added content before we measure scrollHeight.
   useEffect(() => {
     const container = containerRef.current;
     if (!container || isCollapsed) return;
-    
-    let rafId: number | null = null;
-    let throttleTimer: NodeJS.Timeout | null = null;
-    const THROTTLE_MS = 50;
-    
-    const scrollToBottom = () => {
-      if (container && !userScrolledUpRef.current) {
-        container.scrollTop = container.scrollHeight;
-        lastScrollTopRef.current = container.scrollTop;
-      }
-    };
-    
-    const throttledScroll = () => {
-      if (throttleTimer) return;
-      
-      throttleTimer = setTimeout(() => {
-        throttleTimer = null;
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = requestAnimationFrame(scrollToBottom);
-      }, THROTTLE_MS);
-    };
-    
-    const observer = new MutationObserver(throttledScroll);
-    
-    observer.observe(container, {
-      childList: true,
-      subtree: true,
-      characterData: true,
+
+    const rafId = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!userScrolledUpRef.current) {
+          container.scrollTop = container.scrollHeight;
+          lastScrollTopRef.current = container.scrollTop;
+        }
+      });
     });
-    
-    scrollToBottom();
-    
-    return () => {
-      observer.disconnect();
-      if (rafId) cancelAnimationFrame(rafId);
-      if (throttleTimer) clearTimeout(throttleTimer);
-    };
-  }, [isCollapsed]);
+
+    return () => cancelAnimationFrame(rafId);
+  }, [isCollapsed, scrollSignal]);
   
+  // Don't render the scrollable container when there are no items yet.
+  // This prevents an empty white area from showing before subagent content arrives.
+  if (items.length === 0) {
+    return null;
+  }
+
   return (
     <div className={`subagent-items-wrapper ${isCollapsed ? 'subagent-items-wrapper--collapsed' : 'subagent-items-wrapper--expanded'}`}>
-      <div 
+      <div
         ref={containerRef}
         className={`subagent-items-container ${isCollapsed ? 'subagent-items-container--collapsed' : 'subagent-items-container--expanded'}`}
         data-parent-tool-id={parentTaskToolId}
       >
         {items.map((item, idx) => (
-          <SubagentItemRenderer 
+          <SubagentItemRenderer
             key={item.id}
             item={item}
             turnId={turnId}
@@ -550,6 +575,69 @@ const SubagentItemsContainer = React.memo<SubagentItemsContainerProps>(({
             isLastItem={idx === items.length - 1}
           />
         ))}
+      </div>
+    </div>
+  );
+});
+
+/**
+ * Truncates text content by line count to avoid breaking Markdown structures
+ * (code blocks, tables, links) in the middle. Shows an expand hint when truncated.
+ */
+const SUBAGENT_TEXT_TRUNCATE_LINES = 50;
+
+const SubagentTextBlock = React.memo<{ textItem: FlowTextItem; className?: string }>(({
+  textItem,
+  className = '',
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const { t } = useTranslation('flow-chat');
+
+  const content = typeof textItem.content === 'string'
+    ? textItem.content
+    : String(textItem.content || '');
+
+  const isStreaming = textItem.isStreaming &&
+    (textItem.status === 'streaming' || textItem.status === 'running');
+
+  const lines = content.split('\n');
+  const shouldTruncate = !isStreaming && !isExpanded && lines.length > SUBAGENT_TEXT_TRUNCATE_LINES;
+
+  if (!shouldTruncate) {
+    return (
+      <FlowTextBlock
+        textItem={textItem}
+        className={className}
+      />
+    );
+  }
+
+  // Truncate at line boundary to keep Markdown structures intact.
+  const truncatedContent = lines.slice(0, SUBAGENT_TEXT_TRUNCATE_LINES).join('\n');
+  const truncatedItem: FlowTextItem = {
+    ...textItem,
+    content: truncatedContent,
+    isStreaming: false,
+  };
+
+  return (
+    <div className="subagent-text-block--truncated">
+      <FlowTextBlock
+        textItem={truncatedItem}
+        className={className}
+        replayStreamingOnMount={false}
+      />
+      <div className="subagent-text-block__truncation-hint">
+        <span className="subagent-text-block__truncation-message">
+          {t('subagent.showingLines', { shown: SUBAGENT_TEXT_TRUNCATE_LINES, total: lines.length })}
+        </span>
+        <button
+          type="button"
+          className="subagent-text-block__expand-btn"
+          onClick={() => setIsExpanded(true)}
+        >
+          {t('subagent.showAll')}
+        </button>
       </div>
     </div>
   );
@@ -594,7 +682,7 @@ const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundI
   switch (item.type) {
     case 'text':
       return (
-        <FlowTextBlock
+        <SubagentTextBlock
           textItem={item as FlowTextItem}
           className="flow-text-block--subagent-compact"
         />

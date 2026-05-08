@@ -8,8 +8,8 @@ use crate::agentic::agents::{
     get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
 };
 use crate::agentic::core::{
-    render_system_reminder, Message, MessageContent, MessageHelper, MessageSemanticKind,
-    RequestReasoningTokenPolicy, Session,
+    render_system_reminder, Message, MessageContent, MessageHelper, MessageRole,
+    MessageSemanticKind, RequestReasoningTokenPolicy, Session,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::execution::types::FinishReason;
@@ -33,6 +33,7 @@ use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use log::{debug, error, info, trace, warn};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
@@ -49,7 +50,7 @@ pub struct ExecutionEngineConfig {
 impl Default for ExecutionEngineConfig {
     fn default() -> Self {
         Self {
-            max_rounds: 50,
+            max_rounds: crate::service::config::types::DEFAULT_MAX_ROUNDS,
             max_consecutive_same_tool: 3,
         }
     }
@@ -78,6 +79,8 @@ pub struct ExecutionEngine {
 }
 
 impl ExecutionEngine {
+    const FINALIZE_AFTER_TOOL_USE_REMINDER: &'static str = "Tool execution for this turn has already completed, but the turn is ending at this round boundary. Do not call any more tools. Provide the final response to the user based on the tool results already available.";
+
     pub fn new(
         round_executor: Arc<RoundExecutor>,
         event_queue: Arc<EventQueue>,
@@ -110,11 +113,33 @@ impl ExecutionEngine {
             return args_str.to_string();
         }
 
+        let args_hash = hex::encode(Sha256::digest(args_str.as_bytes()));
         format!(
-            "{}..#{}",
+            "{}..#{}:sha256={}",
             truncate_at_char_boundary(args_str, 64),
-            args_str.len()
+            args_str.len(),
+            args_hash
         )
+    }
+
+    fn assistant_has_tool_calls(message: &Message) -> bool {
+        matches!(
+            &message.content,
+            MessageContent::Mixed { tool_calls, .. } if !tool_calls.is_empty()
+        )
+    }
+
+    fn has_tool_result_after_last_assistant(messages: &[Message]) -> bool {
+        let Some(last_assistant_index) = messages
+            .iter()
+            .rposition(|message| message.role == MessageRole::Assistant)
+        else {
+            return false;
+        };
+
+        messages[last_assistant_index + 1..]
+            .iter()
+            .any(|message| matches!(message.content, MessageContent::ToolResult { .. }))
     }
 
     /// Emergency truncation: drop oldest API rounds (assistant+tool pairs)
@@ -1189,8 +1214,11 @@ impl ExecutionEngine {
         messages.extend(initial_messages);
 
         let mut round_index = 0;
+        let mut completed_rounds = 0usize;
         let mut total_tools = 0;
+        let mut last_partial_recovery_reason: Option<String> = None;
         let mut last_assistant_message = Message::assistant("".to_string());
+        let mut finalization_reason: Option<&'static str> = None;
         let mut consecutive_compression_failures: u32 = 0;
         const MAX_CONSECUTIVE_COMPRESSION_FAILURES: u32 = 3;
 
@@ -1298,11 +1326,12 @@ impl ExecutionEngine {
         // Loop to execute model rounds
         loop {
             // Check round limit
-            if round_index >= self.config.max_rounds {
+            if completed_rounds >= self.config.max_rounds {
                 warn!(
                     "Reached max rounds limit: {}, stopping execution",
                     self.config.max_rounds
                 );
+                finalization_reason = Some("max_rounds");
                 break;
             }
 
@@ -1498,6 +1527,7 @@ impl ExecutionEngine {
                 round_result.has_more_rounds,
                 round_result.tool_calls.len()
             );
+            completed_rounds += 1;
             last_assistant_message = round_result.assistant_message.clone();
 
             // Save the last token usage statistics (update each time, keep the last one)
@@ -1539,6 +1569,11 @@ impl ExecutionEngine {
 
             total_tools += round_result.tool_calls.len();
 
+            // Track partial recovery reason from the last round
+            if round_result.partial_recovery_reason.is_some() {
+                last_partial_recovery_reason = round_result.partial_recovery_reason.clone();
+            }
+
             // P0: Consecutive same-tool-call loop detection
             if !round_result.tool_calls.is_empty() {
                 let mut sigs: Vec<String> = round_result
@@ -1566,6 +1601,7 @@ impl ExecutionEngine {
                         max_consec
                     );
                     loop_detected = true;
+                    finalization_reason = Some("loop_detected");
                     break;
                 }
             }
@@ -1591,6 +1627,7 @@ impl ExecutionEngine {
                         "Yielding dialog turn after model round (queued user message): session_id={}, dialog_turn_id={}, round_index={}",
                         context.session_id, context.dialog_turn_id, round_index
                     );
+                    finalization_reason = Some("queued_user_message");
                     break;
                 }
             }
@@ -1629,14 +1666,100 @@ impl ExecutionEngine {
             );
         }
 
+        if let Some(reason) = finalization_reason {
+            if Self::assistant_has_tool_calls(&last_assistant_message)
+                && Self::has_tool_result_after_last_assistant(&messages)
+            {
+                info!(
+                    "Finalizing dialog turn after assistant tool use: session_id={}, turn_id={}, reason={}",
+                    context.session_id, context.dialog_turn_id, reason
+                );
+
+                let mut final_ai_messages = Self::build_ai_messages_for_send(
+                    &messages,
+                    &ai_client.config.format,
+                    context
+                        .workspace
+                        .as_ref()
+                        .map(|workspace| workspace.root_path()),
+                    &context.dialog_turn_id,
+                    primary_supports_image_understanding,
+                    request_context_reminder.as_deref(),
+                )
+                .await?;
+                final_ai_messages.push(AIMessage::user(
+                    Self::FINALIZE_AFTER_TOOL_USE_REMINDER.to_string(),
+                ));
+
+                let round_context = RoundContext {
+                    session_id: context.session_id.clone(),
+                    subagent_parent_info: context.subagent_parent_info.clone(),
+                    dialog_turn_id: context.dialog_turn_id.clone(),
+                    turn_index: context.turn_index,
+                    round_number: completed_rounds,
+                    workspace: context.workspace.clone(),
+                    messages: messages.clone(),
+                    available_tools: Vec::new(),
+                    model_name: ai_client.config.model.clone(),
+                    agent_type: agent_type.clone(),
+                    context_vars: execution_context_vars.clone(),
+                    runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
+                    cancellation_token: CancellationToken::new(),
+                    workspace_services: context.workspace_services.clone(),
+                };
+
+                let final_round_result = self
+                    .round_executor
+                    .execute_round(
+                        ai_client.clone(),
+                        round_context,
+                        final_ai_messages,
+                        None,
+                        Some(context_window),
+                    )
+                    .await?;
+
+                if Self::assistant_has_tool_calls(&final_round_result.assistant_message) {
+                    warn!(
+                        "Finalization round still returned tool calls; keeping prior messages: session_id={}, turn_id={}",
+                        context.session_id, context.dialog_turn_id
+                    );
+                } else {
+                    completed_rounds += 1;
+                    if let Some(ref usage) = final_round_result.usage {
+                        last_usage = Some(usage.clone());
+                    }
+                    last_assistant_message = final_round_result.assistant_message.clone();
+                    messages.push(final_round_result.assistant_message.clone());
+
+                    if let Err(e) = self
+                        .session_manager
+                        .add_message(&context.session_id, final_round_result.assistant_message)
+                        .await
+                    {
+                        warn!("Failed to update final assistant message in memory: {}", e);
+                    }
+                }
+            }
+        }
+
         let duration_ms = elapsed_ms_u64(start_time);
 
         info!(
             "Dialog turn loop completed: turn={}, rounds={}, total_tools={}",
-            context.dialog_turn_id,
-            round_index + 1,
-            total_tools
+            context.dialog_turn_id, completed_rounds, total_tools
         );
+
+        // Determine finish reason
+        let finish_reason = if loop_detected {
+            FinishReason::LoopDetected
+        } else if completed_rounds >= self.config.max_rounds {
+            FinishReason::MaxRounds
+        } else {
+            FinishReason::Complete
+        };
+
+        let success = !loop_detected && completed_rounds < self.config.max_rounds;
 
         // Emit dialog turn completed event
         debug!("Preparing to send DialogTurnCompleted event");
@@ -1647,10 +1770,13 @@ impl ExecutionEngine {
                 AgenticEvent::DialogTurnCompleted {
                     session_id: context.session_id.clone(),
                     turn_id: context.dialog_turn_id.clone(),
-                    total_rounds: round_index + 1,
+                    total_rounds: completed_rounds,
                     total_tools,
                     duration_ms,
                     subagent_parent_info: event_subagent_parent_info,
+                    partial_recovery_reason: last_partial_recovery_reason,
+                    success: Some(success),
+                    finish_reason: Some(finish_reason.to_string()),
                 },
                 None,
             )
@@ -1663,7 +1789,7 @@ impl ExecutionEngine {
             info!(
                 "Dialog turn completed - Token stats: turn_id={}, rounds={}, tools={}, duration={}ms, prompt_tokens={}, completion_tokens={}, total_tokens={}",
                 context.dialog_turn_id,
-                round_index + 1,
+                completed_rounds,
                 total_tools,
                 duration_ms,
                 usage.prompt_token_count,
@@ -1687,28 +1813,16 @@ impl ExecutionEngine {
             );
         }
 
-        // Determine finish reason
-        let finish_reason = if loop_detected {
-            FinishReason::LoopDetected
-        } else if round_index >= self.config.max_rounds {
-            FinishReason::MaxRounds
-        } else {
-            FinishReason::Complete
-        };
-
-        let success = !loop_detected && round_index < self.config.max_rounds;
-
         if loop_detected {
             warn!(
                 "Dialog turn stopped due to loop detection: turn={}, rounds={}",
-                context.dialog_turn_id,
-                round_index + 1
+                context.dialog_turn_id, completed_rounds
             );
         }
 
         Ok(ExecutionResult {
             final_message: last_assistant_message,
-            total_rounds: round_index + 1,
+            total_rounds: completed_rounds,
             success,
             new_messages,
             finish_reason,
@@ -1845,8 +1959,11 @@ impl ExecutionEngine {
 #[cfg(test)]
 mod tests {
     use super::ExecutionEngine;
+    use crate::agentic::core::{Message, ToolCall, ToolResult};
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
+    use serde_json::json;
+    use sha2::{Digest, Sha256};
 
     fn build_model(id: &str, name: &str, model_name: &str) -> AIModelConfig {
         AIModelConfig {
@@ -1894,10 +2011,14 @@ mod tests {
     #[test]
     fn tool_signature_args_summary_truncates_on_utf8_boundary() {
         let args = format!("{}{}", "a".repeat(62), "案".repeat(30));
+        let args_hash = hex::encode(Sha256::digest(args.as_bytes()));
 
         let summary = ExecutionEngine::tool_signature_args_summary(&args);
 
-        assert_eq!(summary, format!("{}..#{}", "a".repeat(62), args.len()));
+        assert_eq!(
+            summary,
+            format!("{}..#{}:sha256={}", "a".repeat(62), args.len(), args_hash)
+        );
     }
 
     #[test]
@@ -1907,5 +2028,68 @@ mod tests {
         let summary = ExecutionEngine::tool_signature_args_summary(args);
 
         assert_eq!(summary, args);
+    }
+
+    #[test]
+    fn tool_signature_args_summary_distinguishes_same_prefix_and_length() {
+        let first = format!("{}{}", "x".repeat(64), "a".repeat(80));
+        let second = format!("{}{}", "x".repeat(64), "b".repeat(80));
+
+        let first_summary = ExecutionEngine::tool_signature_args_summary(&first);
+        let second_summary = ExecutionEngine::tool_signature_args_summary(&second);
+
+        assert_eq!(first.len(), second.len());
+        assert_ne!(first, second);
+        assert_ne!(first_summary, second_summary);
+    }
+
+    #[test]
+    fn assistant_has_tool_calls_detects_mixed_tool_message() {
+        let message = Message::assistant_with_tools(
+            String::new(),
+            vec![ToolCall {
+                tool_id: "tool-1".to_string(),
+                tool_name: "Read".to_string(),
+                arguments: json!({ "path": "README.md" }),
+                is_error: false,
+            }],
+        );
+
+        assert!(ExecutionEngine::assistant_has_tool_calls(&message));
+        assert!(!ExecutionEngine::assistant_has_tool_calls(
+            &Message::assistant("done".to_string())
+        ));
+    }
+
+    #[test]
+    fn detects_tool_result_after_last_assistant() {
+        let assistant = Message::assistant_with_tools(
+            String::new(),
+            vec![ToolCall {
+                tool_id: "tool-1".to_string(),
+                tool_name: "Read".to_string(),
+                arguments: json!({ "path": "README.md" }),
+                is_error: false,
+            }],
+        );
+        let tool_result = Message::tool_result(ToolResult {
+            tool_id: "tool-1".to_string(),
+            tool_name: "Read".to_string(),
+            result: json!({ "content": "hello" }),
+            result_for_assistant: Some("hello".to_string()),
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        });
+
+        assert!(ExecutionEngine::has_tool_result_after_last_assistant(&[
+            Message::user("read it".to_string()),
+            assistant.clone(),
+            tool_result,
+        ]));
+        assert!(!ExecutionEngine::has_tool_result_after_last_assistant(&[
+            Message::user("read it".to_string()),
+            assistant,
+        ]));
     }
 }

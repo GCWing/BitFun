@@ -11,9 +11,10 @@
       "basics": "語言、主題、日誌、終端 Shell 與開機啟動。",
       "models": "AI 模型、API 密鑰、供應商與代理。",
       "sessionConfig": "會話行為、工具與超時。",
-      "review": "深度審查策略、審核員模型與額外審核 Sub-Agent。",
+      "review": "深度審核策略、審核員模型與額外審核 Sub-Agent。",
       "aiContext": "規則與記憶等 AI 上下文。",
       "mcpTools": "MCP 服務器與工具集成。",
+      "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",
       "editor": "編輯器字體、顯示與格式化。",
       "lsp": "語言服務與代碼智能。",
       "keyboard": "快捷鍵與鍵位。"
@@ -33,6 +34,7 @@
       "aiContext": "規則 & 記憶",
       "skills": "技能",
       "mcpTools": "MCP",
+      "acpAgents": "ACP Agent",
       "agents": "智能體",
       "editor": "編輯器",
       "lsp": "語言服務",
@@ -166,6 +168,7 @@
     "scopes": {
       "app": "全局",
       "canvas": "編輯器畫布",
+      "editor": "代碼編輯器（文字焦點）",
       "chat": "Agent 會話",
       "filetree": "文件樹",
       "git": "Git"
@@ -196,6 +199,9 @@
         "anchorZone": "切換錨點區",
         "maximize": "最大化編輯器",
         "closePreview": "關閉預覽"
+      },
+      "editor": {
+        "findInFile": "在檔案中尋找（Monaco）"
       },
       "tab": {
         "close": "關閉當前標籤頁",
@@ -375,8 +381,8 @@
     "textChatDesc": "處理日常對話和問答",
     "codeGeneration": "代碼生成",
     "codeGenerationDesc": "生成和補全代碼",
-    "codeReview": "代碼審查",
-    "codeReviewDesc": "審查和優化代碼",
+    "codeReview": "代碼審核",
+    "codeReviewDesc": "審核和優化代碼",
     "planning": "任務規劃",
     "planningDesc": "分解和規劃複雜任務",
     "selectModel": "選擇模型",

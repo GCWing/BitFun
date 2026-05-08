@@ -29,7 +29,6 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tokio::process::Command;
 
 /// Namespaces handled by the host-side dispatch (no Worker required).
 const HOST_NAMESPACES: &[&str] = &["fs", "shell", "os", "net"];
@@ -377,13 +376,13 @@ async fn dispatch_shell(
 
     #[cfg(target_os = "windows")]
     let mut cmd = {
-        let mut c = Command::new("cmd");
+        let mut c = crate::util::process_manager::create_tokio_command("cmd");
         c.args(["/C", &command]);
         c
     };
     #[cfg(not(target_os = "windows"))]
     let mut cmd = {
-        let mut c = Command::new("sh");
+        let mut c = crate::util::process_manager::create_tokio_command("sh");
         c.args(["-c", &command]);
         c
     };

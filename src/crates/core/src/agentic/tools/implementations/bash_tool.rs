@@ -732,6 +732,7 @@ Usage notes:
         }
 
         // 3. Foreground: get or create the primary terminal session
+        let terminal_ready_started_at = Instant::now();
         let primary_session_id = binding
             .get_or_create(
                 chat_session_id,
@@ -750,6 +751,7 @@ Usage notes:
             )
             .await
             .map_err(|e| BitFunError::tool(format!("Failed to create Terminal session: {}", e)))?;
+        let terminal_ready_ms = elapsed_ms_u64(terminal_ready_started_at);
 
         Self::emit_terminal_ready_event(&tool_use_id, &primary_session_id);
 
@@ -793,7 +795,10 @@ Usage notes:
         let mut final_exit_code: Option<i32> = None;
         let mut was_interrupted = false;
         let mut timed_out = false;
+        let mut command_started_after_ms: Option<u64> = None;
+        let mut completion_reason_label = "stream_end".to_string();
         let mut interrupt_drain_deadline: Option<tokio::time::Instant> = None;
+        let command_stream_started_at = Instant::now();
 
         // Get event system for sending progress
         let event_system = get_global_event_system();
@@ -847,6 +852,7 @@ Usage notes:
 
             match event {
                 CommandStreamEvent::Started { command_id } => {
+                    command_started_after_ms = Some(elapsed_ms_u64(command_stream_started_at));
                     debug!("Bash command started execution, command_id: {}", command_id);
                 }
                 CommandStreamEvent::Output { data } => {
@@ -879,6 +885,7 @@ Usage notes:
                     );
                     final_exit_code = exit_code.or(final_exit_code);
                     timed_out = completion_reason == CommandCompletionReason::TimedOut;
+                    completion_reason_label = format!("{:?}", completion_reason);
 
                     if !timed_out && matches!(exit_code, Some(130) | Some(-1073741510)) {
                         was_interrupted = true;
@@ -904,6 +911,21 @@ Usage notes:
 
         // 6. Build result
         let execution_time_ms = elapsed_ms_u64(start_time);
+        let command_stream_ms = elapsed_ms_u64(command_stream_started_at);
+        info!(
+            "Bash command completed: tool_id={}, terminal_session_id={}, duration_ms={}, terminal_ready_ms={}, command_started_after_ms={:?}, command_stream_ms={}, output_bytes={}, exit_code={:?}, interrupted={}, timed_out={}, completion_reason={}",
+            tool_use_id,
+            primary_session_id,
+            execution_time_ms,
+            terminal_ready_ms,
+            command_started_after_ms,
+            command_stream_ms,
+            accumulated_output.len(),
+            final_exit_code,
+            was_interrupted,
+            timed_out,
+            completion_reason_label
+        );
 
         let result_data = json!({
             "success": final_exit_code.unwrap_or(-1) == 0,

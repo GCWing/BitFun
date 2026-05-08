@@ -179,7 +179,7 @@ function formatData(data: unknown): string {
       const regularData: Record<string, unknown> = {};
       const errors: string[] = [];
 
-      for (const key in data as Record<string, unknown>) {
+      for (const key of Object.keys(data as Record<string, unknown>)) {
         const value = (data as Record<string, unknown>)[key];
         if (value instanceof Error) {
           errors.push(value.stack || `${value.name}: ${value.message}`);

@@ -106,6 +106,7 @@ pub struct MCPServerManager {
     prompt_catalog_cache: Arc<tokio::sync::RwLock<HashMap<String, Vec<MCPPrompt>>>>,
     pending_interactions: Arc<tokio::sync::RwLock<HashMap<String, PendingMCPInteraction>>>,
     oauth_sessions: Arc<tokio::sync::RwLock<HashMap<String, Arc<ActiveRemoteOAuthSession>>>>,
+    ephemeral_configs: Arc<tokio::sync::RwLock<HashMap<String, MCPServerConfig>>>,
 }
 
 impl MCPServerManager {
@@ -123,6 +124,7 @@ impl MCPServerManager {
             prompt_catalog_cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             pending_interactions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             oauth_sessions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            ephemeral_configs: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         }
     }
 }
