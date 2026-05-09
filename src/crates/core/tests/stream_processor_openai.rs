@@ -68,7 +68,7 @@ async fn openai_fixture_keeps_collecting_tool_args_across_usage_chunks() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn openai_fixture_ignores_duplicate_empty_tool_chunk_between_real_tools() {
+async fn openai_fixture_keeps_malformed_tool_arguments_invalid() {
     let output = run_stream_fixture(
         StreamFixtureProvider::OpenAi,
         "stream/openai/thinking_text_three_tools_with_empty_toolcall_anomaly.sse",
@@ -94,10 +94,10 @@ async fn openai_fixture_ignores_duplicate_empty_tool_chunk_between_real_tools() 
 
     assert_eq!(result.tool_calls[2].tool_id, "call_3");
     assert_eq!(result.tool_calls[2].tool_name, "tool_three");
-    assert_eq!(result.tool_calls[2].arguments, json!({ "z": 3 }));
+    assert_eq!(result.tool_calls[2].arguments, json!({}));
     assert!(
-        !result.tool_calls[2].is_error,
-        "the trailing extra right brace should be repaired"
+        result.tool_calls[2].is_error,
+        "malformed JSON must be reported back to the model, not repaired"
     );
 
     assert_eq!(

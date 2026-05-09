@@ -230,6 +230,24 @@ impl RoundExecutor {
                     let no_effective_output = !result.has_effective_output;
                     let is_partial_recovery = result.partial_recovery_reason.is_some();
 
+                    if Self::is_invalid_tool_only_without_text(&result)
+                        && attempt_index < max_attempts - 1
+                    {
+                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        warn!(
+                            "Retrying stream because provider returned only invalid tool arguments: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, tool_calls={}",
+                            context.session_id,
+                            round_id,
+                            attempt_index + 1,
+                            max_attempts,
+                            delay_ms,
+                            result.tool_calls.len()
+                        );
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        attempt_index += 1;
+                        continue;
+                    }
+
                     if no_effective_output && attempt_index < max_attempts - 1 {
                         let delay_ms = Self::retry_delay_ms(attempt_index);
                         warn!(
@@ -719,6 +737,16 @@ impl RoundExecutor {
                 .all(|tool_call| !tool_call.is_valid())
     }
 
+    fn is_invalid_tool_only_without_text(result: &StreamResult) -> bool {
+        result.partial_recovery_reason.is_none()
+            && !Self::has_user_visible_assistant_text(&result.full_text)
+            && !result.tool_calls.is_empty()
+            && result
+                .tool_calls
+                .iter()
+                .all(|tool_call| !tool_call.is_valid())
+    }
+
     fn retry_delay_ms(attempt_index: usize) -> u64 {
         Self::RETRY_BASE_DELAY_MS * (1u64 << attempt_index.min(3))
     }
@@ -846,6 +874,7 @@ mod tests {
                 tool_id: "call_1".to_string(),
                 tool_name: "Write".to_string(),
                 arguments: serde_json::json!({}),
+                raw_arguments: Some("{\"file_path\":\"src/lib.rs\"".to_string()),
                 is_error: true,
             }],
             usage: None,
@@ -870,6 +899,7 @@ mod tests {
                 tool_id: "call_1".to_string(),
                 tool_name: "Write".to_string(),
                 arguments: serde_json::json!({}),
+                raw_arguments: Some("{\"file_path\":\"src/lib.rs\"".to_string()),
                 is_error: true,
             }],
             usage: None,

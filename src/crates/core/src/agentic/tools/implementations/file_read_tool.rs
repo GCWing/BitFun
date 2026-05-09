@@ -107,8 +107,7 @@ impl FileReadTool {
 
         let total_lines = total_lines.ok_or_else(|| {
             BitFunError::tool(
-                "Failed to read file: remote command did not return line-count markers"
-                    .to_string(),
+                "Failed to read file: remote command did not return line-count markers".to_string(),
             )
         })?;
 

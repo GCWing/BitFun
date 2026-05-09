@@ -224,6 +224,17 @@ fn truncate_arguments_preview(value: &serde_json::Value) -> String {
     format!("{}…[truncated, total {} bytes]", &raw[..cut], raw.len())
 }
 
+fn truncate_raw_arguments_preview(raw: &str) -> String {
+    if raw.len() <= TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES {
+        return raw.to_string();
+    }
+    let mut cut = TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES;
+    while cut > 0 && !raw.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    format!("{}…[truncated, total {} bytes]", &raw[..cut], raw.len())
+}
+
 fn classify_tool_error(error: &BitFunError) -> &'static str {
     match error {
         BitFunError::Validation(_) => "invalid_arguments",
@@ -240,7 +251,12 @@ fn build_error_execution_result(
     error: &BitFunError,
 ) -> ToolExecutionResult {
     let (tool_id, tool_name, execution_time_ms, provided_arguments) = if let Some(task) = task {
-        let preview = truncate_arguments_preview(&task.tool_call.arguments);
+        let preview = task
+            .tool_call
+            .raw_arguments
+            .as_deref()
+            .map(truncate_raw_arguments_preview)
+            .unwrap_or_else(|| truncate_arguments_preview(&task.tool_call.arguments));
         (
             task.tool_call.tool_id,
             task.tool_call.tool_name,
@@ -261,14 +277,21 @@ fn build_error_execution_result(
         "next_step_hint": TOOL_ERROR_NEXT_STEP_HINT,
         "message": format!("Tool '{}' failed ({}): {}", tool_name, category, error_message),
     });
-    if let Some(args_preview) = provided_arguments {
-        result_json["provided_arguments"] = serde_json::Value::String(args_preview);
+    if let Some(args_preview) = provided_arguments.as_ref() {
+        result_json["provided_arguments"] = serde_json::Value::String(args_preview.clone());
     }
 
-    let assistant_text = format!(
-        "Tool '{}' failed ({}): {}\n{}",
-        tool_name, category, error_message, TOOL_ERROR_NEXT_STEP_HINT
-    );
+    let assistant_text = if let Some(args_preview) = provided_arguments.as_ref() {
+        format!(
+            "Tool '{}' failed ({}): {}\nProvided arguments: {}\n{}",
+            tool_name, category, error_message, args_preview, TOOL_ERROR_NEXT_STEP_HINT
+        )
+    } else {
+        format!(
+            "Tool '{}' failed ({}): {}\n{}",
+            tool_name, category, error_message, TOOL_ERROR_NEXT_STEP_HINT
+        )
+    };
 
     ToolExecutionResult {
         tool_id: tool_id.clone(),
@@ -636,12 +659,22 @@ impl ToolPipeline {
         );
 
         if tool_name.is_empty() || tool_is_error {
+            let raw_arguments_preview = task
+                .tool_call
+                .raw_arguments
+                .as_deref()
+                .map(truncate_raw_arguments_preview);
             let error_msg = if tool_name.is_empty() && tool_is_error {
                 "Missing valid tool name and arguments are invalid JSON.".to_string()
             } else if tool_name.is_empty() {
                 "Missing valid tool name.".to_string()
             } else {
                 "Arguments are invalid JSON.".to_string()
+            };
+            let error_msg = if let Some(raw_arguments_preview) = raw_arguments_preview {
+                format!("{error_msg} Raw arguments: {raw_arguments_preview}")
+            } else {
+                error_msg
             };
             self.state_manager
                 .update_state(
@@ -1374,6 +1407,7 @@ mod tests {
                 tool_id: tool_id.to_string(),
                 tool_name: tool_name.to_string(),
                 arguments: json!({ "path": "src/main.rs" }),
+                raw_arguments: None,
                 is_error: false,
             },
             ToolExecutionContext {
@@ -1408,5 +1442,29 @@ mod tests {
             result.result.result_for_assistant.as_deref(),
             Some(USER_STEERING_INTERRUPTED_MESSAGE)
         );
+    }
+
+    #[test]
+    fn error_result_prefers_raw_arguments_preview_when_available() {
+        let mut task = test_tool_task("tool_1", "Git");
+        task.tool_call.arguments = json!({});
+        task.tool_call.raw_arguments = Some("{\"operation\":\"log\"".to_string());
+
+        let result = build_error_execution_result(
+            "tool_1",
+            Some(task),
+            &BitFunError::Validation("Arguments are invalid JSON.".to_string()),
+        );
+
+        assert_eq!(
+            result.result.result["provided_arguments"],
+            serde_json::Value::String("{\"operation\":\"log\"".to_string())
+        );
+        assert!(result
+            .result
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Provided arguments: {\"operation\":\"log\""));
     }
 }

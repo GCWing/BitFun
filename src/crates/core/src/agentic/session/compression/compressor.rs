@@ -755,6 +755,7 @@ mod tests {
                             {"content": "Add regression tests", "status": "pending"}
                         ]
                     }),
+                    raw_arguments: None,
                     is_error: false,
                 }],
             ),

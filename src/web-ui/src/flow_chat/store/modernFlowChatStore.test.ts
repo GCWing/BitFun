@@ -211,6 +211,7 @@ describe('sessionToVirtualItems explore grouping', () => {
       },
       turnId: 'turn-1',
       steeringId: 'steer-1',
+      steeringStatus: 'pending',
     });
   });
 });

@@ -2,8 +2,8 @@ use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::service::search::{
     get_global_workspace_search_service, workspace_search_runtime_available, GlobSearchRequest,
 };
-use crate::util::process_manager;
 use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::process_manager;
 use async_trait::async_trait;
 use globset::{GlobBuilder, GlobMatcher};
 use ignore::WalkBuilder;

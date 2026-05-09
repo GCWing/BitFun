@@ -6,7 +6,7 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X } from 'lucide-react';
-import type { DialogTurn } from '../../types/flow-chat';
+import type { DialogTurn, FlowUserSteeringItem } from '../../types/flow-chat';
 import { useFlowChatContext } from './FlowChatContext';
 import { useActiveSession } from '../../store/modernFlowChatStore';
 import { flowChatStore } from '../../store/FlowChatStore';
@@ -22,10 +22,11 @@ const log = createLogger('UserMessageItem');
 interface UserMessageItemProps {
   message: DialogTurn['userMessage'];
   turnId: string;
+  steeringStatus?: FlowUserSteeringItem['status'];
 }
 
 export const UserMessageItem = React.memo<UserMessageItemProps>(
-  ({ message, turnId }) => {
+  ({ message, turnId, steeringStatus }) => {
     const { t } = useTranslation('flow-chat');
     const {
       config,
@@ -48,7 +49,18 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const turnIndex = activeSession?.dialogTurns.findIndex(t => t.id === turnId) ?? -1;
     const dialogTurn = turnIndex >= 0 ? activeSession?.dialogTurns[turnIndex] : null;
     const isFailed = dialogTurn?.status === 'error';
-    const canRollback = allowUserMessageRollback && !!sessionId && turnIndex >= 0 && !isRollingBack;
+    const canRollback =
+      !steeringStatus &&
+      allowUserMessageRollback &&
+      !!sessionId &&
+      turnIndex >= 0 &&
+      !isRollingBack;
+    const steeringTag = steeringStatus === 'pending'
+      ? {
+          className: 'user-message-item__steering-tag--pending',
+          label: t('steering.statusPending'),
+        }
+      : null;
 
     const { displayText, reproductionSteps } = useMemo(() => {
       const reproductionRegex = /<reproduction_steps>([\s\S]*?)<\/reproduction_steps\s*>?/g;
@@ -213,6 +225,11 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           >
             {displayText}
           </div>
+          {steeringTag && (
+            <div className={`user-message-item__steering-tag ${steeringTag.className}`}>
+              {steeringTag.label}
+            </div>
+          )}
           <div className="user-message-item__actions">
             <button
               className={`user-message-item__copy-btn ${copied ? 'copied' : ''}`}
@@ -230,7 +247,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                   <ArrowDownToLine size={14} />
                 </button>
               </Tooltip>
-            ) : allowUserMessageRollback ? (
+            ) : allowUserMessageRollback && !steeringStatus ? (
               <Tooltip content={canRollback ? t('message.rollbackTo', { index: turnIndex + 1 }) : t('message.cannotRollback')}>
                 <button
                   className="user-message-item__rollback-btn"

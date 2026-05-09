@@ -1483,7 +1483,7 @@
   "steering": {
     "title": "立即引導",
     "injectedAt": "已在第 {{round}} 輪前插入",
-    "statusPending": "當前操作完成後注入",
-    "statusInjected": "已在第 {{round}} 輪注入"
+    "statusPending": "等待觸發",
+    "statusInjected": "已觸發"
   }
 }

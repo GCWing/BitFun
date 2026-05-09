@@ -634,6 +634,9 @@ pub struct ToolCall {
     pub tool_id: String,
     pub tool_name: String,
     pub arguments: serde_json::Value,
+    /// Original streamed argument text, preserved for diagnostics when parsing failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_arguments: Option<String>,
     /// Record whether tool parameters are valid
     pub is_error: bool,
 }

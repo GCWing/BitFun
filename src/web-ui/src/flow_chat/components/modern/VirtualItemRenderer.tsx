@@ -34,7 +34,13 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
           return <UserMessageItem message={item.data} turnId={item.turnId} />;
 
         case 'user-steering-message':
-          return <UserMessageItem message={item.data} turnId={item.turnId} />;
+          return (
+            <UserMessageItem
+              message={item.data}
+              turnId={item.turnId}
+              steeringStatus={item.steeringStatus}
+            />
+          );
         
         case 'model-round':
           return (

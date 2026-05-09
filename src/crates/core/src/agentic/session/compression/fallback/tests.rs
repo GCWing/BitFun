@@ -27,6 +27,7 @@ fn clears_tool_results_from_compressed_history() {
                 "start_line": 1,
                 "limit": 20
             }),
+            raw_arguments: None,
             is_error: false,
         }],
     );
@@ -139,6 +140,7 @@ fn groups_consecutive_assistant_messages_under_single_role_header() {
                     arguments: json!({
                         "file_path": "/workspace/example.txt"
                     }),
+                    raw_arguments: None,
                     is_error: false,
                 }],
             ),
@@ -152,6 +154,7 @@ fn groups_consecutive_assistant_messages_under_single_role_header() {
                         "old_string": "before",
                         "new_string": "after"
                     }),
+                    raw_arguments: None,
                     is_error: false,
                 }],
             ),

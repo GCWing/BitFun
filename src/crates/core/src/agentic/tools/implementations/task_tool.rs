@@ -59,7 +59,7 @@ The Task tool launches specialized agents (subprocesses) that autonomously handl
 Available agents and the tools they have access to:
 {}
 
-When using the Task tool, you must specify a subagent_type parameter to select which agent type to use.
+When using the Task tool, you must specify `subagent_type` as a top-level tool argument to select which agent type to use. Do not put `subagent_type`, `description`, `workspace_path`, `model_id`, or `timeout_seconds` inside the prompt string.
 
 When NOT to use the Task tool:
 - If you want to read a specific file path, use the Read or Glob tool instead of the Task tool, to find the match more quickly
@@ -179,11 +179,11 @@ impl Tool for TaskTool {
                 },
                 "prompt": {
                     "type": "string",
-                    "description": "The task for the agent to perform. Keep it scoped and concise. The 180-line / 16KB guideline is a soft reliability threshold, not a hard cap. For large delegations, split into multiple Task calls with clear ownership, and pass file paths, symbols, constraints, and exact questions instead of pasting large file contents."
+                    "description": "The task for the agent to perform. Keep it scoped and concise. Do not include top-level Task arguments such as subagent_type inside this string. The 180-line / 16KB guideline is a soft reliability threshold, not a hard cap. For large delegations, split into multiple Task calls with clear ownership, and pass file paths, symbols, constraints, and exact questions instead of pasting large file contents."
                 },
                 "subagent_type": {
                     "type": "string",
-                    "description": "The type of specialized agent to use for this task"
+                    "description": "Required top-level agent type id. Use the exact case-sensitive id from the available_agents type attribute, for example Explore, FileFinder, CodeReview, or another listed agent."
                 },
                 "workspace_path": {
                     "type": "string",
@@ -203,7 +203,8 @@ impl Tool for TaskTool {
                 "description",
                 "prompt",
                 "subagent_type"
-            ]
+            ],
+            "additionalProperties": false
         })
     }
 
@@ -233,6 +234,7 @@ impl Tool for TaskTool {
         _context: Option<&ToolUseContext>,
     ) -> ValidationResult {
         let validation = InputValidator::new(input)
+            .validate_required("description")
             .validate_required("prompt")
             .validate_required("subagent_type")
             .finish();
@@ -519,6 +521,26 @@ mod tests {
             .unwrap()
             .iter()
             .any(|value| value.as_str() == Some("model_id")));
+    }
+
+    #[test]
+    fn task_schema_requires_top_level_subagent_type_and_rejects_extra_fields() {
+        let schema = TaskTool::new().input_schema();
+
+        assert_eq!(schema["additionalProperties"], false);
+        assert!(schema["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value.as_str() == Some("subagent_type")));
+        assert!(schema["properties"]["subagent_type"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("top-level"));
+        assert!(schema["properties"]["prompt"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Do not include top-level Task arguments"));
     }
 
     #[test]

@@ -39,7 +39,13 @@ export interface ExploreGroupData {
  */
 export type VirtualItem =
   | { type: 'user-message'; data: DialogTurn['userMessage']; turnId: string }
-  | { type: 'user-steering-message'; data: NonNullable<DialogTurn['userMessage']>; turnId: string; steeringId: string }
+  | {
+      type: 'user-steering-message';
+      data: NonNullable<DialogTurn['userMessage']>;
+      turnId: string;
+      steeringId: string;
+      steeringStatus: FlowUserSteeringItem['status'];
+    }
   | { type: 'model-round'; data: ModelRound; turnId: string; isLastRound: boolean }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
   | { type: 'image-analyzing'; turnId: string };
@@ -325,6 +331,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
         data: steeringItemToUserMessage(entry.item),
         turnId: turn.id,
         steeringId: entry.item.steeringId,
+        steeringStatus: entry.item.status,
       });
     });
 

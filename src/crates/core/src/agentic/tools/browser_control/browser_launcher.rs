@@ -1,6 +1,9 @@
 //! Detect and launch the user's default browser with CDP debug port enabled.
 
-use crate::util::{errors::{BitFunError, BitFunResult}, process_manager};
+use crate::util::{
+    errors::{BitFunError, BitFunResult},
+    process_manager,
+};
 #[allow(unused_imports)]
 use log::{debug, info};
 use serde::{Deserialize, Serialize};

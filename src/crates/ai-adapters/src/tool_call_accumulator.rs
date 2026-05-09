@@ -1,4 +1,4 @@
-use log::{error, warn};
+use log::error;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 
@@ -90,167 +90,8 @@ pub struct PendingToolCalls {
 }
 
 impl PendingToolCall {
-    const SINGLE_STRING_ARGUMENT_TOOLS: &[(&str, &str)] = &[
-        ("Bash", "command"),
-        ("Skill", "command"),
-        ("Read", "file_path"),
-        ("GetFileDiff", "file_path"),
-        ("LS", "path"),
-        ("Delete", "path"),
-        ("Glob", "pattern"),
-        ("Grep", "pattern"),
-        ("WebSearch", "query"),
-        ("WebFetch", "url"),
-        ("InitMiniApp", "name"),
-    ];
-
-    fn remove_trailing_right_brace_once(raw_arguments: &str) -> Option<String> {
-        let last_non_whitespace_idx = raw_arguments
-            .char_indices()
-            .rev()
-            .find(|(_, ch)| !ch.is_whitespace())
-            .map(|(idx, _)| idx)?;
-
-        if !raw_arguments[last_non_whitespace_idx..].starts_with('}') {
-            return None;
-        }
-
-        let mut repaired = raw_arguments.to_string();
-        repaired.remove(last_non_whitespace_idx);
-        Some(repaired)
-    }
-
-    fn strip_argument_wrapping(raw_arguments: &str) -> &str {
-        let trimmed = raw_arguments.trim();
-        let Some(stripped) = trimmed
-            .strip_prefix("```")
-            .and_then(|value| value.strip_suffix("```"))
-        else {
-            return trimmed.trim_matches('`').trim();
-        };
-
-        let stripped = stripped.trim();
-        if let Some((first_line, rest)) = stripped.split_once('\n') {
-            if first_line
-                .chars()
-                .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
-            {
-                return rest.trim();
-            }
-        }
-
-        stripped
-    }
-
-    fn single_string_argument_field(tool_name: &str) -> Option<&'static str> {
-        Self::SINGLE_STRING_ARGUMENT_TOOLS
-            .iter()
-            .find_map(|(name, field)| (*name == tool_name).then_some(*field))
-    }
-
-    fn repair_single_string_arguments(tool_name: &str, raw_arguments: &str) -> Option<Value> {
-        let field = Self::single_string_argument_field(tool_name)?;
-        let raw = Self::strip_argument_wrapping(raw_arguments);
-        if raw.is_empty() {
-            return None;
-        }
-        Some(json!({ field: raw }))
-    }
-
-    /// Best-effort repair for a Git tool call whose `arguments` came back as a
-    /// raw shell-style command (e.g. `git status`, `"git diff --staged"`).
-    ///
-    /// We deliberately do NOT enforce a subcommand whitelist here — the Git
-    /// tool itself owns the allow-list and produces a clear "operation X is
-    /// not allowed" error when it sees something unexpected. Replicating that
-    /// list at the accumulator layer used to silently fall through to the raw
-    /// JSON parser, which made the model receive a generic "Arguments are
-    /// invalid JSON" instead of the actionable Git-level error.
-    ///
-    /// We still require the subcommand to look like a plain identifier
-    /// (alphanumerics + `-` + `_`) so we don't mistake unrelated payloads for
-    /// Git commands.
-    fn parse_git_command_arguments(raw_arguments: &str) -> Option<Value> {
-        let trimmed = Self::strip_argument_wrapping(raw_arguments);
-        let command = trimmed
-            .strip_prefix("git ")
-            .map(str::trim)
-            .unwrap_or(trimmed);
-        let mut parts = command.splitn(2, char::is_whitespace);
-        let operation = parts.next()?.trim();
-        if operation.is_empty()
-            || !operation
-                .chars()
-                .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
-        {
-            return None;
-        }
-
-        let args = parts.next().map(str::trim).filter(|args| !args.is_empty());
-        let mut value = json!({ "operation": operation });
-        if let Some(args) = args {
-            value["args"] = json!(args);
-        }
-        Some(value)
-    }
-
-    fn normalize_tool_arguments(tool_name: &str, arguments: Value) -> Value {
-        if let Value::String(raw) = &arguments {
-            if tool_name == "Git" {
-                if let Some(repaired) = Self::parse_git_command_arguments(raw) {
-                    warn!("Git tool call arguments repaired from JSON string command");
-                    return repaired;
-                }
-            }
-            if let Some(repaired) = Self::repair_single_string_arguments(tool_name, raw) {
-                warn!(
-                    "{} tool call arguments repaired from JSON string argument",
-                    tool_name
-                );
-                return repaired;
-            }
-        }
-        arguments
-    }
-
-    fn parse_arguments(tool_name: &str, raw_arguments: &str) -> Result<Value, String> {
-        match serde_json::from_str::<Value>(raw_arguments) {
-            Ok(arguments) => Ok(Self::normalize_tool_arguments(tool_name, arguments)),
-            Err(primary_error) => {
-                if tool_name == "Git" {
-                    if let Some(arguments) = Self::parse_git_command_arguments(raw_arguments) {
-                        warn!("Git tool call arguments repaired from raw command");
-                        return Ok(arguments);
-                    }
-                }
-
-                if let Some(arguments) =
-                    Self::repair_single_string_arguments(tool_name, raw_arguments)
-                {
-                    warn!(
-                        "{} tool call arguments repaired from raw string argument",
-                        tool_name
-                    );
-                    return Ok(arguments);
-                }
-
-                if let Some(repaired_arguments) =
-                    Self::remove_trailing_right_brace_once(raw_arguments)
-                {
-                    match serde_json::from_str::<Value>(&repaired_arguments) {
-                        Ok(arguments) => {
-                            warn!(
-                                "Tool call arguments repaired by removing one trailing right brace"
-                            );
-                            Ok(arguments)
-                        }
-                        Err(_) => Err(primary_error.to_string()),
-                    }
-                } else {
-                    Err(primary_error.to_string())
-                }
-            }
-        }
+    fn parse_arguments(_tool_name: &str, raw_arguments: &str) -> Result<Value, String> {
+        serde_json::from_str::<Value>(raw_arguments).map_err(|error| error.to_string())
     }
 
     pub fn has_pending(&self) -> bool {
@@ -457,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn repairs_git_raw_command_arguments() {
+    fn git_raw_command_arguments_become_invalid_json_diagnostic() {
         let mut pending = PendingToolCall::default();
         pending.start_new("call_1".to_string(), Some("Git".to_string()));
         pending.append_arguments("git status");
@@ -466,12 +307,13 @@ mod tests {
             .finalize(ToolCallBoundary::FinishReason)
             .expect("finalized tool");
 
-        assert_eq!(finalized.arguments, json!({"operation": "status"}));
-        assert!(!finalized.is_error);
+        assert_eq!(finalized.raw_arguments, "git status");
+        assert_eq!(finalized.arguments, json!({}));
+        assert!(finalized.is_error);
     }
 
     #[test]
-    fn repairs_git_json_string_command_arguments() {
+    fn git_json_string_command_arguments_are_not_rewritten() {
         let mut pending = PendingToolCall::default();
         pending.start_new("call_1".to_string(), Some("Git".to_string()));
         pending.append_arguments("\"git diff --staged\"");
@@ -480,54 +322,72 @@ mod tests {
             .finalize(ToolCallBoundary::FinishReason)
             .expect("finalized tool");
 
+        assert_eq!(finalized.arguments, json!("git diff --staged"));
+        assert!(!finalized.is_error);
+    }
+
+    #[test]
+    fn git_args_only_object_is_left_for_tool_schema_diagnostic() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("Git".to_string()));
+        pending.append_arguments("{\"args\": \"--since=\\\"2026-05-02\\\" --oneline\"}");
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason)
+            .expect("finalized tool");
+
         assert_eq!(
             finalized.arguments,
-            json!({"operation": "diff", "args": "--staged"})
+            json!({"args": "--since=\"2026-05-02\" --oneline"})
         );
         assert!(!finalized.is_error);
     }
 
     #[test]
-    fn repairs_raw_string_arguments_for_single_field_tools() {
+    fn git_duplicate_subcommand_in_args_is_left_for_tool_schema_diagnostic() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("Git".to_string()));
+        pending.append_arguments("{\"args\": \"log --oneline -10\"}");
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason)
+            .expect("finalized tool");
+
+        assert_eq!(finalized.arguments, json!({"args": "log --oneline -10"}));
+        assert!(!finalized.is_error);
+    }
+
+    #[test]
+    fn does_not_infer_git_operation_from_ambiguous_args_only_object() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("Git".to_string()));
+        pending.append_arguments("{\"args\": \"--stat\"}");
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason)
+            .expect("finalized tool");
+
+        assert_eq!(finalized.arguments, json!({"args": "--stat"}));
+        assert!(!finalized.is_error);
+    }
+
+    #[test]
+    fn raw_string_arguments_for_single_field_tools_stay_invalid_json() {
         let cases = [
-            ("Bash", "pnpm test", json!({"command": "pnpm test"})),
-            ("Skill", "openai-docs", json!({"command": "openai-docs"})),
-            ("Read", "src/main.rs", json!({"file_path": "src/main.rs"})),
-            (
-                "GetFileDiff",
-                "src/lib.rs",
-                json!({"file_path": "src/lib.rs"}),
-            ),
-            ("LS", "src/crates", json!({"path": "src/crates"})),
-            (
-                "Delete",
-                "tmp/output.log",
-                json!({"path": "tmp/output.log"}),
-            ),
-            ("Glob", "**/*.rs", json!({"pattern": "**/*.rs"})),
-            (
-                "Grep",
-                "Arguments are invalid JSON",
-                json!({"pattern": "Arguments are invalid JSON"}),
-            ),
-            (
-                "WebSearch",
-                "OpenAI Agents SDK",
-                json!({"query": "OpenAI Agents SDK"}),
-            ),
-            (
-                "WebFetch",
-                "https://example.com",
-                json!({"url": "https://example.com"}),
-            ),
-            (
-                "InitMiniApp",
-                "Markdown Viewer",
-                json!({"name": "Markdown Viewer"}),
-            ),
+            ("Bash", "pnpm test"),
+            ("Skill", "openai-docs"),
+            ("Read", "src/main.rs"),
+            ("GetFileDiff", "src/lib.rs"),
+            ("LS", "src/crates"),
+            ("Delete", "tmp/output.log"),
+            ("Glob", "**/*.rs"),
+            ("Grep", "Arguments are invalid JSON"),
+            ("WebSearch", "OpenAI Agents SDK"),
+            ("WebFetch", "https://example.com"),
+            ("InitMiniApp", "Markdown Viewer"),
         ];
 
-        for (tool_name, raw_arguments, expected) in cases {
+        for (tool_name, raw_arguments) in cases {
             let mut pending = PendingToolCall::default();
             pending.start_new("call_1".to_string(), Some(tool_name.to_string()));
             pending.append_arguments(raw_arguments);
@@ -536,13 +396,87 @@ mod tests {
                 .finalize(ToolCallBoundary::FinishReason)
                 .expect("finalized tool");
 
-            assert_eq!(finalized.arguments, expected, "tool={tool_name}");
-            assert!(!finalized.is_error, "tool={tool_name}");
+            assert_eq!(finalized.arguments, json!({}), "tool={tool_name}");
+            assert!(finalized.is_error, "tool={tool_name}");
         }
     }
 
     #[test]
-    fn repairs_json_string_arguments_for_single_field_tools() {
+    fn incomplete_json_object_for_single_field_tools_stays_invalid() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("Bash".to_string()));
+        pending.append_arguments(
+            "{\"command\": \"git log --since=\\\"2026-05-02\\\" --oneline --stat",
+        );
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason)
+            .expect("finalized tool");
+
+        assert_eq!(finalized.arguments, json!({}));
+        assert!(finalized.is_error);
+    }
+
+    #[test]
+    fn does_not_wrap_incomplete_json_object_as_raw_string_argument() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("Bash".to_string()));
+        pending.append_arguments("{\"command\": ");
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason)
+            .expect("finalized tool");
+
+        assert_eq!(finalized.arguments, json!({}));
+        assert!(finalized.is_error);
+    }
+
+    #[test]
+    fn does_not_repair_incomplete_json_object_for_multifield_tools() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("Task".to_string()));
+        pending.append_arguments(
+            "{\"description\":\"Explore BitFun project structure\",\"prompt\":\"read README\\n\\nthoroughness: very",
+        );
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason)
+            .expect("finalized tool");
+
+        assert_eq!(finalized.arguments, json!({}));
+        assert!(finalized.is_error);
+    }
+
+    #[test]
+    fn does_not_repair_object_without_key_value_payload() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("Bash".to_string()));
+        pending.append_arguments("{");
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason)
+            .expect("finalized tool");
+
+        assert_eq!(finalized.arguments, json!({}));
+        assert!(finalized.is_error);
+    }
+
+    #[test]
+    fn does_not_execute_truncated_incomplete_json_object() {
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("Bash".to_string()));
+        pending.append_arguments("{\"command\": \"git log --since=\\\"2026-05-02\\\" --on");
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason)
+            .expect("finalized tool");
+
+        assert_eq!(finalized.arguments, json!({}));
+        assert!(finalized.is_error);
+    }
+
+    #[test]
+    fn json_string_arguments_for_single_field_tools_are_schema_errors_not_rewritten() {
         let mut pending = PendingToolCall::default();
         pending.start_new("call_1".to_string(), Some("Bash".to_string()));
         pending.append_arguments("\"git status\"");
@@ -551,12 +485,12 @@ mod tests {
             .finalize(ToolCallBoundary::FinishReason)
             .expect("finalized tool");
 
-        assert_eq!(finalized.arguments, json!({"command": "git status"}));
+        assert_eq!(finalized.arguments, json!("git status"));
         assert!(!finalized.is_error);
     }
 
     #[test]
-    fn repairs_fenced_raw_arguments_for_single_field_tools() {
+    fn fenced_raw_arguments_for_single_field_tools_stay_invalid_json() {
         let mut pending = PendingToolCall::default();
         pending.start_new("call_1".to_string(), Some("Bash".to_string()));
         pending.append_arguments("```bash\npnpm run lint:web\n```");
@@ -565,8 +499,8 @@ mod tests {
             .finalize(ToolCallBoundary::FinishReason)
             .expect("finalized tool");
 
-        assert_eq!(finalized.arguments, json!({"command": "pnpm run lint:web"}));
-        assert!(!finalized.is_error);
+        assert_eq!(finalized.arguments, json!({}));
+        assert!(finalized.is_error);
     }
 
     #[test]
@@ -584,7 +518,7 @@ mod tests {
     }
 
     #[test]
-    fn repairs_json_with_one_extra_trailing_right_brace() {
+    fn json_with_one_extra_trailing_right_brace_stays_invalid() {
         let mut pending = PendingToolCall::default();
         pending.start_new("call_1".to_string(), Some("tool_a".to_string()));
         pending.append_arguments("{\"a\":1}}");
@@ -594,8 +528,8 @@ mod tests {
             .expect("finalized tool");
 
         assert_eq!(finalized.raw_arguments, "{\"a\":1}}");
-        assert_eq!(finalized.arguments, json!({"a": 1}));
-        assert!(!finalized.is_error);
+        assert_eq!(finalized.arguments, json!({}));
+        assert!(finalized.is_error);
     }
 
     #[test]

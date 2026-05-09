@@ -2139,6 +2139,7 @@ mod tests {
                 tool_id: "tool-1".to_string(),
                 tool_name: "Read".to_string(),
                 arguments: json!({ "path": "README.md" }),
+                raw_arguments: None,
                 is_error: false,
             }],
         );
@@ -2157,6 +2158,7 @@ mod tests {
                 tool_id: "tool-1".to_string(),
                 tool_name: "Read".to_string(),
                 arguments: json!({ "path": "README.md" }),
+                raw_arguments: None,
                 is_error: false,
             }],
         );

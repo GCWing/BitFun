@@ -262,6 +262,9 @@ impl StreamContext {
             tool_id,
             tool_name,
             arguments: finalized.arguments.clone(),
+            raw_arguments: finalized
+                .is_error
+                .then_some(finalized.raw_arguments.clone()),
             is_error: finalized.is_error,
         });
     }
@@ -769,7 +772,10 @@ impl StreamProcessor {
                         TimedStreamItem::Item(Err(e)) => {
                             let error_msg = format!("Stream processing error: {}", e);
                             error!("{}", error_msg);
-                            if ctx.can_recover_as_partial_result() {
+                            let non_recoverable_stream_error =
+                                error_msg.contains("SSE Parsing Error");
+                            if !non_recoverable_stream_error && ctx.can_recover_as_partial_result()
+                            {
                                 flush_sse_on_error(&sse_collector, &error_msg).await;
                                 self.send_thinking_end_if_needed(&mut ctx).await;
                                 ctx.force_finish_pending_tool_calls();
@@ -1051,7 +1057,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn repairs_tool_args_with_one_extra_trailing_right_brace() {
+    async fn does_not_repair_tool_args_with_one_extra_trailing_right_brace() {
         let processor = build_processor();
         let stream = iter(vec![Ok(UnifiedResponse {
             tool_call: Some(UnifiedToolCall {
@@ -1083,8 +1089,12 @@ mod tests {
         assert_eq!(result.tool_calls.len(), 1);
         assert_eq!(result.tool_calls[0].tool_id, "call_1");
         assert_eq!(result.tool_calls[0].tool_name, "tool_a");
-        assert_eq!(result.tool_calls[0].arguments, json!({"a": 1}));
-        assert!(!result.tool_calls[0].is_error);
+        assert_eq!(result.tool_calls[0].arguments, json!({}));
+        assert_eq!(
+            result.tool_calls[0].raw_arguments.as_deref(),
+            Some("{\"a\":1}}")
+        );
+        assert!(result.tool_calls[0].is_error);
     }
 
     #[tokio::test]

@@ -28,6 +28,7 @@ pub struct BuiltinApp {
 }
 
 /// All built-in apps that ship with BitFun.
+/// Each time the BuiltinApp changes, the version needs to be modified to take effect
 pub const BUILTIN_APPS: &[BuiltinApp] = &[
     BuiltinApp {
         id: "builtin-gomoku",

@@ -1482,7 +1482,7 @@
   "steering": {
     "title": "Steer",
     "injectedAt": "Injected before round {{round}}",
-    "statusPending": "Will inject after current step",
-    "statusInjected": "Injected at round {{round}}"
+    "statusPending": "Waiting to trigger",
+    "statusInjected": "Triggered"
   }
 }

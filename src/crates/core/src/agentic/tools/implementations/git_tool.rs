@@ -794,6 +794,8 @@ This tool provides a safe and convenient way to execute Git commands. It support
 - The `operation` field already specifies the Git subcommand (e.g. `diff`, `log`, `add`).
 - The `args` field must contain **only additional arguments** for that subcommand.
 - **Do NOT include the subcommand name itself in `args`.** For example, use `{"operation": "diff", "args": "HEAD~2..HEAD --stat"}` — NOT `{"operation": "diff", "args": "diff HEAD~2..HEAD --stat"}`.
+- A raw shell command string is invalid. Use `{"operation": "status"}` instead of `"git status"`.
+- An object with only `args` and no `operation` is invalid, even if `args` contains flags such as `--since` or `--oneline`. Retry with the explicit operation, for example `{"operation": "log", "args": "--since=\"2026-05-02\" --oneline"}`.
 
 ## Safety Notes
 
@@ -839,12 +841,12 @@ When creating commits, use this format for the commit message:
             "properties": {
                 "operation": {
                     "type": "string",
-                    "description": "The Git operation to perform (e.g., status, diff, log, add, commit, branch, checkout, pull, push)",
+                    "description": "Required Git operation/subcommand to perform (e.g., status, diff, log, add, commit, branch, checkout, pull, push). Do not omit this and do not place the subcommand in args.",
                     "enum": ALLOWED_OPERATIONS
                 },
                 "args": {
                     "type": "string",
-                    "description": "Additional arguments for the Git command (e.g., file paths, flags, options)"
+                    "description": "Only additional arguments for the selected Git operation (e.g., file paths, flags, options). Do not include the operation/subcommand itself here."
                 },
                 "working_directory": {
                     "type": "string",
@@ -913,7 +915,10 @@ When creating commits, use this format for the commit message:
             None => {
                 return ValidationResult {
                     result: false,
-                    message: Some("operation is required".to_string()),
+                    message: Some(
+                        "operation is required. Provide an explicit top-level operation such as {\"operation\":\"status\"}; do not send a raw git command string or an args-only object."
+                            .to_string(),
+                    ),
                     error_code: Some(400),
                     meta: None,
                 };
@@ -1129,7 +1134,36 @@ impl Default for GitTool {
 
 #[cfg(test)]
 mod tests {
+    use crate::agentic::tools::framework::Tool;
+
     use super::{GitTool, ParsedDiffArgs};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn git_schema_requires_explicit_operation_instead_of_args_only() {
+        let tool = GitTool::new();
+        let schema = tool.input_schema();
+        assert_eq!(schema["additionalProperties"], false);
+        assert_eq!(schema["required"], json!(["operation"]));
+        assert!(schema["properties"]["operation"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Do not omit this"));
+        assert!(schema["properties"]["args"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Do not include the operation"));
+
+        let validation = tool
+            .validate_input(&json!({"args": "--since=\"2026-05-02\" --oneline"}), None)
+            .await;
+        assert!(!validation.result);
+        assert!(validation
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("operation is required"));
+    }
 
     #[test]
     fn parse_diff_args_empty() {

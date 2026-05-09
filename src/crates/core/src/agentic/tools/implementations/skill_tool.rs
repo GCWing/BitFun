@@ -9,10 +9,10 @@ use crate::agentic::tools::framework::{
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use log::debug;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 // Use skills module
-use super::skills::{SkillLocation, get_skill_registry};
+use super::skills::{get_skill_registry, SkillLocation};
 
 /// Skill tool
 pub struct SkillTool;
@@ -265,12 +265,12 @@ impl Default for SkillTool {
 #[cfg(test)]
 mod tests {
     use super::SkillTool;
-    use crate::agentic::WorkspaceBinding;
     use crate::agentic::tools::framework::{Tool, ToolResult};
     use crate::agentic::workspace::{
         WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
         WorkspaceServices, WorkspaceShell,
     };
+    use crate::agentic::WorkspaceBinding;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use async_trait::async_trait;
     use serde_json::json;
@@ -432,11 +432,9 @@ Use the remote project skill.
         };
         assert_eq!(data["skill_name"], "cso");
         assert_eq!(data["location"], "user");
-        assert!(
-            data["content"]
-                .as_str()
-                .unwrap_or_default()
-                .contains("# /cso")
-        );
+        assert!(data["content"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("# /cso"));
     }
 }

@@ -47,6 +47,26 @@
   gap: 0.5rem;
 }
 
+.user-message-item__steering-tag {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: fit-content;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  user-select: none;
+}
+
+.user-message-item__steering-tag--pending {
+  color: var(--color-warning, #f59e0b);
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 28%, transparent);
+}
+
 .user-message-item__actions {
   display: flex;
   align-items: center;

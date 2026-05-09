@@ -111,14 +111,21 @@ mod tests {
     use super::read_file;
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
     fn write_temp_file(contents: &str) -> PathBuf {
-        let unique = SystemTime::now()
+        let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("time went backwards")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("bitfun-read-file-test-{unique}.txt"));
+        let counter = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let process_id = std::process::id();
+        let path = std::env::temp_dir().join(format!(
+            "bitfun-read-file-test-{process_id}-{timestamp}-{counter}.txt"
+        ));
         fs::write(&path, contents).expect("temp file should be written");
         path
     }
