@@ -7,7 +7,8 @@ use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::core::CompressionContract;
 use crate::agentic::deep_review_policy::{
-    deep_review_shared_context_measurement_snapshot, DeepReviewIncrementalCache,
+    deep_review_runtime_diagnostics_snapshot, DeepReviewIncrementalCache,
+    DeepReviewRuntimeDiagnostics,
 };
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::service::config::get_app_language_code;
@@ -25,15 +26,6 @@ struct DeepReviewCacheUpdate {
     value: Value,
     hit_count: usize,
     miss_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DeepReviewSharedContextDiagnostics {
-    total_calls: usize,
-    duplicate_calls: usize,
-    duplicate_context_count: usize,
-    max_duplicate_call_count: usize,
-    max_duplicate_reviewer_count: usize,
 }
 
 impl CodeReviewTool {
@@ -879,48 +871,60 @@ impl CodeReviewTool {
         }
     }
 
-    fn deep_review_shared_context_diagnostics(
-        dialog_turn_id: Option<&str>,
-    ) -> Option<DeepReviewSharedContextDiagnostics> {
-        let dialog_turn_id = dialog_turn_id
+    fn log_deep_review_runtime_diagnostics(dialog_turn_id: Option<&str>) {
+        let Some(dialog_turn_id) = dialog_turn_id
             .map(str::trim)
-            .filter(|value| !value.is_empty())?;
-        let snapshot = deep_review_shared_context_measurement_snapshot(dialog_turn_id);
-        if snapshot.total_calls == 0 {
-            return None;
-        }
-
-        Some(DeepReviewSharedContextDiagnostics {
-            total_calls: snapshot.total_calls,
-            duplicate_calls: snapshot.duplicate_calls,
-            duplicate_context_count: snapshot.duplicate_context_count,
-            max_duplicate_call_count: snapshot
-                .repeated_contexts
-                .iter()
-                .map(|context| context.call_count)
-                .max()
-                .unwrap_or(0),
-            max_duplicate_reviewer_count: snapshot
-                .repeated_contexts
-                .iter()
-                .map(|context| context.reviewer_count)
-                .max()
-                .unwrap_or(0),
-        })
-    }
-
-    fn log_deep_review_shared_context_diagnostics(dialog_turn_id: Option<&str>) {
-        let Some(diagnostics) = Self::deep_review_shared_context_diagnostics(dialog_turn_id) else {
+            .filter(|value| !value.is_empty())
+        else {
             return;
         };
+        let Some(DeepReviewRuntimeDiagnostics {
+            queue_wait_count,
+            queue_wait_total_ms,
+            queue_wait_max_ms,
+            provider_capacity_queue_count,
+            provider_capacity_retry_count,
+            provider_capacity_retry_success_count,
+            capacity_skip_count,
+            effective_parallel_min,
+            effective_parallel_final,
+            manual_queue_action_count,
+            manual_retry_count,
+            auto_retry_count,
+            auto_retry_suppressed_reason_counts,
+            shared_context_total_calls,
+            shared_context_duplicate_calls,
+            shared_context_duplicate_context_count,
+        }) = deep_review_runtime_diagnostics_snapshot(dialog_turn_id)
+        else {
+            return;
+        };
+        let auto_retry_suppressed_reason_counts =
+            serde_json::to_string(&auto_retry_suppressed_reason_counts)
+                .unwrap_or_else(|_| "{}".to_string());
 
         debug!(
-            "DeepReview shared context measurement: total_calls={}, duplicate_calls={}, duplicate_context_count={}, max_duplicate_call_count={}, max_duplicate_reviewer_count={}",
-            diagnostics.total_calls,
-            diagnostics.duplicate_calls,
-            diagnostics.duplicate_context_count,
-            diagnostics.max_duplicate_call_count,
-            diagnostics.max_duplicate_reviewer_count
+            "DeepReview runtime diagnostics: queue_wait_count={}, queue_wait_total_ms={}, queue_wait_max_ms={}, provider_capacity_queue_count={}, provider_capacity_retry_count={}, provider_capacity_retry_success_count={}, capacity_skip_count={}, effective_parallel_min={}, effective_parallel_final={}, manual_queue_action_count={}, manual_retry_count={}, auto_retry_count={}, auto_retry_suppressed_reason_counts={}, shared_context_total_calls={}, shared_context_duplicate_calls={}, shared_context_duplicate_context_count={}",
+            queue_wait_count,
+            queue_wait_total_ms,
+            queue_wait_max_ms,
+            provider_capacity_queue_count,
+            provider_capacity_retry_count,
+            provider_capacity_retry_success_count,
+            capacity_skip_count,
+            effective_parallel_min
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "none".to_string()),
+            effective_parallel_final
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "none".to_string()),
+            manual_queue_action_count,
+            manual_retry_count,
+            auto_retry_count,
+            auto_retry_suppressed_reason_counts,
+            shared_context_total_calls,
+            shared_context_duplicate_calls,
+            shared_context_duplicate_context_count
         );
     }
 
@@ -1215,7 +1219,7 @@ impl Tool for CodeReviewTool {
                 &mut filled_input,
                 context.dialog_turn_id.as_deref(),
             );
-            Self::log_deep_review_shared_context_diagnostics(context.dialog_turn_id.as_deref());
+            Self::log_deep_review_runtime_diagnostics(context.dialog_turn_id.as_deref());
             if let Some(cache_update) = Self::deep_review_cache_from_completed_reviewers(
                 &filled_input,
                 run_manifest.as_ref(),
@@ -1662,7 +1666,9 @@ mod tests {
 
     #[tokio::test]
     async fn deep_review_shared_context_diagnostics_stays_out_of_report() {
-        use crate::agentic::deep_review_policy::record_deep_review_shared_context_tool_use;
+        use crate::agentic::deep_review_policy::{
+            deep_review_runtime_diagnostics_snapshot, record_deep_review_shared_context_tool_use,
+        };
 
         let turn_id = "turn-code-review-shared-context-diagnostics";
         record_deep_review_shared_context_tool_use(turn_id, "ReviewSecurity", "Read", "src/lib.rs");
@@ -1679,13 +1685,11 @@ mod tests {
             "src/lib.rs",
         );
 
-        let diagnostics = CodeReviewTool::deep_review_shared_context_diagnostics(Some(turn_id))
+        let diagnostics = deep_review_runtime_diagnostics_snapshot(turn_id)
             .expect("diagnostics should be available for measured turn");
-        assert_eq!(diagnostics.total_calls, 3);
-        assert_eq!(diagnostics.duplicate_calls, 1);
-        assert_eq!(diagnostics.duplicate_context_count, 1);
-        assert_eq!(diagnostics.max_duplicate_call_count, 2);
-        assert_eq!(diagnostics.max_duplicate_reviewer_count, 2);
+        assert_eq!(diagnostics.shared_context_total_calls, 3);
+        assert_eq!(diagnostics.shared_context_duplicate_calls, 1);
+        assert_eq!(diagnostics.shared_context_duplicate_context_count, 1);
 
         let tool = CodeReviewTool::new();
         let mut context = tool_context(Some("DeepReview"));

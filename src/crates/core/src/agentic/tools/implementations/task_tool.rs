@@ -7,11 +7,11 @@ use crate::agentic::deep_review_policy::{
     deep_review_max_retries_per_role, deep_review_queue_control_snapshot,
     load_default_deep_review_policy, record_deep_review_capacity_skip,
     record_deep_review_effective_concurrency_capacity_error,
-    record_deep_review_effective_concurrency_success, record_deep_review_task_budget,
-    try_begin_deep_review_active_reviewer, DeepReviewActiveReviewerGuard,
-    DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy, DeepReviewExecutionPolicy,
-    DeepReviewIncrementalCache, DeepReviewPolicyViolation, DeepReviewRunManifestGate,
-    DeepReviewSubagentRole, DEEP_REVIEW_AGENT_TYPE,
+    record_deep_review_effective_concurrency_success, record_deep_review_runtime_queue_wait,
+    record_deep_review_task_budget, try_begin_deep_review_active_reviewer,
+    DeepReviewActiveReviewerGuard, DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy,
+    DeepReviewExecutionPolicy, DeepReviewIncrementalCache, DeepReviewPolicyViolation,
+    DeepReviewRunManifestGate, DeepReviewSubagentRole, DEEP_REVIEW_AGENT_TYPE,
 };
 use crate::agentic::events::{
     DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus, ErrorCategory,
@@ -568,6 +568,7 @@ impl TaskTool {
             if control_snapshot.cancelled
                 || (is_optional_reviewer && control_snapshot.skip_optional)
             {
+                record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
                 record_deep_review_capacity_skip(dialog_turn_id);
                 clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
                 Self::emit_deep_review_queue_state(
@@ -626,6 +627,7 @@ impl TaskTool {
                 try_begin_deep_review_active_reviewer(dialog_turn_id, effective_parallel_instances)
             {
                 let active_reviewer_count = deep_review_active_reviewer_count(dialog_turn_id);
+                record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
                 clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
                 Self::emit_deep_review_queue_state(
                     session_id,
@@ -652,6 +654,7 @@ impl TaskTool {
                     reason,
                     decision.retry_after_seconds.map(Duration::from_secs),
                 );
+                record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
                 record_deep_review_capacity_skip(dialog_turn_id);
                 clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
                 Self::emit_deep_review_queue_state(
@@ -1830,6 +1833,59 @@ mod tests {
             }
         }
         assert_eq!(deep_review_capacity_skip_count(turn_id), 1);
+    }
+
+    #[tokio::test]
+    async fn deep_review_capacity_queue_records_one_runtime_wait_when_ready() {
+        use crate::agentic::deep_review_policy::{
+            deep_review_runtime_diagnostics_snapshot, try_begin_deep_review_active_reviewer,
+            DeepReviewConcurrencyPolicy,
+        };
+
+        let turn_id = "turn-queue-ready-diagnostics";
+        let tool_id = "tool-queue-ready-diagnostics";
+        let occupied = try_begin_deep_review_active_reviewer(turn_id, 1)
+            .expect("precondition should occupy reviewer capacity");
+        let policy = DeepReviewConcurrencyPolicy {
+            max_parallel_instances: 1,
+            stagger_seconds: 0,
+            max_queue_wait_seconds: 1,
+            batch_extras_separately: true,
+        };
+        let turn_id_owned = turn_id.to_string();
+        let tool_id_owned = tool_id.to_string();
+
+        let handle = tokio::spawn(async move {
+            TaskTool::wait_for_deep_review_reviewer_capacity(
+                "session-queue-ready-diagnostics",
+                &turn_id_owned,
+                &tool_id_owned,
+                "ReviewSecurity",
+                &policy,
+                false,
+            )
+            .await
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
+        drop(occupied);
+
+        let outcome = tokio::time::timeout(tokio::time::Duration::from_millis(500), handle)
+            .await
+            .expect("queue should become ready after capacity frees")
+            .expect("spawned wait should not panic")
+            .expect("queue wait should resolve");
+        match outcome {
+            super::DeepReviewQueueWaitOutcome::Ready { .. } => {}
+            super::DeepReviewQueueWaitOutcome::Skipped { .. } => {
+                panic!("freed capacity should allow the queued reviewer to run");
+            }
+        }
+
+        let diagnostics = deep_review_runtime_diagnostics_snapshot(turn_id)
+            .expect("runtime diagnostics should record terminal queue wait");
+        assert_eq!(diagnostics.queue_wait_count, 1);
+        assert!(diagnostics.queue_wait_total_ms >= 20);
     }
 
     #[tokio::test]

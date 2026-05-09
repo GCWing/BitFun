@@ -427,7 +427,8 @@ impl PartialEq for AgenticEventEnvelope {
 
 #[cfg(test)]
 mod tests {
-    use super::{AgenticEvent, ToolEventData};
+    use super::*;
+    use serde_json::json;
 
     #[test]
     fn model_round_completed_serializes_optional_timing_fields() {
@@ -555,6 +556,49 @@ mod tests {
         assert_eq!(json["duration_ms"], 120);
         assert_eq!(json["execution_ms"], 90);
     }
+
+    #[test]
+    fn deep_review_queue_state_event_serializes_stable_contract() {
+        let event = AgenticEvent::DeepReviewQueueStateChanged {
+            session_id: "review-session".to_string(),
+            turn_id: "turn-1".to_string(),
+            queue_state: DeepReviewQueueState {
+                tool_id: "task-1".to_string(),
+                subagent_type: "ReviewSecurity".to_string(),
+                status: DeepReviewQueueStatus::QueuedForCapacity,
+                reason: Some(DeepReviewQueueReason::ProviderConcurrencyLimit),
+                queued_reviewer_count: 2,
+                active_reviewer_count: Some(1),
+                effective_parallel_instances: Some(2),
+                optional_reviewer_count: Some(1),
+                queue_elapsed_ms: Some(1200),
+                run_elapsed_ms: None,
+                max_queue_wait_seconds: Some(60),
+                session_concurrency_high: true,
+            },
+            subagent_parent_info: None,
+        };
+
+        assert_eq!(event.session_id(), Some("review-session"));
+        assert_eq!(event.default_priority(), AgenticEventPriority::High);
+
+        let serialized = serde_json::to_value(event).expect("serialize event");
+        assert_eq!(serialized["type"], "DeepReviewQueueStateChanged");
+        assert_eq!(serialized["queue_state"]["status"], "queued_for_capacity");
+        assert_eq!(
+            serialized["queue_state"]["reason"],
+            json!("provider_concurrency_limit")
+        );
+        assert_eq!(serialized["queue_state"]["queue_elapsed_ms"], json!(1200));
+        assert_eq!(
+            serialized["queue_state"]["effective_parallel_instances"],
+            json!(2)
+        );
+        assert_eq!(
+            serialized["queue_state"]["run_elapsed_ms"],
+            serde_json::Value::Null
+        );
+    }
 }
 
 impl Eq for AgenticEventEnvelope {}
@@ -668,54 +712,5 @@ impl ToolEventData {
             | Self::Confirmed { .. }
             | Self::Rejected { .. } => AgenticEventPriority::Normal,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn deep_review_queue_state_event_serializes_stable_contract() {
-        let event = AgenticEvent::DeepReviewQueueStateChanged {
-            session_id: "review-session".to_string(),
-            turn_id: "turn-1".to_string(),
-            queue_state: DeepReviewQueueState {
-                tool_id: "task-1".to_string(),
-                subagent_type: "ReviewSecurity".to_string(),
-                status: DeepReviewQueueStatus::QueuedForCapacity,
-                reason: Some(DeepReviewQueueReason::ProviderConcurrencyLimit),
-                queued_reviewer_count: 2,
-                active_reviewer_count: Some(1),
-                effective_parallel_instances: Some(2),
-                optional_reviewer_count: Some(1),
-                queue_elapsed_ms: Some(1200),
-                run_elapsed_ms: None,
-                max_queue_wait_seconds: Some(60),
-                session_concurrency_high: true,
-            },
-            subagent_parent_info: None,
-        };
-
-        assert_eq!(event.session_id(), Some("review-session"));
-        assert_eq!(event.default_priority(), AgenticEventPriority::High);
-
-        let serialized = serde_json::to_value(event).expect("serialize event");
-        assert_eq!(serialized["type"], "DeepReviewQueueStateChanged");
-        assert_eq!(serialized["queue_state"]["status"], "queued_for_capacity");
-        assert_eq!(
-            serialized["queue_state"]["reason"],
-            json!("provider_concurrency_limit")
-        );
-        assert_eq!(serialized["queue_state"]["queue_elapsed_ms"], json!(1200));
-        assert_eq!(
-            serialized["queue_state"]["effective_parallel_instances"],
-            json!(2)
-        );
-        assert_eq!(
-            serialized["queue_state"]["run_elapsed_ms"],
-            serde_json::Value::Null
-        );
     }
 }

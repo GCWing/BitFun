@@ -697,6 +697,10 @@
       "continueQueue": "繼續佇列",
       "cancelQueued": "取消排隊審核員",
       "skipOptionalQueued": "略過選用擴充",
+      "runSlowerNextTime": "下次降低並發",
+      "openReviewSettings": "開啟審核設定",
+      "runSlowerSaved": "下次 Deep Review 最多會使用 {{count}} 個並行審核員。",
+      "runSlowerFailed": "更新審核設定失敗。",
       "controlFailed": "\u4f47\u5217\u63a7\u5236\u5931\u6557\uff0c\u8acb\u91cd\u8a66\u6216\u505c\u6b62\u5be9\u6838\u3002"
     },
     "degradation": {

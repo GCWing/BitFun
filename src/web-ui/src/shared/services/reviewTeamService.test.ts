@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import {
+  DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY,
   DEFAULT_REVIEW_TEAM_EXECUTION_POLICY,
   DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL,
   FALLBACK_REVIEW_TEAM_DEFINITION,
@@ -12,8 +13,10 @@ import {
   loadDefaultReviewTeamConfig,
   loadReviewTeamProjectStrategyOverride,
   loadReviewTeamRateLimitStatus,
+  lowerDefaultReviewTeamMaxParallelReviewers,
   prepareDefaultReviewTeamForLaunch,
   resolveDefaultReviewTeam,
+  saveDefaultReviewTeamConcurrencyPolicy,
   saveReviewTeamProjectStrategyOverride,
   type ReviewTeamStoredConfig,
 } from './reviewTeamService';
@@ -66,6 +69,12 @@ describe('reviewTeamService', () => {
     reviewer_file_split_threshold: DEFAULT_REVIEW_TEAM_EXECUTION_POLICY.reviewerFileSplitThreshold,
     max_same_role_instances: DEFAULT_REVIEW_TEAM_EXECUTION_POLICY.maxSameRoleInstances,
     max_retries_per_role: DEFAULT_REVIEW_TEAM_EXECUTION_POLICY.maxRetriesPerRole,
+    max_parallel_reviewers: DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.maxParallelInstances,
+    max_queue_wait_seconds: DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.maxQueueWaitSeconds,
+    allow_provider_capacity_queue: DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.allowProviderCapacityQueue,
+    allow_bounded_auto_retry: DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.allowBoundedAutoRetry,
+    auto_retry_elapsed_guard_seconds:
+      DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.autoRetryElapsedGuardSeconds,
     ...overrides,
   });
 
@@ -113,6 +122,12 @@ describe('reviewTeamService', () => {
       reviewer_file_split_threshold: DEFAULT_REVIEW_TEAM_EXECUTION_POLICY.reviewerFileSplitThreshold,
       max_same_role_instances: DEFAULT_REVIEW_TEAM_EXECUTION_POLICY.maxSameRoleInstances,
       max_retries_per_role: DEFAULT_REVIEW_TEAM_EXECUTION_POLICY.maxRetriesPerRole,
+      max_parallel_reviewers: DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.maxParallelInstances,
+      max_queue_wait_seconds: DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.maxQueueWaitSeconds,
+      allow_provider_capacity_queue: DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.allowProviderCapacityQueue,
+      allow_bounded_auto_retry: DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.allowBoundedAutoRetry,
+      auto_retry_elapsed_guard_seconds:
+        DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.autoRetryElapsedGuardSeconds,
     });
   });
 
@@ -146,6 +161,91 @@ describe('reviewTeamService', () => {
         ExtraOne: 'normal',
       },
     });
+  });
+
+  it('normalizes persisted capacity and retry settings into the team concurrency policy', async () => {
+    vi.mocked(configAPI.getConfig).mockResolvedValueOnce({
+      extra_subagent_ids: [],
+      strategy_level: 'normal',
+      member_strategy_overrides: {},
+      max_parallel_reviewers: 99,
+      max_queue_wait_seconds: 999,
+      allow_provider_capacity_queue: false,
+      allow_bounded_auto_retry: true,
+      auto_retry_elapsed_guard_seconds: 1,
+    });
+
+    const config = await loadDefaultReviewTeamConfig();
+    const team = resolveDefaultReviewTeam(coreSubagents(), config);
+
+    expect(team.concurrencyPolicy).toEqual({
+      maxParallelInstances: 16,
+      staggerSeconds: 0,
+      maxQueueWaitSeconds: 600,
+      batchExtrasSeparately: true,
+      allowProviderCapacityQueue: false,
+      allowBoundedAutoRetry: true,
+      autoRetryElapsedGuardSeconds: 30,
+    });
+  });
+
+  it('saves capacity and retry settings without changing unrelated review team config', async () => {
+    vi.mocked(configAPI.getConfig).mockResolvedValueOnce(
+      storedConfigWithExtra(['ExtraReviewer'], {
+        strategy_level: 'deep',
+        member_strategy_overrides: { ReviewSecurity: 'quick' },
+        reviewer_timeout_seconds: 300,
+      }),
+    );
+
+    await saveDefaultReviewTeamConcurrencyPolicy({
+      maxParallelInstances: 2,
+      staggerSeconds: 20,
+      maxQueueWaitSeconds: 45,
+      batchExtrasSeparately: false,
+      allowProviderCapacityQueue: false,
+      allowBoundedAutoRetry: true,
+      autoRetryElapsedGuardSeconds: 240,
+    });
+
+    expect(configAPI.setConfig).toHaveBeenCalledWith(
+      'ai.review_teams.default',
+      expect.objectContaining({
+        extra_subagent_ids: ['ExtraReviewer'],
+        strategy_level: 'deep',
+        member_strategy_overrides: { ReviewSecurity: 'quick' },
+        reviewer_timeout_seconds: 300,
+        max_parallel_reviewers: 2,
+        max_queue_wait_seconds: 45,
+        allow_provider_capacity_queue: false,
+        allow_bounded_auto_retry: true,
+        auto_retry_elapsed_guard_seconds: 240,
+      }),
+    );
+  });
+
+  it('lowers the next review max parallel reviewers without going below one', async () => {
+    vi.mocked(configAPI.getConfig)
+      .mockResolvedValueOnce(storedConfigWithExtra([], { max_parallel_reviewers: 3 }))
+      .mockResolvedValueOnce(storedConfigWithExtra([], { max_parallel_reviewers: 1 }));
+
+    await expect(lowerDefaultReviewTeamMaxParallelReviewers()).resolves.toMatchObject({
+      maxParallelInstances: 2,
+    });
+    expect(configAPI.setConfig).toHaveBeenNthCalledWith(
+      1,
+      'ai.review_teams.default',
+      expect.objectContaining({ max_parallel_reviewers: 2 }),
+    );
+
+    await expect(lowerDefaultReviewTeamMaxParallelReviewers()).resolves.toMatchObject({
+      maxParallelInstances: 1,
+    });
+    expect(configAPI.setConfig).toHaveBeenNthCalledWith(
+      2,
+      'ai.review_teams.default',
+      expect.objectContaining({ max_parallel_reviewers: 1 }),
+    );
   });
 
   it('propagates config errors that are not missing review team config paths', async () => {

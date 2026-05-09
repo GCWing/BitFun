@@ -697,6 +697,10 @@
       "continueQueue": "继续队列",
       "cancelQueued": "取消排队审核员",
       "skipOptionalQueued": "跳过可选扩展",
+      "runSlowerNextTime": "下次降低并发",
+      "openReviewSettings": "打开审核设置",
+      "runSlowerSaved": "下次 Deep Review 最多会使用 {{count}} 个并行审核员。",
+      "runSlowerFailed": "更新审核设置失败。",
       "controlFailed": "\u961f\u5217\u63a7\u5236\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5\u6216\u505c\u6b62\u5ba1\u6838\u3002"
     },
     "degradation": {

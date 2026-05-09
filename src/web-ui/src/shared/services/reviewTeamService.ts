@@ -35,10 +35,14 @@ export const DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY = {
   staggerSeconds: 0,
   maxQueueWaitSeconds: 60,
   batchExtrasSeparately: true,
+  allowProviderCapacityQueue: true,
+  allowBoundedAutoRetry: false,
+  autoRetryElapsedGuardSeconds: 180,
 } as const;
 const MAX_PREDICTIVE_TIMEOUT_SECONDS = 3600;
 const MAX_PARALLEL_REVIEWER_INSTANCES = 16;
 const MAX_QUEUE_WAIT_SECONDS = 600;
+const MAX_AUTO_RETRY_ELAPSED_GUARD_SECONDS = 900;
 const PREDICTIVE_TIMEOUT_PER_FILE_SECONDS = 15;
 const PREDICTIVE_TIMEOUT_PER_100_LINES_SECONDS = 30;
 const PREDICTIVE_TIMEOUT_BASE_SECONDS: Record<ReviewStrategyLevel, number> = {
@@ -221,6 +225,11 @@ export interface ReviewTeamStoredConfig {
   reviewer_file_split_threshold: number;
   max_same_role_instances: number;
   max_retries_per_role: number;
+  max_parallel_reviewers: number;
+  max_queue_wait_seconds: number;
+  allow_provider_capacity_queue: boolean;
+  allow_bounded_auto_retry: boolean;
+  auto_retry_elapsed_guard_seconds: number;
 }
 
 export interface ReviewTeamExecutionPolicy {
@@ -236,6 +245,9 @@ export interface ReviewTeamConcurrencyPolicy {
   staggerSeconds: number;
   maxQueueWaitSeconds: number;
   batchExtrasSeparately: boolean;
+  allowProviderCapacityQueue: boolean;
+  allowBoundedAutoRetry: boolean;
+  autoRetryElapsedGuardSeconds: number;
 }
 
 export interface ReviewTeamRateLimitStatus {
@@ -455,6 +467,7 @@ export interface ReviewTeam {
   strategyLevel: ReviewStrategyLevel;
   memberStrategyOverrides: Record<string, ReviewStrategyLevel>;
   executionPolicy: ReviewTeamExecutionPolicy;
+  concurrencyPolicy: ReviewTeamConcurrencyPolicy;
   definition: ReviewTeamDefinition;
   members: ReviewTeamMember[];
   coreMembers: ReviewTeamMember[];
@@ -930,6 +943,62 @@ function normalizeConcurrencyPolicy(
       typeof raw?.batchExtrasSeparately === 'boolean'
         ? raw.batchExtrasSeparately
         : DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.batchExtrasSeparately,
+    allowProviderCapacityQueue:
+      typeof raw?.allowProviderCapacityQueue === 'boolean'
+        ? raw.allowProviderCapacityQueue
+        : DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.allowProviderCapacityQueue,
+    allowBoundedAutoRetry:
+      typeof raw?.allowBoundedAutoRetry === 'boolean'
+        ? raw.allowBoundedAutoRetry
+        : DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.allowBoundedAutoRetry,
+    autoRetryElapsedGuardSeconds: clampInteger(
+      raw?.autoRetryElapsedGuardSeconds,
+      30,
+      MAX_AUTO_RETRY_ELAPSED_GUARD_SECONDS,
+      DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.autoRetryElapsedGuardSeconds,
+    ),
+  };
+}
+
+function normalizeStoredConcurrencyPolicy(
+  raw: unknown,
+): Pick<
+  ReviewTeamStoredConfig,
+  | 'max_parallel_reviewers'
+  | 'max_queue_wait_seconds'
+  | 'allow_provider_capacity_queue'
+  | 'allow_bounded_auto_retry'
+  | 'auto_retry_elapsed_guard_seconds'
+> {
+  const config = raw as Partial<ReviewTeamStoredConfig> | undefined;
+
+  return {
+    max_parallel_reviewers: clampInteger(
+      config?.max_parallel_reviewers,
+      1,
+      MAX_PARALLEL_REVIEWER_INSTANCES,
+      DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.maxParallelInstances,
+    ),
+    max_queue_wait_seconds: clampInteger(
+      config?.max_queue_wait_seconds,
+      0,
+      MAX_QUEUE_WAIT_SECONDS,
+      DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.maxQueueWaitSeconds,
+    ),
+    allow_provider_capacity_queue:
+      typeof config?.allow_provider_capacity_queue === 'boolean'
+        ? config.allow_provider_capacity_queue
+        : DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.allowProviderCapacityQueue,
+    allow_bounded_auto_retry:
+      typeof config?.allow_bounded_auto_retry === 'boolean'
+        ? config.allow_bounded_auto_retry
+        : DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.allowBoundedAutoRetry,
+    auto_retry_elapsed_guard_seconds: clampInteger(
+      config?.auto_retry_elapsed_guard_seconds,
+      30,
+      MAX_AUTO_RETRY_ELAPSED_GUARD_SECONDS,
+      DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.autoRetryElapsedGuardSeconds,
+    ),
   };
 }
 
@@ -1036,12 +1105,27 @@ function executionPolicyFromStoredConfig(
   };
 }
 
+function concurrencyPolicyFromStoredConfig(
+  config: ReviewTeamStoredConfig,
+): ReviewTeamConcurrencyPolicy {
+  return normalizeConcurrencyPolicy({
+    maxParallelInstances: config.max_parallel_reviewers,
+    staggerSeconds: DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.staggerSeconds,
+    maxQueueWaitSeconds: config.max_queue_wait_seconds,
+    batchExtrasSeparately: DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY.batchExtrasSeparately,
+    allowProviderCapacityQueue: config.allow_provider_capacity_queue,
+    allowBoundedAutoRetry: config.allow_bounded_auto_retry,
+    autoRetryElapsedGuardSeconds: config.auto_retry_elapsed_guard_seconds,
+  });
+}
+
 function normalizeStoredConfig(raw: unknown): ReviewTeamStoredConfig {
   const extraIds = Array.isArray((raw as { extra_subagent_ids?: unknown })?.extra_subagent_ids)
     ? (raw as { extra_subagent_ids: unknown[] }).extra_subagent_ids
       .filter((value): value is string => typeof value === 'string')
     : [];
   const executionPolicy = normalizeExecutionPolicy(raw);
+  const concurrencyPolicy = normalizeStoredConcurrencyPolicy(raw);
   const config = raw as Partial<ReviewTeamStoredConfig> | undefined;
 
   return {
@@ -1051,6 +1135,7 @@ function normalizeStoredConfig(raw: unknown): ReviewTeamStoredConfig {
       config?.member_strategy_overrides,
     ),
     ...executionPolicy,
+    ...concurrencyPolicy,
   };
 }
 
@@ -1092,6 +1177,11 @@ export async function saveDefaultReviewTeamConfig(
     reviewer_file_split_threshold: normalizedConfig.reviewer_file_split_threshold,
     max_same_role_instances: normalizedConfig.max_same_role_instances,
     max_retries_per_role: normalizedConfig.max_retries_per_role,
+    max_parallel_reviewers: normalizedConfig.max_parallel_reviewers,
+    max_queue_wait_seconds: normalizedConfig.max_queue_wait_seconds,
+    allow_provider_capacity_queue: normalizedConfig.allow_provider_capacity_queue,
+    allow_bounded_auto_retry: normalizedConfig.allow_bounded_auto_retry,
+    auto_retry_elapsed_guard_seconds: normalizedConfig.auto_retry_elapsed_guard_seconds,
   });
 }
 
@@ -1183,6 +1273,39 @@ export async function saveDefaultReviewTeamExecutionPolicy(
     max_same_role_instances: policy.maxSameRoleInstances,
     max_retries_per_role: policy.maxRetriesPerRole,
   });
+}
+
+export async function saveDefaultReviewTeamConcurrencyPolicy(
+  policy: ReviewTeamConcurrencyPolicy,
+): Promise<void> {
+  const current = await loadDefaultReviewTeamConfig();
+  const normalizedPolicy = normalizeConcurrencyPolicy(policy);
+  await saveDefaultReviewTeamConfig({
+    ...current,
+    max_parallel_reviewers: normalizedPolicy.maxParallelInstances,
+    max_queue_wait_seconds: normalizedPolicy.maxQueueWaitSeconds,
+    allow_provider_capacity_queue: normalizedPolicy.allowProviderCapacityQueue,
+    allow_bounded_auto_retry: normalizedPolicy.allowBoundedAutoRetry,
+    auto_retry_elapsed_guard_seconds: normalizedPolicy.autoRetryElapsedGuardSeconds,
+  });
+}
+
+export async function lowerDefaultReviewTeamMaxParallelReviewers(): Promise<ReviewTeamConcurrencyPolicy> {
+  const current = await loadDefaultReviewTeamConfig();
+  const currentPolicy = concurrencyPolicyFromStoredConfig(current);
+  const nextPolicy = {
+    ...currentPolicy,
+    maxParallelInstances: Math.max(1, currentPolicy.maxParallelInstances - 1),
+  };
+  await saveDefaultReviewTeamConfig({
+    ...current,
+    max_parallel_reviewers: nextPolicy.maxParallelInstances,
+    max_queue_wait_seconds: nextPolicy.maxQueueWaitSeconds,
+    allow_provider_capacity_queue: nextPolicy.allowProviderCapacityQueue,
+    allow_bounded_auto_retry: nextPolicy.allowBoundedAutoRetry,
+    auto_retry_elapsed_guard_seconds: nextPolicy.autoRetryElapsedGuardSeconds,
+  });
+  return nextPolicy;
 }
 
 export async function saveDefaultReviewTeamStrategyLevel(
@@ -1563,6 +1686,7 @@ export function resolveDefaultReviewTeam(
     strategyLevel: storedConfig.strategy_level,
     memberStrategyOverrides: storedConfig.member_strategy_overrides,
     executionPolicy: executionPolicyFromStoredConfig(storedConfig),
+    concurrencyPolicy: concurrencyPolicyFromStoredConfig(storedConfig),
     definition,
     members: [...coreMembers, ...extraMembers],
     coreMembers,
@@ -2727,8 +2851,12 @@ export function buildEffectiveReviewTeamManifest(
   );
   const tokenBudgetMode = options.tokenBudgetMode ?? 'balanced';
   const changeStats = resolveChangeStats(target, options.changeStats);
+  const baseConcurrencyPolicy = normalizeConcurrencyPolicy(team.concurrencyPolicy);
   const concurrencyPolicy = applyRateLimitToConcurrencyPolicy(
-    normalizeConcurrencyPolicy(options.concurrencyPolicy),
+    normalizeConcurrencyPolicy({
+      ...baseConcurrencyPolicy,
+      ...options.concurrencyPolicy,
+    }),
     options.rateLimitStatus,
   );
   const strategyLevel = options.strategyOverride ?? team.strategyLevel;
@@ -3050,6 +3178,9 @@ export function buildReviewTeamPromptBlock(
     `- stagger_seconds: ${manifest.concurrencyPolicy.staggerSeconds}`,
     `- max_queue_wait_seconds: ${manifest.concurrencyPolicy.maxQueueWaitSeconds}`,
     `- batch_extras_separately: ${manifest.concurrencyPolicy.batchExtrasSeparately ? 'yes' : 'no'}`,
+    `- allow_provider_capacity_queue: ${manifest.concurrencyPolicy.allowProviderCapacityQueue ? 'yes' : 'no'}`,
+    `- allow_bounded_auto_retry: ${manifest.concurrencyPolicy.allowBoundedAutoRetry ? 'yes' : 'no'}`,
+    `- auto_retry_elapsed_guard_seconds: ${manifest.concurrencyPolicy.autoRetryElapsedGuardSeconds}`,
   ].join('\n');
   const targetLineCount =
     manifest.changeStats?.totalLinesChanged !== undefined

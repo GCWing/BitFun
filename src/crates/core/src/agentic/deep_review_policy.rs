@@ -866,6 +866,64 @@ pub struct DeepReviewEffectiveConcurrencySnapshot {
     pub retry_after_remaining_ms: Option<u64>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeepReviewRuntimeDiagnostics {
+    pub queue_wait_count: usize,
+    pub queue_wait_total_ms: u64,
+    pub queue_wait_max_ms: u64,
+    pub provider_capacity_queue_count: usize,
+    pub provider_capacity_retry_count: usize,
+    pub provider_capacity_retry_success_count: usize,
+    pub capacity_skip_count: usize,
+    pub effective_parallel_min: Option<usize>,
+    pub effective_parallel_final: Option<usize>,
+    pub manual_queue_action_count: usize,
+    pub manual_retry_count: usize,
+    pub auto_retry_count: usize,
+    pub auto_retry_suppressed_reason_counts: BTreeMap<String, usize>,
+    pub shared_context_total_calls: usize,
+    pub shared_context_duplicate_calls: usize,
+    pub shared_context_duplicate_context_count: usize,
+}
+
+impl DeepReviewRuntimeDiagnostics {
+    fn is_empty(&self) -> bool {
+        self.queue_wait_count == 0
+            && self.queue_wait_total_ms == 0
+            && self.queue_wait_max_ms == 0
+            && self.provider_capacity_queue_count == 0
+            && self.provider_capacity_retry_count == 0
+            && self.provider_capacity_retry_success_count == 0
+            && self.capacity_skip_count == 0
+            && self.effective_parallel_min.is_none()
+            && self.effective_parallel_final.is_none()
+            && self.manual_queue_action_count == 0
+            && self.manual_retry_count == 0
+            && self.auto_retry_count == 0
+            && self.auto_retry_suppressed_reason_counts.is_empty()
+            && self.shared_context_total_calls == 0
+            && self.shared_context_duplicate_calls == 0
+            && self.shared_context_duplicate_context_count == 0
+    }
+
+    fn observe_effective_parallel(&mut self, effective_parallel_instances: usize) {
+        self.effective_parallel_min = Some(
+            self.effective_parallel_min
+                .map_or(effective_parallel_instances, |current| {
+                    current.min(effective_parallel_instances)
+                }),
+        );
+        self.effective_parallel_final = Some(effective_parallel_instances);
+    }
+
+    fn merge_shared_context(&mut self, snapshot: DeepReviewSharedContextMeasurementSnapshot) {
+        self.shared_context_total_calls = snapshot.total_calls;
+        self.shared_context_duplicate_calls = snapshot.duplicate_calls;
+        self.shared_context_duplicate_context_count = snapshot.duplicate_context_count;
+    }
+}
+
 #[derive(Debug, Clone)]
 struct DeepReviewEffectiveConcurrencyState {
     configured_max_parallel_instances: usize,
@@ -1404,6 +1462,7 @@ struct DeepReviewTurnBudget {
     capacity_skips: usize,
     shared_context_uses: HashMap<DeepReviewSharedContextKey, DeepReviewSharedContextUseRecord>,
     effective_concurrency: Option<DeepReviewEffectiveConcurrencyState>,
+    runtime_diagnostics: DeepReviewRuntimeDiagnostics,
     updated_at: Instant,
 }
 
@@ -1419,6 +1478,7 @@ impl DeepReviewTurnBudget {
             capacity_skips: 0,
             shared_context_uses: HashMap::new(),
             effective_concurrency: None,
+            runtime_diagnostics: DeepReviewRuntimeDiagnostics::default(),
             updated_at: now,
         }
     }
@@ -1496,6 +1556,120 @@ impl Default for DeepReviewBudgetTracker {
 }
 
 impl DeepReviewBudgetTracker {
+    fn update_runtime_diagnostics(
+        &self,
+        parent_dialog_turn_id: &str,
+        update: impl FnOnce(&mut DeepReviewRuntimeDiagnostics),
+    ) {
+        if parent_dialog_turn_id.trim().is_empty() {
+            return;
+        }
+
+        let now = Instant::now();
+        if let Ok(last_pruned) = self.last_pruned_at.lock() {
+            if now.saturating_duration_since(*last_pruned) >= PRUNE_INTERVAL {
+                drop(last_pruned);
+                self.prune_stale(now);
+            }
+        }
+
+        let mut budget = self
+            .turns
+            .entry(parent_dialog_turn_id.to_string())
+            .or_insert_with(|| DeepReviewTurnBudget::new(now));
+        update(&mut budget.runtime_diagnostics);
+        budget.updated_at = now;
+    }
+
+    pub fn record_runtime_queue_wait(&self, parent_dialog_turn_id: &str, queue_elapsed_ms: u64) {
+        if queue_elapsed_ms == 0 {
+            return;
+        }
+        self.update_runtime_diagnostics(parent_dialog_turn_id, |diagnostics| {
+            diagnostics.queue_wait_count = diagnostics.queue_wait_count.saturating_add(1);
+            diagnostics.queue_wait_total_ms = diagnostics
+                .queue_wait_total_ms
+                .saturating_add(queue_elapsed_ms);
+            diagnostics.queue_wait_max_ms = diagnostics.queue_wait_max_ms.max(queue_elapsed_ms);
+        });
+    }
+
+    pub fn record_runtime_provider_capacity_queue(&self, parent_dialog_turn_id: &str) {
+        self.update_runtime_diagnostics(parent_dialog_turn_id, |diagnostics| {
+            diagnostics.provider_capacity_queue_count =
+                diagnostics.provider_capacity_queue_count.saturating_add(1);
+        });
+    }
+
+    pub fn record_runtime_provider_capacity_retry(&self, parent_dialog_turn_id: &str) {
+        self.update_runtime_diagnostics(parent_dialog_turn_id, |diagnostics| {
+            diagnostics.provider_capacity_retry_count =
+                diagnostics.provider_capacity_retry_count.saturating_add(1);
+        });
+    }
+
+    pub fn record_runtime_provider_capacity_retry_success(&self, parent_dialog_turn_id: &str) {
+        self.update_runtime_diagnostics(parent_dialog_turn_id, |diagnostics| {
+            diagnostics.provider_capacity_retry_success_count = diagnostics
+                .provider_capacity_retry_success_count
+                .saturating_add(1);
+        });
+    }
+
+    pub fn record_runtime_capacity_skip(
+        &self,
+        parent_dialog_turn_id: &str,
+        _reason: DeepReviewCapacityQueueReason,
+    ) {
+        self.update_runtime_diagnostics(parent_dialog_turn_id, |diagnostics| {
+            diagnostics.capacity_skip_count = diagnostics.capacity_skip_count.saturating_add(1);
+        });
+    }
+
+    pub fn record_runtime_manual_queue_action(&self, parent_dialog_turn_id: &str) {
+        self.update_runtime_diagnostics(parent_dialog_turn_id, |diagnostics| {
+            diagnostics.manual_queue_action_count =
+                diagnostics.manual_queue_action_count.saturating_add(1);
+        });
+    }
+
+    pub fn record_runtime_manual_retry(&self, parent_dialog_turn_id: &str) {
+        self.update_runtime_diagnostics(parent_dialog_turn_id, |diagnostics| {
+            diagnostics.manual_retry_count = diagnostics.manual_retry_count.saturating_add(1);
+        });
+    }
+
+    pub fn record_runtime_auto_retry(&self, parent_dialog_turn_id: &str) {
+        self.update_runtime_diagnostics(parent_dialog_turn_id, |diagnostics| {
+            diagnostics.auto_retry_count = diagnostics.auto_retry_count.saturating_add(1);
+        });
+    }
+
+    pub fn record_runtime_auto_retry_suppressed(&self, parent_dialog_turn_id: &str, reason: &str) {
+        let reason = reason.trim();
+        if reason.is_empty() {
+            return;
+        }
+        self.update_runtime_diagnostics(parent_dialog_turn_id, |diagnostics| {
+            *diagnostics
+                .auto_retry_suppressed_reason_counts
+                .entry(reason.to_string())
+                .or_insert(0) += 1;
+        });
+    }
+
+    pub fn runtime_diagnostics_snapshot(
+        &self,
+        parent_dialog_turn_id: &str,
+    ) -> Option<DeepReviewRuntimeDiagnostics> {
+        let budget = self.turns.get(parent_dialog_turn_id)?;
+        let mut diagnostics = budget.runtime_diagnostics.clone();
+        diagnostics.merge_shared_context(shared_context_measurement_snapshot_from_uses(
+            &budget.shared_context_uses,
+        ));
+        (!diagnostics.is_empty()).then_some(diagnostics)
+    }
+
     pub fn record_shared_context_tool_use(
         &self,
         parent_dialog_turn_id: &str,
@@ -1701,6 +1875,10 @@ impl DeepReviewBudgetTracker {
             .entry(parent_dialog_turn_id.to_string())
             .or_insert_with(|| DeepReviewTurnBudget::new(now));
         budget.capacity_skips += 1;
+        budget.runtime_diagnostics.capacity_skip_count = budget
+            .runtime_diagnostics
+            .capacity_skip_count
+            .saturating_add(1);
         budget.updated_at = now;
     }
 
@@ -1852,9 +2030,15 @@ impl DeepReviewBudgetTracker {
             .entry(parent_dialog_turn_id.to_string())
             .or_insert_with(|| DeepReviewTurnBudget::new(now));
         budget.updated_at = now;
-        let state = budget.effective_concurrency_mut(configured_max_parallel_instances);
-        state.record_capacity_error(reason, retry_after, now);
-        state.snapshot(now)
+        let snapshot = {
+            let state = budget.effective_concurrency_mut(configured_max_parallel_instances);
+            state.record_capacity_error(reason, retry_after, now);
+            state.snapshot(now)
+        };
+        budget
+            .runtime_diagnostics
+            .observe_effective_parallel(snapshot.effective_parallel_instances);
+        snapshot
     }
 
     pub fn record_effective_concurrency_success(
@@ -1873,9 +2057,15 @@ impl DeepReviewBudgetTracker {
             .entry(parent_dialog_turn_id.to_string())
             .or_insert_with(|| DeepReviewTurnBudget::new(now));
         budget.updated_at = now;
-        let state = budget.effective_concurrency_mut(configured_max_parallel_instances);
-        state.record_success(now);
-        state.snapshot(now)
+        let snapshot = {
+            let state = budget.effective_concurrency_mut(configured_max_parallel_instances);
+            state.record_success(now);
+            state.snapshot(now)
+        };
+        budget
+            .runtime_diagnostics
+            .observe_effective_parallel(snapshot.effective_parallel_instances);
+        snapshot
     }
 
     pub fn set_effective_concurrency_user_override(
@@ -1895,9 +2085,15 @@ impl DeepReviewBudgetTracker {
             .entry(parent_dialog_turn_id.to_string())
             .or_insert_with(|| DeepReviewTurnBudget::new(now));
         budget.updated_at = now;
-        let state = budget.effective_concurrency_mut(configured_max_parallel_instances);
-        state.set_user_override(user_override_parallel_instances);
-        state.snapshot(now)
+        let snapshot = {
+            let state = budget.effective_concurrency_mut(configured_max_parallel_instances);
+            state.set_user_override(user_override_parallel_instances);
+            state.snapshot(now)
+        };
+        budget
+            .runtime_diagnostics
+            .observe_effective_parallel(snapshot.effective_parallel_instances);
+        snapshot
     }
 }
 
@@ -2024,6 +2220,48 @@ pub fn record_deep_review_capacity_skip(parent_dialog_turn_id: &str) {
     GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_capacity_skip(parent_dialog_turn_id)
 }
 
+pub fn record_deep_review_runtime_queue_wait(parent_dialog_turn_id: &str, queue_elapsed_ms: u64) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER
+        .record_runtime_queue_wait(parent_dialog_turn_id, queue_elapsed_ms)
+}
+
+pub fn record_deep_review_runtime_provider_capacity_queue(parent_dialog_turn_id: &str) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_runtime_provider_capacity_queue(parent_dialog_turn_id)
+}
+
+pub fn record_deep_review_runtime_provider_capacity_retry(parent_dialog_turn_id: &str) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_runtime_provider_capacity_retry(parent_dialog_turn_id)
+}
+
+pub fn record_deep_review_runtime_provider_capacity_retry_success(parent_dialog_turn_id: &str) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER
+        .record_runtime_provider_capacity_retry_success(parent_dialog_turn_id)
+}
+
+pub fn record_deep_review_runtime_capacity_skip(
+    parent_dialog_turn_id: &str,
+    reason: DeepReviewCapacityQueueReason,
+) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_runtime_capacity_skip(parent_dialog_turn_id, reason)
+}
+
+pub fn record_deep_review_runtime_manual_queue_action(parent_dialog_turn_id: &str) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_runtime_manual_queue_action(parent_dialog_turn_id)
+}
+
+pub fn record_deep_review_runtime_manual_retry(parent_dialog_turn_id: &str) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_runtime_manual_retry(parent_dialog_turn_id)
+}
+
+pub fn record_deep_review_runtime_auto_retry(parent_dialog_turn_id: &str) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_runtime_auto_retry(parent_dialog_turn_id)
+}
+
+pub fn record_deep_review_runtime_auto_retry_suppressed(parent_dialog_turn_id: &str, reason: &str) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER
+        .record_runtime_auto_retry_suppressed(parent_dialog_turn_id, reason)
+}
+
 pub fn record_deep_review_shared_context_tool_use(
     parent_dialog_turn_id: &str,
     subagent_type: &str,
@@ -2042,6 +2280,12 @@ pub fn deep_review_shared_context_measurement_snapshot(
     parent_dialog_turn_id: &str,
 ) -> DeepReviewSharedContextMeasurementSnapshot {
     GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.shared_context_measurement_snapshot(parent_dialog_turn_id)
+}
+
+pub fn deep_review_runtime_diagnostics_snapshot(
+    parent_dialog_turn_id: &str,
+) -> Option<DeepReviewRuntimeDiagnostics> {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.runtime_diagnostics_snapshot(parent_dialog_turn_id)
 }
 
 pub fn try_begin_deep_review_active_reviewer(
@@ -3166,6 +3410,54 @@ mod tests {
         assert_eq!(snapshot.repeated_contexts[0].file_path, "src/lib.rs");
         assert_eq!(snapshot.repeated_contexts[0].call_count, 2);
         assert_eq!(snapshot.repeated_contexts[0].reviewer_count, 2);
+    }
+
+    #[test]
+    fn runtime_diagnostics_records_queue_and_capacity_transitions_as_counts() {
+        let tracker = DeepReviewBudgetTracker::default();
+
+        tracker.record_runtime_queue_wait("turn-runtime", 1_250);
+        tracker.record_runtime_queue_wait("turn-runtime", 2_500);
+        tracker.record_runtime_capacity_skip(
+            "turn-runtime",
+            super::DeepReviewCapacityQueueReason::ProviderConcurrencyLimit,
+        );
+
+        let diagnostics = tracker
+            .runtime_diagnostics_snapshot("turn-runtime")
+            .expect("runtime diagnostics should exist");
+
+        assert_eq!(diagnostics.queue_wait_count, 2);
+        assert_eq!(diagnostics.queue_wait_total_ms, 3_750);
+        assert_eq!(diagnostics.queue_wait_max_ms, 2_500);
+        assert_eq!(diagnostics.capacity_skip_count, 1);
+        assert_eq!(diagnostics.provider_capacity_queue_count, 0);
+    }
+
+    #[test]
+    fn runtime_diagnostics_merges_shared_context_without_content() {
+        let tracker = DeepReviewBudgetTracker::default();
+
+        tracker.record_shared_context_tool_use(
+            "turn-runtime-shared",
+            REVIEWER_SECURITY_AGENT_TYPE,
+            "Read",
+            "src/lib.rs",
+        );
+        tracker.record_shared_context_tool_use(
+            "turn-runtime-shared",
+            REVIEWER_ARCHITECTURE_AGENT_TYPE,
+            "Read",
+            "src/lib.rs",
+        );
+
+        let diagnostics = tracker
+            .runtime_diagnostics_snapshot("turn-runtime-shared")
+            .expect("runtime diagnostics should exist");
+
+        assert_eq!(diagnostics.shared_context_total_calls, 2);
+        assert_eq!(diagnostics.shared_context_duplicate_context_count, 1);
+        assert!(!format!("{diagnostics:?}").contains("fn "));
     }
 
     #[test]

@@ -17,6 +17,7 @@ import {
   RotateCcw,
   Eye,
   Minus,
+  Settings,
 } from 'lucide-react';
 import { Button, Checkbox, Tooltip } from '@/component-library';
 import {
@@ -46,9 +47,18 @@ import {
 import { flowChatStore } from '../../store/FlowChatStore';
 import { CodeReviewReportExportActions } from '../../tool-cards/CodeReviewReportExportActions';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { lowerDefaultReviewTeamMaxParallelReviewers } from '@/shared/services/reviewTeamService';
+import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
+import { useSceneStore } from '@/app/stores/sceneStore';
+import type { ConfigTab } from '@/app/scenes/settings/settingsConfig';
 import './DeepReviewActionBar.scss';
 
 const log = createLogger('DeepReviewActionBar');
+
+function openSettingsTab(tab: ConfigTab) {
+  useSettingsStore.getState().setActiveTab(tab);
+  useSceneStore.getState().openScene('settings');
+}
 
 const PHASE_CONFIG: Record<ReviewActionPhase, {
   icon: React.ComponentType<{ size?: number | string; style?: React.CSSProperties; className?: string }>;
@@ -169,6 +179,25 @@ export const ReviewActionBar: React.FC = () => {
       }));
     }
   }, [capacityQueueState, childSessionId, t]);
+
+  const handleRunSlowerNextTime = useCallback(async () => {
+    try {
+      const nextPolicy = await lowerDefaultReviewTeamMaxParallelReviewers();
+      notificationService.success(t('deepReviewActionBar.capacityQueue.runSlowerSaved', {
+        count: nextPolicy.maxParallelInstances,
+        defaultValue: `Next Deep Review will use up to ${nextPolicy.maxParallelInstances} parallel reviewers.`,
+      }));
+    } catch (error) {
+      log.warn('Failed to lower DeepReview max parallel reviewers', error);
+      notificationService.error(t('deepReviewActionBar.capacityQueue.runSlowerFailed', {
+        defaultValue: 'Failed to update Review settings.',
+      }));
+    }
+  }, [t]);
+
+  const handleOpenReviewSettings = useCallback(() => {
+    openSettingsTab('review');
+  }, []);
 
   // ---- progress tracking ----
   const sessions = flowChatStore.getState().sessions;
@@ -445,7 +474,7 @@ export const ReviewActionBar: React.FC = () => {
 
   const handleOpenModelSettings = useCallback(async () => {
     if (!interruption) return;
-    globalEventBus.emit('settings:open', { tab: 'models' });
+    openSettingsTab('models');
   }, [interruption]);
 
   const handleViewPartialResults = useCallback(() => {
@@ -710,66 +739,87 @@ export const ReviewActionBar: React.FC = () => {
               )}
             </div>
           </div>
-          {supportsInlineQueueControls && (
-            <div className="deep-review-action-bar__capacity-queue-actions">
-              {capacityQueueState.status === 'paused_by_user' ? (
-                <Button
-                  variant="secondary"
-                  size="small"
-                  onClick={() => void handleCapacityQueueAction(
-                    'continue',
-                    store.continueCapacityQueue,
-                  )}
-                >
-                  <Play size={13} />
-                  {t('deepReviewActionBar.capacityQueue.continueQueue', {
-                    defaultValue: 'Continue queue',
-                  })}
-                </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  size="small"
-                  onClick={() => void handleCapacityQueueAction(
-                    'pause',
-                    store.pauseCapacityQueue,
-                  )}
-                >
-                  <Pause size={13} />
-                  {t('deepReviewActionBar.capacityQueue.pauseQueue', {
-                    defaultValue: 'Pause queue',
-                  })}
-                </Button>
-              )}
-              {(capacityQueueState.optionalReviewerCount ?? 0) > 0 && (
+          <div className="deep-review-action-bar__capacity-queue-actions">
+            {supportsInlineQueueControls && (
+              <>
+                {capacityQueueState.status === 'paused_by_user' ? (
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    onClick={() => void handleCapacityQueueAction(
+                      'continue',
+                      store.continueCapacityQueue,
+                    )}
+                  >
+                    <Play size={13} />
+                    {t('deepReviewActionBar.capacityQueue.continueQueue', {
+                      defaultValue: 'Continue queue',
+                    })}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    onClick={() => void handleCapacityQueueAction(
+                      'pause',
+                      store.pauseCapacityQueue,
+                    )}
+                  >
+                    <Pause size={13} />
+                    {t('deepReviewActionBar.capacityQueue.pauseQueue', {
+                      defaultValue: 'Pause queue',
+                    })}
+                  </Button>
+                )}
+                {(capacityQueueState.optionalReviewerCount ?? 0) > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="small"
+                    onClick={() => void handleCapacityQueueAction(
+                      'skip_optional',
+                      store.skipOptionalQueuedReviewers,
+                    )}
+                  >
+                    <SkipForward size={13} />
+                    {t('deepReviewActionBar.capacityQueue.skipOptionalQueued', {
+                      defaultValue: 'Skip optional extras',
+                    })}
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="small"
                   onClick={() => void handleCapacityQueueAction(
-                    'skip_optional',
-                    store.skipOptionalQueuedReviewers,
+                    'cancel',
+                    store.cancelQueuedReviewers,
                   )}
                 >
-                  <SkipForward size={13} />
-                  {t('deepReviewActionBar.capacityQueue.skipOptionalQueued', {
-                    defaultValue: 'Skip optional extras',
+                  {t('deepReviewActionBar.capacityQueue.cancelQueued', {
+                    defaultValue: 'Cancel queued reviewers',
                   })}
                 </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="small"
-                onClick={() => void handleCapacityQueueAction(
-                  'cancel',
-                  store.cancelQueuedReviewers,
-                )}
-              >
-                {t('deepReviewActionBar.capacityQueue.cancelQueued', {
-                  defaultValue: 'Cancel queued reviewers',
-                })}
-              </Button>
-            </div>
-          )}
+              </>
+            )}
+            <Button
+              variant="ghost"
+              size="small"
+              onClick={() => void handleRunSlowerNextTime()}
+            >
+              <Settings size={13} />
+              {t('deepReviewActionBar.capacityQueue.runSlowerNextTime', {
+                defaultValue: 'Run slower next time',
+              })}
+            </Button>
+            <Button
+              variant="ghost"
+              size="small"
+              onClick={handleOpenReviewSettings}
+            >
+              {t('deepReviewActionBar.capacityQueue.openReviewSettings', {
+                defaultValue: 'Open Review settings',
+              })}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -828,6 +878,32 @@ export const ReviewActionBar: React.FC = () => {
           <span className="deep-review-action-bar__attribution-message">
             {t(errorAttribution.description, { defaultValue: '' })}
           </span>
+          {errorAttribution.actions.length > 0 && (
+            <div className="deep-review-action-bar__attribution-actions">
+              {errorAttribution.actions.map((action) => (
+                <Button
+                  key={action.code}
+                  variant="secondary"
+                  size="small"
+                  onClick={() => {
+                    if (action.code === 'open_model_settings') {
+                      openSettingsTab('models');
+                    } else if (action.code === 'switch_model') {
+                      openSettingsTab('models');
+                    } else if (action.code === 'retry' || action.code === 'continue') {
+                      void handleContinueReview();
+                    } else if (action.code === 'wait_and_retry') {
+                      void handleContinueReview();
+                    } else if (action.code === 'copy_diagnostics') {
+                      void handleCopyDiagnostics();
+                    }
+                  }}
+                >
+                  {t(action.labelKey, { defaultValue: action.code })}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

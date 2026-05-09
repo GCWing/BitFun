@@ -697,6 +697,10 @@
       "continueQueue": "Continue queue",
       "cancelQueued": "Cancel queued reviewers",
       "skipOptionalQueued": "Skip optional extras",
+      "runSlowerNextTime": "Run slower next time",
+      "openReviewSettings": "Open Review settings",
+      "runSlowerSaved": "Next Deep Review will use up to {{count}} parallel reviewers.",
+      "runSlowerFailed": "Failed to update Review settings.",
       "controlFailed": "Queue control failed. Please try again or stop the review."
     },
     "degradation": {

@@ -48,6 +48,30 @@
     "maxSameRoleInstances": "Max same-role instances",
     "maxSameRoleInstancesDesc": "Maximum parallel instances for one reviewer role."
   },
+  "capacity": {
+    "title": "Capacity and retry",
+    "description": "Control how Deep Review waits for capacity and whether unresolved slices may retry after you opt in.",
+    "maxParallelReviewers": {
+      "label": "Max parallel reviewers",
+      "description": "Maximum Deep Review reviewer instances to run at the same time. This does not change global session concurrency."
+    },
+    "maxQueueWaitSeconds": {
+      "label": "Max queue wait",
+      "description": "How long a reviewer may wait for Deep Review capacity before it is skipped."
+    },
+    "allowProviderCapacityQueue": {
+      "label": "Wait for provider capacity",
+      "description": "Briefly queue transient provider capacity errors instead of skipping immediately."
+    },
+    "allowBoundedAutoRetry": {
+      "label": "Allow bounded automatic retry",
+      "description": "After you opt in from a retry prompt, future Deep Reviews may retry smaller unresolved slices within strict limits."
+    },
+    "autoRetryElapsedGuardSeconds": {
+      "label": "Auto-retry elapsed guard",
+      "description": "Maximum extra elapsed time automatic retries may use in one Deep Review run."
+    }
+  },
   "members": {
     "title": "Reviewers",
     "description": "Adjust reviewer strategy and model assignment. Core roles stay locked.",
