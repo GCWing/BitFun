@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listen } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { cursorPosition, getCurrentWindow } from '@tauri-apps/api/window';
 import { aiExperienceConfigService, type AgentCompanionPetSelection, type AIExperienceSettings } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { ChatInputPixelPet, type ChatInputPixelPetMood } from '@/flow_chat/components/ChatInputPixelPet';
 import type { ChatInputPetMood } from '@/flow_chat/utils/chatInputPetMood';
@@ -21,6 +21,7 @@ const BUBBLE_GAP = 6;
 const BUBBLE_MIN_WIDTH = 132;
 const BUBBLE_MAX_WIDTH = 252;
 const WINDOW_EDGE_BUFFER = 4;
+const POINTER_HOVER_POLL_INTERVAL_MS = 120;
 
 export const AgentCompanionDesktopPet: React.FC = () => {
   const { t } = useTranslation('flow-chat');
@@ -143,6 +144,98 @@ export const AgentCompanionDesktopPet: React.FC = () => {
         log.warn('Failed to resize Agent companion window', error);
       });
   }, [activePetSize.height, activePetSize.width, tasks]);
+
+  useEffect(() => {
+    const tauriWindow = getCurrentWindow();
+    let disposed = false;
+    let windowPosition: { x: number; y: number } | null = null;
+    let scaleFactor = 1;
+    let removeWindowMovedListener: (() => void) | null = null;
+    let removeScaleChangedListener: (() => void) | null = null;
+
+    void tauriWindow.outerPosition()
+      .then(position => {
+        windowPosition = position;
+      })
+      .catch(error => {
+        log.warn('Failed to read Agent companion window position', error);
+      });
+
+    void tauriWindow.scaleFactor()
+      .then(nextScaleFactor => {
+        scaleFactor = nextScaleFactor;
+      })
+      .catch(error => {
+        log.warn('Failed to read Agent companion window scale factor', error);
+      });
+
+    void tauriWindow.onMoved(event => {
+      windowPosition = event.payload;
+    }).then(unlisten => {
+      if (disposed) {
+        unlisten();
+      } else {
+        removeWindowMovedListener = unlisten;
+      }
+    }).catch(error => {
+      log.warn('Failed to listen for Agent companion window moves', error);
+    });
+
+    void tauriWindow.onScaleChanged(event => {
+      scaleFactor = event.payload.scaleFactor;
+    }).then(unlisten => {
+      if (disposed) {
+        unlisten();
+      } else {
+        removeScaleChangedListener = unlisten;
+      }
+    }).catch(error => {
+      log.warn('Failed to listen for Agent companion scale changes', error);
+    });
+
+    const pollPointerHover = async () => {
+      try {
+        if (!windowPosition) {
+          windowPosition = await tauriWindow.outerPosition();
+        }
+
+        const pointer = await cursorPosition();
+        if (disposed) {
+          return;
+        }
+
+        const hitbox = dockRef.current?.querySelector<HTMLElement>('.bitfun-agent-companion-window__pet-hitbox');
+        if (!hitbox) {
+          setIsHoveringPet(false);
+          return;
+        }
+
+        const hitboxRect = hitbox.getBoundingClientRect();
+        const pointerX = (pointer.x - windowPosition.x) / scaleFactor;
+        const pointerY = (pointer.y - windowPosition.y) / scaleFactor;
+        const isPointerInsideHitbox = pointerX >= hitboxRect.left
+          && pointerX <= hitboxRect.right
+          && pointerY >= hitboxRect.top
+          && pointerY <= hitboxRect.bottom;
+
+        setIsHoveringPet(isPointerInsideHitbox);
+      } catch (error) {
+        log.warn('Failed to poll Agent companion pointer hover state', error);
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      void pollPointerHover();
+    }, POINTER_HOVER_POLL_INTERVAL_MS);
+    void pollPointerHover();
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+      removeWindowMovedListener?.();
+      removeScaleChangedListener?.();
+    };
+  }, []);
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
