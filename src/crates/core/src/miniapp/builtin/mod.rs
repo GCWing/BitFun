@@ -31,7 +31,7 @@ pub struct BuiltinApp {
 pub const BUILTIN_APPS: &[BuiltinApp] = &[
     BuiltinApp {
         id: "builtin-gomoku",
-        version: 10,
+        version: 11,
         meta_json: include_str!("assets/gomoku/meta.json"),
         html: include_str!("assets/gomoku/index.html"),
         css: include_str!("assets/gomoku/style.css"),
@@ -41,7 +41,7 @@ pub const BUILTIN_APPS: &[BuiltinApp] = &[
     },
     BuiltinApp {
         id: "builtin-daily-divination",
-        version: 20,
+        version: 21,
         meta_json: include_str!("assets/divination/meta.json"),
         html: include_str!("assets/divination/index.html"),
         css: include_str!("assets/divination/style.css"),
@@ -51,7 +51,7 @@ pub const BUILTIN_APPS: &[BuiltinApp] = &[
     },
     BuiltinApp {
         id: "builtin-regex-playground",
-        version: 15,
+        version: 16,
         meta_json: include_str!("assets/regex-playground/meta.json"),
         html: include_str!("assets/regex-playground/index.html"),
         css: include_str!("assets/regex-playground/style.css"),
@@ -61,7 +61,7 @@ pub const BUILTIN_APPS: &[BuiltinApp] = &[
     },
     BuiltinApp {
         id: "builtin-coding-selfie",
-        version: 27,
+        version: 28,
         meta_json: include_str!("assets/coding-selfie/meta.json"),
         html: include_str!("assets/coding-selfie/index.html"),
         css: include_str!("assets/coding-selfie/style.css"),
