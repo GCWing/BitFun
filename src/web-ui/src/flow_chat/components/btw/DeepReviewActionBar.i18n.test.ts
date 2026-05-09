@@ -33,6 +33,7 @@ const REQUIRED_ACTION_BAR_KEYS = [
   'deepReviewActionBar.fixInterrupted',
   'deepReviewActionBar.continueFix',
   'deepReviewActionBar.skipRemaining',
+  'deepReviewActionBar.switchModel',
   'reviewActionBar.noIssuesFound',
 ];
 

@@ -672,39 +672,11 @@
     line-height: 1.5;
   }
 
-  &__attribution-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
   /* Recovery plan */
   &__recovery-plan {
     display: flex;
     flex-direction: column;
     gap: 6px;
-  }
-
-  &__recovery-plan-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    border-radius: 6px;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--color-text-muted);
-    font-size: 12px;
-    cursor: pointer;
-    transition: background 0.2s, border-color 0.2s, color 0.2s;
-    width: fit-content;
-
-    &:hover {
-      background: var(--element-bg-subtle);
-      border-color: var(--border-base);
-      color: var(--color-text-primary);
-    }
   }
 
   &__recovery-plan-detail {

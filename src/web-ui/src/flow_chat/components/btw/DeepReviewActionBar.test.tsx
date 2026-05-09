@@ -6,6 +6,13 @@ import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
 const sendMessageMock = vi.hoisted(() => vi.fn());
 const eventBusEmitMock = vi.hoisted(() => vi.fn());
 const confirmWarningMock = vi.hoisted(() => vi.fn());
+const continueDeepReviewSessionMock = vi.hoisted(() => vi.fn());
+const buildRecoveryPlanMock = vi.hoisted(() => vi.fn(() => ({
+  willPreserve: ['ReviewSecurity'],
+  willRerun: ['ReviewPerformance'],
+  willSkip: [],
+  summaryText: '1 completed reviewer will be preserved; 1 reviewer will be rerun',
+})));
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -13,7 +20,10 @@ vi.mock('react-i18next', () => ({
     init: vi.fn(),
   },
   useTranslation: () => ({
-    t: (_key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? _key,
+    t: (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => {
+      const template = options?.defaultValue ?? _key;
+      return template.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? _match));
+    },
   }),
 }));
 
@@ -91,12 +101,12 @@ vi.mock('../../utils/deepReviewExperience', () => ({
   buildReviewerProgressSummary: () => null,
   extractPartialReviewData: () => null,
   buildErrorAttribution: () => null,
-  buildRecoveryPlan: () => null,
+  buildRecoveryPlan: buildRecoveryPlanMock,
   evaluateDegradationOptions: () => [],
 }));
 
 vi.mock('../../services/DeepReviewContinuationService', () => ({
-  continueDeepReviewSession: vi.fn(),
+  continueDeepReviewSession: continueDeepReviewSessionMock,
 }));
 
 vi.mock('@/shared/ai-errors/aiErrorPresenter', () => ({
@@ -148,6 +158,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     sendMessageMock.mockResolvedValue(undefined);
     confirmWarningMock.mockResolvedValue(true);
     eventBusEmitMock.mockReturnValue(false);
+    continueDeepReviewSessionMock.mockResolvedValue(undefined);
     useReviewActionBarStore.getState().reset();
   });
 
@@ -481,5 +492,88 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(state.phase).toBe('review_completed');
     expect(state.remainingFixIds).toEqual([]);
     expect(state.activeAction).toBeNull();
+  });
+
+  it('keeps Deep Review interruption actions in one row without a standalone retry or recovery toggle', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+
+    useReviewActionBarStore.getState().showInterruptedActionBar({
+      childSessionId: 'deep-review-session',
+      parentSessionId: 'parent-session',
+      interruption: {
+        phase: 'resume_failed',
+        childSessionId: 'deep-review-session',
+        parentSessionId: 'parent-session',
+        originalTarget: '/DeepReview review latest commit',
+        errorDetail: { category: 'network', rawMessage: 'network timeout' },
+        canResume: true,
+        recommendedActions: [
+          { code: 'retry', labelKey: 'errors:ai.actions.retry' },
+          { code: 'switch_model', labelKey: 'errors:ai.actions.switchModel' },
+          { code: 'copy_diagnostics', labelKey: 'errors:ai.actions.copyDiagnostics' },
+        ],
+        reviewers: [
+          { reviewer: 'ReviewSecurity', status: 'completed' },
+          { reviewer: 'ReviewPerformance', status: 'timed_out' },
+        ],
+      },
+      phase: 'resume_failed',
+    });
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    const buttonTexts = Array.from(container.querySelectorAll('button'))
+      .map((button) => button.textContent ?? '');
+
+    expect(buttonTexts.some((text) => text.includes('Continue review'))).toBe(true);
+    expect(buttonTexts.some((text) => text.includes('Switch model'))).toBe(true);
+    expect(buttonTexts.some((text) => text.includes('Copy diagnostics'))).toBe(true);
+    expect(buttonTexts.some((text) => text.includes('Retry'))).toBe(false);
+    expect(buttonTexts.some((text) => text.includes('Show recovery plan'))).toBe(false);
+    expect(container.textContent).toContain('1 completed reviewers will be preserved');
+    expect(container.textContent).toContain('1 reviewers will be rerun');
+  });
+
+  it('minimizes and disables the continue action after a resume request starts successfully', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+
+    useReviewActionBarStore.getState().showInterruptedActionBar({
+      childSessionId: 'deep-review-session',
+      parentSessionId: 'parent-session',
+      interruption: {
+        phase: 'review_interrupted',
+        childSessionId: 'deep-review-session',
+        parentSessionId: 'parent-session',
+        originalTarget: '/DeepReview review latest commit',
+        errorDetail: { category: 'network', rawMessage: 'network timeout' },
+        canResume: true,
+        recommendedActions: [],
+        reviewers: [],
+      },
+    });
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    const continueButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Continue review'));
+    expect(continueButton).toBeTruthy();
+
+    await act(async () => {
+      continueButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const state = useReviewActionBarStore.getState();
+    expect(continueDeepReviewSessionMock).toHaveBeenCalledTimes(1);
+    expect(state.phase).toBe('resume_running');
+    expect(state.minimized).toBe(true);
+
+    const restoredContinueButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Continue review')) as HTMLButtonElement | undefined;
+    expect(restoredContinueButton?.disabled).toBe(true);
   });
 });

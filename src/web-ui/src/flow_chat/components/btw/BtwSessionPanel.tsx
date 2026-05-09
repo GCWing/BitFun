@@ -405,7 +405,9 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     // Only activate if the action bar is idle or not yet shown for this session
     if (store.childSessionId === childSessionId && store.phase !== 'idle') {
       // Update phase based on turn status if currently showing
-      if (isError && store.phase !== 'fix_failed' && store.phase !== 'review_error' && store.phase !== 'fix_interrupted') {
+      if (isError && store.phase === 'resume_running') {
+        store.updatePhase('resume_failed', childSession.error ?? undefined);
+      } else if (isError && store.phase !== 'fix_failed' && store.phase !== 'review_error' && store.phase !== 'fix_interrupted') {
         store.updatePhase(
           store.phase === 'fix_running' ? 'fix_failed' : 'review_error',
           childSession.error ?? undefined,
@@ -425,6 +427,16 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           // show completion state in the action bar instead of dismissing it.
           store.updatePhase('fix_completed');
         }
+      } else if (isComplete && store.phase === 'resume_running') {
+        store.showActionBar({
+          childSessionId,
+          parentSessionId: parentSessionId ?? null,
+          reviewData: latestReviewData,
+          reviewMode,
+          phase: 'review_completed',
+          completedRemediationIds: store.completedRemediationIds,
+        });
+        store.minimize();
       }
       return;
     }

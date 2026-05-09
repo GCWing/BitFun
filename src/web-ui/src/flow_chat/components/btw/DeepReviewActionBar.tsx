@@ -101,7 +101,6 @@ export const ReviewActionBar: React.FC = () => {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [showRemediationList, setShowRemediationList] = useState(true);
   const [showPartialResults, setShowPartialResults] = useState(false);
-  const [showRecoveryPlan, setShowRecoveryPlan] = useState(false);
   const [expandedDecisionIds, setExpandedDecisionIds] = useState<Set<string>>(new Set());
   const [elapsedMs, setElapsedMs] = useState(0);
   const [longRunningNotified, setLongRunningNotified] = useState(false);
@@ -112,6 +111,7 @@ export const ReviewActionBar: React.FC = () => {
   const isFixDisabled = activeAction !== null || selectedCount === 0;
   const isDeepReview = reviewMode === 'deep';
   const hasInterruption = isDeepReview && Boolean(interruption);
+  const isResumeRunning = phase === 'resume_running';
 
   // ---- progress tracking ----
   const sessions = flowChatStore.getState().sessions;
@@ -151,6 +151,17 @@ export const ReviewActionBar: React.FC = () => {
   const degradationOptions = useMemo(() => {
     if (!interruption) return [];
     return evaluateDegradationOptions(interruption);
+  }, [interruption]);
+
+  const modelRecoveryAction = useMemo(() => {
+    const actionCodes = new Set(interruption?.recommendedActions.map((action) => action.code) ?? []);
+    if (actionCodes.has('switch_model')) {
+      return 'switch_model';
+    }
+    if (actionCodes.has('open_model_settings')) {
+      return 'open_model_settings';
+    }
+    return null;
   }, [interruption]);
 
   // ---- long-running hint ----
@@ -353,6 +364,7 @@ export const ReviewActionBar: React.FC = () => {
       await continueDeepReviewSession(interruption, t('deepReviewActionBar.resumeRequestDisplay', {
         defaultValue: 'Continue interrupted Deep Review',
       }), { force: !interruption.canResume });
+      store.minimize();
     } catch (error) {
       log.error('Failed to continue interrupted Deep Review', { childSessionId, error });
       const message = t('deepReviewActionBar.resumeFailedMessage', {
@@ -374,12 +386,7 @@ export const ReviewActionBar: React.FC = () => {
     await handleStartFixing(false, remainingSet);
   }, [reviewData, childSessionId, remainingFixIds, store, handleStartFixing]);
 
-  const handleRetryResume = useCallback(async () => {
-    if (!interruption) return;
-    await handleContinueReview();
-  }, [interruption, handleContinueReview]);
-
-  const handleRetryWithDifferentModel = useCallback(async () => {
+  const handleOpenModelSettings = useCallback(async () => {
     if (!interruption) return;
     globalEventBus.emit('settings:open', { tab: 'models' });
   }, [interruption]);
@@ -661,87 +668,47 @@ export const ReviewActionBar: React.FC = () => {
           <span className="deep-review-action-bar__attribution-message">
             {t(errorAttribution.description, { defaultValue: '' })}
           </span>
-          {errorAttribution.actions.length > 0 && (
-            <div className="deep-review-action-bar__attribution-actions">
-              {errorAttribution.actions.map((action) => (
-                <Button
-                  key={action.code}
-                  variant="secondary"
-                  size="small"
-                  onClick={() => {
-                    if (action.code === 'open_model_settings') {
-                      globalEventBus.emit('settings:open', { tab: 'models' });
-                    } else if (action.code === 'switch_model') {
-                      globalEventBus.emit('settings:open', { tab: 'models' });
-                    } else if (action.code === 'retry' || action.code === 'continue') {
-                      void handleContinueReview();
-                    } else if (action.code === 'wait_and_retry') {
-                      void handleContinueReview();
-                    } else if (action.code === 'copy_diagnostics') {
-                      void handleCopyDiagnostics();
-                    }
-                  }}
-                >
-                  {t(action.labelKey, { defaultValue: action.code })}
-                </Button>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
       {/* Recovery plan preview */}
       {hasInterruption && recoveryPlan && (
         <div className="deep-review-action-bar__recovery-plan">
-          <button
-            type="button"
-            className="deep-review-action-bar__recovery-plan-toggle"
-            onClick={() => setShowRecoveryPlan(!showRecoveryPlan)}
-          >
-            <Info size={12} />
-            <span>
-              {showRecoveryPlan
-                ? t('deepReviewActionBar.hideRecoveryPlan', { defaultValue: 'Hide recovery plan' })
-                : t('deepReviewActionBar.showRecoveryPlan', { defaultValue: 'Show recovery plan' })}
-            </span>
-          </button>
-          {showRecoveryPlan && (
-            <div className="deep-review-action-bar__recovery-plan-detail">
-              {recoveryPlan.willPreserve.length > 0 && (
-                <div className="deep-review-action-bar__recovery-item">
-                  <CheckCircle size={12} className="deep-review-action-bar__recovery-icon--preserve" />
-                  <span>
-                    {t('deepReviewActionBar.recoveryPreserve', {
-                      count: recoveryPlan.willPreserve.length,
-                      defaultValue: '{{count}} completed reviewers will be preserved',
-                    })}
-                  </span>
-                </div>
-              )}
-              {recoveryPlan.willRerun.length > 0 && (
-                <div className="deep-review-action-bar__recovery-item">
-                  <RotateCcw size={12} className="deep-review-action-bar__recovery-icon--rerun" />
-                  <span>
-                    {t('deepReviewActionBar.recoveryRerun', {
-                      count: recoveryPlan.willRerun.length,
-                      defaultValue: '{{count}} reviewers will be rerun',
-                    })}
-                  </span>
-                </div>
-              )}
-              {recoveryPlan.willSkip.length > 0 && (
-                <div className="deep-review-action-bar__recovery-item">
-                  <SkipForward size={12} className="deep-review-action-bar__recovery-icon--skip" />
-                  <span>
-                    {t('deepReviewActionBar.recoverySkip', {
-                      count: recoveryPlan.willSkip.length,
-                      defaultValue: '{{count}} reviewers will be skipped',
-                    })}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="deep-review-action-bar__recovery-plan-detail">
+            {recoveryPlan.willPreserve.length > 0 && (
+              <div className="deep-review-action-bar__recovery-item">
+                <CheckCircle size={12} className="deep-review-action-bar__recovery-icon--preserve" />
+                <span>
+                  {t('deepReviewActionBar.recoveryPreserve', {
+                    count: recoveryPlan.willPreserve.length,
+                    defaultValue: '{{count}} completed reviewers will be preserved',
+                  })}
+                </span>
+              </div>
+            )}
+            {recoveryPlan.willRerun.length > 0 && (
+              <div className="deep-review-action-bar__recovery-item">
+                <RotateCcw size={12} className="deep-review-action-bar__recovery-icon--rerun" />
+                <span>
+                  {t('deepReviewActionBar.recoveryRerun', {
+                    count: recoveryPlan.willRerun.length,
+                    defaultValue: '{{count}} reviewers will be rerun',
+                  })}
+                </span>
+              </div>
+            )}
+            {recoveryPlan.willSkip.length > 0 && (
+              <div className="deep-review-action-bar__recovery-item">
+                <SkipForward size={12} className="deep-review-action-bar__recovery-icon--skip" />
+                <span>
+                  {t('deepReviewActionBar.recoverySkip', {
+                    count: recoveryPlan.willSkip.length,
+                    defaultValue: '{{count}} reviewers will be skipped',
+                  })}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1064,12 +1031,24 @@ export const ReviewActionBar: React.FC = () => {
               variant="primary"
               size="small"
               isLoading={activeAction === 'resume'}
-              disabled={activeAction !== null}
+              disabled={activeAction !== null || isResumeRunning}
               onClick={() => void handleContinueReview()}
             >
               <Play size={14} />
               {t('deepReviewActionBar.resumeReview', { defaultValue: 'Continue review' })}
             </Button>
+            {modelRecoveryAction && (
+              <Button
+                variant="secondary"
+                size="small"
+                disabled={activeAction !== null}
+                onClick={() => void handleOpenModelSettings()}
+              >
+                {modelRecoveryAction === 'switch_model'
+                  ? t('deepReviewActionBar.switchModel', { defaultValue: 'Switch model' })
+                  : t('deepReviewActionBar.openModelSettings', { defaultValue: 'Open model settings' })}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="small"
@@ -1078,6 +1057,16 @@ export const ReviewActionBar: React.FC = () => {
               <Copy size={14} />
               {t('deepReviewActionBar.copyDiagnostics', { defaultValue: 'Copy diagnostics' })}
             </Button>
+            {partialResults?.hasPartialResults && (
+              <Button
+                variant="ghost"
+                size="small"
+                onClick={handleViewPartialResults}
+              >
+                <Eye size={14} />
+                {t('deepReviewActionBar.viewPartialResults', { defaultValue: 'View partial results' })}
+              </Button>
+            )}
           </>
         )}
 
@@ -1110,37 +1099,6 @@ export const ReviewActionBar: React.FC = () => {
             >
               {t('deepReviewActionBar.skipRemaining', { defaultValue: 'Skip remaining' })}
             </Button>
-          </>
-        )}
-
-        {phase === 'resume_failed' && (
-          <>
-            <Button
-              variant="primary"
-              size="small"
-              isLoading={activeAction === 'resume'}
-              onClick={() => void handleRetryResume()}
-            >
-              <RotateCcw size={14} />
-              {t('deepReviewActionBar.retryResume', { defaultValue: 'Retry' })}
-            </Button>
-            <Button
-              variant="secondary"
-              size="small"
-              onClick={() => void handleRetryWithDifferentModel()}
-            >
-              {t('deepReviewActionBar.retryWithDifferentModel', { defaultValue: 'Try different model' })}
-            </Button>
-            {partialResults?.hasPartialResults && (
-              <Button
-                variant="ghost"
-                size="small"
-                onClick={handleViewPartialResults}
-              >
-                <Eye size={14} />
-                {t('deepReviewActionBar.viewPartialResults', { defaultValue: 'View partial results' })}
-              </Button>
-            )}
           </>
         )}
 
