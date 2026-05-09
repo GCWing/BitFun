@@ -50,12 +50,7 @@ pub async fn computer_use_get_status(
 #[tauri::command]
 pub async fn computer_use_request_permissions() -> Result<(), String> {
     let host = DesktopComputerUseHost::new();
-    host.request_accessibility_permission()
-        .await
-        .map_err(|e| e.to_string())?;
-    host.request_screen_capture_permission()
-        .await
-        .map_err(|e| e.to_string())?;
+    host.prompt_for_missing_permissions();
     Ok(())
 }
 

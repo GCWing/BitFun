@@ -26,6 +26,8 @@ export interface AgentCompanionTaskStatus {
 export interface AgentCompanionActivityPayload {
   mood: ChatInputPetMood;
   tasks: AgentCompanionTaskStatus[];
+  sequence?: number;
+  emittedAt?: number;
 }
 
 const EMPTY_ACTIVITY: AgentCompanionActivityPayload = {

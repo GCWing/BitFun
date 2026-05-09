@@ -34,6 +34,8 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   const [petFrameSize, setPetFrameSize] = useState<{ width: number; height: number } | null>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const bubblesRef = useRef<HTMLDivElement>(null);
+  const lastActivitySequenceRef = useRef(0);
+  const lastActivityEmittedAtRef = useRef(0);
   const displayTasks = [...tasks].reverse();
   const activePetSize = pet && petFrameSize
     ? petFrameSize
@@ -65,6 +67,16 @@ export const AgentCompanionDesktopPet: React.FC = () => {
 
     let removeActivityListener: (() => void) | null = null;
     void listen<AgentCompanionActivityPayload>('agent-companion://activity-updated', event => {
+      const emittedAt = event.payload.emittedAt ?? 0;
+      const sequence = event.payload.sequence ?? 0;
+      if (
+        emittedAt < lastActivityEmittedAtRef.current
+        || (emittedAt === lastActivityEmittedAtRef.current && sequence <= lastActivitySequenceRef.current)
+      ) {
+        return;
+      }
+      lastActivityEmittedAtRef.current = emittedAt;
+      lastActivitySequenceRef.current = sequence;
       setMood(event.payload.mood);
       setTasks(event.payload.tasks);
     }).then(unlisten => {

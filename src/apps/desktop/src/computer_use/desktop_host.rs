@@ -809,11 +809,13 @@ impl Default for DesktopComputerUseHost {
 
 impl DesktopComputerUseHost {
     pub fn new() -> Self {
-        let host = Self {
+        Self {
             state: Mutex::new(ComputerUseSessionMutableState::new()),
-        };
-        host.run_background_input_self_check();
-        host
+        }
+    }
+
+    pub fn prompt_for_missing_permissions(&self) {
+        self.run_background_input_self_check();
     }
 
     fn next_screenshot_id() -> String {
