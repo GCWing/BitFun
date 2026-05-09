@@ -192,6 +192,7 @@ export interface ReviewTeamMember {
   id: string;
   subagentId: string;
   definitionKey?: ReviewTeamCoreRoleKey;
+  conditional?: boolean;
   displayName: string;
   roleName: string;
   description: string;
@@ -237,7 +238,7 @@ export interface ReviewTeamManifestMember {
   locked: boolean;
   source: ReviewTeamMember['source'];
   subagentSource: ReviewTeamMember['subagentSource'];
-  reason?: 'disabled' | 'unavailable';
+  reason?: 'disabled' | 'unavailable' | 'non_applicable';
 }
 
 export interface ReviewTeamRunManifest {
@@ -695,6 +696,7 @@ function buildCoreMember(
     id: `core:${definition.subagentId}`,
     subagentId: definition.subagentId,
     definitionKey: definition.key,
+    conditional: definition.conditional,
     displayName: definition.funName,
     roleName: definition.roleName,
     description: definition.description,
@@ -848,11 +850,59 @@ export async function loadDefaultReviewTeam(
   });
 }
 
+interface ReviewTeamLaunchOptions {
+  reviewTargetFilePaths?: string[];
+}
+
+interface ReviewTeamManifestOptions {
+  workspacePath?: string;
+  policySource?: ReviewTeamRunManifest['policySource'];
+  reviewTargetFilePaths?: string[];
+}
+
+function hasExplicitReviewTarget(filePaths?: string[]): boolean {
+  return Boolean(filePaths?.some((filePath) => filePath.trim().length > 0));
+}
+
+function isFrontendReviewTarget(filePath: string): boolean {
+  const normalizedPath = filePath.replace(/\\/g, '/').toLowerCase();
+  return (
+    normalizedPath.startsWith('src/web-ui/') ||
+    normalizedPath.includes('/src/web-ui/') ||
+    normalizedPath.includes('/locales/') ||
+    normalizedPath.startsWith('locales/') ||
+    /\.(tsx|jsx|scss|css)$/.test(normalizedPath)
+  );
+}
+
+function isConditionalCoreMemberApplicable(
+  member: ReviewTeamMember,
+  reviewTargetFilePaths?: string[],
+): boolean {
+  if (!member.conditional) {
+    return true;
+  }
+  if (!hasExplicitReviewTarget(reviewTargetFilePaths)) {
+    return true;
+  }
+  if (member.definitionKey === 'frontend') {
+    // The frontend reviewer is optional. Only include it for explicit targets
+    // that match the same frontend/i18n signal described in the DeepReview prompt.
+    return (reviewTargetFilePaths ?? []).some(isFrontendReviewTarget);
+  }
+  return true;
+}
+
 export async function prepareDefaultReviewTeamForLaunch(
   workspacePath?: string,
+  options: ReviewTeamLaunchOptions = {},
 ): Promise<ReviewTeam> {
   const team = await loadDefaultReviewTeam(workspacePath);
-  const missingCoreMembers = team.coreMembers.filter((member) => !member.available);
+  const missingCoreMembers = team.coreMembers.filter(
+    (member) =>
+      !member.available &&
+      isConditionalCoreMemberApplicable(member, options.reviewTargetFilePaths),
+  );
 
   if (missingCoreMembers.length > 0) {
     throw new Error(
@@ -863,7 +913,10 @@ export async function prepareDefaultReviewTeamForLaunch(
   }
 
   const coreMembersToEnable = team.coreMembers.filter(
-    (member) => member.available && !member.enabled,
+    (member) =>
+      member.available &&
+      !member.enabled &&
+      isConditionalCoreMemberApplicable(member, options.reviewTargetFilePaths),
   );
 
   if (coreMembersToEnable.length > 0) {
@@ -920,17 +973,20 @@ function toManifestMember(
 
 export function buildEffectiveReviewTeamManifest(
   team: ReviewTeam,
-  options: {
-    workspacePath?: string;
-    policySource?: ReviewTeamRunManifest['policySource'];
-  } = {},
+  options: ReviewTeamManifestOptions = {},
 ): ReviewTeamRunManifest {
   const availableCoreMembers = team.coreMembers.filter((member) => member.available);
   const unavailableCoreMembers = team.coreMembers.filter((member) => !member.available);
-  const coreReviewers = availableCoreMembers
+  const inapplicableCoreMembers = availableCoreMembers.filter(
+    (member) => !isConditionalCoreMemberApplicable(member, options.reviewTargetFilePaths),
+  );
+  const applicableCoreMembers = availableCoreMembers.filter(
+    (member) => isConditionalCoreMemberApplicable(member, options.reviewTargetFilePaths),
+  );
+  const coreReviewers = applicableCoreMembers
     .filter((member) => member.definitionKey !== 'judge')
     .map((member) => toManifestMember(member));
-  const qualityGateReviewer = availableCoreMembers.find(
+  const qualityGateReviewer = applicableCoreMembers.find(
     (member) => member.definitionKey === 'judge',
   );
   const enabledExtraReviewers = team.extraMembers
@@ -944,6 +1000,9 @@ export function buildEffectiveReviewTeamManifest(
       ),
     ...unavailableCoreMembers.map((member) =>
       toManifestMember(member, 'unavailable'),
+    ),
+    ...inapplicableCoreMembers.map((member) =>
+      toManifestMember(member, 'non_applicable'),
     ),
   ];
 

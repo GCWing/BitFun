@@ -2465,6 +2465,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: dialog_turn_id.clone(),
         };
 
+        // Subagent sessions do not go through `start_dialog_turn_internal`, so
+        // they must mark their active turn here. The desktop stop action uses
+        // this state to find the running turn and signal the right cancel token.
+        self.session_manager
+            .update_session_state(
+                &session_id,
+                SessionState::Processing {
+                    current_turn_id: dialog_turn_id.clone(),
+                    phase: ProcessingPhase::Thinking,
+                },
+            )
+            .await?;
+
         // Emit DialogTurnStarted with subagent_parent_info so the frontend can
         // associate the subagent session ID with the parent tool (enabling the
         // "ignore timeout" feature for deep-review subagents).

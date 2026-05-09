@@ -381,18 +381,18 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     const turnStatus = lastTurn?.status;
     const isComplete = turnStatus === 'completed';
     const isError = turnStatus === 'error' || Boolean(childSession.error);
+    const deepReviewInterruption = isDeepReview
+      ? deriveDeepReviewInterruption(childSession)
+      : null;
 
     const store = useReviewActionBarStore.getState();
 
-    if (isDeepReview && (!latestReviewData || latestReviewMode !== 'deep') && isError) {
-      const interruption = deriveDeepReviewInterruption(childSession);
-      if (interruption) {
-        store.showInterruptedActionBar({
-          childSessionId,
-          parentSessionId: parentSessionId ?? null,
-          interruption,
-        });
-      }
+    if (isDeepReview && (!latestReviewData || latestReviewMode !== 'deep') && deepReviewInterruption) {
+      store.showInterruptedActionBar({
+        childSessionId,
+        parentSessionId: parentSessionId ?? null,
+        interruption: deepReviewInterruption,
+      });
       return;
     }
 

@@ -167,4 +167,124 @@ describe('deepReviewContinuation', () => {
     expect(prompt).toContain('ReviewPerformance: completed');
     expect(prompt).toContain('ReviewSecurity: timed_out');
   });
+
+  it('marks policy-ineligible reviewers as skipped so continuation does not re-run them', () => {
+    const session = createDeepReviewSession({
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          sessionId: 'deep-review-session',
+          timestamp: 1,
+          status: 'error',
+          userMessage: {
+            id: 'user-1',
+            content: 'Run a deep review for src/crates/core/src/lib.rs',
+            timestamp: 1,
+          },
+          startTime: 1,
+          modelRounds: [
+            {
+              id: 'round-1',
+              index: 0,
+              startTime: 1,
+              isStreaming: false,
+              isComplete: true,
+              status: 'completed',
+              items: [
+                {
+                  id: 'tool-frontend',
+                  type: 'tool',
+                  toolName: 'Task',
+                  toolCall: {
+                    id: 'call-frontend',
+                    input: { subagent_type: 'ReviewFrontend' },
+                  },
+                  toolResult: {
+                    result: null,
+                    success: false,
+                    error:
+                      'DeepReview Task policy violation: {"code":"deep_review_subagent_not_review","message":"Subagent ReviewFrontend must be marked for review."}',
+                  },
+                  startTime: 1,
+                  timestamp: 1,
+                  status: 'error',
+                },
+              ],
+            },
+          ],
+          error: 'DeepReview Task policy violation',
+        },
+      ],
+    });
+
+    const interruption = deriveDeepReviewInterruption(session, { category: 'model_error' });
+    const prompt = buildDeepReviewContinuationPrompt(interruption!);
+
+    expect(interruption?.reviewers).toEqual([
+      expect.objectContaining({
+        reviewer: 'ReviewFrontend',
+        status: 'skipped',
+      }),
+    ]);
+    expect(prompt).toContain('ReviewFrontend: skipped');
+    expect(prompt).toContain('Do not re-run skipped, non-applicable, or policy-ineligible reviewers');
+  });
+
+  it('derives a resumable interruption for manually cancelled deep reviews without model recovery actions', () => {
+    const session = createDeepReviewSession({
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          sessionId: 'deep-review-session',
+          timestamp: 1,
+          status: 'cancelled',
+          userMessage: {
+            id: 'user-1',
+            content: 'Original command:\n/DeepReview review current changes',
+            timestamp: 1,
+          },
+          startTime: 1,
+          modelRounds: [
+            {
+              id: 'round-1',
+              index: 0,
+              startTime: 1,
+              isStreaming: false,
+              isComplete: true,
+              status: 'cancelled',
+              items: [
+                {
+                  id: 'tool-security',
+                  type: 'tool',
+                  toolName: 'Task',
+                  toolCall: {
+                    id: 'call-security',
+                    input: { subagent_type: 'ReviewSecurity' },
+                  },
+                  startTime: 1,
+                  timestamp: 1,
+                  status: 'cancelled',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const interruption = deriveDeepReviewInterruption(session);
+    const actionCodes = interruption?.recommendedActions.map((action) => action.code);
+
+    expect(interruption?.phase).toBe('review_interrupted');
+    expect(interruption?.canResume).toBe(true);
+    expect(interruption?.reviewers).toEqual([
+      expect.objectContaining({
+        reviewer: 'ReviewSecurity',
+        status: 'cancelled',
+      }),
+    ]);
+    expect(actionCodes).toEqual(['continue', 'copy_diagnostics']);
+    expect(actionCodes).not.toContain('switch_model');
+    expect(actionCodes).not.toContain('wait_and_retry');
+  });
 });

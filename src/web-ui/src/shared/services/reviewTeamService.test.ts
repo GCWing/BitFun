@@ -268,6 +268,31 @@ describe('reviewTeamService', () => {
     ]);
   });
 
+  it('skips the conditional frontend reviewer when an explicit target has no frontend files', () => {
+    const team = resolveDefaultReviewTeam(
+      coreSubagents(),
+      storedConfigWithExtra(),
+    );
+
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      workspacePath: 'D:/workspace/project-a',
+      reviewTargetFilePaths: ['src/crates/core/src/agentic/deep_review_policy.rs'],
+    });
+
+    expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
+      'ReviewBusinessLogic',
+      'ReviewPerformance',
+      'ReviewSecurity',
+      'ReviewArchitecture',
+    ]);
+    expect(manifest.skippedReviewers).toEqual([
+      expect.objectContaining({
+        subagentId: 'ReviewFrontend',
+        reason: 'non_applicable',
+      }),
+    ]);
+  });
+
   it('applies per-member strategy overrides in the launch manifest and prompt', () => {
     const team = resolveDefaultReviewTeam(
       [

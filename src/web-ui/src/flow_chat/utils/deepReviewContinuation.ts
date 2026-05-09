@@ -6,7 +6,7 @@ import {
 import type { FlowToolItem, Session } from '../types/flow-chat';
 
 export type DeepReviewContinuationPhase = 'review_interrupted' | 'resume_blocked';
-export type DeepReviewReviewerStatus = 'completed' | 'timed_out' | 'failed' | 'cancelled' | 'unknown';
+export type DeepReviewReviewerStatus = 'completed' | 'timed_out' | 'failed' | 'cancelled' | 'skipped' | 'unknown';
 
 export interface DeepReviewReviewerProgress {
   reviewer: string;
@@ -42,12 +42,27 @@ export function deriveDeepReviewInterruption(
   }
 
   const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
-  const hasFailure = lastTurn?.status === 'error' || Boolean(session.error);
+  const wasManuallyCancelled = lastTurn?.status === 'cancelled';
+  const hasFailure = lastTurn?.status === 'error' || wasManuallyCancelled || Boolean(session.error);
   if (!hasFailure) {
     return null;
   }
 
-  const normalizedError = normalizeAiErrorDetail(errorDetail, session.error ?? lastTurn?.error ?? '');
+  const fallbackMessage =
+    session.error ??
+    lastTurn?.error ??
+    (wasManuallyCancelled ? 'Deep Review was stopped by the user.' : '');
+  const effectiveErrorDetail =
+    errorDetail ??
+    (wasManuallyCancelled
+      ? {
+        category: 'unknown' as const,
+        retryable: true,
+        actionHints: ['continue', 'copy_diagnostics'] as const,
+        rawMessage: fallbackMessage,
+      }
+      : null);
+  const normalizedError = normalizeAiErrorDetail(effectiveErrorDetail, fallbackMessage);
   const presentation = getAiErrorPresentation(normalizedError);
   const canResume = !RESUME_BLOCKING_CATEGORIES.has(presentation.category);
 
@@ -78,6 +93,7 @@ export function buildDeepReviewContinuationPrompt(interruption: DeepReviewInterr
     '',
     'Recovery rules:',
     '- Do not restart completed reviewer work unless the existing result is clearly incomplete or unusable.',
+    '- Do not re-run skipped, non-applicable, or policy-ineligible reviewers; keep them recorded as skipped coverage.',
     '- Re-run only missing, failed, timed-out, or cancelled reviewers when enough context exists.',
     '- If reviewer coverage remains incomplete, say that explicitly and mark the final report as lower confidence.',
     '- Run ReviewJudge before the final submit_code_review result when reviewer findings exist.',
@@ -140,6 +156,11 @@ function getReviewerProgressFromTask(item: FlowToolItem): DeepReviewReviewerProg
     status = 'completed';
   } else if (/timeout|timed out/i.test(error ?? '')) {
     status = 'timed_out';
+  } else if (isPolicyIneligibleReviewerError(error)) {
+    // A Task policy violation means the orchestrator scheduled a reviewer that
+    // is not eligible for this pass. Retrying the same Task only repeats that
+    // product error, so continuation should preserve it as skipped coverage.
+    status = 'skipped';
   } else if (item.status === 'cancelled') {
     status = 'cancelled';
   } else if (item.toolResult?.success === false || item.status === 'error') {
@@ -152,4 +173,11 @@ function getReviewerProgressFromTask(item: FlowToolItem): DeepReviewReviewerProg
     toolCallId: item.toolCall.id,
     error,
   };
+}
+
+function isPolicyIneligibleReviewerError(error?: string): boolean {
+  if (!error) {
+    return false;
+  }
+  return /DeepReview Task policy violation|deep_review_subagent_(?:not_review|not_allowed|not_readonly)/i.test(error);
 }

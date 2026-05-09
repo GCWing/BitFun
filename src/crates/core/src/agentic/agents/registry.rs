@@ -10,7 +10,8 @@ use crate::agentic::agents::custom_subagents::{
 };
 use crate::agentic::deep_review_policy::{
     REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
-    REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE, REVIEW_JUDGE_AGENT_TYPE,
+    REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE,
+    REVIEW_JUDGE_AGENT_TYPE,
 };
 use crate::agentic::tools::{get_all_registered_tool_names, get_readonly_registered_tool_names};
 use crate::service::config::global::GlobalConfigManager;
@@ -148,6 +149,7 @@ fn is_review_agent_entry(entry: &AgentEntry) -> bool {
             | REVIEWER_PERFORMANCE_AGENT_TYPE
             | REVIEWER_SECURITY_AGENT_TYPE
             | REVIEWER_ARCHITECTURE_AGENT_TYPE
+            | REVIEWER_FRONTEND_AGENT_TYPE
             | REVIEW_JUDGE_AGENT_TYPE
     )
 }
@@ -1355,6 +1357,26 @@ mod tests {
                 default_model_id_for_builtin_agent(agent_type),
                 "fast",
                 "{agent_type} should stay on the fast model slot"
+            );
+        }
+    }
+
+    #[test]
+    fn built_in_deep_review_reviewers_are_marked_as_review_agents() {
+        let registry = AgentRegistry::new();
+
+        for agent_type in [
+            "ReviewBusinessLogic",
+            "ReviewPerformance",
+            "ReviewSecurity",
+            "ReviewArchitecture",
+            "ReviewFrontend",
+            "ReviewJudge",
+        ] {
+            assert_eq!(
+                registry.get_subagent_is_review(agent_type),
+                Some(true),
+                "{agent_type} must pass DeepReview Task policy validation"
             );
         }
     }

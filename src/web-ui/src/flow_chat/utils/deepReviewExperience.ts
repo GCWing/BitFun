@@ -227,7 +227,9 @@ export function buildRecoveryPlan(
     )
     .map((r) => r.reviewer);
 
-  const willSkip: string[] = [];
+  const willSkip = reviewers
+    .filter((r) => r.status === 'skipped')
+    .map((r) => r.reviewer);
 
   const parts: string[] = [];
   if (willPreserve.length > 0) {

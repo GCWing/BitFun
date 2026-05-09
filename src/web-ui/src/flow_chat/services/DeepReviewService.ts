@@ -225,8 +225,13 @@ export async function buildDeepReviewPromptFromSessionFiles(
   extraContext?: string,
   workspacePath?: string,
 ): Promise<string> {
-  const team = await prepareDefaultReviewTeamForLaunch(workspacePath);
-  const manifest = buildEffectiveReviewTeamManifest(team, { workspacePath });
+  const team = await prepareDefaultReviewTeamForLaunch(workspacePath, {
+    reviewTargetFilePaths: filePaths,
+  });
+  const manifest = buildEffectiveReviewTeamManifest(team, {
+    workspacePath,
+    reviewTargetFilePaths: filePaths,
+  });
   const fileList = formatFileList(filePaths);
   const contextBlock = extraContext?.trim()
     ? `User-provided focus:\n${extraContext.trim()}`

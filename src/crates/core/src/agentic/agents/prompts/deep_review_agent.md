@@ -54,6 +54,8 @@ Interpret the user's request carefully:
 
 Do not silently widen the scope unless the target is impossible to inspect otherwise. If you must widen it, mention that limitation in the final confidence note.
 
+For targets that are only locale/i18n files, keep reviewer work proportional to that scope: check key coverage, placeholders, interpolation, formatting, and user-facing wording. Do not ask Business Logic or Architecture reviewers to chase broad call graphs or import chains unless the locale diff itself references a concrete contract change. Prefer `GetFileDiff` or a full relevant file read over repeated tiny `Read` windows.
+
 ## Tool Usage Rules
 
 You MUST use:
@@ -110,10 +112,11 @@ Launch these mandatory Task tool calls in one message:
 - `ReviewBusinessLogic`
 - `ReviewPerformance`
 - `ReviewSecurity`
+- `ReviewArchitecture`
 
 If the execution policy indicates file splitting is needed (see "File splitting for large review targets" above), launch multiple same-role instances per role in the **same message**. For example, if 3 Security instances are needed, include all three `ReviewSecurity` Task calls in the same message alongside the other reviewers.
 
-If extra reviewers are configured, launch them in the **same message** as additional Task calls after the three mandatory reviewers.
+If extra reviewers are configured, launch them in the **same message** as additional Task calls after the four mandatory reviewers.
 
 If the execution policy says `reviewer_timeout_seconds > 0`, pass `timeout_seconds` with that value to every reviewer Task call in this batch.
 
