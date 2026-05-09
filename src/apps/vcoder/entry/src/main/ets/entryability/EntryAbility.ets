@@ -77,6 +77,21 @@ export default class EntryAbility extends RustAbility {
         return 'false';
       }
     });
+    RustModule.registerArktsFunction('open_browser', async (err: Error, url: string): Promise<string> => {
+      try {
+        let want : Want = {
+          "action": "ohos.want.action.viewData",
+          "entities": ["entity.system.browsable"],
+          "uri": url
+        }
+        await this.context.startAbility(want);
+        hilog.info(201, 'vnext', `open url succeed: ${url}`);
+        return `start ability succeed with ${url}`;
+      } catch (error) {
+        hilog.info(201, 'vnext', `fail to open ${url} ${error.code}`);
+        return `fail to open ${url} ${error.code}`;
+      }
+    });
     RustModule.registerArktsFunction('window_is_minimized', async (err: Error, arg: string): Promise<string> => {
       let state = windowStage.getMainWindowSync().getWindowStatus();
       if (state == window.WindowStatusType.MINIMIZE) {

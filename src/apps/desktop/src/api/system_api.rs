@@ -120,7 +120,18 @@ pub async fn run_system_command(
         success: result.success,
     })
 }
-
+#[tauri::command]
+pub async fn open_external_ohos(url: String) -> Result<(), String> {
+    #[cfg(target_env = "ohos")]
+    {
+        use crate::api::ohos::browser::open_browser;
+        open_browser(url).await
+    }
+    #[cfg(not(target_env = "ohos"))]
+    {
+        Err("open_external is only supported on ohos".to_string())
+    }
+}
 #[tauri::command]
 pub async fn set_macos_edit_menu_mode(
     state: State<'_, AppState>,

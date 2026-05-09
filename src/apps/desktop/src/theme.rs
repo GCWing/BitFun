@@ -375,7 +375,7 @@ fn resize_agent_companion_window(
 
 #[tauri::command]
 pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
-    Err("Failed to create Agent companion window".to_string());
+    Err("Failed to create Agent companion window".to_string())
 }
 
 #[tauri::command]

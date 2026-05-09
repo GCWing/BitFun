@@ -742,6 +742,7 @@ pub async fn _run() {
             api::terminal_api::terminal_shutdown_all,
             api::terminal_api::terminal_get_history,
             get_system_info,
+            open_external_ohos,
             send_system_notification,
             check_command_exists,
             check_commands_exist,

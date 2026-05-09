@@ -46,10 +46,17 @@ export class SystemAPI {
    
   async openExternal(url: string): Promise<void> {
     try {
-      await openUrl(url);
+      // 尝试调用 open_external_ohos (OHOS平台会成功)
+      await api.invoke('open_external_ohos', {url});
     } catch (error) {
-      log.error('Failed to open external URL', { url, error });
-      throw new Error(`Failed to open external URL: ${error}`);
+      // 非 OHOS 平台会收到错误，然后回退到 openUrl
+      log.warn('open_external_ohos failed, falling back to openUrl', { url, error });
+      try {
+        await openUrl(url);
+      } catch (error) {
+        log.error('Failed to open external URL', { url, error });
+        throw new Error(`Failed to open external URL: ${error}`);
+      }
     }
   }
 
