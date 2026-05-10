@@ -157,6 +157,8 @@ Keep PRs small and focused. Avoid bundling unrelated changes.
 
 Run relevant tests for your change:
 
+For `/usage` UI copy changes, keep `en-US`, `zh-CN`, and `zh-TW` locale strings in sync.
+
 ```bash
 # Rust
 cargo test --workspace

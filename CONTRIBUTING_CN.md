@@ -157,6 +157,8 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 
 按改动范围运行相关测试：
 
+修改 `/usage` UI 文案时，请同步 `en-US`、`zh-CN`、`zh-TW` 多语言文本。
+
 ```bash
 # Rust
 cargo test --workspace
