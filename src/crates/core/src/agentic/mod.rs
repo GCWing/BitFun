@@ -17,8 +17,11 @@ pub mod execution;
 pub mod tools;
 
 // Coordination module
+pub mod context_profile;
 pub mod coordination;
+pub mod deep_review;
 pub mod deep_review_policy;
+pub(crate) mod subagent_runtime;
 
 // Shared-context fork-agent execution module
 pub mod fork_agent;
@@ -43,6 +46,7 @@ mod util;
 pub mod insights;
 
 pub use agents::*;
+pub use context_profile::*;
 pub use coordination::*;
 pub use core::*;
 pub use events::{queue, router, types as event_types};

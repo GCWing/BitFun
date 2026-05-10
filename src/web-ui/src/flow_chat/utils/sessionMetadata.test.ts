@@ -357,6 +357,27 @@ describe('sessionMetadata', () => {
     });
   });
 
+  it('persists the Deep Review run manifest from the runtime session', () => {
+    const runManifest = {
+      reviewMode: 'deep',
+      skippedReviewers: [
+        {
+          subagentId: 'ReviewFrontend',
+          displayName: 'Frontend Reviewer',
+          reason: 'not_applicable',
+        },
+      ],
+    };
+    const session = createSession({
+      sessionKind: 'deep_review',
+      deepReviewRunManifest: runManifest,
+    } as Partial<Session>);
+
+    const metadata = buildSessionMetadata(session);
+
+    expect(metadata.deepReviewRunManifest).toBe(runManifest);
+  });
+
   describe('unread completion persistence', () => {
     it('persists unreadCompletion from session to metadata', () => {
       const session = createSession({

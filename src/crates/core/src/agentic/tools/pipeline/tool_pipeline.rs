@@ -6,6 +6,7 @@
 use super::state_manager::ToolStateManager;
 use super::types::*;
 use crate::agentic::core::{ToolCall, ToolExecutionState, ToolResult as ModelToolResult};
+use crate::agentic::deep_review::tool_context;
 use crate::agentic::events::types::ToolEventData;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{ToolResult as FrameworkToolResult, ToolUseContext};
@@ -1134,6 +1135,20 @@ impl ToolPipeline {
                         );
                     }
                 }
+                let deep_review_parent_context =
+                    task.context
+                        .subagent_parent_info
+                        .as_ref()
+                        .map(|parent_info| tool_context::DeepReviewToolParentContext {
+                            tool_call_id: parent_info.tool_call_id.as_str(),
+                            session_id: parent_info.session_id.as_str(),
+                            dialog_turn_id: parent_info.dialog_turn_id.as_str(),
+                        });
+                tool_context::append_tool_use_context_data(
+                    &task.context.context_vars,
+                    deep_review_parent_context,
+                    &mut map,
+                );
 
                 map
             },

@@ -1071,6 +1071,16 @@ When creating commits, use this format for the commit message:
             args.unwrap_or("")
         );
 
+        if git_operation_needs_light_checkpoint(operation, args) {
+            context
+                .record_light_checkpoint(
+                    "Git",
+                    &format!("git {} {}", operation, args.unwrap_or("").trim()),
+                    Vec::new(),
+                )
+                .await;
+        }
+
         let start_time = std::time::Instant::now();
 
         // Remote SSH workspace: run git on the server (not libgit2 on the PC).
@@ -1126,6 +1136,15 @@ When creating commits, use this format for the commit message:
     }
 }
 
+fn git_operation_needs_light_checkpoint(operation: &str, args: Option<&str>) -> bool {
+    match operation {
+        "add" | "commit" | "pull" | "checkout" | "switch" | "merge" | "rebase" | "stash"
+        | "reset" | "restore" | "clean" | "cherry-pick" => true,
+        "branch" => args.is_some_and(|value| !value.trim().is_empty()),
+        _ => false,
+    }
+}
+
 impl Default for GitTool {
     fn default() -> Self {
         Self::new()
@@ -1136,7 +1155,7 @@ impl Default for GitTool {
 mod tests {
     use crate::agentic::tools::framework::Tool;
 
-    use super::{GitTool, ParsedDiffArgs};
+    use super::{git_operation_needs_light_checkpoint, GitTool, ParsedDiffArgs};
     use serde_json::json;
 
     #[tokio::test]
@@ -1163,6 +1182,28 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("operation is required"));
+    }
+
+    #[test]
+    fn checkpoint_detection_flags_mutating_git_operations() {
+        assert!(git_operation_needs_light_checkpoint(
+            "checkout",
+            Some("main")
+        ));
+        assert!(git_operation_needs_light_checkpoint(
+            "reset",
+            Some("--hard HEAD")
+        ));
+        assert!(git_operation_needs_light_checkpoint(
+            "branch",
+            Some("-D old")
+        ));
+        assert!(!git_operation_needs_light_checkpoint("status", None));
+        assert!(!git_operation_needs_light_checkpoint(
+            "diff",
+            Some("-- src/lib.rs")
+        ));
+        assert!(!git_operation_needs_light_checkpoint("branch", None));
     }
 
     #[test]

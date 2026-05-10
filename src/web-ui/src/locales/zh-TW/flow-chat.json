@@ -569,6 +569,7 @@
     "fixFailed": "修復失敗",
     "fixTimeout": "修復超時",
     "fixInterrupted": "修復已中斷，還剩 {{count}} 項。",
+    "reviewWaitingCapacity": "審核佇列等待中",
     "continueFix": "繼續修復 {{count}} 項",
     "skipRemaining": "跳過剩餘項",
     "reviewError": "審核出錯",
@@ -588,8 +589,26 @@
     "showCustomInput": "補充說明",
     "hideCustomInput": "收起說明",
     "customInstructionsPlaceholder": "描述修復的額外要求或上下文信息...",
+    "remediationStatus": {
+      "fixing": "修復中",
+      "fixed": "已修復"
+    },
+    "decisionGate": {
+      "title": "修復前確認待決策項",
+      "description": "請先選擇每個待決策項的處理方案，BitFun 會依你的選擇開始修改。",
+      "supplementLabel": "補充要求",
+      "supplementPlaceholder": "可選：補充限制、範圍邊界或實作偏好。",
+      "missingSelection": "開始前需要先為每個待決策項選擇一個方案。",
+      "noOptionsHint": "該項沒有結構化選項。只有在確認依目前計畫執行時再繼續。",
+      "confirmFix": "確認並開始",
+      "confirmFixAndReview": "確認並重審",
+      "cancel": "返回選擇"
+    },
     "fillBackInput": "填入輸入框",
     "fillBackInputHint": "將選中的修復計劃填入輸入框，供手動編輯",
+    "retryIncompleteSlices": "重試未完成切片（{{count}}）",
+    "retryIncompleteRequestDisplay": "重試 {{count}} 個未完成的 Deep Review 切片",
+    "retryIncompleteFailed": "無法重試未完成的 Deep Review 切片。",
     "fixCompletedMessage": "所有修復已成功應用。",
     "replaceInputConfirmTitle": "替換當前輸入？",
     "replaceInputConfirmMessage": "輸入框中已有文本，填入計劃將替換當前草稿內容。",
@@ -630,6 +649,48 @@
     "recoveryPreserve": "{{count}} 個已完成的 reviewer 將保留",
     "recoveryRerun": "{{count}} 個 reviewer 將重新運行",
     "recoverySkip": "{{count}} 個 reviewer 將被跳過",
+    "capacityQueue": {
+      "title": "審核員正在等待容量",
+      "pausedTitle": "佇列已暫停",
+      "detail": "排隊等待時間不會計入審核員執行時長。",
+      "reason": "原因：{{reason}}",
+      "elapsed": "已等待 {{elapsed}}",
+      "elapsedWithMax": "已等待 {{elapsed}} / {{max}}",
+      "reasons": {
+        "providerRateLimit": "模型服務限速",
+        "providerConcurrencyLimit": "模型服務並發限制",
+        "retryAfter": "模型服務要求稍後重試",
+        "localConcurrencyCap": "本地審核員容量",
+        "launchBatchBlocked": "前一啟動批次仍在執行",
+        "temporaryOverload": "模型服務暫時過載"
+      },
+      "reasonDetails": {
+        "providerRateLimit": "模型服務正在限速。BitFun 會短暫等待；如果反覆出現，可以降低 Review Team 並行審核員數量。",
+        "providerConcurrencyLimit": "模型服務拒絕了新的並發審核員。BitFun 會在容量恢復後重試；如果持續發生，建議降低審核員並行數。",
+        "retryAfter": "模型服務要求稍後重試。這裡的等待不會消耗審核員執行時間。",
+        "localConcurrencyCap": "目前 Review Team 審核員並行上限已滿。已有審核員完成後，該審核員會繼續啟動。",
+        "launchBatchBlocked": "前一啟動批次仍在執行。等待可以保持計畫中的審核順序，避免後續批次提前執行。",
+        "temporaryOverload": "模型服務回報暫時過載。BitFun 會短暫等待，然後繼續或將該審核員標記為容量略過。"
+      },
+      "sessionBusy": "目前會話較忙，可暫停 Deep Review 或稍後繼續。",
+      "stopHint": "可使用停止按鈕中斷目前審核佇列。",
+      "waitingReviewersTitle": "等待中的審核員",
+      "reviewerStatusQueued": "等待中",
+      "reviewerStatusPaused": "已暫停",
+      "optionalReviewer": "選用",
+      "pauseQueue": "暫停佇列",
+      "continueQueue": "繼續佇列",
+      "cancelQueued": "取消排隊審核員",
+      "skipOptionalQueued": "略過選用擴充",
+      "runSlowerNextTime": "下次降低並發",
+      "openReviewSettings": "開啟審核設定",
+      "runSlowerSaved": "下次 Deep Review 最多會使用 {{count}} 個並行審核員。",
+      "runSlowerFailed": "更新審核設定失敗。",
+      "runSlowerFailedWithReason": "更新審核設定失敗：{{reason}}。可以開啟審核設定並手動降低 Review Team 最大並行審核員數量。",
+      "controlFailed": "佇列控制不可用，因為該審核員缺少會話、輪次或工具識別碼。可使用停止按鈕中斷審核，或等待佇列狀態重新整理後再試。",
+      "controlFailedWithReason": "佇列控制失敗：{{reason}}。請重試；如果佇列卡住，可以使用停止來中斷審核。",
+      "controlPartiallyFailedWithReason": "佇列控制已部分生效；{{total}} 位審核員中有 {{failed}} 位失敗：{{reason}}。請等待佇列狀態重新整理後重試；如果佇列卡住，可以使用停止來中斷審核。"
+    },
     "degradation": {
       "reduceReviewers": "僅運行核心 reviewer",
       "reduceReviewersDesc": "跳過額外 reviewer，只保留核心 reviewer",
@@ -660,9 +721,11 @@
     "windowTitle": "深度審核",
     "eyebrow": "程式碼審核團隊",
     "title": "開始深度審核？",
-    "body": "深度審核會啟動並行程式碼審核團隊，通常比普通審核耗時更久，也會消耗更多 Token。",
+    "body": "深度審核會啟動多個審核員，通常比普通審核耗時更久，也會消耗更多 Token。",
     "readonlyLabel": "首次只讀",
-    "readonly": "首次審核默認只讀：它會先輸出問題和修復計劃，不會直接修改代碼。",
+    "readonly": "首次審核會先輸出問題和修復計劃，不會直接修改程式碼。",
+    "sessionConcurrencyTitle": "目前會話較忙",
+    "sessionConcurrencyBody": "目標會話已有 {{count}} 個 subagent 任務在執行。可選擇更輕量策略、暫時取消，或在容量空閒後手動繼續。",
     "costLabel": "Token 消耗更高",
     "cost": "預期消耗：多個審核角色加質量門禁，運行時間和 Token 可能達到普通審核的數倍。",
     "timeLabel": "耗時更久",
@@ -670,7 +733,77 @@
     "dontShowAgain": "下次不再提示",
     "cancel": "取消",
     "confirm": "開始深度審核",
-    "estimatedTokens": "預計消耗：{{min}} - {{max}} tokens"
+    "estimatedTokens": "預計消耗：{{min}} - {{max}} tokens",
+    "runStrategy": "運行策略：{{strategy}}",
+    "recommendedStrategy": "推薦策略：{{strategy}}",
+    "reviewDepth": "審查深度：{{depth}}",
+    "reviewDepthLabels": {
+      "high_risk_only": "僅高風險",
+      "risk_expanded": "風險擴展",
+      "full_depth": "完整深度"
+    },
+    "recommendationTitle": "風險推薦",
+    "strategyOverrideTitle": "運行策略",
+    "strategyOverrideBody": "為本專案的本次啟動選擇審核策略。",
+    "teamDefaultStrategy": "團隊預設",
+    "strategyLabels": {
+      "quick": "快速",
+      "normal": "標準",
+      "deep": "深度"
+    },
+    "lineupTitle": "審核陣容",
+    "summaryTitle": "啟動摘要",
+    "targetFiles": "{{count}} 個檔案",
+    "targetFiles_one": "{{count}} 個檔案",
+    "targetFiles_other": "{{count}} 個檔案",
+    "targetRiskTags": "風險區域：{{tags}}",
+    "targetTagsWithMore": "{{tags}}，另有 {{count}} 個",
+    "targetTagsWithMore_one": "{{tags}}，另有 {{count}} 個",
+    "targetTagsWithMore_other": "{{tags}}，另有 {{count}} 個",
+    "optionalReviewers": "{{count}} 個可選審核者",
+    "optionalReviewers_one": "{{count}} 個可選審核者",
+    "optionalReviewers_other": "{{count}} 個可選審核者",
+    "summaryFirstReview": "先摘要再覆蓋",
+    "targetTagLabels": {
+      "frontendUi": "前端 UI",
+      "frontendStyle": "前端樣式",
+      "frontendI18n": "前端國際化",
+      "frontendContract": "前端契約",
+      "desktopContract": "桌面契約",
+      "webServerContract": "Web 服務契約",
+      "backendCore": "後端核心",
+      "transport": "傳輸層",
+      "apiLayer": "API 層",
+      "aiAdapter": "AI 介接器",
+      "installerUi": "安裝器 UI",
+      "test": "測試",
+      "docs": "文件",
+      "config": "設定",
+      "generatedOrLock": "生成檔或鎖定檔",
+      "unknown": "未知區域"
+    },
+    "estimatedCalls": "{{count}} 次審核調用",
+    "estimatedCalls_one": "{{count}} 次審核調用",
+    "estimatedCalls_other": "{{count}} 次審核調用",
+    "activeReviewers": "{{count}} 個已啟用",
+    "activeReviewers_one": "{{count}} 個已啟用",
+    "activeReviewers_other": "{{count}} 個已啟用",
+    "skippedReviewers": "{{count}} 個已跳過",
+    "skippedReviewers_one": "{{count}} 個已跳過",
+    "skippedReviewers_other": "{{count}} 個已跳過",
+    "skippedMore": "另有 {{count}} 個",
+    "skippedMore_one": "另有 {{count}} 個",
+    "skippedMore_other": "另有 {{count}} 個",
+    "activeGroupTitle": "將運行",
+    "skippedGroupTitle": "已跳過的審核者",
+    "skippedReasons": {
+      "notApplicable": "不適用於本次目標",
+      "budgetLimited": "受 Token 預算限制",
+      "invalidTooling": "設定問題",
+      "disabled": "已停用",
+      "unavailable": "不可用",
+      "skipped": "已跳過"
+    }
   },
   "flowChatHeader": {
     "turnList": "輪次列表",
@@ -1051,7 +1184,12 @@
       "disableLabel": "關閉",
       "enableTooltip": "恢復超時限制",
       "enableLabel": "啟用",
-      "restoreShort": "恢復（剩餘 {{seconds}} 秒）"
+      "restoreShort": "恢復（剩餘 {{seconds}} 秒）",
+      "durationTooltip": "耗時 {{duration}}",
+      "completedDurationTooltip": "已完成，耗時 {{duration}}",
+      "failedDurationTooltip": "執行失敗，耗時 {{duration}}",
+      "failedDurationTooltipWithReason": "執行失敗，耗時 {{duration}}：{{reason}}",
+      "cancelledDurationTooltip": "已取消，耗時 {{duration}}"
     },
     "template": {
       "get": "獲取模板:",
@@ -1353,8 +1491,65 @@
         "partial": "部分完成",
         "unknown": "未知"
       },
+      "runManifest": {
+        "recommendedStrategy": "推薦策略",
+        "riskRecommendationTitle": "風險推薦",
+        "reviewDepth": "審查深度",
+        "reviewDepthLabels": {
+          "high_risk_only": "僅高風險",
+          "risk_expanded": "風險擴展",
+          "full_depth": "完整深度"
+        }
+      },
       "sectionItemCount": "{{count}} 項",
       "remediationPlan": "修復計劃",
+      "reliabilityStatus": {
+        "title": "審核狀態",
+        "context_pressure": {
+          "label": "上下文壓力上升",
+          "detail": "大型或受限目標預計會呼叫 {{count}} 次審核者。"
+        },
+        "compression_preserved": {
+          "label": "壓縮已保留關鍵事實",
+          "detail": "覆蓋說明包含壓縮保留下來的上下文。"
+        },
+        "cache_hit": {
+          "label": "增量快取重用了審核結果",
+          "detail": "{{count}} 個審核包重用了相符的快取輸出。"
+        },
+        "cache_miss": {
+          "label": "增量快取未命中或已刷新",
+          "detail": "{{count}} 個審核包重新執行或刷新了過期快取。"
+        },
+        "concurrency_limited": {
+          "label": "審核員啟動受到並行限制",
+          "detail": "{{count}} 次審核員啟動觸發了並行上限。"
+        },
+        "partial_reviewer": {
+          "label": "審核者逾時但有部分結果",
+          "detail": "{{count}} 個審核者結果是部分結果，信心已降低。"
+        },
+        "reduced_scope": {
+          "label": "降深度覆蓋",
+          "detail": "本次審核使用了降深度範圍設定。"
+        },
+        "retry_guidance": {
+          "label": "已給出重試指引",
+          "detail": "{{count}} 條重試指引用於補足部分審核覆蓋。"
+        },
+        "skipped_reviewers": {
+          "label": "已略過的審核員",
+          "detail": "{{count}} 個審核員因適用性、設定或預算被略過。"
+        },
+        "token_budget_limited": {
+          "label": "Token 預算限制了審核覆蓋",
+          "detail": "{{count}} 個審核員因 Token 預算模式被略過。"
+        },
+        "user_decision": {
+          "label": "需要使用者決策",
+          "detail": "{{count}} 個審核項需要先決策再修復。"
+        }
+      },
       "sections": {
         "summary": "結論摘要",
         "issues": "問題列表",
@@ -1383,8 +1578,11 @@
         "noIssues": "沒有已驗證問題。",
         "status": "狀態",
         "findings": "問題數",
+        "packet": "分包",
+        "partialOutput": "部分輸出",
         "validation": "驗證說明",
         "source": "來源",
+        "reliabilitySignals": "審核可靠性",
         "noItems": "無。"
       },
       "export": {
@@ -1419,7 +1617,7 @@
         "noSelectionHint": "至少選擇一項修復計劃後才能開始修復。",
         "ungrouped": "其他",
         "startFix": "開始修復",
-        "fixAndReview": "修復\\u0026重審",
+        "fixAndReview": "修復&重審",
         "cancel": "取消",
         "fixUnavailable": "無法開始修復：審核會話不可用。",
         "fixRequestDisplay": "開始修復深度審核問題",

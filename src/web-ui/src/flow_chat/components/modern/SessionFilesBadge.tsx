@@ -26,7 +26,8 @@ import { runWithConcurrencyLimit } from '@/shared/utils/runWithConcurrencyLimit'
 import { createBtwChildSession } from '../../services/BtwThreadService';
 import { openBtwSessionInAuxPane } from '../../services/openBtwSession';
 import {
-  buildDeepReviewPromptFromSessionFiles,
+  buildDeepReviewLaunchFromSessionFiles,
+  buildDeepReviewPreviewFromSessionFiles,
   launchDeepReviewSession,
 } from '../../services/DeepReviewService';
 import { insertReviewSessionSummaryMarker } from '../../services/ReviewSessionMarkerService';
@@ -41,6 +42,7 @@ import { useSessionReviewActivity } from '../../hooks/useSessionReviewActivity';
 import { useSessionStateMachine } from '../../hooks/useSessionStateMachine';
 import { SessionExecutionState } from '../../state-machine/types';
 import { isReviewActivityBlocking } from '../../utils/sessionReviewActivity';
+import { deriveDeepReviewSessionConcurrencyGuard } from '../../utils/deepReviewCapacityGuard';
 import './SessionFilesBadge.scss';
 
 const log = createLogger('SessionFilesBadge');
@@ -609,24 +611,6 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       return;
     }
 
-    const confirmed = await confirmDeepReviewLaunch();
-    if (!confirmed) {
-      return;
-    }
-    setLaunchingReviewMode('deep_review');
-
-    if (skippedCount > 0) {
-      notificationService.info(
-        t('sessionFilesBadge.review.filteredNotice', {
-          included: reviewableFilePaths.length,
-          skipped: skippedCount,
-          defaultValue:
-            'Review will analyze {{included}} files and skip {{skipped}} excluded files such as lock, generated, or binary assets.',
-        }),
-        { duration: 3500 }
-      );
-    }
-
     const fileList = reviewableFilePaths.map(p => `- ${p}`).join('\n');
     const displayMessage = skippedCount > 0
       ? t('sessionFilesBadge.deepReview.displayMessageFiltered', {
@@ -641,7 +625,34 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         });
 
     try {
-      const prompt = await buildDeepReviewPromptFromSessionFiles(
+      const preview = await buildDeepReviewPreviewFromSessionFiles(
+        reviewableFilePaths,
+        currentWorkspace?.rootPath,
+      );
+      const confirmed = await confirmDeepReviewLaunch(preview, {
+        sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
+          flowChatStore.getState(),
+          sessionId,
+        ),
+      });
+      if (!confirmed) {
+        return;
+      }
+      setLaunchingReviewMode('deep_review');
+
+      if (skippedCount > 0) {
+        notificationService.info(
+          t('sessionFilesBadge.review.filteredNotice', {
+            included: reviewableFilePaths.length,
+            skipped: skippedCount,
+            defaultValue:
+              'Review will analyze {{included}} files and skip {{skipped}} excluded files such as lock, generated, or binary assets.',
+          }),
+          { duration: 3500 }
+        );
+      }
+
+      const { prompt, runManifest } = await buildDeepReviewLaunchFromSessionFiles(
         reviewableFilePaths,
         undefined,
         currentWorkspace?.rootPath,
@@ -652,6 +663,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         workspacePath: currentWorkspace?.rootPath,
         prompt,
         displayMessage,
+        runManifest,
         childSessionName: t('sessionFilesBadge.deepReview.threadTitle', {
           defaultValue: 'Deep review',
         }),

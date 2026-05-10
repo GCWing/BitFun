@@ -8,6 +8,7 @@ import type {
   SessionKind,
   SessionTitleSource,
 } from '@/shared/types/session-history';
+import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
 // Base type for streaming items.
 export interface FlowItem {
@@ -316,6 +317,9 @@ export interface Session {
    * Cleared when the user switches to the session or the pending action is resolved.
    */
   needsUserAttention?: 'ask_user' | 'tool_confirm';
+
+  /** Per-run reviewer manifest for Deep Review child sessions. */
+  deepReviewRunManifest?: ReviewTeamRunManifest;
 
   /**
    * Runtime-only session that should stay in memory but never be persisted or

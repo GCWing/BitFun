@@ -168,6 +168,72 @@ describe('deepReviewContinuation', () => {
     expect(prompt).toContain('ReviewSecurity: timed_out');
   });
 
+  it('tracks reviewer partial timeout output when available', () => {
+    const session = createDeepReviewSession({
+      error: 'Timeout',
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          sessionId: 'deep-review-session',
+          timestamp: 1,
+          status: 'error',
+          userMessage: {
+            id: 'user-1',
+            content: 'Original command:\n/DeepReview review latest commit',
+            timestamp: 1,
+          },
+          startTime: 1,
+          modelRounds: [
+            {
+              id: 'round-1',
+              index: 0,
+              startTime: 1,
+              isStreaming: false,
+              isComplete: true,
+              status: 'completed',
+              items: [
+                {
+                  id: 'tool-1',
+                  type: 'tool',
+                  toolName: 'Task',
+                  toolCall: {
+                    id: 'call-security',
+                    input: { subagent_type: 'ReviewSecurity' },
+                  },
+                  toolResult: {
+                    result: {
+                      status: 'partial_timeout',
+                      partial_output: 'Found one likely token logging issue before timeout.',
+                    },
+                    success: true,
+                    resultForAssistant:
+                      "Subagent 'ReviewSecurity' timed out with partial result.",
+                  },
+                  startTime: 1,
+                  timestamp: 1,
+                  status: 'completed',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const interruption = deriveDeepReviewInterruption(session, { category: 'timeout' });
+    const prompt = buildDeepReviewContinuationPrompt(interruption!);
+
+    expect(interruption?.reviewers).toEqual([
+      expect.objectContaining({
+        reviewer: 'ReviewSecurity',
+        status: 'partial_timeout',
+        partialOutput: 'Found one likely token logging issue before timeout.',
+      }),
+    ]);
+    expect(prompt).toContain('ReviewSecurity: partial_timeout');
+    expect(prompt).toContain('partial output: Found one likely token logging issue before timeout.');
+  });
+
   it('marks policy-ineligible reviewers as skipped so continuation does not re-run them', () => {
     const session = createDeepReviewSession({
       dialogTurns: [
@@ -286,5 +352,161 @@ describe('deepReviewContinuation', () => {
     expect(actionCodes).toEqual(['continue', 'copy_diagnostics']);
     expect(actionCodes).not.toContain('switch_model');
     expect(actionCodes).not.toContain('wait_and_retry');
+  });
+
+  it('includes retry budget constraints from the persisted run manifest', () => {
+    const session = createDeepReviewSession({
+      error: 'Timeout',
+      deepReviewRunManifest: {
+        executionPolicy: {
+          maxRetriesPerRole: 1,
+        },
+        skippedReviewers: [],
+      },
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          sessionId: 'deep-review-session',
+          timestamp: 1,
+          status: 'error',
+          userMessage: {
+            id: 'user-1',
+            content: 'Original command:\n/DeepReview review latest commit',
+            timestamp: 1,
+          },
+          startTime: 1,
+          modelRounds: [
+            {
+              id: 'round-1',
+              index: 0,
+              startTime: 1,
+              isStreaming: false,
+              isComplete: true,
+              status: 'completed',
+              items: [
+                {
+                  id: 'tool-1',
+                  type: 'tool',
+                  toolName: 'Task',
+                  toolCall: {
+                    id: 'call-security',
+                    input: { subagent_type: 'ReviewSecurity' },
+                  },
+                  toolResult: {
+                    result: { status: 'timed_out' },
+                    success: false,
+                    error: 'Reviewer timed out',
+                  },
+                  startTime: 1,
+                  timestamp: 1,
+                  status: 'error',
+                },
+              ],
+            },
+          ],
+          error: 'Timeout',
+        },
+      ],
+    } as Partial<Session>);
+
+    const interruption = deriveDeepReviewInterruption(session, { category: 'timeout' });
+    const prompt = buildDeepReviewContinuationPrompt(interruption!);
+
+    expect(prompt).toContain('max_retries_per_role = 1');
+    expect(prompt).toContain('retry = true');
+    expect(prompt).toContain('reduce the scope');
+  });
+
+  it('includes persisted manifest skips when continuing an interrupted review', () => {
+    const session = createDeepReviewSession({
+      error: 'Timeout',
+      deepReviewRunManifest: {
+        skippedReviewers: [
+          {
+            subagentId: 'ReviewFrontend',
+            displayName: 'Frontend Reviewer',
+            reason: 'not_applicable',
+          },
+        ],
+      },
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          sessionId: 'deep-review-session',
+          timestamp: 1,
+          status: 'error',
+          userMessage: {
+            id: 'user-1',
+            content: 'Original command:\n/DeepReview review latest commit',
+            timestamp: 1,
+          },
+          startTime: 1,
+          modelRounds: [],
+          error: 'Timeout',
+        },
+      ],
+    } as Partial<Session>);
+
+    const interruption = deriveDeepReviewInterruption(session, { category: 'timeout' });
+    const prompt = buildDeepReviewContinuationPrompt(interruption!);
+
+    expect(prompt).toContain('Do not run reviewers skipped as not_applicable.');
+    expect(prompt).toContain('ReviewFrontend: skipped (not_applicable)');
+  });
+
+  it('includes incremental cache guidance from the persisted run manifest', () => {
+    const session = createDeepReviewSession({
+      error: 'Timeout',
+      deepReviewRunManifest: {
+        incrementalReviewCache: {
+          source: 'target_manifest',
+          strategy: 'reuse_completed_packets_when_fingerprint_matches',
+          cacheKey: 'incremental-review:abc12345',
+          fingerprint: 'abc12345',
+          filePaths: [
+            'src/web-ui/src/shared/services/reviewTeamService.ts',
+          ],
+          workspaceAreas: ['web-ui'],
+          reviewerPacketIds: [
+            'reviewer:ReviewBusinessLogic',
+            'reviewer:ReviewSecurity',
+          ],
+          lineCount: 128,
+          lineCountSource: 'diff_stat',
+          invalidatesOn: [
+            'target_file_set_changed',
+            'target_line_count_changed',
+            'reviewer_roster_changed',
+          ],
+        },
+        skippedReviewers: [],
+      },
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          sessionId: 'deep-review-session',
+          timestamp: 1,
+          status: 'error',
+          userMessage: {
+            id: 'user-1',
+            content: 'Original command:\n/DeepReview review latest commit',
+            timestamp: 1,
+          },
+          startTime: 1,
+          modelRounds: [],
+          error: 'Timeout',
+        },
+      ],
+    } as Partial<Session>);
+
+    const interruption = deriveDeepReviewInterruption(session, { category: 'timeout' });
+    const prompt = buildDeepReviewContinuationPrompt(interruption!);
+
+    expect(prompt).toContain('Incremental review cache guidance:');
+    expect(prompt).toContain('cache_key: incremental-review:abc12345');
+    expect(prompt).toContain('fingerprint: abc12345');
+    expect(prompt).toContain('Only reuse completed reviewer outputs when the current review target fingerprint still matches.');
+    expect(prompt).toContain('reviewer:ReviewBusinessLogic');
+    expect(prompt).toContain('target_file_set_changed');
   });
 });

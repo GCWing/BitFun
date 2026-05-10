@@ -388,6 +388,35 @@ impl TransportAdapter for TauriTransportAdapter {
                     }),
                 )?;
             }
+            AgenticEvent::DeepReviewQueueStateChanged {
+                session_id,
+                turn_id,
+                queue_state,
+                subagent_parent_info,
+            } => {
+                self.app_handle.emit(
+                    "agentic://deep-review-queue-state-changed",
+                    json!({
+                        "sessionId": session_id,
+                        "turnId": turn_id,
+                        "queueState": {
+                            "toolId": queue_state.tool_id,
+                            "subagentType": queue_state.subagent_type,
+                            "status": queue_state.status,
+                            "reason": queue_state.reason,
+                            "queuedReviewerCount": queue_state.queued_reviewer_count,
+                            "activeReviewerCount": queue_state.active_reviewer_count,
+                            "effectiveParallelInstances": queue_state.effective_parallel_instances,
+                            "optionalReviewerCount": queue_state.optional_reviewer_count,
+                            "queueElapsedMs": queue_state.queue_elapsed_ms,
+                            "runElapsedMs": queue_state.run_elapsed_ms,
+                            "maxQueueWaitSeconds": queue_state.max_queue_wait_seconds,
+                            "sessionConcurrencyHigh": queue_state.session_concurrency_high,
+                        },
+                        "subagentParentInfo": subagent_parent_info,
+                    }),
+                )?;
+            }
             AgenticEvent::ModelRoundCompleted {
                 session_id,
                 turn_id,

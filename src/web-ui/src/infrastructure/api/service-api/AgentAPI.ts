@@ -62,6 +62,7 @@ export interface StartDialogTurnRequest {
   workspacePath?: string;
   /** Optional multimodal image contexts (snake_case fields, aligned with backend ImageContextData). */
   imageContexts?: ImageInputContextData[];
+  userMessageMetadata?: Record<string, unknown>;
 }
 
 export interface CompactSessionRequest {
@@ -153,6 +154,52 @@ export interface TextChunkEvent extends AgenticEvent {
 export interface ToolEvent extends AgenticEvent {
   toolEvent: any;
   subagentParentInfo?: SubagentParentInfo;
+}
+
+export type DeepReviewQueueStatus =
+  | 'queued_for_capacity'
+  | 'paused_by_user'
+  | 'running'
+  | 'capacity_skipped';
+
+export type DeepReviewQueueReason =
+  | 'provider_rate_limit'
+  | 'provider_concurrency_limit'
+  | 'retry_after'
+  | 'local_concurrency_cap'
+  | 'launch_batch_blocked'
+  | 'temporary_overload';
+
+export interface DeepReviewQueueStateEventData {
+  toolId: string;
+  subagentType: string;
+  status: DeepReviewQueueStatus;
+  reason?: DeepReviewQueueReason;
+  queuedReviewerCount: number;
+  activeReviewerCount?: number;
+  effectiveParallelInstances?: number;
+  optionalReviewerCount?: number;
+  queueElapsedMs?: number;
+  runElapsedMs?: number;
+  maxQueueWaitSeconds?: number;
+  sessionConcurrencyHigh?: boolean;
+}
+
+export interface DeepReviewQueueStateChangedEvent extends AgenticEvent {
+  queueState: DeepReviewQueueStateEventData;
+}
+
+export type DeepReviewQueueControlAction =
+  | 'pause'
+  | 'continue'
+  | 'cancel'
+  | 'skip_optional';
+
+export interface DeepReviewQueueControlRequest {
+  sessionId: string;
+  dialogTurnId: string;
+  toolId: string;
+  action: DeepReviewQueueControlAction;
 }
 
  
@@ -264,6 +311,14 @@ export class AgentAPI {
       );
     } catch (error) {
       throw createTauriCommandError('steer_dialog_turn', error, request);
+    }
+  }
+
+  async controlDeepReviewQueue(request: DeepReviewQueueControlRequest): Promise<void> {
+    try {
+      await api.invoke<void>('control_deep_review_queue', { request });
+    } catch (error) {
+      throw createTauriCommandError('control_deep_review_queue', error, request);
     }
   }
 
@@ -419,6 +474,15 @@ export class AgentAPI {
     return api.listen<ToolEvent>('agentic://tool-event', callback);
   }
 
+  onDeepReviewQueueStateChanged(
+    callback: (event: DeepReviewQueueStateChangedEvent) => void
+  ): () => void {
+    return api.listen<DeepReviewQueueStateChangedEvent>(
+      'agentic://deep-review-queue-state-changed',
+      callback
+    );
+  }
+
    
   onDialogTurnCompleted(callback: (event: AgenticEvent) => void): () => void {
     return api.listen<AgenticEvent>('agentic://dialog-turn-completed', callback);
@@ -477,7 +541,14 @@ export class AgentAPI {
     }
   }
 
-   
+  async getDefaultReviewTeamDefinition(): Promise<unknown> {
+    try {
+      return await api.invoke<unknown>('get_default_review_team_definition');
+    } catch (error) {
+      throw createTauriCommandError('get_default_review_team_definition', error);
+    }
+  }
+
   async generateSessionTitle(
     sessionId: string,
     userMessage: string,

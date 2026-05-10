@@ -51,6 +51,7 @@ impl BitfunAcpRuntime {
                     acp_session.mode_id.clone(),
                     Some(acp_session.cwd.clone()),
                     DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                    None,
                 )
                 .await
                 .map_err(Self::internal_error)?;
@@ -66,6 +67,7 @@ impl BitfunAcpRuntime {
                     acp_session.mode_id.clone(),
                     Some(acp_session.cwd.clone()),
                     DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                    None,
                 )
                 .await
                 .map_err(Self::internal_error)?;

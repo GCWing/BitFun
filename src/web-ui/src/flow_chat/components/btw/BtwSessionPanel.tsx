@@ -297,6 +297,8 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const actionBarChildSessionId = useReviewActionBarStore((s) => s.childSessionId);
   const actionBarCompletedIds = useReviewActionBarStore((s) => s.completedRemediationIds);
   const actionBarRemediationItems = useReviewActionBarStore((s) => s.remediationItems);
+  const actionBarSelectedIds = useReviewActionBarStore((s) => s.selectedRemediationIds);
+  const actionBarFixingIds = useReviewActionBarStore((s) => s.fixingRemediationIds);
   const actionBarLastSubmittedAction = useReviewActionBarStore((s) => s.lastSubmittedAction);
   const isDeepReview = childKind === 'deep_review';
   const isReviewSession = childKind === 'review' || childKind === 'deep_review';
@@ -329,6 +331,14 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
 
   const remainingCount = actionBarRemediationItems.length - actionBarCompletedIds.size;
   const totalCount = actionBarRemediationItems.length;
+  const fixScopedIds = actionBarFixingIds.size > 0 ? actionBarFixingIds : actionBarSelectedIds;
+  const fixScopedCompletedCount = [...fixScopedIds].filter((id) => actionBarCompletedIds.has(id)).length;
+  const minimizedCountLabel = (
+    ['fix_running', 'fix_completed', 'fix_failed', 'fix_timeout', 'fix_interrupted'].includes(actionBarPhase) &&
+    fixScopedIds.size > 0
+  )
+    ? `${fixScopedCompletedCount}/${fixScopedIds.size}`
+    : `${remainingCount}/${totalCount}`;
   const minimizedActionLabel = useMemo(() => {
     switch (actionBarPhase) {
       case 'fix_running':
@@ -404,6 +414,16 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
 
     // Only activate if the action bar is idle or not yet shown for this session
     if (store.childSessionId === childSessionId && store.phase !== 'idle') {
+      // A fix request briefly coexists with the previous completed review turn
+      // until FlowChatManager creates the new fix turn; ignore that stale terminal state.
+      const currentFixTurnHasStarted = store.phase !== 'fix_running' ||
+        !store.fixingBaselineTurnId ||
+        lastTurn?.id !== store.fixingBaselineTurnId;
+
+      if (store.phase === 'fix_running' && !currentFixTurnHasStarted && (isComplete || isError)) {
+        return;
+      }
+
       // Update phase based on turn status if currently showing
       if (isError && store.phase === 'resume_running') {
         store.updatePhase('resume_failed', childSession.error ?? undefined);
@@ -437,6 +457,14 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           completedRemediationIds: store.completedRemediationIds,
         });
         store.minimize();
+      } else if (isComplete && store.phase === 'review_waiting_capacity') {
+        store.showActionBar({
+          childSessionId,
+          parentSessionId: parentSessionId ?? null,
+          reviewData: latestReviewData,
+          reviewMode,
+          phase: 'review_completed',
+        });
       }
       return;
     }
@@ -713,7 +741,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
               </span>
               {totalCount > 0 && (
                 <span className="btw-session-panel__minimized-count">
-                  {remainingCount}/{totalCount}
+                  {minimizedCountLabel}
                 </span>
               )}
             </button>

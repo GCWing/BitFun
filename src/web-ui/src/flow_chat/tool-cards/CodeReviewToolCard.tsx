@@ -9,6 +9,7 @@ import {
   Loader2,
   AlertTriangle,
   AlertCircle,
+  Clock,
   Info,
   ChevronDown,
   ChevronUp,
@@ -16,6 +17,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Tooltip, ToolProcessingDots } from '@/component-library';
 import type { ToolCardProps } from '../types/flow-chat';
+import { flowChatStore } from '../store/FlowChatStore';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
@@ -23,10 +25,12 @@ import {
   buildReviewRemediationItems,
 } from '../utils/codeReviewRemediation';
 import {
+  buildCodeReviewReliabilityNotices,
   buildCodeReviewReportSections,
   getDefaultExpandedCodeReviewSectionIds,
   type CodeReviewReportData,
   type CodeReviewReviewer,
+  type ReviewReliabilityNotice,
   type RemediationGroupId,
   type ReviewReportGroup,
   type ReviewSectionId,
@@ -34,8 +38,14 @@ import {
 } from '../utils/codeReviewReport';
 import { CodeReviewReportExportActions } from './CodeReviewReportExportActions';
 import { DEEP_REVIEW_SCROLL_TO_EVENT, type DeepReviewScrollToRequest } from '../events/flowchatNavigation';
-import { globalEventBus } from '@/infrastructure';
+import { globalEventBus } from '@/infrastructure/event-bus';
 import { normalizeDecisionEntry, type DecisionContext } from '../utils/codeReviewReport';
+import {
+  getActiveReviewTeamManifestMembers,
+  type ReviewTeamManifestMember,
+  type ReviewTeamManifestMemberReason,
+  type ReviewTeamRunManifest,
+} from '@/shared/services/reviewTeamService';
 import './CodeReviewToolCard.scss';
 
 const log = createLogger('CodeReviewToolCard');
@@ -126,6 +136,134 @@ function formatReviewerStatus(status: string, t: Translate): string {
   });
 }
 
+function getReliabilityNoticeLabel(notice: ReviewReliabilityNotice, t: Translate): string {
+  return t(`toolCards.codeReview.reliabilityStatus.${notice.kind}.label`, {
+    defaultValue: {
+      context_pressure: 'Context pressure rising',
+      compression_preserved: 'Compression preserved key facts',
+      cache_hit: 'Incremental cache reused reviewer output',
+      cache_miss: 'Incremental cache missed or refreshed',
+      concurrency_limited: 'Reviewer launch was concurrency-limited',
+      partial_reviewer: 'Reviewer timed out with partial result',
+      reduced_scope: 'Reduced-depth coverage',
+      retry_guidance: 'Retry guidance emitted',
+      skipped_reviewers: 'Skipped reviewers',
+      token_budget_limited: 'Token budget limited reviewer coverage',
+      user_decision: 'User decision needed',
+    }[notice.kind],
+  });
+}
+
+function getReliabilityNoticeDetail(notice: ReviewReliabilityNotice, t: Translate): string {
+  if (notice.detail?.trim()) {
+    return notice.detail.trim();
+  }
+
+  return t(`toolCards.codeReview.reliabilityStatus.${notice.kind}.detail`, {
+    count: notice.count ?? 0,
+    defaultValue: {
+      context_pressure: '{{count}} reviewer calls planned for a large or constrained target.',
+      compression_preserved: 'Coverage notes include preserved context from compression.',
+      cache_hit: '{{count}} reviewer packet reused matching cached output.',
+      cache_miss: '{{count}} reviewer packet ran fresh or refreshed stale cache.',
+      concurrency_limited: '{{count}} reviewer launch hit a concurrency cap.',
+      partial_reviewer: '{{count}} reviewer result is partial; confidence is reduced.',
+      reduced_scope: 'This review used a reduced-depth scope profile.',
+      retry_guidance: '{{count}} retry guidance item was emitted for partial review coverage.',
+      skipped_reviewers: '{{count}} reviewer was skipped by applicability, configuration, or budget.',
+      token_budget_limited: '{{count}} reviewer was skipped by token budget mode.',
+      user_decision: '{{count}} review item needs your decision before fixing.',
+    }[notice.kind],
+  });
+}
+
+function getReliabilityNoticeIcon(notice: ReviewReliabilityNotice): React.ReactNode {
+  if (notice.kind === 'partial_reviewer' || notice.kind === 'retry_guidance') {
+    return <Clock size={13} />;
+  }
+  if (
+    notice.kind === 'user_decision' ||
+    notice.kind === 'concurrency_limited' ||
+    notice.kind === 'token_budget_limited'
+  ) {
+    return <AlertTriangle size={13} />;
+  }
+  return <Info size={13} />;
+}
+
+function getDeepReviewRunManifestForSession(sessionId?: string): ReviewTeamRunManifest | undefined {
+  if (!sessionId) {
+    return undefined;
+  }
+
+  return flowChatStore.getState().sessions.get(sessionId)?.deepReviewRunManifest;
+}
+
+function getReviewerLabel(member: ReviewTeamManifestMember): string {
+  return member.displayName || member.subagentId;
+}
+
+function getSkippedReasonLabel(
+  reason: ReviewTeamManifestMemberReason | undefined,
+  t: Translate,
+): string {
+  switch (reason) {
+    case 'not_applicable':
+      return t('toolCards.codeReview.runManifest.skippedReasons.notApplicable', {
+        defaultValue: 'Not applicable to this target',
+      });
+    case 'budget_limited':
+      return t('toolCards.codeReview.runManifest.skippedReasons.budgetLimited', {
+        defaultValue: 'Limited by token budget',
+      });
+    case 'invalid_tooling':
+      return t('toolCards.codeReview.runManifest.skippedReasons.invalidTooling', {
+        defaultValue: 'Configuration issue',
+      });
+    case 'disabled':
+      return t('toolCards.codeReview.runManifest.skippedReasons.disabled', {
+        defaultValue: 'Disabled',
+      });
+    case 'unavailable':
+      return t('toolCards.codeReview.runManifest.skippedReasons.unavailable', {
+        defaultValue: 'Unavailable',
+      });
+    default:
+      return t('toolCards.codeReview.runManifest.skippedReasons.skipped', {
+        defaultValue: 'Skipped',
+      });
+  }
+}
+
+function formatRunManifestSummary(
+  manifest: ReviewTeamRunManifest,
+  activeReviewers: ReviewTeamManifestMember[],
+  t: Translate,
+): string {
+  return t('toolCards.codeReview.runManifest.summary', {
+    active: activeReviewers.length,
+    skipped: manifest.skippedReviewers.length,
+    calls: manifest.tokenBudget.estimatedReviewerCalls,
+    defaultValue: '{{active}} active / {{skipped}} skipped / {{calls}} calls',
+  });
+}
+
+function formatReviewDepthLabel(reviewDepth: string, t: Translate): string {
+  return t(`toolCards.codeReview.runManifest.reviewDepthLabels.${reviewDepth}`, {
+    defaultValue: {
+      high_risk_only: 'High-risk-only',
+      risk_expanded: 'Risk-expanded',
+      full_depth: 'Full-depth',
+    }[reviewDepth] ?? reviewDepth,
+  });
+}
+
+function formatRunManifestTarget(manifest: ReviewTeamRunManifest): string {
+  return manifest.target.tags.length > 0
+    ? manifest.target.tags.join(', ')
+    : manifest.target.source;
+}
+
 function renderReportGroupList<TId extends RemediationGroupId | StrengthGroupId>(
   groups: Array<ReviewReportGroup<TId>>,
   titleForGroup: (id: TId) => string,
@@ -144,7 +282,7 @@ function renderReportGroupList<TId extends RemediationGroupId | StrengthGroupId>
 
 export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
   toolItem,
-  sessionId: _sessionId,
+  sessionId,
 }) => {
   const { t } = useTranslation('flow-chat');
   const { toolResult, status } = toolItem;
@@ -157,6 +295,21 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
     toolId,
     toolName: toolItem.toolName,
   });
+  const [sessionRunManifest, setSessionRunManifest] = useState<ReviewTeamRunManifest | undefined>(
+    () => getDeepReviewRunManifestForSession(sessionId),
+  );
+
+  useEffect(() => {
+    setSessionRunManifest(getDeepReviewRunManifestForSession(sessionId));
+
+    if (!sessionId) {
+      return undefined;
+    }
+
+    return flowChatStore.subscribe((state) => {
+      setSessionRunManifest(state.sessions.get(sessionId)?.deepReviewRunManifest);
+    });
+  }, [sessionId]);
 
   const getStatusIcon = () => {
     switch (status) {
@@ -445,7 +598,10 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
         extra={(
           <>
             {hasData && reviewData && (
-              <CodeReviewReportExportActions reviewData={reviewData} />
+              <CodeReviewReportExportActions
+                reviewData={reviewData}
+                runManifest={reviewData.review_mode === 'deep' ? sessionRunManifest : undefined}
+              />
             )}
             {hasData && (
               <Tooltip
@@ -475,7 +631,14 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
     const review_mode = reviewData.review_mode;
     const review_scope = reviewData.review_scope;
     const reviewers = reviewData.reviewers ?? [];
+    const runManifest = review_mode === 'deep'
+      ? sessionRunManifest
+      : undefined;
+    const activeRunManifestReviewers = runManifest
+      ? getActiveReviewTeamManifestMembers(runManifest)
+      : [];
     const reportSections = buildCodeReviewReportSections(reviewData);
+    const reliabilityNotices = buildCodeReviewReliabilityNotices(reviewData, runManifest);
     const riskLevel = summary.risk_level ?? 'low';
     const recommendedAction = summary.recommended_action ?? 'approve';
     const remediationItemCount = reportSections.remediationGroups
@@ -485,11 +648,47 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
     const remediationExpanded = expandedReportSectionIds.has('remediation');
     const issuesExpanded = expandedReportSectionIds.has('issues');
     const strengthsExpanded = expandedReportSectionIds.has('strengths');
+    const runManifestExpanded = expandedReportSectionIds.has('runManifest');
     const teamExpanded = expandedReportSectionIds.has('team');
     const coverageExpanded = expandedReportSectionIds.has('coverage');
 
     return (
       <div className="code-review-details">
+        {reliabilityNotices.length > 0 && (
+          <div
+            className="review-reliability-status"
+            aria-label={t('toolCards.codeReview.reliabilityStatus.title', {
+              defaultValue: 'Review status',
+            })}
+          >
+            <div className="review-reliability-status__title">
+              {t('toolCards.codeReview.reliabilityStatus.title', {
+                defaultValue: 'Review status',
+              })}
+            </div>
+            <div className="review-reliability-status__items">
+              {reliabilityNotices.map((notice) => (
+                <div
+                  key={notice.kind}
+                  className={`review-reliability-status__item review-reliability-status__item--${notice.severity}`}
+                >
+                  <span className="review-reliability-status__icon">
+                    {getReliabilityNoticeIcon(notice)}
+                  </span>
+                  <span className="review-reliability-status__text">
+                    <span className="review-reliability-status__label">
+                      {getReliabilityNoticeLabel(notice, t)}
+                    </span>
+                    <span className="review-reliability-status__detail">
+                      {getReliabilityNoticeDetail(notice, t)}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="review-summary">
           <div className="summary-header">{t('toolCards.codeReview.overallAssessment')}</div>
           <div className="summary-rows">
@@ -537,6 +736,95 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
             )}
           </div>
         </div>
+
+        {runManifest && (
+          <ReviewReportSection
+            title={t('toolCards.codeReview.sections.runManifest', { defaultValue: 'Run manifest' })}
+            summary={formatRunManifestSummary(runManifest, activeRunManifestReviewers, t)}
+            expanded={runManifestExpanded}
+            onToggle={handleToggleReportSection('runManifest')}
+          >
+            <div className="run-manifest">
+              <div className="run-manifest__facts">
+                <div className="run-manifest__fact">
+                  <span>{t('toolCards.codeReview.runManifest.target', { defaultValue: 'Target' })}</span>
+                  <strong>{formatRunManifestTarget(runManifest)}</strong>
+                </div>
+                <div className="run-manifest__fact">
+                  <span>{t('toolCards.codeReview.runManifest.budget', { defaultValue: 'Budget' })}</span>
+                  <strong>{runManifest.tokenBudget.mode}</strong>
+                </div>
+                <div className="run-manifest__fact">
+                  <span>{t('toolCards.codeReview.runManifest.estimatedCalls', { defaultValue: 'Estimated calls' })}</span>
+                  <strong>{runManifest.tokenBudget.estimatedReviewerCalls}</strong>
+                </div>
+                {runManifest.strategyRecommendation && (
+                  <div className="run-manifest__fact">
+                    <span>
+                      {t('toolCards.codeReview.runManifest.recommendedStrategy', {
+                        defaultValue: 'Recommended strategy',
+                      })}
+                    </span>
+                    <strong>{runManifest.strategyRecommendation.strategyLevel}</strong>
+                  </div>
+                )}
+                {runManifest.scopeProfile && (
+                  <div className="run-manifest__fact">
+                    <span>
+                      {t('toolCards.codeReview.runManifest.reviewDepth', {
+                        defaultValue: 'Review depth',
+                      })}
+                    </span>
+                    <strong>{formatReviewDepthLabel(runManifest.scopeProfile.reviewDepth, t)}</strong>
+                  </div>
+                )}
+              </div>
+
+              {runManifest.strategyRecommendation && (
+                <div className="run-manifest__group">
+                  <div className="run-manifest__group-title">
+                    {t('toolCards.codeReview.runManifest.riskRecommendationTitle', {
+                      defaultValue: 'Risk recommendation',
+                    })}
+                  </div>
+                  <p>{runManifest.strategyRecommendation.rationale}</p>
+                </div>
+              )}
+
+              {activeRunManifestReviewers.length > 0 && (
+                <div className="run-manifest__group">
+                  <div className="run-manifest__group-title">
+                    {t('toolCards.codeReview.runManifest.activeGroupTitle', { defaultValue: 'Will run' })}
+                  </div>
+                  <div className="run-manifest__chips">
+                    {activeRunManifestReviewers.map((member) => (
+                      <span key={`active-${member.subagentId}`} className="run-manifest__chip">
+                        <span className="run-manifest__chip-name">{getReviewerLabel(member)}</span>
+                        <span className="run-manifest__chip-meta">{member.roleName}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {runManifest.skippedReviewers.length > 0 && (
+                <div className="run-manifest__group">
+                  <div className="run-manifest__group-title run-manifest__group-title--warning">
+                    {t('toolCards.codeReview.runManifest.skippedGroupTitle', { defaultValue: 'Skipped reviewers' })}
+                  </div>
+                  <ul className="run-manifest__skipped-list">
+                    {runManifest.skippedReviewers.map((member) => (
+                      <li key={`skipped-${member.subagentId}`}>
+                        <span>{getReviewerLabel(member)}</span>
+                        <strong>{getSkippedReasonLabel(member.reason, t)}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </ReviewReportSection>
+        )}
 
         {issues.length > 0 && (
           <ReviewReportSection
@@ -847,6 +1135,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
     handleToggleReportSection,
     remediationItems,
     reviewData,
+    sessionRunManifest,
     t,
   ]);
 

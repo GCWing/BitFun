@@ -6,6 +6,7 @@ import { stateMachineManager } from '../state-machine';
 import { flowChatManager } from './FlowChatManager';
 import type { Session } from '../types/flow-chat';
 import type { SessionKind } from '@/shared/types/session-history';
+import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 import { buildSessionMetadata } from '../utils/sessionMetadata';
 
 const log = createLogger('BtwThreadService');
@@ -93,6 +94,7 @@ export async function createBtwChildSession(params: {
   requestId?: string;
   addMarker?: boolean;
   sessionKind?: Extract<SessionKind, 'btw' | 'review' | 'deep_review'>;
+  deepReviewRunManifest?: ReviewTeamRunManifest;
 }): Promise<{
   requestId: string;
   childSessionId: string;
@@ -149,6 +151,7 @@ export async function createBtwChildSession(params: {
         parentDialogTurnId,
         parentTurnIndex,
       },
+      deepReviewRunManifest: params.deepReviewRunManifest,
       isTransient: false,
     },
     remoteConnectionId,

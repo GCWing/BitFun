@@ -28,6 +28,7 @@ export type ReviewActionPhase =
   | 'fix_failed'
   | 'fix_timeout'
   | 'fix_interrupted'
+  | 'review_waiting_capacity'
   | 'review_interrupted'
   | 'resume_blocked'
   | 'resume_running'
@@ -35,6 +36,55 @@ export type ReviewActionPhase =
   | 'review_error';
 
 export type DeepReviewActionPhase = ReviewActionPhase;
+
+export type DeepReviewCapacityQueueStatus =
+  | 'queued_for_capacity'
+  | 'paused_by_user'
+  | 'running'
+  | 'capacity_skipped';
+
+export type DeepReviewCapacityQueueAction =
+  | 'pause'
+  | 'continue'
+  | 'cancel'
+  | 'skip_optional';
+
+export type DeepReviewCapacityQueueReason =
+  | 'provider_rate_limit'
+  | 'provider_concurrency_limit'
+  | 'retry_after'
+  | 'local_concurrency_cap'
+  | 'launch_batch_blocked'
+  | 'temporary_overload';
+
+export interface DeepReviewCapacityWaitingReviewer {
+  toolId?: string;
+  subagentType?: string;
+  displayName?: string;
+  status: Exclude<DeepReviewCapacityQueueStatus, 'running' | 'capacity_skipped'>;
+  reason?: DeepReviewCapacityQueueReason;
+  optional?: boolean;
+  queueElapsedMs?: number;
+  maxQueueWaitSeconds?: number;
+}
+
+export interface DeepReviewCapacityQueueState {
+  toolId?: string;
+  subagentType?: string;
+  dialogTurnId?: string;
+  status: DeepReviewCapacityQueueStatus;
+  reason?: DeepReviewCapacityQueueReason;
+  queuedReviewerCount: number;
+  activeReviewerCount?: number;
+  effectiveParallelInstances?: number;
+  optionalReviewerCount?: number;
+  queueElapsedMs?: number;
+  runElapsedMs?: number;
+  maxQueueWaitSeconds?: number;
+  sessionConcurrencyHigh?: boolean;
+  controlMode?: 'local' | 'session_stop_only' | 'backend';
+  waitingReviewers?: DeepReviewCapacityWaitingReviewer[];
+}
 
 export interface ReviewActionBarState {
   /** Which child session this bar belongs to */
@@ -56,9 +106,9 @@ export interface ReviewActionBarState {
   /** Whether the action bar is minimized (collapsed to a floating button) */
   minimized: boolean;
   /** Which fix action is currently in flight */
-  activeAction: 'fix' | 'fix-review' | 'resume' | null;
+  activeAction: 'fix' | 'fix-review' | 'resume' | 'retry' | null;
   /** Last user action that changed the action bar content */
-  lastSubmittedAction: 'fix' | 'fix-review' | 'resume' | null;
+  lastSubmittedAction: 'fix' | 'fix-review' | 'resume' | 'retry' | null;
   /** User-supplied custom instructions (from the textarea) */
   customInstructions: string;
   /** Error message when phase is fix_failed or review_error */
@@ -69,10 +119,16 @@ export interface ReviewActionBarState {
   completedRemediationIds: Set<string>;
   /** IDs of items being fixed in the current fix_running session (snapshot at start) */
   fixingRemediationIds: Set<string>;
+  /** Last dialog turn that existed before the current fix request was submitted */
+  fixingBaselineTurnId: string | null;
   /** IDs of items remaining when a fix was interrupted */
   remainingFixIds: string[];
   /** User's option choice for needs_decision items: map of item id -> option index */
   decisionSelections: Record<string, number>;
+  /** Visible Deep Review capacity queue state. Automatic queue execution is not enabled here. */
+  capacityQueueState: DeepReviewCapacityQueueState | null;
+  /** Last local queue-control action selected by the user */
+  lastCapacityQueueAction: DeepReviewCapacityQueueAction | null;
 
   // ---- actions ----
   showActionBar: (params: {
@@ -89,17 +145,31 @@ export interface ReviewActionBarState {
     interruption: DeepReviewInterruption;
     phase?: Extract<ReviewActionPhase, 'review_interrupted' | 'resume_blocked' | 'resume_failed'>;
   }) => void;
+  showCapacityQueueBar: (params: {
+    childSessionId: string;
+    parentSessionId: string | null;
+    capacityQueueState: DeepReviewCapacityQueueState;
+  }) => void;
   updatePhase: (phase: ReviewActionPhase, errorMessage?: string | null) => void;
   toggleRemediation: (id: string) => void;
   toggleAllRemediation: () => void;
   toggleGroupRemediation: (groupId: RemediationGroupId) => void;
-  setActiveAction: (action: 'fix' | 'fix-review' | 'resume' | null) => void;
+  setActiveAction: (
+    action: 'fix' | 'fix-review' | 'resume' | 'retry' | null,
+    options?: { baselineTurnId?: string | null },
+  ) => void;
   setCustomInstructions: (value: string) => void;
   setSelectedRemediationIds: (ids: Set<string>) => void;
   dismiss: () => void;
   minimize: () => void;
   restore: () => void;
   skipRemainingFixes: () => void;
+  setCapacityQueueState: (state: DeepReviewCapacityQueueState | null) => void;
+  applyCapacityQueueState: (state: DeepReviewCapacityQueueState) => void;
+  pauseCapacityQueue: () => void;
+  continueCapacityQueue: () => void;
+  cancelQueuedReviewers: () => void;
+  skipOptionalQueuedReviewers: () => void;
   setDecisionSelection: (itemId: string, optionIndex: number) => void;
   reset: () => void;
 }
@@ -116,16 +186,107 @@ const initialState = {
   selectedRemediationIds: new Set<string>(),
   dismissed: false,
   minimized: false,
-  activeAction: null as 'fix' | 'fix-review' | 'resume' | null,
-  lastSubmittedAction: null as 'fix' | 'fix-review' | 'resume' | null,
+  activeAction: null as 'fix' | 'fix-review' | 'resume' | 'retry' | null,
+  lastSubmittedAction: null as 'fix' | 'fix-review' | 'resume' | 'retry' | null,
   customInstructions: '',
   errorMessage: null as string | null,
   interruption: null as DeepReviewInterruption | null,
   completedRemediationIds: new Set<string>(),
   fixingRemediationIds: new Set<string>(),
+  fixingBaselineTurnId: null as string | null,
   remainingFixIds: [] as string[],
   decisionSelections: {} as Record<string, number>,
+  capacityQueueState: null as DeepReviewCapacityQueueState | null,
+  lastCapacityQueueAction: null as DeepReviewCapacityQueueAction | null,
 };
+
+function isTerminalQueueStatus(status: DeepReviewCapacityQueueStatus): boolean {
+  return status === 'running' || status === 'capacity_skipped';
+}
+
+function queueReviewerKey(
+  reviewer: Pick<DeepReviewCapacityWaitingReviewer, 'toolId' | 'subagentType'>,
+): string {
+  return reviewer.toolId || reviewer.subagentType || 'unknown-reviewer';
+}
+
+function waitingReviewerFromQueueState(
+  state: DeepReviewCapacityQueueState,
+): DeepReviewCapacityWaitingReviewer | null {
+  if (state.status === 'running' || state.status === 'capacity_skipped') {
+    return null;
+  }
+
+  return {
+    toolId: state.toolId,
+    subagentType: state.subagentType,
+    status: state.status,
+    reason: state.reason,
+    optional: (state.optionalReviewerCount ?? 0) > 0,
+    queueElapsedMs: state.queueElapsedMs,
+    maxQueueWaitSeconds: state.maxQueueWaitSeconds,
+  };
+}
+
+function normalizeWaitingReviewers(
+  state: DeepReviewCapacityQueueState,
+): DeepReviewCapacityWaitingReviewer[] {
+  if (state.waitingReviewers) {
+    return state.waitingReviewers;
+  }
+
+  const reviewer = waitingReviewerFromQueueState(state);
+  return reviewer ? [reviewer] : [];
+}
+
+function withNormalizedWaitingReviewers(
+  state: DeepReviewCapacityQueueState,
+): DeepReviewCapacityQueueState {
+  return {
+    ...state,
+    waitingReviewers: normalizeWaitingReviewers(state),
+  };
+}
+
+function mergeCapacityQueueState(
+  current: DeepReviewCapacityQueueState | null,
+  incoming: DeepReviewCapacityQueueState,
+): DeepReviewCapacityQueueState | null {
+  const currentReviewers = current?.waitingReviewers ?? normalizeWaitingReviewers(current ?? incoming);
+  const reviewerMap = new Map(
+    currentReviewers.map((reviewer) => [queueReviewerKey(reviewer), reviewer]),
+  );
+  const incomingReviewers = normalizeWaitingReviewers(incoming);
+  const fallbackIncomingKey = queueReviewerKey(incoming);
+
+  if (isTerminalQueueStatus(incoming.status)) {
+    reviewerMap.delete(fallbackIncomingKey);
+    for (const reviewer of incomingReviewers) {
+      reviewerMap.delete(queueReviewerKey(reviewer));
+    }
+  } else {
+    for (const reviewer of incomingReviewers) {
+      reviewerMap.set(queueReviewerKey(reviewer), reviewer);
+    }
+  }
+
+  const waitingReviewers = [...reviewerMap.values()];
+  if (waitingReviewers.length === 0) {
+    return null;
+  }
+
+  const queuedReviewerCount = Math.max(waitingReviewers.length, incoming.queuedReviewerCount ?? 0);
+  const optionalReviewerCount = waitingReviewers.filter((reviewer) => reviewer.optional).length;
+  const allPaused = waitingReviewers.every((reviewer) => reviewer.status === 'paused_by_user');
+
+  return {
+    ...incoming,
+    status: allPaused ? 'paused_by_user' : 'queued_for_capacity',
+    queuedReviewerCount,
+    optionalReviewerCount,
+    waitingReviewers,
+  };
+}
 
 export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) => ({
   ...initialState,
@@ -162,8 +323,11 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       interruption: null,
       completedRemediationIds: preservedCompleted,
       fixingRemediationIds: new Set(),
+      fixingBaselineTurnId: null,
       remainingFixIds: [],
       decisionSelections: {},
+      capacityQueueState: null,
+      lastCapacityQueueAction: null,
     });
   },
 
@@ -185,8 +349,39 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       interruption,
       completedRemediationIds: new Set(),
       fixingRemediationIds: new Set(),
+      fixingBaselineTurnId: null,
       remainingFixIds: [],
       decisionSelections: {},
+      capacityQueueState: null,
+      lastCapacityQueueAction: null,
+    });
+  },
+
+  showCapacityQueueBar: ({ childSessionId, parentSessionId, capacityQueueState }) => {
+    set({
+      childSessionId,
+      parentSessionId,
+      reviewMode: 'deep',
+      reviewData: null,
+      remediationItems: [],
+      selectedRemediationIds: new Set(),
+      phase: 'review_waiting_capacity',
+      dismissed: false,
+      minimized: false,
+      activeAction: null,
+      lastSubmittedAction: null,
+      customInstructions: '',
+      errorMessage: null,
+      interruption: null,
+      completedRemediationIds: get().childSessionId === childSessionId
+        ? get().completedRemediationIds
+        : new Set(),
+      fixingRemediationIds: new Set(),
+      fixingBaselineTurnId: null,
+      remainingFixIds: [],
+      decisionSelections: {},
+      capacityQueueState: withNormalizedWaitingReviewers(capacityQueueState),
+      lastCapacityQueueAction: null,
     });
   },
 
@@ -203,15 +398,25 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
         errorMessage: errorMessage ?? null,
         completedRemediationIds: nextCompleted,
         fixingRemediationIds: new Set(),
+        fixingBaselineTurnId: null,
         remainingFixIds: [],
       });
     } else {
-      set({ phase, errorMessage: errorMessage ?? null });
+      set({
+        phase,
+        errorMessage: errorMessage ?? null,
+        ...(phase !== 'fix_running' ? { fixingBaselineTurnId: null } : {}),
+      });
     }
   },
 
   toggleRemediation: (id) => {
-    const next = new Set(get().selectedRemediationIds);
+    const { completedRemediationIds, selectedRemediationIds } = get();
+    if (completedRemediationIds.has(id)) {
+      return;
+    }
+
+    const next = new Set(selectedRemediationIds);
     if (next.has(id)) {
       next.delete(id);
     } else {
@@ -221,23 +426,46 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
   },
 
   toggleAllRemediation: () => {
-    const { remediationItems, selectedRemediationIds } = get();
-    const allSelected = remediationItems.length > 0 &&
-      selectedRemediationIds.size === remediationItems.length;
-    if (allSelected) {
-      set({ selectedRemediationIds: new Set() });
-    } else {
-      set({ selectedRemediationIds: new Set(remediationItems.map((i) => i.id)) });
+    const { remediationItems, selectedRemediationIds, completedRemediationIds } = get();
+    const selectableIds = remediationItems
+      .filter((item) => !completedRemediationIds.has(item.id))
+      .map((item) => item.id);
+    const allSelected = selectableIds.length > 0 &&
+      selectableIds.every((id) => selectedRemediationIds.has(id));
+    const next = new Set(selectedRemediationIds);
+
+    for (const id of completedRemediationIds) {
+      next.delete(id);
     }
+
+    if (allSelected) {
+      for (const id of selectableIds) {
+        next.delete(id);
+      }
+    } else {
+      for (const id of selectableIds) {
+        next.add(id);
+      }
+    }
+
+    set({ selectedRemediationIds: next });
   },
 
   toggleGroupRemediation: (groupId) => {
-    const { remediationItems, selectedRemediationIds } = get();
-    const groupIds = new Set(remediationItems.filter((i) => i.groupId === groupId).map((i) => i.id));
+    const { remediationItems, selectedRemediationIds, completedRemediationIds } = get();
+    const groupIds = new Set(
+      remediationItems
+        .filter((item) => (item.groupId ?? 'ungrouped') === groupId && !completedRemediationIds.has(item.id))
+        .map((item) => item.id),
+    );
     if (groupIds.size === 0) return;
 
     const allGroupSelected = [...groupIds].every((id) => selectedRemediationIds.has(id));
     const next = new Set(selectedRemediationIds);
+
+    for (const id of completedRemediationIds) {
+      next.delete(id);
+    }
 
     if (allGroupSelected) {
       for (const id of groupIds) {
@@ -252,14 +480,15 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
     set({ selectedRemediationIds: next });
   },
 
-  setActiveAction: (action) => {
+  setActiveAction: (action, options) => {
     if (action === 'fix' || action === 'fix-review') {
       set({
         activeAction: action,
         lastSubmittedAction: action,
         fixingRemediationIds: new Set(get().selectedRemediationIds),
+        fixingBaselineTurnId: options?.baselineTurnId ?? null,
       });
-    } else if (action === 'resume') {
+    } else if (action === 'resume' || action === 'retry') {
       set({
         activeAction: action,
         lastSubmittedAction: action,
@@ -280,9 +509,89 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
   skipRemainingFixes: () => set({
     phase: 'review_completed',
     remainingFixIds: [],
+    fixingBaselineTurnId: null,
     activeAction: null,
     lastSubmittedAction: null,
   }),
+  setCapacityQueueState: (capacityQueueState) => set({
+    capacityQueueState: capacityQueueState
+      ? withNormalizedWaitingReviewers(capacityQueueState)
+      : null,
+    lastCapacityQueueAction: null,
+  }),
+  applyCapacityQueueState: (capacityQueueState) => {
+    const nextQueueState = mergeCapacityQueueState(get().capacityQueueState, capacityQueueState);
+    set((state) => ({
+      capacityQueueState: nextQueueState,
+      lastCapacityQueueAction: null,
+      ...(nextQueueState === null && state.phase === 'review_waiting_capacity'
+        ? { phase: 'idle' as ReviewActionPhase }
+        : {}),
+    }));
+  },
+  pauseCapacityQueue: () => {
+    const current = get().capacityQueueState;
+    if (!current || current.status === 'capacity_skipped') return;
+    set({
+      capacityQueueState: {
+        ...current,
+        status: 'paused_by_user',
+        waitingReviewers: current.waitingReviewers?.map((reviewer) => ({
+          ...reviewer,
+          status: 'paused_by_user',
+        })),
+      },
+      lastCapacityQueueAction: 'pause',
+    });
+  },
+  continueCapacityQueue: () => {
+    const current = get().capacityQueueState;
+    if (!current || current.status !== 'paused_by_user') return;
+    set({
+      capacityQueueState: {
+        ...current,
+        status: 'queued_for_capacity',
+        waitingReviewers: current.waitingReviewers?.map((reviewer) => ({
+          ...reviewer,
+          status: 'queued_for_capacity',
+        })),
+      },
+      lastCapacityQueueAction: 'continue',
+    });
+  },
+  cancelQueuedReviewers: () => {
+    const current = get().capacityQueueState;
+    if (!current) return;
+    set({
+      capacityQueueState: {
+        ...current,
+        status: 'capacity_skipped',
+        queuedReviewerCount: 0,
+        optionalReviewerCount: 0,
+        waitingReviewers: [],
+      },
+      lastCapacityQueueAction: 'cancel',
+    });
+  },
+  skipOptionalQueuedReviewers: () => {
+    const current = get().capacityQueueState;
+    if (!current) return;
+    const optionalCount = current.optionalReviewerCount ?? 0;
+    if (optionalCount <= 0) return;
+
+    const skippedCount = Math.min(optionalCount, current.queuedReviewerCount);
+    const queuedReviewerCount = Math.max(0, current.queuedReviewerCount - skippedCount);
+    set({
+      capacityQueueState: {
+        ...current,
+        status: queuedReviewerCount > 0 ? current.status : 'capacity_skipped',
+        queuedReviewerCount,
+        optionalReviewerCount: 0,
+        waitingReviewers: current.waitingReviewers?.filter((reviewer) => !reviewer.optional),
+      },
+      lastCapacityQueueAction: 'skip_optional',
+    });
+  },
   reset: () => set({ ...initialState, selectedRemediationIds: new Set() }),
 }));
 

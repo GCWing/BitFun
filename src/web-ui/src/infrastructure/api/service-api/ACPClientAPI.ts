@@ -1,4 +1,5 @@
 import { api } from './ApiClient';
+import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
 
 export type AcpClientPermissionMode = 'ask' | 'allow_once' | 'reject_once';
 export type AcpClientStatus = 'configured' | 'starting' | 'running' | 'stopped' | 'failed';
@@ -60,6 +61,8 @@ export interface StartAcpDialogTurnRequest {
   remoteConnectionId?: string;
   remoteSshHost?: string;
   timeoutSeconds?: number;
+  imageContexts?: ImageInputContextData[];
+  userMessageMetadata?: Record<string, unknown>;
 }
 
 export interface CancelAcpDialogTurnRequest {

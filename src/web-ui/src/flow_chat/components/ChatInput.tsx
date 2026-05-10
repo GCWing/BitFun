@@ -37,8 +37,9 @@ import { runUsageReportCommand } from '../services/usageReportService';
 import { FlowChatManager } from '@/flow_chat';
 import {
   DEEP_REVIEW_SLASH_COMMAND,
-  buildDeepReviewPromptFromSlashCommand,
   getDeepReviewLaunchErrorMessage,
+  buildDeepReviewLaunchFromSlashCommand,
+  buildDeepReviewPreviewFromSlashCommand,
   isDeepReviewSlashCommand,
   launchDeepReviewSession,
 } from '../services/DeepReviewService';
@@ -62,6 +63,7 @@ import { useDeepReviewConsent } from './DeepReviewConsentDialog';
 import { useAgentCompanionActivity } from '../hooks/useAgentCompanionActivity';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
+import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import './ChatInput.scss';
 
 const log = createLogger('ChatInput');
@@ -1512,24 +1514,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    const confirmed = await confirmDeepReviewLaunch();
-    if (!confirmed) {
-      return;
-    }
-
     const originalPendingLargePastes = { ...pendingLargePastesRef.current };
-    if (effectiveTargetSessionId) {
-      addToHistory(effectiveTargetSessionId, message);
-    }
-    setHistoryIndex(-1);
-    setSavedDraft('');
-    dispatchInput({ type: 'CLEAR_VALUE' });
-    clearPendingLargePastes();
-    setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
     try {
-      const prompt = await buildDeepReviewPromptFromSlashCommand(
+      const preview = await buildDeepReviewPreviewFromSlashCommand(
+        message,
+        effectiveTargetSession.workspacePath,
+      );
+      const confirmed = await confirmDeepReviewLaunch(preview, {
+        sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
+          flowChatState,
+          effectiveTargetSessionId,
+        ),
+      });
+      if (!confirmed) {
+        return;
+      }
+
+      if (effectiveTargetSessionId) {
+        addToHistory(effectiveTargetSessionId, message);
+      }
+      setHistoryIndex(-1);
+      setSavedDraft('');
+      dispatchInput({ type: 'CLEAR_VALUE' });
+      clearPendingLargePastes();
+      setQueuedInput(null);
+      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+
+      const { prompt, runManifest } = await buildDeepReviewLaunchFromSlashCommand(
         message,
         effectiveTargetSession.workspacePath,
       );
@@ -1539,6 +1551,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         workspacePath: effectiveTargetSession.workspacePath,
         prompt,
         displayMessage: message,
+        runManifest,
         childSessionName: t('chatInput.deepreviewThreadTitle', {
           defaultValue: 'Deep review',
         }),
@@ -1567,6 +1580,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     currentReviewActivity,
     effectiveTargetSession,
     effectiveTargetSessionId,
+    flowChatState,
     inputState.value,
     isBtwSession,
     setQueuedInput,

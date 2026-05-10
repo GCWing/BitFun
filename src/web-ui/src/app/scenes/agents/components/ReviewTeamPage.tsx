@@ -31,8 +31,10 @@ import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useAgentsStore } from '../agentsStore';
 import {
+  DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY,
   DEFAULT_REVIEW_TEAM_EXECUTION_POLICY,
   DEFAULT_REVIEW_TEAM_MODEL,
+  FALLBACK_REVIEW_TEAM_DEFINITION,
   loadDefaultReviewTeam,
   REVIEW_STRATEGY_DEFINITIONS,
   type ReviewStrategyLevel,
@@ -166,6 +168,8 @@ const ReviewTeamPage: React.FC = () => {
         strategyLevel: 'normal',
         memberStrategyOverrides: {},
         executionPolicy: { ...DEFAULT_REVIEW_TEAM_EXECUTION_POLICY },
+        concurrencyPolicy: { ...DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY },
+        definition: FALLBACK_REVIEW_TEAM_DEFINITION,
         members: [],
         coreMembers: [],
         extraMembers: [],

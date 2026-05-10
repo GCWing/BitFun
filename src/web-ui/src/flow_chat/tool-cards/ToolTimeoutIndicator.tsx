@@ -1,5 +1,10 @@
 import React, { useRef, useEffect } from 'react';
-import { Timer, Infinity as InfinityIcon } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Timer,
+  Infinity as InfinityIcon,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLiveElapsedTime } from '../hooks/useLiveElapsedTime';
 import { useSubagentTimeoutControl } from '../hooks/useSubagentTimeoutControl';
@@ -35,6 +40,19 @@ export interface ToolTimeoutIndicatorProps {
   showControls?: boolean;
   subagentSessionId?: string;
   completedDurationMs?: number;
+  completedStatus?: 'success' | 'error' | 'cancelled';
+  completedTooltip?: string;
+  completedFailureReason?: string;
+}
+
+function renderCompletedDurationIcon(status: ToolTimeoutIndicatorProps['completedStatus']) {
+  if (status === 'success') {
+    return <CheckCircle2 size={13} strokeWidth={2.2} />;
+  }
+  if (status === 'error' || status === 'cancelled') {
+    return <AlertCircle size={13} strokeWidth={2.2} />;
+  }
+  return <Timer size={13} strokeWidth={2} />;
 }
 
 export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
@@ -44,6 +62,9 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
   showControls = false,
   subagentSessionId,
   completedDurationMs,
+  completedStatus,
+  completedTooltip,
+  completedFailureReason,
 }) => {
   const { t } = useTranslation('flow-chat');
   const {
@@ -89,10 +110,43 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
 
   // Completed state: show precise duration only.
   if (!isRunning && completedDurationMs != null) {
+    const durationLabel = formatDurationPrecise(completedDurationMs);
+    const completionLabel = completedTooltip || (
+      completedStatus === 'success'
+        ? t('toolCards.timeout.completedDurationTooltip', {
+          duration: durationLabel,
+          defaultValue: `Completed in ${durationLabel}`,
+        })
+        : completedStatus === 'error'
+          ? completedFailureReason
+            ? t('toolCards.timeout.failedDurationTooltipWithReason', {
+              duration: durationLabel,
+              reason: completedFailureReason,
+              defaultValue: `Failed after ${durationLabel}: ${completedFailureReason}`,
+            })
+            : t('toolCards.timeout.failedDurationTooltip', {
+              duration: durationLabel,
+              defaultValue: `Failed after ${durationLabel}`,
+            })
+          : completedStatus === 'cancelled'
+            ? t('toolCards.timeout.cancelledDurationTooltip', {
+              duration: durationLabel,
+              defaultValue: `Cancelled after ${durationLabel}`,
+            })
+            : t('toolCards.timeout.durationTooltip', {
+              duration: durationLabel,
+              defaultValue: `Duration ${durationLabel}`,
+            })
+    );
+
     return (
-      <span className="duration-text">
-        <Timer size={13} strokeWidth={2} />
-        {formatDurationPrecise(completedDurationMs)}
+      <span
+        className={`duration-text duration-text--completed${completedStatus ? ` duration-text--completed-${completedStatus}` : ''}`}
+        title={completionLabel}
+        aria-label={completionLabel}
+      >
+        {renderCompletedDurationIcon(completedStatus)}
+        {durationLabel}
       </span>
     );
   }

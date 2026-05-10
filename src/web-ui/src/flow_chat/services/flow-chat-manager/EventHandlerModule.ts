@@ -21,6 +21,7 @@ import { notificationService } from '../../../shared/notification-system/service
 import type { NotificationAction } from '../../../shared/notification-system/types';
 import { createLogger } from '@/shared/utils/logger';
 import type {
+  DeepReviewQueueStateChangedEvent,
   ImageAnalysisEvent,
   SessionModelAutoMigratedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
@@ -39,6 +40,8 @@ import {
   type AiErrorPresentation,
   type AiErrorDetail,
 } from '@/shared/ai-errors/aiErrorPresenter';
+import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
+import { buildDeepReviewCapacityQueueStateFromEvent } from '../../utils/deepReviewQueueStateEvents';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
 // `restore_session` and assistant bootstrap can race on the same historical
@@ -103,6 +106,39 @@ function logDroppedDataEvent(
     sessionId,
     turnId,
     ...details,
+  });
+}
+
+function handleDeepReviewQueueStateChanged(event: DeepReviewQueueStateChangedEvent): void {
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(event.sessionId);
+  const queueState = buildDeepReviewCapacityQueueStateFromEvent(event, session);
+  if (!queueState) {
+    return;
+  }
+
+  const actionBar = useReviewActionBarStore.getState();
+  if (actionBar.childSessionId === event.sessionId) {
+    actionBar.applyCapacityQueueState(queueState);
+    const nextActionBar = useReviewActionBarStore.getState();
+    if (
+      queueState.status !== 'running' &&
+      queueState.status !== 'capacity_skipped' &&
+      nextActionBar.phase === 'idle'
+    ) {
+      actionBar.updatePhase('review_waiting_capacity');
+    }
+    return;
+  }
+
+  if (queueState.status === 'running' || queueState.status === 'capacity_skipped') {
+    return;
+  }
+
+  actionBar.showCapacityQueueBar({
+    childSessionId: event.sessionId,
+    parentSessionId: session?.parentSessionId ?? null,
+    capacityQueueState: queueState,
   });
 }
 
@@ -390,6 +426,9 @@ export async function initializeEventListeners(
     },
     onToolEvent: (event) => {
       handleToolEvent(context, event, onTodoWriteResult);
+    },
+    onDeepReviewQueueStateChanged: (event) => {
+      handleDeepReviewQueueStateChanged(event);
     },
     onModelRoundStarted: (event) => {
       handleModelRoundStart(context, event);

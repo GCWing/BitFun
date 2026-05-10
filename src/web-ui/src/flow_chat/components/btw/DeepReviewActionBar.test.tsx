@@ -13,6 +13,9 @@ const buildRecoveryPlanMock = vi.hoisted(() => vi.fn(() => ({
   willSkip: [],
   summaryText: '1 completed reviewer will be preserved; 1 reviewer will be rerun',
 })));
+const controlDeepReviewQueueMock = vi.hoisted(() => vi.fn());
+const lowerDefaultReviewTeamMaxParallelReviewersMock = vi.hoisted(() => vi.fn());
+const flowChatSessionsMock = vi.hoisted(() => new Map<string, unknown>());
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -43,12 +46,32 @@ vi.mock('@/component-library', () => ({
   ),
   Checkbox: ({
     checked,
+    disabled,
+    indeterminate,
+    label,
     onChange,
   }: {
     checked?: boolean;
+    disabled?: boolean;
+    indeterminate?: boolean;
+    label?: React.ReactNode;
     onChange?: () => void;
   }) => (
-    <input type="checkbox" checked={checked} readOnly onClick={onChange} />
+    <label>
+      <input
+        type="checkbox"
+        aria-checked={indeterminate ? 'mixed' : checked ? 'true' : 'false'}
+        checked={checked}
+        disabled={disabled}
+        readOnly
+        onClick={() => {
+          if (!disabled) {
+            onChange?.();
+          }
+        }}
+      />
+      {label}
+    </label>
   ),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -57,6 +80,16 @@ vi.mock('../../services/FlowChatManager', () => ({
   flowChatManager: {
     sendMessage: sendMessageMock,
   },
+}));
+
+vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
+  agentAPI: {
+    controlDeepReviewQueue: controlDeepReviewQueueMock,
+  },
+}));
+
+vi.mock('@/shared/services/reviewTeamService', () => ({
+  lowerDefaultReviewTeamMaxParallelReviewers: lowerDefaultReviewTeamMaxParallelReviewersMock,
 }));
 
 vi.mock('@/infrastructure/event-bus', () => ({
@@ -89,7 +122,7 @@ vi.mock('@/shared/utils/logger', () => ({
 vi.mock('../../store/FlowChatStore', () => ({
   flowChatStore: {
     getState: () => ({
-      sessions: new Map(),
+      sessions: flowChatSessionsMock,
       activeSessionId: null,
     }),
     subscribe: () => () => {},
@@ -159,6 +192,14 @@ describeWithJsdom('DeepReviewActionBar', () => {
     confirmWarningMock.mockResolvedValue(true);
     eventBusEmitMock.mockReturnValue(false);
     continueDeepReviewSessionMock.mockResolvedValue(undefined);
+    lowerDefaultReviewTeamMaxParallelReviewersMock.mockResolvedValue({
+      maxParallelInstances: 1,
+      maxQueueWaitSeconds: 120,
+      allowProviderCapacityQueue: true,
+      allowBoundedAutoRetry: false,
+      autoRetryElapsedGuardSeconds: 180,
+    });
+    flowChatSessionsMock.clear();
     useReviewActionBarStore.getState().reset();
   });
 
@@ -170,11 +211,24 @@ describeWithJsdom('DeepReviewActionBar', () => {
     dom.window.close();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    flowChatSessionsMock.clear();
     useReviewActionBarStore.getState().reset();
   });
 
   it('keeps remediation in progress after submitting a fix turn', async () => {
     const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+
+    flowChatSessionsMock.set('child-session', {
+      sessionId: 'child-session',
+      sessionKind: 'review',
+      dialogTurns: [
+        {
+          id: 'review-turn-1',
+          status: 'completed',
+          modelRounds: [],
+        },
+      ],
+    });
 
     useReviewActionBarStore.getState().showActionBar({
       childSessionId: 'child-session',
@@ -209,7 +263,15 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     expect(sendMessageMock).toHaveBeenCalledTimes(1);
-    expect(useReviewActionBarStore.getState().phase).toBe('fix_running');
+    const state = useReviewActionBarStore.getState();
+    expect(state.phase).toBe('fix_running');
+    expect(state.fixingBaselineTurnId).toBe('review-turn-1');
+    expect(container.textContent).toContain('Fix the incorrect branch.');
+    expect(container.textContent).toContain('Fixing');
+    const itemCheckbox = container.querySelector<HTMLInputElement>(
+      '.deep-review-action-bar__remediation-item input[type="checkbox"]',
+    );
+    expect(itemCheckbox?.disabled).toBe(true);
   });
 
   it('uses standard review mode when starting Code Review remediation', async () => {
@@ -360,6 +422,387 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(state.minimized).toBe(true);
   });
 
+  it('does not show capacity queue controls when there is no queue state', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+
+    useReviewActionBarStore.getState().showActionBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        summary: { recommended_action: 'request_changes' },
+        remediation_plan: ['Fix issue 1'],
+      },
+      phase: 'review_completed',
+    });
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    expect(container.textContent).not.toContain('Reviewers waiting for capacity');
+    expect(Array.from(container.querySelectorAll('button')).some((button) => (
+      button.textContent?.includes('Pause queue')
+    ))).toBe(false);
+  });
+
+  it('shows compact capacity queue controls and keeps them locally adjustable', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+
+    useReviewActionBarStore.getState().showActionBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        summary: { recommended_action: 'request_changes' },
+        remediation_plan: ['Fix issue 1'],
+      },
+      phase: 'review_completed',
+    });
+    useReviewActionBarStore.setState({
+      capacityQueueState: {
+        status: 'queued_for_capacity',
+        reason: 'provider_concurrency_limit',
+        queuedReviewerCount: 2,
+        activeReviewerCount: 1,
+        optionalReviewerCount: 1,
+        queueElapsedMs: 12_000,
+        maxQueueWaitSeconds: 60,
+        sessionConcurrencyHigh: true,
+      },
+    } as Partial<ReturnType<typeof useReviewActionBarStore.getState>>);
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    expect(container.textContent).toContain('Reviewers waiting for capacity');
+    expect(container.textContent).toContain('Queue wait does not count against reviewer runtime.');
+    expect(container.textContent).toContain('Reason: provider concurrency limit');
+    expect(container.textContent).toContain('Waited 12s of 1m 0s');
+    expect(container.textContent).toContain('Your active session is busy.');
+    expect(container.textContent).toContain('Run slower next time');
+    expect(container.textContent).toContain('Open Review settings');
+
+    const pauseButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Pause queue'));
+    expect(pauseButton).toBeTruthy();
+
+    await act(async () => {
+      pauseButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect((useReviewActionBarStore.getState() as unknown as {
+      capacityQueueState: { status: string };
+    }).capacityQueueState.status).toBe('paused_by_user');
+    expect(container.textContent).toContain('Queue paused');
+
+    const runSlowerButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Run slower next time'));
+    expect(runSlowerButton).toBeTruthy();
+
+    await act(async () => {
+      runSlowerButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(lowerDefaultReviewTeamMaxParallelReviewersMock).toHaveBeenCalledTimes(1);
+
+    const openSettingsButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Open Review settings'));
+    expect(openSettingsButton).toBeTruthy();
+
+    await act(async () => {
+      openSettingsButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const { useSettingsStore } = await import('@/app/scenes/settings/settingsStore');
+    expect(useSettingsStore.getState().activeTab).toBe('review');
+  });
+
+  it('sends backend queue control actions for event-driven capacity waits', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+    controlDeepReviewQueueMock.mockResolvedValue(undefined);
+
+    useReviewActionBarStore.getState().showCapacityQueueBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      capacityQueueState: {
+        toolId: 'task-queue-1',
+        subagentType: 'ReviewSecurity',
+        dialogTurnId: 'turn-queue-1',
+        status: 'queued_for_capacity',
+        queuedReviewerCount: 2,
+        activeReviewerCount: 1,
+        optionalReviewerCount: 1,
+        controlMode: 'backend',
+        waitingReviewers: [
+          {
+            toolId: 'task-queue-1',
+            subagentType: 'ReviewSecurity',
+            displayName: 'Security reviewer',
+            status: 'queued_for_capacity',
+          },
+          {
+            toolId: 'task-queue-2',
+            subagentType: 'ReviewFrontend',
+            displayName: 'Frontend reviewer',
+            status: 'queued_for_capacity',
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    const pauseButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Pause queue'));
+    expect(pauseButton).toBeTruthy();
+
+    await act(async () => {
+      pauseButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(controlDeepReviewQueueMock).toHaveBeenCalledTimes(2);
+    expect(controlDeepReviewQueueMock).toHaveBeenCalledWith({
+      sessionId: 'child-session',
+      dialogTurnId: 'turn-queue-1',
+      toolId: 'task-queue-1',
+      action: 'pause',
+    });
+    expect(controlDeepReviewQueueMock).toHaveBeenCalledWith({
+      sessionId: 'child-session',
+      dialogTurnId: 'turn-queue-1',
+      toolId: 'task-queue-2',
+      action: 'pause',
+    });
+    expect((useReviewActionBarStore.getState() as unknown as {
+      capacityQueueState: { status: string };
+    }).capacityQueueState.status).toBe('paused_by_user');
+  });
+
+  it('shows the backend reason when queue control fails', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+    const { notificationService } = await import('@/shared/notification-system');
+    controlDeepReviewQueueMock.mockRejectedValueOnce(new Error('backend queue already closed'));
+
+    useReviewActionBarStore.getState().showCapacityQueueBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      capacityQueueState: {
+        toolId: 'task-queue-1',
+        subagentType: 'ReviewSecurity',
+        dialogTurnId: 'turn-queue-1',
+        status: 'queued_for_capacity',
+        queuedReviewerCount: 1,
+        controlMode: 'backend',
+      },
+    });
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    const pauseButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Pause queue'));
+    expect(pauseButton).toBeTruthy();
+
+    await act(async () => {
+      pauseButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(notificationService.error).toHaveBeenCalledWith(
+      expect.stringContaining('backend queue already closed'),
+    );
+    expect(notificationService.error).toHaveBeenCalledWith(
+      expect.stringContaining('use Stop to interrupt the review'),
+    );
+  });
+
+  it('reports partial backend queue control failures without claiming full success', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+    const { notificationService } = await import('@/shared/notification-system');
+    controlDeepReviewQueueMock
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('tool already running'));
+
+    useReviewActionBarStore.getState().showCapacityQueueBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      capacityQueueState: {
+        toolId: 'task-queue-1',
+        subagentType: 'ReviewSecurity',
+        dialogTurnId: 'turn-queue-1',
+        status: 'queued_for_capacity',
+        queuedReviewerCount: 2,
+        controlMode: 'backend',
+        waitingReviewers: [
+          {
+            toolId: 'task-queue-1',
+            subagentType: 'ReviewSecurity',
+            displayName: 'Security reviewer',
+            status: 'queued_for_capacity',
+          },
+          {
+            toolId: 'task-queue-2',
+            subagentType: 'ReviewFrontend',
+            displayName: 'Frontend reviewer',
+            status: 'queued_for_capacity',
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    const pauseButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Pause queue'));
+    expect(pauseButton).toBeTruthy();
+
+    await act(async () => {
+      pauseButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(controlDeepReviewQueueMock).toHaveBeenCalledTimes(2);
+    expect(notificationService.error).toHaveBeenCalledWith(
+      expect.stringContaining('1 of 2 reviewers failed'),
+    );
+    expect(notificationService.error).toHaveBeenCalledWith(
+      expect.stringContaining('tool already running'),
+    );
+    expect((useReviewActionBarStore.getState() as unknown as {
+      capacityQueueState: { status: string };
+    }).capacityQueueState.status).toBe('queued_for_capacity');
+  });
+
+  it('shows the settings update reason when run-slower fails', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+    const { notificationService } = await import('@/shared/notification-system');
+    lowerDefaultReviewTeamMaxParallelReviewersMock.mockRejectedValueOnce(
+      new Error('config store unavailable'),
+    );
+
+    useReviewActionBarStore.getState().showCapacityQueueBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      capacityQueueState: {
+        status: 'queued_for_capacity',
+        reason: 'local_concurrency_cap',
+        queuedReviewerCount: 1,
+      },
+    });
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    const runSlowerButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Run slower next time'));
+    expect(runSlowerButton).toBeTruthy();
+
+    await act(async () => {
+      runSlowerButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(notificationService.error).toHaveBeenCalledWith(
+      expect.stringContaining('config store unavailable'),
+    );
+    expect(notificationService.error).toHaveBeenCalledWith(
+      expect.stringContaining('Open Review settings'),
+    );
+  });
+
+  it('starts a structured retry turn for explicit incomplete Deep Review slices', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+
+    flowChatSessionsMock.set('deep-review-session', {
+      sessionId: 'deep-review-session',
+      sessionKind: 'deep_review',
+      deepReviewRunManifest: {
+        reviewMode: 'deep',
+        workPackets: [
+          {
+            packetId: 'reviewer:ReviewSecurity:group-1-of-2',
+            phase: 'reviewer',
+            launchBatch: 0,
+            subagentId: 'ReviewSecurity',
+            displayName: 'Security reviewer',
+            roleName: 'Security reviewer',
+            assignedScope: {
+              kind: 'review_target',
+              targetSource: 'session_files',
+              targetResolution: 'resolved',
+              targetTags: ['security'],
+              fileCount: 2,
+              files: ['src/auth.ts', 'src/session.ts'],
+              excludedFileCount: 0,
+              groupIndex: 1,
+              groupCount: 2,
+            },
+            allowedTools: ['Read', 'GetFileDiff'],
+            timeoutSeconds: 300,
+            requiredOutputFields: ['summary', 'findings'],
+            strategyLevel: 'deep',
+            strategyDirective: 'Review security-sensitive changes.',
+            model: 'fast-model',
+          },
+        ],
+      },
+    });
+
+    useReviewActionBarStore.getState().showActionBar({
+      childSessionId: 'deep-review-session',
+      parentSessionId: 'parent-session',
+      reviewMode: 'deep',
+      reviewData: {
+        review_mode: 'deep',
+        summary: { recommended_action: 'request_changes' },
+        reviewers: [
+          {
+            name: 'Security reviewer',
+            specialty: 'security',
+            status: 'partial_timeout',
+            summary: 'Timed out after completing src/session.ts.',
+            packet_id: 'reviewer:ReviewSecurity:group-1-of-2',
+            covered_files: ['src/session.ts'],
+            retry_scope_files: ['src/auth.ts'],
+          },
+        ],
+      },
+      phase: 'review_completed',
+    });
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    const retryButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Retry incomplete slices'));
+    expect(retryButton).toBeTruthy();
+
+    await act(async () => {
+      retryButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledTimes(1);
+    const [prompt, sessionId, displayMessage, agentType] = sendMessageMock.mock.calls[0];
+    expect(prompt).toContain('"retry_coverage"');
+    expect(prompt).toContain('"source_packet_id": "reviewer:ReviewSecurity:group-1-of-2"');
+    expect(prompt).toContain('"retry_scope_files"');
+    expect(sessionId).toBe('deep-review-session');
+    expect(displayMessage).toContain('Retry 1 incomplete');
+    expect(agentType).toBe('DeepReview');
+  });
+
   it('shows distinct progress text after starting fix and re-review', async () => {
     const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
 
@@ -387,6 +830,78 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     expect(container.textContent).toContain('Fixing and preparing re-review...');
+  });
+
+  it('requires explicit decision confirmation before executing selected decision remediation', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+
+    useReviewActionBarStore.getState().showActionBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        review_mode: 'deep',
+        summary: { recommended_action: 'request_changes' },
+        report_sections: {
+          remediation_groups: {
+            needs_decision: [{
+              question: 'Which migration strategy should we use?',
+              plan: 'Choose a migration strategy before editing.',
+              options: ['Fast path', 'Staged path'],
+              tradeoffs: 'Fast path is risky; staged path is safer.',
+              recommendation: 1,
+            }],
+          },
+        },
+      },
+      phase: 'review_completed',
+    });
+    useReviewActionBarStore.getState().setSelectedRemediationIds(new Set(['remediation-needs_decision-0']));
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    const startFixButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Start fixing'));
+    expect(startFixButton).toBeTruthy();
+
+    await act(async () => {
+      startFixButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(sendMessageMock).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('Confirm decision items before fixing');
+    expect(container.textContent).toContain('Which migration strategy should we use?');
+    expect(container.textContent).toContain('Fast path is risky; staged path is safer.');
+
+    const confirmBeforeSelection = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Confirm and start')) as HTMLButtonElement | undefined;
+    expect(confirmBeforeSelection?.disabled).toBe(true);
+
+    const stagedPathButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Staged path'));
+    expect(stagedPathButton).toBeTruthy();
+
+    await act(async () => {
+      stagedPathButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const confirmButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Confirm and start')) as HTMLButtonElement | undefined;
+    expect(confirmButton).toBeTruthy();
+    expect(confirmButton?.disabled).toBe(false);
+
+    await act(async () => {
+      confirmButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledTimes(1);
+    const [prompt] = sendMessageMock.mock.calls[0];
+    expect(prompt).toContain('User chose option 2: Staged path');
+    expect(prompt).not.toContain('Recommended option 2: Staged path');
   });
 
   it('marks completed remediation items when fix completes', async () => {

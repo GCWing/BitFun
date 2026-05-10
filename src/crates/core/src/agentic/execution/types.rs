@@ -32,6 +32,9 @@ pub struct ExecutionContext {
     /// When set, engine drains pending user steering messages at each round boundary
     /// and injects them into the dialog history without ending the turn.
     pub round_steering: Option<Arc<dyn DialogRoundSteeringSource>>,
+    /// When true, stream cancellation may be converted into a partial assistant
+    /// result if text/tool output has already been produced.
+    pub recover_partial_on_cancel: bool,
 }
 
 /// Round context
@@ -54,6 +57,7 @@ pub struct RoundContext {
     pub steering_interrupt: Option<DialogRoundSteeringInterrupt>,
     pub cancellation_token: CancellationToken,
     pub workspace_services: Option<WorkspaceServices>,
+    pub recover_partial_on_cancel: bool,
 }
 
 /// Round result

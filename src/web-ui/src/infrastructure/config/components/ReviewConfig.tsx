@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Badge, Button, ConfigPageLoading, NumberInput, Select } from '@/component-library';
+import { Badge, Button, ConfigPageLoading, NumberInput, Select, Switch } from '@/component-library';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -23,12 +23,14 @@ import {
   removeDefaultReviewTeamMember,
   REVIEW_STRATEGY_DEFINITIONS,
   REVIEW_STRATEGY_LEVELS,
+  saveDefaultReviewTeamConcurrencyPolicy,
   saveDefaultReviewTeamExecutionPolicy,
   saveDefaultReviewTeamMemberStrategyOverride,
   saveDefaultReviewTeamStrategyLevel,
   type ReviewMemberStrategyLevel,
   type ReviewStrategyLevel,
   type ReviewTeam,
+  type ReviewTeamConcurrencyPolicy,
   type ReviewTeamExecutionPolicy,
   type ReviewTeamMember,
 } from '@/shared/services/reviewTeamService';
@@ -111,6 +113,7 @@ const ReviewConfig: React.FC = () => {
   const [subagents, setSubagents] = useState<SubagentInfo[]>([]);
   const [candidateId, setCandidateId] = useState('');
   const [savingPolicyKey, setSavingPolicyKey] = useState<keyof ReviewTeamExecutionPolicy | null>(null);
+  const [savingConcurrencyKey, setSavingConcurrencyKey] = useState<keyof ReviewTeamConcurrencyPolicy | null>(null);
   const [savingMemberId, setSavingMemberId] = useState<string | null>(null);
   const [savingStrategyTarget, setSavingStrategyTarget] = useState<string | null>(null);
   const [addingMember, setAddingMember] = useState(false);
@@ -260,6 +263,29 @@ const ReviewConfig: React.FC = () => {
       notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
     } finally {
       setSavingPolicyKey(null);
+    }
+  }, [loadData, notifyError, notifySuccess, t, team]);
+
+  const handleConcurrencyPolicyChange = useCallback(async (
+    key: keyof ReviewTeamConcurrencyPolicy,
+    value: ReviewTeamConcurrencyPolicy[keyof ReviewTeamConcurrencyPolicy],
+  ) => {
+    if (!team) return;
+
+    const nextPolicy = {
+      ...team.concurrencyPolicy,
+      [key]: value,
+    } as ReviewTeamConcurrencyPolicy;
+    setSavingConcurrencyKey(key);
+    setTeam({ ...team, concurrencyPolicy: nextPolicy });
+    try {
+      await saveDefaultReviewTeamConcurrencyPolicy(nextPolicy);
+      notifySuccess(t('messages.saved'));
+    } catch (error) {
+      await loadData();
+      notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
+    } finally {
+      setSavingConcurrencyKey(null);
     }
   }, [loadData, notifyError, notifySuccess, t, team]);
 
@@ -440,6 +466,71 @@ const ReviewConfig: React.FC = () => {
               step={1}
               size="small"
               disabled={savingPolicyKey === 'maxSameRoleInstances'}
+            />
+          </ConfigPageRow>
+        </ConfigPageSection>
+
+        <ConfigPageSection title={t('capacity.title')} description={t('capacity.description')}>
+          <ConfigPageRow label={t('capacity.maxParallelReviewers.label')} description={t('capacity.maxParallelReviewers.description')} align="center" balanced>
+            <NumberInput
+              value={team.concurrencyPolicy.maxParallelInstances}
+              onChange={(value) => void handleConcurrencyPolicyChange('maxParallelInstances', value)}
+              min={1}
+              max={16}
+              step={1}
+              size="small"
+              disabled={savingConcurrencyKey === 'maxParallelInstances'}
+            />
+          </ConfigPageRow>
+
+          <ConfigPageRow label={t('capacity.maxQueueWaitSeconds.label')} description={t('capacity.maxQueueWaitSeconds.description')} align="center" balanced>
+            <NumberInput
+              value={team.concurrencyPolicy.maxQueueWaitSeconds}
+              onChange={(value) => void handleConcurrencyPolicyChange('maxQueueWaitSeconds', value)}
+              min={0}
+              max={600}
+              step={15}
+              unit="s"
+              size="small"
+              disabled={savingConcurrencyKey === 'maxQueueWaitSeconds'}
+            />
+          </ConfigPageRow>
+
+          <ConfigPageRow label={t('capacity.allowProviderCapacityQueue.label')} description={t('capacity.allowProviderCapacityQueue.description')} align="center" balanced>
+            <Switch
+              checked={team.concurrencyPolicy.allowProviderCapacityQueue}
+              onChange={(event) => void handleConcurrencyPolicyChange(
+                'allowProviderCapacityQueue',
+                event.target.checked,
+              )}
+              disabled={savingConcurrencyKey === 'allowProviderCapacityQueue'}
+            />
+          </ConfigPageRow>
+
+          <ConfigPageRow label={t('capacity.allowBoundedAutoRetry.label')} description={t('capacity.allowBoundedAutoRetry.description')} align="center" balanced>
+            <Switch
+              checked={team.concurrencyPolicy.allowBoundedAutoRetry}
+              onChange={(event) => void handleConcurrencyPolicyChange(
+                'allowBoundedAutoRetry',
+                event.target.checked,
+              )}
+              disabled={savingConcurrencyKey === 'allowBoundedAutoRetry'}
+            />
+          </ConfigPageRow>
+
+          <ConfigPageRow label={t('capacity.autoRetryElapsedGuardSeconds.label')} description={t('capacity.autoRetryElapsedGuardSeconds.description')} align="center" balanced>
+            <NumberInput
+              value={team.concurrencyPolicy.autoRetryElapsedGuardSeconds}
+              onChange={(value) => void handleConcurrencyPolicyChange('autoRetryElapsedGuardSeconds', value)}
+              min={30}
+              max={900}
+              step={30}
+              unit="s"
+              size="small"
+              disabled={
+                !team.concurrencyPolicy.allowBoundedAutoRetry ||
+                savingConcurrencyKey === 'autoRetryElapsedGuardSeconds'
+              }
             />
           </ConfigPageRow>
         </ConfigPageSection>

@@ -569,6 +569,7 @@
     "fixFailed": "Fix failed",
     "fixTimeout": "Fix timed out",
     "fixInterrupted": "Fix was interrupted. {{count}} items remain.",
+    "reviewWaitingCapacity": "Review queue waiting",
     "continueFix": "Continue fixing {{count}} items",
     "skipRemaining": "Skip remaining",
     "reviewError": "Review error",
@@ -588,8 +589,26 @@
     "showCustomInput": "Add instructions",
     "hideCustomInput": "Hide instructions",
     "customInstructionsPlaceholder": "Describe additional requirements or context for the fix...",
+    "remediationStatus": {
+      "fixing": "Fixing",
+      "fixed": "Fixed"
+    },
+    "decisionGate": {
+      "title": "Confirm decision items before fixing",
+      "description": "Choose how each selected decision should be handled before BitFun starts editing.",
+      "supplementLabel": "Additional requirements",
+      "supplementPlaceholder": "Optional: add constraints, scope limits, or implementation preferences before starting.",
+      "missingSelection": "Choose an option for each selected decision item before starting.",
+      "noOptionsHint": "This item has no structured options. Confirm only if you want the selected plan to be executed as written.",
+      "confirmFix": "Confirm and start",
+      "confirmFixAndReview": "Confirm and re-review",
+      "cancel": "Back to selection"
+    },
     "fillBackInput": "Fill to input",
     "fillBackInputHint": "Copy selected fix plan to the input box for manual editing",
+    "retryIncompleteSlices": "Retry incomplete slices ({{count}})",
+    "retryIncompleteRequestDisplay": "Retry {{count}} incomplete Deep Review slice(s)",
+    "retryIncompleteFailed": "Unable to retry incomplete Deep Review slices.",
     "fixCompletedMessage": "All fixes applied successfully.",
     "replaceInputConfirmTitle": "Replace current input?",
     "replaceInputConfirmMessage": "The chat input already has text. Filling this plan will replace the current draft.",
@@ -630,6 +649,48 @@
     "recoveryPreserve": "{{count}} completed reviewers will be preserved",
     "recoveryRerun": "{{count}} reviewers will be rerun",
     "recoverySkip": "{{count}} reviewers will be skipped",
+    "capacityQueue": {
+      "title": "Reviewers waiting for capacity",
+      "pausedTitle": "Queue paused",
+      "detail": "Queue wait does not count against reviewer runtime.",
+      "reason": "Reason: {{reason}}",
+      "elapsed": "Waited {{elapsed}}",
+      "elapsedWithMax": "Waited {{elapsed}} of {{max}}",
+      "reasons": {
+        "providerRateLimit": "provider rate limit",
+        "providerConcurrencyLimit": "provider concurrency limit",
+        "retryAfter": "provider retry-after",
+        "localConcurrencyCap": "local reviewer capacity",
+        "launchBatchBlocked": "previous launch batch still running",
+        "temporaryOverload": "temporary provider overload"
+      },
+      "reasonDetails": {
+        "providerRateLimit": "The model provider is rate-limiting requests. BitFun will wait briefly; reducing Review Team parallel reviewers can help if this repeats.",
+        "providerConcurrencyLimit": "The model provider rejected another concurrent reviewer. BitFun will retry after capacity opens; lower reviewer parallelism if it keeps happening.",
+        "retryAfter": "The model provider asked BitFun to retry later. Waiting here avoids spending reviewer runtime while the provider cools down.",
+        "localConcurrencyCap": "The configured Review Team reviewer limit is full. This reviewer will start after an active reviewer finishes.",
+        "launchBatchBlocked": "An earlier launch batch is still running. Waiting preserves the planned review order and prevents a later batch from overtaking it.",
+        "temporaryOverload": "The model provider reported temporary overload. BitFun will wait briefly and then continue or mark the reviewer as capacity skipped."
+      },
+      "sessionBusy": "Your active session is busy. Pause Deep Review or continue later.",
+      "stopHint": "Use Stop to interrupt this review queue.",
+      "waitingReviewersTitle": "Waiting reviewers",
+      "reviewerStatusQueued": "Waiting",
+      "reviewerStatusPaused": "Paused",
+      "optionalReviewer": "Optional",
+      "pauseQueue": "Pause queue",
+      "continueQueue": "Continue queue",
+      "cancelQueued": "Cancel queued reviewers",
+      "skipOptionalQueued": "Skip optional extras",
+      "runSlowerNextTime": "Run slower next time",
+      "openReviewSettings": "Open Review settings",
+      "runSlowerSaved": "Next Deep Review will use up to {{count}} parallel reviewers.",
+      "runSlowerFailed": "Failed to update Review settings.",
+      "runSlowerFailedWithReason": "Failed to update Review settings: {{reason}}. Open Review settings and lower Review Team max parallel reviewers manually.",
+      "controlFailed": "Queue control is unavailable because this reviewer is missing session, turn, or tool identifiers. Use Stop to interrupt the review, or wait for the queue state to refresh.",
+      "controlFailedWithReason": "Queue control failed: {{reason}}. Try again, or use Stop to interrupt the review if the queue is stuck.",
+      "controlPartiallyFailedWithReason": "Queue control partly applied; {{failed}} of {{total}} reviewers failed: {{reason}}. Wait for the queue state to refresh, then retry or use Stop if it is stuck."
+    },
     "degradation": {
       "reduceReviewers": "Run with core reviewers only",
       "reduceReviewersDesc": "Skip extra reviewers and keep only core reviewers",
@@ -660,9 +721,11 @@
     "windowTitle": "Deep Review",
     "eyebrow": "Code review team",
     "title": "Start Deep Review?",
-    "body": "Deep Review launches a parallel code review team. It can take longer and consume noticeably more tokens than a standard review.",
+    "body": "Deep Review launches multiple reviewers and can take longer or use more tokens than a standard review.",
     "readonlyLabel": "Read-only first pass",
-    "readonly": "The first pass is read-only. It will produce findings and a remediation plan before any code changes.",
+    "readonly": "The first pass reports findings and a remediation plan before any code changes.",
+    "sessionConcurrencyTitle": "Active session is busy",
+    "sessionConcurrencyBody": "The target session already has {{count}} running subagent tasks. Choose a lighter strategy, cancel for now, or continue manually when capacity is free.",
     "costLabel": "Higher token usage",
     "cost": "Expected cost: multiple reviewers plus a quality gate, so runtime and token use may be several times higher than a standard review.",
     "timeLabel": "Longer runtime",
@@ -670,7 +733,77 @@
     "dontShowAgain": "Do not show this again",
     "cancel": "Cancel",
     "confirm": "Start Deep Review",
-    "estimatedTokens": "Estimated: {{min}} - {{max}} tokens"
+    "estimatedTokens": "Estimated: {{min}} - {{max}} tokens",
+    "runStrategy": "Run strategy: {{strategy}}",
+    "recommendedStrategy": "Recommended strategy: {{strategy}}",
+    "reviewDepth": "Review depth: {{depth}}",
+    "reviewDepthLabels": {
+      "high_risk_only": "High-risk-only",
+      "risk_expanded": "Risk-expanded",
+      "full_depth": "Full-depth"
+    },
+    "recommendationTitle": "Risk recommendation",
+    "strategyOverrideTitle": "Run strategy",
+    "strategyOverrideBody": "Choose a project-specific strategy for this launch.",
+    "teamDefaultStrategy": "Team default",
+    "strategyLabels": {
+      "quick": "Quick",
+      "normal": "Normal",
+      "deep": "Deep"
+    },
+    "lineupTitle": "Review lineup",
+    "summaryTitle": "Launch summary",
+    "targetFiles": "{{count}} files",
+    "targetFiles_one": "{{count}} file",
+    "targetFiles_other": "{{count}} files",
+    "targetRiskTags": "Risk areas: {{tags}}",
+    "targetTagsWithMore": "{{tags}} +{{count}} more",
+    "targetTagsWithMore_one": "{{tags}} +{{count}} more",
+    "targetTagsWithMore_other": "{{tags}} +{{count}} more",
+    "optionalReviewers": "{{count}} optional reviewers",
+    "optionalReviewers_one": "{{count}} optional reviewer",
+    "optionalReviewers_other": "{{count}} optional reviewers",
+    "summaryFirstReview": "Summary-first coverage",
+    "targetTagLabels": {
+      "frontendUi": "Frontend UI",
+      "frontendStyle": "Frontend styles",
+      "frontendI18n": "Frontend i18n",
+      "frontendContract": "Frontend contract",
+      "desktopContract": "Desktop contract",
+      "webServerContract": "Web server contract",
+      "backendCore": "Backend core",
+      "transport": "Transport",
+      "apiLayer": "API layer",
+      "aiAdapter": "AI adapter",
+      "installerUi": "Installer UI",
+      "test": "Tests",
+      "docs": "Docs",
+      "config": "Config",
+      "generatedOrLock": "Generated or lockfile",
+      "unknown": "Unknown area"
+    },
+    "estimatedCalls": "{{count}} reviewer calls",
+    "estimatedCalls_one": "{{count}} reviewer call",
+    "estimatedCalls_other": "{{count}} reviewer calls",
+    "activeReviewers": "{{count}} active",
+    "activeReviewers_one": "{{count}} active",
+    "activeReviewers_other": "{{count}} active",
+    "skippedReviewers": "{{count}} skipped",
+    "skippedReviewers_one": "{{count}} skipped",
+    "skippedReviewers_other": "{{count}} skipped",
+    "skippedMore": "+{{count}} more",
+    "skippedMore_one": "+{{count}} more",
+    "skippedMore_other": "+{{count}} more",
+    "activeGroupTitle": "Will run",
+    "skippedGroupTitle": "Skipped reviewers",
+    "skippedReasons": {
+      "notApplicable": "Not applicable to this target",
+      "budgetLimited": "Limited by token budget",
+      "invalidTooling": "Configuration issue",
+      "disabled": "Disabled",
+      "unavailable": "Unavailable",
+      "skipped": "Skipped"
+    }
   },
   "flowChatHeader": {
     "turnList": "Turn list",
@@ -1051,7 +1184,12 @@
       "disableLabel": "Ignore limit",
       "enableTooltip": "Re-enable timeout",
       "enableLabel": "Restore limit",
-      "restoreShort": "Restore ({{seconds}}s left)"
+      "restoreShort": "Restore ({{seconds}}s left)",
+      "durationTooltip": "Duration {{duration}}",
+      "completedDurationTooltip": "Completed in {{duration}}",
+      "failedDurationTooltip": "Failed after {{duration}}",
+      "failedDurationTooltipWithReason": "Failed after {{duration}}: {{reason}}",
+      "cancelledDurationTooltip": "Cancelled after {{duration}}"
     },
     "template": {
       "get": "Get Template:",
@@ -1353,8 +1491,65 @@
         "partial": "partial",
         "unknown": "unknown"
       },
+      "runManifest": {
+        "recommendedStrategy": "Recommended strategy",
+        "riskRecommendationTitle": "Risk recommendation",
+        "reviewDepth": "Review depth",
+        "reviewDepthLabels": {
+          "high_risk_only": "High-risk-only",
+          "risk_expanded": "Risk-expanded",
+          "full_depth": "Full-depth"
+        }
+      },
       "sectionItemCount": "{{count}} items",
       "remediationPlan": "Remediation Plan",
+      "reliabilityStatus": {
+        "title": "Review status",
+        "context_pressure": {
+          "label": "Context pressure rising",
+          "detail": "{{count}} reviewer calls planned for a large or constrained target."
+        },
+        "compression_preserved": {
+          "label": "Compression preserved key facts",
+          "detail": "Coverage notes include preserved context from compression."
+        },
+        "cache_hit": {
+          "label": "Incremental cache reused reviewer output",
+          "detail": "{{count}} reviewer packet reused matching cached output."
+        },
+        "cache_miss": {
+          "label": "Incremental cache missed or refreshed",
+          "detail": "{{count}} reviewer packet ran fresh or refreshed stale cache."
+        },
+        "concurrency_limited": {
+          "label": "Reviewer launch was concurrency-limited",
+          "detail": "{{count}} reviewer launch hit a concurrency cap."
+        },
+        "partial_reviewer": {
+          "label": "Reviewer timed out with partial result",
+          "detail": "{{count}} reviewer result is partial; confidence is reduced."
+        },
+        "reduced_scope": {
+          "label": "Reduced-depth coverage",
+          "detail": "This review used a reduced-depth scope profile."
+        },
+        "retry_guidance": {
+          "label": "Retry guidance emitted",
+          "detail": "{{count}} retry guidance item was emitted for partial review coverage."
+        },
+        "skipped_reviewers": {
+          "label": "Skipped reviewers",
+          "detail": "{{count}} reviewer was skipped by applicability, configuration, or budget."
+        },
+        "token_budget_limited": {
+          "label": "Token budget limited reviewer coverage",
+          "detail": "{{count}} reviewer was skipped by token budget mode."
+        },
+        "user_decision": {
+          "label": "User decision needed",
+          "detail": "{{count}} review item needs your decision before fixing."
+        }
+      },
       "sections": {
         "summary": "Executive Summary",
         "issues": "Issues",
@@ -1383,8 +1578,11 @@
         "noIssues": "No validated issues.",
         "status": "Status",
         "findings": "Findings",
+        "packet": "Packet",
+        "partialOutput": "Partial output",
         "validation": "Validation",
         "source": "Source",
+        "reliabilitySignals": "Review Reliability",
         "noItems": "None."
       },
       "export": {
@@ -1419,7 +1617,7 @@
         "noSelectionHint": "Select at least one remediation item to start fixing.",
         "ungrouped": "Other",
         "startFix": "Start fixing",
-        "fixAndReview": "Fix \\u0026 re-review",
+        "fixAndReview": "Fix & re-review",
         "cancel": "Cancel",
         "fixUnavailable": "Unable to start remediation because the review session is unavailable.",
         "fixRequestDisplay": "Start fixing Deep Review findings",

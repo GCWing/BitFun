@@ -200,6 +200,13 @@ Usage:
 
         let resolved = context.resolve_tool_path(file_path)?;
         context.enforce_path_operation(ToolPathOperation::Edit, &resolved)?;
+        context
+            .record_light_checkpoint(
+                "Edit",
+                &resolved.logical_path,
+                vec![resolved.logical_path.clone()],
+            )
+            .await;
 
         // For remote workspace paths, use the abstract FS to read → edit in memory → write back.
         if resolved.uses_remote_workspace_backend() {

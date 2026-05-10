@@ -48,6 +48,30 @@
     "maxSameRoleInstances": "同角色最大實例數",
     "maxSameRoleInstancesDesc": "單個審核角色允許並行啟動的最大實例數。"
   },
+  "capacity": {
+    "title": "容量與重試",
+    "description": "控制 Deep Review 如何等待可用容量，以及在你同意後是否允許對未完成的小範圍內容重試。",
+    "maxParallelReviewers": {
+      "label": "最大並行審核員",
+      "description": "Deep Review 同時執行的審核員實例上限。此設定不會修改全域工作階段並發。"
+    },
+    "maxQueueWaitSeconds": {
+      "label": "最大排隊等待",
+      "description": "審核員等待 Deep Review 容量的最長時間，超過後會被略過。"
+    },
+    "allowProviderCapacityQueue": {
+      "label": "等待供應商容量",
+      "description": "遇到短暫的供應商容量問題時先短暫排隊，而不是立即略過。"
+    },
+    "allowBoundedAutoRetry": {
+      "label": "允許有界自動重試",
+      "description": "你在重試提示中同意後，後續 Deep Review 可以在嚴格限制內自動重試更小的未完成範圍。"
+    },
+    "autoRetryElapsedGuardSeconds": {
+      "label": "自動重試耗時上限",
+      "description": "單次 Deep Review 中自動重試最多可額外使用的時間。"
+    }
+  },
   "members": {
     "title": "審核員",
     "description": "調整每個審核員的策略和模型。核心角色會保持鎖定。",

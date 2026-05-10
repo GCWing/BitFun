@@ -286,6 +286,7 @@ export class FlowChatStore {
       sessionKind?: SessionKind;
       btwOrigin?: Session['btwOrigin'];
       isTransient?: boolean;
+      deepReviewRunManifest?: Session['deepReviewRunManifest'];
     },
     remoteConnectionId?: string,
     remoteSshHost?: string
@@ -324,6 +325,7 @@ export class FlowChatStore {
         sessionKind: relationship.sessionKind,
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
+        deepReviewRunManifest: meta?.deepReviewRunManifest,
         isTransient: meta?.isTransient ?? false,
       };
 
@@ -1729,6 +1731,7 @@ export class FlowChatStore {
             btwOrigin: relationship.btwOrigin,
             hasUnreadCompletion: metadata.unreadCompletion,
             needsUserAttention: metadata.needsUserAttention,
+            deepReviewRunManifest: metadata.deepReviewRunManifest,
             isTransient: false,
           };
           

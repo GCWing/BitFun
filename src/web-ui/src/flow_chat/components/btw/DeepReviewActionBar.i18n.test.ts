@@ -33,7 +33,43 @@ const REQUIRED_ACTION_BAR_KEYS = [
   'deepReviewActionBar.fixInterrupted',
   'deepReviewActionBar.continueFix',
   'deepReviewActionBar.skipRemaining',
+  'deepReviewActionBar.decisionGate.title',
+  'deepReviewActionBar.decisionGate.description',
+  'deepReviewActionBar.decisionGate.supplementLabel',
+  'deepReviewActionBar.decisionGate.supplementPlaceholder',
+  'deepReviewActionBar.decisionGate.missingSelection',
+  'deepReviewActionBar.decisionGate.noOptionsHint',
+  'deepReviewActionBar.decisionGate.confirmFix',
+  'deepReviewActionBar.decisionGate.confirmFixAndReview',
+  'deepReviewActionBar.decisionGate.cancel',
   'deepReviewActionBar.switchModel',
+  'deepReviewActionBar.capacityQueue.title',
+  'deepReviewActionBar.capacityQueue.pausedTitle',
+  'deepReviewActionBar.capacityQueue.detail',
+  'deepReviewActionBar.capacityQueue.sessionBusy',
+  'deepReviewActionBar.capacityQueue.waitingReviewersTitle',
+  'deepReviewActionBar.capacityQueue.reviewerStatusQueued',
+  'deepReviewActionBar.capacityQueue.reviewerStatusPaused',
+  'deepReviewActionBar.capacityQueue.optionalReviewer',
+  'deepReviewActionBar.capacityQueue.pauseQueue',
+  'deepReviewActionBar.capacityQueue.continueQueue',
+  'deepReviewActionBar.capacityQueue.cancelQueued',
+  'deepReviewActionBar.capacityQueue.skipOptionalQueued',
+  'deepReviewActionBar.capacityQueue.runSlowerNextTime',
+  'deepReviewActionBar.capacityQueue.openReviewSettings',
+  'deepReviewActionBar.capacityQueue.reasons.launchBatchBlocked',
+  'deepReviewActionBar.capacityQueue.reasonDetails.providerRateLimit',
+  'deepReviewActionBar.capacityQueue.reasonDetails.providerConcurrencyLimit',
+  'deepReviewActionBar.capacityQueue.reasonDetails.retryAfter',
+  'deepReviewActionBar.capacityQueue.reasonDetails.localConcurrencyCap',
+  'deepReviewActionBar.capacityQueue.reasonDetails.launchBatchBlocked',
+  'deepReviewActionBar.capacityQueue.reasonDetails.temporaryOverload',
+  'deepReviewActionBar.capacityQueue.runSlowerSaved',
+  'deepReviewActionBar.capacityQueue.runSlowerFailed',
+  'deepReviewActionBar.capacityQueue.runSlowerFailedWithReason',
+  'deepReviewActionBar.capacityQueue.controlFailed',
+  'deepReviewActionBar.capacityQueue.controlFailedWithReason',
+  'deepReviewActionBar.capacityQueue.controlPartiallyFailedWithReason',
   'reviewActionBar.noIssuesFound',
 ];
 
@@ -55,8 +91,17 @@ const REQUIRED_CODE_REVIEW_CARD_KEYS = [
   'toolCards.codeReview.reviewerStatuses.unknown',
 ];
 
+const USER_VISIBLE_TEXT_KEYS_MUST_NOT_CONTAIN_ESCAPED_UNICODE = [
+  'toolCards.codeReview.remediationActions.fixAndReview',
+];
+
 const REQUIRED_REVIEW_TEAM_PAGE_KEYS = [
   'reviewTeams.detail.loading',
+];
+
+const REQUIRED_DEEP_REVIEW_CONSENT_KEYS = [
+  'deepReviewConsent.sessionConcurrencyTitle',
+  'deepReviewConsent.sessionConcurrencyBody',
 ];
 
 function getMessageValue(messages: unknown, key: string): unknown {
@@ -93,9 +138,30 @@ describe('DeepReviewActionBar i18n', () => {
     }
   });
 
+  it('does not show escaped unicode sequences in user-visible action text', () => {
+    for (const [locale, messages] of Object.entries(LOCALES)) {
+      for (const key of USER_VISIBLE_TEXT_KEYS_MUST_NOT_CONTAIN_ESCAPED_UNICODE) {
+        const value = getMessageValue(messages, key);
+        expect(typeof value, `${locale} ${key} should be a string`).toBe('string');
+        expect(value, `${locale} ${key} should not contain literal unicode escape text`).not.toMatch(/\\u[0-9a-fA-F]{4}/);
+      }
+    }
+  });
+
   it('keeps review team page strings available in every bundled locale', () => {
     for (const [locale, messages] of Object.entries(AGENT_LOCALES)) {
       const missingKeys = REQUIRED_REVIEW_TEAM_PAGE_KEYS.filter((key) => {
+        const value = getMessageValue(messages, key);
+        return typeof value !== 'string' || value.trim().length === 0;
+      });
+
+      expect(missingKeys, `${locale} missing keys`).toEqual([]);
+    }
+  });
+
+  it('keeps Deep Review consent strings available in every bundled locale', () => {
+    for (const [locale, messages] of Object.entries(LOCALES)) {
+      const missingKeys = REQUIRED_DEEP_REVIEW_CONSENT_KEYS.filter((key) => {
         const value = getMessageValue(messages, key);
         return typeof value !== 'string' || value.trim().length === 0;
       });
