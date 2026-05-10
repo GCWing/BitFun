@@ -17,6 +17,7 @@ import {
   Network,
   MessageSquareQuote,
   Globe,
+  Activity,
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
 
@@ -194,6 +195,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     type: 'btw-session',
     displayName: 'Side Session',
     icon: MessageSquareQuote,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
+  'session-usage': {
+    type: 'session-usage',
+    displayName: 'Session Usage',
+    icon: Activity,
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false

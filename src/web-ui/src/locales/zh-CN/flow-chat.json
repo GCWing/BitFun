@@ -39,6 +39,173 @@
   "runtimeStatus": {
     "waitingForModelResponse": "等待模型响应..."
   },
+  "usage": {
+    "title": "会话用量",
+    "unavailable": "不可用",
+    "redacted": "已脱敏",
+    "percent": "{{value}}%",
+    "duration": {
+      "ms": "{{value}}毫秒",
+      "seconds": "{{value}}秒",
+      "minutes": "{{value}}分钟",
+      "minutesSeconds": "{{minutes}}分{{seconds}}秒",
+      "hours": "{{value}}小时",
+      "hoursMinutes": "{{hours}}小时{{minutes}}分钟"
+    },
+    "actions": {
+      "copyMarkdown": "复制 Markdown",
+      "copied": "已复制",
+      "openDetails": "打开详情",
+      "copySessionId": "复制会话 ID",
+      "copyWorkspacePath": "复制项目路径"
+    },
+    "coverage": {
+      "complete": "完整",
+      "partial": "部分",
+      "minimal": "最小",
+      "partialNotice": "部分指标没有被当前会话或服务商上报。悬浮带虚线下划线的数值可查看具体原因。"
+    },
+    "toolCategories": {
+      "git": "Git",
+      "shell": "Shell",
+      "file": "文件",
+      "other": "其他"
+    },
+    "fileScopes": {
+      "snapshot_summary": "快照汇总",
+      "tool_inputs_only": "仅工具输入",
+      "unavailable": "未跟踪"
+    },
+    "accounting": {
+      "approximate": "近似",
+      "exact": "精确",
+      "unavailable": "未上报"
+    },
+    "status": {
+      "timingNotRecorded": "未记录耗时",
+      "cacheNotReported": "未上报缓存",
+      "noFileChanges": "无文件变更",
+      "notRecorded": "未记录"
+    },
+    "cacheCoverage": {
+      "available": "已上报",
+      "partial": "部分上报",
+      "unavailable": "未上报"
+    },
+    "card": {
+      "eyebrow": "本地报告",
+      "turns": "{{count}} 轮",
+      "calls": "{{count}} 次调用",
+      "operations": "{{count}} 次操作"
+    },
+    "loading": {
+      "markdown": "正在生成用量报告...",
+      "title": "正在生成用量报告",
+      "description": "正在读取本地会话记录，并整理隐私安全的统计摘要。",
+      "steps": {
+        "collecting": "读取会话记录",
+        "tokens": "汇总 Token 和工具活动",
+        "safety": "检查可安全展示的字段"
+      }
+    },
+    "metrics": {
+      "wall": "会话跨度",
+      "active": "已记录轮次耗时",
+      "modelTime": "模型轮次耗时",
+      "toolTime": "工具调用耗时",
+      "tokens": "Token",
+      "cached": "缓存",
+      "files": "文件",
+      "errors": "错误"
+    },
+    "sections": {
+      "models": "模型",
+      "tools": "工具",
+      "files": "文件"
+    },
+    "empty": {
+      "models": "暂无模型指标",
+      "tools": "暂无工具指标",
+      "files": "无文件变更",
+      "errors": "暂无错误示例",
+      "modelsDescription": "当模型调用上报 Token 用量后，这里会显示模型统计。",
+      "toolsDescription": "当会话执行工具后，这里会显示工具调用统计。",
+      "filesDescription": "当前会话没有找到文件编辑记录。",
+      "errorsDescription": "本次报告没有记录到可展示的工具或模型错误样例。"
+    },
+    "runtime": {
+      "open": "生成会话用量",
+      "button": "用量",
+      "tooltip": "在当前聊天中生成用量报告"
+    },
+    "panel": {
+      "tabsLabel": "用量报告分区",
+      "accounting": "计量方式",
+      "turnScope": "范围",
+      "cacheCoverage": "缓存统计",
+      "compressions": "压缩次数",
+      "fileScope": "文件范围",
+      "toolErrors": "工具错误",
+      "modelErrors": "模型错误",
+      "metadataLabel": "用量报告元信息"
+    },
+    "privacy": {
+      "title": "隐私安全报告",
+      "summary": "不包含提示词、工具输入、命令输出或文件内容。"
+    },
+    "tabs": {
+      "overview": "总览",
+      "models": "模型",
+      "tools": "工具",
+      "files": "文件",
+      "errors": "错误"
+    },
+    "table": {
+      "model": "模型",
+      "tool": "工具",
+      "category": "类别",
+      "calls": "调用",
+      "success": "成功",
+      "errors": "错误",
+      "input": "输入",
+      "output": "输出",
+      "cached": "缓存",
+      "duration": "记录耗时",
+      "p95": "P95",
+      "execution": "执行",
+      "file": "文件",
+      "operations": "操作",
+      "added": "新增",
+      "deleted": "删除",
+      "turns": "轮次",
+      "operationIds": "操作 ID",
+      "label": "标签",
+      "count": "次数"
+    },
+    "help": {
+      "wall": "从第一轮开始到最后一轮结束的记录跨度，可能包含轮次之间的空闲间隔。",
+      "active": "产生可统计活动的轮次记录耗时之和，可能包含轮次内的编排或等待时间。",
+      "timeShare": "占已记录轮次耗时的比例。模型与工具耗时可能重叠，因此仅作为近似参考。",
+      "modelRoundTime": "基于会话中保存的模型轮次起止时间计算，不等同于纯模型流式输出或吞吐耗时；占比按已记录轮次耗时近似计算。",
+      "toolTime": "基于已记录工具调用耗时计算；占比按已记录轮次耗时近似计算。",
+      "cachedTokens": "当前服务商没有为这个会话上报缓存读取 Token 元数据；可用时仍会显示总 Token。",
+      "cachedTokensPartial": "只有部分调用上报了缓存读取 Token 元数据，因此缓存 Token 合计只覆盖这些调用。",
+      "toolDuration": "该工具调用没有上报耗时元数据。",
+      "toolP95": "同一工具至少记录两次带耗时调用后才会显示 P95。",
+      "toolExecution": "该工具没有单独上报执行耗时字段。",
+      "filesUnavailable": "当前会话没有找到本地快照或可识别的文件编辑工具记录。",
+      "filesNoRecordedChanges": "BitFun 没有检测到当前会话中的文件变更。如果本次会话没有编辑文件，这是正常状态。",
+      "filesRemoteUnavailable": "远程会话的文件快照暂未纳入此报告；只有工具记录能识别到编辑文件时才会显示文件行。",
+      "filesNotTracked": "当前会话没有找到本地快照或可识别的文件编辑工具记录。",
+      "fileTurnIndexes": "当文件活动来自汇总而不是逐轮操作记录时，不会记录轮次。",
+      "fileOperationIds": "当报告无法关联到具体工具操作时，不会记录操作 ID。"
+    },
+    "meta": {
+      "generatedAt": "生成时间",
+      "sessionId": "会话 ID",
+      "workspacePath": "项目路径"
+    }
+  },
   "agentCompanion": {
     "activity": {
       "starting": "启动中",
@@ -299,7 +466,13 @@
     },
     "openFolder": "打开文件夹…",
     "selectWorkspaceTitle": "选择工作区目录",
-    "switchWorkspaceFailed": "切换工作区失败：{{error}}"
+    "switchWorkspaceFailed": "切换工作区失败：{{error}}",
+    "usageAction": "会话用量",
+    "usageNoSession": "当前没有可用于 /usage 的会话",
+    "usageCommandUsage": "请单独输入 /usage，不要附加其他内容。",
+    "usageBusy": "请等待当前会话空闲后再使用 /usage。",
+    "usageNoWorkspace": "生成用量报告需要先打开一个项目。",
+    "usageFailed": "用量报告生成失败"
   },
   "planner": {
     "title": "任务规划",

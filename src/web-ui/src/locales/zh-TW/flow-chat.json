@@ -39,6 +39,173 @@
   "runtimeStatus": {
     "waitingForModelResponse": "等待模型回應..."
   },
+  "usage": {
+    "title": "工作階段用量",
+    "unavailable": "不可用",
+    "redacted": "已遮蔽",
+    "percent": "{{value}}%",
+    "duration": {
+      "ms": "{{value}}毫秒",
+      "seconds": "{{value}}秒",
+      "minutes": "{{value}}分鐘",
+      "minutesSeconds": "{{minutes}}分{{seconds}}秒",
+      "hours": "{{value}}小時",
+      "hoursMinutes": "{{hours}}小時{{minutes}}分鐘"
+    },
+    "actions": {
+      "copyMarkdown": "複製 Markdown",
+      "copied": "已複製",
+      "openDetails": "開啟詳情",
+      "copySessionId": "複製工作階段 ID",
+      "copyWorkspacePath": "複製專案路徑"
+    },
+    "coverage": {
+      "complete": "完整",
+      "partial": "部分",
+      "minimal": "最小",
+      "partialNotice": "部分指標沒有被目前工作階段或服務商回報。懸浮帶虛線底線的數值可查看具體原因。"
+    },
+    "toolCategories": {
+      "git": "Git",
+      "shell": "Shell",
+      "file": "檔案",
+      "other": "其他"
+    },
+    "fileScopes": {
+      "snapshot_summary": "快照彙總",
+      "tool_inputs_only": "僅工具輸入",
+      "unavailable": "未追蹤"
+    },
+    "accounting": {
+      "approximate": "近似",
+      "exact": "精確",
+      "unavailable": "未回報"
+    },
+    "status": {
+      "timingNotRecorded": "未記錄耗時",
+      "cacheNotReported": "未回報快取",
+      "noFileChanges": "無檔案變更",
+      "notRecorded": "未記錄"
+    },
+    "cacheCoverage": {
+      "available": "已回報",
+      "partial": "部分回報",
+      "unavailable": "未回報"
+    },
+    "card": {
+      "eyebrow": "本機報告",
+      "turns": "{{count}} 輪",
+      "calls": "{{count}} 次呼叫",
+      "operations": "{{count}} 次操作"
+    },
+    "loading": {
+      "markdown": "正在產生用量報告...",
+      "title": "正在產生用量報告",
+      "description": "正在讀取本機工作階段記錄，並整理隱私安全的統計摘要。",
+      "steps": {
+        "collecting": "讀取工作階段記錄",
+        "tokens": "彙總 Token 和工具活動",
+        "safety": "檢查可安全顯示的欄位"
+      }
+    },
+    "metrics": {
+      "wall": "工作階段跨度",
+      "active": "已記錄回合耗時",
+      "modelTime": "模型回合耗時",
+      "toolTime": "工具呼叫耗時",
+      "tokens": "Token",
+      "cached": "快取",
+      "files": "檔案",
+      "errors": "錯誤"
+    },
+    "sections": {
+      "models": "模型",
+      "tools": "工具",
+      "files": "檔案"
+    },
+    "empty": {
+      "models": "暫無模型指標",
+      "tools": "暫無工具指標",
+      "files": "無檔案變更",
+      "errors": "暫無錯誤範例",
+      "modelsDescription": "當模型呼叫上報 Token 用量後，這裡會顯示模型統計。",
+      "toolsDescription": "當工作階段執行工具後，這裡會顯示工具呼叫統計。",
+      "filesDescription": "目前工作階段沒有找到檔案編輯記錄。",
+      "errorsDescription": "本次報告沒有記錄到可顯示的工具或模型錯誤範例。"
+    },
+    "runtime": {
+      "open": "產生工作階段用量",
+      "button": "用量",
+      "tooltip": "在目前聊天中產生用量報告"
+    },
+    "panel": {
+      "tabsLabel": "用量報告分區",
+      "accounting": "計量方式",
+      "turnScope": "範圍",
+      "cacheCoverage": "快取統計",
+      "compressions": "壓縮次數",
+      "fileScope": "檔案範圍",
+      "toolErrors": "工具錯誤",
+      "modelErrors": "模型錯誤",
+      "metadataLabel": "用量報告中繼資訊"
+    },
+    "privacy": {
+      "title": "隱私安全報告",
+      "summary": "不包含提示詞、工具輸入、命令輸出或檔案內容。"
+    },
+    "tabs": {
+      "overview": "總覽",
+      "models": "模型",
+      "tools": "工具",
+      "files": "檔案",
+      "errors": "錯誤"
+    },
+    "table": {
+      "model": "模型",
+      "tool": "工具",
+      "category": "類別",
+      "calls": "呼叫",
+      "success": "成功",
+      "errors": "錯誤",
+      "input": "輸入",
+      "output": "輸出",
+      "cached": "快取",
+      "duration": "記錄耗時",
+      "p95": "P95",
+      "execution": "執行",
+      "file": "檔案",
+      "operations": "操作",
+      "added": "新增",
+      "deleted": "刪除",
+      "turns": "輪次",
+      "operationIds": "操作 ID",
+      "label": "標籤",
+      "count": "次數"
+    },
+    "help": {
+      "wall": "從第一回合開始到最後一回合結束的記錄跨度，可能包含回合之間的閒置間隔。",
+      "active": "產生可統計活動的回合記錄耗時總和，可能包含回合內的編排或等待時間。",
+      "timeShare": "占已記錄回合耗時的比例。模型與工具耗時可能重疊，因此僅作為近似參考。",
+      "modelRoundTime": "基於工作階段中保存的模型回合起止時間計算，不等同於純模型串流輸出或吞吐耗時；占比按已記錄回合耗時近似計算。",
+      "toolTime": "基於已記錄工具呼叫耗時計算；占比按已記錄回合耗時近似計算。",
+      "cachedTokens": "目前服務商沒有為這個工作階段回報快取讀取 Token 中繼資料；可用時仍會顯示總 Token。",
+      "cachedTokensPartial": "只有部分呼叫回報了快取讀取 Token 中繼資料，因此快取 Token 合計只涵蓋這些呼叫。",
+      "toolDuration": "該工具呼叫沒有回報耗時中繼資料。",
+      "toolP95": "同一工具至少記錄兩次帶耗時呼叫後才會顯示 P95。",
+      "toolExecution": "該工具沒有單獨回報執行耗時欄位。",
+      "filesUnavailable": "目前工作階段沒有找到本機快照或可識別的檔案編輯工具記錄。",
+      "filesNoRecordedChanges": "BitFun 沒有偵測到目前工作階段中的檔案變更。如果本次工作階段沒有編輯檔案，這是正常狀態。",
+      "filesRemoteUnavailable": "遠端工作階段的檔案快照暫未納入此報告；只有工具記錄能識別到編輯檔案時才會顯示檔案列。",
+      "filesNotTracked": "目前工作階段沒有找到本機快照或可識別的檔案編輯工具記錄。",
+      "fileTurnIndexes": "當檔案活動來自彙總而不是逐回合操作記錄時，不會記錄回合。",
+      "fileOperationIds": "當報告無法關聯到具體工具操作時，不會記錄操作 ID。"
+    },
+    "meta": {
+      "generatedAt": "產生時間",
+      "sessionId": "工作階段 ID",
+      "workspacePath": "專案路徑"
+    }
+  },
   "agentCompanion": {
     "activity": {
       "starting": "啟動中",
@@ -299,7 +466,13 @@
     },
     "openFolder": "打開文件夾…",
     "selectWorkspaceTitle": "選擇工作區目錄",
-    "switchWorkspaceFailed": "切換工作區失敗：{{error}}"
+    "switchWorkspaceFailed": "切換工作區失敗：{{error}}",
+    "usageAction": "工作階段用量",
+    "usageNoSession": "目前沒有可用於 /usage 的工作階段",
+    "usageCommandUsage": "請單獨輸入 /usage，不要附加其他內容。",
+    "usageBusy": "請等待目前工作階段閒置後再使用 /usage。",
+    "usageNoWorkspace": "產生用量報告需要先開啟一個專案。",
+    "usageFailed": "用量報告產生失敗"
   },
   "planner": {
     "title": "任務規劃",

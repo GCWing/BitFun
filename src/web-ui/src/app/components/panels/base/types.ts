@@ -26,6 +26,7 @@ export type PanelContentType =
   | 'task-detail'
   | 'plan-viewer'
   | 'btw-session'
+  | 'session-usage'
   | 'terminal'
   | 'generative-widget'
   | 'browser';

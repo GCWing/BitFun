@@ -4,6 +4,7 @@
  */
 
 import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { useSessionModeStore } from '@/app/stores/sessionModeStore';
@@ -23,6 +24,8 @@ import type { FlowChatConfig } from '../../types/flow-chat';
 import type { LineRange } from '@/component-library';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { isAcpFlowSession } from '../../utils/acpSession';
+import { useSessionDerivedState } from '../../hooks/useSessionStateMachine';
+import { runUsageReportCommand } from '../../services/usageReportService';
 import './ModernFlowChatContainer.scss';
 
 interface ModernFlowChatContainerProps {
@@ -44,9 +47,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   onOpenVisualization,
   onSwitchToChatPanel,
 }) => {
+  const { t } = useTranslation('flow-chat');
   const virtualItems = useVirtualItems();
   const activeSession = useActiveSession();
   const visibleTurnInfo = useVisibleTurnInfo();
+  const derivedState = useSessionDerivedState(activeSession?.sessionId ?? null);
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
   const [searchOpenRequest, setSearchOpenRequest] = useState(0);
   const autoPinnedSessionIdRef = useRef<string | null>(null);
@@ -141,9 +146,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       .map((turn, index) => ({
         turnId: turn.id,
         turnIndex: index + 1,
-        title: turn.userMessage?.content ?? '',
+        title: turn.userMessage?.metadata?.localCommandKind === 'usage_report'
+          ? t('usage.title')
+          : turn.userMessage?.content ?? '',
       }));
-  }, [activeSession?.dialogTurns]);
+  }, [activeSession?.dialogTurns, t]);
 
   const effectiveVisibleTurnInfo = useMemo<VisibleTurnInfo | null>(() => {
     if (!pendingHeaderTurnId) {
@@ -162,6 +169,18 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       userMessage: targetTurn.title,
     };
   }, [pendingHeaderTurnId, turnSummaries, visibleTurnInfo]);
+
+  const currentHeaderMessage = useMemo(() => {
+    const turnId = effectiveVisibleTurnInfo?.turnId;
+    if (!turnId) {
+      return effectiveVisibleTurnInfo?.userMessage ?? '';
+    }
+    const turn = activeSession?.dialogTurns.find(item => item.id === turnId);
+    if (turn?.userMessage?.metadata?.localCommandKind === 'usage_report') {
+      return t('usage.title');
+    }
+    return effectiveVisibleTurnInfo?.userMessage ?? '';
+  }, [activeSession?.dialogTurns, effectiveVisibleTurnInfo?.turnId, effectiveVisibleTurnInfo?.userMessage, t]);
 
   useEffect(() => {
     if (!pendingHeaderTurnId) return;
@@ -249,6 +268,27 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     handleJumpToTurn(nextTurn.turnId);
   }, [effectiveVisibleTurnInfo, handleJumpToTurn, turnSummaries]);
 
+  const handleGenerateUsageReport = useCallback(() => {
+    if (!activeSession) {
+      return;
+    }
+    void runUsageReportCommand({
+      session: activeSession,
+      isProcessing: !!derivedState?.isProcessing,
+      busyMessage: t('chatInput.usageBusy', {
+        defaultValue: 'Wait until the session is idle before using /usage.',
+      }),
+      noWorkspaceMessage: t('chatInput.usageNoWorkspace', {
+        defaultValue: 'A workspace is required to build a usage report.',
+      }),
+      failedTitle: t('chatInput.usageFailed', { defaultValue: 'Usage report failed' }),
+      unknownErrorMessage: t('error.unknown'),
+      loadingMarkdown: t('usage.loading.markdown', { defaultValue: 'Generating usage report...' }),
+    }).catch(() => {
+      // `runUsageReportCommand` owns the user-facing error notification.
+    });
+  }, [activeSession, derivedState?.isProcessing, t]);
+
   useShortcut(
     'chat.stopGeneration',
     { key: 'Escape', scope: 'chat', allowInInput: true },
@@ -304,10 +344,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         <FlowChatHeader
           currentTurn={effectiveVisibleTurnInfo?.turnIndex ?? 0}
           totalTurns={effectiveVisibleTurnInfo?.totalTurns ?? 0}
-          currentUserMessage={effectiveVisibleTurnInfo?.userMessage ?? ''}
+          currentUserMessage={currentHeaderMessage}
           visible={virtualItems.length > 0}
           sessionId={activeSession?.sessionId}
           workspacePath={workspacePath}
+          onOpenRuntimeStatus={activeSession ? handleGenerateUsageReport : undefined}
           turns={turnSummaries}
           onJumpToTurn={handleJumpToTurn}
           onJumpToCurrentTurn={() => {

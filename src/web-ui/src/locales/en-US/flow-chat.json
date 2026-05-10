@@ -39,6 +39,173 @@
   "runtimeStatus": {
     "waitingForModelResponse": "Waiting for model response..."
   },
+  "usage": {
+    "title": "Session Usage",
+    "unavailable": "Unavailable",
+    "redacted": "Redacted",
+    "percent": "{{value}}%",
+    "duration": {
+      "ms": "{{value}}ms",
+      "seconds": "{{value}}s",
+      "minutes": "{{value}}m",
+      "minutesSeconds": "{{minutes}}m {{seconds}}s",
+      "hours": "{{value}}h",
+      "hoursMinutes": "{{hours}}h {{minutes}}m"
+    },
+    "actions": {
+      "copyMarkdown": "Copy Markdown",
+      "copied": "Copied",
+      "copySessionId": "Copy session ID",
+      "copyWorkspacePath": "Copy project path",
+      "openDetails": "Open details"
+    },
+    "coverage": {
+      "complete": "Complete",
+      "partial": "Partial",
+      "minimal": "Minimal",
+      "partialNotice": "Some metrics were not reported by this session or provider. Hover underlined values for the specific reason."
+    },
+    "toolCategories": {
+      "git": "Git",
+      "shell": "Shell",
+      "file": "File",
+      "other": "Other"
+    },
+    "fileScopes": {
+      "snapshot_summary": "Snapshot summary",
+      "tool_inputs_only": "Tool inputs only",
+      "unavailable": "Not tracked"
+    },
+    "accounting": {
+      "approximate": "Approximate",
+      "exact": "Exact",
+      "unavailable": "Not reported"
+    },
+    "status": {
+      "timingNotRecorded": "Timing not recorded",
+      "cacheNotReported": "Cache not reported",
+      "noFileChanges": "No file changes",
+      "notRecorded": "Not recorded"
+    },
+    "cacheCoverage": {
+      "available": "Reported",
+      "partial": "Partially reported",
+      "unavailable": "Not reported"
+    },
+    "card": {
+      "eyebrow": "Local report",
+      "turns": "{{count}} turns",
+      "calls": "{{count}} calls",
+      "operations": "{{count}} ops"
+    },
+    "loading": {
+      "markdown": "Generating usage report...",
+      "title": "Generating usage report",
+      "description": "Reading local session records and preparing a privacy-safe summary.",
+      "steps": {
+        "collecting": "Reading session records",
+        "tokens": "Summarizing token and tool activity",
+        "safety": "Checking privacy-safe display fields"
+      }
+    },
+    "metrics": {
+      "wall": "Session span",
+      "active": "Recorded turn time",
+      "modelTime": "Model round time",
+      "toolTime": "Tool call time",
+      "tokens": "Tokens",
+      "cached": "Cached",
+      "files": "Files",
+      "errors": "Errors"
+    },
+    "sections": {
+      "models": "Models",
+      "tools": "Tools",
+      "files": "Files"
+    },
+    "empty": {
+      "models": "No model metrics",
+      "modelsDescription": "Model rows appear after calls report token usage.",
+      "tools": "No tool metrics",
+      "toolsDescription": "Tool rows appear after the session runs tools.",
+      "files": "No file changes",
+      "filesDescription": "No file-edit records were found for this session.",
+      "errors": "No error examples",
+      "errorsDescription": "No sampled tool or model errors were recorded."
+    },
+    "help": {
+      "wall": "Span from the first recorded turn start to the last recorded turn end. Idle gaps can be included.",
+      "active": "Sum of recorded turn durations that produced reportable activity. It can include orchestration or waiting inside a turn.",
+      "timeShare": "Share of recorded turn time. Model and tool spans may overlap, so this is only an approximate indicator.",
+      "modelRoundTime": "Recorded model-round duration from persisted start and end timestamps, not pure model streaming or throughput time. The percentage uses recorded turn time and is approximate.",
+      "toolTime": "Recorded tool-call duration. The percentage uses recorded turn time and is approximate.",
+      "cachedTokens": "The provider did not report cache-read token metadata for this session. Total token counts are still shown when available.",
+      "cachedTokensPartial": "Only some calls reported cache-read token metadata, so the cached-token total covers those calls only.",
+      "toolDuration": "This tool call did not report timing metadata.",
+      "toolP95": "P95 appears after at least two timed calls are recorded for this tool.",
+      "toolExecution": "This tool did not report a separate execution-duration field.",
+      "filesUnavailable": "No file snapshot or file-edit tool record was found for this session.",
+      "filesNoRecordedChanges": "BitFun did not detect file changes in this session. This is expected when the agent did not edit files.",
+      "filesRemoteUnavailable": "Remote session file snapshots are not included in this report yet. File rows appear only when tool records identify edited files.",
+      "filesNotTracked": "No local snapshot or identifiable file-edit tool record was found for this session.",
+      "fileTurnIndexes": "Turn indexes are not recorded when file activity comes from a summary instead of per-turn operation records.",
+      "fileOperationIds": "Operation IDs are not recorded when the report cannot link this row back to individual tool operations."
+    },
+    "meta": {
+      "generatedAt": "Generated",
+      "sessionId": "Session ID",
+      "workspacePath": "Project path"
+    },
+    "runtime": {
+      "open": "Generate session usage",
+      "button": "Usage",
+      "tooltip": "Generate a usage report in this chat"
+    },
+    "panel": {
+      "tabsLabel": "Usage report sections",
+      "metadataLabel": "Usage report metadata",
+      "accounting": "Accounting",
+      "turnScope": "Scope",
+      "cacheCoverage": "Cache reporting",
+      "compressions": "Compressions",
+      "fileScope": "File scope",
+      "toolErrors": "Tool errors",
+      "modelErrors": "Model errors"
+    },
+    "privacy": {
+      "title": "Privacy-safe report",
+      "summary": "Prompts, tool inputs, command outputs, and file contents are not included."
+    },
+    "tabs": {
+      "overview": "Overview",
+      "models": "Models",
+      "tools": "Tools",
+      "files": "Files",
+      "errors": "Errors"
+    },
+    "table": {
+      "model": "Model",
+      "tool": "Tool",
+      "category": "Category",
+      "calls": "Calls",
+      "success": "Success",
+      "errors": "Errors",
+      "input": "Input",
+      "output": "Output",
+      "cached": "Cached",
+      "duration": "Recorded time",
+      "p95": "P95",
+      "execution": "Execution",
+      "file": "File",
+      "operations": "Ops",
+      "added": "Added",
+      "deleted": "Deleted",
+      "turns": "Turns",
+      "operationIds": "Operation IDs",
+      "label": "Label",
+      "count": "Count"
+    }
+  },
   "agentCompanion": {
     "activity": {
       "starting": "Starting",
@@ -249,6 +416,12 @@
     "compactBusy": "Wait until the session is idle before using /compact.",
     "compactUsage": "Use /compact without extra arguments.",
     "compactFailed": "Session compaction failed",
+    "usageAction": "Session usage",
+    "usageNoSession": "No active session for /usage",
+    "usageCommandUsage": "Use /usage without extra arguments.",
+    "usageBusy": "Wait until the session is idle before using /usage.",
+    "usageNoWorkspace": "A workspace is required to build a usage report.",
+    "usageFailed": "Usage report failed",
     "initAction": "Generate AGENTS.md",
     "initNoSession": "No active session for /init",
     "initBusy": "Wait until the session is idle before using /init.",

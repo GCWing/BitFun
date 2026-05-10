@@ -10,6 +10,7 @@ import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { useGitBasicInfo } from '@/tools/git/hooks/useGitState';
+import { SessionRuntimeStatusEntry } from '../usage/SessionRuntimeStatusEntry';
 import './FlowChatHeader.scss';
 
 export interface FlowChatHeaderTurnSummary {
@@ -57,6 +58,8 @@ export interface FlowChatHeaderProps {
   onSearchClose?: () => void;
   /** Increments each time the parent requests to open the search bar. */
   searchOpenRequest?: number;
+  /** Generates a local session usage report. */
+  onOpenRuntimeStatus?: () => void;
 }
 export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   currentTurn,
@@ -78,6 +81,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   onSearchPrev,
   onSearchClose,
   searchOpenRequest = 0,
+  onOpenRuntimeStatus,
 }) => {
   const { t } = useTranslation('flow-chat');
   const { currentBranch, isRepository } = useGitBasicInfo(workspacePath ?? '');
@@ -230,6 +234,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           </span>
         ) : null}
         <SessionFilesBadge sessionId={sessionId} />
+        <SessionRuntimeStatusEntry
+          onOpen={onOpenRuntimeStatus}
+        />
       </div>
 
       <Tooltip content={currentUserMessage} placement="bottom">

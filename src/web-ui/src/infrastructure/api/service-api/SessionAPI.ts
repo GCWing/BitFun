@@ -3,6 +3,126 @@ import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { SessionMetadata, DialogTurnData } from '@/shared/types/session-history';
 
+export interface SessionUsageReportRequest {
+  sessionId: string;
+  workspacePath: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export interface SessionUsageReport {
+  schemaVersion: number;
+  reportId: string;
+  sessionId: string;
+  generatedAt: number;
+  generatedFromAppVersion?: string;
+  workspace: {
+    kind: 'local' | 'remote_ssh' | 'unknown';
+    pathLabel?: string;
+    workspaceId?: string;
+    remoteConnectionId?: string;
+    remoteSshHost?: string;
+  };
+  scope: {
+    kind: 'entire_session' | 'turn_range';
+    turnCount: number;
+    fromTurnId?: string;
+    toTurnId?: string;
+    includesSubagents: boolean;
+  };
+  coverage: {
+    level: 'complete' | 'partial' | 'minimal';
+    available: string[];
+    missing: string[];
+    notes: string[];
+  };
+  time: {
+    accounting: 'approximate' | 'exact' | 'unavailable';
+    denominator: 'session_wall_time' | 'active_turn_time' | 'unavailable';
+    wallTimeMs?: number;
+    activeTurnMs?: number;
+    modelMs?: number;
+    toolMs?: number;
+    idleGapMs?: number;
+  };
+  tokens: {
+    source: 'token_usage_records' | 'unavailable';
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    cachedTokens?: number;
+    cacheCoverage: 'available' | 'partial' | 'unavailable';
+  };
+  models: Array<{
+    modelId: string;
+    callCount: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    cachedTokens?: number;
+    durationMs?: number;
+  }>;
+  tools: Array<{
+    toolName: string;
+    category?: 'git' | 'shell' | 'file' | 'other';
+    callCount: number;
+    successCount: number;
+    errorCount: number;
+    durationMs?: number;
+    p95DurationMs?: number;
+    queueWaitMs?: number;
+    preflightMs?: number;
+    confirmationWaitMs?: number;
+    executionMs?: number;
+    redacted: boolean;
+  }>;
+  files: {
+    scope: 'snapshot_summary' | 'tool_inputs_only' | 'unavailable';
+    changedFiles?: number;
+    addedLines?: number;
+    deletedLines?: number;
+    files: Array<{
+      pathLabel: string;
+      operationCount: number;
+      addedLines?: number;
+      deletedLines?: number;
+      sessionId?: string;
+      turnIndexes?: number[];
+      operationIds?: string[];
+      redacted: boolean;
+    }>;
+  };
+  compression: {
+    compactionCount: number;
+    manualCompactionCount: number;
+    automaticCompactionCount: number;
+    savedTokens?: number;
+  };
+  errors: {
+    totalErrors: number;
+    toolErrors: number;
+    modelErrors: number;
+    examples: Array<{
+      label: string;
+      count: number;
+      redacted: boolean;
+    }>;
+  };
+  slowest: Array<{
+    label: string;
+    kind: 'model' | 'tool' | 'turn';
+    durationMs: number;
+    redacted: boolean;
+  }>;
+  privacy: {
+    promptContentIncluded: boolean;
+    toolInputsIncluded: boolean;
+    commandOutputsIncluded: boolean;
+    fileContentsIncluded: boolean;
+    redactedFields: string[];
+  };
+}
+
 function remoteSessionFields(
   remoteConnectionId?: string,
   remoteSshHost?: string
@@ -178,6 +298,25 @@ export class SessionAPI {
       });
     } catch (error) {
       throw createTauriCommandError('load_persisted_session_metadata', error, { sessionId, workspacePath });
+    }
+  }
+
+  async getSessionUsageReport(
+    request: SessionUsageReportRequest
+  ): Promise<SessionUsageReport> {
+    try {
+      return await api.invoke('get_session_usage_report', {
+        request: {
+          session_id: request.sessionId,
+          workspace_path: request.workspacePath,
+          ...remoteSessionFields(request.remoteConnectionId, request.remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('get_session_usage_report', error, {
+        sessionId: request.sessionId,
+        workspacePath: request.workspacePath,
+      });
     }
   }
 }

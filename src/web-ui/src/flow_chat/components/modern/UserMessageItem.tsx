@@ -15,6 +15,9 @@ import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { ReproductionStepsBlock, Tooltip, confirmDanger } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
+import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
+import { SessionUsageReportCard } from '../usage/SessionUsageReportCard';
+import { coerceSessionUsageReport } from '../usage/usageReportUtils';
 import './UserMessageItem.scss';
 
 const log = createLogger('UserMessageItem');
@@ -45,6 +48,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const contentRef = useRef<HTMLDivElement>(null);
     const messageContent = typeof message?.content === 'string' ? message.content : String(message?.content || '');
     const messageImages = useMemo(() => message?.images ?? [], [message?.images]);
+    const isUsageReportMessage = message?.metadata?.localCommandKind === 'usage_report';
+    const isUsageReportLoading = message?.metadata?.usageReportStatus === 'loading';
+    const usageReport = coerceSessionUsageReport(message?.metadata?.usageReport);
 
     const turnIndex = activeSession?.dialogTurns.findIndex(t => t.id === turnId) ?? -1;
     const dialogTurn = turnIndex >= 0 ? activeSession?.dialogTurns[turnIndex] : null;
@@ -181,6 +187,19 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
         content: messageContent
       });
     }, [messageContent]);
+
+    const handleOpenUsageReport = useCallback((report: SessionUsageReport) => {
+      void import('../../services/openSessionUsageReport').then(({ openSessionUsagePanel }) => {
+        openSessionUsagePanel({
+          report,
+          markdown: messageContent,
+          sessionId: activeSession?.sessionId ?? sessionId,
+          workspacePath: activeSession?.workspacePath,
+          title: t('usage.title'),
+          expand: true,
+        });
+      });
+    }, [activeSession?.sessionId, activeSession?.workspacePath, messageContent, sessionId, t]);
     
     // Collapse when clicking outside.
     useEffect(() => {
@@ -201,6 +220,18 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     // Avoid zero-size errors by rendering a placeholder instead of null.
     if (!message) {
       return <div style={{ minHeight: '1px' }} />;
+    }
+
+    if (isUsageReportMessage) {
+      return (
+        <SessionUsageReportCard
+          report={usageReport}
+          markdown={messageContent}
+          generatedAt={message.metadata?.generatedAt}
+          isLoading={isUsageReportLoading}
+          onOpenDetails={usageReport ? handleOpenUsageReport : undefined}
+        />
+      );
     }
     
     return (

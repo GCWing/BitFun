@@ -151,8 +151,8 @@ function App() {
         const { ACPClientAPI } = await import('../infrastructure/api/service-api/ACPClientAPI');
         await ACPClientAPI.initializeClients();
         log.debug('ACP clients initialized');
-        const requirementProbes = await ACPClientAPI.probeClientRequirements({ force: true });
-        log.debug('ACP client requirements probed', { count: requirementProbes.length });
+        // Requirement probes execute third-party CLIs such as `opencode --version`.
+        // Keep startup side-effect free; settings and ACP session creation can probe on demand.
       } catch (error) {
         log.error('Failed to initialize ACP clients', error);
       }

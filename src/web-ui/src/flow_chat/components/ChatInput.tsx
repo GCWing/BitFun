@@ -33,6 +33,7 @@ import { useMessageSender } from '../hooks/useMessageSender';
 import { useChatInputState } from '../store/chatInputStateStore';
 import { useInputHistoryStore } from '../store/inputHistoryStore';
 import { startBtwThread } from '../services/BtwThreadService';
+import { runUsageReportCommand } from '../services/usageReportService';
 import { FlowChatManager } from '@/flow_chat';
 import {
   DEEP_REVIEW_SLASH_COMMAND,
@@ -1058,6 +1059,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           }]),
       {
         kind: 'action',
+        id: 'usage',
+        command: '/usage',
+        label: t('chatInput.usageAction', { defaultValue: 'Usage report' }),
+      },
+      {
+        kind: 'action',
         id: 'deepreview',
         command: DEEP_REVIEW_SLASH_COMMAND,
         label: t('chatInput.deepreviewAction', { defaultValue: 'Deep review' }),
@@ -1164,11 +1171,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const trimmedLower = text.trim().toLowerCase();
     const isBtwCommand = trimmedLower.startsWith('/btw');
     const isCompactCommand = trimmedLower.startsWith('/compact');
+    const isUsageCommand = trimmedLower.startsWith('/usage');
     const isDeepReviewCommand = isDeepReviewSlashCommand(text);
     const isProcessing = !!derivedState?.isProcessing;
 
     // Don't queue /btw while the main session is processing; /btw runs independently.
-    if (derivedState?.isProcessing && !isBtwCommand && !isCompactCommand && !isDeepReviewCommand) {
+    if (derivedState?.isProcessing && !isBtwCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand) {
       setQueuedInput(text);
     }
 
@@ -1183,7 +1191,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         // Only show the picker for "/..." patterns that are plausibly a command (/ or /b... /d...).
         // Once the user types a space (starts composing the real question), stop showing the picker
         // so Enter can submit "/btw ..." or "/DeepReview ..." instead of selecting from the picker.
-        if (!hasWhitespace && (query === '' || query.startsWith('b') || query.startsWith('d'))) {
+        if (!hasWhitespace && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('u'))) {
           setSlashCommandState({
             isActive: true,
             kind: 'actions',
@@ -1197,7 +1205,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
 
       // When idle, keep the picker for mode switching, but don't interfere with executable slash commands.
-      if (!isBtwCommand && !isCompactCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
+      if (!isBtwCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
         setSlashCommandState({
           isActive: true,
           kind: 'all',
@@ -1335,6 +1343,61 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           duration: 5000,
         }
       );
+    }
+  }, [
+    derivedState?.isProcessing,
+    effectiveTargetSession,
+    effectiveTargetSessionId,
+    inputState.value,
+    setQueuedInput,
+    t,
+  ]);
+
+  const submitUsageFromInput = useCallback(async () => {
+    if (!effectiveTargetSessionId || !effectiveTargetSession) {
+      notificationService.error(
+        t('chatInput.usageNoSession', { defaultValue: 'No active session for /usage' })
+      );
+      return;
+    }
+
+    const message = inputState.value.trim();
+    if (!/^\/usage\s*$/i.test(message)) {
+      notificationService.warning(
+        t('chatInput.usageCommandUsage', { defaultValue: 'Use /usage without extra arguments.' })
+      );
+      return;
+    }
+
+    dispatchInput({ type: 'CLEAR_VALUE' });
+    setQueuedInput(null);
+    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+
+    try {
+      const result = await runUsageReportCommand({
+        session: effectiveTargetSession,
+        isProcessing: !!derivedState?.isProcessing,
+        busyMessage: t('chatInput.usageBusy', {
+          defaultValue: 'Wait until the session is idle before using /usage.',
+        }),
+        noWorkspaceMessage: t('chatInput.usageNoWorkspace', {
+          defaultValue: 'A workspace is required to build a usage report.',
+        }),
+        failedTitle: t('chatInput.usageFailed', { defaultValue: 'Usage report failed' }),
+        unknownErrorMessage: t('error.unknown'),
+        loadingMarkdown: t('usage.loading.markdown', { defaultValue: 'Generating usage report...' }),
+      });
+
+      if (result.inserted) {
+        dispatchInput({ type: 'DEACTIVATE' });
+      }
+    } catch (error) {
+      log.error('Failed to trigger /usage', {
+        error,
+        sessionId: effectiveTargetSessionId,
+      });
+      dispatchInput({ type: 'ACTIVATE' });
+      dispatchInput({ type: 'SET_VALUE', payload: message });
     }
   }, [
     derivedState?.isProcessing,
@@ -1645,6 +1708,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
+    if (/^\/usage\s*$/i.test(message)) {
+      await submitUsageFromInput();
+      return;
+    }
+
     if (/^\/init\s*$/i.test(message)) {
       await submitInitFromInput();
       return;
@@ -1663,6 +1731,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (message.toLowerCase().startsWith('/compact')) {
       notificationService.warning(
         t('chatInput.compactUsage', { defaultValue: 'Use /compact without extra arguments.' })
+      );
+      return;
+    }
+
+    if (message.toLowerCase().startsWith('/usage')) {
+      notificationService.warning(
+        t('chatInput.usageCommandUsage', { defaultValue: 'Use /usage without extra arguments.' })
       );
       return;
     }
@@ -1730,6 +1805,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setQueuedInput,
     submitBtwFromInput,
     submitCompactFromInput,
+    submitUsageFromInput,
     submitInitFromInput,
     submitDeepreviewFromInput,
     submitMcpPromptFromInput,
@@ -1821,6 +1897,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     } else if (actionId === 'compact') {
       next = '/compact';
+    } else if (actionId === 'usage') {
+      next = '/usage';
     } else if (actionId === 'init') {
       next = '/init';
     } else if (actionId === 'deepreview') {

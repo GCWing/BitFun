@@ -95,6 +95,12 @@ const BtwSessionPanel = React.lazy(() =>
   }))
 );
 
+const SessionUsagePanel = React.lazy(() =>
+  import('@/flow_chat/components/usage/SessionUsagePanel').then(module => ({
+    default: module.SessionUsagePanel
+  }))
+);
+
 // CodePreview, ChartRenderer and CodeNode removed - visualization features disabled
 import { 
   FlexiblePanelProps
@@ -719,6 +725,18 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             <BtwSessionPanel
               childSessionId={content.data?.childSessionId}
               parentSessionId={content.data?.parentSessionId}
+              workspacePath={content.data?.workspacePath || workspacePath}
+            />
+          </React.Suspense>
+        );
+
+      case 'session-usage':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.taskDetail')}</div>}>
+            <SessionUsagePanel
+              report={content.data?.report}
+              markdown={content.data?.markdown}
+              sessionId={content.data?.sessionId}
               workspacePath={content.data?.workspacePath || workspacePath}
             />
           </React.Suspense>

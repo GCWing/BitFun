@@ -16,7 +16,7 @@ import {
 } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
-import type { SessionKind } from '@/shared/types/session-history';
+import type { LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
 import {
   deriveLastFinishedAtFromMetadata,
   deriveSessionRelationshipFromMetadata,
@@ -798,6 +798,52 @@ export class FlowChatStore {
         sessions: newSessions
       };
     });
+  }
+
+  public addLocalUsageReportTurn(params: {
+    sessionId: string;
+    markdown: string;
+    reportId: string;
+    schemaVersion: number;
+    generatedAt: number;
+    report?: Record<string, any>;
+    status?: 'loading' | 'completed';
+  }): DialogTurn | null {
+    const session = this.state.sessions.get(params.sessionId);
+    if (!session) {
+      log.warn('Session not found, cannot add local usage report', { sessionId: params.sessionId });
+      return null;
+    }
+
+    const metadata: LocalCommandMetadata = {
+      localCommandKind: 'usage_report',
+      reportId: params.reportId,
+      schemaVersion: params.schemaVersion,
+      generatedAt: params.generatedAt,
+      modelVisible: false,
+      usageReport: params.report,
+      usageReportStatus: params.status ?? 'completed',
+    };
+    const turnIndex = session.dialogTurns.length;
+    const dialogTurn: DialogTurn = {
+      id: `local-usage-${params.reportId}`,
+      sessionId: params.sessionId,
+      kind: 'local_command',
+      userMessage: {
+        id: `local-usage-user-${params.reportId}`,
+        content: params.markdown,
+        timestamp: params.generatedAt,
+        metadata,
+      },
+      modelRounds: [],
+      status: params.status === 'loading' ? 'processing' : 'completed',
+      startTime: params.generatedAt,
+      endTime: params.generatedAt,
+      backendTurnIndex: turnIndex,
+    };
+
+    this.addDialogTurn(params.sessionId, dialogTurn);
+    return dialogTurn;
   }
 
   public deleteDialogTurn(sessionId: string, dialogTurnId: string): void {
@@ -1801,7 +1847,9 @@ export class FlowChatStore {
         : undefined;
 
       const displayContent =
-        metadata?.original_text || this.cleanRemoteUserInput(turn.userMessage.content);
+        metadata?.localCommandKind === 'usage_report'
+          ? turn.userMessage.content
+          : metadata?.original_text || this.cleanRemoteUserInput(turn.userMessage.content);
       const normalizedTurnStatus = normalizeRecoveredTurnStatus(turn.status, { error: undefined });
 
       return {
