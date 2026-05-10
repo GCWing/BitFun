@@ -192,6 +192,7 @@ export interface AIConfig {
   tool_confirmation_timeout_secs?: number | null;
   skip_tool_confirmation?: boolean;
   computer_use_enabled?: boolean;
+  browser_control_preferred_browser?: string;
 }
 
 export interface StoredModeConfigItem {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, SquarePen, Trash2, Wifi, Loader, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { Button, Switch, Select, IconButton, NumberInput, Card, Modal, Input, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import { 
   AIModelConfig as AIModelConfigType, 
@@ -2370,7 +2370,7 @@ const AIModelConfig: React.FC = () => {
               tooltip={t('cliAuth.rescan')}
               disabled={isDiscoveringCli}
             >
-              <Loader size={16} className={isDiscoveringCli ? 'bitfun-ai-model-config__spin' : ''} />
+              <RefreshCw size={16} className={isDiscoveringCli ? 'bitfun-ai-model-config__spin' : ''} />
             </IconButton>
           )}
         >

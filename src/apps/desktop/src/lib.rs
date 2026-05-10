@@ -947,6 +947,7 @@ pub async fn run() {
             api::browser_api::browser_webview_eval,
             api::browser_api::browser_get_url,
             // Browser Control API (CDP-based user browser control)
+            api::browser_control_api::browser_control_list_browsers,
             api::browser_control_api::browser_control_get_status,
             api::browser_control_api::browser_control_launch,
             api::browser_control_api::browser_control_restart_with_cdp,

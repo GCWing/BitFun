@@ -61,6 +61,14 @@ type BrowserControlLaunchResponse = {
   browserKind: string;
 };
 
+type BrowserControlBrowserOption = {
+  value: string;
+  label: string;
+  installed: boolean;
+};
+
+const DEFAULT_BROWSER_CONTROL_BROWSER = 'default';
+
 const DEFAULT_COMPANION_PET_VALUE = '__default_panda__';
 
 export type SessionSettingsPanelVariant = 'personalization' | 'permissions';
@@ -100,6 +108,8 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [browserKind, setBrowserKind] = useState('');
   const [browserVersion, setBrowserVersion] = useState<string | null>(null);
   const [browserPageCount, setBrowserPageCount] = useState(0);
+  const [browserOptions, setBrowserOptions] = useState<BrowserControlBrowserOption[]>([]);
+  const [preferredBrowser, setPreferredBrowser] = useState(DEFAULT_BROWSER_CONTROL_BROWSER);
   const [browserControlBusy, setBrowserControlBusy] = useState(false);
   const [browserStatusLoading, setBrowserStatusLoading] = useState(false);
   const [platform, setPlatform] = useState<string>('');
@@ -135,17 +145,21 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     setBrowserStatusLoading(true);
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const s = await invoke<{
-        cdpAvailable: boolean;
-        browserKind: string;
-        browserVersion: string | null;
-        port: number;
-        pageCount: number;
-      }>('browser_control_get_status', { request: { port: 9222 } });
+      const [s, browsers] = await Promise.all([
+        invoke<{
+          cdpAvailable: boolean;
+          browserKind: string;
+          browserVersion: string | null;
+          port: number;
+          pageCount: number;
+        }>('browser_control_get_status', { request: { port: 9222 } }),
+        invoke<{ options: BrowserControlBrowserOption[] }>('browser_control_list_browsers'),
+      ]);
       setBrowserCdpAvailable(s.cdpAvailable);
       setBrowserKind(s.browserKind);
       setBrowserVersion(s.browserVersion);
       setBrowserPageCount(s.pageCount);
+      setBrowserOptions(browsers.options);
     } catch (error) {
       log.error('browser_control_get_status failed', error);
     } finally {
@@ -182,6 +196,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         confirmTimeout,
         debugConfigData,
         computerUseCfg,
+        browserControlPreferredBrowser,
         loadedCompanionPets,
       ] = await Promise.all([
         aiExperienceConfigService.getSettingsAsync(),
@@ -192,6 +207,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<number | null>('ai.tool_confirmation_timeout_secs'),
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
+        configManager.getConfig<string>('ai.browser_control_preferred_browser'),
         listAgentCompanionPets(),
       ]);
 
@@ -203,6 +219,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setExecutionTimeout(execTimeout != null ? String(execTimeout) : '');
       setConfirmationTimeout(confirmTimeout != null ? String(confirmTimeout) : '');
       if (debugConfigData) setDebugConfig(debugConfigData);
+      setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
 
       refreshDesktopStatus(computerUseCfg);
     } catch (error) {
@@ -442,6 +459,28 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     }
   };
 
+  const handleBrowserControlBrowserChange = async (value: string | number) => {
+    const nextValue = String(value || DEFAULT_BROWSER_CONTROL_BROWSER);
+    const previousValue = preferredBrowser;
+    setPreferredBrowser(nextValue);
+    setBrowserControlBusy(true);
+    try {
+      await configManager.setConfig(
+        'ai.browser_control_preferred_browser',
+        nextValue === DEFAULT_BROWSER_CONTROL_BROWSER ? '' : nextValue,
+      );
+      await refreshBrowserControlStatus();
+    } catch (error) {
+      log.error('Failed to save browser_control_preferred_browser', error);
+      setPreferredBrowser(previousValue);
+      notificationService.error(
+        `${tTools('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
+      );
+    } finally {
+      setBrowserControlBusy(false);
+    }
+  };
+
   const handleBrowserControlLaunch = async () => {
     setBrowserControlBusy(true);
     try {
@@ -668,6 +707,11 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const browserStatusLabel = browserCdpAvailable
     ? `${browserKind} · ${browserPageCount} ${t('browserControl.tabs')}`
     : browserStatusLoading ? t('loading.text') : t('browserControl.notConnected');
+  const browserSelectOptions: SelectOption[] = browserOptions.map((option) => ({
+    value: option.value,
+    label: option.installed ? option.label : `${option.label} (${t('browserControl.notInstalled')})`,
+    disabled: !option.installed,
+  }));
 
   const pageTitle = variant === 'personalization'
     ? t('personalizationPage.title')
@@ -1046,6 +1090,24 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         >
           {IS_TAURI_DESKTOP ? (
             <>
+              <ConfigPageRow
+                label={t('browserControl.preferredBrowser')}
+                description={t('browserControl.preferredBrowserDesc')}
+                align="center"
+                balanced
+              >
+                <div className="bitfun-func-agent-config__row-control">
+                  <Select
+                    value={preferredBrowser}
+                    options={browserSelectOptions}
+                    size="small"
+                    disabled={browserControlBusy || browserStatusLoading || browserSelectOptions.length === 0}
+                    onChange={(value) => {
+                      if (!Array.isArray(value)) void handleBrowserControlBrowserChange(value);
+                    }}
+                  />
+                </div>
+              </ConfigPageRow>
               <ConfigPageRow
                 label={t('browserControl.status')}
                 description={t('browserControl.statusDesc') || undefined}

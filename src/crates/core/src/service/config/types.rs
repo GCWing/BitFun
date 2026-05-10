@@ -536,6 +536,10 @@ pub struct AIConfig {
     /// Allow Computer use (desktop automation) when the desktop host is available (all session modes).
     #[serde(default)]
     pub computer_use_enabled: bool,
+
+    /// Preferred browser for CDP browser control. Empty/default uses the system default browser.
+    #[serde(default)]
+    pub browser_control_preferred_browser: String,
 }
 
 impl AIConfig {
@@ -1485,6 +1489,7 @@ impl Default for AIConfig {
             skip_tool_confirmation: true,
             debug_mode_config: DebugModeConfig::default(),
             computer_use_enabled: false,
+            browser_control_preferred_browser: String::new(),
         }
     }
 }

@@ -42,11 +42,12 @@ fn convert_tool_result(
             result_for_assistant,
             image_attachments,
         } => {
-            // If the tool does not provide result_for_assistant, generate default friendly description
-            let assistant_text = result_for_assistant.or_else(|| {
-                // Generate natural language description based on data
-                generate_default_assistant_text(tool_name, &data)
-            });
+            // If the tool does not provide result_for_assistant, pass the full
+            // structured result through to the model. Summaries like
+            // "completed successfully" can hide fields the model needs for the
+            // next decision.
+            let assistant_text =
+                result_for_assistant.or_else(|| serialize_result_for_assistant(tool_name, &data));
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -59,8 +60,7 @@ fn convert_tool_result(
             }
         }
         FrameworkToolResult::Progress { content, .. } => {
-            // Progress message also generates friendly text
-            let assistant_text = generate_default_assistant_text(tool_name, &content);
+            let assistant_text = serialize_result_for_assistant(tool_name, &content);
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -73,8 +73,7 @@ fn convert_tool_result(
             }
         }
         FrameworkToolResult::StreamChunk { data, .. } => {
-            // Streaming data block also generates friendly text
-            let assistant_text = generate_default_assistant_text(tool_name, &data);
+            let assistant_text = serialize_result_for_assistant(tool_name, &data);
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -89,103 +88,17 @@ fn convert_tool_result(
     }
 }
 
-/// Generate default tool result description
-fn generate_default_assistant_text(tool_name: &str, data: &serde_json::Value) -> Option<String> {
-    // Check if data is null or empty
-    if data.is_null() {
-        return Some(format!(
-            "Tool {} completed, but no result returned.",
-            tool_name
-        ));
-    }
-
-    // If it is an empty object or empty array
-    if (data.is_object() && data.as_object().is_some_and(|o| o.is_empty()))
-        || (data.is_array() && data.as_array().is_some_and(|a| a.is_empty()))
-    {
-        return Some(format!(
-            "Tool {} completed, returned empty result.",
-            tool_name
-        ));
-    }
-
-    // Try to extract common fields to generate description
-    if let Some(obj) = data.as_object() {
-        // Check if there is a success field
-        if let Some(success) = obj.get("success").and_then(|v| v.as_bool()) {
-            if success {
-                if let Some(message) = obj.get("message").and_then(|v| v.as_str()) {
-                    return Some(format!(
-                        "Tool {} completed successfully: {}",
-                        tool_name, message
-                    ));
-                }
-                return Some(format!("Tool {} completed successfully.", tool_name));
-            } else {
-                if let Some(error) = obj.get("error").and_then(|v| v.as_str()) {
-                    return Some(format!(
-                        "Tool {} completed with error: {}",
-                        tool_name, error
-                    ));
-                }
-                return Some(format!("Tool {} completed with error.", tool_name));
-            }
-        }
-
-        // Check if there is a result/data/content field
-        for key in &["result", "data", "content", "output"] {
-            if let Some(value) = obj.get(*key) {
-                if let Some(text) = value.as_str() {
-                    if !text.is_empty() && text.len() < 500 {
-                        return Some(format!("Tool {} completed, returned: {}", tool_name, text));
-                    }
-                }
-            }
-        }
-
-        // If there are multiple fields, provide field list
-        let field_names: Vec<&str> = obj.keys().take(5).map(|s| s.as_str()).collect();
-        if !field_names.is_empty() {
-            return Some(format!(
-                "Tool {} completed, returned data with the following fields: {}",
-                tool_name,
-                field_names.join(", ")
-            ));
-        }
-    }
-
-    // If it is a string, return directly (but limit length)
-    if let Some(text) = data.as_str() {
-        if !text.is_empty() {
-            if text.len() <= 500 {
-                return Some(format!("Tool {} completed: {}", tool_name, text));
-            } else {
-                return Some(format!(
-                    "Tool {} completed, returned {} characters of text result.",
-                    tool_name,
-                    text.len()
-                ));
-            }
-        }
-    }
-
-    // If it is a number or boolean
-    if data.is_number() || data.is_boolean() {
-        return Some(format!("Tool {} completed, returned: {}", tool_name, data));
-    }
-
-    // Default: simply describe data type
-    Some(format!(
-        "Tool {} completed, returned {} type of result.",
-        tool_name,
-        if data.is_object() {
-            "object"
-        } else if data.is_array() {
-            "array"
-        } else {
-            "data"
-        }
-    ))
+fn serialize_result_for_assistant(tool_name: &str, data: &serde_json::Value) -> Option<String> {
+    serde_json::to_string_pretty(data)
+        .or_else(|_| serde_json::to_string(data))
+        .ok()
+        .filter(|text| !text.trim().is_empty())
+        .or_else(|| {
+            Some(format!(
+                "Tool {} returned no serializable result.",
+                tool_name
+            ))
+        })
 }
 
 /// Convert core::ToolResult to framework::ToolResult
@@ -208,7 +121,6 @@ fn elapsed_ms_since(time: SystemTime) -> u64 {
 /// signal remains actionable without bloating the prompt.
 const TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES: usize = 1024;
 
-const TOOL_ERROR_NEXT_STEP_HINT: &str = "Inspect the error and the arguments you sent, then either (a) retry with corrected arguments, (b) call a different tool, or (c) report the failure to the user. Do not repeat the same call without changes.";
 const USER_STEERING_INTERRUPTED_MESSAGE: &str = "Tool execution skipped because the user sent a new steering message for the running turn. Stop the remaining old tool plan and handle the new user message next.";
 
 fn truncate_arguments_preview(value: &serde_json::Value) -> String {
@@ -274,7 +186,6 @@ fn build_error_execution_result(
         "error": error_message,
         "category": category,
         "tool_name": tool_name,
-        "next_step_hint": TOOL_ERROR_NEXT_STEP_HINT,
         "message": format!("Tool '{}' failed ({}): {}", tool_name, category, error_message),
     });
     if let Some(args_preview) = provided_arguments.as_ref() {
@@ -283,13 +194,13 @@ fn build_error_execution_result(
 
     let assistant_text = if let Some(args_preview) = provided_arguments.as_ref() {
         format!(
-            "Tool '{}' failed ({}): {}\nProvided arguments: {}\n{}",
-            tool_name, category, error_message, args_preview, TOOL_ERROR_NEXT_STEP_HINT
+            "Tool '{}' failed ({}): {}\nProvided arguments: {}",
+            tool_name, category, error_message, args_preview
         )
     } else {
         format!(
-            "Tool '{}' failed ({}): {}\n{}",
-            tool_name, category, error_message, TOOL_ERROR_NEXT_STEP_HINT
+            "Tool '{}' failed ({}): {}",
+            tool_name, category, error_message
         )
     };
 
@@ -1466,5 +1377,29 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("Provided arguments: {\"operation\":\"log\""));
+    }
+
+    #[test]
+    fn fallback_assistant_text_preserves_full_structured_result() {
+        let result = convert_tool_result(
+            FrameworkToolResult::Result {
+                data: json!({
+                    "success": false,
+                    "exit_code": 1,
+                    "working_directory": "/private/tmp",
+                    "output": "ERR_PNPM_NO_PKG_MANIFEST"
+                }),
+                result_for_assistant: None,
+                image_attachments: None,
+            },
+            "tool_1",
+            "Bash",
+        );
+
+        let assistant_text = result.result_for_assistant.unwrap_or_default();
+        assert!(assistant_text.contains("\"success\": false"));
+        assert!(assistant_text.contains("\"exit_code\": 1"));
+        assert!(assistant_text.contains("\"working_directory\": \"/private/tmp\""));
+        assert!(!assistant_text.contains("completed with error"));
     }
 }

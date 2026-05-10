@@ -1,5 +1,6 @@
 //! Detect and launch the user's default browser with CDP debug port enabled.
 
+use crate::infrastructure::app_paths::get_path_manager_arc;
 use crate::util::{
     errors::{BitFunError, BitFunResult},
     process_manager,
@@ -7,7 +8,10 @@ use crate::util::{
 #[allow(unused_imports)]
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::Duration;
 
 /// Default CDP debug port.
@@ -51,6 +55,11 @@ pub struct BrowserInfo {
     pub is_running: bool,
     pub cdp_available: bool,
 }
+
+/// Cache for browser installation status to avoid repeated filesystem checks.
+/// The cache is valid for the lifetime of the process since browser installations
+/// don't change during a session.
+static BROWSER_INSTALL_CACHE: Mutex<Option<HashMap<String, bool>>> = Mutex::new(None);
 
 pub struct BrowserLauncher;
 
@@ -173,6 +182,158 @@ impl BrowserLauncher {
         }
 
         Ok(BrowserKind::Chrome)
+    }
+
+    /// Check whether a browser's executable (or app bundle) is present on disk.
+    /// Results are cached for the process lifetime since browser installations
+    /// don't change during a session.
+    pub fn is_browser_installed(kind: &BrowserKind) -> bool {
+        // Unknown browsers are never considered installed.
+        if matches!(kind, BrowserKind::Unknown(_)) {
+            return false;
+        }
+
+        let cache_key = format!("{:?}", kind);
+
+        // Check cache first.
+        {
+            let cache = BROWSER_INSTALL_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(ref map) = *cache {
+                if let Some(&cached) = map.get(&cache_key) {
+                    return cached;
+                }
+            }
+        }
+
+        // Compute the result.
+        let result = Self::check_browser_installed_impl(kind);
+
+        // Store in cache.
+        {
+            let mut cache = BROWSER_INSTALL_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+            let map = cache.get_or_insert_with(HashMap::new);
+            map.insert(cache_key, result);
+        }
+
+        debug!("Browser {:?} installed: {}", kind, result);
+        result
+    }
+
+    /// Internal implementation of browser installation check.
+    fn check_browser_installed_impl(kind: &BrowserKind) -> bool {
+        let exe = Self::browser_executable(kind);
+        #[cfg(target_os = "macos")]
+        {
+            // On macOS, check the .app bundle instead of the inner executable
+            let app_path = match kind {
+                BrowserKind::Chrome => "/Applications/Google Chrome.app",
+                BrowserKind::Edge => "/Applications/Microsoft Edge.app",
+                BrowserKind::Brave => "/Applications/Brave Browser.app",
+                BrowserKind::Arc => "/Applications/Arc.app",
+                BrowserKind::Chromium => "/Applications/Chromium.app",
+                BrowserKind::Unknown(_) => "",
+            };
+            if !app_path.is_empty() {
+                return std::path::Path::new(app_path).exists();
+            }
+        }
+        std::path::Path::new(&exe).exists()
+    }
+
+    /// Clear the browser installation cache. Useful for testing or when
+    /// browser installations might have changed.
+    #[cfg(test)]
+    pub fn clear_install_cache() {
+        let mut cache = BROWSER_INSTALL_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        *cache = None;
+    }
+
+    pub fn browser_kind_from_config(value: &str) -> Option<BrowserKind> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "" | "default" => None,
+            "chrome" | "google-chrome" | "google_chrome" => Some(BrowserKind::Chrome),
+            "edge" | "microsoft-edge" | "microsoft_edge" => Some(BrowserKind::Edge),
+            "chromium" => Some(BrowserKind::Chromium),
+            "brave" | "brave-browser" | "brave_browser" => Some(BrowserKind::Brave),
+            "arc" => Some(BrowserKind::Arc),
+            other => Some(BrowserKind::Unknown(other.to_string())),
+        }
+    }
+
+    pub fn resolve_browser_kind(preferred_browser: Option<&str>) -> BitFunResult<BrowserKind> {
+        if let Some(kind) = preferred_browser.and_then(Self::browser_kind_from_config) {
+            Ok(kind)
+        } else {
+            Self::detect_default_browser()
+        }
+    }
+
+    fn browser_profile_slug(kind: &BrowserKind) -> String {
+        match kind {
+            BrowserKind::Chrome => "chrome".to_string(),
+            BrowserKind::Edge => "edge".to_string(),
+            BrowserKind::Chromium => "chromium".to_string(),
+            BrowserKind::Brave => "brave".to_string(),
+            BrowserKind::Arc => "arc".to_string(),
+            BrowserKind::Unknown(name) => name
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+                .collect::<String>()
+                .trim_matches('-')
+                .to_string(),
+        }
+    }
+
+    fn managed_user_data_dir(kind: &BrowserKind) -> PathBuf {
+        get_path_manager_arc()
+            .user_data_dir()
+            .join("browser-control")
+            .join(Self::browser_profile_slug(kind))
+    }
+
+    fn ensure_managed_user_data_dir(kind: &BrowserKind) -> BitFunResult<PathBuf> {
+        let dir = Self::managed_user_data_dir(kind);
+        std::fs::create_dir_all(&dir).map_err(|e| {
+            BitFunError::tool(format!(
+                "Failed to create browser control profile directory: {}",
+                e
+            ))
+        })?;
+        Ok(dir)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn launch_app_name(kind: &BrowserKind) -> Option<&'static str> {
+        match kind {
+            BrowserKind::Chrome => Some("Google Chrome"),
+            BrowserKind::Edge => Some("Microsoft Edge"),
+            BrowserKind::Brave => Some("Brave Browser"),
+            BrowserKind::Arc => Some("Arc"),
+            BrowserKind::Chromium => Some("Chromium"),
+            BrowserKind::Unknown(_) => None,
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn spawn_macos_browser(kind: &BrowserKind, exe: &str, args: &[String]) -> std::io::Result<std::process::Child> {
+        if let Some(app_name) = Self::launch_app_name(kind) {
+            let mut command = silent_command("open");
+            command.args(["-na", app_name, "--args"]);
+            command.args(args);
+            command.spawn()
+        } else {
+            silent_command(exe).args(args).spawn()
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn spawn_browser(_kind: &BrowserKind, exe: &str, args: &[String]) -> std::io::Result<std::process::Child> {
+        silent_command(exe).args(args).spawn()
+    }
+
+    #[cfg(target_os = "macos")]
+    fn spawn_browser(kind: &BrowserKind, exe: &str, args: &[String]) -> std::io::Result<std::process::Child> {
+        Self::spawn_macos_browser(kind, exe, args)
     }
 
     /// Get the executable path or launch command for a browser kind.
@@ -320,42 +481,26 @@ impl BrowserLauncher {
         }
 
         let exe = Self::browser_executable(kind);
+        let profile_dir = match user_data_dir {
+            Some(dir) => Path::new(dir).to_path_buf(),
+            None => Self::ensure_managed_user_data_dir(kind)?,
+        };
         let flag = format!("--remote-debugging-port={}", port);
-        let mut extra: Vec<String> = vec![];
-        if let Some(dir) = user_data_dir {
-            extra.push(format!("--user-data-dir={}", dir));
-        }
-
-        let is_running = Self::is_browser_running(kind);
-
-        // Critical: if a same-kind browser is already running AND the model
-        // hasn't asked for an isolated profile, Chrome will ignore our
-        // `--remote-debugging-port` flag and just open a new window in the
-        // existing process. So instruct the user — unless `user_data_dir`
-        // gives us a sandbox to launch a parallel process in.
-        if is_running && user_data_dir.is_none() {
-            let instructions = format!(
-                "Your {} is currently running without the CDP debug port. \
-                 Either quit the browser completely (Cmd+Q / Ctrl+Q) so I \
-                 can relaunch it with debugging on, OR call browser.connect \
-                 again with `user_data_dir: \"<path>\"` so I can launch an \
-                 isolated parallel instance.\n\
-                 Alternatively, you can restart manually:\n  \"{}\" {}",
-                kind, exe, flag
-            );
-            return Ok(LaunchResult::BrowserRunningWithoutCdp {
-                browser: kind.to_string(),
-                executable: exe,
-                port,
-                instructions,
-            });
-        }
+        let profile_flag = format!("--user-data-dir={}", profile_dir.display());
+        let extra: Vec<String> = vec![
+            flag.clone(),
+            profile_flag,
+            "--no-first-run".to_string(),
+            "--no-default-browser-check".to_string(),
+        ];
 
         info!(
-            "Launching {} with CDP on port {} (user_data_dir={:?})",
-            kind, port, user_data_dir
+            "Launching {} with CDP on port {} (user_data_dir={})",
+            kind,
+            port,
+            profile_dir.display()
         );
-        let result = silent_command(&exe).arg(&flag).args(&extra).spawn();
+        let result = Self::spawn_browser(kind, &exe, &extra);
 
         match result {
             Ok(_child) => {
@@ -382,11 +527,10 @@ impl BrowserLauncher {
     }
 
     pub async fn restart_with_cdp(kind: &BrowserKind, port: u16) -> BitFunResult<LaunchResult> {
-        Self::terminate_browser(kind)?;
-        Self::wait_for_browser_exit(kind, Duration::from_secs(8)).await?;
         Self::launch_with_cdp_opts(kind, port, None).await
     }
 
+    #[allow(dead_code)]
     fn terminate_browser(kind: &BrowserKind) -> BitFunResult<()> {
         #[cfg(target_os = "macos")]
         {
@@ -467,6 +611,7 @@ impl BrowserLauncher {
         }
     }
 
+    #[allow(dead_code)]
     async fn wait_for_browser_exit(kind: &BrowserKind, timeout: Duration) -> BitFunResult<()> {
         let started = std::time::Instant::now();
         while Self::is_browser_running(kind) {
@@ -482,6 +627,7 @@ impl BrowserLauncher {
     }
 
     /// Check if a browser process is currently running.
+    #[allow(dead_code)]
     fn is_browser_running(kind: &BrowserKind) -> bool {
         // Per-platform process names.
         // macOS / Linux match against the executable filename via `pgrep -f`.

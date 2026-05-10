@@ -4,8 +4,10 @@ use crate::client::AIClient;
 use crate::providers::shared;
 use crate::types::RemoteModelInfo;
 use anyhow::Result;
+use log::warn;
 use reqwest::RequestBuilder;
 use serde::Deserialize;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
 struct OpenAIModelsResponse {
@@ -110,80 +112,209 @@ struct CodexBackendModelEntry {
     /// We only surface entries the CLI itself shows (`list`).
     #[serde(default)]
     visibility: Option<String>,
+    #[serde(default)]
+    supported_in_api: Option<bool>,
+    #[serde(default)]
+    priority: Option<i64>,
+}
+
+const DEFAULT_CODEX_MODELS: &[&str] = &[
+    "gpt-5.5",
+    "gpt-5.4-mini",
+    "gpt-5.4",
+    "gpt-5.3-codex",
+    "gpt-5.2-codex",
+    "gpt-5.1-codex-max",
+    "gpt-5.1-codex-mini",
+];
+
+const FORWARD_COMPAT_CODEX_MODELS: &[(&str, &[&str])] = &[
+    ("gpt-5.5", &["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex"]),
+    ("gpt-5.4-mini", &["gpt-5.3-codex", "gpt-5.2-codex"]),
+    ("gpt-5.4", &["gpt-5.3-codex", "gpt-5.2-codex"]),
+    ("gpt-5.3-codex", &["gpt-5.2-codex"]),
+];
+
+fn codex_home_dir() -> PathBuf {
+    std::env::var("CODEX_HOME")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".codex")))
+        .unwrap_or_else(|| PathBuf::from(".codex"))
+}
+
+fn add_unique_model_id(ordered: &mut Vec<String>, id: String) {
+    if !id.trim().is_empty() && !ordered.iter().any(|existing| existing == &id) {
+        ordered.push(id);
+    }
+}
+
+fn add_forward_compat_codex_models(ordered: &mut Vec<String>) {
+    for (synthetic, templates) in FORWARD_COMPAT_CODEX_MODELS {
+        if ordered.iter().any(|model| model == synthetic) {
+            continue;
+        }
+        if templates
+            .iter()
+            .any(|template| ordered.iter().any(|model| model == template))
+        {
+            ordered.push((*synthetic).to_string());
+        }
+    }
+}
+
+fn read_codex_config_model(codex_home: &Path) -> Option<String> {
+    let config_path = codex_home.join("config.toml");
+    let text = match std::fs::read_to_string(&config_path) {
+        Ok(t) => t,
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                warn!("Failed to read Codex config from {}: {}", config_path.display(), e);
+            }
+            return None;
+        }
+    };
+    text.lines().find_map(|line| {
+        let line = line.trim();
+        if line.starts_with('#') {
+            return None;
+        }
+        let (key, value) = line.split_once('=')?;
+        if key.trim() != "model" {
+            return None;
+        }
+        let model = value.trim().trim_matches(|ch| ch == '"' || ch == '\'');
+        (!model.is_empty()).then(|| model.to_string())
+    })
+}
+
+fn read_codex_cached_models(codex_home: &Path) -> Vec<String> {
+    let cache_path = codex_home.join("models_cache.json");
+    let bytes = match std::fs::read(&cache_path) {
+        Ok(b) => b,
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                warn!("Failed to read Codex models cache from {}: {}", cache_path.display(), e);
+            }
+            return Vec::new();
+        }
+    };
+    let payload: CodexBackendModelsResponse = match serde_json::from_slice(&bytes) {
+        Ok(p) => p,
+        Err(e) => {
+            warn!("Failed to parse Codex models cache JSON from {}: {}", cache_path.display(), e);
+            return Vec::new();
+        }
+    };
+    codex_models_from_entries(payload.models)
+}
+
+fn codex_models_from_entries(entries: Vec<CodexBackendModelEntry>) -> Vec<String> {
+    let mut sortable = Vec::new();
+    for model in entries {
+        if model.supported_in_api == Some(false) {
+            continue;
+        }
+        if model
+            .visibility
+            .as_deref()
+            .map(|v| {
+                let normalized = v.trim().to_ascii_lowercase();
+                normalized == "hide" || normalized == "hidden"
+            })
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        sortable.push((model.priority.unwrap_or(10_000), model.slug));
+    }
+    sortable.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+
+    let mut ordered = Vec::new();
+    for (_, slug) in sortable {
+        add_unique_model_id(&mut ordered, slug);
+    }
+    ordered
+}
+
+fn codex_fallback_model_ids() -> Vec<String> {
+    let codex_home = codex_home_dir();
+    let mut ordered = Vec::new();
+    if let Some(model) = read_codex_config_model(&codex_home) {
+        add_unique_model_id(&mut ordered, model);
+    }
+    for model in read_codex_cached_models(&codex_home) {
+        add_unique_model_id(&mut ordered, model);
+    }
+    for model in DEFAULT_CODEX_MODELS {
+        add_unique_model_id(&mut ordered, (*model).to_string());
+    }
+    add_forward_compat_codex_models(&mut ordered);
+    ordered
+}
+
+fn codex_model_infos(model_ids: Vec<String>) -> Vec<RemoteModelInfo> {
+    dedupe_remote_models(
+        model_ids
+            .into_iter()
+            .map(|id| RemoteModelInfo {
+                id,
+                display_name: None,
+            })
+            .collect(),
+    )
 }
 
 /// `chatgpt.com/backend-api/codex/models` returns each model's
 /// `minimal_client_version`, and only emits entries whose minimum is satisfied
-/// by the `client_version` query param. Codex CLI credentials inject a
-/// Codex-shaped `User-Agent` containing the locally installed CLI version; use
-/// that same version here so the model picker matches what the user sees in
-/// `codex /model`.
-fn codex_client_version(client: &AIClient) -> Option<String> {
-    let headers = client.config.custom_headers.as_ref()?;
-    let user_agent = headers
-        .iter()
-        .find(|(key, _)| key.eq_ignore_ascii_case("User-Agent"))?
-        .1
-        .trim();
-    let version = user_agent
-        .strip_prefix("codex_cli_rs/")
-        .or_else(|| user_agent.strip_prefix("codex/"))?
-        .trim();
-
-    if version.is_empty() {
-        None
+/// by the `client_version` query param. Hermes-agent uses `client_version=1.0.0`
+/// for discovery, which avoids accidentally hiding newer models when the local
+/// CLI binary is old or unavailable.
+fn codex_models_url(base_models_url: &str) -> String {
+    let separator = if base_models_url.contains('?') {
+        '&'
     } else {
-        Some(version.to_string())
-    }
+        '?'
+    };
+    format!("{base_models_url}{separator}client_version=1.0.0")
 }
 
 async fn list_codex_chatgpt_models(
     client: &AIClient,
     base_models_url: &str,
 ) -> Result<Vec<RemoteModelInfo>> {
-    let url = if let Some(version) = codex_client_version(client) {
-        let separator = if base_models_url.contains('?') {
-            '&'
-        } else {
-            '?'
-        };
-        format!("{base_models_url}{separator}client_version={version}")
-    } else {
-        log::warn!(
-            "Codex backend model discovery is missing a codex CLI client version; requesting models without client_version"
-        );
-        base_models_url.to_string()
+    let url = codex_models_url(base_models_url);
+
+    let live_models = async {
+        let response = apply_headers(client, client.client.get(&url))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let payload: CodexBackendModelsResponse = response.json().await?;
+        Ok::<Vec<String>, anyhow::Error>(codex_models_from_entries(payload.models))
+    }
+    .await;
+
+    let mut model_ids = match live_models {
+        Ok(models) if !models.is_empty() => models,
+        Ok(_) => {
+            log::warn!("Codex backend model discovery returned no models; using local fallback catalog");
+            codex_fallback_model_ids()
+        }
+        Err(error) => {
+            log::warn!(
+                "Codex backend model discovery failed: {}; using local fallback catalog",
+                error
+            );
+            codex_fallback_model_ids()
+        }
     };
 
-    let response = apply_headers(client, client.client.get(&url))
-        .send()
-        .await?
-        .error_for_status()?;
-
-    let payload: CodexBackendModelsResponse = response.json().await?;
-
-    let filtered: Vec<RemoteModelInfo> = payload
-        .models
-        .into_iter()
-        .filter(|model| {
-            model
-                .visibility
-                .as_deref()
-                .map(|v| v.eq_ignore_ascii_case("list"))
-                .unwrap_or(true)
-        })
-        .map(|model| RemoteModelInfo {
-            id: model.slug,
-            // Codex backend's `display_name` is often the same slug with
-            // different casing (e.g. `gpt-5.4-mini` vs `GPT-5.4-Mini`). The
-            // BitFun model picker renders display_name + slug stacked, which
-            // looks like duplicate names. Drop display_name so each entry is a
-            // single line keyed only by the canonical slug.
-            display_name: None,
-        })
-        .collect();
-
-    Ok(dedupe_remote_models(filtered))
+    add_forward_compat_codex_models(&mut model_ids);
+    Ok(codex_model_infos(model_ids))
 }
 
 pub(crate) fn extract_tool_name(tool: &serde_json::Value) -> String {

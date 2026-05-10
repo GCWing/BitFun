@@ -12,9 +12,10 @@ use crate::providers::shared;
 use crate::stream::handle_gemini_stream;
 use crate::types::{Message, RemoteModelInfo, ToolDefinition};
 use anyhow::{anyhow, Result};
-use log::debug;
+use log::{debug, warn};
 use reqwest::RequestBuilder;
 use serde::Deserialize;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::sync::Mutex;
 
@@ -183,23 +184,95 @@ pub(crate) async fn send_stream(
     .await
 }
 
+const DEFAULT_CODE_ASSIST_MODELS: &[(&str, &str)] = &[
+    ("gemini-3.1-pro-preview", "Gemini 3.1 Pro"),
+    ("gemini-3-pro-preview", "Gemini 3 Pro"),
+    ("gemini-3-flash-preview", "Gemini 3 Flash"),
+    ("gemini-3.1-flash-lite-preview", "Gemini 3.1 Flash Lite"),
+    ("gemini-2.5-pro", "Gemini 2.5 Pro"),
+    ("gemini-2.5-flash", "Gemini 2.5 Flash"),
+    ("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite"),
+];
+
+fn gemini_home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".gemini"))
+}
+
+fn read_gemini_settings_model(gemini_home: &Path) -> Option<String> {
+    let settings_path = gemini_home.join("settings.json");
+    let bytes = match std::fs::read(&settings_path) {
+        Ok(b) => b,
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                warn!("Failed to read Gemini settings from {}: {}", settings_path.display(), e);
+            }
+            return None;
+        }
+    };
+    let value: serde_json::Value = match serde_json::from_slice(&bytes) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!("Failed to parse Gemini settings JSON from {}: {}", settings_path.display(), e);
+            return None;
+        }
+    };
+    value
+        .get("model")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .map(str::to_string)
+}
+
+fn read_gemini_env_model(gemini_home: &Path) -> Option<String> {
+    let env_path = gemini_home.join(".env");
+    let text = match std::fs::read_to_string(&env_path) {
+        Ok(t) => t,
+        Err(e) => {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                warn!("Failed to read Gemini .env from {}: {}", env_path.display(), e);
+            }
+            return None;
+        }
+    };
+    text.lines().find_map(|line| {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            return None;
+        }
+        let (key, value) = line.split_once('=')?;
+        if key.trim() != "GEMINI_MODEL" {
+            return None;
+        }
+        let model = value.trim().trim_matches(|ch| ch == '"' || ch == '\'');
+        (!model.is_empty()).then(|| model.to_string())
+    })
+}
+
 /// Code Assist (`cloudcode-pa.googleapis.com`) does not expose a list-models
 /// endpoint; the upstream `gemini-cli` ships a hard-coded `VALID_GEMINI_MODELS`
-/// set in `packages/core/src/config/models.ts`. We mirror its stable entries so
-/// the BitFun model picker shows exactly what the CLI itself allows.
+/// set in `packages/core/src/config/models.ts`. We mirror its stable entries and
+/// preserve the user's local configured model when present.
 pub(crate) async fn list_models(_client: &AIClient) -> Result<Vec<RemoteModelInfo>> {
-    Ok(vec![
-        RemoteModelInfo {
-            id: "gemini-2.5-pro".to_string(),
-            display_name: Some("Gemini 2.5 Pro".to_string()),
-        },
-        RemoteModelInfo {
-            id: "gemini-2.5-flash".to_string(),
-            display_name: Some("Gemini 2.5 Flash".to_string()),
-        },
-        RemoteModelInfo {
-            id: "gemini-2.5-flash-lite".to_string(),
-            display_name: Some("Gemini 2.5 Flash-Lite".to_string()),
-        },
-    ])
+    let mut models = Vec::new();
+
+    if let Some(gemini_home) = gemini_home_dir() {
+        if let Some(model) = read_gemini_settings_model(&gemini_home)
+            .or_else(|| read_gemini_env_model(&gemini_home))
+        {
+            models.push(RemoteModelInfo {
+                id: model,
+                display_name: None,
+            });
+        }
+    }
+
+    for (id, display_name) in DEFAULT_CODE_ASSIST_MODELS {
+        models.push(RemoteModelInfo {
+            id: (*id).to_string(),
+            display_name: Some((*display_name).to_string()),
+        });
+    }
+
+    Ok(crate::client::utils::dedupe_remote_models(models))
 }

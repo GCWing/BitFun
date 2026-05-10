@@ -4,10 +4,14 @@ import { notificationService } from '@/shared/notification-system';
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
+import { withTimeout } from '@/shared/utils/timing';
 
 const log = createLogger('captureElementToDownloadsPng');
 
-const loadHtmlToImage = () => import('html-to-image');
+const loadModernScreenshot = () => import('modern-screenshot');
+
+/** Maximum time to wait for capture before aborting (ms). */
+const CAPTURE_TIMEOUT_MS = 15_000;
 
 export async function captureElementToDownloadsPng(
   element: HTMLElement,
@@ -18,28 +22,55 @@ export async function captureElementToDownloadsPng(
 
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  const htmlToImage = await loadHtmlToImage();
+  const modernScreenshot = await loadModernScreenshot();
   let blob: Blob | null = null;
 
+  const captureOptions = {
+    quality: 1,
+    scale: 2,
+    backgroundColor: bgColor,
+    fetch: {
+      bypassingCache: true,
+    } as const,
+    font: false as const,
+    features: {
+      removeControlCharacter: true,
+      fixSvgXmlDecode: true,
+    } as const,
+  };
+
+  // Strategy 1: domToBlob (primary — avoids data-URL overhead)
   try {
-    blob = await htmlToImage.toBlob(element, {
-      quality: 1,
-      pixelRatio: 2,
-      backgroundColor: bgColor,
-      skipFonts: true,
-      cacheBust: true,
-    });
+    blob = await withTimeout(
+      modernScreenshot.domToBlob(element, { ...captureOptions, type: 'image/png' }),
+      CAPTURE_TIMEOUT_MS,
+      'domToBlob capture',
+    );
   } catch (e) {
-    log.warn('toBlob failed, trying toPng', e);
-    const dataUrl = await htmlToImage.toPng(element, {
-      quality: 1,
-      pixelRatio: 2,
-      backgroundColor: bgColor,
-      skipFonts: true,
-      cacheBust: true,
-    });
-    const response = await fetch(dataUrl);
-    blob = await response.blob();
+    log.warn('domToBlob failed, trying domToPng', e);
+
+    // Strategy 2: domToPng (fallback)
+    try {
+      const dataUrl = await withTimeout(
+        modernScreenshot.domToPng(element, captureOptions),
+        CAPTURE_TIMEOUT_MS,
+        'domToPng capture',
+      );
+      if (!dataUrl || dataUrl === 'data:,' || dataUrl.length < 100) {
+        throw new Error('domToPng returned empty or corrupt image data');
+      }
+      const response = await fetch(dataUrl);
+      blob = await response.blob();
+    } catch (e2) {
+      log.warn('domToPng also failed, trying reduced scale', e2);
+
+      // Strategy 3: domToBlob with scale=1 (reduced memory)
+      blob = await withTimeout(
+        modernScreenshot.domToBlob(element, { ...captureOptions, scale: 1, type: 'image/png' }),
+        CAPTURE_TIMEOUT_MS,
+        'domToBlob reduced-scale capture',
+      );
+    }
   }
 
   if (!blob) {
