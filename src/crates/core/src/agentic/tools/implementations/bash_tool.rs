@@ -272,6 +272,7 @@ impl BashTool {
         interrupted: bool,
         timed_out: bool,
         exit_code: i32,
+        shell_state: Option<&str>,
     ) -> String {
         let mut result_string = String::new();
 
@@ -297,6 +298,14 @@ impl BashTool {
             } else {
                 result_string.push_str(&format!("<output>{}</output>", cleaned_output));
             }
+        }
+
+        // Post-command terminal state: shows what the shell displayed after the
+        // command finished (e.g., prompt, continuation prompt, or other state).
+        // This gives AI the full picture of the terminal context.
+        if let Some(state) = shell_state {
+            let cleaned_state = strip_ansi(state);
+            result_string.push_str(&format!("<shell_state>{}</shell_state>", cleaned_state));
         }
 
         // Interruption notice
@@ -908,6 +917,7 @@ Usage notes:
         let mut final_exit_code: Option<i32> = None;
         let mut was_interrupted = false;
         let mut timed_out = false;
+        let mut final_shell_state: Option<String> = None;
         let mut command_started_after_ms: Option<u64> = None;
         let mut completion_reason_label = "stream_end".to_string();
         let mut interrupt_drain_deadline: Option<tokio::time::Instant> = None;
@@ -991,6 +1001,7 @@ Usage notes:
                     exit_code,
                     total_output,
                     completion_reason,
+                    shell_state,
                 } => {
                     debug!(
                         "Bash command completed, exit_code: {:?}, tool_id: {}",
@@ -1006,6 +1017,11 @@ Usage notes:
 
                     if !total_output.is_empty() {
                         accumulated_output = total_output;
+                    }
+
+                    // Capture post-command terminal state for the AI agent
+                    if shell_state.is_some() {
+                        final_shell_state = shell_state;
                     }
                     break;
                 }
@@ -1059,6 +1075,7 @@ Usage notes:
             was_interrupted,
             timed_out,
             final_exit_code.unwrap_or(-1),
+            final_shell_state.as_deref(),
         );
 
         Ok(vec![ToolResult::Result {
@@ -1334,7 +1351,8 @@ mod tests {
         let long_output =
             "prefix\n".to_string() + &"y".repeat(MAX_OUTPUT_LENGTH + 100) + "\nfinal-error";
 
-        let rendered = tool.render_result("session-1", "/repo", &long_output, false, false, 1);
+        let rendered =
+            tool.render_result("session-1", "/repo", &long_output, false, false, 1, None);
 
         assert!(rendered.contains("<output truncated=\"true\">"));
         assert!(rendered.contains("tail preserved"));
@@ -1378,6 +1396,7 @@ mod tests {
             false,
             false,
             1,
+            None,
         );
 
         assert!(rendered.contains("<exit_code>1</exit_code>"));

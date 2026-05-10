@@ -457,10 +457,7 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         // timestamp slug when no session is bound (e.g. one-shot prompt builds in tests).
         if result.contains(PLACEHOLDER_SESSION_ID) {
             let session_id = self.context.session_id.clone().unwrap_or_else(|| {
-                format!(
-                    "unbound-{}",
-                    chrono::Local::now().format("%Y%m%d-%H%M%S")
-                )
+                format!("unbound-{}", chrono::Local::now().format("%Y%m%d-%H%M%S"))
             });
             result = result.replace(PLACEHOLDER_SESSION_ID, &session_id);
         }

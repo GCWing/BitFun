@@ -168,19 +168,21 @@ pub async fn terminate_child_process_tree(
 pub fn spawn_child_process_tree_cleanup(child: Child, graceful_timeout: Duration) {
     let _ = std::thread::Builder::new()
         .name("process-tree-cleanup".to_string())
-        .spawn(move || match tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
-            Ok(runtime) => {
-                runtime.block_on(async move {
+        .spawn(move || {
+            match tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                Ok(runtime) => {
+                    runtime.block_on(async move {
+                        let mut child = child;
+                        let _ = terminate_child_process_tree(&mut child, graceful_timeout).await;
+                    });
+                }
+                Err(_) => {
                     let mut child = child;
-                    let _ = terminate_child_process_tree(&mut child, graceful_timeout).await;
-                });
-            }
-            Err(_) => {
-                let mut child = child;
-                let _ = child.start_kill();
+                    let _ = child.start_kill();
+                }
             }
         });
 }

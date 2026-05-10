@@ -65,7 +65,11 @@ fn usage_report_from_cli_session(session: &Session) -> SessionUsageReport {
         },
         scope: UsageScope {
             kind: UsageScopeKind::EntireSession,
-            turn_count: session.messages.iter().filter(|message| message.role == "user").count(),
+            turn_count: session
+                .messages
+                .iter()
+                .filter(|message| message.role == "user")
+                .count(),
             from_turn_id: session.messages.first().map(|message| message.id.clone()),
             to_turn_id: session.messages.last().map(|message| message.id.clone()),
             includes_subagents: false,
@@ -640,7 +644,10 @@ mod tests {
 
     #[test]
     fn usage_command_renders_without_model_request() {
-        let session = Session::new("agentic".to_string(), Some("D:/workspace/bitfun".to_string()));
+        let session = Session::new(
+            "agentic".to_string(),
+            Some("D:/workspace/bitfun".to_string()),
+        );
         let report = usage_report_from_cli_session(&session);
 
         assert_eq!(report.session_id, session.id);

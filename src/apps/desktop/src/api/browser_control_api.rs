@@ -48,11 +48,31 @@ pub struct BrowserControlBrowsersResponse {
 pub async fn browser_control_list_browsers() -> Result<BrowserControlBrowsersResponse, String> {
     let browsers = [
         ("default", "Default browser", true),
-        ("chrome", "Google Chrome", BrowserLauncher::is_browser_installed(&BrowserKind::Chrome)),
-        ("edge", "Microsoft Edge", BrowserLauncher::is_browser_installed(&BrowserKind::Edge)),
-        ("brave", "Brave Browser", BrowserLauncher::is_browser_installed(&BrowserKind::Brave)),
-        ("chromium", "Chromium", BrowserLauncher::is_browser_installed(&BrowserKind::Chromium)),
-        ("arc", "Arc", BrowserLauncher::is_browser_installed(&BrowserKind::Arc)),
+        (
+            "chrome",
+            "Google Chrome",
+            BrowserLauncher::is_browser_installed(&BrowserKind::Chrome),
+        ),
+        (
+            "edge",
+            "Microsoft Edge",
+            BrowserLauncher::is_browser_installed(&BrowserKind::Edge),
+        ),
+        (
+            "brave",
+            "Brave Browser",
+            BrowserLauncher::is_browser_installed(&BrowserKind::Brave),
+        ),
+        (
+            "chromium",
+            "Chromium",
+            BrowserLauncher::is_browser_installed(&BrowserKind::Chromium),
+        ),
+        (
+            "arc",
+            "Arc",
+            BrowserLauncher::is_browser_installed(&BrowserKind::Arc),
+        ),
     ];
 
     Ok(BrowserControlBrowsersResponse {

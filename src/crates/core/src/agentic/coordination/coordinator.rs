@@ -1642,6 +1642,39 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
 
+        // Register this turn as in-flight immediately after it becomes visible
+        // as Processing. Later await points must not leave a cancel/start
+        // window where wait_session_drained observes zero active work.
+        let active_counter = self
+            .active_turns_per_session
+            .entry(session_id.clone())
+            .or_insert_with(|| Arc::new(AtomicUsize::new(0)))
+            .clone();
+        active_counter.fetch_add(1, Ordering::SeqCst);
+        struct ActiveTurnRegistration {
+            counter: Arc<AtomicUsize>,
+            armed: bool,
+        }
+        impl ActiveTurnRegistration {
+            fn disarm(&mut self) {
+                self.armed = false;
+            }
+        }
+        impl Drop for ActiveTurnRegistration {
+            fn drop(&mut self) {
+                if self.armed {
+                    self.counter.fetch_sub(1, Ordering::SeqCst);
+                }
+            }
+        }
+        let mut active_registration = ActiveTurnRegistration {
+            counter: active_counter.clone(),
+            armed: true,
+        };
+        let cancellation_token = CancellationToken::new();
+        self.execution_engine
+            .register_cancel_token(&turn_id, cancellation_token);
+
         // Send dialog turn started event with original input and image metadata
         // so all frontends (desktop, mobile, bot) can display correctly.
         self.emit_event(AgenticEvent::DialogTurnStarted {
@@ -1660,10 +1693,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await;
 
         // Get context messages (re-fetch as history may have been restored)
-        let messages = self
-            .session_manager
-            .get_context_messages(&session_id)
-            .await?;
+        let messages = match self.session_manager.get_context_messages(&session_id).await {
+            Ok(messages) => messages,
+            Err(error) => {
+                self.execution_engine.cleanup_cancel_token(&turn_id).await;
+                return Err(error);
+            }
+        };
 
         // Create execution context (pass full config and resource IDs)
         let mut context_vars = std::collections::HashMap::new();
@@ -1770,44 +1806,82 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let user_message_metadata_clone = user_message_metadata;
         let scheduler_notify_tx = self.scheduler_notify_tx.get().cloned();
 
-        // P0-8: register this turn as in-flight so a subsequent cancel→start
-        // sequence can wait for the spawn task to actually drain before the
-        // new turn touches the in-memory message cache.
-        let active_counter = self
-            .active_turns_per_session
-            .entry(session_id.clone())
-            .or_insert_with(|| Arc::new(AtomicUsize::new(0)))
-            .clone();
-        active_counter.fetch_add(1, Ordering::SeqCst);
-        let active_counter_for_spawn = active_counter.clone();
-
         tokio::spawn(async move {
-            // RAII-style decrement on every exit path of the spawn body.
-            struct DropGuard {
-                counter: Arc<AtomicUsize>,
+            // RAII guard: on drop (ANY exit path, including panic), decrements
+            // the in-flight counter and resets Processing → Idle only if this
+            // task still owns the current turn.
+            //
+            // This is the single source of truth for "is this spawn active?".
+            // Because `Drop` is synchronous we use an in-memory-only state
+            // update here; the async persistence of the state change is done
+            // explicitly in the spawn body below.
+            struct SessionExecutionGuard {
+                session_manager: Arc<SessionManager>,
+                session_id: String,
+                turn_id: String,
+                active_counter: Arc<AtomicUsize>,
             }
-            impl Drop for DropGuard {
-                fn drop(&mut self) {
-                    self.counter.fetch_sub(1, Ordering::SeqCst);
+            impl SessionExecutionGuard {
+                fn new(
+                    session_manager: Arc<SessionManager>,
+                    session_id: String,
+                    turn_id: String,
+                    active_counter: Arc<AtomicUsize>,
+                ) -> Self {
+                    Self {
+                        session_manager,
+                        session_id,
+                        turn_id,
+                        active_counter,
+                    }
                 }
             }
-            let _drop_guard = DropGuard {
-                counter: active_counter_for_spawn,
-            };
+            impl Drop for SessionExecutionGuard {
+                fn drop(&mut self) {
+                    self.active_counter.fetch_sub(1, Ordering::SeqCst);
+                    // If the session is still in Processing (abnormal exit),
+                    // synchronously reset to Idle so the user is never stuck.
+                    self.session_manager
+                        .reset_session_state_if_processing(&self.session_id, &self.turn_id);
+                }
+            }
+
+            let _guard = SessionExecutionGuard::new(
+                session_manager.clone(),
+                session_id_clone.clone(),
+                turn_id_clone.clone(),
+                active_counter,
+            );
 
             // Note: Don't check cancellation here as cancel token hasn't been created yet
             // Cancel token is created in execute_dialog_turn -> execute_round
             // execute_dialog_turn has proper cancellation checks internally
 
-            let _ = session_manager
-                .update_session_state(
+            match session_manager
+                .update_session_state_for_turn_if_processing(
                     &session_id_clone,
+                    &turn_id_clone,
                     SessionState::Processing {
                         current_turn_id: turn_id_clone.clone(),
                         phase: ProcessingPhase::Thinking,
                     },
                 )
-                .await;
+                .await
+            {
+                Ok(true) => {}
+                Ok(false) => {
+                    debug!(
+                        "Skipped refreshing Processing state for stale or cancelled turn: session_id={}, turn_id={}",
+                        session_id_clone, turn_id_clone
+                    );
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to set session state to Processing: session_id={}, turn_id={}, error={}",
+                        session_id_clone, turn_id_clone, e
+                    );
+                }
+            }
 
             let workspace_turn_status = match execution_engine
                 .execute_dialog_turn(effective_agent_type_clone, messages, execution_context)
@@ -1824,7 +1898,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         session_id_clone, turn_id_clone, execution_result.total_rounds
                     );
 
-                    let _ = session_manager
+                    if let Err(e) = session_manager
                         .complete_dialog_turn(
                             &session_id_clone,
                             &turn_id_clone,
@@ -1836,20 +1910,44 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                 duration_ms: 0,
                             },
                         )
-                        .await;
+                        .await
+                    {
+                        error!(
+                            "Failed to complete dialog turn: session_id={}, turn_id={}, error={}",
+                            session_id_clone, turn_id_clone, e
+                        );
+                    }
 
-                    let _ = session_manager
-                        .update_session_state(&session_id_clone, SessionState::Idle)
-                        .await;
+                    match session_manager
+                        .update_session_state_for_turn_if_processing(
+                            &session_id_clone,
+                            &turn_id_clone,
+                            SessionState::Idle,
+                        )
+                        .await
+                    {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            debug!(
+                                "Skipped setting session Idle after completion for stale turn: session_id={}, turn_id={}",
+                                session_id_clone, turn_id_clone
+                            );
+                        }
+                        Err(e) => {
+                            error!("Failed to set session state to Idle after completion: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                        }
+                    }
 
                     if let Some(tx) = &scheduler_notify_tx {
-                        let _ = tx.try_send((
+                        if let Err(e) = tx.try_send((
                             session_id_clone.clone(),
                             TurnOutcome::Completed {
                                 turn_id: turn_id_clone.clone(),
                                 final_response,
                             },
-                        ));
+                        )) {
+                            error!("Failed to notify scheduler of turn completion: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                        }
                     }
 
                     Some(crate::service::session::TurnStatus::Completed)
@@ -1867,7 +1965,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         // cancellation is detected between rounds.  If cancellation
                         // interrupted streaming mid-round, no event was emitted.
                         // Emit it here unconditionally (duplicates are harmless).
-                        let _ = event_queue
+                        if let Err(e) = event_queue
                             .enqueue(
                                 AgenticEvent::DialogTurnCancelled {
                                     session_id: session_id_clone.clone(),
@@ -1876,27 +1974,51 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                 },
                                 Some(EventPriority::Critical),
                             )
-                            .await;
+                            .await
+                        {
+                            error!("Failed to emit DialogTurnCancelled event: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                        }
 
                         // Mark the turn as cancelled in persistence so its partial
                         // content appears in historical messages (turns_to_chat_messages
                         // skips InProgress turns) and the frontend can distinguish a
                         // cancellation from a normal completion.
-                        let _ = session_manager
+                        if let Err(e) = session_manager
                             .cancel_dialog_turn(&session_id_clone, &turn_id_clone)
-                            .await;
+                            .await
+                        {
+                            error!("Failed to cancel dialog turn in persistence: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                        }
 
-                        let _ = session_manager
-                            .update_session_state(&session_id_clone, SessionState::Idle)
-                            .await;
+                        match session_manager
+                            .update_session_state_for_turn_if_processing(
+                                &session_id_clone,
+                                &turn_id_clone,
+                                SessionState::Idle,
+                            )
+                            .await
+                        {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                debug!(
+                                    "Skipped setting session Idle after cancellation for stale turn: session_id={}, turn_id={}",
+                                    session_id_clone, turn_id_clone
+                                );
+                            }
+                            Err(e) => {
+                                error!("Failed to set session state to Idle after cancellation: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                            }
+                        }
 
                         if let Some(tx) = &scheduler_notify_tx {
-                            let _ = tx.try_send((
+                            if let Err(e) = tx.try_send((
                                 session_id_clone.clone(),
                                 TurnOutcome::Cancelled {
                                     turn_id: turn_id_clone.clone(),
                                 },
-                            ));
+                            )) {
+                                error!("Failed to notify scheduler of turn cancellation: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                            }
                         }
 
                         Some(crate::service::session::TurnStatus::Cancelled)
@@ -1907,7 +2029,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         let recoverable =
                             !matches!(&e, BitFunError::AIClient(_) | BitFunError::Timeout(_));
 
-                        let _ = event_queue
+                        if let Err(eq_err) = event_queue
                             .enqueue(
                                 AgenticEvent::DialogTurnFailed {
                                     session_id: session_id_clone.clone(),
@@ -1919,30 +2041,54 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                 },
                                 Some(EventPriority::Critical),
                             )
-                            .await;
+                            .await
+                        {
+                            error!("Failed to emit DialogTurnFailed event: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, eq_err);
+                        }
 
-                        let _ = session_manager
+                        if let Err(e) = session_manager
                             .fail_dialog_turn(&session_id_clone, &turn_id_clone, error_text.clone())
-                            .await;
+                            .await
+                        {
+                            error!("Failed to mark dialog turn as failed: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                        }
 
-                        let _ = session_manager
-                            .update_session_state(
+                        match session_manager
+                            .update_session_state_for_turn_if_processing(
                                 &session_id_clone,
+                                &turn_id_clone,
                                 SessionState::Error {
                                     error: error_text.clone(),
                                     recoverable,
                                 },
                             )
-                            .await;
+                            .await
+                        {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                debug!(
+                                    "Skipped setting session Error after failure for stale turn: session_id={}, turn_id={}",
+                                    session_id_clone, turn_id_clone
+                                );
+                            }
+                            Err(e) => {
+                                error!(
+                                    "Failed to set session state to Error: session_id={}, turn_id={}, error={}",
+                                    session_id_clone, turn_id_clone, e
+                                );
+                            }
+                        }
 
                         if let Some(tx) = &scheduler_notify_tx {
-                            let _ = tx.try_send((
+                            if let Err(e) = tx.try_send((
                                 session_id_clone.clone(),
                                 TurnOutcome::Failed {
                                     turn_id: turn_id_clone.clone(),
                                     error: error_text,
                                 },
-                            ));
+                            )) {
+                                error!("Failed to notify scheduler of turn failure: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                            }
                         }
 
                         Some(crate::service::session::TurnStatus::Error)
@@ -1971,6 +2117,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 }
             }
         });
+        active_registration.disarm();
 
         Ok(())
     }
@@ -2018,10 +2165,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .unwrap_or_else(|| "Unknown".to_string());
         debug!("Current state: {}", old_state);
 
-        // Step 1: Immediately update session state to Idle (non-blocking, allows immediate new dialog)
-        debug!("Updating session state to Idle");
-        self.session_manager
-            .update_session_state(session_id, SessionState::Idle)
+        // Step 1: Immediately update session state to Idle only if this
+        // cancellation still targets the currently processing turn. A delayed
+        // cancel request for an older turn must not clear a newer turn.
+        debug!("Conditionally updating session state to Idle for cancelled turn");
+        let state_updated = self
+            .session_manager
+            .update_session_state_for_turn_if_processing(
+                session_id,
+                dialog_turn_id,
+                SessionState::Idle,
+            )
             .await?;
 
         let new_state = self
@@ -2031,13 +2185,21 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .unwrap_or_else(|| "Unknown".to_string());
         debug!("State updated: {} -> {}", old_state, new_state);
 
-        // Step 2: Immediately send state change event (notify frontend can start new dialog)
-        self.emit_event(AgenticEvent::SessionStateChanged {
-            session_id: session_id.to_string(),
-            new_state: "idle".to_string(),
-        })
-        .await;
-        debug!("Session state change event sent");
+        // Step 2: Immediately send state change event only when this cancel
+        // actually changed the active turn state.
+        if state_updated {
+            self.emit_event(AgenticEvent::SessionStateChanged {
+                session_id: session_id.to_string(),
+                new_state: "idle".to_string(),
+            })
+            .await;
+            debug!("Session state change event sent");
+        } else {
+            debug!(
+                "Skipped idle event for stale cancellation: session_id={}, dialog_turn_id={}",
+                session_id, dialog_turn_id
+            );
+        }
 
         // Step 3: Trigger cancellation tokens so the running turn unwinds. We
         // do this synchronously (not spawn) because the calls themselves are

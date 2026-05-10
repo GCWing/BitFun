@@ -118,6 +118,139 @@ mod tests {
         )
     }
 
+    fn in_memory_test_manager() -> SessionManager {
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence_manager,
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+            },
+        )
+    }
+
+    #[tokio::test]
+    async fn reset_session_state_if_processing_ignores_a_newer_turn() {
+        let manager = in_memory_test_manager();
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Active session".to_string(),
+            "agent".to_string(),
+            SessionConfig::default(),
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-2".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+        manager.sessions.insert(session_id.clone(), session);
+
+        manager.reset_session_state_if_processing(&session_id, "turn-1");
+
+        let session = manager
+            .get_session(&session_id)
+            .expect("session should remain available");
+        assert!(matches!(
+            session.state,
+            SessionState::Processing {
+                ref current_turn_id,
+                ..
+            } if current_turn_id == "turn-2"
+        ));
+    }
+
+    #[tokio::test]
+    async fn reset_session_state_if_processing_resets_the_matching_turn() {
+        let manager = in_memory_test_manager();
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Active session".to_string(),
+            "agent".to_string(),
+            SessionConfig::default(),
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+        manager.sessions.insert(session_id.clone(), session);
+
+        manager.reset_session_state_if_processing(&session_id, "turn-1");
+
+        let session = manager
+            .get_session(&session_id)
+            .expect("session should remain available");
+        assert!(matches!(session.state, SessionState::Idle));
+    }
+
+    #[tokio::test]
+    async fn update_session_state_for_turn_if_processing_ignores_a_newer_turn() {
+        let manager = in_memory_test_manager();
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Active session".to_string(),
+            "agent".to_string(),
+            SessionConfig::default(),
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-2".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+        manager.sessions.insert(session_id.clone(), session);
+
+        let updated = manager
+            .update_session_state_for_turn_if_processing(&session_id, "turn-1", SessionState::Idle)
+            .await
+            .expect("conditional state update should not fail");
+
+        let session = manager
+            .get_session(&session_id)
+            .expect("session should remain available");
+        assert!(!updated);
+        assert!(matches!(
+            session.state,
+            SessionState::Processing {
+                ref current_turn_id,
+                ..
+            } if current_turn_id == "turn-2"
+        ));
+    }
+
+    #[tokio::test]
+    async fn update_session_state_for_turn_if_processing_updates_matching_turn() {
+        let manager = in_memory_test_manager();
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Active session".to_string(),
+            "agent".to_string(),
+            SessionConfig::default(),
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+        manager.sessions.insert(session_id.clone(), session);
+
+        let updated = manager
+            .update_session_state_for_turn_if_processing(&session_id, "turn-1", SessionState::Idle)
+            .await
+            .expect("conditional state update should not fail");
+
+        let session = manager
+            .get_session(&session_id)
+            .expect("session should remain available");
+        assert!(updated);
+        assert!(matches!(session.state, SessionState::Idle));
+    }
+
     #[tokio::test]
     async fn restore_session_resets_processing_state_without_marking_unread_completion() {
         let workspace = TestWorkspace::new();
@@ -863,12 +996,12 @@ impl SessionManager {
         self.context_store.create_session(&session_id);
 
         // 3. Persist to local path (handles remote workspaces correctly)
+        // Use the local `session` directly -- no need to re-fetch from DashMap,
+        // which would hold a Ref guard across the async save_session call.
         if self.config.enable_persistence && Self::should_persist_session(&session) {
-            if let Some(session) = self.sessions.get(&session_id) {
-                self.persistence_manager
-                    .save_session(&session_storage_path, &session)
-                    .await?;
-            }
+            self.persistence_manager
+                .save_session(&session_storage_path, &session)
+                .await?;
         }
 
         info!("Session created: session_name={}", session.session_name);
@@ -881,6 +1014,34 @@ impl SessionManager {
         self.sessions.get(session_id).map(|s| s.clone())
     }
 
+    /// Synchronously reset session state to Idle if it is currently Processing
+    /// the expected turn.
+    ///
+    /// This is an in-memory-only operation intended for RAII-style cleanup in
+    /// spawn tasks.  Because `Drop::drop` is synchronous we cannot do async
+    /// file I/O here, but that is acceptable: the in-memory state is the
+    /// source of truth at runtime, and `restore_session` already resets any
+    /// non-Idle persisted state to Idle on application restart.
+    pub fn reset_session_state_if_processing(&self, session_id: &str, expected_turn_id: &str) {
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            if matches!(
+                &session.state,
+                SessionState::Processing {
+                    current_turn_id,
+                    ..
+                } if current_turn_id == expected_turn_id
+            ) {
+                debug!(
+                    "RAII guard resetting stuck Processing state to Idle: session_id={}, turn_id={}",
+                    session_id, expected_turn_id
+                );
+                session.state = SessionState::Idle;
+                session.updated_at = SystemTime::now();
+                session.last_activity_at = SystemTime::now();
+            }
+        }
+    }
+
     /// Update session state
     pub async fn update_session_state(
         &self,
@@ -889,32 +1050,93 @@ impl SessionManager {
     ) -> BitFunResult<()> {
         let effective_path = self.effective_session_workspace_path(session_id).await;
 
-        if let Some(mut session) = self.sessions.get_mut(session_id) {
+        // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
+        // Collect the data needed for persistence, then release the guard before doing I/O.
+        let should_persist = if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.state = new_state.clone();
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
 
-            // Persist state changes
-            if self.config.enable_persistence && Self::should_persist_session(&session) {
-                if let Some(ref workspace_path) = effective_path {
-                    self.persistence_manager
-                        .save_session_state(workspace_path, session_id, &new_state)
-                        .await?;
-                }
-            }
-
-            debug!(
-                "Updated session state: session_id={}, state={:?}",
-                session_id, new_state
-            );
+            let persist = self.config.enable_persistence && Self::should_persist_session(&session);
+            persist
         } else {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
                 session_id
             )));
+        };
+        // RefMut guard released here -- DashMap shard lock is free.
+
+        // Persist state changes outside the guard scope.
+        if should_persist {
+            if let Some(ref workspace_path) = effective_path {
+                self.persistence_manager
+                    .save_session_state(workspace_path, session_id, &new_state)
+                    .await?;
+            }
         }
 
+        debug!(
+            "Updated session state: session_id={}, state={:?}",
+            session_id, new_state
+        );
+
         Ok(())
+    }
+
+    /// Update session state only when the session is still processing the
+    /// expected turn. Returns `true` when the state was updated.
+    pub async fn update_session_state_for_turn_if_processing(
+        &self,
+        session_id: &str,
+        expected_turn_id: &str,
+        new_state: SessionState,
+    ) -> BitFunResult<bool> {
+        let effective_path = self.effective_session_workspace_path(session_id).await;
+
+        let should_persist = if let Some(mut session) = self.sessions.get_mut(session_id) {
+            let owns_processing_turn = matches!(
+                &session.state,
+                SessionState::Processing {
+                    current_turn_id,
+                    ..
+                } if current_turn_id == expected_turn_id
+            );
+
+            if !owns_processing_turn {
+                debug!(
+                    "Skipped session state update for stale turn: session_id={}, expected_turn_id={}, current_state={:?}",
+                    session_id, expected_turn_id, session.state
+                );
+                return Ok(false);
+            }
+
+            session.state = new_state.clone();
+            session.updated_at = SystemTime::now();
+            session.last_activity_at = SystemTime::now();
+
+            self.config.enable_persistence && Self::should_persist_session(&session)
+        } else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        };
+
+        if should_persist {
+            if let Some(ref workspace_path) = effective_path {
+                self.persistence_manager
+                    .save_session_state(workspace_path, session_id, &new_state)
+                    .await?;
+            }
+        }
+
+        debug!(
+            "Updated session state for turn: session_id={}, turn_id={}, state={:?}",
+            session_id, expected_turn_id, new_state
+        );
+
+        Ok(true)
     }
 
     /// Update session title (in-memory + persistence)
@@ -941,14 +1163,19 @@ impl SessionManager {
                     session_id
                 )));
             };
-            let Some(session) = self.sessions.get(session_id) else {
-                return Err(BitFunError::NotFound(format!(
-                    "Session not found: {}",
-                    session_id
-                )));
+            // Clone the session data out of the DashMap guard before awaiting I/O.
+            let session_snapshot = {
+                let Some(session) = self.sessions.get(session_id) else {
+                    return Err(BitFunError::NotFound(format!(
+                        "Session not found: {}",
+                        session_id
+                    )));
+                };
+                session.clone()
             };
+            // Ref guard released -- DashMap shard lock is free.
             self.persistence_manager
-                .save_session(workspace_path, &session)
+                .save_session(workspace_path, &session_snapshot)
                 .await?;
         }
 
@@ -1007,9 +1234,9 @@ impl SessionManager {
 
         if self.should_persist_session_id(session_id) {
             let effective_path = self.effective_session_workspace_path(session_id).await;
-            if let (Some(workspace_path), Some(session)) =
-                (effective_path, self.sessions.get(session_id))
-            {
+            let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
+            // Ref guard released -- DashMap shard lock is free.
+            if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
                 self.persistence_manager
                     .save_session(&workspace_path, &session)
                     .await?;
@@ -1033,14 +1260,16 @@ impl SessionManager {
         // If the session was evicted from memory (idle > 1h), try to restore it
         // using the workspace path recorded when it was first created/restored.
         if !self.sessions.contains_key(session_id) && self.config.enable_persistence {
-            if let Some(workspace_path) = self.session_workspace_index.get(session_id) {
+            let workspace_path = self
+                .session_workspace_index
+                .get(session_id)
+                .map(|entry| entry.clone());
+            if let Some(workspace_path) = workspace_path {
                 debug!(
                     "Session evicted from memory, restoring for model update: session_id={}",
                     session_id
                 );
-                let _ = self
-                    .restore_session(&workspace_path.clone(), session_id)
-                    .await;
+                let _ = self.restore_session(&workspace_path, session_id).await;
             }
         }
 
@@ -1057,9 +1286,9 @@ impl SessionManager {
 
         if self.should_persist_session_id(session_id) {
             let effective_path = self.effective_session_workspace_path(session_id).await;
-            if let (Some(workspace_path), Some(session)) =
-                (effective_path, self.sessions.get(session_id))
-            {
+            let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
+            // Ref guard released -- DashMap shard lock is free.
+            if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
                 self.persistence_manager
                     .save_session(&workspace_path, &session)
                     .await?;
@@ -1397,7 +1626,8 @@ impl SessionManager {
         self.context_store.replace_context(session_id, messages);
 
         // 3) Truncate session turn list & persist
-        if let Some(mut session) = self.sessions.get_mut(session_id) {
+        // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
+        let session_snapshot = if let Some(mut session) = self.sessions.get_mut(session_id) {
             if session.dialog_turn_ids.len() > target_turn {
                 session.dialog_turn_ids.truncate(target_turn);
             }
@@ -1405,11 +1635,22 @@ impl SessionManager {
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
 
-            if Self::should_persist_session(&session) && self.config.enable_persistence {
-                self.persistence_manager
-                    .save_session(workspace_path, &session)
-                    .await?;
+            let should_persist =
+                Self::should_persist_session(&session) && self.config.enable_persistence;
+            if should_persist {
+                Some(session.clone())
+            } else {
+                None
             }
+        } else {
+            None
+        };
+        // RefMut guard released here -- DashMap shard lock is free.
+
+        if let Some(session) = session_snapshot {
+            self.persistence_manager
+                .save_session(workspace_path, &session)
+                .await?;
         }
 
         // 4) Delete snapshots from target_turn (inclusive) onwards
@@ -1510,7 +1751,10 @@ impl SessionManager {
                 },
             );
 
-            if let Some(session) = self.sessions.get(session_id) {
+            // Clone the session data out of the DashMap guard before awaiting I/O.
+            let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
+            // Ref guard released -- DashMap shard lock is free.
+            if let Some(session) = session_snapshot {
                 self.persistence_manager
                     .save_session(&workspace_path, &session)
                     .await?;
@@ -2045,7 +2289,8 @@ impl SessionManager {
         self.context_store
             .add_message(child_session_id, assistant_message);
 
-        if let Some(mut session) = self.sessions.get_mut(child_session_id) {
+        // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
+        let session_snapshot = if let Some(mut session) = self.sessions.get_mut(child_session_id) {
             if !session
                 .dialog_turn_ids
                 .iter()
@@ -2057,10 +2302,19 @@ impl SessionManager {
             session.last_activity_at = SystemTime::now();
 
             if self.config.enable_persistence && Self::should_persist_session(&session) {
-                self.persistence_manager
-                    .save_session(workspace_path, &session)
-                    .await?;
+                Some(session.clone())
+            } else {
+                None
             }
+        } else {
+            None
+        };
+        // RefMut guard released here -- DashMap shard lock is free.
+
+        if let Some(session) = session_snapshot {
+            self.persistence_manager
+                .save_session(workspace_path, &session)
+                .await?;
         }
 
         self.persist_context_snapshot_for_turn_best_effort(
@@ -2151,24 +2405,33 @@ impl SessionManager {
     ) -> BitFunResult<()> {
         let effective_path = self.effective_session_workspace_path(session_id).await;
 
-        if let Some(mut session) = self.sessions.get_mut(session_id) {
+        // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
+        let session_snapshot = if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.compression_state = compression_state;
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
             if self.config.enable_persistence && Self::should_persist_session(&session) {
-                if let Some(ref workspace_path) = effective_path {
-                    self.persistence_manager
-                        .save_session(workspace_path, &session)
-                        .await?;
-                }
+                Some(session.clone())
+            } else {
+                None
             }
-            Ok(())
         } else {
-            Err(BitFunError::NotFound(format!(
+            return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
                 session_id
-            )))
+            )));
+        };
+        // RefMut guard released here -- DashMap shard lock is free.
+
+        if let Some(session) = session_snapshot {
+            if let Some(ref workspace_path) = effective_path {
+                self.persistence_manager
+                    .save_session(workspace_path, &session)
+                    .await?;
+            }
         }
+
+        Ok(())
     }
 
     async fn try_generate_session_title_with_ai(

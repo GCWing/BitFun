@@ -304,25 +304,29 @@ impl WorkspaceSearchService {
         let service = Arc::clone(self);
         match std::thread::Builder::new()
             .name("workspace-search-shutdown".to_string())
-            .spawn(move || match tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            {
-                Ok(runtime) => {
-                    runtime.block_on(async move {
-                        service.shutdown_all_daemons().await;
-                    });
-                }
-                Err(error) => {
-                    log::warn!(
-                        "Failed to create runtime for workspace search shutdown: {}",
-                        error
-                    );
+            .spawn(move || {
+                match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(runtime) => {
+                        runtime.block_on(async move {
+                            service.shutdown_all_daemons().await;
+                        });
+                    }
+                    Err(error) => {
+                        log::warn!(
+                            "Failed to create runtime for workspace search shutdown: {}",
+                            error
+                        );
+                    }
                 }
             }) {
             Ok(handle) => {
                 if handle.join().is_err() {
-                    log::warn!("Workspace search shutdown thread panicked during blocking shutdown");
+                    log::warn!(
+                        "Workspace search shutdown thread panicked during blocking shutdown"
+                    );
                 }
             }
             Err(error) => {

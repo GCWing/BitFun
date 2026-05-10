@@ -1731,10 +1731,13 @@ impl ExecutionEngine {
                 }
             }
 
-            // Check if cancelled after each round
-            let dialog_turn_cancelled =
-                !self.round_executor.has_active_dialog_turn(&dialog_turn_id);
-            if dialog_turn_cancelled {
+            // Check if cancellation was requested after each round. Tokens stay
+            // registered until final cleanup so early cancellation can be
+            // observed by the first round.
+            if self
+                .round_executor
+                .is_dialog_turn_cancelled(&dialog_turn_id)
+            {
                 debug!(
                     "Dialog turn cancelled, stopping execution: dialog_turn_id={}",
                     dialog_turn_id

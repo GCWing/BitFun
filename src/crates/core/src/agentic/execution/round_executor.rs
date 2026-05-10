@@ -104,6 +104,16 @@ impl RoundExecutor {
         let max_attempts = Self::MAX_RETRIES_WITHOUT_OUTPUT + 1;
         let mut attempt_index = 0usize;
         let (stream_result, send_to_stream_ms, stream_processing_ms) = loop {
+            // Check cancellation before opening a model stream. This catches
+            // early cancellation registered before the first round starts.
+            if cancel_token.is_cancelled() {
+                debug!(
+                    "Cancel token detected before AI request, stopping execution: session_id={}",
+                    context.session_id
+                );
+                return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
+            }
+
             let request_started_at = Instant::now();
             debug!(
                 "Sending request: model={}, messages={}, tools={}, attempt={}/{}",
@@ -159,10 +169,10 @@ impl RoundExecutor {
             let ai_stream = stream_response.stream;
             let raw_sse_rx = stream_response.raw_sse_rx;
 
-            // Check cancellation token before calling stream processing
+            // Check cancellation token before calling stream processing.
             if cancel_token.is_cancelled() {
                 debug!(
-                    "Cancel token detected before AI call, stopping execution: session_id={}",
+                    "Cancel token detected after AI stream opened, stopping execution: session_id={}",
                     context.session_id
                 );
                 return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
@@ -684,6 +694,13 @@ impl RoundExecutor {
         self.cancellation_tokens.contains_key(dialog_turn_id)
     }
 
+    /// Check if dialog turn cancellation has been requested.
+    pub fn is_dialog_turn_cancelled(&self, dialog_turn_id: &str) -> bool {
+        self.cancellation_tokens
+            .get(dialog_turn_id)
+            .is_some_and(|token| token.is_cancelled())
+    }
+
     /// Register cancellation token (for external control, e.g., execute_subagent)
     pub fn register_cancel_token(&self, dialog_turn_id: &str, token: CancellationToken) {
         self.cancellation_tokens
@@ -694,10 +711,14 @@ impl RoundExecutor {
     pub async fn cancel_dialog_turn(&self, dialog_turn_id: &str) -> BitFunResult<()> {
         debug!("Cancelling dialog turn: dialog_turn_id={}", dialog_turn_id);
 
-        if let Some((_, token)) = self.cancellation_tokens.remove(dialog_turn_id) {
+        if let Some(token) = self
+            .cancellation_tokens
+            .get(dialog_turn_id)
+            .map(|entry| entry.clone())
+        {
             debug!("Found cancel token, triggering cancellation");
             token.cancel();
-            debug!("Cancel token triggered and cleaned up");
+            debug!("Cancel token triggered");
         } else {
             debug!("Cancel token not found (dialog may have completed or not started)");
         }
@@ -867,7 +888,41 @@ fn token_details_from_usage(
 
 #[cfg(test)]
 mod tests {
-    use super::RoundExecutor;
+    use super::{RoundExecutor, StreamProcessor};
+    use crate::agentic::events::{EventQueue, EventQueueConfig};
+    use dashmap::DashMap;
+    use std::sync::Arc;
+    use tokio_util::sync::CancellationToken;
+
+    fn test_round_executor() -> RoundExecutor {
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        RoundExecutor {
+            stream_processor: Arc::new(StreamProcessor::new(event_queue.clone())),
+            tool_pipeline: None,
+            event_queue,
+            cancellation_tokens: Arc::new(DashMap::new()),
+        }
+    }
+
+    #[tokio::test]
+    async fn cancel_keeps_token_registered_until_cleanup() {
+        let executor = test_round_executor();
+        let token = CancellationToken::new();
+        executor.register_cancel_token("turn-1", token.clone());
+
+        executor
+            .cancel_dialog_turn("turn-1")
+            .await
+            .expect("cancel should succeed");
+
+        assert!(token.is_cancelled());
+        assert!(executor.has_active_dialog_turn("turn-1"));
+        assert!(executor.is_dialog_turn_cancelled("turn-1"));
+
+        executor.cleanup_dialog_turn("turn-1").await;
+        assert!(!executor.has_active_dialog_turn("turn-1"));
+        assert!(!executor.is_dialog_turn_cancelled("turn-1"));
+    }
 
     #[test]
     fn detects_transient_stream_transport_error() {

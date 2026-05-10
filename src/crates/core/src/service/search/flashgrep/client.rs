@@ -579,12 +579,11 @@ impl AsyncDaemonClient {
                 wait_result?;
                 Ok(())
             }
-            Err(_) => process_manager::terminate_child_process_tree(
-                child,
-                Duration::from_millis(750),
-            )
-            .await
-            .map_err(AppError::Io),
+            Err(_) => {
+                process_manager::terminate_child_process_tree(child, Duration::from_millis(750))
+                    .await
+                    .map_err(AppError::Io)
+            }
         }
     }
 

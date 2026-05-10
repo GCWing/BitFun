@@ -197,7 +197,9 @@ impl BrowserLauncher {
 
         // Check cache first.
         {
-            let cache = BROWSER_INSTALL_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+            let cache = BROWSER_INSTALL_CACHE
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             if let Some(ref map) = *cache {
                 if let Some(&cached) = map.get(&cache_key) {
                     return cached;
@@ -210,7 +212,9 @@ impl BrowserLauncher {
 
         // Store in cache.
         {
-            let mut cache = BROWSER_INSTALL_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+            let mut cache = BROWSER_INSTALL_CACHE
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             let map = cache.get_or_insert_with(HashMap::new);
             map.insert(cache_key, result);
         }
@@ -244,7 +248,9 @@ impl BrowserLauncher {
     /// browser installations might have changed.
     #[cfg(test)]
     pub fn clear_install_cache() {
-        let mut cache = BROWSER_INSTALL_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        let mut cache = BROWSER_INSTALL_CACHE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         *cache = None;
     }
 
@@ -277,7 +283,13 @@ impl BrowserLauncher {
             BrowserKind::Arc => "arc".to_string(),
             BrowserKind::Unknown(name) => name
                 .chars()
-                .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() {
+                        c.to_ascii_lowercase()
+                    } else {
+                        '-'
+                    }
+                })
                 .collect::<String>()
                 .trim_matches('-')
                 .to_string(),
@@ -315,7 +327,11 @@ impl BrowserLauncher {
     }
 
     #[cfg(target_os = "macos")]
-    fn spawn_macos_browser(kind: &BrowserKind, exe: &str, args: &[String]) -> std::io::Result<std::process::Child> {
+    fn spawn_macos_browser(
+        kind: &BrowserKind,
+        exe: &str,
+        args: &[String],
+    ) -> std::io::Result<std::process::Child> {
         if let Some(app_name) = Self::launch_app_name(kind) {
             let mut command = silent_command("open");
             command.args(["-na", app_name, "--args"]);
@@ -327,12 +343,20 @@ impl BrowserLauncher {
     }
 
     #[cfg(not(target_os = "macos"))]
-    fn spawn_browser(_kind: &BrowserKind, exe: &str, args: &[String]) -> std::io::Result<std::process::Child> {
+    fn spawn_browser(
+        _kind: &BrowserKind,
+        exe: &str,
+        args: &[String],
+    ) -> std::io::Result<std::process::Child> {
         silent_command(exe).args(args).spawn()
     }
 
     #[cfg(target_os = "macos")]
-    fn spawn_browser(kind: &BrowserKind, exe: &str, args: &[String]) -> std::io::Result<std::process::Child> {
+    fn spawn_browser(
+        kind: &BrowserKind,
+        exe: &str,
+        args: &[String],
+    ) -> std::io::Result<std::process::Child> {
         Self::spawn_macos_browser(kind, exe, args)
     }
 

@@ -192,7 +192,9 @@ pub fn render_usage_report_markdown(report: &SessionUsageReport) -> String {
 
     if !report.models.is_empty() {
         out.push_str("## Models\n\n");
-        out.push_str("| Model | Calls | Input | Output | Total |\n| --- | ---: | ---: | ---: | ---: |\n");
+        out.push_str(
+            "| Model | Calls | Input | Output | Total |\n| --- | ---: | ---: | ---: | ---: |\n",
+        );
         for model in &report.models {
             out.push_str(&format!(
                 "| {} | {} | {} | {} | {} |\n",

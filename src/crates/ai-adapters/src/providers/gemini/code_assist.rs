@@ -204,7 +204,11 @@ fn read_gemini_settings_model(gemini_home: &Path) -> Option<String> {
         Ok(b) => b,
         Err(e) => {
             if e.kind() != std::io::ErrorKind::NotFound {
-                warn!("Failed to read Gemini settings from {}: {}", settings_path.display(), e);
+                warn!(
+                    "Failed to read Gemini settings from {}: {}",
+                    settings_path.display(),
+                    e
+                );
             }
             return None;
         }
@@ -212,7 +216,11 @@ fn read_gemini_settings_model(gemini_home: &Path) -> Option<String> {
     let value: serde_json::Value = match serde_json::from_slice(&bytes) {
         Ok(v) => v,
         Err(e) => {
-            warn!("Failed to parse Gemini settings JSON from {}: {}", settings_path.display(), e);
+            warn!(
+                "Failed to parse Gemini settings JSON from {}: {}",
+                settings_path.display(),
+                e
+            );
             return None;
         }
     };
@@ -230,7 +238,11 @@ fn read_gemini_env_model(gemini_home: &Path) -> Option<String> {
         Ok(t) => t,
         Err(e) => {
             if e.kind() != std::io::ErrorKind::NotFound {
-                warn!("Failed to read Gemini .env from {}: {}", env_path.display(), e);
+                warn!(
+                    "Failed to read Gemini .env from {}: {}",
+                    env_path.display(),
+                    e
+                );
             }
             return None;
         }
@@ -257,8 +269,8 @@ pub(crate) async fn list_models(_client: &AIClient) -> Result<Vec<RemoteModelInf
     let mut models = Vec::new();
 
     if let Some(gemini_home) = gemini_home_dir() {
-        if let Some(model) = read_gemini_settings_model(&gemini_home)
-            .or_else(|| read_gemini_env_model(&gemini_home))
+        if let Some(model) =
+            read_gemini_settings_model(&gemini_home).or_else(|| read_gemini_env_model(&gemini_home))
         {
             models.push(RemoteModelInfo {
                 id: model,

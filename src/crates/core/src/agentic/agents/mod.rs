@@ -48,11 +48,11 @@ pub use prompt_builder::{
     RequestContextSection,
 };
 pub use readonly_subagent::ReadonlySubagent;
-pub use research_specialist_agent::ResearchSpecialistAgent;
 pub use registry::{
     get_agent_registry, AgentCategory, AgentInfo, AgentRegistry, CustomSubagentConfig,
     CustomSubagentDetail, SubAgentSource,
 };
+pub use research_specialist_agent::ResearchSpecialistAgent;
 pub use review_fixer_agent::ReviewFixerAgent;
 pub use review_specialist_agents::{
     ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,

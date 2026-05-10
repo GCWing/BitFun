@@ -171,7 +171,11 @@ fn read_codex_config_model(codex_home: &Path) -> Option<String> {
         Ok(t) => t,
         Err(e) => {
             if e.kind() != std::io::ErrorKind::NotFound {
-                warn!("Failed to read Codex config from {}: {}", config_path.display(), e);
+                warn!(
+                    "Failed to read Codex config from {}: {}",
+                    config_path.display(),
+                    e
+                );
             }
             return None;
         }
@@ -196,7 +200,11 @@ fn read_codex_cached_models(codex_home: &Path) -> Vec<String> {
         Ok(b) => b,
         Err(e) => {
             if e.kind() != std::io::ErrorKind::NotFound {
-                warn!("Failed to read Codex models cache from {}: {}", cache_path.display(), e);
+                warn!(
+                    "Failed to read Codex models cache from {}: {}",
+                    cache_path.display(),
+                    e
+                );
             }
             return Vec::new();
         }
@@ -204,7 +212,11 @@ fn read_codex_cached_models(codex_home: &Path) -> Vec<String> {
     let payload: CodexBackendModelsResponse = match serde_json::from_slice(&bytes) {
         Ok(p) => p,
         Err(e) => {
-            warn!("Failed to parse Codex models cache JSON from {}: {}", cache_path.display(), e);
+            warn!(
+                "Failed to parse Codex models cache JSON from {}: {}",
+                cache_path.display(),
+                e
+            );
             return Vec::new();
         }
     };
@@ -301,7 +313,9 @@ async fn list_codex_chatgpt_models(
     let mut model_ids = match live_models {
         Ok(models) if !models.is_empty() => models,
         Ok(_) => {
-            log::warn!("Codex backend model discovery returned no models; using local fallback catalog");
+            log::warn!(
+                "Codex backend model discovery returned no models; using local fallback catalog"
+            );
             codex_fallback_model_ids()
         }
         Err(error) => {

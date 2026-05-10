@@ -61,7 +61,7 @@ impl ToolStateManager {
 
     /// Update task state
     pub async fn update_state(&self, tool_id: &str, new_state: ToolExecutionState) {
-        if let Some(mut task) = self.tasks.get_mut(tool_id) {
+        let task_for_event = if let Some(mut task) = self.tasks.get_mut(tool_id) {
             let old_state = task.state.clone();
             task.state = new_state.clone();
 
@@ -85,8 +85,13 @@ impl ToolStateManager {
                 format!("{:?}", new_state).split('{').next().unwrap_or("")
             );
 
-            // Send state change event
-            self.emit_state_change_event(task.clone()).await;
+            Some(task.clone())
+        } else {
+            None
+        };
+
+        if let Some(task) = task_for_event {
+            self.emit_state_change_event(task).await;
         }
     }
 
@@ -280,6 +285,82 @@ impl ToolStateManager {
         }
 
         stats
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::types::{ToolExecutionContext, ToolExecutionOptions, ToolTask};
+    use super::*;
+    use crate::agentic::core::ToolCall;
+    use crate::agentic::events::EventQueueConfig;
+    use std::collections::HashMap;
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    fn test_task(tool_id: &str) -> ToolTask {
+        ToolTask::new(
+            ToolCall {
+                tool_id: tool_id.to_string(),
+                tool_name: "test_tool".to_string(),
+                arguments: serde_json::json!({}),
+                raw_arguments: None,
+                is_error: false,
+            },
+            ToolExecutionContext {
+                session_id: "session-1".to_string(),
+                dialog_turn_id: "turn-1".to_string(),
+                agent_type: "agentic".to_string(),
+                workspace: None,
+                context_vars: HashMap::new(),
+                subagent_parent_info: None,
+                allowed_tools: Vec::new(),
+                runtime_tool_restrictions: Default::default(),
+                steering_interrupt: None,
+                workspace_services: None,
+            },
+            ToolExecutionOptions::default(),
+        )
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn update_state_does_not_hold_task_lock_while_emitting_event() {
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let manager = Arc::new(ToolStateManager::new(event_queue.clone()));
+        let tool_id = manager.create_task(test_task("tool-1")).await;
+
+        let queue_guard = event_queue.lock_queue_for_test().await;
+        let update_manager = manager.clone();
+        let update_tool_id = tool_id.clone();
+        let update_handle = tokio::spawn(async move {
+            update_manager
+                .update_state(
+                    &update_tool_id,
+                    ToolExecutionState::Running {
+                        started_at: std::time::SystemTime::now(),
+                        progress: None,
+                    },
+                )
+                .await;
+        });
+
+        tokio::task::yield_now().await;
+
+        let read_manager = manager.clone();
+        let read_tool_id = tool_id.clone();
+        let read_handle = tokio::task::spawn_blocking(move || read_manager.get_task(&read_tool_id));
+
+        let task = timeout(Duration::from_millis(100), read_handle)
+            .await
+            .expect("reading task state should not wait for event emission")
+            .expect("blocking task should complete");
+        assert!(task.is_some());
+
+        drop(queue_guard);
+        timeout(Duration::from_secs(1), update_handle)
+            .await
+            .expect("state update should finish after event queue is released")
+            .expect("state update task should not panic");
     }
 }
 

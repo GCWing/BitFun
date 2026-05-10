@@ -176,6 +176,13 @@ impl EventQueue {
         self.broadcast_tx.subscribe()
     }
 
+    #[cfg(test)]
+    pub(crate) async fn lock_queue_for_test(
+        &self,
+    ) -> tokio::sync::MutexGuard<'_, BinaryHeap<std::cmp::Reverse<EventEnvelope>>> {
+        self.queue.lock().await
+    }
+
     /// Clear all events for a session
     pub async fn clear_session(&self, session_id: &str) -> BitFunResult<()> {
         // Remove all events for this session from the queue

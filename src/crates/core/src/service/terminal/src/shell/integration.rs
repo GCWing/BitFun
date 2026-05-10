@@ -120,6 +120,12 @@ pub struct ShellIntegration {
     /// When true, we are between PromptStart and CommandInputStart,
     /// checking whether prompt text exists to detect ConPTY reordering.
     detecting_conpty_reorder: bool,
+    /// Buffer for plain text that was NOT collected by shell integration
+    /// (i.e., output received while `should_collect()` returned false).
+    /// This captures the terminal state after command execution, including
+    /// prompts (e.g., `$ `, `dquote> `) and other non-command output.
+    /// Cleared when a new command starts executing.
+    recent_plain_output: String,
 }
 
 impl ShellIntegration {
@@ -140,6 +146,7 @@ impl ShellIntegration {
             command_just_finished: false,
             post_command_collecting: false,
             detecting_conpty_reorder: false,
+            recent_plain_output: String::new(),
         }
     }
 
@@ -195,6 +202,13 @@ impl ShellIntegration {
         self.output_buffer.clear();
     }
 
+    /// Get recent plain text that was NOT collected by shell integration.
+    /// This captures terminal state after command execution, including
+    /// prompts (e.g., `$ `, `dquote> `) and other non-command output.
+    pub fn get_recent_plain_output(&self) -> &str {
+        &self.recent_plain_output
+    }
+
     /// Process incoming data and extract events
     pub fn process_data(&mut self, data: &str) -> Vec<ShellIntegrationEvent> {
         let mut events = Vec::new();
@@ -220,14 +234,22 @@ impl ShellIntegration {
                             seq,
                             OscSequence::CommandFinished { .. } | OscSequence::PromptStart
                         );
-                        if should_flush && !plain_output.is_empty() && self.should_collect() {
-                            self.output_buffer.push_str(&plain_output);
-                            if let Some(cmd_id) = &self.current_command_id {
-                                events.push(ShellIntegrationEvent::OutputData {
-                                    command_id: cmd_id.clone(),
-                                    data: std::mem::take(&mut plain_output),
-                                });
+                        if should_flush && !plain_output.is_empty() {
+                            if self.should_collect() {
+                                self.output_buffer.push_str(&plain_output);
+                                if let Some(cmd_id) = &self.current_command_id {
+                                    events.push(ShellIntegrationEvent::OutputData {
+                                        command_id: cmd_id.clone(),
+                                        data: std::mem::take(&mut plain_output),
+                                    });
+                                } else {
+                                    plain_output.clear();
+                                }
                             } else {
+                                // Not collecting output (e.g., shell is showing prompt
+                                // or in continuation mode). Capture this text so the
+                                // AI agent can see the full terminal state.
+                                self.recent_plain_output.push_str(&plain_output);
                                 plain_output.clear();
                             }
                         }
@@ -273,14 +295,19 @@ impl ShellIntegration {
         // Accumulate plain output if we should collect output.
         // Continue collecting after Finished via post_command_collecting flag,
         // because ConPTY may deliver rendered output after shell integration sequences.
-        if !plain_output.is_empty() && self.should_collect() {
-            self.output_buffer.push_str(&plain_output);
+        if !plain_output.is_empty() {
+            if self.should_collect() {
+                self.output_buffer.push_str(&plain_output);
 
-            if let Some(cmd_id) = &self.current_command_id {
-                events.push(ShellIntegrationEvent::OutputData {
-                    command_id: cmd_id.clone(),
-                    data: plain_output,
-                });
+                if let Some(cmd_id) = &self.current_command_id {
+                    events.push(ShellIntegrationEvent::OutputData {
+                        command_id: cmd_id.clone(),
+                        data: plain_output,
+                    });
+                }
+            } else {
+                // Not collecting output — capture as recent terminal state
+                self.recent_plain_output.push_str(&plain_output);
             }
         }
 
@@ -393,6 +420,7 @@ impl ShellIntegration {
             OscSequence::CommandExecutionStart => {
                 self.state = CommandState::Executing;
                 self.output_buffer.clear();
+                self.recent_plain_output.clear();
                 // Clear previous command's exit code when new command starts
                 self.last_exit_code = None;
                 self.command_just_finished = false;
@@ -689,5 +717,29 @@ mod tests {
         assert_eq!(integration.unescape_value("hello"), "hello");
         assert_eq!(integration.unescape_value("hello\\\\world"), "hello\\world");
         assert_eq!(integration.unescape_value("hello\\x3bworld"), "hello;world");
+    }
+
+    #[test]
+    fn post_command_prompt_is_recorded_as_recent_plain_output() {
+        let mut integration = ShellIntegration::new();
+
+        integration.process_data("\x1b]633;E;printf test;nonce123\x07");
+        integration.process_data("\x1b]633;C\x07");
+        integration.process_data("test\n");
+        integration.process_data("\x1b]633;D;0\x07\x1b]633;A\x07$ \x1b]633;B\x07");
+
+        assert_eq!(integration.get_output(), "test\n");
+        assert_eq!(integration.get_recent_plain_output(), "$ ");
+    }
+
+    #[test]
+    fn continuation_prompt_is_recorded_as_recent_plain_output() {
+        let mut integration = ShellIntegration::new();
+
+        integration.process_data("\x1b]633;A\x07$ \x1b]633;B\x07");
+        integration.process_data("\x1b]633;F\x07dquote> ");
+
+        assert_eq!(integration.get_output(), "");
+        assert_eq!(integration.get_recent_plain_output(), "$ dquote> ");
     }
 }

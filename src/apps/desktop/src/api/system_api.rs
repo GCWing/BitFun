@@ -98,10 +98,7 @@ pub struct InstallUpdateRequest {}
 
 /// Downloads and installs the latest update from the updater endpoint (re-checks remote).
 #[tauri::command]
-pub async fn install_update(
-    app: AppHandle,
-    request: InstallUpdateRequest,
-) -> Result<(), String> {
+pub async fn install_update(app: AppHandle, request: InstallUpdateRequest) -> Result<(), String> {
     let _ = request;
     let updater = app.updater().map_err(|e| e.to_string())?;
     let update = updater.check().await.map_err(|e| e.to_string())?;
@@ -116,17 +113,16 @@ pub async fn install_update(
         .download_and_install(
             move |chunk_len, content_len| {
                 let (downloaded, total) = {
-                    let mut g = progress_chunk.lock().expect("update progress mutex poisoned");
+                    let mut g = progress_chunk
+                        .lock()
+                        .expect("update progress mutex poisoned");
                     g.0 = g.0.saturating_add(chunk_len as u64);
                     g.1 = g.1.or(content_len);
                     (g.0, g.1)
                 };
                 let _ = app_chunk.emit(
                     UPDATE_PROGRESS_EVENT,
-                    UpdateProgressPayload {
-                        downloaded,
-                        total,
-                    },
+                    UpdateProgressPayload { downloaded, total },
                 );
             },
             {
@@ -141,10 +137,7 @@ pub async fn install_update(
                     };
                     let _ = app_done.emit(
                         UPDATE_PROGRESS_EVENT,
-                        UpdateProgressPayload {
-                            downloaded,
-                            total,
-                        },
+                        UpdateProgressPayload { downloaded, total },
                     );
                 }
             },

@@ -39,6 +39,9 @@ mod tests {
             agent.prompt_template_name(Some("gpt-5.1")),
             "research_specialist_agent"
         );
-        assert_eq!(agent.prompt_template_name(None), "research_specialist_agent");
+        assert_eq!(
+            agent.prompt_template_name(None),
+            "research_specialist_agent"
+        );
     }
 }

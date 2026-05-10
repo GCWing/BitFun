@@ -79,6 +79,12 @@ pub enum CommandStreamEvent {
         exit_code: Option<i32>,
         total_output: String,
         completion_reason: CommandCompletionReason,
+        /// Post-command terminal state: the most recent terminal output that
+        /// was NOT part of the command's own output. This includes the shell
+        /// prompt (e.g., `$ `, `dquote> `) and any other text the shell
+        /// displayed after the command finished. AI agents can use this to
+        /// understand the full terminal context and avoid misjudgments.
+        shell_state: Option<String>,
     },
     /// Command execution failed
     Error { message: String },
@@ -112,6 +118,25 @@ async fn get_integration_output_snapshot(
         .get(session_id)
         .map(|i| i.get_output().to_string())
         .unwrap_or_default()
+}
+
+/// Get the post-command terminal state from shell integration.
+/// Returns the most recent terminal output that was NOT part of the command's
+/// own output — typically the shell prompt (e.g., `$ `, `dquote> `) or any
+/// other text the shell displayed after the command finished.
+async fn get_post_command_terminal_state(
+    session_integrations: &Arc<RwLock<HashMap<String, ShellIntegration>>>,
+    session_id: &str,
+) -> Option<String> {
+    let integrations = session_integrations.read().await;
+    integrations.get(session_id).and_then(|i| {
+        let recent = i.get_recent_plain_output().trim().to_string();
+        if recent.is_empty() {
+            None
+        } else {
+            Some(recent)
+        }
+    })
 }
 
 /// Session manager for terminal sessions
@@ -785,6 +810,7 @@ impl SessionManager {
                     exit_code,
                     total_output,
                     completion_reason,
+                    shell_state: _,
                 } => {
                     if !total_output.is_empty() {
                         output = total_output;
@@ -953,10 +979,14 @@ impl SessionManager {
                         let output =
                             get_integration_output_snapshot(&session_integrations, &session_id)
                                 .await;
+                        let shell_state =
+                            get_post_command_terminal_state(&session_integrations, &session_id)
+                                .await;
                         send(CommandStreamEvent::Completed {
                             exit_code: finished_exit_code.flatten(),
                             total_output: output,
                             completion_reason: CommandCompletionReason::TimedOut,
+                            shell_state,
                         })
                         .await;
                         return;
@@ -1015,6 +1045,11 @@ impl SessionManager {
                             if output_len == last_output_len {
                                 post_finish_idle_count += 1;
                                 if post_finish_idle_count >= post_finish_idle_required {
+                                    let shell_state = get_post_command_terminal_state(
+                                        &session_integrations,
+                                        &session_id,
+                                    )
+                                    .await;
                                     send(CommandStreamEvent::Completed {
                                         exit_code: finished_exit_code.flatten(),
                                         total_output: output,
@@ -1023,6 +1058,7 @@ impl SessionManager {
                                         } else {
                                             CommandCompletionReason::Completed
                                         },
+                                        shell_state,
                                     })
                                     .await;
                                     return;
@@ -1041,6 +1077,11 @@ impl SessionManager {
                                 post_finish_idle_count += 1;
                                 // Wait at least 10 poll cycles (500ms) after seeing Prompt to ensure all output arrived
                                 if post_finish_idle_count >= 10 {
+                                    let shell_state = get_post_command_terminal_state(
+                                        &session_integrations,
+                                        &session_id,
+                                    )
+                                    .await;
                                     send(CommandStreamEvent::Completed {
                                         exit_code: finished_exit_code.flatten(),
                                         total_output: output,
@@ -1049,6 +1090,7 @@ impl SessionManager {
                                         } else {
                                             CommandCompletionReason::Completed
                                         },
+                                        shell_state,
                                     })
                                     .await;
                                     return;
@@ -1063,6 +1105,11 @@ impl SessionManager {
                             if output_len == last_output_len {
                                 idle_count += 1;
                                 if idle_count >= max_idle_checks {
+                                    let shell_state = get_post_command_terminal_state(
+                                        &session_integrations,
+                                        &session_id,
+                                    )
+                                    .await;
                                     send(CommandStreamEvent::Completed {
                                         exit_code: None,
                                         total_output: output,
@@ -1071,6 +1118,7 @@ impl SessionManager {
                                         } else {
                                             CommandCompletionReason::Completed
                                         },
+                                        shell_state,
                                     })
                                     .await;
                                     return;
