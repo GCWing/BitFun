@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { normalizeSubagentParentInfo } from './subagentParentInfo';
 import {
   formatDialogErrorForNotification,
+  handleDialogTurnComplete,
   handleSessionStateChanged,
   insertSteeringItemIfAbsent,
   shouldProcessEvent,
@@ -15,10 +16,20 @@ import type { FlowChatContext } from './types';
 vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
   i18nService: {
     t: (key: string) => ({
+      'errors:ai.unknown.title': 'AI request failed',
+      'errors:ai.unknown.message': 'The model stopped before returning a usable response. Try again or switch models.',
       'errors:ai.invalidRequest.title': 'Model request invalid',
       'errors:ai.invalidRequest.message': 'The provider rejected the request format, parameters, model name, or payload size. Adjust the request or choose another model.',
       'errors:ai.actions.copyDiagnostics': 'Copy diagnostics',
     }[key] ?? key),
+  },
+}));
+
+vi.mock('../../../shared/notification-system/services/NotificationService', () => ({
+  notificationService: {
+    error: vi.fn(),
+    warning: vi.fn(),
+    success: vi.fn(),
   },
 }));
 
@@ -401,6 +412,41 @@ describe('handleSessionStateChanged', () => {
       .sessions.get('session-1')
       ?.dialogTurns[0];
     expect(turn?.status).toBe('completed');
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
+  });
+});
+
+describe('handleDialogTurnComplete', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('treats unsuccessful completed events as errors instead of normal completion', async () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+    await setFinishingMachine();
+
+    handleDialogTurnComplete(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      success: false,
+      finishReason: 'empty_round',
+    }, vi.fn());
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0];
+
+    expect(turn?.status).toBe('error');
+    expect(turn?.error).toContain('empty response');
     expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
   });
 });

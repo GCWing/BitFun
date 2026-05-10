@@ -1038,6 +1038,9 @@
     "dialogCompleted": "AI 助手已完成任務。",
     "dialogCompletedTitle": "BitFun 任務已完成",
     "dialogCompletedWithSession": "「{{sessionTitle}}」已完成，可以回到 BitFun 查看結果。",
-    "dialogCompletedFallback": "有一個 BitFun 會話已完成，可以回到應用查看結果。"
+    "dialogCompletedFallback": "有一個 BitFun 會話已完成，可以回到應用查看結果。",
+    "dialogFailedTitle": "BitFun 任務已中斷",
+    "dialogFailedWithSession": "「{{sessionTitle}}」已異常停止，可以回到 BitFun 查看原因。",
+    "dialogFailedFallback": "有一個 BitFun 會話已異常停止，可以回到應用查看原因。"
   }
 }

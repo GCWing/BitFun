@@ -103,6 +103,20 @@ describe('shouldSendDialogCompletionNotification', () => {
       }),
     ).toBe(true);
   });
+
+  it('allows failed completion notifications in the background', () => {
+    expect(
+      shouldSendDialogCompletionNotification({
+        event: event({
+          success: false,
+          finishReason: 'empty_round',
+        }),
+        session: session(),
+        isBackground: true,
+        notificationsEnabled: true,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe('buildDialogCompletionNotificationCopy', () => {
@@ -110,6 +124,10 @@ describe('buildDialogCompletionNotificationCopy', () => {
     if (key === 'notify.dialogCompletedTitle') return 'BitFun finished a task';
     if (key === 'notify.dialogCompletedWithSession') {
       return `${options?.sessionTitle} is ready.`;
+    }
+    if (key === 'notify.dialogFailedTitle') return 'BitFun task stopped';
+    if (key === 'notify.dialogFailedWithSession') {
+      return `${options?.sessionTitle} stopped unexpectedly.`;
     }
     return 'A BitFun session is ready.';
   };
@@ -135,6 +153,20 @@ describe('buildDialogCompletionNotificationCopy', () => {
     ).toEqual({
       title: 'BitFun finished a task',
       body: 'A BitFun session is ready.',
+    });
+  });
+
+  it('uses failure copy when the backend completed with an unsuccessful result', () => {
+    expect(
+      buildDialogCompletionNotificationCopy({
+        sessionTitle: 'Browser control fix',
+        success: false,
+        finishReason: 'empty_round',
+        t,
+      }),
+    ).toEqual({
+      title: 'BitFun task stopped',
+      body: 'Browser control fix stopped unexpectedly.',
     });
   });
 });

@@ -1038,6 +1038,9 @@
     "dialogCompleted": "AI agent has finished the task.",
     "dialogCompletedTitle": "BitFun task finished",
     "dialogCompletedWithSession": "\"{{sessionTitle}}\" is ready. Return to BitFun to review the result.",
-    "dialogCompletedFallback": "A BitFun session is ready. Return to BitFun to review the result."
+    "dialogCompletedFallback": "A BitFun session is ready. Return to BitFun to review the result.",
+    "dialogFailedTitle": "BitFun task stopped",
+    "dialogFailedWithSession": "\"{{sessionTitle}}\" stopped unexpectedly. Return to BitFun to review the reason.",
+    "dialogFailedFallback": "A BitFun session stopped unexpectedly. Return to BitFun to review the reason."
   }
 }

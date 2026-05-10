@@ -1707,7 +1707,17 @@ function handleCompressionFailed(context: FlowChatContext, event: any): void {
 /**
  * Handle dialog turn completed event
  */
-function handleDialogTurnComplete(
+function buildUnsuccessfulCompletionError(finishReason?: string): string {
+  if (finishReason === 'empty_round') {
+    return 'Model returned an empty response after retrying. finish_reason=empty_round';
+  }
+
+  return finishReason
+    ? `Dialog turn ended without a usable result. finish_reason=${finishReason}`
+    : 'Dialog turn ended without a usable result.';
+}
+
+export function handleDialogTurnComplete(
   context: FlowChatContext,
   event: any,
   _onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
@@ -1723,13 +1733,33 @@ function handleDialogTurnComplete(
   if (subagentParentInfo) {
     if (sessionId) {
       attachSubagentSessionToParentTool(subagentParentInfo, sessionId);
-      settleSubagentItems(context, subagentParentInfo, sessionId, 'completed');
+      if (success === false) {
+        settleSubagentItems(
+          context,
+          subagentParentInfo,
+          sessionId,
+          'error',
+          buildUnsuccessfulCompletionError(finishReason),
+        );
+      } else {
+        settleSubagentItems(context, subagentParentInfo, sessionId, 'completed');
+      }
     }
     return;
   }
 
   if (!sessionId || !turnId) {
     log.warn('DialogTurnCompleted missing sessionId or turnId', { event });
+    return;
+  }
+
+  if (success === false) {
+    handleDialogTurnFailed(context, {
+      ...event,
+      sessionId,
+      turnId,
+      error: event?.error || buildUnsuccessfulCompletionError(finishReason),
+    });
     return;
   }
 
