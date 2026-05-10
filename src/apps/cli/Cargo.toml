@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Internal crates
-bitfun-core = { path = "../../crates/core" }
+bitfun-core = { path = "../../crates/core", default-features = false, features = ["product-full"] }
 bitfun-events = { path = "../../crates/events" }
 bitfun-acp = { path = "../../crates/acp" }
 

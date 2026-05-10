@@ -1,0 +1,12 @@
+[package]
+name = "bitfun-core-types"
+version.workspace = true
+edition.workspace = true
+description = "BitFun shared low-level product DTOs"
+
+[lib]
+name = "bitfun_core_types"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }

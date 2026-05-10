@@ -1,9 +1,12 @@
 [workspace]
 members = [
+    "src/crates/core-types",
     "src/crates/events",
     "src/crates/ai-adapters",
     "src/crates/acp",
     "src/crates/core",
+    "src/crates/terminal",
+    "src/crates/tool-runtime",
     "src/crates/transport",
     "src/crates/api-layer",
     "src/crates/webdriver",

@@ -17,6 +17,7 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 | Module | Path | Agent doc |
 |---|---|---|
 | Core (product logic) | `src/crates/core` | [AGENTS.md](src/crates/core/AGENTS.md) |
+| Extracted core support | `src/crates/{core-types,agent-stream,runtime-ports,terminal,tool-runtime}` | (use core guide) |
 | Transport adapters | `src/crates/transport` | (use core guide) |
 | API layer | `src/crates/api-layer` | (use core guide) |
 | AI adapters | `src/crates/ai-adapters` | [AGENTS.md](src/crates/ai-adapters/AGENTS.md) |
@@ -96,6 +97,15 @@ await api.invoke('your_command', { request: { ... } });
 
 ## Architecture
 
+### Core decomposition guardrails
+
+For any `bitfun-core` decomposition, feature-boundary, dependency-boundary, or
+Rust build-speed refactor, read
+[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)
+before editing. The guardrail document defines product-behavior invariants,
+crate ownership targets, forbidden dependency directions, feature safety rules,
+and milestone verification gates.
+
 ### Backend flow
 
 Trace most features in this order:
@@ -133,7 +143,7 @@ Session data is stored under `.bitfun/sessions/{session_id}/`.
 | Shared Rust logic in `core`, `transport`, `api-layer`, or services | `cargo check --workspace && cargo test --workspace` |
 | Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
 | Behavior covered by desktop smoke/functional flows | `cargo build -p bitfun-desktop` then the nearest E2E spec or `pnpm run e2e:test:l0` |
-| `src/crates/ai-adapters` | Relevant Rust checks above **and** stream integration tests in `src/crates/core/tests` |
+| `src/crates/ai-adapters` | Relevant Rust checks above **and** `cargo test -p bitfun-agent-stream` for stream contracts |
 | Installer app | `pnpm run installer:build` |
 
 ## Where to look first

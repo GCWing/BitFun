@@ -9,7 +9,7 @@ description = "BitFun Agent Client Protocol integration"
 name = "bitfun_acp"
 
 [dependencies]
-bitfun-core = { path = "../core" }
+bitfun-core = { path = "../core", default-features = false, features = ["product-full"] }
 bitfun-events = { path = "../events" }
 
 agent-client-protocol = { version = "=0.11.1", features = ["unstable"] }

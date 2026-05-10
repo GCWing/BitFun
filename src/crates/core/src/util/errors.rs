@@ -2,7 +2,7 @@
 //!
 //! Provide unified error types and handling for the whole application
 
-use bitfun_events::agentic::{AiErrorDetail, ErrorCategory};
+use bitfun_core_types::errors::{AiErrorDetail, ErrorCategory};
 use serde::Serialize;
 use thiserror::Error;
 
@@ -467,5 +467,26 @@ mod tests {
         );
 
         assert_eq!(err.error_category(), ErrorCategory::ProviderUnavailable);
+    }
+
+    #[test]
+    fn error_detail_extracts_provider_metadata_and_retry_hint() {
+        let err = BitFunError::AIClient(
+            r#"Provider error: provider=openai, code=rate_limit_exceeded, message="Too many requests", request_id=req_123, http 429"#.to_string(),
+        );
+
+        let detail = err.error_detail();
+
+        assert_eq!(detail.category, ErrorCategory::RateLimit);
+        assert_eq!(detail.provider.as_deref(), Some("openai"));
+        assert_eq!(detail.provider_code.as_deref(), Some("rate_limit_exceeded"));
+        assert_eq!(detail.provider_message.as_deref(), Some("Too many requests"));
+        assert_eq!(detail.request_id.as_deref(), Some("req_123"));
+        assert_eq!(detail.http_status, Some(429));
+        assert_eq!(detail.retryable, Some(true));
+        assert_eq!(
+            detail.action_hints,
+            vec!["wait_and_retry", "switch_model", "copy_diagnostics"]
+        );
     }
 }

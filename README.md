@@ -159,7 +159,9 @@ For more details, see the [Contributing guide](./CONTRIBUTING.md).
 ## Project structure at a glance
 
 ```
-src/crates/core         # Product logic hub: agentic / service / infrastructure
+src/crates/core         # Compatibility facade and product runtime assembly
+src/crates/{core-types,agent-stream,runtime-ports} # Extracted core support boundaries
+src/crates/{terminal,tool-runtime} # Workspace-level terminal/tool helper crates
 src/crates/transport    # Tauri / WebSocket / CLI transport adapters
 src/crates/api-layer    # Shared handlers and DTOs
 src/apps/desktop        # Tauri desktop host

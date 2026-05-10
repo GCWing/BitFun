@@ -85,10 +85,10 @@ sse-stream = "0.2.1"
 bitfun-ai-adapters = { path = "../ai-adapters" }
 
 # Tool runtime
-tool-runtime = { path = "src/agentic/tools/implementations/tool-runtime" }
+tool-runtime = { path = "../tool-runtime" }
 
 # terminal
-terminal-core = { path = "src/service/terminal" }
+terminal-core = { path = "../terminal" }
 
 # I18n internationalization
 fluent-bundle = { workspace = true }
@@ -122,6 +122,7 @@ ssh_config = { version = "0.1", optional = true }
 bitfun-relay-server = { path = "../../apps/relay-server" }
 
 # Event layer dependency (lowest layer)
+bitfun-core-types = { path = "../core-types" }
 bitfun-events = { path = "../events" }
 
 # Transport layer dependency
@@ -141,7 +142,10 @@ rustls-native-certs = "0.8"
 schannel = "0.1"
 
 [features]
-default = ["ssh-remote"]
+# Full product runtime feature set. Product crates should depend on this
+# explicitly before `bitfun-core` default features are made lighter.
+default = ["product-full"]
+product-full = ["ssh-remote"]
 tauri-support = ["tauri"]  # Optional tauri support
 ssh-remote = ["russh", "russh-sftp", "russh-keys", "shellexpand", "ssh_config"]  # russh-keys pure-Rust crypto backend (no openssl)
 

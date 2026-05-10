@@ -17,6 +17,7 @@ BitFun 是一个由 Rust workspace 与共享 React 前端组成的项目。
 | 模块 | 路径 | Agent 文档 |
 |---|---|---|
 | Core（产品逻辑） | `src/crates/core` | [AGENTS.md](src/crates/core/AGENTS.md) |
+| 已拆出的 core 支撑 crate | `src/crates/{core-types,agent-stream,runtime-ports,terminal,tool-runtime}` | （使用 core 指南） |
 | Transport 适配层 | `src/crates/transport` | （使用 core 指南） |
 | API layer | `src/crates/api-layer` | （使用 core 指南） |
 | AI adapters | `src/crates/ai-adapters` | [AGENTS.md](src/crates/ai-adapters/AGENTS.md) |
@@ -96,6 +97,13 @@ await api.invoke('your_command', { request: { ... } });
 
 ## 架构
 
+### Core 拆解护栏
+
+任何 `bitfun-core` 拆解、feature 边界、依赖边界或 Rust 构建提速重构，
+都必须先阅读
+[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)。
+该文档定义产品行为不变量、crate 归属目标、禁止依赖方向、feature 安全规则和里程碑验证门禁。
+
 ### 后端链路
 
 大多数功能建议按这个顺序追踪：
@@ -133,7 +141,7 @@ SessionManager → Session → DialogTurn → ModelRound
 | `core`、`transport`、`api-layer` 或共享服务中的 Rust 逻辑 | `cargo check --workspace && cargo test --workspace` |
 | 桌面端集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
 | 被桌面端 smoke/functional 流覆盖的行为 | `cargo build -p bitfun-desktop` 后运行最接近的 E2E spec，或 `pnpm run e2e:test:l0` |
-| `src/crates/ai-adapters` | 运行上面相关 Rust 检查，**并且**运行 `src/crates/core/tests` 中的 stream integration tests |
+| `src/crates/ai-adapters` | 运行上面相关 Rust 检查，**并且**运行 `cargo test -p bitfun-agent-stream` 验证 stream contract |
 | 安装器应用 | `pnpm run installer:build` |
 
 ## 先看哪里

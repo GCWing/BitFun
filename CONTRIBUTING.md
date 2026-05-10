@@ -85,6 +85,10 @@ Do not use platform-specific dependencies in `core`:
 - ❌ `tauri::AppHandle`
 - ✅ `bitfun_events::EventEmitter`
 
+For `bitfun-core` decomposition or build-speed refactors, follow
+[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)
+and do not change product feature sets or release scripts as a side effect.
+
 ### Tauri command conventions
 
 - Command names use `snake_case`
