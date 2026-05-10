@@ -522,10 +522,10 @@ export class AgentAPI {
     action: { type: 'disable' } | { type: 'restore' } | { type: 'extend'; seconds: number },
   ): Promise<void> {
     const actionPayload = action.type === 'disable'
-      ? 'Disable'
+      ? { type: 'Disable', payload: null }
       : action.type === 'restore'
-        ? 'Restore'
-        : { Extend: { seconds: action.seconds } };
+        ? { type: 'Restore', payload: null }
+        : { type: 'Extend', payload: { seconds: action.seconds } };
     try {
       await api.invoke<void>('set_subagent_timeout', {
         request: { session_id: sessionId, action: actionPayload },
