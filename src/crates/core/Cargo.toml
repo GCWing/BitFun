@@ -84,6 +84,9 @@ sse-stream = "0.2.1"
 # Shared AI protocol adapters
 bitfun-ai-adapters = { path = "../ai-adapters" }
 
+# Lightweight agent stream processing
+bitfun-agent-stream = { path = "../agent-stream" }
+
 # Tool runtime
 tool-runtime = { path = "../tool-runtime" }
 
@@ -124,6 +127,7 @@ bitfun-relay-server = { path = "../../apps/relay-server" }
 # Event layer dependency (lowest layer)
 bitfun-core-types = { path = "../core-types" }
 bitfun-events = { path = "../events" }
+bitfun-runtime-ports = { path = "../runtime-ports" }
 
 # Transport layer dependency
 bitfun-transport = { path = "../transport" }

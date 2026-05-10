@@ -1,6 +1,6 @@
 mod common;
 
-use bitfun_core::agentic::events::{AgenticEvent, ToolEventData};
+use bitfun_events::{AgenticEvent, ToolEventData};
 use common::sse_fixture_server::FixtureSseServerOptions;
 use common::stream_test_harness::{
     run_stream_fixture, run_stream_fixture_with_options, StreamFixtureProvider,

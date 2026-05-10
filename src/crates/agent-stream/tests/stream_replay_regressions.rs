@@ -1,9 +1,9 @@
 mod common;
 
+use bitfun_agent_stream::StreamResult;
 use bitfun_ai_adapters::providers::{openai::OpenAIMessageConverter, AnthropicMessageConverter};
-use bitfun_core::agentic::core::Message as CoreMessage;
-use bitfun_core::agentic::events::{AgenticEvent, ToolEventData};
-use bitfun_core::util::types::Message as AIMessage;
+use bitfun_ai_adapters::{Message as AIMessage, ToolCall as AIToolCall};
+use bitfun_events::{AgenticEvent, ToolEventData};
 use common::sse_fixture_server::FixtureSseServerOptions;
 use common::stream_test_harness::{
     run_stream_fixture, run_stream_fixture_with_options, StreamFixtureProvider,
@@ -11,9 +11,7 @@ use common::stream_test_harness::{
 };
 use serde_json::json;
 
-fn build_replay_assistant_message(
-    result: &bitfun_core::agentic::execution::StreamResult,
-) -> CoreMessage {
+fn build_replay_assistant_message(result: &StreamResult) -> AIMessage {
     let reasoning = if result.full_thinking.is_empty() {
         if result.reasoning_content_present {
             Some(String::new())
@@ -24,12 +22,28 @@ fn build_replay_assistant_message(
         Some(result.full_thinking.clone())
     };
 
-    CoreMessage::assistant_with_reasoning(
-        reasoning,
-        result.full_text.clone(),
-        result.tool_calls.clone(),
-    )
-    .with_thinking_signature(result.thinking_signature.clone())
+    AIMessage {
+        role: "assistant".to_string(),
+        content: Some(result.full_text.clone()),
+        reasoning_content: reasoning,
+        thinking_signature: result.thinking_signature.clone(),
+        tool_calls: Some(
+            result
+                .tool_calls
+                .iter()
+                .map(|tool_call| AIToolCall {
+                    id: tool_call.tool_id.clone(),
+                    name: tool_call.tool_name.clone(),
+                    arguments: tool_call.arguments.clone(),
+                    raw_arguments: tool_call.raw_arguments.clone(),
+                })
+                .collect(),
+        ),
+        tool_call_id: None,
+        name: None,
+        is_error: None,
+        tool_image_attachments: None,
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -96,7 +110,7 @@ async fn replays_structurally_empty_openai_reasoning_content_with_tool_call() {
         ]
     );
 
-    let replay_message: AIMessage = build_replay_assistant_message(&result).into();
+    let replay_message = build_replay_assistant_message(&result);
     let openai_payload = OpenAIMessageConverter::convert_messages(vec![replay_message]);
 
     assert_eq!(openai_payload.len(), 1);
@@ -176,7 +190,7 @@ async fn replays_structurally_empty_anthropic_thinking_with_signature_and_tool_u
         "expected tool_use block to trigger early detection"
     );
 
-    let replay_message: AIMessage = build_replay_assistant_message(&result).into();
+    let replay_message = build_replay_assistant_message(&result);
     let (_, anthropic_messages) = AnthropicMessageConverter::convert_messages(vec![replay_message]);
     let content = anthropic_messages[0]["content"]
         .as_array()

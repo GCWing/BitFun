@@ -1,6 +1,6 @@
 mod common;
 
-use bitfun_core::agentic::events::AgenticEvent;
+use bitfun_events::AgenticEvent;
 use common::stream_test_harness::{
     run_stream_fixture_with_options, StreamFixtureProvider, StreamFixtureRunOptions,
 };

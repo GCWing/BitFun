@@ -4,6 +4,7 @@
 
 use super::types::{AgenticEvent, EventEnvelope, EventPriority};
 use crate::util::errors::BitFunResult;
+use bitfun_agent_stream::StreamEventSink;
 use log::{debug, trace, warn};
 use std::collections::BinaryHeap;
 use std::sync::Arc;
@@ -229,5 +230,12 @@ impl EventQueue {
     /// Check if the queue is empty
     pub async fn is_empty(&self) -> bool {
         self.queue.lock().await.is_empty()
+    }
+}
+
+#[async_trait::async_trait]
+impl StreamEventSink for EventQueue {
+    async fn enqueue(&self, event: AgenticEvent, priority: Option<EventPriority>) {
+        let _ = EventQueue::enqueue(self, event, priority).await;
     }
 }

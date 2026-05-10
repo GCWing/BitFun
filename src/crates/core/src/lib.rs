@@ -13,6 +13,7 @@ pub mod util; // Utility layer - General types, errors, helper functions // Mini
 pub use infrastructure::debug_log as debug;
 
 // Export main types
+pub use bitfun_runtime_ports as runtime_ports;
 pub use util::errors::*;
 pub use util::types::*;
 

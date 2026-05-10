@@ -50,6 +50,16 @@ impl From<SubagentParentInfo> for EventSubagentParentInfo {
     }
 }
 
+impl From<SubagentParentInfo> for bitfun_agent_stream::SubagentParentInfo {
+    fn from(info: SubagentParentInfo) -> Self {
+        Self {
+            tool_call_id: info.tool_call_id,
+            session_id: info.session_id,
+            dialog_turn_id: info.dialog_turn_id,
+        }
+    }
+}
+
 /// Tool execution context
 #[derive(Debug, Clone)]
 pub struct ToolExecutionContext {

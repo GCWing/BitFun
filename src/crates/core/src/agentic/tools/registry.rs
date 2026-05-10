@@ -3,13 +3,26 @@
 use crate::agentic::tools::framework::Tool;
 use crate::agentic::tools::implementations::*;
 use crate::util::errors::BitFunResult;
+use bitfun_runtime_ports::{DynamicToolDescriptor, DynamicToolProvider, ToolDecorator};
 use indexmap::IndexMap;
 use log::{debug, info, trace, warn};
 use std::sync::Arc;
 
+type ToolRef = Arc<dyn Tool>;
+type ToolDecoratorRef = Arc<dyn ToolDecorator<ToolRef>>;
+
+struct SnapshotToolDecorator;
+
+impl ToolDecorator<ToolRef> for SnapshotToolDecorator {
+    fn decorate(&self, tool: ToolRef) -> ToolRef {
+        crate::service::snapshot::wrap_tool_for_snapshot_tracking(tool)
+    }
+}
+
 /// Tool registry - manages all available tools (using IndexMap to maintain registration order)
 pub struct ToolRegistry {
-    tools: IndexMap<String, Arc<dyn Tool>>,
+    tools: IndexMap<String, ToolRef>,
+    tool_decorator: ToolDecoratorRef,
 }
 
 impl Default for ToolRegistry {
@@ -21,8 +34,18 @@ impl Default for ToolRegistry {
 impl ToolRegistry {
     /// Create a new tool registry
     pub fn new() -> Self {
+        Self::with_tool_decorator(Arc::new(SnapshotToolDecorator))
+    }
+
+    /// Create a registry with an injected decoration boundary.
+    ///
+    /// The default production decorator preserves snapshot-aware wrapping while
+    /// allowing future owner crates to replace this concrete service coupling
+    /// through the `bitfun-runtime-ports` interface.
+    pub fn with_tool_decorator(tool_decorator: ToolDecoratorRef) -> Self {
         let mut registry = Self {
             tools: IndexMap::new(),
+            tool_decorator,
         };
 
         // Register all tools
@@ -31,7 +54,7 @@ impl ToolRegistry {
     }
 
     /// Dynamically register MCP tools
-    pub fn register_mcp_tools(&mut self, tools: Vec<Arc<dyn Tool>>) {
+    pub fn register_mcp_tools(&mut self, tools: Vec<ToolRef>) {
         let tool_count = tools.len();
         info!("Registering MCP tools: count={}", tool_count);
 
@@ -162,10 +185,10 @@ impl ToolRegistry {
     }
 
     /// Register a single tool
-    pub fn register_tool(&mut self, tool: Arc<dyn Tool>) {
+    pub fn register_tool(&mut self, tool: ToolRef) {
         // Snapshot-aware wrapping happens once at registration time so every
         // subsequent lookup returns the same runtime implementation.
-        let tool = crate::service::snapshot::wrap_tool_for_snapshot_tracking(tool);
+        let tool = self.tool_decorator.decorate(tool);
         let name = tool.name().to_string();
         self.tools.insert(name, tool);
     }
@@ -187,6 +210,33 @@ impl ToolRegistry {
             self.tools.len()
         );
         self.tools.values().cloned().collect()
+    }
+}
+
+#[async_trait::async_trait]
+impl DynamicToolProvider for ToolRegistry {
+    async fn list_dynamic_tools(
+        &self,
+    ) -> bitfun_runtime_ports::PortResult<Vec<DynamicToolDescriptor>> {
+        let mut descriptors = Vec::with_capacity(self.tools.len());
+
+        for tool in self.tools.values() {
+            let description = tool.description().await.map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::Backend,
+                    error.to_string(),
+                )
+            })?;
+
+            descriptors.push(DynamicToolDescriptor {
+                name: tool.name().to_string(),
+                description,
+                input_schema: tool.input_schema_for_model().await,
+                provider_id: None,
+            });
+        }
+
+        Ok(descriptors)
     }
 }
 

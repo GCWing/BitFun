@@ -2464,7 +2464,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let permit = match (cancel_token, deadline) {
             (Some(token), Some(deadline)) => {
                 tokio::select! {
-                    result = semaphore.acquire_owned() => result?,
+                    result = semaphore.acquire_owned() => result
+                        .map_err(|error| BitFunError::Semaphore(error.to_string()))?,
                     _ = token.cancelled() => {
                         return Err(BitFunError::Cancelled(
                             "Subagent task was cancelled while waiting for a concurrency slot".to_string(),
@@ -2480,7 +2481,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
             (Some(token), None) => {
                 tokio::select! {
-                    result = semaphore.acquire_owned() => result?,
+                    result = semaphore.acquire_owned() => result
+                        .map_err(|error| BitFunError::Semaphore(error.to_string()))?,
                     _ = token.cancelled() => {
                         return Err(BitFunError::Cancelled(
                             "Subagent task was cancelled while waiting for a concurrency slot".to_string(),
@@ -2490,7 +2492,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
             (None, Some(deadline)) => {
                 tokio::select! {
-                    result = semaphore.acquire_owned() => result?,
+                    result = semaphore.acquire_owned() => result
+                        .map_err(|error| BitFunError::Semaphore(error.to_string()))?,
                     _ = tokio::time::sleep_until(deadline) => {
                         return Err(BitFunError::Timeout(format!(
                             "Timed out while waiting for a concurrency slot for subagent '{}'",
@@ -2499,7 +2502,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     }
                 }
             }
-            (None, None) => semaphore.acquire_owned().await?,
+            (None, None) => semaphore
+                .acquire_owned()
+                .await
+                .map_err(|error| BitFunError::Semaphore(error.to_string()))?,
         };
 
         let wait_ms = started_waiting.elapsed().as_millis();
@@ -3401,6 +3407,153 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 debug!("Global coordinator already exists, skipping set");
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
+    async fn create_session(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionCreateRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCreateResult> {
+        let workspace_path = request.workspace_path.clone().ok_or_else(|| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                "workspace_path is required to create an agent session",
+            )
+        })?;
+
+        let session = self
+            .create_session_with_workspace(
+                None,
+                request.session_name,
+                request.agent_type,
+                SessionConfig {
+                    workspace_path: Some(workspace_path.clone()),
+                    ..Default::default()
+                },
+                workspace_path,
+            )
+            .await
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::Backend,
+                    error.to_string(),
+                )
+            })?;
+
+        Ok(bitfun_runtime_ports::AgentSessionCreateResult {
+            session_id: session.session_id,
+            agent_type: session.agent_type,
+        })
+    }
+
+    async fn submit_message(
+        &self,
+        request: bitfun_runtime_ports::AgentSubmissionRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSubmissionResult> {
+        if !request.attachments.is_empty() {
+            return Err(bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                "agent submission port does not yet accept generic attachments",
+            ));
+        }
+
+        let session = self
+            .get_session_manager()
+            .get_session(&request.session_id)
+            .ok_or_else(|| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::NotFound,
+                    format!("session not found: {}", request.session_id),
+                )
+            })?;
+
+        let turn_id = request
+            .metadata
+            .get("turnId")
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+        self.start_dialog_turn(
+            request.session_id,
+            request.message.clone(),
+            Some(request.message),
+            Some(turn_id.clone()),
+            session.agent_type.clone(),
+            session.config.workspace_path.clone(),
+            DialogSubmissionPolicy::for_source(DialogTriggerSource::Bot),
+        )
+        .await
+        .map_err(|error| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::Backend,
+                error.to_string(),
+            )
+        })?;
+
+        Ok(bitfun_runtime_ports::AgentSubmissionResult {
+            turn_id,
+            accepted: true,
+        })
+    }
+
+    async fn resolve_session_agent_type(
+        &self,
+        session_id: &str,
+    ) -> bitfun_runtime_ports::PortResult<Option<String>> {
+        Ok(self
+            .get_session_manager()
+            .get_session(session_id)
+            .map(|session| session.agent_type.clone()))
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
+    async fn read_session_transcript(
+        &self,
+        request: bitfun_runtime_ports::SessionTranscriptRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::SessionTranscript> {
+        let messages = self
+            .get_messages(&request.session_id)
+            .await
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::Backend,
+                    error.to_string(),
+                )
+            })?;
+
+        let messages = messages
+            .into_iter()
+            .filter(|message| match request.from_turn_id.as_ref() {
+                Some(from_turn_id) => message.metadata.turn_id.as_ref() == Some(from_turn_id),
+                None => true,
+            })
+            .map(|message| {
+                let role = match message.role {
+                    crate::agentic::core::MessageRole::User => "user",
+                    crate::agentic::core::MessageRole::Assistant => "assistant",
+                    crate::agentic::core::MessageRole::Tool => "tool",
+                    crate::agentic::core::MessageRole::System => "system",
+                }
+                .to_string();
+
+                bitfun_runtime_ports::TranscriptMessage {
+                    role,
+                    turn_id: message.metadata.turn_id,
+                    content: serde_json::to_value(message.content).unwrap_or_default(),
+                }
+            })
+            .collect();
+
+        Ok(bitfun_runtime_ports::SessionTranscript {
+            session_id: request.session_id,
+            messages,
+        })
     }
 }
 

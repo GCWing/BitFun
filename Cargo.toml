@@ -3,6 +3,8 @@ members = [
     "src/crates/core-types",
     "src/crates/events",
     "src/crates/ai-adapters",
+    "src/crates/agent-stream",
+    "src/crates/runtime-ports",
     "src/crates/acp",
     "src/crates/core",
     "src/crates/terminal",

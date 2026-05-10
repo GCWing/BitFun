@@ -650,6 +650,19 @@ impl ToolCall {
     }
 }
 
+impl From<bitfun_agent_stream::ToolCall> for ToolCall {
+    fn from(tool_call: bitfun_agent_stream::ToolCall) -> Self {
+        Self {
+            tool_id: tool_call.tool_id,
+            tool_name: tool_call.tool_name,
+            arguments: tool_call.arguments,
+            raw_arguments: tool_call.raw_arguments,
+            is_error: tool_call.is_error,
+            recovered_from_truncation: tool_call.recovered_from_truncation,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolResult {
     pub tool_id: String,

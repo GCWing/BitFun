@@ -1,6 +1,6 @@
 mod common;
 
-use bitfun_core::agentic::events::AgenticEvent;
+use bitfun_events::AgenticEvent;
 use common::sse_fixture_server::FixtureSseServerOptions;
 use common::stream_test_harness::{run_stream_fixture, StreamFixtureProvider};
 use serde_json::json;

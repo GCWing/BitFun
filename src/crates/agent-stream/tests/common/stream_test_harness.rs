@@ -1,17 +1,34 @@
 use super::fixture_loader::load_fixture_bytes;
 use super::sse_fixture_server::{FixtureSseServer, FixtureSseServerOptions};
+use bitfun_agent_stream::{StreamEventSink, StreamProcessError, StreamProcessor, StreamResult};
 use bitfun_ai_adapters::stream::{
     handle_anthropic_stream, handle_gemini_stream, handle_openai_stream, handle_responses_stream,
     UnifiedResponse,
 };
-use bitfun_core::agentic::events::{AgenticEvent, EventQueue, EventQueueConfig};
-use bitfun_core::agentic::execution::{StreamProcessError, StreamResult};
-use bitfun_core::StreamProcessor;
+use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority};
 use futures::StreamExt;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
+
+#[derive(Default)]
+struct RecordingEventSink {
+    events: Mutex<Vec<AgenticEvent>>,
+}
+
+#[async_trait::async_trait]
+impl StreamEventSink for RecordingEventSink {
+    async fn enqueue(&self, event: AgenticEvent, _priority: Option<EventPriority>) {
+        self.events.lock().await.push(event);
+    }
+}
+
+impl RecordingEventSink {
+    async fn drain_all(&self) -> Vec<AgenticEvent> {
+        std::mem::take(&mut *self.events.lock().await)
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
@@ -137,8 +154,8 @@ pub async fn run_stream_fixture_with_options(
         }
     }
 
-    let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
-    let processor = StreamProcessor::new(event_queue.clone());
+    let event_sink = Arc::new(RecordingEventSink::default());
+    let processor = StreamProcessor::new(event_sink.clone());
     let unified_stream = UnboundedReceiverStream::new(rx_event).boxed();
     let cancellation_token = CancellationToken::new();
 
@@ -155,21 +172,7 @@ pub async fn run_stream_fixture_with_options(
         )
         .await;
 
-    let events = drain_all_events(&event_queue).await;
+    let events = event_sink.drain_all().await;
 
     StreamFixtureRunOutput { result, events }
-}
-
-async fn drain_all_events(event_queue: &Arc<EventQueue>) -> Vec<AgenticEvent> {
-    let mut events = Vec::new();
-
-    loop {
-        let batch = event_queue.dequeue_batch(256).await;
-        if batch.is_empty() {
-            break;
-        }
-        events.extend(batch.into_iter().map(|envelope| envelope.event));
-    }
-
-    events
 }
