@@ -1,4 +1,7 @@
 //! Tool framework - Tool interface definition and execution context
+use crate::agentic::coordination::get_global_coordinator;
+use crate::agentic::deep_review_policy::record_deep_review_shared_context_tool_use;
+use crate::agentic::session::EvidenceLedgerCheckpoint;
 use crate::agentic::tools::restrictions::{
     is_local_path_within_root, is_remote_posix_path_within_root, ToolPathOperation,
     ToolRuntimeRestrictions,
@@ -10,13 +13,16 @@ use crate::agentic::tools::workspace_paths::{
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::get_path_manager_arc;
+use crate::service::git::{GitDiffParams, GitService};
 use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
 use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
 use crate::util::errors::BitFunResult;
 use crate::util::types::ToolImageAttachment;
 use async_trait::async_trait;
+use log::warn;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
@@ -93,6 +99,107 @@ impl ToolUseContext {
 
     pub fn ws_shell(&self) -> Option<&dyn crate::agentic::workspace::WorkspaceShell> {
         self.workspace_services.as_ref().map(|s| s.shell.as_ref())
+    }
+
+    pub async fn record_light_checkpoint(
+        &self,
+        tool_name: &str,
+        target: &str,
+        touched_files: Vec<String>,
+    ) {
+        let Some(session_id) = self.session_id.as_deref() else {
+            return;
+        };
+        let Some(turn_id) = self.dialog_turn_id.as_deref() else {
+            return;
+        };
+        let Some(coordinator) = get_global_coordinator() else {
+            return;
+        };
+
+        let checkpoint = self.build_light_checkpoint(touched_files).await;
+        coordinator
+            .get_session_manager()
+            .record_checkpoint_created(session_id, turn_id, tool_name, target, checkpoint);
+    }
+
+    async fn build_light_checkpoint(&self, touched_files: Vec<String>) -> EvidenceLedgerCheckpoint {
+        let mut checkpoint = EvidenceLedgerCheckpoint {
+            current_branch: None,
+            dirty_state_summary: "workspace_unavailable".to_string(),
+            touched_files,
+            diff_hash: None,
+        };
+
+        if self.is_remote() {
+            checkpoint.dirty_state_summary =
+                "remote_workspace_git_metadata_unavailable".to_string();
+            return checkpoint;
+        }
+
+        let Some(workspace_root) = self.workspace_root() else {
+            return checkpoint;
+        };
+
+        match GitService::get_status(workspace_root).await {
+            Ok(status) => {
+                checkpoint.current_branch = Some(status.current_branch);
+                checkpoint.dirty_state_summary = format!(
+                    "staged={}, unstaged={}, untracked={}",
+                    status.staged.len(),
+                    status.unstaged.len(),
+                    status.untracked.len()
+                );
+            }
+            Err(error) => {
+                checkpoint.dirty_state_summary = format!("git_status_unavailable: {}", error);
+            }
+        }
+
+        checkpoint.diff_hash = self
+            .checkpoint_diff_hash(workspace_root, &checkpoint.touched_files)
+            .await;
+        checkpoint
+    }
+
+    async fn checkpoint_diff_hash(
+        &self,
+        workspace_root: &Path,
+        touched_files: &[String],
+    ) -> Option<String> {
+        let files = touched_files
+            .iter()
+            .filter_map(|file| git_relative_path(workspace_root, file))
+            .collect::<Vec<_>>();
+
+        if files.is_empty() {
+            return None;
+        }
+
+        let mut diff = String::new();
+        for staged in [false, true] {
+            let params = GitDiffParams {
+                files: Some(files.clone()),
+                staged: Some(staged),
+                ..Default::default()
+            };
+            match GitService::get_diff(workspace_root, &params).await {
+                Ok(part) => diff.push_str(&part),
+                Err(error) => {
+                    warn!(
+                        "Failed to collect checkpoint diff hash: staged={}, error={}",
+                        staged, error
+                    );
+                    return None;
+                }
+            }
+        }
+
+        if diff.is_empty() {
+            return None;
+        }
+
+        Some(hex::encode(Sha256::digest(diff.as_bytes())))
     }
 
     pub fn enforce_tool_runtime_restrictions(&self, tool_name: &str) -> BitFunResult<()> {
@@ -358,7 +465,7 @@ impl ToolUseContext {
 }
 
 #[cfg(test)]
-mod tests {
+mod path_resolution_tests {
     use super::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::WorkspaceBinding;
@@ -511,6 +618,74 @@ impl ToolResult {
     }
 }
 
+fn git_relative_path(workspace_root: &Path, path: &str) -> Option<String> {
+    if is_bitfun_runtime_uri(path) {
+        return None;
+    }
+
+    let path = Path::new(path);
+    let relative = if path.is_absolute() {
+        path.strip_prefix(workspace_root).ok()?
+    } else {
+        path
+    };
+
+    Some(relative.to_string_lossy().replace('\\', "/"))
+}
+
+fn custom_data_str<'a>(context: &'a ToolUseContext, key: &str) -> Option<&'a str> {
+    context
+        .custom_data
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn maybe_record_deep_review_shared_context_tool_use(
+    tool_name: &str,
+    input: &Value,
+    context: &ToolUseContext,
+) {
+    if !tool_name.eq_ignore_ascii_case("Read") && !tool_name.eq_ignore_ascii_case("GetFileDiff") {
+        return;
+    }
+    if !custom_data_str(context, "deep_review_subagent_role")
+        .is_some_and(|role| role.eq_ignore_ascii_case("reviewer"))
+    {
+        return;
+    }
+    let Some(parent_turn_id) = custom_data_str(context, "deep_review_parent_dialog_turn_id") else {
+        return;
+    };
+    let Some(file_path) = input
+        .get("file_path")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return;
+    };
+    let measured_path = if context.is_remote() {
+        None
+    } else {
+        context
+            .workspace_root()
+            .and_then(|workspace_root| git_relative_path(workspace_root, file_path))
+    }
+    .unwrap_or_else(|| file_path.to_string());
+    let subagent_type = custom_data_str(context, "deep_review_subagent_type")
+        .or(context.agent_type.as_deref())
+        .unwrap_or("unknown");
+
+    record_deep_review_shared_context_tool_use(
+        parent_turn_id,
+        subagent_type,
+        tool_name,
+        &measured_path,
+    );
+}
+
 /// Tool trait
 #[async_trait]
 pub trait Tool: Send + Sync {
@@ -638,7 +813,7 @@ pub trait Tool: Send + Sync {
     /// execution to [`call_impl`], so most tools should override `call_impl`
     /// instead of overriding this method directly.
     async fn call(&self, input: &Value, context: &ToolUseContext) -> BitFunResult<Vec<ToolResult>> {
-        if let Some(cancellation_token) = context.cancellation_token.as_ref() {
+        let result = if let Some(cancellation_token) = context.cancellation_token.as_ref() {
             tokio::select! {
                 result = self.call_impl(input, context) => {
                     result
@@ -650,7 +825,11 @@ pub trait Tool: Send + Sync {
             }
         } else {
             self.call_impl(input, context).await
+        };
+        if result.is_ok() {
+            maybe_record_deep_review_shared_context_tool_use(self.name(), input, context);
         }
+        result
     }
 }
 
@@ -658,4 +837,91 @@ pub trait Tool: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct ToolRenderOptions {
     pub verbose: bool,
+}
+
+#[cfg(test)]
+mod shared_context_tests {
+    use super::{Tool, ToolResult, ToolUseContext};
+    use crate::agentic::deep_review_policy::deep_review_shared_context_measurement_snapshot;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::util::errors::BitFunResult;
+    use async_trait::async_trait;
+    use serde_json::{json, Value};
+    use std::collections::HashMap;
+
+    struct MeasurementReadTool;
+
+    #[async_trait]
+    impl Tool for MeasurementReadTool {
+        fn name(&self) -> &str {
+            "Read"
+        }
+
+        async fn description(&self) -> BitFunResult<String> {
+            Ok("Read file".to_string())
+        }
+
+        fn input_schema(&self) -> Value {
+            json!({
+                "type": "object",
+                "properties": {
+                    "file_path": { "type": "string" }
+                }
+            })
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &Value,
+            _context: &ToolUseContext,
+        ) -> BitFunResult<Vec<ToolResult>> {
+            Ok(vec![ToolResult::ok(
+                json!({ "ok": true }),
+                Some("ok".to_string()),
+            )])
+        }
+    }
+
+    #[tokio::test]
+    async fn call_records_deep_review_read_file_measurement_without_touching_result() {
+        let parent_turn_id = format!("turn-framework-measure-{}", uuid::Uuid::new_v4());
+        let mut custom_data = HashMap::new();
+        custom_data.insert(
+            "deep_review_parent_dialog_turn_id".to_string(),
+            json!(parent_turn_id.clone()),
+        );
+        custom_data.insert("deep_review_subagent_role".to_string(), json!("reviewer"));
+        custom_data.insert(
+            "deep_review_subagent_type".to_string(),
+            json!("ReviewSecurity"),
+        );
+        let context = ToolUseContext {
+            tool_call_id: Some("tool-read".to_string()),
+            agent_type: Some("ReviewSecurity".to_string()),
+            session_id: Some("subagent-session".to_string()),
+            dialog_turn_id: Some("subagent-turn".to_string()),
+            workspace: None,
+            custom_data,
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        };
+        let tool = MeasurementReadTool;
+
+        let result = tool
+            .call(&json!({ "file_path": ".\\src\\lib.rs" }), &context)
+            .await
+            .expect("read tool call should succeed");
+        tool.call(&json!({ "file_path": "src/lib.rs" }), &context)
+            .await
+            .expect("read tool call should succeed");
+
+        assert_eq!(result.len(), 1);
+        let snapshot = deep_review_shared_context_measurement_snapshot(&parent_turn_id);
+        assert_eq!(snapshot.total_calls, 2);
+        assert_eq!(snapshot.duplicate_calls, 1);
+        assert_eq!(snapshot.repeated_contexts[0].tool_name, "Read");
+        assert_eq!(snapshot.repeated_contexts[0].file_path, "src/lib.rs");
+    }
 }

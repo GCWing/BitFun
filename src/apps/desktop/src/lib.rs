@@ -561,6 +561,7 @@ pub async fn run() {
             api::agentic_api::ensure_assistant_bootstrap,
             api::agentic_api::cancel_dialog_turn,
             api::agentic_api::steer_dialog_turn,
+            api::agentic_api::control_deep_review_queue,
             api::agentic_api::cancel_session,
             api::agentic_api::set_subagent_timeout,
             api::agentic_api::delete_session,
@@ -572,6 +573,7 @@ pub async fn run() {
             api::agentic_api::cancel_tool,
             api::agentic_api::generate_session_title,
             api::agentic_api::get_available_modes,
+            api::agentic_api::get_default_review_team_definition,
             api::btw_api::btw_ask_stream,
             api::btw_api::btw_cancel,
             api::editor_ai_api::editor_ai_stream,
@@ -693,6 +695,7 @@ pub async fn run() {
             git_create_branch,
             git_delete_branch,
             git_get_diff,
+            git_get_changed_files,
             git_reset_files,
             git_reset_to_commit,
             git_get_file_content,
@@ -1077,12 +1080,29 @@ async fn init_agentic_system() -> anyhow::Result<(
         tool_pipeline.clone(),
     ));
 
+    // Get execution config from global settings
+    let exec_config = match bitfun_core::service::config::get_global_config_service().await {
+        Ok(config_service) => {
+            match config_service
+                .get_config::<bitfun_core::service::config::types::GlobalConfig>(None)
+                .await
+            {
+                Ok(global_config) => execution::ExecutionEngineConfig {
+                    max_rounds: global_config.ai.max_rounds,
+                    ..Default::default()
+                },
+                Err(_) => Default::default(),
+            }
+        }
+        Err(_) => Default::default(),
+    };
+
     let execution_engine = Arc::new(execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
         session_manager.clone(),
         context_compressor,
-        execution::ExecutionEngineConfig::default(),
+        exec_config,
     ));
 
     let coordinator = Arc::new(coordination::ConversationCoordinator::new(

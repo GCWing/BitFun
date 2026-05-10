@@ -12,7 +12,9 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-pub use bitfun_agent_stream::{StreamProcessorError, ToolCall as StreamToolCall};
+pub use bitfun_agent_stream::{
+    StreamProcessOptions, StreamProcessorError, ToolCall as StreamToolCall,
+};
 
 /// Stream processing result exposed through bitfun-core compatibility types.
 #[derive(Debug, Clone)]
@@ -92,8 +94,35 @@ impl StreamProcessor {
         subagent_parent_info: Option<SubagentParentInfo>,
         cancellation_token: &CancellationToken,
     ) -> Result<StreamResult, StreamProcessError> {
+        self.process_stream_with_options(
+            stream,
+            watchdog_timeout,
+            raw_sse_rx,
+            session_id,
+            dialog_turn_id,
+            round_id,
+            subagent_parent_info,
+            cancellation_token,
+            StreamProcessOptions::default(),
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn process_stream_with_options(
+        &self,
+        stream: BoxStream<'static, Result<bitfun_ai_adapters::UnifiedResponse, anyhow::Error>>,
+        watchdog_timeout: Option<Duration>,
+        raw_sse_rx: Option<mpsc::UnboundedReceiver<String>>,
+        session_id: String,
+        dialog_turn_id: String,
+        round_id: String,
+        subagent_parent_info: Option<SubagentParentInfo>,
+        cancellation_token: &CancellationToken,
+        options: StreamProcessOptions,
+    ) -> Result<StreamResult, StreamProcessError> {
         self.inner
-            .process_stream(
+            .process_stream_with_options(
                 stream,
                 watchdog_timeout,
                 raw_sse_rx,
@@ -102,6 +131,7 @@ impl StreamProcessor {
                 round_id,
                 subagent_parent_info.map(Into::into),
                 cancellation_token,
+                options,
             )
             .await
             .map(Into::into)

@@ -70,6 +70,10 @@ Never modify files or git state.
 
 Return markdown only, using this exact structure:
 
+## Packet
+packet_id: <packet_id from the judge work packet, or none if no packet was provided>
+status: completed
+
 ## Reviewer
 Review Quality Inspector
 

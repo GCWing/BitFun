@@ -9,6 +9,9 @@ use anyhow::{Result, anyhow};
 use bitfun_core::agentic::agents::SubAgentSource;
 use bitfun_core::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSource};
 use bitfun_core::agentic::core::SessionConfig;
+use bitfun_core::agentic::deep_review_policy::{
+    DeepReviewQueueControlAction, apply_deep_review_queue_control,
+};
 use bitfun_core::service::config::types::SubAgentConfig;
 use bitfun_core::service::i18n::{LocaleId, LocaleMetadata, sync_global_i18n_service_locale};
 use std::collections::HashMap;
@@ -378,6 +381,36 @@ pub async fn dispatch(
                 .cancel_dialog_turn(&session_id, &dialog_turn_id)
                 .await
                 .map_err(|e| anyhow!("{}", e))?;
+            Ok(serde_json::json!({ "success": true }))
+        }
+        "control_deep_review_queue" => {
+            let request = extract_request(&params)?;
+            let session_id = get_string(&request, "sessionId")?;
+            let dialog_turn_id = get_string(&request, "dialogTurnId")?;
+            let tool_id = get_string(&request, "toolId")?;
+            let action_raw = get_string(&request, "action")?;
+            let action = match action_raw.as_str() {
+                "pause" => DeepReviewQueueControlAction::Pause,
+                "continue" => DeepReviewQueueControlAction::Continue,
+                "cancel" => DeepReviewQueueControlAction::Cancel,
+                "skip_optional" => DeepReviewQueueControlAction::SkipOptional,
+                other => {
+                    return Err(anyhow!(
+                        "Invalid DeepReview queue control action: {}",
+                        other
+                    ));
+                }
+            };
+            if session_id.trim().is_empty() {
+                return Err(anyhow!("Missing sessionId"));
+            }
+            if dialog_turn_id.trim().is_empty() {
+                return Err(anyhow!("Missing dialogTurnId"));
+            }
+            if tool_id.trim().is_empty() {
+                return Err(anyhow!("Missing toolId"));
+            }
+            apply_deep_review_queue_control(&dialog_turn_id, &tool_id, action);
             Ok(serde_json::json!({ "success": true }))
         }
         "cancel_session" => {

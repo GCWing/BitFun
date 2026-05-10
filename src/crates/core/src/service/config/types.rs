@@ -560,6 +560,10 @@ pub struct AIConfig {
     /// Preferred browser for CDP browser control. Empty/default uses the system default browser.
     #[serde(default)]
     pub browser_control_preferred_browser: String,
+
+    /// Maximum number of rounds per dialog turn before soft-pausing.
+    #[serde(default = "default_max_rounds")]
+    pub max_rounds: usize,
 }
 
 impl AIConfig {
@@ -701,6 +705,12 @@ fn default_skip_tool_confirmation() -> bool {
 
 fn default_subagent_max_concurrency() -> usize {
     5
+}
+
+pub const DEFAULT_MAX_ROUNDS: usize = 200;
+
+fn default_max_rounds() -> usize {
+    DEFAULT_MAX_ROUNDS
 }
 
 impl Default for ModeConfig {
@@ -1512,6 +1522,7 @@ impl Default for AIConfig {
             debug_mode_config: DebugModeConfig::default(),
             computer_use_enabled: false,
             browser_control_preferred_browser: String::new(),
+            max_rounds: default_max_rounds(),
         }
     }
 }

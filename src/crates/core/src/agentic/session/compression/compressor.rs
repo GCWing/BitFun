@@ -3,11 +3,12 @@
 //! Responsible only for transforming a session context into a compressed one.
 
 use super::fallback::{
-    build_structured_compression_summary, CompressionFallbackOptions, CompressionSummaryArtifact,
+    build_structured_compression_summary_with_contract, CompressionFallbackOptions,
+    CompressionSummaryArtifact,
 };
 use crate::agentic::core::{
-    render_system_reminder, CompressedTodoSnapshot, CompressionEntry, CompressionPayload, Message,
-    MessageHelper, MessageRole, MessageSemanticKind,
+    render_system_reminder, CompressedTodoSnapshot, CompressionContract, CompressionEntry,
+    CompressionPayload, Message, MessageHelper, MessageRole, MessageSemanticKind,
 };
 use crate::infrastructure::ai::{get_global_ai_client_factory, AIClient};
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -196,8 +197,28 @@ impl ContextCompressor {
         session_id: &str,
         context_window: usize,
         turn_index_to_keep: usize,
+        turns: Vec<TurnWithTokens>,
+        tail_policy: CompressionTailPolicy,
+    ) -> BitFunResult<CompressionResult> {
+        self.compress_turns_with_contract(
+            session_id,
+            context_window,
+            turn_index_to_keep,
+            turns,
+            tail_policy,
+            None,
+        )
+        .await
+    }
+
+    pub async fn compress_turns_with_contract(
+        &self,
+        session_id: &str,
+        context_window: usize,
+        turn_index_to_keep: usize,
         mut turns: Vec<TurnWithTokens>,
         tail_policy: CompressionTailPolicy,
+        contract: Option<CompressionContract>,
     ) -> BitFunResult<CompressionResult> {
         if turns.is_empty() {
             debug!("No turns need compression: session_id={}", session_id);
@@ -230,7 +251,7 @@ impl ContextCompressor {
         let mut has_model_summary = false;
         if !turns.is_empty() {
             let mut summary_artifact = self
-                .execute_compression_with_fallback(turns, context_window)
+                .execute_compression_with_fallback(turns, context_window, contract)
                 .await?;
             if turns_to_keep.is_empty() {
                 self.append_todo_snapshot(&mut summary_artifact, last_todo.clone());
@@ -340,6 +361,7 @@ impl ContextCompressor {
         &self,
         turns_to_compress: Vec<TurnWithTokens>,
         context_window: usize,
+        contract: Option<CompressionContract>,
     ) -> BitFunResult<CompressionSummaryArtifact> {
         let summary_result = match get_global_ai_client_factory().await {
             Ok(ai_client_factory) => match ai_client_factory
@@ -347,8 +369,13 @@ impl ContextCompressor {
                 .await
             {
                 Ok(ai_client) => {
-                    self.execute_compression(ai_client, turns_to_compress.clone(), context_window)
-                        .await
+                    self.execute_compression(
+                        ai_client,
+                        turns_to_compress.clone(),
+                        context_window,
+                        contract.as_ref(),
+                    )
+                    .await
                 }
                 Err(err) => Err(BitFunError::AIClient(format!(
                     "Failed to get AI client: {}",
@@ -364,12 +391,26 @@ impl ContextCompressor {
         match summary_result {
             Ok(summary) => {
                 trace!("Compression summary: {}", summary);
+                let mut payload = CompressionPayload::from_summary(summary.clone());
+                let summary_text =
+                    if let Some(contract) = contract.filter(|contract| !contract.is_empty()) {
+                        payload.entries.insert(
+                            0,
+                            CompressionEntry::Contract {
+                                contract: contract.clone(),
+                            },
+                        );
+                        format!(
+                            "{}\n\nPrevious conversation is summarized below:\n{}",
+                            contract.render_for_model(),
+                            summary
+                        )
+                    } else {
+                        format!("Previous conversation is summarized below:\n{}", summary)
+                    };
                 Ok(CompressionSummaryArtifact {
-                    summary_text: format!(
-                        "Previous conversation is summarized below:\n{}",
-                        summary
-                    ),
-                    payload: CompressionPayload::from_summary(summary),
+                    summary_text,
+                    payload,
                     used_model_summary: true,
                 })
             }
@@ -378,12 +419,13 @@ impl ContextCompressor {
                     "Model-based compression failed, falling back to structured local compression: {}",
                     err
                 );
-                let summary_artifact = build_structured_compression_summary(
+                let summary_artifact = build_structured_compression_summary_with_contract(
                     turns_to_compress
                         .into_iter()
                         .map(|turn| turn.messages)
                         .collect(),
                     &self.build_fallback_options(context_window),
+                    contract,
                 );
                 Ok(summary_artifact)
             }
@@ -426,6 +468,7 @@ impl ContextCompressor {
         ai_client: Arc<AIClient>,
         turns_to_compress: Vec<TurnWithTokens>,
         context_window: usize,
+        contract: Option<&CompressionContract>,
     ) -> BitFunResult<String> {
         debug!("Compressing {} turn(s)", turns_to_compress.len());
 
@@ -483,6 +526,7 @@ Be thorough and precise. Do not lose important technical details from either the
                             ai_client.clone(),
                             gen_system_message_for_summary(&summary),
                             cur_messages,
+                            contract,
                         )
                         .await?;
                     cur_messages = Vec::new();
@@ -506,6 +550,7 @@ Be thorough and precise. Do not lose important technical details from either the
                             ai_client.clone(),
                             gen_system_message_for_summary(&summary),
                             messages_part1,
+                            contract,
                         )
                         .await?;
                     request_cnt += 1;
@@ -518,6 +563,7 @@ Be thorough and precise. Do not lose important technical details from either the
                             ai_client.clone(),
                             gen_system_message_for_summary(&summary),
                             messages_part2,
+                            contract,
                         )
                         .await?;
                     request_cnt += 1;
@@ -540,6 +586,7 @@ Be thorough and precise. Do not lose important technical details from either the
                     ai_client.clone(),
                     gen_system_message_for_summary(&summary),
                     cur_messages,
+                    contract,
                 )
                 .await?;
             request_cnt += 1;
@@ -553,9 +600,16 @@ Be thorough and precise. Do not lose important technical details from either the
         ai_client: Arc<AIClient>,
         system_message_for_summary: Message,
         messages: Vec<Message>,
+        contract: Option<&CompressionContract>,
     ) -> BitFunResult<String> {
         let raw_summary = self
-            .generate_summary_with_retry(ai_client, system_message_for_summary, messages, 2)
+            .generate_summary_with_retry(
+                ai_client,
+                system_message_for_summary,
+                messages,
+                contract,
+                2,
+            )
             .await?;
         Self::normalize_model_summary_output(&raw_summary).ok_or_else(|| {
             BitFunError::AIClient(
@@ -570,6 +624,7 @@ Be thorough and precise. Do not lose important technical details from either the
         ai_client: Arc<AIClient>,
         system_message_for_summary: Message,
         messages: Vec<Message>,
+        contract: Option<&CompressionContract>,
         max_tries: usize,
     ) -> BitFunResult<String> {
         let mut summary_messages = vec![AIMessage::from(system_message_for_summary)];
@@ -578,7 +633,7 @@ Be thorough and precise. Do not lose important technical details from either the
             ai_msg.reasoning_content = None;
             ai_msg
         }));
-        summary_messages.push(AIMessage::user(self.get_compact_prompt()));
+        summary_messages.push(AIMessage::user(self.get_compact_prompt(contract)));
 
         let mut last_error = None;
         let base_wait_time_ms = 500;
@@ -624,9 +679,21 @@ Be thorough and precise. Do not lose important technical details from either the
         Err(BitFunError::AIClient(error_msg))
     }
 
-    fn get_compact_prompt(&self) -> String {
-        r#"Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
+    fn get_compact_prompt(&self, contract: Option<&CompressionContract>) -> String {
+        let contract_instruction = contract
+            .filter(|contract| !contract.is_empty())
+            .map(|contract| {
+                format!(
+                    "\n\nThe following compaction contract is authoritative factual context from tool observations. Preserve every field from it in the final <summary>:\n{}\n",
+                    contract.render_for_model()
+                )
+            })
+            .unwrap_or_default();
+
+        format!(
+            r#"Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
 This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
+{contract_instruction}
 
 Before providing your final summary, wrap your analysis in <analysis> tags to organize your thoughts and ensure you've covered all necessary points. Then output the final retained summary in <summary> tags.
 Important: only the content inside <summary> will be kept as compressed history. The <analysis> section is transient and will be discarded, so do not put any required final information only in <analysis>.
@@ -712,7 +779,7 @@ Here's an example of how your output should be structured:
 
 Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response. 
 "#
-        .to_string()
+        )
     }
 }
 
@@ -729,7 +796,8 @@ fn extract_tag_content<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
 mod tests {
     use super::{CompressionTailPolicy, ContextCompressor, TurnWithTokens};
     use crate::agentic::core::{
-        render_system_reminder, CompressionEntry, CompressionPayload, Message, MessageSemanticKind,
+        render_system_reminder, CompressionContract, CompressionContractItem, CompressionEntry,
+        CompressionPayload, Message, MessageSemanticKind,
     };
 
     fn make_turn(messages: Vec<Message>) -> TurnWithTokens {
@@ -856,6 +924,28 @@ mod tests {
         let marker = ContextCompressor::render_boundary_marker_text(true);
         assert!(!marker.contains("partial reconstructed record"));
         assert!(marker.contains("historical context"));
+    }
+
+    #[test]
+    fn model_summary_prompt_includes_compaction_contract() {
+        let compressor = ContextCompressor::new(Default::default());
+        let contract = CompressionContract {
+            touched_files: vec!["src/lib.rs".to_string()],
+            verification_commands: vec![CompressionContractItem {
+                target: "cargo test".to_string(),
+                status: "succeeded".to_string(),
+                summary: "Tests passed.".to_string(),
+                error_kind: None,
+            }],
+            blocking_failures: Vec::new(),
+            subagent_statuses: Vec::new(),
+        };
+
+        let prompt = compressor.get_compact_prompt(Some(&contract));
+
+        assert!(prompt.contains("authoritative factual context"));
+        assert!(prompt.contains("src/lib.rs"));
+        assert!(prompt.contains("cargo test"));
     }
 
     #[test]

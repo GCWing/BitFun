@@ -1265,6 +1265,51 @@ impl ToolPipeline {
                         );
                     }
                 }
+                if let Some(raw_manifest) =
+                    task.context.context_vars.get("deep_review_run_manifest")
+                {
+                    if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(raw_manifest) {
+                        map.insert("deep_review_run_manifest".to_string(), manifest);
+                    }
+                }
+                if let Some(role) = task.context.context_vars.get("deep_review_subagent_role") {
+                    if !role.trim().is_empty() {
+                        map.insert(
+                            "deep_review_subagent_role".to_string(),
+                            serde_json::json!(role.trim()),
+                        );
+                    }
+                }
+                if let Some(subagent_type) =
+                    task.context.context_vars.get("deep_review_subagent_type")
+                {
+                    if !subagent_type.trim().is_empty() {
+                        map.insert(
+                            "deep_review_subagent_type".to_string(),
+                            serde_json::json!(subagent_type.trim()),
+                        );
+                    }
+                }
+                if map
+                    .get("deep_review_subagent_role")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|role| role == "reviewer")
+                {
+                    if let Some(parent_info) = task.context.subagent_parent_info.as_ref() {
+                        map.insert(
+                            "deep_review_parent_tool_call_id".to_string(),
+                            serde_json::json!(parent_info.tool_call_id.clone()),
+                        );
+                        map.insert(
+                            "deep_review_parent_session_id".to_string(),
+                            serde_json::json!(parent_info.session_id.clone()),
+                        );
+                        map.insert(
+                            "deep_review_parent_dialog_turn_id".to_string(),
+                            serde_json::json!(parent_info.dialog_turn_id.clone()),
+                        );
+                    }
+                }
 
                 map
             },

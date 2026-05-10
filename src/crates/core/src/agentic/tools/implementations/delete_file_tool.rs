@@ -12,7 +12,7 @@ use tokio::fs;
 
 /// File deletion tool - provides safe file/directory deletion functionality
 ///
-/// This tool automatically integrates with the snapshot system, all deletion operations are recorded and support rollback
+/// This tool records a lightweight checkpoint before deletion. Rollback is not automatic.
 pub struct DeleteFileTool;
 
 impl Default for DeleteFileTool {
@@ -34,7 +34,7 @@ impl Tool for DeleteFileTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Deletes a file or directory from the filesystem. This operation is tracked by the snapshot system and can be rolled back if needed.
+        Ok(r#"Deletes a file or directory from the filesystem. This operation records a lightweight checkpoint before deletion, but rollback is not automatic.
 
 Usage guidelines:
 1. **File Deletion**:
@@ -53,8 +53,8 @@ Usage guidelines:
    - The path must exist in the filesystem
 
 4. **Safety Features**:
-    - All deletions are tracked by the snapshot system
-    - Users can review and roll back deletions if needed
+    - Deletions record a lightweight checkpoint when session context is available
+    - The checkpoint captures Git branch/dirty-state metadata when cheap
     - The tool requires user confirmation for execution
 
 5. **Best Practices**:
@@ -79,8 +79,8 @@ Example for directory:
 
 Important notes:
  - NEVER use bash `rm` commands when this tool is available
- - This tool provides better safety through the snapshot system
- - All deletions can be rolled back through the snapshot interface
+ - This tool provides better safety through checkpoint metadata
+ - Rollback is not automatic; use the recorded checkpoint metadata to guide recovery
  - The tool will fail gracefully if permissions are insufficient"#.to_string())
     }
 
@@ -294,6 +294,13 @@ Important notes:
 
         let resolved = context.resolve_tool_path(path_str)?;
         context.enforce_path_operation(ToolPathOperation::Delete, &resolved)?;
+        context
+            .record_light_checkpoint(
+                "Delete",
+                &resolved.logical_path,
+                vec![resolved.logical_path.clone()],
+            )
+            .await;
 
         // Remote workspace path: delete via shell command
         if resolved.uses_remote_workspace_backend() {

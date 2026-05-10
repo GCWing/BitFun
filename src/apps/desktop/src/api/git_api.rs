@@ -3,8 +3,8 @@
 use crate::api::app_state::AppState;
 use bitfun_core::infrastructure::storage::StorageOptions;
 use bitfun_core::service::git::{
-    GitAddParams, GitCommitParams, GitDiffParams, GitLogParams, GitPullParams, GitPushParams,
-    GitService,
+    GitAddParams, GitChangedFile, GitChangedFilesParams, GitCommitParams, GitDiffParams,
+    GitLogParams, GitPullParams, GitPushParams, GitService,
 };
 use bitfun_core::service::git::{
     GitBranch, GitCommit, GitOperationResult, GitRepository, GitStatus,
@@ -89,6 +89,13 @@ pub struct GitDeleteBranchRequest {
 pub struct GitDiffRequest {
     pub repository_path: String,
     pub params: GitDiffParams,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitChangedFilesRequest {
+    pub repository_path: String,
+    pub params: GitChangedFilesParams,
 }
 
 #[derive(Debug, Deserialize)]
@@ -368,6 +375,24 @@ pub async fn git_get_diff(
                 request.repository_path, e
             );
             format!("Failed to get Git diff: {}", e)
+        })
+}
+
+#[tauri::command]
+pub async fn git_get_changed_files(
+    _state: State<'_, AppState>,
+    request: GitChangedFilesRequest,
+) -> Result<Vec<GitChangedFile>, String> {
+    info!(
+        "Getting changed Git files for repository: {}",
+        request.repository_path
+    );
+
+    GitService::get_changed_files(&request.repository_path, &request.params)
+        .await
+        .map_err(|e| {
+            error!("Failed to get changed Git files: {}", e);
+            e.to_string()
         })
 }
 

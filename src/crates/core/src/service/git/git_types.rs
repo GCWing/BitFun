@@ -163,6 +163,31 @@ pub struct GitDiffParams {
     pub stat: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GitChangedFilesParams {
+    pub source: Option<String>,
+    pub target: Option<String>,
+    pub staged: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GitChangedFileStatus {
+    Added,
+    Modified,
+    Deleted,
+    Renamed,
+    Copied,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GitChangedFile {
+    pub path: String,
+    pub old_path: Option<String>,
+    pub status: GitChangedFileStatus,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitOperationResult {
     pub success: bool,

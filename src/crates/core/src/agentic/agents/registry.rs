@@ -1362,6 +1362,19 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn frontend_reviewer_is_registered_as_review_subagent() {
+        let registry = AgentRegistry::new();
+        let subagents = registry.get_subagents_info(None).await;
+        let frontend = subagents
+            .iter()
+            .find(|agent| agent.id == "ReviewFrontend")
+            .expect("ReviewFrontend should be registered as a subagent");
+
+        assert!(frontend.is_review);
+        assert!(frontend.is_readonly);
+    }
+
     #[test]
     fn built_in_deep_review_reviewers_are_marked_as_review_agents() {
         let registry = AgentRegistry::new();

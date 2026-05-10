@@ -2,7 +2,7 @@
 //!
 //! Executes a single model round: calls AI, processes streaming responses, executes tools
 
-use super::stream_processor::{StreamProcessor, StreamResult};
+use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
@@ -190,7 +190,7 @@ impl RoundExecutor {
             let stream_started_at = Instant::now();
             match self
                 .stream_processor
-                .process_stream(
+                .process_stream_with_options(
                     ai_stream,
                     StreamProcessor::derive_watchdog_timeout(ai_client.stream_idle_timeout()),
                     raw_sse_rx, // Pass raw SSE data receiver (for error diagnosis)
@@ -199,6 +199,9 @@ impl RoundExecutor {
                     round_id.clone(),
                     subagent_parent_info.clone(),
                     &cancel_token,
+                    StreamProcessOptions {
+                        recover_partial_on_cancel: context.recover_partial_on_cancel,
+                    },
                 )
                 .await
             {
