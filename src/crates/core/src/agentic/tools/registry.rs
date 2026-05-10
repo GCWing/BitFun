@@ -211,6 +211,12 @@ impl ToolRegistry {
         );
         self.tools.values().cloned().collect()
     }
+
+    fn mcp_server_id_from_tool_name(tool_name: &str) -> Option<String> {
+        let rest = tool_name.strip_prefix("mcp__")?;
+        let (server_id, _) = rest.split_once("__")?;
+        (!server_id.is_empty()).then(|| server_id.to_string())
+    }
 }
 
 #[async_trait::async_trait]
@@ -218,9 +224,12 @@ impl DynamicToolProvider for ToolRegistry {
     async fn list_dynamic_tools(
         &self,
     ) -> bitfun_runtime_ports::PortResult<Vec<DynamicToolDescriptor>> {
-        let mut descriptors = Vec::with_capacity(self.tools.len());
+        let mut descriptors = Vec::new();
 
-        for tool in self.tools.values() {
+        for (name, tool) in self.tools.iter() {
+            let Some(server_id) = Self::mcp_server_id_from_tool_name(name) else {
+                continue;
+            };
             let description = tool.description().await.map_err(|error| {
                 bitfun_runtime_ports::PortError::new(
                     bitfun_runtime_ports::PortErrorKind::Backend,
@@ -232,7 +241,7 @@ impl DynamicToolProvider for ToolRegistry {
                 name: tool.name().to_string(),
                 description,
                 input_schema: tool.input_schema_for_model().await,
-                provider_id: None,
+                provider_id: Some(server_id),
             });
         }
 
@@ -243,6 +252,7 @@ impl DynamicToolProvider for ToolRegistry {
 #[cfg(test)]
 mod tests {
     use super::create_tool_registry;
+    use super::ToolRegistry;
     use serde_json::json;
 
     #[test]
@@ -255,6 +265,19 @@ mod tests {
     fn registry_includes_cron_tool() {
         let registry = create_tool_registry();
         assert!(registry.get_tool("Cron").is_some());
+    }
+
+    #[test]
+    fn parses_mcp_dynamic_tool_provider_id() {
+        assert_eq!(
+            ToolRegistry::mcp_server_id_from_tool_name("mcp__server_1__search").as_deref(),
+            Some("server_1")
+        );
+        assert_eq!(ToolRegistry::mcp_server_id_from_tool_name("WebFetch"), None);
+        assert_eq!(
+            ToolRegistry::mcp_server_id_from_tool_name("mcp____search"),
+            None
+        );
     }
 
     #[test]

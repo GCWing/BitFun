@@ -3477,6 +3477,29 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
             .map(ToOwned::to_owned)
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
+        let trigger_source = match request
+            .source
+            .unwrap_or(bitfun_runtime_ports::AgentSubmissionSource::Bot)
+        {
+            bitfun_runtime_ports::AgentSubmissionSource::DesktopUi => {
+                DialogTriggerSource::DesktopUi
+            }
+            bitfun_runtime_ports::AgentSubmissionSource::DesktopApi => {
+                DialogTriggerSource::DesktopApi
+            }
+            bitfun_runtime_ports::AgentSubmissionSource::AgentSession => {
+                DialogTriggerSource::AgentSession
+            }
+            bitfun_runtime_ports::AgentSubmissionSource::ScheduledJob => {
+                DialogTriggerSource::ScheduledJob
+            }
+            bitfun_runtime_ports::AgentSubmissionSource::RemoteRelay => {
+                DialogTriggerSource::RemoteRelay
+            }
+            bitfun_runtime_ports::AgentSubmissionSource::Bot => DialogTriggerSource::Bot,
+            bitfun_runtime_ports::AgentSubmissionSource::Cli => DialogTriggerSource::Cli,
+        };
+
         self.start_dialog_turn(
             request.session_id,
             request.message.clone(),
@@ -3484,7 +3507,7 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
             Some(turn_id.clone()),
             session.agent_type.clone(),
             session.config.workspace_path.clone(),
-            DialogSubmissionPolicy::for_source(DialogTriggerSource::Bot),
+            DialogSubmissionPolicy::for_source(trigger_source),
         )
         .await
         .map_err(|error| {
@@ -3529,8 +3552,8 @@ impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
 
         let messages = messages
             .into_iter()
-            .filter(|message| match request.from_turn_id.as_ref() {
-                Some(from_turn_id) => message.metadata.turn_id.as_ref() == Some(from_turn_id),
+            .filter(|message| match request.turn_id.as_ref() {
+                Some(turn_id) => message.metadata.turn_id.as_ref() == Some(turn_id),
                 None => true,
             })
             .map(|message| {

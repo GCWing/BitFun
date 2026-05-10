@@ -67,10 +67,24 @@ pub struct AgentSessionCreateResult {
 pub struct AgentSubmissionRequest {
     pub session_id: String,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<AgentSubmissionSource>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<AgentInputAttachment>,
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentSubmissionSource {
+    DesktopUi,
+    DesktopApi,
+    AgentSession,
+    ScheduledJob,
+    RemoteRelay,
+    Bot,
+    Cli,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -134,7 +148,7 @@ pub trait ConfigReadPort: Send + Sync {
 pub struct SessionTranscriptRequest {
     pub session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub from_turn_id: Option<String>,
+    pub turn_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -182,6 +196,7 @@ mod tests {
         let request = AgentSubmissionRequest {
             session_id: "session_1".to_string(),
             message: "hello".to_string(),
+            source: None,
             attachments: Vec::new(),
             metadata: serde_json::Map::new(),
         };
@@ -190,6 +205,37 @@ mod tests {
 
         assert_eq!(json["sessionId"], "session_1");
         assert_eq!(json["message"], "hello");
+        assert!(json.get("source").is_none());
         assert!(json.get("attachments").is_none());
+    }
+
+    #[test]
+    fn agent_submission_request_serializes_source_without_changing_field_case() {
+        let request = AgentSubmissionRequest {
+            session_id: "session_1".to_string(),
+            message: "hello".to_string(),
+            source: Some(AgentSubmissionSource::RemoteRelay),
+            attachments: Vec::new(),
+            metadata: serde_json::Map::new(),
+        };
+
+        let json = serde_json::to_value(request).expect("serialize request");
+
+        assert_eq!(json["source"], "remote_relay");
+        assert!(json.get("turnId").is_none());
+    }
+
+    #[test]
+    fn session_transcript_request_serializes_turn_id_contract() {
+        let request = SessionTranscriptRequest {
+            session_id: "session_1".to_string(),
+            turn_id: Some("turn_1".to_string()),
+        };
+
+        let json = serde_json::to_value(request).expect("serialize transcript request");
+
+        assert_eq!(json["sessionId"], "session_1");
+        assert_eq!(json["turnId"], "turn_1");
+        assert!(json.get("fromTurnId").is_none());
     }
 }
