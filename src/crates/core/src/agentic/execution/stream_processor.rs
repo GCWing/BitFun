@@ -446,12 +446,22 @@ impl StreamProcessor {
                     tool_id: tool_call.tool_id,
                     tool_name: tool_call.tool_name,
                     reason: reason.clone(),
+                    duration_ms: None,
+                    queue_wait_ms: None,
+                    preflight_ms: None,
+                    confirmation_wait_ms: None,
+                    execution_ms: None,
                 }
             } else {
                 ToolEventData::Failed {
                     tool_id: tool_call.tool_id,
                     tool_name: tool_call.tool_name,
                     error: reason.clone(),
+                    duration_ms: None,
+                    queue_wait_ms: None,
+                    preflight_ms: None,
+                    confirmation_wait_ms: None,
+                    execution_ms: None,
                 }
             };
 

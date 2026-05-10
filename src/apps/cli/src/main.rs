@@ -629,3 +629,22 @@ fn handle_config_action(action: ConfigAction, config: &CliConfig) -> Result<()> 
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::CommandFactory;
+
+    #[test]
+    fn usage_top_level_is_not_registered_before_session_lookup_exists() {
+        let command = Cli::command();
+        let has_usage_subcommand = command
+            .get_subcommands()
+            .any(|subcommand| subcommand.get_name() == "usage");
+
+        assert!(
+            !has_usage_subcommand,
+            "interactive /usage remains the only CLI entry point until workspace-scoped session lookup is designed"
+        );
+    }
+}

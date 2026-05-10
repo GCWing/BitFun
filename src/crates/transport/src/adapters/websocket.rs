@@ -160,6 +160,68 @@ impl TransportAdapter for WebSocketTransportAdapter {
                     "subagentParentInfo": subagent_parent_info,
                 })
             }
+            AgenticEvent::TokenUsageUpdated {
+                session_id,
+                turn_id,
+                model_id,
+                input_tokens,
+                output_tokens,
+                total_tokens,
+                max_context_tokens,
+                is_subagent,
+                cached_tokens,
+                token_details,
+            } => {
+                json!({
+                    "type": "token-usage-updated",
+                    "sessionId": session_id,
+                    "turnId": turn_id,
+                    "modelId": model_id,
+                    "inputTokens": input_tokens,
+                    "outputTokens": output_tokens,
+                    "totalTokens": total_tokens,
+                    "maxContextTokens": max_context_tokens,
+                    "isSubagent": is_subagent,
+                    "cachedTokens": cached_tokens,
+                    "tokenDetails": token_details,
+                })
+            }
+            AgenticEvent::ModelRoundCompleted {
+                session_id,
+                turn_id,
+                round_id,
+                has_tool_calls,
+                subagent_parent_info,
+                duration_ms,
+                provider_id,
+                model_id,
+                model_alias,
+                first_chunk_ms,
+                first_visible_output_ms,
+                stream_duration_ms,
+                attempt_count,
+                failure_category,
+                token_details,
+            } => {
+                json!({
+                    "type": "model-round-completed",
+                    "sessionId": session_id,
+                    "turnId": turn_id,
+                    "roundId": round_id,
+                    "hasToolCalls": has_tool_calls,
+                    "subagentParentInfo": subagent_parent_info,
+                    "durationMs": duration_ms,
+                    "providerId": provider_id,
+                    "modelId": model_id,
+                    "modelAlias": model_alias,
+                    "firstChunkMs": first_chunk_ms,
+                    "firstVisibleOutputMs": first_visible_output_ms,
+                    "streamDurationMs": stream_duration_ms,
+                    "attemptCount": attempt_count,
+                    "failureCategory": failure_category,
+                    "tokenDetails": token_details,
+                })
+            }
             AgenticEvent::DialogTurnCompleted {
                 session_id,
                 turn_id,

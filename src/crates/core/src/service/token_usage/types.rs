@@ -14,7 +14,12 @@ pub struct TokenUsageRecord {
     pub input_tokens: u32,
     pub output_tokens: u32,
     pub cached_tokens: u32,
+    /// Whether cached token count was explicitly reported by the provider/event.
+    #[serde(default)]
+    pub cached_tokens_available: bool,
     pub total_tokens: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_details: Option<serde_json::Value>,
     /// Whether this record is from a subagent call
     #[serde(default)]
     pub is_subagent: bool,

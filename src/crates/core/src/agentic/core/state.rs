@@ -66,13 +66,46 @@ pub enum ToolExecutionState {
     Completed {
         result: ToolResult,
         duration_ms: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        queue_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preflight_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        confirmation_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        execution_ms: Option<u64>,
     },
 
     /// Execution failed
-    Failed { error: String, is_retryable: bool },
+    Failed {
+        error: String,
+        is_retryable: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        queue_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preflight_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        confirmation_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        execution_ms: Option<u64>,
+    },
 
     /// Cancelled
-    Cancelled { reason: String },
+    Cancelled {
+        reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        queue_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preflight_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        confirmation_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        execution_ms: Option<u64>,
+    },
 }
 
 /// Tool statistics

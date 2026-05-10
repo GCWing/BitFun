@@ -334,6 +334,10 @@ mod tests {
             result: serde_json::json!({ "stdout": "ok" }),
             result_for_assistant: Some("done".to_string()),
             duration_ms: 42,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: None,
         };
 
         let updates = tool_event_updates(&event, &mut seen);

@@ -165,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn build_messages_from_turns_skips_manual_compaction_turns() {
+    fn build_messages_from_turns_skips_model_invisible_turns() {
         use crate::service::session::{DialogTurnData, DialogTurnKind, UserMessageData};
 
         let turns = vec![
@@ -190,6 +190,21 @@ mod tests {
                     content: "/compact".to_string(),
                     timestamp: 2,
                     metadata: None,
+                },
+            ),
+            DialogTurnData::new_with_kind(
+                DialogTurnKind::LocalCommand,
+                "turn-3".to_string(),
+                2,
+                "session-1".to_string(),
+                UserMessageData {
+                    id: "user-3".to_string(),
+                    content: "# Session Usage Report".to_string(),
+                    timestamp: 3,
+                    metadata: Some(serde_json::json!({
+                        "localCommandKind": "usage_report",
+                        "modelVisible": false
+                    })),
                 },
             ),
         ];

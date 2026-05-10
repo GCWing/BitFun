@@ -236,6 +236,7 @@ pub enum DialogTurnKind {
     #[default]
     UserDialog,
     ManualCompaction,
+    LocalCommand,
 }
 
 impl DialogTurnKind {
@@ -689,6 +690,16 @@ mod tests {
         );
 
         assert_eq!(turn.kind, DialogTurnKind::UserDialog);
+    }
+
+    #[test]
+    fn local_usage_report_turn_is_model_invisible() {
+        assert!(!DialogTurnKind::LocalCommand.is_model_visible());
+    }
+
+    #[test]
+    fn manual_compaction_turn_is_model_invisible() {
+        assert!(!DialogTurnKind::ManualCompaction.is_model_visible());
     }
 
     #[test]

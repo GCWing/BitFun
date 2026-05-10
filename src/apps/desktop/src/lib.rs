@@ -741,6 +741,7 @@ pub async fn run() {
             // Session persistence API
             list_persisted_sessions,
             load_session_turns,
+            get_session_usage_report,
             save_session_turn,
             save_session_metadata,
             export_session_transcript,

@@ -269,6 +269,8 @@ impl TransportAdapter for TauriTransportAdapter {
                 total_tokens,
                 max_context_tokens,
                 is_subagent,
+                cached_tokens,
+                token_details,
             } => {
                 self.app_handle.emit(
                     "agentic://token-usage-updated",
@@ -281,6 +283,8 @@ impl TransportAdapter for TauriTransportAdapter {
                         "totalTokens": total_tokens,
                         "maxContextTokens": max_context_tokens,
                         "isSubagent": is_subagent,
+                        "cachedTokens": cached_tokens,
+                        "tokenDetails": token_details,
                     }),
                 )?;
             }
@@ -390,6 +394,16 @@ impl TransportAdapter for TauriTransportAdapter {
                 round_id,
                 has_tool_calls,
                 subagent_parent_info,
+                duration_ms,
+                provider_id,
+                model_id,
+                model_alias,
+                first_chunk_ms,
+                first_visible_output_ms,
+                stream_duration_ms,
+                attempt_count,
+                failure_category,
+                token_details,
             } => {
                 self.app_handle.emit(
                     "agentic://model-round-completed",
@@ -399,6 +413,16 @@ impl TransportAdapter for TauriTransportAdapter {
                         "roundId": round_id,
                         "hasToolCalls": has_tool_calls,
                         "subagentParentInfo": subagent_parent_info,
+                        "durationMs": duration_ms,
+                        "providerId": provider_id,
+                        "modelId": model_id,
+                        "modelAlias": model_alias,
+                        "firstChunkMs": first_chunk_ms,
+                        "firstVisibleOutputMs": first_visible_output_ms,
+                        "streamDurationMs": stream_duration_ms,
+                        "attemptCount": attempt_count,
+                        "failureCategory": failure_category,
+                        "tokenDetails": token_details,
                     }),
                 )?;
             }

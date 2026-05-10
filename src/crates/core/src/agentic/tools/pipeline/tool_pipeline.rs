@@ -418,6 +418,11 @@ impl ToolPipeline {
                     &task_id,
                     ToolExecutionState::Cancelled {
                         reason: USER_STEERING_INTERRUPTED_MESSAGE.to_string(),
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                 )
                 .await;
@@ -682,6 +687,11 @@ impl ToolPipeline {
                     ToolExecutionState::Failed {
                         error: error_msg.clone(),
                         is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                 )
                 .await;
@@ -707,6 +717,11 @@ impl ToolPipeline {
                     ToolExecutionState::Failed {
                         error: error_msg.clone(),
                         is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                 )
                 .await;
@@ -728,6 +743,11 @@ impl ToolPipeline {
                     ToolExecutionState::Failed {
                         error: error_msg,
                         is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                 )
                 .await;
@@ -762,6 +782,11 @@ impl ToolPipeline {
                     ToolExecutionState::Failed {
                         error: error_msg.clone(),
                         is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                 )
                 .await;
@@ -784,6 +809,7 @@ impl ToolPipeline {
         debug!("Executing tool: tool_name={}", tool_name);
 
         let is_streaming = tool.supports_streaming();
+        let preflight_ms = elapsed_ms_u64(start_time);
 
         let needs_confirmation =
             task.options.confirm_before_run && tool.needs_permissions(Some(&tool_args));
@@ -844,6 +870,11 @@ impl ToolPipeline {
                             &tool_id,
                             ToolExecutionState::Cancelled {
                                 reason: format!("User rejected: {}", reason),
+                                duration_ms: Some(elapsed_ms_u64(start_time)),
+                                queue_wait_ms: Some(queue_wait_ms),
+                                preflight_ms: Some(preflight_ms),
+                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
+                                execution_ms: None,
                             },
                         )
                         .await;
@@ -862,6 +893,11 @@ impl ToolPipeline {
                             &tool_id,
                             ToolExecutionState::Cancelled {
                                 reason: "Confirmation channel closed".to_string(),
+                                duration_ms: Some(elapsed_ms_u64(start_time)),
+                                queue_wait_ms: Some(queue_wait_ms),
+                                preflight_ms: Some(preflight_ms),
+                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
+                                execution_ms: None,
                             },
                         )
                         .await;
@@ -876,6 +912,11 @@ impl ToolPipeline {
                             &tool_id,
                             ToolExecutionState::Cancelled {
                                 reason: "Confirmation timeout".to_string(),
+                                duration_ms: Some(elapsed_ms_u64(start_time)),
+                                queue_wait_ms: Some(queue_wait_ms),
+                                preflight_ms: Some(preflight_ms),
+                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
+                                execution_ms: None,
                             },
                         )
                         .await;
@@ -899,6 +940,11 @@ impl ToolPipeline {
                     &tool_id,
                     ToolExecutionState::Cancelled {
                         reason: "Tool was cancelled before execution".to_string(),
+                        duration_ms: Some(elapsed_ms_u64(start_time)),
+                        queue_wait_ms: Some(queue_wait_ms),
+                        preflight_ms: Some(preflight_ms),
+                        confirmation_wait_ms: Some(confirmation_wait_ms),
+                        execution_ms: None,
                     },
                 )
                 .await;
@@ -951,6 +997,10 @@ impl ToolPipeline {
                         ToolExecutionState::Completed {
                             result: convert_to_framework_result(&tool_result),
                             duration_ms,
+                            queue_wait_ms: Some(queue_wait_ms),
+                            preflight_ms: Some(preflight_ms),
+                            confirmation_wait_ms: Some(confirmation_wait_ms),
+                            execution_ms: Some(execution_ms),
                         },
                     )
                     .await;
@@ -983,6 +1033,11 @@ impl ToolPipeline {
                             &tool_id,
                             ToolExecutionState::Cancelled {
                                 reason: reason.clone(),
+                                duration_ms: Some(elapsed_ms_u64(start_time)),
+                                queue_wait_ms: Some(queue_wait_ms),
+                                preflight_ms: Some(preflight_ms),
+                                confirmation_wait_ms: Some(confirmation_wait_ms),
+                                execution_ms: Some(execution_ms),
                             },
                         )
                         .await;
@@ -1010,6 +1065,11 @@ impl ToolPipeline {
                         ToolExecutionState::Failed {
                             error: error_msg.clone(),
                             is_retryable,
+                            duration_ms: Some(elapsed_ms_u64(start_time)),
+                            queue_wait_ms: Some(queue_wait_ms),
+                            preflight_ms: Some(preflight_ms),
+                            confirmation_wait_ms: Some(confirmation_wait_ms),
+                            execution_ms: Some(execution_ms),
                         },
                     )
                     .await;
@@ -1259,6 +1319,11 @@ impl ToolPipeline {
                 tool_id,
                 ToolExecutionState::Cancelled {
                     reason: reason.clone(),
+                    duration_ms: None,
+                    queue_wait_ms: None,
+                    preflight_ms: None,
+                    confirmation_wait_ms: None,
+                    execution_ms: None,
                 },
             )
             .await;
@@ -1385,6 +1450,11 @@ impl ToolPipeline {
                     tool_id,
                     ToolExecutionState::Cancelled {
                         reason: format!("User rejected: {}", reason),
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                 )
                 .await;

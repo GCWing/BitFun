@@ -174,6 +174,10 @@ pub enum AgenticEvent {
         total_tokens: usize,
         max_context_tokens: Option<usize>,
         is_subagent: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cached_tokens: Option<usize>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        token_details: Option<serde_json::Value>,
     },
 
     ContextCompressionStarted {
@@ -223,6 +227,26 @@ pub enum AgenticEvent {
         round_id: String,
         has_tool_calls: bool,
         subagent_parent_info: Option<SubagentParentInfo>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model_alias: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        first_chunk_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        first_visible_output_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stream_duration_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_count: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        failure_category: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        token_details: Option<serde_json::Value>,
     },
 
     TextChunk {
@@ -352,16 +376,44 @@ pub enum ToolEventData {
         #[serde(skip_serializing_if = "Option::is_none")]
         result_for_assistant: Option<String>,
         duration_ms: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        queue_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preflight_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        confirmation_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        execution_ms: Option<u64>,
     },
     Failed {
         tool_id: String,
         tool_name: String,
         error: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        queue_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preflight_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        confirmation_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        execution_ms: Option<u64>,
     },
     Cancelled {
         tool_id: String,
         tool_name: String,
         reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        queue_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preflight_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        confirmation_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        execution_ms: Option<u64>,
     },
 }
 
@@ -376,6 +428,138 @@ pub struct AgenticEventEnvelope {
 impl PartialEq for AgenticEventEnvelope {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AgenticEvent, ToolEventData};
+
+    #[test]
+    fn model_round_completed_serializes_optional_timing_fields() {
+        let event = AgenticEvent::ModelRoundCompleted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_id: "round-1".to_string(),
+            has_tool_calls: false,
+            subagent_parent_info: None,
+            duration_ms: Some(123),
+            provider_id: Some("provider".to_string()),
+            model_id: Some("model".to_string()),
+            model_alias: Some("alias".to_string()),
+            first_chunk_ms: Some(10),
+            first_visible_output_ms: Some(12),
+            stream_duration_ms: Some(100),
+            attempt_count: Some(1),
+            failure_category: None,
+            token_details: Some(serde_json::json!({ "reasoningTokens": 7 })),
+        };
+
+        let json = serde_json::to_value(&event).expect("serialize event");
+
+        assert_eq!(json["duration_ms"], 123);
+        assert_eq!(json["first_chunk_ms"], 10);
+        assert_eq!(json["token_details"]["reasoningTokens"], 7);
+    }
+
+    #[test]
+    fn model_round_completed_deserializes_legacy_payload_without_timing_fields() {
+        let json = serde_json::json!({
+            "type": "ModelRoundCompleted",
+            "session_id": "session-1",
+            "turn_id": "turn-1",
+            "round_id": "round-1",
+            "has_tool_calls": false,
+            "subagent_parent_info": null
+        });
+
+        let event: AgenticEvent = serde_json::from_value(json).expect("legacy event");
+
+        match event {
+            AgenticEvent::ModelRoundCompleted { duration_ms, .. } => {
+                assert_eq!(duration_ms, None);
+            }
+            _ => panic!("unexpected event"),
+        }
+    }
+
+    #[test]
+    fn token_usage_updated_serializes_optional_cache_and_detail_fields() {
+        let event = AgenticEvent::TokenUsageUpdated {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            model_id: "model".to_string(),
+            input_tokens: 10,
+            output_tokens: Some(5),
+            total_tokens: 15,
+            max_context_tokens: Some(100),
+            is_subagent: false,
+            cached_tokens: Some(3),
+            token_details: Some(serde_json::json!({ "cachedSource": "provider" })),
+        };
+
+        let json = serde_json::to_value(&event).expect("serialize event");
+
+        assert_eq!(json["cached_tokens"], 3);
+        assert_eq!(json["token_details"]["cachedSource"], "provider");
+    }
+
+    #[test]
+    fn completed_tool_reports_total_and_execution_duration() {
+        let event = ToolEventData::Completed {
+            tool_id: "tool-1".to_string(),
+            tool_name: "write_file".to_string(),
+            result: serde_json::json!({ "ok": true }),
+            result_for_assistant: None,
+            duration_ms: 120,
+            queue_wait_ms: Some(10),
+            preflight_ms: Some(20),
+            confirmation_wait_ms: Some(0),
+            execution_ms: Some(90),
+        };
+
+        let json = serde_json::to_value(&event).expect("serialize tool event");
+
+        assert_eq!(json["duration_ms"], 120);
+        assert_eq!(json["execution_ms"], 90);
+    }
+
+    #[test]
+    fn failed_tool_reports_best_effort_total_duration() {
+        let event = ToolEventData::Failed {
+            tool_id: "tool-1".to_string(),
+            tool_name: "write_file".to_string(),
+            error: "failed".to_string(),
+            duration_ms: Some(120),
+            queue_wait_ms: Some(10),
+            preflight_ms: Some(20),
+            confirmation_wait_ms: None,
+            execution_ms: Some(90),
+        };
+
+        let json = serde_json::to_value(&event).expect("serialize tool event");
+
+        assert_eq!(json["duration_ms"], 120);
+        assert_eq!(json["execution_ms"], 90);
+    }
+
+    #[test]
+    fn cancelled_tool_reports_best_effort_total_duration() {
+        let event = ToolEventData::Cancelled {
+            tool_id: "tool-1".to_string(),
+            tool_name: "write_file".to_string(),
+            reason: "cancelled".to_string(),
+            duration_ms: Some(120),
+            queue_wait_ms: Some(10),
+            preflight_ms: Some(20),
+            confirmation_wait_ms: None,
+            execution_ms: Some(90),
+        };
+
+        let json = serde_json::to_value(&event).expect("serialize tool event");
+
+        assert_eq!(json["duration_ms"], 120);
+        assert_eq!(json["execution_ms"], 90);
     }
 }
 

@@ -186,6 +186,10 @@ impl ToolStateManager {
             ToolExecutionState::Completed {
                 result,
                 duration_ms,
+                queue_wait_ms,
+                preflight_ms,
+                confirmation_wait_ms,
+                execution_ms,
             } => ToolEventData::Completed {
                 tool_id: task.tool_call.tool_id.clone(),
                 tool_name: task.tool_call.tool_name.clone(),
@@ -198,21 +202,47 @@ impl ToolStateManager {
                     _ => None,
                 },
                 duration_ms: *duration_ms,
+                queue_wait_ms: *queue_wait_ms,
+                preflight_ms: *preflight_ms,
+                confirmation_wait_ms: *confirmation_wait_ms,
+                execution_ms: *execution_ms,
             },
 
             ToolExecutionState::Failed {
                 error,
                 is_retryable: _,
+                duration_ms,
+                queue_wait_ms,
+                preflight_ms,
+                confirmation_wait_ms,
+                execution_ms,
             } => ToolEventData::Failed {
                 tool_id: task.tool_call.tool_id.clone(),
                 tool_name: task.tool_call.tool_name.clone(),
                 error: error.clone(),
+                duration_ms: *duration_ms,
+                queue_wait_ms: *queue_wait_ms,
+                preflight_ms: *preflight_ms,
+                confirmation_wait_ms: *confirmation_wait_ms,
+                execution_ms: *execution_ms,
             },
 
-            ToolExecutionState::Cancelled { reason } => ToolEventData::Cancelled {
+            ToolExecutionState::Cancelled {
+                reason,
+                duration_ms,
+                queue_wait_ms,
+                preflight_ms,
+                confirmation_wait_ms,
+                execution_ms,
+            } => ToolEventData::Cancelled {
                 tool_id: task.tool_call.tool_id.clone(),
                 tool_name: task.tool_call.tool_name.clone(),
                 reason: reason.clone(),
+                duration_ms: *duration_ms,
+                queue_wait_ms: *queue_wait_ms,
+                preflight_ms: *preflight_ms,
+                confirmation_wait_ms: *confirmation_wait_ms,
+                execution_ms: *execution_ms,
             },
         };
 

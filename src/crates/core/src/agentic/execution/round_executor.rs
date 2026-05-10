@@ -364,6 +364,8 @@ impl RoundExecutor {
                     total_tokens: usage.total_token_count as usize,
                     max_context_tokens: context_window,
                     is_subagent,
+                    cached_tokens: usage.cached_content_token_count.map(|v| v as usize),
+                    token_details: token_details_from_usage(usage),
                 },
                 EventPriority::Normal,
             )
@@ -384,6 +386,19 @@ impl RoundExecutor {
                 round_id: round_id.clone(),
                 has_tool_calls: !stream_result.tool_calls.is_empty(),
                 subagent_parent_info: event_subagent_parent_info.clone(),
+                duration_ms: Some(elapsed_ms_u64(round_started_at)),
+                provider_id: None,
+                model_id: Some(context.model_name.clone()),
+                model_alias: Some(context.model_name.clone()),
+                first_chunk_ms: stream_result.first_chunk_ms,
+                first_visible_output_ms: stream_result.first_visible_output_ms,
+                stream_duration_ms: Some(stream_processing_ms),
+                attempt_count: Some((attempt_index + 1) as u32),
+                failure_category: None,
+                token_details: stream_result
+                    .usage
+                    .as_ref()
+                    .and_then(token_details_from_usage),
             },
             EventPriority::High,
         )
@@ -718,6 +733,11 @@ impl RoundExecutor {
                         tool_id: tool_call.tool_id.clone(),
                         tool_name: tool_call.tool_name.clone(),
                         error: format!("Tool arguments stream interrupted: {}", error),
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                     subagent_parent_info: subagent_parent_info.clone(),
                 },
@@ -823,6 +843,26 @@ impl RoundExecutor {
 
         transient_keywords.iter().any(|k| msg.contains(k))
     }
+}
+
+fn token_details_from_usage(
+    usage: &crate::util::types::ai::GeminiUsage,
+) -> Option<serde_json::Value> {
+    let mut details = serde_json::Map::new();
+    if let Some(reasoning_tokens) = usage.reasoning_token_count {
+        details.insert(
+            "reasoningTokenCount".to_string(),
+            serde_json::json!(reasoning_tokens),
+        );
+    }
+    if let Some(cached_tokens) = usage.cached_content_token_count {
+        details.insert(
+            "cachedContentTokenCount".to_string(),
+            serde_json::json!(cached_tokens),
+        );
+    }
+
+    (!details.is_empty()).then_some(serde_json::Value::Object(details))
 }
 
 #[cfg(test)]

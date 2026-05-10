@@ -282,6 +282,7 @@ impl Agent for CoreAgentAdapter {
                             result,
                             result_for_assistant: _,
                             duration_ms,
+                            ..
                         } => {
                             let result_str = serde_json::to_string(&result)
                                 .unwrap_or_else(|_| "Success".to_string());
@@ -304,6 +305,7 @@ impl Agent for CoreAgentAdapter {
                             tool_id,
                             tool_name,
                             error,
+                            ..
                         } => {
                             if let Some(tool) = tool_map.get_mut(&tool_id) {
                                 tool.status = ToolCallStatus::Failed;
@@ -321,6 +323,7 @@ impl Agent for CoreAgentAdapter {
                             tool_id,
                             tool_name: _,
                             reason,
+                            ..
                         } => {
                             if let Some(tool) = tool_map.get_mut(&tool_id) {
                                 tool.status = ToolCallStatus::Cancelled;

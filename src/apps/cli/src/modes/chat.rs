@@ -2,6 +2,15 @@
 ///
 /// Interactive chat mode with TUI interface
 use anyhow::Result;
+use bitfun_core::service::session_usage::{
+    render_usage_report_terminal, SessionUsageReport, UsageCacheCoverage,
+    UsageCompressionBreakdown, UsageCoverage, UsageCoverageKey, UsageCoverageLevel,
+    UsageErrorBreakdown, UsageFileBreakdown, UsageFileScope, UsagePrivacy, UsageScope,
+    UsageScopeKind, UsageTimeAccounting, UsageTimeBreakdown, UsageTimeDenominator,
+    UsageTokenBreakdown, UsageTokenSource, UsageWorkspace, UsageWorkspaceKind,
+    SESSION_USAGE_REPORT_SCHEMA_VERSION,
+};
+use chrono::Utc;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
@@ -18,6 +27,119 @@ use crate::ui::chat::ChatView;
 use crate::ui::theme::Theme;
 use crate::ui::{init_terminal, restore_terminal};
 use uuid;
+
+fn available_commands_help() -> String {
+    "Available commands:\n\
+     /help - Show help\n\
+     /clear - Clear conversation\n\
+     /agents - List available agents\n\
+     /switch <agent> - Switch agent\n\
+     /history - Show history\n\
+     /usage - Show current session usage report\n\
+     /export - Export session"
+        .to_string()
+}
+
+fn usage_report_from_cli_session(session: &Session) -> SessionUsageReport {
+    let now = Utc::now();
+    let now_ms = now.timestamp_millis();
+    let created_ms = session.created_at.timestamp_millis();
+    let wall_time_ms = now_ms.saturating_sub(created_ms) as u64;
+
+    SessionUsageReport {
+        schema_version: SESSION_USAGE_REPORT_SCHEMA_VERSION,
+        report_id: format!("usage-{}-{}", session.id, now_ms),
+        session_id: session.id.clone(),
+        generated_at: now_ms,
+        generated_from_app_version: Some(env!("CARGO_PKG_VERSION").to_string()),
+        workspace: UsageWorkspace {
+            kind: if session.workspace.is_some() {
+                UsageWorkspaceKind::Local
+            } else {
+                UsageWorkspaceKind::Unknown
+            },
+            path_label: session.workspace.clone(),
+            workspace_id: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        },
+        scope: UsageScope {
+            kind: UsageScopeKind::EntireSession,
+            turn_count: session.messages.iter().filter(|message| message.role == "user").count(),
+            from_turn_id: session.messages.first().map(|message| message.id.clone()),
+            to_turn_id: session.messages.last().map(|message| message.id.clone()),
+            includes_subagents: false,
+        },
+        coverage: UsageCoverage {
+            level: UsageCoverageLevel::Partial,
+            available: vec![UsageCoverageKey::WorkspaceIdentity],
+            missing: vec![
+                UsageCoverageKey::ModelRoundTiming,
+                UsageCoverageKey::ToolPhaseTiming,
+                UsageCoverageKey::CachedTokens,
+                UsageCoverageKey::TokenDetailBreakdown,
+                UsageCoverageKey::SubagentScope,
+                UsageCoverageKey::RemoteSnapshotStats,
+                UsageCoverageKey::FileLineStats,
+                UsageCoverageKey::CostEstimates,
+            ],
+            notes: vec![
+                "CLI P0 report uses current in-memory session metadata only.".to_string(),
+                "Token and cache details are unavailable in this runtime path.".to_string(),
+            ],
+        },
+        time: UsageTimeBreakdown {
+            accounting: UsageTimeAccounting::Approximate,
+            denominator: UsageTimeDenominator::SessionWallTime,
+            wall_time_ms: Some(wall_time_ms),
+            active_turn_ms: None,
+            model_ms: None,
+            tool_ms: None,
+            idle_gap_ms: None,
+        },
+        tokens: UsageTokenBreakdown {
+            source: UsageTokenSource::Unavailable,
+            input_tokens: None,
+            output_tokens: None,
+            total_tokens: None,
+            cached_tokens: None,
+            cache_coverage: UsageCacheCoverage::Unavailable,
+        },
+        models: vec![],
+        tools: vec![],
+        files: UsageFileBreakdown {
+            scope: UsageFileScope::Unavailable,
+            changed_files: if session.metadata.files_modified == 0 {
+                None
+            } else {
+                Some(session.metadata.files_modified as u64)
+            },
+            added_lines: None,
+            deleted_lines: None,
+            files: vec![],
+        },
+        compression: UsageCompressionBreakdown {
+            compaction_count: 0,
+            manual_compaction_count: 0,
+            automatic_compaction_count: 0,
+            saved_tokens: None,
+        },
+        errors: UsageErrorBreakdown {
+            total_errors: 0,
+            tool_errors: 0,
+            model_errors: 0,
+            examples: vec![],
+        },
+        slowest: vec![],
+        privacy: UsagePrivacy {
+            prompt_content_included: false,
+            tool_inputs_included: false,
+            command_outputs_included: false,
+            file_contents_included: false,
+            redacted_fields: vec![],
+        },
+    }
+}
 
 /// Chat mode exit reason
 #[derive(Debug, Clone, PartialEq)]
@@ -434,17 +556,7 @@ impl ChatMode {
 
         match parts[0] {
             "/help" => {
-                chat_view.add_message(
-                    "system".to_string(),
-                    "Available commands:\n\
-                     /help - Show help\n\
-                     /clear - Clear conversation\n\
-                     /agents - List available agents\n\
-                     /switch <agent> - Switch agent\n\
-                     /history - Show history\n\
-                     /export - Export session"
-                        .to_string(),
-                );
+                chat_view.add_message("system".to_string(), available_commands_help());
             }
             "/clear" => {
                 chat_view.clear_screen();
@@ -488,6 +600,10 @@ impl ChatMode {
                     ),
                 );
             }
+            "/usage" => {
+                let report = usage_report_from_cli_session(&chat_view.session);
+                chat_view.add_message("system".to_string(), render_usage_report_terminal(&report));
+            }
             "/export" => {
                 chat_view.add_message(
                     "system".to_string(),
@@ -509,5 +625,36 @@ impl ChatMode {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{available_commands_help, usage_report_from_cli_session};
+    use crate::session::Session;
+
+    #[test]
+    fn help_lists_usage_command() {
+        assert!(available_commands_help().contains("/usage - Show current session usage report"));
+    }
+
+    #[test]
+    fn usage_command_renders_without_model_request() {
+        let session = Session::new("agentic".to_string(), Some("D:/workspace/bitfun".to_string()));
+        let report = usage_report_from_cli_session(&session);
+
+        assert_eq!(report.session_id, session.id);
+        assert_eq!(report.tokens.cached_tokens, None);
+        assert_eq!(report.scope.turn_count, 0);
+    }
+
+    #[test]
+    fn usage_command_redacts_sensitive_labels() {
+        let session = Session::new("agentic".to_string(), None);
+        let report = usage_report_from_cli_session(&session);
+
+        assert!(!report.privacy.prompt_content_included);
+        assert!(!report.privacy.tool_inputs_included);
+        assert_eq!(report.workspace.path_label, None);
     }
 }
