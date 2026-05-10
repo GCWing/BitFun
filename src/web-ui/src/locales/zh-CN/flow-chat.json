@@ -197,7 +197,10 @@
       "actions": "操作",
       "label": "标签",
       "count": "次数",
-      "kind": "类型"
+      "kind": "类型",
+      "rowLimitSummary": "正在显示 {{visible}} / {{total}} 行",
+      "showAllRows": "显示全部 {{count}} 行",
+      "showFewerRows": "显示前 {{count}} 行"
     },
     "slowestKinds": {
       "model": "模型调用",

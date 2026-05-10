@@ -27,7 +27,8 @@ pub mod token_usage; // Token usage tracking
 pub mod workspace; // Workspace management // Diff calculation and merge service
 pub mod workspace_runtime; // Workspace runtime layout / migration / initialization
 
-// Terminal is a standalone crate; re-export it here.
+// Terminal is implemented in the workspace-level `terminal-core` crate.
+// This re-export preserves the legacy `bitfun_core::service::terminal` path.
 pub use terminal_core as terminal;
 
 // Re-export main components.

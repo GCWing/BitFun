@@ -231,7 +231,10 @@
       "actions": "Actions",
       "label": "Label",
       "count": "Count",
-      "kind": "Kind"
+      "kind": "Kind",
+      "rowLimitSummary": "Showing {{visible}} of {{total}} rows",
+      "showAllRows": "Show all {{count}} rows",
+      "showFewerRows": "Show first {{count}} rows"
     },
     "slowestKinds": {
       "model": "Model call",

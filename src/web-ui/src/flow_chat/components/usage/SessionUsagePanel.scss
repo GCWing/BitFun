@@ -511,6 +511,30 @@
     }
   }
 
+  &__table-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    color: var(--color-text-muted);
+    font-size: 11px;
+  }
+
+  &__table-expand {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent-primary);
+    font: inherit;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--accent-primary-hover);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+  }
+
   &__empty {
     display: flex;
     flex-direction: column;

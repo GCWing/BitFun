@@ -197,7 +197,10 @@
       "actions": "操作",
       "label": "標籤",
       "count": "次數",
-      "kind": "類型"
+      "kind": "類型",
+      "rowLimitSummary": "正在顯示 {{visible}} / {{total}} 列",
+      "showAllRows": "顯示全部 {{count}} 列",
+      "showFewerRows": "顯示前 {{count}} 列"
     },
     "slowestKinds": {
       "model": "模型呼叫",

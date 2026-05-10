@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
@@ -54,6 +54,15 @@ interface SessionUsagePanelProps {
 }
 
 const TABS: SessionUsagePanelTab[] = ['overview', 'models', 'tools', 'files', 'errors', 'slowest'];
+const MAX_USAGE_TABLE_ROWS = 50;
+
+function tabId(tab: SessionUsagePanelTab): string {
+  return `session-usage-tab-${tab}`;
+}
+
+function tabPanelId(tab: SessionUsagePanelTab): string {
+  return `session-usage-panel-${tab}`;
+}
 
 export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
   report,
@@ -66,6 +75,7 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
   const [activeTab, setActiveTab] = useState<SessionUsagePanelTab>(initialTab ?? 'overview');
   const [copied, setCopied] = useState(false);
   const [copiedMeta, setCopiedMeta] = useState<'session' | 'workspace' | null>(null);
+  const tabRefs = useRef<Partial<Record<SessionUsagePanelTab, HTMLButtonElement | null>>>({});
 
   useEffect(() => {
     if (initialTab) {
@@ -94,6 +104,33 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
     } catch {
       setCopiedMeta(null);
     }
+  }, []);
+
+  const handleTabKeyDown = useCallback((
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    currentTab: SessionUsagePanelTab
+  ) => {
+    const currentIndex = TABS.indexOf(currentTab);
+    let nextIndex: number | null = null;
+
+    if (event.key === 'ArrowRight') {
+      nextIndex = (currentIndex + 1) % TABS.length;
+    } else if (event.key === 'ArrowLeft') {
+      nextIndex = (currentIndex - 1 + TABS.length) % TABS.length;
+    } else if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = TABS.length - 1;
+    }
+
+    if (nextIndex === null) {
+      return;
+    }
+
+    event.preventDefault();
+    const nextTab = TABS[nextIndex];
+    setActiveTab(nextTab);
+    tabRefs.current[nextTab]?.focus();
   }, []);
 
   if (!report) {
@@ -176,20 +213,39 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
         </div>
       </header>
 
-      <nav className="session-usage-panel__tabs" aria-label={t('usage.panel.tabsLabel')}>
+      <nav
+        className="session-usage-panel__tabs"
+        role="tablist"
+        aria-orientation="horizontal"
+        aria-label={t('usage.panel.tabsLabel')}
+      >
         {TABS.map(tab => (
           <button
             key={tab}
+            ref={node => {
+              tabRefs.current[tab] = node;
+            }}
+            id={tabId(tab)}
             type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            aria-controls={tabPanelId(tab)}
+            tabIndex={activeTab === tab ? 0 : -1}
             className={`session-usage-panel__tab${activeTab === tab ? ' session-usage-panel__tab--active' : ''}`}
             onClick={() => setActiveTab(tab)}
+            onKeyDown={event => handleTabKeyDown(event, tab)}
           >
             {t(`usage.tabs.${tab}`)}
           </button>
         ))}
       </nav>
 
-      <main className="session-usage-panel__body">
+      <main
+        className="session-usage-panel__body"
+        role="tabpanel"
+        id={tabPanelId(activeTab)}
+        aria-labelledby={tabId(activeTab)}
+      >
         {activeTab === 'overview' && <UsageOverview report={report} />}
         {activeTab === 'models' && <UsageModels report={report} />}
         {activeTab === 'tools' && <UsageTools report={report} />}
@@ -253,6 +309,16 @@ type UsageTableNodeCell = {
 };
 
 type UsageTableCell = string | UsageTableValueCell | UsageTableNodeCell;
+
+interface UsageTableHeader {
+  id: string;
+  label: string;
+}
+
+interface UsageTableRow {
+  id: string;
+  cells: UsageTableCell[];
+}
 
 function UsageValue({
   value,
@@ -428,13 +494,13 @@ function UsageOverview({ report }: { report: SessionUsageReport }) {
 function UsageModels({ report }: { report: SessionUsageReport }) {
   const { t } = useTranslation('flow-chat');
   const hasModelDuration = report.models.some(model => model.durationMs !== undefined);
-  const headers = [
-    t('usage.table.model'),
-    t('usage.table.calls'),
-    ...(hasModelDuration ? [t('usage.table.duration')] : []),
-    t('usage.table.input'),
-    t('usage.table.output'),
-    t('usage.table.cached'),
+  const headers: UsageTableHeader[] = [
+    { id: 'model', label: t('usage.table.model') },
+    { id: 'calls', label: t('usage.table.calls') },
+    ...(hasModelDuration ? [{ id: 'duration', label: t('usage.table.duration') }] : []),
+    { id: 'input', label: t('usage.table.input') },
+    { id: 'output', label: t('usage.table.output') },
+    { id: 'cached', label: t('usage.table.cached') },
   ];
   return (
     <UsageTable
@@ -442,33 +508,34 @@ function UsageModels({ report }: { report: SessionUsageReport }) {
       emptyLabel={t('usage.empty.models')}
       emptyDescription={t('usage.empty.modelsDescription')}
       headers={headers}
-      rows={report.models.map(model => {
+      rows={report.models.map((model, index) => {
         const cached = formatUsageNumber(model.cachedTokens, t);
         const source = model.modelIdSource ?? (model.modelId === 'unknown_model' ? 'legacy_missing' : undefined);
         const modelHelp = getModelHelp(source, t, model.modelId);
-        const row: UsageTableCell[] = [
+        const cells: UsageTableCell[] = [
           modelHelp
             ? { value: getModelLabel(model.modelId, t, source), help: modelHelp }
             : getModelLabel(model.modelId, t, source),
           formatUsageNumber(model.callCount, t),
         ];
         if (hasModelDuration) {
-          row.push(
+          cells.push(
             model.durationMs === undefined
               ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.modelRoundTime'))
               : formatUsageDuration(model.durationMs, t)
           );
         }
-        row.push(
+        cells.push(
           formatUsageNumber(model.inputTokens, t),
           formatUsageNumber(model.outputTokens, t),
           report.tokens.cacheCoverage === 'unavailable'
             ? { value: t('usage.status.cacheNotReported'), help: t('usage.help.cachedTokens') }
             : cached,
         );
-        return [
-          ...row,
-        ];
+        return {
+          id: `model-${index}-${model.modelId}`,
+          cells,
+        };
       })}
     />
   );
@@ -482,35 +549,40 @@ function UsageTools({ report }: { report: SessionUsageReport }) {
       emptyLabel={t('usage.empty.tools')}
       emptyDescription={t('usage.empty.toolsDescription')}
       headers={[
-        t('usage.table.tool'),
-        t('usage.table.category'),
-        t('usage.table.calls'),
-        t('usage.table.success'),
-        t('usage.table.errors'),
-        t('usage.table.duration'),
-        t('usage.table.p95'),
-        t('usage.table.execution'),
+        { id: 'tool', label: t('usage.table.tool') },
+        { id: 'category', label: t('usage.table.category') },
+        { id: 'calls', label: t('usage.table.calls') },
+        { id: 'success', label: t('usage.table.success') },
+        { id: 'errors', label: t('usage.table.errors') },
+        { id: 'duration', label: t('usage.table.duration') },
+        { id: 'p95', label: t('usage.table.p95') },
+        { id: 'execution', label: t('usage.table.execution') },
       ]}
-      rows={report.tools.map(tool => {
+      rows={report.tools.map((tool, index) => {
         const duration = formatUsageDuration(tool.durationMs, t);
         const p95 = formatUsageDuration(tool.p95DurationMs, t);
         const execution = formatUsageDuration(tool.executionMs, t);
-        return [
-          tool.redacted ? getRedactedLabel(t) : tool.toolName,
-          getToolCategoryLabel(tool.category, t),
-          formatUsageNumber(tool.callCount, t),
-          formatUsageNumber(tool.successCount, t),
-          formatUsageNumber(tool.errorCount, t),
-          tool.durationMs === undefined
-            ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.toolDuration'))
-            : duration,
-          tool.p95DurationMs === undefined
-            ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.toolP95'))
-            : p95,
-          tool.executionMs === undefined
-            ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.toolExecution'))
-            : execution,
-        ];
+        return {
+          id: tool.redacted
+            ? `tool-${index}-redacted-${tool.category}`
+            : `tool-${index}-${tool.category}-${tool.toolName}`,
+          cells: [
+            tool.redacted ? getRedactedLabel(t) : tool.toolName,
+            getToolCategoryLabel(tool.category, t),
+            formatUsageNumber(tool.callCount, t),
+            formatUsageNumber(tool.successCount, t),
+            formatUsageNumber(tool.errorCount, t),
+            tool.durationMs === undefined
+              ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.toolDuration'))
+              : duration,
+            tool.p95DurationMs === undefined
+              ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.toolP95'))
+              : p95,
+            tool.executionMs === undefined
+              ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.toolExecution'))
+              : execution,
+          ],
+        };
       })}
     />
   );
@@ -574,7 +646,7 @@ function UsageFiles({
     }
   }, [report.files.scope, sessionId, workspacePath]);
 
-  const rows = useMemo(() => report.files.files.map(file => {
+  const rows = useMemo(() => report.files.files.map((file, index) => {
     const operationId = file.operationIds?.[0];
     const resolvedPath = resolveUsageFilePath(file.pathLabel, workspacePath);
     const diffKey = `${resolvedPath}:${operationId ?? ''}`;
@@ -601,7 +673,11 @@ function UsageFiles({
       ),
     };
 
-    return [
+    return {
+      id: file.redacted
+        ? `file-${index}-redacted-${file.operationCount}`
+        : `file-${index}-${file.pathLabel}-${(file.operationIds ?? []).join('|')}`,
+      cells: [
       file.redacted
         ? getRedactedLabel(t)
         : {
@@ -613,7 +689,8 @@ function UsageFiles({
       formatUsageNumber(file.deletedLines, t),
       (file.turnIndexes ?? []).join(', ') || { value: t('usage.status.notRecorded'), help: t('usage.help.fileTurnIndexes') },
       actionCell,
-    ];
+      ],
+    };
   }), [handleOpenFileDiff, openingDiffKey, report.files.files, report.files.scope, sessionId, t, workspacePath]);
 
   return (
@@ -631,12 +708,12 @@ function UsageFiles({
         emptyLabel={getFileSummaryLabel(report, t)}
         emptyDescription={fileScopeHelp ?? t('usage.empty.filesDescription')}
         headers={[
-          t('usage.table.file'),
-          t('usage.table.operations'),
-          t('usage.table.added'),
-          t('usage.table.deleted'),
-          t('usage.table.turns'),
-          t('usage.table.actions'),
+          { id: 'file', label: t('usage.table.file') },
+          { id: 'operations', label: t('usage.table.operations') },
+          { id: 'added', label: t('usage.table.added') },
+          { id: 'deleted', label: t('usage.table.deleted') },
+          { id: 'turns', label: t('usage.table.turns') },
+          { id: 'actions', label: t('usage.table.actions') },
         ]}
         rows={rows}
         tableClassName="session-usage-panel__table--files"
@@ -692,17 +769,25 @@ function UsageErrors({ report }: { report: SessionUsageReport }) {
         emptyLabel={t('usage.empty.errors')}
         emptyDescription={t('usage.empty.errorsDescription')}
         emptyHelp={t('usage.help.errorExamples')}
-        headers={[t('usage.table.label'), t('usage.table.count')]}
-        rows={report.errors.examples.map(example => [
-          {
-            value: example.redacted ? getRedactedLabel(t) : example.label,
-            help: t('usage.help.errorExampleRow'),
-          },
-          {
-            value: formatUsageNumber(example.count, t),
-            help: t('usage.help.errorExampleCount'),
-          },
-        ])}
+        headers={[
+          { id: 'label', label: t('usage.table.label') },
+          { id: 'count', label: t('usage.table.count') },
+        ]}
+        rows={report.errors.examples.map((example, index) => ({
+          id: example.redacted
+            ? `error-${index}-redacted-${example.count}`
+            : `error-${index}-${example.label}-${example.count}`,
+          cells: [
+            {
+              value: example.redacted ? getRedactedLabel(t) : example.label,
+              help: t('usage.help.errorExampleRow'),
+            },
+            {
+              value: formatUsageNumber(example.count, t),
+              help: t('usage.help.errorExampleCount'),
+            },
+          ],
+        }))}
       />
     </section>
   );
@@ -763,11 +848,11 @@ function UsageSlowest({ report, sessionId }: { report: SessionUsageReport; sessi
         emptyDescription={t('usage.empty.slowestDescription')}
         emptyHelp={t('usage.help.slowestSpans')}
         headers={[
-          t('usage.table.label'),
-          t('usage.table.kind'),
-          t('usage.table.duration'),
+          { id: 'label', label: t('usage.table.label') },
+          { id: 'kind', label: t('usage.table.kind') },
+          { id: 'duration', label: t('usage.table.duration') },
         ]}
-        rows={report.slowest.map(span => {
+        rows={report.slowest.map((span, index) => {
           const spanHelp = getSlowSpanHelp(span, t);
           const spanLabel = getSlowSpanLabel(span, t);
           const canJumpToTurn = Boolean(sessionId && span.turnId);
@@ -790,11 +875,14 @@ function UsageSlowest({ report, sessionId }: { report: SessionUsageReport; sessi
             : spanHelp
               ? { value: spanLabel, help: spanHelp }
               : spanLabel;
-          return [
-            labelCell,
-            t(`usage.slowestKinds.${span.kind === 'model' ? 'modelCall' : span.kind}`),
-            formatUsageDuration(span.durationMs, t),
-          ];
+          return {
+            id: `slowest-${index}-${span.kind}-${span.turnId ?? spanLabel}`,
+            cells: [
+              labelCell,
+              t(`usage.slowestKinds.${span.kind === 'model' ? 'modelCall' : span.kind}`),
+              formatUsageDuration(span.durationMs, t),
+            ],
+          };
         })}
       />
     </section>
@@ -806,12 +894,15 @@ interface UsageTableProps {
   emptyLabel: string;
   emptyDescription?: string;
   emptyHelp?: string;
-  headers: string[];
-  rows: UsageTableCell[][];
+  headers: UsageTableHeader[];
+  rows: UsageTableRow[];
   tableClassName?: string;
 }
 
 function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, rows, tableClassName }: UsageTableProps) {
+  const { t } = useTranslation('flow-chat');
+  const [expanded, setExpanded] = useState(false);
+
   if (empty) {
     return (
       <div className="session-usage-panel__empty">
@@ -821,34 +912,60 @@ function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, r
     );
   }
 
+  const shouldLimitRows = rows.length > MAX_USAGE_TABLE_ROWS;
+  const visibleRows = shouldLimitRows && !expanded
+    ? rows.slice(0, MAX_USAGE_TABLE_ROWS)
+    : rows;
+
   return (
-    <div className="session-usage-panel__table-wrap">
-      <table className={['session-usage-panel__table', tableClassName].filter(Boolean).join(' ')}>
-        <thead>
-          <tr>
-            {headers.map(header => <th key={header}>{header}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {row.map((cell, cellIndex) => (
-                <td
-                  key={`${rowIndex}-${cellIndex}`}
-                  className={typeof cell === 'string' ? undefined : cell.className}
-                >
-                  {typeof cell === 'string'
-                    ? <span>{cell}</span>
-                    : 'node' in cell
-                      ? cell.node
-                      : <UsageValue value={cell.value} help={cell.help} />}
-                </td>
-              ))}
+    <>
+      <div className="session-usage-panel__table-wrap">
+        <table className={['session-usage-panel__table', tableClassName].filter(Boolean).join(' ')}>
+          <thead>
+            <tr>
+              {headers.map(header => <th key={header.id}>{header.label}</th>)}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {visibleRows.map(row => (
+              <tr key={row.id}>
+                {row.cells.map((cell, cellIndex) => (
+                  <td
+                    key={`${row.id}-${headers[cellIndex]?.id ?? cellIndex}`}
+                    className={typeof cell === 'string' ? undefined : cell.className}
+                  >
+                    {typeof cell === 'string'
+                      ? <span>{cell}</span>
+                      : 'node' in cell
+                        ? cell.node
+                        : <UsageValue value={cell.value} help={cell.help} />}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {shouldLimitRows && (
+        <div className="session-usage-panel__table-footer">
+          <span>
+            {t('usage.table.rowLimitSummary', {
+              visible: visibleRows.length,
+              total: rows.length,
+            })}
+          </span>
+          <button
+            type="button"
+            className="session-usage-panel__table-expand"
+            onClick={() => setExpanded(value => !value)}
+          >
+            {expanded
+              ? t('usage.table.showFewerRows', { count: MAX_USAGE_TABLE_ROWS })
+              : t('usage.table.showAllRows', { count: rows.length })}
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

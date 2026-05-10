@@ -190,6 +190,9 @@ vi.mock('react-i18next', () => ({
         'usage.slowestKinds.turn': 'Turn',
         'usage.slowestLabels.modelCall': 'Turn {{turn}} model call',
         'usage.slowestLabels.modelCallUnknown': 'Model call',
+        'usage.table.rowLimitSummary': 'Showing {{visible}} of {{total}} rows',
+        'usage.table.showAllRows': 'Show all {{count}} rows',
+        'usage.table.showFewerRows': 'Show first {{count}} rows',
       };
       return interpolate(labels[key] ?? key, options);
     },
@@ -637,12 +640,18 @@ describe('Session usage report UI components', () => {
   it('switches panel sections and keeps raw sensitive details redacted', () => {
     render(<SessionUsagePanel report={usageReport()} markdown="## Session Usage" />);
 
+    const tablist = container.querySelector('[role="tablist"]');
+    expect(tablist?.getAttribute('aria-label')).toBe('Usage report sections');
+    expect(container.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby'))
+      .toBe('session-usage-tab-overview');
+
     for (const tab of ['Models', 'Tools', 'Files', 'Errors']) {
-      const tabButton = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      const tabButton = Array.from(container.querySelectorAll('[role="tab"]'))
         .find(button => button.textContent === tab);
       act(() => {
         tabButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
       });
+      expect(tabButton?.getAttribute('aria-selected')).toBe('true');
       expect(container.textContent).toContain(tab);
     }
 
@@ -716,6 +725,69 @@ describe('Session usage report UI components', () => {
     const missingValues = container.querySelectorAll('.session-usage-panel__missing-value');
     expect(missingValues).toHaveLength(3);
     expect(Array.from(missingValues).every(value => value.textContent === 'Timing not recorded')).toBe(true);
+  });
+
+  it('supports standard keyboard navigation across usage panel tabs', () => {
+    render(<SessionUsagePanel report={usageReport()} markdown="## Session Usage" />);
+
+    const overviewTab = container.querySelector<HTMLButtonElement>('#session-usage-tab-overview');
+    act(() => {
+      overviewTab?.focus();
+      overviewTab?.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+        key: 'End',
+        bubbles: true,
+      }));
+    });
+
+    const slowestTab = container.querySelector<HTMLButtonElement>('#session-usage-tab-slowest');
+    expect(slowestTab?.getAttribute('aria-selected')).toBe('true');
+    expect(dom.window.document.activeElement).toBe(slowestTab);
+
+    act(() => {
+      slowestTab?.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
+        key: 'ArrowLeft',
+        bubbles: true,
+      }));
+    });
+
+    const errorsTab = container.querySelector<HTMLButtonElement>('#session-usage-tab-errors');
+    expect(errorsTab?.getAttribute('aria-selected')).toBe('true');
+    expect(dom.window.document.activeElement).toBe(errorsTab);
+  });
+
+  it('caps long usage tables and allows explicit expansion', () => {
+    const tools = Array.from({ length: 55 }, (_, index) => ({
+      toolName: `Tool ${index + 1}`,
+      category: 'other' as const,
+      callCount: 1,
+      successCount: 1,
+      errorCount: 0,
+      durationMs: 1000,
+      p95DurationMs: 1000,
+      executionMs: 1000,
+      redacted: false,
+    }));
+
+    render(<SessionUsagePanel report={usageReport({ tools })} markdown="## Session Usage" />);
+
+    const toolsTab = Array.from(container.querySelectorAll('[role="tab"]'))
+      .find(button => button.textContent === 'Tools');
+    act(() => {
+      toolsTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(50);
+    expect(container.textContent).toContain('Showing 50 of 55 rows');
+    expect(container.textContent).not.toContain('Tool 55');
+
+    const showAll = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent === 'Show all 55 rows');
+    act(() => {
+      showAll?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(55);
+    expect(container.textContent).toContain('Tool 55');
   });
 
   it('opens the detail panel on a requested usage tab', () => {
