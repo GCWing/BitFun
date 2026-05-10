@@ -70,7 +70,7 @@
   },
   "browserControl": {
     "sectionTitle": "瀏覽器控制",
-    "sectionDescription": "複用你的默認瀏覽器，保留登錄態、Cookie 和擴展。",
+    "sectionDescription": "選擇瀏覽器並啟用 CDP 控制。",
     "desktopOnly": "瀏覽器控制僅在 BitFun 桌面應用中可用。",
     "status": "連接狀態",
     "statusDesc": "",

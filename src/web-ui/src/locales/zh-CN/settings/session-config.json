@@ -70,7 +70,7 @@
   },
   "browserControl": {
     "sectionTitle": "浏览器控制",
-    "sectionDescription": "选择浏览器并启动 CDP 控制。默认浏览器仍会复用系统默认项；Chrome 类浏览器将使用 BitFun 管理的调试配置目录启动，以避免调试端口被已运行实例忽略。",
+    "sectionDescription": "选择浏览器并启动 CDP 控制。",
     "desktopOnly": "浏览器控制仅在 BitFun 桌面应用中可用。",
     "preferredBrowser": "浏览器",
     "preferredBrowserDesc": "选择要由 BitFun 通过 CDP 控制的浏览器；默认表示跟随系统默认浏览器。",

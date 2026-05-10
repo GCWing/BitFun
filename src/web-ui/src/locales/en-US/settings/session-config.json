@@ -70,7 +70,7 @@
   },
   "browserControl": {
     "sectionTitle": "Browser control",
-    "sectionDescription": "Choose a browser and start CDP control. Default follows your system default browser; Chrome-family browsers are launched with a BitFun-managed debug profile so the debug port is not ignored by an existing instance.",
+    "sectionDescription": "Choose a browser and start CDP control.",
     "desktopOnly": "Browser control is only available in the BitFun desktop app.",
     "preferredBrowser": "Browser",
     "preferredBrowserDesc": "Choose which browser BitFun controls through CDP. Default follows the system default browser.",
