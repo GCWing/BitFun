@@ -16,7 +16,6 @@ src/web-ui/public/fonts/
 │   ├── FiraCode-SemiBold.woff2
 │   └── FiraCode-VF.woff2
 └── Noto_Sans_SC/
-    ├── NotoSansSC-VariableFont_wght.ttf
     └── static/
         ├── NotoSansSC-Regular.ttf
         ├── NotoSansSC-Medium.ttf
@@ -49,6 +48,8 @@ src/web-ui/public/fonts/
 | 400 | NotoSansSC-Regular.ttf | 正文 |
 | 500 | NotoSansSC-Medium.ttf | 标题/强调 |
 | 600 | NotoSansSC-SemiBold.ttf | 重要标题 |
+
+仅打包 `fonts.css` 实际引用的静态字重。
 
 ## 字体配置
 

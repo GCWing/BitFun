@@ -18,8 +18,7 @@
     ],
     "resources": {
       "../../mobile-web/dist": "mobile-web/dist",
-      "resources/worker_host.js": "resources/worker_host.js",
-      "../../../resources/flashgrep": "flashgrep"
+      "resources/worker_host.js": "resources/worker_host.js"
     },
     "linux": {
       "deb": {
