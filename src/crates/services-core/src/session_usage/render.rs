@@ -1,4 +1,4 @@
-use crate::service::session_usage::types::*;
+use crate::session_usage::types::*;
 
 pub fn render_usage_report_terminal(report: &SessionUsageReport) -> String {
     let mut out = Vec::new();
@@ -409,13 +409,13 @@ fn coverage_key_label(key: &UsageCoverageKey) -> &'static str {
 }
 
 fn tool_category_label(
-    category: &crate::service::session_usage::classifier::UsageToolCategory,
+    category: &crate::session_usage::classifier::UsageToolCategory,
 ) -> &'static str {
     match category {
-        crate::service::session_usage::classifier::UsageToolCategory::Git => "git",
-        crate::service::session_usage::classifier::UsageToolCategory::Shell => "shell",
-        crate::service::session_usage::classifier::UsageToolCategory::File => "file",
-        crate::service::session_usage::classifier::UsageToolCategory::Other => "other",
+        crate::session_usage::classifier::UsageToolCategory::Git => "git",
+        crate::session_usage::classifier::UsageToolCategory::Shell => "shell",
+        crate::session_usage::classifier::UsageToolCategory::File => "file",
+        crate::session_usage::classifier::UsageToolCategory::Other => "other",
     }
 }
 

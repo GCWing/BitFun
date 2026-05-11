@@ -1,4 +1,4 @@
-use crate::infrastructure::events::EventEmitter;
+use bitfun_events::EventEmitter;
 use log::{debug, error};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;

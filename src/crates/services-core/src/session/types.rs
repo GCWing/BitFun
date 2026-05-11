@@ -1,6 +1,6 @@
 //! Types for session persistence
 
-use crate::agentic::core::SessionKind;
+use bitfun_core_types::SessionKind;
 use serde::{Deserialize, Serialize};
 
 pub const SESSION_STORAGE_SCHEMA_VERSION: u32 = 2;
@@ -756,7 +756,7 @@ mod tests {
         DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, ToolItemData,
         UserMessageData,
     };
-    use crate::agentic::core::SessionKind;
+    use bitfun_core_types::SessionKind;
 
     #[test]
     fn dialog_turn_kind_defaults_to_user_dialog_for_legacy_payloads() {

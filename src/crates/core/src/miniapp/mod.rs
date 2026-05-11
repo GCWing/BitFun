@@ -1,6 +1,5 @@
 //! MiniApp module — V2: ESM UI + Node Worker, Runtime Adapter, permission policy.
 
-pub mod bridge_builder;
 pub mod builtin;
 pub mod compiler;
 pub mod exporter;
@@ -8,10 +7,9 @@ pub mod host_dispatch;
 pub mod js_worker;
 pub mod js_worker_pool;
 pub mod manager;
-pub mod permission_policy;
 pub mod runtime_detect;
 pub mod storage;
-pub mod types;
+pub use bitfun_product_domains::miniapp::{bridge_builder, permission_policy, types};
 
 pub use builtin::{seed_builtin_miniapps, BuiltinApp, BUILTIN_APPS};
 pub use exporter::{ExportCheckResult, ExportOptions, ExportResult, ExportTarget, MiniAppExporter};

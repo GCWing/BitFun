@@ -4,7 +4,7 @@
  * Provides various function agents for automating specific tasks
  */
 
-pub mod common;
+pub use bitfun_product_domains::function_agents::common;
 
 #[path = "git-func-agent/mod.rs"]
 pub mod git_func_agent;

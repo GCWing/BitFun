@@ -1,0 +1,15 @@
+[package]
+name = "bitfun-agent-tools"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun agent tool contracts"
+
+[lib]
+name = "bitfun_agent_tools"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+bitfun-ai-adapters = { path = "../ai-adapters" }

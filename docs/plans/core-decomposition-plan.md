@@ -914,11 +914,18 @@ cargo check --workspace
 
 **任务：**
 
-- [ ] 新建 `bitfun-services-core`，默认 feature 尽量轻。
-- [ ] 基础 DTO 从 `bitfun-core-types` 引入。
+- [x] 新建 `bitfun-services-core`，默认 feature 尽量轻。
+- [x] 基础 DTO 从 `bitfun-core-types` 引入。
 - [ ] 与 agent runtime 的调用通过 ports 完成。
 - [ ] `search`、`lsp`、`cron`、`snapshot` 先作为同 crate 内 feature group，不单独拆 crate。
-- [ ] core 旧路径通过 re-export 保持。
+- [x] 已迁移模块的 core 旧路径通过 re-export 保持。
+
+**当前安全迁移状态（2026-05-11）：**
+
+- 已迁移到 `bitfun-services-core`：`service::system`、`service::diff`、`util::process_manager`、`service::session::types`、`service::session_usage::{types,classifier,redaction,render}`、`service::token_usage::types`。
+- `SessionKind` 已移动到 `bitfun-core-types`，core 的 `agentic::core::SessionKind` 与 `service::session::SessionKind` 继续通过 re-export 兼容。
+- 最新主干新增的 Deep Review `deep_review_run_manifest` / `deep_review_cache` 字段已随 `service::session::types` 一起迁移，并保留原有序列化别名与 round-trip 测试；这不是新的 P2 行为变更。
+- `service::config`、`workspace`、`workspace_runtime`、`filesystem`、`runtime`、`i18n`、`bootstrap`、`project_context` 仍保留在 core；继续迁移前需要先确认 `BitFunError`、`PathManager`、workspace/provider ports 的边界方案。
 
 **验证：**
 
@@ -962,8 +969,14 @@ product-full = ["git", "mcp", "remote-ssh", "remote-connect", "announcement", "f
 - [ ] 再迁移 `remote-ssh`，保留 `ssh-remote` 语义。
 - [ ] 再迁移 `mcp`，动态工具通过 `DynamicToolProvider` 接入。
 - [ ] 最后迁移 `remote-connect`，通过 `AgentSubmissionPort`、`SessionTranscriptReader`、`EventSink` 解耦 agent runtime。
-- [ ] 每迁移一个集成能力，都保持 core 旧路径 re-export。
-- [ ] 产品完整 runtime 通过 `services-integrations/product-full` 启用所有集成能力。
+- [x] 已迁移的集成能力保持 core 旧路径 re-export。
+- [x] 产品完整 runtime 通过 `services-integrations/product-full` 启用已迁移集成能力。
+
+**当前安全迁移状态（2026-05-11）：**
+
+- 已迁移到 `bitfun-services-integrations`：`service::file_watch`，通过 `file-watch` / `product-full` feature 启用，并保持 `core::service::file_watch` 旧路径。
+- `git`、`remote-ssh`、`mcp`、`remote-connect`、`announcement` 尚未迁移；它们涉及 Git service、SSH runtime、MCP dynamic tool provider、remote agent submission 与 announcement config/path 边界，继续前需要单独确认端口方案与等价性测试。
+- 最新主干的 Deep Review capacity / cost / queue 控制仍属于 core runtime 与 review-team orchestration，不在本轮 `services-integrations` 迁移范围内；如果后续迁移 remote-connect / MCP，需要先定义这些运行状态的 port 合约。
 
 **验证：**
 
@@ -996,7 +1009,7 @@ cargo check -p bitfun-cli
 **任务：**
 
 - [ ] 抽出 tool trait、tool context、tool result、registry 到 `agent-tools`。
-- [ ] `agent-tools` 不依赖任何 concrete service。
+- [x] `agent-tools` 不依赖任何 concrete service。
 - [ ] 将工具实现迁移到 `tool-packs` crate，并按 feature group 分模块：
   - basic file/search/terminal
   - git
@@ -1005,7 +1018,7 @@ cargo check -p bitfun-cli
   - computer use
   - miniapp
   - cron/task/agent control
-- [ ] `tool-packs` 默认 feature 为空，产品完整 runtime 启用 `product-full`。
+- [x] `tool-packs` 默认 feature 为空，产品完整 runtime 启用 `product-full`。
 - [ ] 产品 runtime assembly 注册所有 provider：
 
 ```rust
@@ -1023,6 +1036,13 @@ pub fn create_tool_registry() -> ToolRegistry {
 ```
 
 - [ ] 增加 registry 等价性测试：完整产品 registry 中的工具集合与拆分前一致。
+
+**当前安全迁移状态（2026-05-11）：**
+
+- 已迁移到 `bitfun-agent-tools`：`ToolResult`、`ValidationResult`、`InputValidator`，core 旧路径继续 re-export。
+- 已新增 `bitfun-tool-packs` feature scaffold，默认 feature 为空，`product-full` 只聚合 feature，不注册或迁移任何工具实现。
+- `Tool` trait、`ToolUseContext`、registry 和具体工具实现仍在 core；它们直接连接 workspace service、snapshot wrapper、computer-use host、runtime restrictions 与 cancellation token，继续迁移前必须先确认可移植 tool context / provider port 方案，并补工具清单等价性测试。
+- 最新主干新增的 Deep Review shared-context / evidence-ledger checkpoint hook 仍保留在 core 的 `ToolUseContext` 中；在设计独立 tool context / event port 前，不应把 `ToolUseContext` 或 registry 继续外移。
 
 **验证：**
 
@@ -1070,9 +1090,15 @@ product-full = ["miniapp", "function-agents"]
 - [ ] miniapp runtime、compiler、permission、builtin 迁移到 `product-domains::miniapp`。
 - [ ] function agents 迁移到 `product-domains::function_agents`。
 - [ ] 与 agent/tool 的连接通过 provider 或 port。
-- [ ] core 旧路径 re-export。
+- [x] 已迁移模块的 core 旧路径 re-export。
 - [ ] function agents 依赖 agent runtime port，不直接依赖 service concrete manager。
 - [ ] server/desktop 调用路径保持不变。
+
+**当前安全迁移状态（2026-05-11）：**
+
+- 已迁移到 `bitfun-product-domains::miniapp`：`types`、`bridge_builder`、`permission_policy`，core 旧路径继续 re-export。
+- 已迁移到 `bitfun-product-domains::function_agents`：公共 `common` 类型，以及 git/startchat function-agent 的纯 DTO 类型；AI client、Git service、prompt 与分析运行逻辑仍留在 core。
+- miniapp runtime/compiler/builtin 与 function-agent 运行逻辑继续迁移前，需要先确认 agent/tool/provider port 和 Git/AI service 边界。
 
 **验证：**
 
@@ -1468,6 +1494,13 @@ cargo check --workspace
 - 新增 crate 数量仍保持中等粒度。
 - heavy dependency 所属 crate 清晰。
 
+**当前 P2 执行状态（2026-05-11）：**
+
+- 已完成中等粒度 owner crate 成型的安全部分：`bitfun-services-core`、`bitfun-services-integrations`、`bitfun-agent-tools`、`bitfun-tool-packs`、`bitfun-product-domains` 均已加入 workspace。
+- 已迁移的模块均由 core facade re-export，未改变产品默认 feature、构建脚本或 release 脚本。
+- 未声明完成的 P2 剩余部分：重 service 迁移、concrete tool implementation 迁移、tool registry/provider 化、miniapp/function-agent 运行逻辑迁移。这些会触碰 `PathManager`、`BitFunError`、`ToolUseContext`、workspace service、snapshot wrapper、`AgentSubmissionPort` 或 Git/AI service 边界，需要在继续前显式确认。
+- 本次 rebase 后重新核对最新主干 Deep Review capacity/cost/queue、context profile、evidence ledger 与 session manifest 变更：当前 PR 只迁移已声明的纯类型/低耦合模块并保留 core facade，未改动这些行为路径；后续迁移必须补端口设计和等价测试后再推进。
+
 **暂停条件：**
 
 - 某个迁移必须让产品 crate 减少 feature 才能通过。
@@ -1498,6 +1531,13 @@ cargo check --workspace
 - 可以做低风险直接依赖版本收敛。
 - `default = []` 必须是单独 PR，且只在所有产品 crate 显式启用完整 runtime 后评估。
 - 不允许把 facade 变成新的业务实现聚合。
+
+**P3 进入条件与最新主干补充（2026-05-11）：**
+
+- P3 只能在 P2 剩余迁移闭环后启动：重 service 迁移、concrete tool implementation 迁移、tool registry/provider 化、miniapp/function-agent 运行逻辑迁移都必须先完成或显式保留为 core-owned runtime。
+- 最近 `origin/main` 的 Deep Review 变更增加了 context profile、evidence ledger、capacity/cost/queue 控制、`deep_review_run_manifest` / `deep_review_cache`、以及 review-team UI orchestration。P3 facade 收敛前必须确认这些行为要么仍由 core product runtime assembly 拥有，要么已有对应 owner crate + port/provider 合约和等价测试。
+- `ToolUseContext` 的 shared-context / evidence checkpoint hook、`TaskTool` / `CodeReviewTool` 的 Deep Review capacity flow、以及 session manifest/cache persistence 不能在 P3 中只通过 re-export 消失；如果外移，需要先补 boundary contract、旧路径兼容和 Deep Review regression。
+- P3 的闭环检查应同时覆盖 Rust crate graph 与产品 runtime 行为：边界脚本只证明依赖方向，不能替代 Deep Review、MCP dynamic tools、remote connect、snapshot wrapping、miniapp/function-agent 的产品等价性验证。
 
 **验收门：**
 

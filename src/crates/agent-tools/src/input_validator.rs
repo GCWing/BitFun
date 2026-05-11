@@ -1,4 +1,4 @@
-use super::ValidationResult;
+use crate::ValidationResult;
 use serde_json::Value;
 
 pub struct InputValidator<'a> {

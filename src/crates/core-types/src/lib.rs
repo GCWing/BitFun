@@ -4,5 +4,7 @@
 //! product assembly dependencies here.
 
 pub mod errors;
+pub mod session;
 
 pub use errors::{AiErrorDetail, ErrorCategory};
+pub use session::SessionKind;

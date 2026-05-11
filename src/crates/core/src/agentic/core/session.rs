@@ -1,15 +1,8 @@
 use super::state::SessionState;
+pub use bitfun_core_types::SessionKind;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use uuid::Uuid;
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum SessionKind {
-    #[default]
-    Standard,
-    Subagent,
-}
 
 // ============ Session ============
 

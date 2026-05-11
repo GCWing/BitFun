@@ -4,7 +4,7 @@ pub mod ai_service;
  *
  * Provides work state analysis and greeting generation on session start
  */
-pub mod types;
+pub use bitfun_product_domains::function_agents::startchat_func_agent::types;
 pub mod work_state_analyzer;
 
 pub use ai_service::AIWorkStateService;

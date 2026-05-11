@@ -1,0 +1,21 @@
+[package]
+name = "bitfun-product-domains"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun product domain owner crate"
+
+[lib]
+name = "bitfun_product_domains"
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+dirs = { workspace = true }
+
+[features]
+default = []
+miniapp = []
+function-agents = []
+product-full = ["miniapp", "function-agents"]

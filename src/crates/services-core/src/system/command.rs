@@ -2,7 +2,7 @@
 //!
 //! Provides command detection and execution.
 
-use crate::util::process_manager;
+use crate::process_manager;
 use log::error;
 use std::path::PathBuf;
 #[cfg(target_os = "macos")]
@@ -203,7 +203,7 @@ fn dedup_existing_dirs(paths: Vec<PathBuf>) -> Vec<PathBuf> {
 ///
 /// # Example
 /// ```rust
-/// use bitfun_core::service::system::check_command;
+/// use bitfun_services_core::system::check_command;
 ///
 /// let result = check_command("git");
 /// if result.exists {

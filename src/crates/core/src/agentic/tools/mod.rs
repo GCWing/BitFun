@@ -8,12 +8,12 @@ pub mod computer_use_verification;
 pub mod framework;
 pub mod image_context;
 pub mod implementations;
-pub mod input_validator;
 pub mod pipeline;
 pub mod registry;
 pub mod restrictions;
 pub mod user_input_manager;
 pub mod workspace_paths;
+pub use bitfun_agent_tools::input_validator;
 
 pub use framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 pub use image_context::{ImageContextData, ImageContextProvider, ImageContextProviderRef};

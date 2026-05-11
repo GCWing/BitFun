@@ -87,6 +87,18 @@ bitfun-ai-adapters = { path = "../ai-adapters" }
 # Lightweight agent stream processing
 bitfun-agent-stream = { path = "../agent-stream" }
 
+# Agent tool contracts
+bitfun-agent-tools = { path = "../agent-tools" }
+
+# Core service owner crate
+bitfun-services-core = { path = "../services-core" }
+
+# Integration service owner crate
+bitfun-services-integrations = { path = "../services-integrations", features = ["product-full"] }
+
+# Product domain owner crate
+bitfun-product-domains = { path = "../product-domains", features = ["product-full"] }
+
 # Tool runtime
 tool-runtime = { path = "../tool-runtime" }
 

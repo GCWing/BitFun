@@ -1,0 +1,23 @@
+[package]
+name = "bitfun-services-integrations"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun integration service owner crate"
+
+[lib]
+name = "bitfun_services_integrations"
+crate-type = ["rlib"]
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+bitfun-events = { path = "../events" }
+notify = { workspace = true, optional = true }
+
+[features]
+default = []
+file-watch = ["notify"]
+product-full = ["file-watch"]
