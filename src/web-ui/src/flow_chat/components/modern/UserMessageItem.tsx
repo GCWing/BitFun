@@ -17,6 +17,7 @@ import { ReproductionStepsBlock, Tooltip, confirmDanger } from '@/component-libr
 import { createLogger } from '@/shared/utils/logger';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import { SessionUsageReportCard } from '../usage/SessionUsageReportCard';
+import type { SessionUsagePanelTab } from '../usage/sessionUsagePanelTypes';
 import { coerceSessionUsageReport } from '../usage/usageReportUtils';
 import './UserMessageItem.scss';
 
@@ -188,13 +189,14 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       });
     }, [messageContent]);
 
-    const handleOpenUsageReport = useCallback((report: SessionUsageReport) => {
+    const handleOpenUsageReport = useCallback((report: SessionUsageReport, initialTab?: SessionUsagePanelTab) => {
       void import('../../services/openSessionUsageReport').then(({ openSessionUsagePanel }) => {
         openSessionUsagePanel({
           report,
           markdown: messageContent,
           sessionId: activeSession?.sessionId ?? sessionId,
           workspacePath: activeSession?.workspacePath,
+          initialTab,
           title: t('usage.title'),
           expand: true,
         });

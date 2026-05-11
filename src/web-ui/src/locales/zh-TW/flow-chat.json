@@ -56,13 +56,18 @@
       "copyMarkdown": "複製 Markdown",
       "copied": "已複製",
       "openDetails": "開啟詳情",
+      "openFileDiff": "開啟 diff",
       "copySessionId": "複製工作階段 ID",
-      "copyWorkspacePath": "複製專案路徑"
+      "copyWorkspacePath": "複製專案路徑",
+      "openSectionDetails": "開啟{{section}}詳情",
+      "jumpToTurn": "跳轉到該回合",
+      "viewDetails": "詳情",
+      "viewAllSection": "查看全部 {{count}} 項"
     },
     "coverage": {
-      "complete": "完整",
-      "partial": "部分",
-      "minimal": "最小",
+      "complete": "資料完整",
+      "partial": "部分資料可用",
+      "minimal": "僅基礎資料",
       "partialNotice": "部分指標沒有被目前工作階段或服務商回報。懸浮帶虛線底線的數值可查看具體原因。"
     },
     "toolCategories": {
@@ -85,7 +90,10 @@
       "timingNotRecorded": "未記錄耗時",
       "cacheNotReported": "未回報快取",
       "noFileChanges": "無檔案變更",
-      "notRecorded": "未記錄"
+      "notRecorded": "未記錄",
+      "modelNotRecorded": "未記錄模型名稱",
+      "legacyModel": "舊會話模型未統計",
+      "inferredModel": "{{model}}（推測）"
     },
     "cacheCoverage": {
       "available": "已回報",
@@ -96,7 +104,8 @@
       "heading": "會話統計",
       "turns": "{{count}} 輪",
       "calls": "{{count}} 次呼叫",
-      "operations": "{{count}} 次操作"
+      "operations": "{{count}} 次操作",
+      "tokens": "{{value}} Tokens"
     },
     "loading": {
       "markdown": "正在產生用量報告...",
@@ -113,15 +122,17 @@
       "active": "已記錄回合耗時",
       "modelTime": "模型回合耗時",
       "toolTime": "工具呼叫耗時",
-      "tokens": "Token",
+      "tokens": "Tokens",
       "cached": "快取",
       "files": "檔案",
-      "errors": "錯誤"
+      "errors": "錯誤",
+      "errorRate": "錯誤率"
     },
     "sections": {
       "models": "模型",
       "tools": "工具",
-      "files": "檔案"
+      "files": "檔案",
+      "slowest": "最慢耗時"
     },
     "empty": {
       "models": "暫無模型指標",
@@ -131,7 +142,9 @@
       "modelsDescription": "當模型呼叫上報 Token 用量後，這裡會顯示模型統計。",
       "toolsDescription": "當工作階段執行工具後，這裡會顯示工具呼叫統計。",
       "filesDescription": "目前工作階段沒有找到檔案編輯記錄。",
-      "errorsDescription": "本次報告沒有記錄到可顯示的工具或模型錯誤範例。"
+      "errorsDescription": "本次報告沒有記錄到可顯示的工具或模型錯誤範例。",
+      "slowest": "無慢耗時記錄",
+      "slowestDescription": "沒有記錄到帶耗時的回合、模型呼叫或工具片段。"
     },
     "runtime": {
       "open": "產生工作階段用量",
@@ -147,6 +160,7 @@
       "fileScope": "檔案範圍",
       "toolErrors": "工具錯誤",
       "modelErrors": "模型錯誤",
+      "errorScope": "錯誤範圍",
       "metadataLabel": "用量報告中繼資訊"
     },
     "privacy": {
@@ -158,7 +172,8 @@
       "models": "模型",
       "tools": "工具",
       "files": "檔案",
-      "errors": "錯誤"
+      "errors": "錯誤",
+      "slowest": "慢耗時"
     },
     "table": {
       "model": "模型",
@@ -179,31 +194,66 @@
       "deleted": "刪除",
       "turns": "輪次",
       "operationIds": "操作 ID",
+      "actions": "操作",
       "label": "標籤",
-      "count": "次數"
+      "count": "次數",
+      "kind": "類型"
+    },
+    "slowestKinds": {
+      "model": "模型呼叫",
+      "modelCall": "模型呼叫",
+      "tool": "工具",
+      "turn": "回合"
+    },
+    "slowestLabels": {
+      "modelCall": "第 {{turn}} 回合模型呼叫",
+      "modelCallUnknown": "模型呼叫"
     },
     "help": {
       "wall": "從第一回合開始到最後一回合結束的記錄跨度，可能包含回合之間的閒置間隔。",
-      "active": "產生可統計活動的回合記錄耗時總和，可能包含回合內的編排或等待時間。",
+      "active": "產生可統計活動的回合記錄時間段聯集，可能包含回合內的編排或等待時間。",
       "timeShare": "占已記錄回合耗時的比例。模型與工具耗時可能重疊，因此僅作為近似參考。",
-      "modelRoundTime": "基於工作階段中保存的模型回合起止時間計算，不等同於純模型串流輸出或吞吐耗時；占比按已記錄回合耗時近似計算。",
+      "modelRoundTime": "基於工作階段中保存的模型回合執行期中繼資料或起止時間計算，不等同於純服務商串流輸出或吞吐耗時；占比按已記錄回合耗時近似計算。",
       "toolTime": "基於已記錄工具呼叫耗時計算；占比按已記錄回合耗時近似計算。",
       "cachedTokens": "目前服務商沒有為這個工作階段回報快取讀取 Token 中繼資料；可用時仍會顯示總 Token。",
       "cachedTokensPartial": "只有部分呼叫回報了快取讀取 Token 中繼資料，因此快取 Token 合計只涵蓋這些呼叫。",
       "toolDuration": "該工具呼叫沒有回報耗時中繼資料。",
       "toolP95": "同一工具至少記錄兩次帶耗時呼叫後才會顯示 P95。",
       "toolExecution": "該工具沒有單獨回報執行耗時欄位。",
+      "legacyModel": "這個工作階段建立時尚未記錄逐回合模型名稱，因此報告無法確認精確模型。",
+      "inferredModel": "舊工作階段缺少逐回合模型名稱，已根據工作階段的模型設定推測。",
       "filesUnavailable": "目前工作階段沒有找到本機快照或可識別的檔案編輯工具記錄。",
       "filesNoRecordedChanges": "BitFun 沒有偵測到目前工作階段中的檔案變更。如果本次工作階段沒有編輯檔案，這是正常狀態。",
-      "filesRemoteUnavailable": "遠端工作階段的檔案快照暫未納入此報告；只有工具記錄能識別到編輯檔案時才會顯示檔案列。",
+      "filesRemoteUnavailable": "沒有找到這個遠端工作階段的快照彙總；如果工具記錄能識別到寫入、編輯或刪除檔案，仍會顯示檔案列。",
       "filesNotTracked": "目前工作階段沒有找到本機快照或可識別的檔案編輯工具記錄。",
       "fileTurnIndexes": "當檔案活動來自彙總而不是逐回合操作記錄時，不會記錄回合。",
-      "fileOperationIds": "當報告無法關聯到具體工具操作時，不會記錄操作 ID。"
+      "fileOperationIds": "當報告無法關聯到具體工具操作時，不會記錄操作 ID。",
+      "fileDiffUnavailable": "Diff 連結需要基於快照的檔案列和可見檔案路徑。",
+      "errors": "統計結束為錯誤狀態的模型回合，以及持久化結果標記為未成功的工具呼叫；不包含原始服務商回應、工具輸入或命令輸出。",
+      "toolErrors": "工具錯誤統計持久化結果標記為未成功的工具呼叫。",
+      "modelErrors": "模型錯誤統計最終進入錯誤狀態的對話回合。",
+      "errorExamples": "範例只按安全標籤分組；原始服務商回應、工具輸入和命令輸出不會進入報告。",
+      "errorExampleRow": "模型/執行期錯誤或失敗工具類型的安全分組標籤。",
+      "errorExampleCount": "目前報告範圍內符合該標籤的錯誤次數。",
+      "slowestSpans": "慢耗時來自已記錄的回合、模型呼叫與工具時間戳，用於定位耗時來源，不代表精確服務商延遲。",
+      "slowestModelCall": "該列是目前回合內的一次模型呼叫。模型：{{model}}。"
     },
     "meta": {
       "generatedAt": "產生時間",
       "sessionId": "工作階段 ID",
       "workspacePath": "專案路徑"
+    }
+  },
+  "quickActions": {
+    "defaults": {
+      "commit": {
+        "label": "提交",
+        "prompt": "提交目前所有程式碼變更"
+      },
+      "createPr": {
+        "label": "建立 PR",
+        "prompt": "為目前分支建立 Pull Request"
+      }
     }
   },
   "agentCompanion": {

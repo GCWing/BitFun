@@ -6,14 +6,34 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
+import { globalEventBus } from '@/infrastructure/event-bus';
 import enFlowChat from '@/locales/en-US/flow-chat.json';
 import zhCnFlowChat from '@/locales/zh-CN/flow-chat.json';
 import zhTwFlowChat from '@/locales/zh-TW/flow-chat.json';
+import { FLOWCHAT_PIN_TURN_TO_TOP_EVENT, type FlowChatPinTurnToTopRequest } from '../../events/flowchatNavigation';
 import { SessionRuntimeStatusEntry } from './SessionRuntimeStatusEntry';
 import { SessionUsagePanel } from './SessionUsagePanel';
 import { SessionUsageReportCard } from './SessionUsageReportCard';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+const snapshotApiMocks = vi.hoisted(() => ({
+  getOperationDiff: vi.fn(),
+}));
+
+const tabUtilsMocks = vi.hoisted(() => ({
+  createDiffEditorTab: vi.fn(),
+}));
+
+vi.mock('@/infrastructure/api', () => ({
+  snapshotAPI: {
+    getOperationDiff: snapshotApiMocks.getOperationDiff,
+  },
+}));
+
+vi.mock('@/shared/utils/tabUtils', () => ({
+  createDiffEditorTab: tabUtilsMocks.createDiffEditorTab,
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -34,9 +54,14 @@ vi.mock('react-i18next', () => ({
         'usage.actions.copySessionId': 'Copy session ID',
         'usage.actions.copyWorkspacePath': 'Copy project path',
         'usage.actions.openDetails': 'Open details',
-        'usage.coverage.complete': 'Complete',
-        'usage.coverage.partial': 'Partial',
-        'usage.coverage.minimal': 'Minimal',
+        'usage.actions.openFileDiff': 'Open diff',
+        'usage.actions.openSectionDetails': 'Open {{section}} details',
+        'usage.actions.jumpToTurn': 'Jump to this turn',
+        'usage.actions.viewDetails': 'Details',
+        'usage.actions.viewAllSection': 'View all {{count}}',
+        'usage.coverage.complete': 'Complete data',
+        'usage.coverage.partial': 'Partial data',
+        'usage.coverage.minimal': 'Minimal data',
         'usage.coverage.partialNotice': 'Some metrics were not reported by this session or provider. Hover underlined values for the specific reason.',
         'usage.toolCategories.git': 'Git',
         'usage.toolCategories.shell': 'Shell',
@@ -55,10 +80,15 @@ vi.mock('react-i18next', () => ({
         'usage.status.cacheNotReported': 'Cache not reported',
         'usage.status.noFileChanges': 'No file changes',
         'usage.status.notRecorded': 'Not recorded',
+        'usage.status.modelNotRecorded': 'Model not recorded',
+        'usage.status.legacyModel': 'Legacy model not tracked',
+        'usage.status.inferredModel': '{{model}} (inferred)',
         'usage.card.heading': 'Session statistics',
+        'usage.card.eyebrow': 'Local report',
         'usage.card.turns': '{{count}} turns',
         'usage.card.calls': '{{count}} calls',
         'usage.card.operations': '{{count}} ops',
+        'usage.card.tokens': '{{value}} tokens',
         'usage.loading.title': 'Generating usage report',
         'usage.loading.description': 'Reading local session records and preparing a privacy-safe summary.',
         'usage.loading.steps.collecting': 'Reading session records',
@@ -72,9 +102,11 @@ vi.mock('react-i18next', () => ({
         'usage.metrics.cached': 'Cached',
         'usage.metrics.files': 'Files',
         'usage.metrics.errors': 'Errors',
+        'usage.metrics.errorRate': 'Error rate',
         'usage.sections.models': 'Models',
         'usage.sections.tools': 'Tools',
         'usage.sections.files': 'Files',
+        'usage.sections.slowest': 'Slowest spans',
         'usage.empty.models': 'No model metrics',
         'usage.empty.modelsDescription': 'Model rows appear after calls report token usage.',
         'usage.empty.tools': 'No tool metrics',
@@ -84,16 +116,27 @@ vi.mock('react-i18next', () => ({
         'usage.empty.errors': 'No error examples',
         'usage.empty.errorsDescription': 'No sampled tool or model errors were recorded.',
         'usage.help.wall': 'Span from the first recorded turn start to the last recorded turn end. Idle gaps can be included.',
-        'usage.help.active': 'Sum of recorded turn durations that produced reportable activity. It can include orchestration or waiting inside a turn.',
+        'usage.help.active': 'Union of recorded turn spans that produced reportable activity. It can include orchestration or waiting inside a turn.',
         'usage.help.timeShare': 'Share of recorded turn time. Model and tool spans may overlap, so this is only an approximate indicator.',
-        'usage.help.modelRoundTime': 'Recorded model-round duration from persisted start and end timestamps, not pure model streaming or throughput time. The percentage uses recorded turn time and is approximate.',
+        'usage.help.modelRoundTime': 'Recorded model-round duration from persisted runtime metadata or start/end timestamps, not pure provider streaming or throughput time. The percentage uses recorded turn time and is approximate.',
         'usage.help.toolTime': 'Recorded tool-call duration. The percentage uses recorded turn time and is approximate.',
         'usage.help.cachedTokens': 'The provider did not report cache-read token metadata for this session. Total token counts are still shown when available.',
         'usage.help.cachedTokensPartial': 'Only some calls reported cache-read token metadata, so the cached-token total covers those calls only.',
+        'usage.help.legacyModel': 'Older sessions did not store per-round model names.',
+        'usage.help.inferredModel': 'Inferred from the session model setting.',
         'usage.help.filesUnavailable': 'No file snapshot or file-edit tool record was found for this session.',
         'usage.help.filesNoRecordedChanges': 'BitFun did not detect file changes in this session. This is expected when the agent did not edit files.',
-        'usage.help.filesRemoteUnavailable': 'Remote session file snapshots are not included in this report yet. File rows appear only when tool records identify edited files.',
+        'usage.help.filesRemoteUnavailable': 'No remote snapshot summary was found for this session. File rows can still appear from recognized file-edit tool records.',
         'usage.help.filesNotTracked': 'No local snapshot or identifiable file-edit tool record was found for this session.',
+        'usage.help.fileDiffUnavailable': 'Diff links require a snapshot-backed file row and a visible file path.',
+        'usage.help.errors': 'Counts model turns that ended in error plus tool calls whose result was unsuccessful.',
+        'usage.help.toolErrors': 'Tool errors count unsuccessful tool calls.',
+        'usage.help.modelErrors': 'Model errors count dialog turns that ended in the error state.',
+        'usage.help.errorExamples': 'Examples are grouped by safe labels only; raw provider responses, tool inputs, and command output stay out of the report.',
+        'usage.help.errorExampleRow': 'Safe grouped label for an error type.',
+        'usage.help.errorExampleCount': 'Number of matching errors.',
+        'usage.help.slowestSpans': 'Slow spans are derived from recorded turn, model, and tool timestamps. They help identify time sinks, not exact provider latency.',
+        'usage.help.slowestModelCall': 'Model call in this turn. Model: {{model}}.',
         'usage.meta.generatedAt': 'Generated',
         'usage.meta.sessionId': 'Session ID',
         'usage.meta.workspacePath': 'Project path',
@@ -108,6 +151,7 @@ vi.mock('react-i18next', () => ({
         'usage.panel.fileScope': 'File scope',
         'usage.panel.toolErrors': 'Tool errors',
         'usage.panel.modelErrors': 'Model errors',
+        'usage.panel.errorScope': 'Error scope',
         'usage.privacy.title': 'Privacy-safe report',
         'usage.privacy.summary': 'Prompts, tool inputs, command outputs, and file contents are not included.',
         'usage.tabs.overview': 'Overview',
@@ -115,6 +159,7 @@ vi.mock('react-i18next', () => ({
         'usage.tabs.tools': 'Tools',
         'usage.tabs.files': 'Files',
         'usage.tabs.errors': 'Errors',
+        'usage.tabs.slowest': 'Slowest',
         'usage.table.model': 'Model',
         'usage.table.tool': 'Tool',
         'usage.table.category': 'Category',
@@ -133,8 +178,18 @@ vi.mock('react-i18next', () => ({
         'usage.table.deleted': 'Deleted',
         'usage.table.turns': 'Turns',
         'usage.table.operationIds': 'Operation IDs',
+        'usage.table.actions': 'Actions',
         'usage.table.label': 'Label',
         'usage.table.count': 'Count',
+        'usage.table.kind': 'Kind',
+        'usage.empty.slowest': 'No slow spans',
+        'usage.empty.slowestDescription': 'No timed spans were recorded.',
+        'usage.slowestKinds.model': 'Model',
+        'usage.slowestKinds.modelCall': 'Model call',
+        'usage.slowestKinds.tool': 'Tool',
+        'usage.slowestKinds.turn': 'Turn',
+        'usage.slowestLabels.modelCall': 'Turn {{turn}} model call',
+        'usage.slowestLabels.modelCallUnknown': 'Model call',
       };
       return interpolate(labels[key] ?? key, options);
     },
@@ -302,6 +357,8 @@ describe('Session usage report UI components', () => {
   let root: Root;
 
   beforeEach(() => {
+    snapshotApiMocks.getOperationDiff.mockReset();
+    tabUtilsMocks.createDiffEditorTab.mockReset();
     dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
       pretendToBeVisual: true,
     });
@@ -345,8 +402,9 @@ describe('Session usage report UI components', () => {
 
     const cachedMetric = Array.from(container.querySelectorAll('.session-usage-report-card__metric'))
       .find(metric => metric.textContent?.includes('Cached'));
-    expect(container.textContent).toContain('Partial');
+    expect(container.textContent).toContain('Partial data');
     const partialCoverageBadge = container.querySelector('.session-usage-report-card__coverage');
+    expect(partialCoverageBadge).not.toBeNull();
     expect(partialCoverageBadge?.parentElement?.getAttribute('data-tooltip')).toContain('Hover underlined values');
     expect(cachedMetric?.textContent).toContain('Cache not reported');
     expect(cachedMetric?.textContent).not.toMatch(/Cached\s*0/);
@@ -356,10 +414,210 @@ describe('Session usage report UI components', () => {
       .toBe(false);
 
     const openButton = container.querySelector('button[aria-label="Open details"]');
+    expect(openButton?.textContent).toBe('Details');
+    expect(openButton?.className).toContain('session-usage-report-card__details-button');
+    expect(container.querySelector('.session-usage-report-card__action-group')).toBeNull();
     act(() => {
       openButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
     expect(onOpenDetails).toHaveBeenCalledWith(report);
+  });
+
+  it('explains error totals on the chat card', () => {
+    const report = usageReport({
+      errors: {
+        totalErrors: 2,
+        toolErrors: 1,
+        modelErrors: 1,
+        examples: [
+          { label: 'Write', count: 1, redacted: false },
+          { label: 'Model/runtime turn errors', count: 1, redacted: false },
+        ],
+      },
+    });
+
+    render(
+      <SessionUsageReportCard
+        report={report}
+        markdown="## Session Usage"
+      />
+    );
+
+    const errorsMetric = Array.from(container.querySelectorAll('.session-usage-report-card__metric'))
+      .find(metric => metric.textContent?.includes('Errors'));
+    expect(errorsMetric?.textContent).toContain('2');
+    expect(errorsMetric?.querySelector('[data-tooltip]')?.getAttribute('data-tooltip'))
+      .toContain('tool calls whose result was unsuccessful');
+  });
+
+  it('offers section detail jumps when summary lists are truncated', () => {
+    const onOpenDetails = vi.fn();
+    const report = usageReport({
+      tools: Array.from({ length: 4 }, (_, index) => ({
+        toolName: `Tool ${index + 1}`,
+        category: 'file',
+        callCount: index + 1,
+        successCount: index + 1,
+        errorCount: 0,
+        durationMs: 1000 + index,
+        redacted: false,
+      })),
+      files: {
+        scope: 'snapshot_summary',
+        changedFiles: 5,
+        addedLines: 18,
+        deletedLines: 2,
+        files: Array.from({ length: 5 }, (_, index) => ({
+          pathLabel: `src/file-${index + 1}.ts`,
+          operationCount: index + 1,
+          addedLines: index + 1,
+          deletedLines: 0,
+          redacted: false,
+        })),
+      },
+    });
+
+    render(
+      <SessionUsageReportCard
+        report={report}
+        markdown="## Session Usage"
+        onOpenDetails={onOpenDetails}
+      />
+    );
+
+    expect(container.textContent).toContain('View all 4');
+    expect(container.textContent).toContain('View all 5');
+
+    const toolsButton = container.querySelector('button[aria-label="Open Tools details"]');
+    act(() => {
+      toolsButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    expect(onOpenDetails).toHaveBeenCalledWith(report, 'tools');
+
+    const filesButton = container.querySelector('button[aria-label="Open Files details"]');
+    act(() => {
+      filesButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    expect(onOpenDetails).toHaveBeenCalledWith(report, 'files');
+  });
+
+  it('uses semantic file diff colors on the chat card summary', () => {
+    render(
+      <SessionUsageReportCard
+        report={usageReport()}
+        markdown="## Session Usage"
+      />
+    );
+
+    expect(container.querySelector('.session-usage-report-card__file-stat--added')?.textContent).toBe('+4');
+    expect(container.querySelector('.session-usage-report-card__file-stat--deleted')?.textContent).toBe('-2');
+  });
+
+  it('keeps chat card file names visible and labels model tokens', () => {
+    const longPath = 'src/features/session-usage/reports/components/very/deeply/nested/UsageReportCardFilePathThatWouldNormallyOverflow.tsx';
+    const fileName = 'UsageReportCardFilePathThatWouldNormallyOverflow.tsx';
+    const report = usageReport({
+      models: [
+        {
+          modelId: 'gpt-5.4',
+          callCount: 2,
+          inputTokens: 1200,
+          outputTokens: 300,
+          totalTokens: 1500,
+          durationMs: 40_000,
+        },
+      ],
+      files: {
+        scope: 'snapshot_summary',
+        changedFiles: 1,
+        addedLines: 4,
+        deletedLines: 2,
+        files: [
+          {
+            pathLabel: longPath,
+            operationCount: 2,
+            addedLines: 4,
+            deletedLines: 2,
+            redacted: false,
+          },
+        ],
+      },
+    });
+
+    render(
+      <SessionUsageReportCard
+        report={report}
+        markdown="## Session Usage"
+      />
+    );
+
+    const fileNameLabel = container.querySelector('.session-usage-report-card__mini-list-file-name');
+    expect(fileNameLabel?.textContent).toBe(fileName);
+    expect(container.textContent).not.toContain('src/features');
+    expect(container.textContent).not.toContain('/.../');
+    expect(container.querySelector(`[data-tooltip="${longPath}"]`)).not.toBeNull();
+    expect(container.textContent).toContain('1,500 tokens');
+  });
+
+  it('does not append a token unit when chat card model tokens are unavailable', () => {
+    const report = usageReport({
+      models: [
+        {
+          modelId: 'legacy-model',
+          callCount: 1,
+          inputTokens: undefined,
+          outputTokens: undefined,
+          totalTokens: undefined,
+          durationMs: 12_000,
+        },
+      ],
+    });
+
+    render(
+      <SessionUsageReportCard
+        report={report}
+        markdown="## Session Usage"
+      />
+    );
+
+    expect(container.textContent).toContain('Unavailable');
+    expect(container.textContent).not.toContain('Unavailable tokens');
+    expect(container.textContent).not.toContain('Unavailable Token');
+  });
+
+  it('keeps the detail coverage badge in the header action area', () => {
+    render(<SessionUsagePanel report={usageReport()} markdown="## Session Usage" />);
+
+    const headerActions = container.querySelector('.session-usage-panel__header-actions');
+    expect(headerActions?.querySelector('.session-usage-panel__badge')?.textContent).toBe('Partial data');
+    expect(container.querySelector('.session-usage-panel__title-wrap .session-usage-panel__badge')).toBeNull();
+  });
+
+  it('explains error examples on the detail panel', () => {
+    const report = usageReport({
+      errors: {
+        totalErrors: 2,
+        toolErrors: 1,
+        modelErrors: 1,
+        examples: [
+          { label: 'Write', count: 1, redacted: false },
+          { label: 'Model/runtime turn errors', count: 1, redacted: false },
+        ],
+      },
+    });
+
+    render(<SessionUsagePanel report={report} markdown="## Session Usage" />);
+
+    const errorsTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Errors');
+    act(() => {
+      errorsTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Tool errors');
+    expect(container.textContent).toContain('Model errors');
+    expect(container.querySelector('[data-tooltip="Safe grouped label for an error type."]')).not.toBeNull();
+    expect(container.querySelector('[data-tooltip="Number of matching errors."]')).not.toBeNull();
   });
 
   it('shows an immediate usage loading card before report data exists', () => {
@@ -392,6 +650,144 @@ describe('Session usage report UI components', () => {
     expect(container.textContent).not.toContain('secret shell command output');
     expect(container.textContent).not.toContain('secrets/raw-file-content.txt');
     expect(container.textContent).not.toContain('raw provider error with secret payload');
+  });
+
+  it('shows model duration only when model span facts exist', () => {
+    render(<SessionUsagePanel report={usageReport()} markdown="## Session Usage" />);
+
+    const modelTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Models');
+    act(() => {
+      modelTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Recorded time');
+    expect(container.textContent).toContain('40s');
+
+    const reportWithoutModelDuration = usageReport({
+      models: [
+        {
+          modelId: 'gpt-5.4',
+          callCount: 1,
+          inputTokens: 1200,
+          outputTokens: 300,
+          totalTokens: 1500,
+          durationMs: undefined,
+        },
+      ],
+    });
+
+    render(<SessionUsagePanel report={reportWithoutModelDuration} markdown="## Session Usage" />);
+    const modelTabWithoutDuration = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Models');
+    act(() => {
+      modelTabWithoutDuration?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).not.toContain('Recorded time');
+    expect(container.textContent).not.toContain('Timing not recorded');
+  });
+
+  it('renders missing tool timings as subdued values', () => {
+    const report = usageReport({
+      tools: [
+        {
+          toolName: 'read_file',
+          category: 'file',
+          callCount: 3,
+          successCount: 3,
+          errorCount: 0,
+          durationMs: undefined,
+          p95DurationMs: undefined,
+          executionMs: undefined,
+          redacted: false,
+        },
+      ],
+    });
+
+    render(<SessionUsagePanel report={report} markdown="## Session Usage" />);
+
+    const toolsTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Tools');
+    act(() => {
+      toolsTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    const missingValues = container.querySelectorAll('.session-usage-panel__missing-value');
+    expect(missingValues).toHaveLength(3);
+    expect(Array.from(missingValues).every(value => value.textContent === 'Timing not recorded')).toBe(true);
+  });
+
+  it('opens the detail panel on a requested usage tab', () => {
+    render(<SessionUsagePanel report={usageReport()} markdown="## Session Usage" initialTab="files" />);
+
+    const filesTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Files');
+    expect(filesTab?.className).toContain('session-usage-panel__tab--active');
+    expect(container.textContent).toContain('File scope');
+  });
+
+  it('explains inferred legacy model labels on the card and detail panel', () => {
+    const report = usageReport({
+      models: [
+        {
+          modelId: 'gpt-5.4',
+          modelIdSource: 'inferred_session_model',
+          callCount: 2,
+          inputTokens: 1200,
+          outputTokens: 300,
+          totalTokens: 1500,
+          durationMs: 40_000,
+        },
+      ],
+    });
+
+    render(
+      <SessionUsageReportCard
+        report={report}
+        markdown="## Session Usage"
+      />
+    );
+
+    expect(container.textContent).toContain('gpt-5.4 (inferred)');
+    expect(container.querySelector('[data-tooltip="Inferred from the session model setting."]')).not.toBeNull();
+
+    render(<SessionUsagePanel report={report} markdown="## Session Usage" />);
+    const modelTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Models');
+    act(() => {
+      modelTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('gpt-5.4 (inferred)');
+    expect(container.querySelector('[data-tooltip="Inferred from the session model setting."]')).not.toBeNull();
+  });
+
+  it('hides legacy model round placeholders in the detail panel', () => {
+    const report = usageReport({
+      models: [
+        {
+          modelId: 'model round 0',
+          callCount: 1,
+          inputTokens: undefined,
+          outputTokens: undefined,
+          totalTokens: undefined,
+          durationMs: 12_000,
+        },
+      ],
+    });
+
+    render(<SessionUsagePanel report={report} markdown="## Session Usage" />);
+
+    const modelTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Models');
+    act(() => {
+      modelTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Legacy model not tracked');
+    expect(container.textContent).not.toContain('model round 0');
+    expect(container.querySelector('[data-tooltip="Older sessions did not store per-round model names."]')).not.toBeNull();
   });
 
   it('renders the runtime status entry as a lightweight usage trigger', () => {
@@ -475,6 +871,236 @@ describe('Session usage report UI components', () => {
       .find(node => node.getAttribute('data-tooltip')?.includes('did not detect file changes'));
     expect(fileUnavailableHelp).toBeTruthy();
   });
+
+  it('keeps file diff actions visible and exposes full paths for long file rows', () => {
+    const longPath = 'src/web-ui/src/component-library/components/Markdown/Markdown.tsx';
+    const report = usageReport({
+      files: {
+        scope: 'snapshot_summary',
+        changedFiles: 1,
+        addedLines: 20,
+        deletedLines: 4,
+        files: [
+          {
+            pathLabel: longPath,
+            operationCount: 2,
+            addedLines: 20,
+            deletedLines: 4,
+            turnIndexes: [1],
+            operationIds: ['operation-1'],
+            redacted: false,
+          },
+        ],
+      },
+    });
+
+    render(
+      <SessionUsagePanel
+        report={report}
+        markdown="## Session Usage"
+        sessionId="session-1"
+        workspacePath="D:/workspace/bitfun"
+      />
+    );
+
+    const filesTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Files');
+    act(() => {
+      filesTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.session-usage-panel__table--files')).not.toBeNull();
+    expect(container.querySelector(`[data-tooltip="${longPath}"]`)).not.toBeNull();
+    const pathCell = container.querySelector('.session-usage-panel__file-path-cell');
+    expect(pathCell?.textContent).toBe('.../Markdown/Markdown.tsx');
+    expect(pathCell?.textContent).not.toContain('component-library/components');
+    expect(pathCell?.textContent).not.toBe(longPath);
+    expect(container.textContent).not.toContain('Operation IDs');
+    expect(container.textContent).not.toContain('operation-1');
+    expect(container.querySelector('.session-usage-panel__sticky-action-cell')).not.toBeNull();
+    expect(container.querySelector('.session-usage-panel__table-action')).not.toBeNull();
+  });
+
+  it('opens snapshot-backed file diffs from the detail panel', async () => {
+    snapshotApiMocks.getOperationDiff.mockResolvedValue({
+      filePath: 'D:/workspace/bitfun/src/main.rs',
+      originalContent: 'before',
+      modifiedContent: 'after',
+      anchorLine: 42,
+    });
+    const report = usageReport({
+      files: {
+        scope: 'snapshot_summary',
+        changedFiles: 1,
+        addedLines: 2,
+        deletedLines: 1,
+        files: [
+          {
+            pathLabel: 'src/main.rs',
+            operationCount: 1,
+            addedLines: 2,
+            deletedLines: 1,
+            turnIndexes: [1],
+            operationIds: ['operation-1'],
+            redacted: false,
+          },
+        ],
+      },
+    });
+
+    render(
+      <SessionUsagePanel
+        report={report}
+        markdown="## Session Usage"
+        sessionId="session-1"
+        workspacePath="D:/workspace/bitfun"
+      />
+    );
+
+    const filesTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Files');
+    act(() => {
+      filesTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    const openDiffButton = container.querySelector('button[aria-label="Open diff"]');
+    expect(openDiffButton).not.toBeNull();
+
+    await act(async () => {
+      openDiffButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(snapshotApiMocks.getOperationDiff).toHaveBeenCalledWith(
+      'session-1',
+      'D:/workspace/bitfun/src/main.rs',
+      'operation-1',
+      'D:/workspace/bitfun',
+    );
+    expect(tabUtilsMocks.createDiffEditorTab).toHaveBeenCalledWith(
+      'D:/workspace/bitfun/src/main.rs',
+      'main.rs',
+      'before',
+      'after',
+      true,
+      'agent',
+      'D:/workspace/bitfun',
+      42,
+      undefined,
+      {
+        titleKind: 'diff',
+        duplicateKeyPrefix: 'diff',
+      },
+    );
+  });
+
+  it('shows slowest spans in the detail panel', () => {
+    const report = usageReport({
+      slowest: [
+        {
+          label: 'turn 2',
+          kind: 'turn',
+          durationMs: 95_000,
+          redacted: false,
+          turnId: 'turn-2',
+          turnIndex: 2,
+        },
+        {
+          label: 'secret shell command',
+          kind: 'tool',
+          durationMs: 30_000,
+          redacted: true,
+        },
+      ],
+    });
+
+    const pinEvents: FlowChatPinTurnToTopRequest[] = [];
+    const unsubscribe = globalEventBus.on<FlowChatPinTurnToTopRequest>(
+      FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
+      event => pinEvents.push(event),
+    );
+
+    render(<SessionUsagePanel report={report} markdown="## Session Usage" sessionId="session-1" />);
+
+    const slowestTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Slowest');
+    act(() => {
+      slowestTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Slow spans are derived from recorded turn, model, and tool timestamps');
+    expect(container.textContent).toContain('turn 2');
+    expect(container.textContent).toContain('1m 35s');
+    expect(container.textContent).toContain('Redacted');
+    expect(container.textContent).not.toContain('secret shell command');
+
+    const turnLink = container.querySelector<HTMLButtonElement>('.session-usage-panel__turn-link');
+    expect(turnLink?.textContent).toBe('turn 2');
+    act(() => {
+      turnLink?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(pinEvents).toEqual([
+      {
+        sessionId: 'session-1',
+        turnId: 'turn-2',
+        behavior: 'smooth',
+        pinMode: 'transient',
+        source: 'usage-report',
+      },
+    ]);
+    unsubscribe();
+  });
+
+  it('labels slow model spans by turn and jumps to that turn', () => {
+    const report = usageReport({
+      slowest: [
+        {
+          label: 'gpt-5.4',
+          kind: 'model',
+          durationMs: 42_000,
+          redacted: false,
+          turnId: 'turn-4',
+          turnIndex: 4,
+        },
+      ],
+    });
+
+    const pinEvents: FlowChatPinTurnToTopRequest[] = [];
+    const unsubscribe = globalEventBus.on<FlowChatPinTurnToTopRequest>(
+      FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
+      event => pinEvents.push(event),
+    );
+
+    render(<SessionUsagePanel report={report} markdown="## Session Usage" sessionId="session-1" />);
+
+    const slowestTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Slowest');
+    act(() => {
+      slowestTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Turn 4 model call');
+    expect(container.textContent).toContain('Model call');
+    expect(container.textContent).not.toContain('gpt-5.4');
+    expect(container.querySelector('[data-tooltip="Model call in this turn. Model: gpt-5.4. Jump to this turn"]'))
+      .not.toBeNull();
+
+    const turnLink = container.querySelector<HTMLButtonElement>('.session-usage-panel__turn-link');
+    act(() => {
+      turnLink?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(pinEvents).toEqual([
+      {
+        sessionId: 'session-1',
+        turnId: 'turn-4',
+        behavior: 'smooth',
+        pinMode: 'transient',
+        source: 'usage-report',
+      },
+    ]);
+    unsubscribe();
+  });
 });
 
 describe('Session usage report i18n and theme guards', () => {
@@ -534,6 +1160,13 @@ describe('Session usage report i18n and theme guards', () => {
     expect(styleText).toContain('width: auto;');
     expect(styleText).toContain('margin: 0.12rem 3rem');
     expect(styleText).toContain('border: 1px solid color-mix(in srgb, var(--border-base)');
+    expect(styleText).toContain('grid-template-columns: repeat(3, minmax(116px, 1fr));');
+    expect(styleText).toContain('width: clamp(180px, 26vw, 280px);');
+    expect(styleText).toContain('max-width: 280px;');
+    expect(styleText).toContain('text-overflow: ellipsis;');
+    expect(styleText).not.toContain('grid-template-columns: repeat(4, minmax(116px, 1fr));');
+    expect(styleText).not.toContain('grid-template-columns: minmax(0, 1fr) auto max-content;');
+    expect(styleText).not.toContain('max-width: 72%;');
     expect(styleText).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
   });
 });

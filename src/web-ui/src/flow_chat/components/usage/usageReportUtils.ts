@@ -1,6 +1,11 @@
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 
 type Translator = (key: string, options?: Record<string, unknown>) => string;
+type ModelIdentitySource = SessionUsageReport['models'][number]['modelIdSource'];
+
+const UNKNOWN_MODEL_ID = 'unknown_model';
+const LEGACY_MODEL_ROUND_LABEL_PATTERN = /^model\s+round\s+\d+$/i;
+const FILE_PATH_MIDDLE_ELLIPSIS_THRESHOLD = 48;
 
 export function hasNoRecordedFileChanges(report: SessionUsageReport): boolean {
   return report.files.files.length === 0 &&
@@ -123,6 +128,97 @@ export function getFileSummaryLabel(report: SessionUsageReport, t: Translator): 
   return formatUsageNumber(report.files.changedFiles, t);
 }
 
+export function getModelLabel(
+  modelId: string | undefined,
+  t: Translator,
+  source?: ModelIdentitySource
+): string {
+  if (
+    source === 'inferred_session_model' &&
+    modelId &&
+    modelId !== UNKNOWN_MODEL_ID &&
+    !isLegacyModelRoundLabel(modelId) &&
+    !isOpaqueModelIdentifier(modelId)
+  ) {
+    return t('usage.status.inferredModel', { model: modelId });
+  }
+  if (
+    !modelId ||
+    modelId === UNKNOWN_MODEL_ID ||
+    isLegacyModelRoundLabel(modelId) ||
+    source === 'legacy_missing' ||
+    source === 'inferred_session_model'
+  ) {
+    return t('usage.status.legacyModel');
+  }
+  return modelId;
+}
+
+export function getModelHelp(
+  source: ModelIdentitySource | undefined,
+  t: Translator,
+  modelId?: string
+): string | undefined {
+  if (source === 'inferred_session_model') {
+    if (modelId && (isOpaqueModelIdentifier(modelId) || isLegacyModelRoundLabel(modelId))) {
+      return t('usage.help.legacyModel');
+    }
+    return t('usage.help.inferredModel');
+  }
+  if (source === 'legacy_missing') {
+    return t('usage.help.legacyModel');
+  }
+  if (isLegacyModelRoundLabel(modelId)) {
+    return t('usage.help.legacyModel');
+  }
+  return undefined;
+}
+
+export function getSlowSpanLabel(
+  span: SessionUsageReport['slowest'][number],
+  t: Translator
+): string {
+  if (span.redacted) {
+    return getRedactedLabel(t);
+  }
+  if (span.kind === 'model') {
+    return typeof span.turnIndex === 'number' && Number.isFinite(span.turnIndex)
+      ? t('usage.slowestLabels.modelCall', { turn: span.turnIndex })
+      : t('usage.slowestLabels.modelCallUnknown');
+  }
+  return span.label;
+}
+
+export function getSlowSpanHelp(
+  span: SessionUsageReport['slowest'][number],
+  t: Translator
+): string | undefined {
+  if (span.redacted) {
+    return undefined;
+  }
+  if (span.kind === 'model') {
+    const modelLabel = getModelLabel(span.label, t, span.modelIdSource);
+    const modelHelp = getModelHelp(span.modelIdSource, t, span.label);
+    const callHelp = t('usage.help.slowestModelCall', { model: modelLabel });
+    return modelHelp ? `${callHelp} ${modelHelp}` : callHelp;
+  }
+  if (span.modelIdSource) {
+    return getModelHelp(span.modelIdSource, t, span.label);
+  }
+  return span.label === UNKNOWN_MODEL_ID || isLegacyModelRoundLabel(span.label)
+    ? t('usage.help.legacyModel')
+    : undefined;
+}
+
+function isOpaqueModelIdentifier(modelId: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(modelId) ||
+    /^[0-9a-f]{32}$/i.test(modelId);
+}
+
+function isLegacyModelRoundLabel(modelId: string | undefined): boolean {
+  return Boolean(modelId && LEGACY_MODEL_ROUND_LABEL_PATTERN.test(modelId.trim()));
+}
+
 export function getFileScopeHelp(report: SessionUsageReport, t: Translator): string | undefined {
   if (report.files.scope !== 'unavailable') {
     return undefined;
@@ -159,6 +255,26 @@ export function getTopFiles(report: SessionUsageReport, limit: number): SessionU
       b.operationCount - a.operationCount
     )
     .slice(0, limit);
+}
+
+export function getUsageFilePathDisplayParts(pathLabel: string): { prefix: string; fileName: string } | null {
+  if (pathLabel.length <= FILE_PATH_MIDDLE_ELLIPSIS_THRESHOLD) {
+    return null;
+  }
+
+  const segments = pathLabel.split(/[\\/]+/).filter(Boolean);
+  if (segments.length <= 1) {
+    return null;
+  }
+
+  const fileName = segments.at(-1) ?? pathLabel;
+  const prefix = segments.slice(0, -1).join('/');
+  return prefix ? { prefix, fileName } : null;
+}
+
+export function getUsageFileNameFromPath(pathLabel: string): string {
+  const segments = pathLabel.split(/[\\/]+/).filter(Boolean);
+  return segments.at(-1) ?? pathLabel;
 }
 
 export function getRedactedLabel(t: Translator): string {

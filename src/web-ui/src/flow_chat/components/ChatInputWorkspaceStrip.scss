@@ -64,7 +64,7 @@
 
   &--split &__main {
     flex: 1 1 auto;
-    max-width: calc(100% - 22px);
+    max-width: calc(100% - 24px);
   }
 
   &__usage {
@@ -74,19 +74,19 @@
     justify-content: flex-end;
   }
 
-  /* Match strip text cap height (--flowchat-font-size-xxs = 10px); tight hit target ≈ line box */
+  /* Keep the usage action compact, but large enough to read beside the strip text. */
   &__usage-btn.icon-btn {
-    width: 14px;
-    height: 14px;
-    min-width: 14px;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
     border-radius: 4px;
-    opacity: 0.72;
-    color: var(--color-text-secondary);
+    opacity: 0.86;
+    color: color-mix(in srgb, var(--color-accent-500) 62%, var(--color-text-secondary));
 
     &:hover:not(:disabled) {
       transform: none;
-      background: var(--element-bg-medium);
-      color: var(--color-text-primary);
+      background: color-mix(in srgb, var(--color-accent-500) 10%, var(--element-bg-medium));
+      color: color-mix(in srgb, var(--color-accent-500) 86%, var(--color-text-primary));
       opacity: 1;
     }
 
@@ -96,8 +96,8 @@
 
     svg {
       flex-shrink: 0;
-      width: 10px;
-      height: 10px;
+      width: 14px;
+      height: 14px;
     }
   }
 

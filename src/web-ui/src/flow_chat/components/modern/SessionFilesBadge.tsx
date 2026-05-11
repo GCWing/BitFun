@@ -47,6 +47,7 @@ import {
   DEFAULT_QUICK_ACTIONS,
   type QuickAction,
 } from '@/infrastructure/config/services/AIExperienceConfigService';
+import { resolveQuickActionText } from '@/infrastructure/config/services/quickActionLocalization';
 import './SessionFilesBadge.scss';
 
 const log = createLogger('SessionFilesBadge');
@@ -736,17 +737,18 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
   const handleQuickActionClick = useCallback(async (action: QuickAction) => {
     if (!sessionId || isSessionProcessing) return;
     setIsReviewMenuOpen(false);
+    const actionText = resolveQuickActionText(action, t);
     try {
       const { FlowChatManager } = await import('../../services/FlowChatManager');
       await FlowChatManager.getInstance().sendMessage(
-        action.prompt,
+        actionText.prompt,
         sessionId,
-        action.label,
+        actionText.label,
       );
     } catch (error) {
       log.error('Failed to trigger quick action', { actionId: action.id, error });
     }
-  }, [sessionId, isSessionProcessing]);
+  }, [sessionId, isSessionProcessing, t]);
 
   const getOperationIcon = (operationType: 'write' | 'edit' | 'delete') => {
     switch (operationType) {
@@ -851,25 +853,28 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
               <div className="session-files-badge__review-menu-separator" role="separator" />
             )}
 
-            {quickActions.filter(a => a.enabled).map(action => (
-              <button
-                key={action.id}
-                className="session-files-badge__review-menu-item"
-                onClick={() => { void handleQuickActionClick(action); }}
-                type="button"
-                role="menuitem"
-                disabled={isSessionProcessing}
-              >
-                {action.id === 'commit' ? (
-                  <GitCommitHorizontal size={12} className="session-files-badge__review-icon" />
-                ) : action.id === 'create_pr' ? (
-                  <GitPullRequest size={12} className="session-files-badge__review-icon" />
-                ) : (
-                  <Zap size={12} className="session-files-badge__review-icon" />
-                )}
-                <span>{action.label}</span>
-              </button>
-            ))}
+            {quickActions.filter(a => a.enabled).map(action => {
+              const actionText = resolveQuickActionText(action, t);
+              return (
+                <button
+                  key={action.id}
+                  className="session-files-badge__review-menu-item"
+                  onClick={() => { void handleQuickActionClick(action); }}
+                  type="button"
+                  role="menuitem"
+                  disabled={isSessionProcessing}
+                >
+                  {action.id === 'commit' ? (
+                    <GitCommitHorizontal size={12} className="session-files-badge__review-icon" />
+                  ) : action.id === 'create_pr' ? (
+                    <GitPullRequest size={12} className="session-files-badge__review-icon" />
+                  ) : (
+                    <Zap size={12} className="session-files-badge__review-icon" />
+                  )}
+                  <span>{actionText.label}</span>
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

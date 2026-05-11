@@ -109,7 +109,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
                 usageReport.onOpen();
               }}
             >
-              <Activity size={10} strokeWidth={2} aria-hidden />
+              <Activity size={14} strokeWidth={2} aria-hidden />
             </IconButton>
           </Tooltip>
         </div>

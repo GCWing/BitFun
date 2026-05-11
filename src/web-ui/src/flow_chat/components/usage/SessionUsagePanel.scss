@@ -38,6 +38,13 @@
     min-width: 0;
   }
 
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+  }
+
   &__badge {
     flex: 0 0 auto;
     padding: 2px 7px;
@@ -58,6 +65,10 @@
     &--minimal {
       color: var(--color-text-secondary);
       background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+    }
+
+    &--hint {
+      cursor: help;
     }
   }
 
@@ -315,6 +326,13 @@
     }
   }
 
+  &__section-help {
+    margin: -4px 0 0;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
   &__table-wrap {
     min-width: 0;
     overflow: auto;
@@ -357,6 +375,139 @@
 
     tbody tr:last-child td {
       border-bottom: 0;
+    }
+
+    &--files {
+      min-width: 620px;
+      table-layout: fixed;
+
+      th:nth-child(1),
+      td:nth-child(1) {
+        width: clamp(180px, 26vw, 280px);
+        max-width: 280px;
+      }
+
+      th:nth-child(2),
+      td:nth-child(2),
+      th:nth-child(3),
+      td:nth-child(3),
+      th:nth-child(4),
+      td:nth-child(4),
+      th:nth-child(5),
+      td:nth-child(5) {
+        width: 72px;
+      }
+
+      th:last-child,
+      td:last-child {
+        position: sticky;
+        right: 0;
+        z-index: 1;
+        width: 48px;
+        min-width: 48px;
+        max-width: 48px;
+        padding-right: 6px;
+        padding-left: 6px;
+        text-align: center;
+        background: color-mix(in srgb, var(--color-bg-flowchat) 92%, var(--element-bg-soft));
+        box-shadow: -10px 0 14px -14px color-mix(in srgb, var(--color-text-primary) 54%, transparent);
+      }
+
+      th:last-child {
+        z-index: 2;
+        background: color-mix(in srgb, var(--element-bg-soft) 72%, var(--color-bg-flowchat));
+      }
+    }
+  }
+
+  &__file-path-cell {
+    max-width: 280px;
+  }
+
+  &__file-path-display {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--color-text-primary);
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__table td &__file-path-display {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__sticky-action-cell {
+    white-space: nowrap;
+  }
+
+  &__missing-cell {
+    color: var(--color-text-muted);
+  }
+
+  &__table td &__missing-value {
+    display: inline-flex;
+    align-items: center;
+    max-width: none;
+    min-height: 20px;
+    padding: 0 7px;
+    border: 1px solid color-mix(in srgb, var(--border-base) 54%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--element-bg-soft) 58%, transparent);
+    color: var(--color-text-muted);
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+
+    &--help {
+      cursor: help;
+    }
+  }
+
+  &__table-action {
+    width: 24px;
+    height: 24px;
+  }
+
+  &__table-action-placeholder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: var(--color-text-muted);
+  }
+
+  &__turn-link {
+    display: block;
+    max-width: 260px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent-primary);
+    font: inherit;
+    text-align: left;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover {
+      color: var(--accent-primary-hover, var(--accent-primary));
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--accent-primary) 70%, transparent);
+      outline-offset: 2px;
+      border-radius: 3px;
     }
   }
 

@@ -738,6 +738,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               markdown={content.data?.markdown}
               sessionId={content.data?.sessionId}
               workspacePath={content.data?.workspacePath || workspacePath}
+              initialTab={content.data?.initialTab}
             />
           </React.Suspense>
         );

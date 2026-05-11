@@ -56,13 +56,18 @@
       "copyMarkdown": "复制 Markdown",
       "copied": "已复制",
       "openDetails": "打开详情",
+      "openFileDiff": "打开 diff",
       "copySessionId": "复制会话 ID",
-      "copyWorkspacePath": "复制项目路径"
+      "copyWorkspacePath": "复制项目路径",
+      "openSectionDetails": "打开{{section}}详情",
+      "jumpToTurn": "跳转到该轮次",
+      "viewDetails": "详情",
+      "viewAllSection": "查看全部 {{count}} 项"
     },
     "coverage": {
-      "complete": "完整",
-      "partial": "部分",
-      "minimal": "最小",
+      "complete": "数据完整",
+      "partial": "部分数据可用",
+      "minimal": "仅基础数据",
       "partialNotice": "部分指标没有被当前会话或服务商上报。悬浮带虚线下划线的数值可查看具体原因。"
     },
     "toolCategories": {
@@ -85,7 +90,10 @@
       "timingNotRecorded": "未记录耗时",
       "cacheNotReported": "未上报缓存",
       "noFileChanges": "无文件变更",
-      "notRecorded": "未记录"
+      "notRecorded": "未记录",
+      "modelNotRecorded": "未记录模型名称",
+      "legacyModel": "旧会话模型未统计",
+      "inferredModel": "{{model}}（推测）"
     },
     "cacheCoverage": {
       "available": "已上报",
@@ -96,7 +104,8 @@
       "heading": "会话统计",
       "turns": "{{count}} 轮",
       "calls": "{{count}} 次调用",
-      "operations": "{{count}} 次操作"
+      "operations": "{{count}} 次操作",
+      "tokens": "{{value}} Tokens"
     },
     "loading": {
       "markdown": "正在生成用量报告...",
@@ -113,15 +122,17 @@
       "active": "已记录轮次耗时",
       "modelTime": "模型轮次耗时",
       "toolTime": "工具调用耗时",
-      "tokens": "Token",
+      "tokens": "Tokens",
       "cached": "缓存",
       "files": "文件",
-      "errors": "错误"
+      "errors": "错误",
+      "errorRate": "错误率"
     },
     "sections": {
       "models": "模型",
       "tools": "工具",
-      "files": "文件"
+      "files": "文件",
+      "slowest": "最慢耗时"
     },
     "empty": {
       "models": "暂无模型指标",
@@ -131,7 +142,9 @@
       "modelsDescription": "当模型调用上报 Token 用量后，这里会显示模型统计。",
       "toolsDescription": "当会话执行工具后，这里会显示工具调用统计。",
       "filesDescription": "当前会话没有找到文件编辑记录。",
-      "errorsDescription": "本次报告没有记录到可展示的工具或模型错误样例。"
+      "errorsDescription": "本次报告没有记录到可展示的工具或模型错误样例。",
+      "slowest": "无慢耗时记录",
+      "slowestDescription": "没有记录到带耗时的轮次、模型调用或工具片段。"
     },
     "runtime": {
       "open": "生成会话用量",
@@ -147,6 +160,7 @@
       "fileScope": "文件范围",
       "toolErrors": "工具错误",
       "modelErrors": "模型错误",
+      "errorScope": "错误范围",
       "metadataLabel": "用量报告元信息"
     },
     "privacy": {
@@ -158,7 +172,8 @@
       "models": "模型",
       "tools": "工具",
       "files": "文件",
-      "errors": "错误"
+      "errors": "错误",
+      "slowest": "慢耗时"
     },
     "table": {
       "model": "模型",
@@ -179,31 +194,66 @@
       "deleted": "删除",
       "turns": "轮次",
       "operationIds": "操作 ID",
+      "actions": "操作",
       "label": "标签",
-      "count": "次数"
+      "count": "次数",
+      "kind": "类型"
+    },
+    "slowestKinds": {
+      "model": "模型调用",
+      "modelCall": "模型调用",
+      "tool": "工具",
+      "turn": "轮次"
+    },
+    "slowestLabels": {
+      "modelCall": "第 {{turn}} 轮模型调用",
+      "modelCallUnknown": "模型调用"
     },
     "help": {
       "wall": "从第一轮开始到最后一轮结束的记录跨度，可能包含轮次之间的空闲间隔。",
-      "active": "产生可统计活动的轮次记录耗时之和，可能包含轮次内的编排或等待时间。",
+      "active": "产生可统计活动的轮次记录时间段并集，可能包含轮次内的编排或等待时间。",
       "timeShare": "占已记录轮次耗时的比例。模型与工具耗时可能重叠，因此仅作为近似参考。",
-      "modelRoundTime": "基于会话中保存的模型轮次起止时间计算，不等同于纯模型流式输出或吞吐耗时；占比按已记录轮次耗时近似计算。",
+      "modelRoundTime": "基于会话中保存的模型轮次运行时元数据或起止时间计算，不等同于纯服务商流式输出或吞吐耗时；占比按已记录轮次耗时近似计算。",
       "toolTime": "基于已记录工具调用耗时计算；占比按已记录轮次耗时近似计算。",
       "cachedTokens": "当前服务商没有为这个会话上报缓存读取 Token 元数据；可用时仍会显示总 Token。",
       "cachedTokensPartial": "只有部分调用上报了缓存读取 Token 元数据，因此缓存 Token 合计只覆盖这些调用。",
       "toolDuration": "该工具调用没有上报耗时元数据。",
       "toolP95": "同一工具至少记录两次带耗时调用后才会显示 P95。",
       "toolExecution": "该工具没有单独上报执行耗时字段。",
+      "legacyModel": "这个会话创建时尚未记录逐轮模型名称，因此报告无法确认精确模型。",
+      "inferredModel": "旧会话缺少逐轮模型名称，已根据会话的模型设置推测。",
       "filesUnavailable": "当前会话没有找到本地快照或可识别的文件编辑工具记录。",
       "filesNoRecordedChanges": "BitFun 没有检测到当前会话中的文件变更。如果本次会话没有编辑文件，这是正常状态。",
-      "filesRemoteUnavailable": "远程会话的文件快照暂未纳入此报告；只有工具记录能识别到编辑文件时才会显示文件行。",
+      "filesRemoteUnavailable": "没有找到这个远程会话的快照汇总；如果工具记录能识别到写入、编辑或删除文件，仍会显示文件行。",
       "filesNotTracked": "当前会话没有找到本地快照或可识别的文件编辑工具记录。",
       "fileTurnIndexes": "当文件活动来自汇总而不是逐轮操作记录时，不会记录轮次。",
-      "fileOperationIds": "当报告无法关联到具体工具操作时，不会记录操作 ID。"
+      "fileOperationIds": "当报告无法关联到具体工具操作时，不会记录操作 ID。",
+      "fileDiffUnavailable": "Diff 链接需要基于快照的文件行和可见文件路径。",
+      "errors": "统计结束为错误状态的模型轮次，以及持久化结果标记为未成功的工具调用；不包含原始服务商响应、工具输入或命令输出。",
+      "toolErrors": "工具错误统计持久化结果标记为未成功的工具调用。",
+      "modelErrors": "模型错误统计最终进入错误状态的对话轮次。",
+      "errorExamples": "示例只按安全标签分组；原始服务商响应、工具输入和命令输出不会进入报告。",
+      "errorExampleRow": "模型/运行时错误或失败工具类型的安全分组标签。",
+      "errorExampleCount": "当前报告范围内匹配该标签的错误次数。",
+      "slowestSpans": "慢耗时来自已记录的轮次、模型调用与工具时间戳，用于定位耗时来源，不代表精确服务商延迟。",
+      "slowestModelCall": "该行是当前轮次内的一次模型调用。模型：{{model}}。"
     },
     "meta": {
       "generatedAt": "生成时间",
       "sessionId": "会话 ID",
       "workspacePath": "项目路径"
+    }
+  },
+  "quickActions": {
+    "defaults": {
+      "commit": {
+        "label": "提交",
+        "prompt": "提交当前所有代码变更"
+      },
+      "createPr": {
+        "label": "创建 PR",
+        "prompt": "为当前分支创建 Pull Request"
+      }
     }
   },
   "agentCompanion": {

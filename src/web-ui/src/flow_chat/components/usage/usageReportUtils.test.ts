@@ -4,6 +4,10 @@ import {
   calculateShare,
   coerceSessionUsageReport,
   getFileSummaryLabel,
+  getModelHelp,
+  getModelLabel,
+  getSlowSpanHelp,
+  getSlowSpanLabel,
   getTopFiles,
 } from './usageReportUtils';
 
@@ -12,6 +16,15 @@ const t = (key: string, options?: Record<string, unknown>): string => {
   if (key === 'usage.percent') return `${options?.value}%`;
   if (key === 'usage.duration.seconds') return `${options?.value}s`;
   if (key === 'usage.status.noFileChanges') return 'No file changes';
+  if (key === 'usage.status.modelNotRecorded') return 'Model not recorded';
+  if (key === 'usage.status.legacyModel') return 'Legacy model not tracked';
+  if (key === 'usage.status.inferredModel') return `${options?.model} (inferred)`;
+  if (key === 'usage.help.legacyModel') return 'Older sessions did not store per-round model names.';
+  if (key === 'usage.help.inferredModel') return 'Inferred from the session model setting.';
+  if (key === 'usage.help.slowestModelCall') return `Model call: ${options?.model}`;
+  if (key === 'usage.slowestLabels.modelCall') return `Turn ${options?.turn} model call`;
+  if (key === 'usage.slowestLabels.modelCallUnknown') return 'Model call';
+  if (key === 'usage.redacted') return 'Redacted';
   return key;
 };
 
@@ -131,5 +144,54 @@ describe('usageReportUtils', () => {
       'src/large.ts',
       'src/small.ts',
     ]);
+  });
+
+  it('labels legacy and inferred model identities with helpful copy', () => {
+    expect(getModelLabel('unknown_model', t, 'legacy_missing')).toBe('Legacy model not tracked');
+    expect(getModelLabel('model round 0', t)).toBe('Legacy model not tracked');
+    expect(getModelLabel('gpt-5.4', t, 'inferred_session_model')).toBe('gpt-5.4 (inferred)');
+    expect(getModelLabel('019e0c07-c7bc-73f1-b1d6-5260ed215fe0', t, 'inferred_session_model'))
+      .toBe('Legacy model not tracked');
+    expect(getSlowSpanLabel({
+      label: 'gpt-5.4',
+      kind: 'model',
+      durationMs: 100,
+      redacted: false,
+      turnIndex: 3,
+      modelIdSource: 'inferred_session_model',
+    }, t)).toBe('Turn 3 model call');
+  });
+
+  it('returns model identity tooltip copy when the source is inferred or legacy', () => {
+    expect(getModelHelp('inferred_session_model', t)).toBe('Inferred from the session model setting.');
+    expect(getModelHelp('inferred_session_model', t, '019e0c07-c7bc-73f1-b1d6-5260ed215fe0'))
+      .toBe('Older sessions did not store per-round model names.');
+    expect(getModelHelp('legacy_missing', t)).toBe('Older sessions did not store per-round model names.');
+    expect(getModelHelp(undefined, t, 'model round 0')).toBe('Older sessions did not store per-round model names.');
+    expect(getSlowSpanHelp({
+      label: 'unknown_model',
+      kind: 'model',
+      durationMs: 100,
+      redacted: false,
+      modelIdSource: 'legacy_missing',
+    }, t)).toBe('Model call: Legacy model not tracked Older sessions did not store per-round model names.');
+    expect(getSlowSpanHelp({
+      label: 'model round 1',
+      kind: 'model',
+      durationMs: 100,
+      redacted: false,
+    }, t)).toBe('Model call: Legacy model not tracked Older sessions did not store per-round model names.');
+    expect(getSlowSpanHelp({
+      label: 'gpt-5.4',
+      kind: 'model',
+      durationMs: 100,
+      redacted: false,
+    }, t)).toBe('Model call: gpt-5.4');
+    expect(getSlowSpanLabel({
+      label: 'secret',
+      kind: 'tool',
+      durationMs: 100,
+      redacted: true,
+    }, t)).toBe('Redacted');
   });
 });

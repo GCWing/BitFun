@@ -1,6 +1,7 @@
 import { createTab } from '@/shared/utils/tabUtils';
 import type { PanelContent } from '@/app/components/panels/base/types';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
+import type { SessionUsagePanelTab } from '../components/usage/sessionUsagePanelTypes';
 
 export const SESSION_USAGE_PANEL_TYPE = 'session-usage' as const;
 
@@ -10,6 +11,7 @@ export interface SessionUsagePanelData {
   sessionId?: string;
   workspacePath?: string;
   title?: string;
+  initialTab?: SessionUsagePanelTab;
 }
 
 export interface SessionUsagePanelMetadata {
@@ -51,7 +53,7 @@ export function openSessionUsagePanel(params: SessionUsagePanelData & { expand?:
     metadata: content.metadata,
     checkDuplicate: true,
     duplicateCheckKey: content.metadata?.duplicateCheckKey,
-    replaceExisting: false,
+    replaceExisting: !!params.initialTab,
     mode: 'agent',
   });
 }

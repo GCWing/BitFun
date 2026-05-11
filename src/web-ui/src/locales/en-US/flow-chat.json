@@ -57,12 +57,17 @@
       "copied": "Copied",
       "copySessionId": "Copy session ID",
       "copyWorkspacePath": "Copy project path",
-      "openDetails": "Open details"
+      "openDetails": "Open details",
+      "openFileDiff": "Open diff",
+      "openSectionDetails": "Open {{section}} details",
+      "jumpToTurn": "Jump to this turn",
+      "viewDetails": "Details",
+      "viewAllSection": "View all {{count}}"
     },
     "coverage": {
-      "complete": "Complete",
-      "partial": "Partial",
-      "minimal": "Minimal",
+      "complete": "Complete data",
+      "partial": "Partial data",
+      "minimal": "Minimal data",
       "partialNotice": "Some metrics were not reported by this session or provider. Hover underlined values for the specific reason."
     },
     "toolCategories": {
@@ -85,7 +90,10 @@
       "timingNotRecorded": "Timing not recorded",
       "cacheNotReported": "Cache not reported",
       "noFileChanges": "No file changes",
-      "notRecorded": "Not recorded"
+      "notRecorded": "Not recorded",
+      "modelNotRecorded": "Model not recorded",
+      "legacyModel": "Legacy model not tracked",
+      "inferredModel": "{{model}} (inferred)"
     },
     "cacheCoverage": {
       "available": "Reported",
@@ -96,7 +104,8 @@
       "heading": "Session statistics",
       "turns": "{{count}} turns",
       "calls": "{{count}} calls",
-      "operations": "{{count}} ops"
+      "operations": "{{count}} ops",
+      "tokens": "{{value}} tokens"
     },
     "loading": {
       "markdown": "Generating usage report...",
@@ -116,12 +125,14 @@
       "tokens": "Tokens",
       "cached": "Cached",
       "files": "Files",
-      "errors": "Errors"
+      "errors": "Errors",
+      "errorRate": "Error rate"
     },
     "sections": {
       "models": "Models",
       "tools": "Tools",
-      "files": "Files"
+      "files": "Files",
+      "slowest": "Slowest spans"
     },
     "empty": {
       "models": "No model metrics",
@@ -131,25 +142,38 @@
       "files": "No file changes",
       "filesDescription": "No file-edit records were found for this session.",
       "errors": "No error examples",
-      "errorsDescription": "No sampled tool or model errors were recorded."
+      "errorsDescription": "No sampled tool or model errors were recorded.",
+      "slowest": "No slow spans",
+      "slowestDescription": "No timed turn, model-call, or tool spans were recorded."
     },
     "help": {
       "wall": "Span from the first recorded turn start to the last recorded turn end. Idle gaps can be included.",
-      "active": "Sum of recorded turn durations that produced reportable activity. It can include orchestration or waiting inside a turn.",
+      "active": "Union of recorded turn spans that produced reportable activity. It can include orchestration or waiting inside a turn.",
       "timeShare": "Share of recorded turn time. Model and tool spans may overlap, so this is only an approximate indicator.",
-      "modelRoundTime": "Recorded model-round duration from persisted start and end timestamps, not pure model streaming or throughput time. The percentage uses recorded turn time and is approximate.",
+      "modelRoundTime": "Recorded model-round duration from persisted runtime metadata or start/end timestamps, not pure provider streaming or throughput time. The percentage uses recorded turn time and is approximate.",
       "toolTime": "Recorded tool-call duration. The percentage uses recorded turn time and is approximate.",
       "cachedTokens": "The provider did not report cache-read token metadata for this session. Total token counts are still shown when available.",
       "cachedTokensPartial": "Only some calls reported cache-read token metadata, so the cached-token total covers those calls only.",
       "toolDuration": "This tool call did not report timing metadata.",
       "toolP95": "P95 appears after at least two timed calls are recorded for this tool.",
       "toolExecution": "This tool did not report a separate execution-duration field.",
+      "legacyModel": "Older sessions did not store per-round model names, so this report cannot identify the exact model.",
+      "inferredModel": "Inferred from the session model setting because older turns did not store per-round model names.",
       "filesUnavailable": "No file snapshot or file-edit tool record was found for this session.",
       "filesNoRecordedChanges": "BitFun did not detect file changes in this session. This is expected when the agent did not edit files.",
-      "filesRemoteUnavailable": "Remote session file snapshots are not included in this report yet. File rows appear only when tool records identify edited files.",
+      "filesRemoteUnavailable": "No remote snapshot summary was found for this session. File rows can still appear from recognized file-edit tool records.",
       "filesNotTracked": "No local snapshot or identifiable file-edit tool record was found for this session.",
       "fileTurnIndexes": "Turn indexes are not recorded when file activity comes from a summary instead of per-turn operation records.",
-      "fileOperationIds": "Operation IDs are not recorded when the report cannot link this row back to individual tool operations."
+      "fileOperationIds": "Operation IDs are not recorded when the report cannot link this row back to individual tool operations.",
+      "fileDiffUnavailable": "Diff links require a snapshot-backed file row and a visible file path.",
+      "errors": "Counts model turns that ended in error plus tool calls whose result was unsuccessful. It does not include raw provider responses, tool inputs, or command output.",
+      "toolErrors": "Tool errors count tool calls whose persisted result is marked unsuccessful.",
+      "modelErrors": "Model errors count dialog turns that ended in the error state.",
+      "errorExamples": "Examples are grouped by safe labels only; raw provider responses, tool inputs, and command output stay out of the report.",
+      "errorExampleRow": "Safe grouped label for a model/runtime error or failing tool type.",
+      "errorExampleCount": "Number of matching errors in this report scope.",
+      "slowestSpans": "Slow spans are derived from recorded turn, model-call, and tool timestamps. They help identify time sinks, not exact provider latency.",
+      "slowestModelCall": "Model call in this turn. Model: {{model}}."
     },
     "meta": {
       "generatedAt": "Generated",
@@ -170,7 +194,8 @@
       "compressions": "Compressions",
       "fileScope": "File scope",
       "toolErrors": "Tool errors",
-      "modelErrors": "Model errors"
+      "modelErrors": "Model errors",
+      "errorScope": "Error scope"
     },
     "privacy": {
       "title": "Privacy-safe report",
@@ -181,7 +206,8 @@
       "models": "Models",
       "tools": "Tools",
       "files": "Files",
-      "errors": "Errors"
+      "errors": "Errors",
+      "slowest": "Slowest"
     },
     "table": {
       "model": "Model",
@@ -202,8 +228,32 @@
       "deleted": "Deleted",
       "turns": "Turns",
       "operationIds": "Operation IDs",
+      "actions": "Actions",
       "label": "Label",
-      "count": "Count"
+      "count": "Count",
+      "kind": "Kind"
+    },
+    "slowestKinds": {
+      "model": "Model call",
+      "modelCall": "Model call",
+      "tool": "Tool",
+      "turn": "Turn"
+    },
+    "slowestLabels": {
+      "modelCall": "Turn {{turn}} model call",
+      "modelCallUnknown": "Model call"
+    }
+  },
+  "quickActions": {
+    "defaults": {
+      "commit": {
+        "label": "Commit",
+        "prompt": "Commit all current code changes"
+      },
+      "createPr": {
+        "label": "Create PR",
+        "prompt": "Create a Pull Request for the current branch"
+      }
     }
   },
   "agentCompanion": {

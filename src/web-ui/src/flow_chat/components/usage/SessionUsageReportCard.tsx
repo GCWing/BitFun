@@ -4,11 +4,11 @@ import {
   Activity,
   AlertTriangle,
   Check,
+  ChevronRight,
   Copy,
   Clock3,
   Database,
   FileText,
-  Info,
 } from 'lucide-react';
 import { IconButton, MarkdownRenderer, ToolProcessingDots, Tooltip } from '@/component-library';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
@@ -20,20 +20,26 @@ import {
   getCoverageTone,
   getFileScopeHelp,
   getFileSummaryLabel,
+  getModelHelp,
+  getModelLabel,
   getRedactedLabel,
   getTopFiles,
   getTopModels,
   getTopTools,
   getToolCategoryLabel,
+  getUsageFileNameFromPath,
 } from './usageReportUtils';
+import type { SessionUsagePanelTab } from './sessionUsagePanelTypes';
 import './SessionUsageReportCard.scss';
+
+const SUMMARY_LIST_LIMIT = 3;
 
 interface SessionUsageReportCardProps {
   report?: SessionUsageReport;
   markdown?: string;
   generatedAt?: number;
   isLoading?: boolean;
-  onOpenDetails?: (report: SessionUsageReport) => void;
+  onOpenDetails?: (report: SessionUsageReport, initialTab?: SessionUsagePanelTab) => void;
 }
 
 export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
@@ -65,9 +71,16 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
     }
   }, [onOpenDetails, report]);
 
-  const topModels = useMemo(() => report ? getTopModels(report, 3) : [], [report]);
-  const topTools = useMemo(() => report ? getTopTools(report, 3) : [], [report]);
-  const topFiles = useMemo(() => report ? getTopFiles(report, 3) : [], [report]);
+  const handleOpenSectionDetails = useCallback((initialTab: SessionUsagePanelTab) => (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (report) {
+      onOpenDetails?.(report, initialTab);
+    }
+  }, [onOpenDetails, report]);
+
+  const topModels = useMemo(() => report ? getTopModels(report, SUMMARY_LIST_LIMIT) : [], [report]);
+  const topTools = useMemo(() => report ? getTopTools(report, SUMMARY_LIST_LIMIT) : [], [report]);
+  const topFiles = useMemo(() => report ? getTopFiles(report, SUMMARY_LIST_LIMIT) : [], [report]);
   const loadingHints = useMemo(() => [
     t('usage.loading.steps.collecting'),
     t('usage.loading.steps.tokens'),
@@ -176,6 +189,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
       value: formatUsageNumber(report.errors.totalErrors, t),
       icon: AlertTriangle,
       tone: report.errors.totalErrors > 0 ? 'warning' : undefined,
+      help: t('usage.help.errors'),
     },
   ];
 
@@ -206,27 +220,31 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
               {getCoverageLabel(report.coverage.level, t)}
             </span>
           )}
-          <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
-            <IconButton
-              variant="ghost"
-              size="xs"
-              onClick={handleCopy}
-              aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
-            >
-              {copied ? <Check size={14} /> : <Copy size={14} />}
-            </IconButton>
-          </Tooltip>
-          <Tooltip content={t('usage.actions.openDetails')}>
-            <IconButton
-              variant="ghost"
-              size="xs"
-              onClick={handleOpenDetails}
-              disabled={!onOpenDetails}
-              aria-label={t('usage.actions.openDetails')}
-            >
-              <Info size={14} />
-            </IconButton>
-          </Tooltip>
+          <div className="session-usage-report-card__header-actions">
+            <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
+              <IconButton
+                className="session-usage-report-card__copy-action"
+                variant="ghost"
+                size="xs"
+                onClick={handleCopy}
+                aria-label={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip content={t('usage.actions.openDetails')}>
+              <button
+                type="button"
+                className="session-usage-report-card__details-button"
+                onClick={handleOpenDetails}
+                disabled={!onOpenDetails}
+                aria-label={t('usage.actions.openDetails')}
+              >
+                <span>{t('usage.actions.viewDetails')}</span>
+                <ChevronRight size={13} aria-hidden />
+              </button>
+            </Tooltip>
+          </div>
         </div>
       </div>
 
@@ -249,16 +267,38 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
       <div className="session-usage-report-card__lists">
         <UsageMiniList
           title={t('usage.sections.models')}
-          items={topModels.map(model => ({
-            label: model.modelId,
-            value: formatUsageNumber(model.totalTokens, t),
-            detail: t('usage.card.calls', { count: model.callCount }),
-          }))}
+          showAll={buildShowAllAction({
+            totalCount: report.models.length,
+            visibleCount: topModels.length,
+            sectionLabel: t('usage.sections.models'),
+            t,
+            onClick: onOpenDetails ? handleOpenSectionDetails('models') : undefined,
+          })}
+          items={topModels.map(model => {
+            const source = model.modelIdSource ?? (model.modelId === 'unknown_model' ? 'legacy_missing' : undefined);
+            const help = getModelHelp(source, t, model.modelId);
+            const label = getModelLabel(model.modelId, t, source);
+            const tokenValue = typeof model.totalTokens === 'number' && Number.isFinite(model.totalTokens)
+              ? t('usage.card.tokens', { value: formatUsageNumber(model.totalTokens, t) })
+              : formatUsageNumber(model.totalTokens, t);
+            return {
+              label: help ? { value: label, help } : label,
+              value: tokenValue,
+              detail: t('usage.card.calls', { count: model.callCount }),
+            };
+          })}
           emptyLabel={t('usage.empty.models')}
           emptyDescription={t('usage.empty.modelsDescription')}
         />
         <UsageMiniList
           title={t('usage.sections.tools')}
+          showAll={buildShowAllAction({
+            totalCount: report.tools.length,
+            visibleCount: topTools.length,
+            sectionLabel: t('usage.sections.tools'),
+            t,
+            onClick: onOpenDetails ? handleOpenSectionDetails('tools') : undefined,
+          })}
           items={topTools.map(tool => ({
             label: tool.redacted ? getRedactedLabel(t) : tool.toolName,
             value: t('usage.card.calls', { count: tool.callCount }),
@@ -269,10 +309,29 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
         />
         <UsageMiniList
           title={t('usage.sections.files')}
+          showAll={buildShowAllAction({
+            totalCount: report.files.files.length,
+            visibleCount: topFiles.length,
+            sectionLabel: t('usage.sections.files'),
+            t,
+            onClick: onOpenDetails ? handleOpenSectionDetails('files') : undefined,
+          })}
           items={topFiles.map(file => ({
-            label: file.redacted ? getRedactedLabel(t) : file.pathLabel,
+            label: file.redacted
+              ? getRedactedLabel(t)
+              : {
+                node: <UsageMiniListFilePathLabel pathLabel={file.pathLabel} />,
+                text: file.pathLabel,
+                help: file.pathLabel,
+              },
             value: t('usage.card.operations', { count: file.operationCount }),
-            detail: `${formatUsageNumber(file.addedLines, t)} / ${formatUsageNumber(file.deletedLines, t)}`,
+            detail: (
+              <UsageFileChangeDetail
+                addedLines={file.addedLines}
+                deletedLines={file.deletedLines}
+                t={t}
+              />
+            ),
           }))}
           emptyLabel={getFileSummaryLabel(report, t)}
           emptyDescription={fileMetricHelp ?? t('usage.empty.filesDescription')}
@@ -292,21 +351,143 @@ function UsageMetricValue({ value, help }: { value: string; help?: string }) {
   return help ? <Tooltip content={help}>{node}</Tooltip> : node;
 }
 
+type UsageMiniListLabel = string | {
+  value: string;
+  help?: string;
+} | {
+  node: React.ReactElement;
+  text: string;
+  help?: string;
+};
+
+type UsageMiniListShowAll = {
+  label: string;
+  ariaLabel: string;
+  onClick: (event: React.MouseEvent) => void;
+};
+
 interface UsageMiniListProps {
   title: string;
+  showAll?: UsageMiniListShowAll;
   items: Array<{
-    label: string;
+    label: UsageMiniListLabel;
     value: string;
-    detail: string;
+    detail: React.ReactNode;
   }>;
   emptyLabel: string;
   emptyDescription?: string;
 }
 
-function UsageMiniList({ title, items, emptyLabel, emptyDescription }: UsageMiniListProps) {
+function buildShowAllAction({
+  totalCount,
+  visibleCount,
+  sectionLabel,
+  t,
+  onClick,
+}: {
+  totalCount: number;
+  visibleCount: number;
+  sectionLabel: string;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  onClick?: (event: React.MouseEvent) => void;
+}): UsageMiniListShowAll | undefined {
+  if (!onClick || totalCount <= visibleCount) {
+    return undefined;
+  }
+  return {
+    label: t('usage.actions.viewAllSection', { count: totalCount }),
+    ariaLabel: t('usage.actions.openSectionDetails', { section: sectionLabel }),
+    onClick,
+  };
+}
+
+function getMiniListLabelText(label: UsageMiniListLabel): string {
+  if (typeof label !== 'string' && 'node' in label) {
+    return label.text;
+  }
+  return typeof label === 'string' ? label : label.value;
+}
+
+function UsageMiniListLabelView({ label }: { label: UsageMiniListLabel }) {
+  if (typeof label !== 'string' && 'node' in label) {
+    return label.help
+      ? <Tooltip content={label.help}>{label.node}</Tooltip>
+      : label.node;
+  }
+
+  const labelText = getMiniListLabelText(label);
+  const node = (
+    <span className={`session-usage-report-card__mini-list-label${typeof label !== 'string' && label.help ? ' session-usage-report-card__mini-list-label--help' : ''}`}>
+      {labelText}
+    </span>
+  );
+
+  return typeof label !== 'string' && label.help
+    ? <Tooltip content={label.help}>{node}</Tooltip>
+    : node;
+}
+
+function UsageMiniListFilePathLabel({ pathLabel }: { pathLabel: string }) {
+  return (
+    <span className="session-usage-report-card__mini-list-file-name">
+      {getUsageFileNameFromPath(pathLabel)}
+    </span>
+  );
+}
+
+function UsageFileChangeDetail({
+  addedLines,
+  deletedLines,
+  t,
+}: {
+  addedLines?: number;
+  deletedLines?: number;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  return (
+    <span
+      className="session-usage-report-card__file-stat"
+      aria-label={`${t('usage.table.added')}: ${formatUsageNumber(addedLines, t)}, ${t('usage.table.deleted')}: ${formatUsageNumber(deletedLines, t)}`}
+    >
+      <span className="session-usage-report-card__file-stat--added">
+        {formatSignedFileLineCount(addedLines, '+', t)}
+      </span>
+      <span className="session-usage-report-card__file-stat-separator">/</span>
+      <span className="session-usage-report-card__file-stat--deleted">
+        {formatSignedFileLineCount(deletedLines, '-', t)}
+      </span>
+    </span>
+  );
+}
+
+function formatSignedFileLineCount(
+  value: number | undefined,
+  sign: '+' | '-',
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
+  const formatted = formatUsageNumber(value, t);
+  return typeof value === 'number' && Number.isFinite(value) ? `${sign}${formatted}` : formatted;
+}
+
+function UsageMiniList({ title, showAll, items, emptyLabel, emptyDescription }: UsageMiniListProps) {
   return (
     <div className="session-usage-report-card__mini-list">
-      <div className="session-usage-report-card__mini-list-title">{title}</div>
+      <div className="session-usage-report-card__mini-list-header">
+        <div className="session-usage-report-card__mini-list-title">{title}</div>
+        {showAll && (
+          <Tooltip content={showAll.ariaLabel}>
+            <button
+              type="button"
+              className="session-usage-report-card__mini-list-more"
+              onClick={showAll.onClick}
+              aria-label={showAll.ariaLabel}
+            >
+              <span>{showAll.label}</span>
+              <ChevronRight size={12} aria-hidden />
+            </button>
+          </Tooltip>
+        )}
+      </div>
       {items.length === 0 ? (
         <div className="session-usage-report-card__mini-list-empty">
           <strong>{emptyLabel}</strong>
@@ -314,8 +495,8 @@ function UsageMiniList({ title, items, emptyLabel, emptyDescription }: UsageMini
         </div>
       ) : (
         items.map(item => (
-          <div className="session-usage-report-card__mini-list-row" key={`${item.label}-${item.value}`}>
-            <span className="session-usage-report-card__mini-list-label">{item.label}</span>
+          <div className="session-usage-report-card__mini-list-row" key={`${getMiniListLabelText(item.label)}-${item.value}`}>
+            <UsageMiniListLabelView label={item.label} />
             <span className="session-usage-report-card__mini-list-value">{item.value}</span>
             <span className="session-usage-report-card__mini-list-detail">{item.detail}</span>
           </div>
