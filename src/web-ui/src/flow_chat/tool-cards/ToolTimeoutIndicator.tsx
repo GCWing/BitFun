@@ -122,7 +122,7 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
               className={`duration-timeout ${isTimeoutDisabled ? 'duration-timeout--disabled' : ''} ${isWarning ? 'duration-timeout--warning' : ''}`}
             >
               {isTimeoutDisabled
-                ? formatDurationLive(timeoutMs!)
+                ? <InfinityIcon size={14} className="duration-timeout--infinity" />
                 : displayRemaining != null
                   ? formatDurationLive(displayRemaining)
                   : formatDurationLive(timeoutMs!)}

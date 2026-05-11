@@ -53,6 +53,11 @@
   opacity: 0.5;
 }
 
+.duration-timeout--infinity {
+  vertical-align: middle;
+  opacity: 0.8;
+}
+
 .duration-timeout--warning {
   color: var(--color-warning, #f59e0b);
   opacity: 1;
