@@ -62,7 +62,14 @@
       "openSectionDetails": "開啟{{section}}詳情",
       "jumpToTurn": "跳轉到該回合",
       "viewDetails": "詳情",
-      "viewAllSection": "查看全部 {{count}} 項"
+      "viewAllSection": "查看全部 {{count}} 項",
+      "showAllRows": "顯示全部 {{count}} 項",
+      "showFewerRows": "收合"
+    },
+    "export": {
+      "redactPaths": "遮蔽路徑",
+      "redactPathsHelp": "複製 Markdown 時替換專案與檔案路徑。",
+      "redactedPath": "[已遮蔽路徑]"
     },
     "coverage": {
       "complete": "資料完整",
@@ -93,7 +100,8 @@
       "notRecorded": "未記錄",
       "modelNotRecorded": "未記錄模型名稱",
       "legacyModel": "舊會話模型未統計",
-      "inferredModel": "{{model}}（推測）"
+      "inferredModel": "{{model}}（推測）",
+      "p95SampleInsufficient": "樣本不足"
     },
     "cacheCoverage": {
       "available": "已回報",
@@ -188,6 +196,9 @@
       "duration": "記錄耗時",
       "p95": "P95",
       "execution": "執行",
+      "toolDuration": "總耗時",
+      "toolP95Duration": "P95 總耗時",
+      "toolExecutionDuration": "執行耗時",
       "file": "檔案",
       "operations": "操作",
       "added": "新增",
@@ -220,9 +231,9 @@
       "toolTime": "基於已記錄工具呼叫耗時計算；占比按已記錄回合耗時近似計算。",
       "cachedTokens": "目前服務商沒有為這個工作階段回報快取讀取 Token 中繼資料；可用時仍會顯示總 Token。",
       "cachedTokensPartial": "只有部分呼叫回報了快取讀取 Token 中繼資料，因此快取 Token 合計只涵蓋這些呼叫。",
-      "toolDuration": "該工具呼叫沒有回報耗時中繼資料。",
-      "toolP95": "同一工具至少記錄兩次帶耗時呼叫後才會顯示 P95。",
-      "toolExecution": "該工具沒有單獨回報執行耗時欄位。",
+      "toolDuration": "目前報告範圍內該工具名稱的總記錄耗時，可能包含排隊、預檢查、確認等待和實際執行。",
+      "toolP95": "該工具總耗時的 95 分位值；同一工具至少有兩次帶耗時呼叫後才會顯示。",
+      "toolExecution": "扣除排隊、預檢查和確認等待後的工具執行階段耗時。舊工作階段可能沒有這個欄位。",
       "legacyModel": "這個工作階段建立時尚未記錄逐回合模型名稱，因此報告無法確認精確模型。",
       "inferredModel": "舊工作階段缺少逐回合模型名稱，已根據工作階段的模型設定推測。",
       "filesUnavailable": "目前工作階段沒有找到本機快照或可識別的檔案編輯工具記錄。",

@@ -10,10 +10,16 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import enFlowChat from '@/locales/en-US/flow-chat.json';
 import zhCnFlowChat from '@/locales/zh-CN/flow-chat.json';
 import zhTwFlowChat from '@/locales/zh-TW/flow-chat.json';
-import { FLOWCHAT_PIN_TURN_TO_TOP_EVENT, type FlowChatPinTurnToTopRequest } from '../../events/flowchatNavigation';
+import {
+  FLOWCHAT_FOCUS_ITEM_EVENT,
+  FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
+  type FlowChatFocusItemRequest,
+  type FlowChatPinTurnToTopRequest,
+} from '../../events/flowchatNavigation';
 import { SessionRuntimeStatusEntry } from './SessionRuntimeStatusEntry';
 import { SessionUsagePanel } from './SessionUsagePanel';
 import { SessionUsageReportCard } from './SessionUsageReportCard';
+import { USAGE_EXPORT_REDACT_PATHS_STORAGE_KEY } from './usageReportUtils';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -81,6 +87,7 @@ vi.mock('react-i18next', () => ({
         'usage.status.noFileChanges': 'No file changes',
         'usage.status.notRecorded': 'Not recorded',
         'usage.status.modelNotRecorded': 'Model not recorded',
+        'usage.status.p95SampleInsufficient': 'Not enough samples',
         'usage.status.legacyModel': 'Legacy model not tracked',
         'usage.status.inferredModel': '{{model}} (inferred)',
         'usage.card.heading': 'Session statistics',
@@ -172,6 +179,9 @@ vi.mock('react-i18next', () => ({
         'usage.table.duration': 'Recorded time',
         'usage.table.p95': 'P95',
         'usage.table.execution': 'Execution',
+        'usage.table.toolDuration': 'Total time',
+        'usage.table.toolP95Duration': 'P95 total',
+        'usage.table.toolExecutionDuration': 'Execution time',
         'usage.table.file': 'File',
         'usage.table.operations': 'Ops',
         'usage.table.added': 'Added',
@@ -193,6 +203,9 @@ vi.mock('react-i18next', () => ({
         'usage.table.rowLimitSummary': 'Showing {{visible}} of {{total}} rows',
         'usage.table.showAllRows': 'Show all {{count}} rows',
         'usage.table.showFewerRows': 'Show first {{count}} rows',
+        'usage.export.redactPaths': 'Redact paths',
+        'usage.export.redactPathsHelp': 'Replace workspace and file paths when copying Markdown.',
+        'usage.export.redactedPath': '[redacted path]',
       };
       return interpolate(labels[key] ?? key, options);
     },
@@ -239,7 +252,7 @@ function usageReport(overrides: Partial<SessionUsageReport> = {}): SessionUsageR
     coverage: {
       level: 'partial',
       available: ['workspace_identity'],
-      missing: ['cost_estimates'],
+      missing: ['token_detail_breakdown'],
       notes: [],
     },
     time: {
@@ -364,6 +377,7 @@ describe('Session usage report UI components', () => {
     tabUtilsMocks.createDiffEditorTab.mockReset();
     dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
       pretendToBeVisual: true,
+      url: 'http://localhost/',
     });
     vi.stubGlobal('window', dom.window);
     vi.stubGlobal('document', dom.window.document);
@@ -517,6 +531,7 @@ describe('Session usage report UI components', () => {
   });
 
   it('keeps chat card file names visible and labels model tokens', () => {
+    dom.window.localStorage.setItem(USAGE_EXPORT_REDACT_PATHS_STORAGE_KEY, 'false');
     const longPath = 'src/features/session-usage/reports/components/very/deeply/nested/UsageReportCardFilePathThatWouldNormallyOverflow.tsx';
     const fileName = 'UsageReportCardFilePathThatWouldNormallyOverflow.tsx';
     const report = usageReport({
@@ -560,6 +575,67 @@ describe('Session usage report UI components', () => {
     expect(container.textContent).not.toContain('/.../');
     expect(container.querySelector(`[data-tooltip="${longPath}"]`)).not.toBeNull();
     expect(container.textContent).toContain('1,500 tokens');
+  });
+
+  it('syncs path redaction between the chat card and detail panel', () => {
+    const report = usageReport({
+      workspace: {
+        kind: 'local',
+        pathLabel: 'D:/workspace/bitfun',
+      },
+      files: {
+        scope: 'snapshot_summary',
+        changedFiles: 1,
+        addedLines: 4,
+        deletedLines: 2,
+        files: [
+          {
+            pathLabel: 'src/private/secret.ts',
+            operationCount: 2,
+            addedLines: 4,
+            deletedLines: 2,
+            turnIndexes: [1],
+            operationIds: ['operation-1'],
+            redacted: false,
+          },
+        ],
+      },
+    });
+
+    render(
+      <>
+        <SessionUsageReportCard report={report} markdown="## Session Usage" />
+        <SessionUsagePanel
+          report={report}
+          markdown="## Session Usage"
+          sessionId="session-1"
+          workspacePath="D:/workspace/bitfun"
+          initialTab="files"
+        />
+      </>
+    );
+
+    const redactionInputs = Array.from(container.querySelectorAll<HTMLInputElement>(
+      `input[aria-label="Redact paths"]`
+    ));
+    expect(redactionInputs).toHaveLength(2);
+    expect(redactionInputs.every(input => input.checked)).toBe(true);
+    expect(container.textContent).toContain('[redacted path]');
+    expect(container.textContent).toContain('secret.ts');
+    expect(container.textContent).not.toContain('D:/workspace/bitfun');
+    expect(container.textContent).not.toContain('src/private/secret.ts');
+    expect(container.querySelector('[data-tooltip="[redacted path]/secret.ts"]')).not.toBeNull();
+
+    act(() => {
+      redactionInputs[0]?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    const updatedInputs = Array.from(container.querySelectorAll<HTMLInputElement>(
+      `input[aria-label="Redact paths"]`
+    ));
+    expect(updatedInputs.every(input => input.checked)).toBe(false);
+    expect(container.textContent).toContain('D:/workspace/bitfun');
+    expect(container.querySelector('[data-tooltip="src/private/secret.ts"]')).not.toBeNull();
   });
 
   it('does not append a token unit when chat card model tokens are unavailable', () => {
@@ -697,7 +773,7 @@ describe('Session usage report UI components', () => {
     expect(container.textContent).not.toContain('Timing not recorded');
   });
 
-  it('renders missing tool timings as subdued values', () => {
+  it('hides unavailable tool execution timing and uses explicit tool timing headers', () => {
     const report = usageReport({
       tools: [
         {
@@ -722,8 +798,12 @@ describe('Session usage report UI components', () => {
       toolsTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
+    expect(container.textContent).toContain('Total time');
+    expect(container.textContent).toContain('P95 total');
+    expect(container.textContent).not.toContain('Execution time');
+
     const missingValues = container.querySelectorAll('.session-usage-panel__missing-value');
-    expect(missingValues).toHaveLength(3);
+    expect(missingValues).toHaveLength(2);
     expect(Array.from(missingValues).every(value => value.textContent === 'Timing not recorded')).toBe(true);
   });
 
@@ -788,6 +868,109 @@ describe('Session usage report UI components', () => {
 
     expect(container.querySelectorAll('tbody tr')).toHaveLength(55);
     expect(container.textContent).toContain('Tool 55');
+  });
+
+  it('links model tool and error aggregate rows to representative transcript anchors', () => {
+    const report = usageReport({
+      models: [
+        {
+          modelId: 'gpt-5.4',
+          callCount: 1,
+          totalTokens: 120,
+          durationMs: 12_000,
+          sampleTurnId: 'turn-2',
+          sampleTurnIndex: 1,
+        },
+      ],
+      tools: [
+        {
+          toolName: 'write_file',
+          category: 'file',
+          callCount: 1,
+          successCount: 1,
+          errorCount: 0,
+          durationMs: 2_000,
+          sampleTurnIndex: 2,
+          sampleItemId: 'tool-3',
+          redacted: false,
+        },
+      ],
+      errors: {
+        totalErrors: 1,
+        toolErrors: 1,
+        modelErrors: 0,
+        examples: [
+          {
+            label: 'write_file',
+            count: 1,
+            sampleTurnIndex: 3,
+            sampleItemId: 'tool-4',
+            redacted: false,
+          },
+        ],
+      },
+    });
+    const focusEvents: FlowChatFocusItemRequest[] = [];
+    const unsubscribe = globalEventBus.on<FlowChatFocusItemRequest>(
+      FLOWCHAT_FOCUS_ITEM_EVENT,
+      event => focusEvents.push(event),
+    );
+
+    render(<SessionUsagePanel report={report} markdown="## Session Usage" sessionId="session-1" />);
+
+    const modelsTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Models');
+    act(() => {
+      modelsTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    const modelAnchor = container.querySelector<HTMLButtonElement>('.session-usage-panel__row-anchor-link');
+    expect(modelAnchor?.textContent).toContain('gpt-5.4');
+    act(() => {
+      modelAnchor?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    const toolsTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Tools');
+    act(() => {
+      toolsTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    const toolAnchor = container.querySelector<HTMLButtonElement>('.session-usage-panel__row-anchor-link');
+    expect(toolAnchor?.textContent).toContain('write_file');
+    act(() => {
+      toolAnchor?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    const errorsTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Errors');
+    act(() => {
+      errorsTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+    const errorAnchor = container.querySelector<HTMLButtonElement>('.session-usage-panel__row-anchor-link');
+    expect(errorAnchor?.textContent).toContain('write_file');
+    act(() => {
+      errorAnchor?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(focusEvents).toEqual([
+      {
+        sessionId: 'session-1',
+        turnIndex: 2,
+        source: 'usage-report',
+      },
+      {
+        sessionId: 'session-1',
+        turnIndex: 3,
+        itemId: 'tool-3',
+        source: 'usage-report',
+      },
+      {
+        sessionId: 'session-1',
+        turnIndex: 4,
+        itemId: 'tool-4',
+        source: 'usage-report',
+      },
+    ]);
+    unsubscribe();
   });
 
   it('opens the detail panel on a requested usage tab', () => {
@@ -945,6 +1128,7 @@ describe('Session usage report UI components', () => {
   });
 
   it('keeps file diff actions visible and exposes full paths for long file rows', () => {
+    dom.window.localStorage.setItem(USAGE_EXPORT_REDACT_PATHS_STORAGE_KEY, 'false');
     const longPath = 'src/web-ui/src/component-library/components/Markdown/Markdown.tsx';
     const report = usageReport({
       files: {

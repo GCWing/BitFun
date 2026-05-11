@@ -13,6 +13,7 @@ import {
 import { IconButton, MarkdownRenderer, ToolProcessingDots, Tooltip } from '@/component-library';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import {
+  buildSessionUsageExportMarkdown,
   formatUsageDuration,
   formatUsageNumber,
   formatUsageTimestamp,
@@ -20,6 +21,7 @@ import {
   getCoverageTone,
   getFileScopeHelp,
   getFileSummaryLabel,
+  getUsageDisplayPathLabel,
   getModelHelp,
   getModelLabel,
   getRedactedLabel,
@@ -27,7 +29,10 @@ import {
   getTopModels,
   getTopTools,
   getToolCategoryLabel,
+  getUsageExportRedactPathsPreference,
   getUsageFileNameFromPath,
+  setUsageExportRedactPathsPreference,
+  subscribeUsageExportRedactPathsPreference,
 } from './usageReportUtils';
 import type { SessionUsagePanelTab } from './sessionUsagePanelTypes';
 import './SessionUsageReportCard.scss';
@@ -52,17 +57,25 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
   const { t } = useTranslation('flow-chat');
   const [copied, setCopied] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
+  const [redactExportPaths, setRedactExportPaths] = useState(getUsageExportRedactPathsPreference);
 
   const handleCopy = useCallback(async (event: React.MouseEvent) => {
     event.stopPropagation();
     try {
-      await navigator.clipboard.writeText(markdown);
+      await navigator.clipboard.writeText(buildSessionUsageExportMarkdown(markdown, report, {
+        redactPaths: redactExportPaths,
+        t,
+      }));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
       setCopied(false);
     }
-  }, [markdown]);
+  }, [markdown, redactExportPaths, report, t]);
+
+  const handleRedactExportPathsChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setUsageExportRedactPathsPreference(event.target.checked);
+  }, []);
 
   const handleOpenDetails = useCallback((event: React.MouseEvent) => {
     event.stopPropagation();
@@ -98,6 +111,10 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
 
     return () => window.clearInterval(timer);
   }, [isLoading, loadingHints.length]);
+
+  useEffect(() => (
+    subscribeUsageExportRedactPathsPreference(setRedactExportPaths)
+  ), []);
 
   if (isLoading) {
     return (
@@ -147,6 +164,9 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
       ? t('usage.help.cachedTokensPartial')
     : undefined;
   const fileMetricHelp = getFileScopeHelp(report, t);
+  const workspacePathLabel = getUsageDisplayPathLabel(report.workspace.pathLabel, t, {
+    redactPaths: redactExportPaths,
+  });
 
   const metrics = [
     {
@@ -205,7 +225,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
           <div className="session-usage-report-card__meta">
             <span>{formatUsageTimestamp(generatedAt ?? report.generatedAt, t)}</span>
             <span>{t('usage.card.turns', { count: report.scope.turnCount })}</span>
-            <span>{report.workspace.pathLabel || t('usage.unavailable')}</span>
+            <span>{workspacePathLabel}</span>
           </div>
         </div>
         <div className="session-usage-report-card__actions">
@@ -221,6 +241,17 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
             </span>
           )}
           <div className="session-usage-report-card__header-actions">
+            <Tooltip content={t('usage.export.redactPathsHelp')}>
+              <label className="session-usage-report-card__export-option">
+                <input
+                  type="checkbox"
+                  checked={redactExportPaths}
+                  onChange={handleRedactExportPathsChange}
+                  aria-label={t('usage.export.redactPaths')}
+                />
+                <span>{t('usage.export.redactPaths')}</span>
+              </label>
+            </Tooltip>
             <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
               <IconButton
                 className="session-usage-report-card__copy-action"
@@ -316,23 +347,29 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
             t,
             onClick: onOpenDetails ? handleOpenSectionDetails('files') : undefined,
           })}
-          items={topFiles.map(file => ({
-            label: file.redacted
-              ? getRedactedLabel(t)
-              : {
-                node: <UsageMiniListFilePathLabel pathLabel={file.pathLabel} />,
-                text: file.pathLabel,
-                help: file.pathLabel,
-              },
-            value: t('usage.card.operations', { count: file.operationCount }),
-            detail: (
-              <UsageFileChangeDetail
-                addedLines={file.addedLines}
-                deletedLines={file.deletedLines}
-                t={t}
-              />
-            ),
-          }))}
+          items={topFiles.map(file => {
+            const pathLabel = getUsageDisplayPathLabel(file.pathLabel, t, {
+              redactPaths: redactExportPaths,
+              keepFileName: true,
+            });
+            return {
+              label: file.redacted
+                ? getRedactedLabel(t)
+                : {
+                  node: <UsageMiniListFilePathLabel pathLabel={file.pathLabel} />,
+                  text: pathLabel,
+                  help: pathLabel,
+                },
+              value: t('usage.card.operations', { count: file.operationCount }),
+              detail: (
+                <UsageFileChangeDetail
+                  addedLines={file.addedLines}
+                  deletedLines={file.deletedLines}
+                  t={t}
+                />
+              ),
+            };
+          })}
           emptyLabel={getFileSummaryLabel(report, t)}
           emptyDescription={fileMetricHelp ?? t('usage.empty.filesDescription')}
         />

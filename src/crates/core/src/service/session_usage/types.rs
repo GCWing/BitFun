@@ -99,7 +99,6 @@ pub enum UsageCoverageKey {
     SubagentScope,
     RemoteSnapshotStats,
     FileLineStats,
-    CostEstimates,
     WorkspaceIdentity,
 }
 
@@ -170,6 +169,10 @@ pub struct UsageModelBreakdown {
     pub total_tokens: Option<u64>,
     pub cached_tokens: Option<u64>,
     pub duration_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_turn_index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -191,6 +194,12 @@ pub struct UsageToolBreakdown {
     pub confirmation_wait_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_turn_index: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_item_id: Option<String>,
     pub redacted: bool,
 }
 
@@ -272,6 +281,12 @@ pub struct UsageErrorBreakdown {
 pub struct UsageErrorExample {
     pub label: String,
     pub count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_turn_index: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sample_item_id: Option<String>,
     pub redacted: bool,
 }
 
@@ -335,7 +350,6 @@ impl SessionUsageReport {
                 missing: vec![
                     UsageCoverageKey::CachedTokens,
                     UsageCoverageKey::TokenDetailBreakdown,
-                    UsageCoverageKey::CostEstimates,
                 ],
                 notes: vec![
                     "P0 report uses existing persisted session facts and marks not-reported metrics explicitly."
@@ -414,7 +428,6 @@ pub(crate) fn test_report() -> SessionUsageReport {
     report.coverage.missing = vec![
         UsageCoverageKey::CachedTokens,
         UsageCoverageKey::TokenDetailBreakdown,
-        UsageCoverageKey::CostEstimates,
     ];
     report.time = UsageTimeBreakdown {
         accounting: UsageTimeAccounting::Approximate,
@@ -441,6 +454,8 @@ pub(crate) fn test_report() -> SessionUsageReport {
         total_tokens: Some(1540),
         cached_tokens: None,
         duration_ms: None,
+        sample_turn_id: Some("turn-1".to_string()),
+        sample_turn_index: Some(0),
     }];
     report.tools = vec![UsageToolBreakdown {
         tool_name: "read_file".to_string(),
@@ -454,6 +469,9 @@ pub(crate) fn test_report() -> SessionUsageReport {
         preflight_ms: None,
         confirmation_wait_ms: None,
         execution_ms: None,
+        sample_turn_id: Some("turn-1".to_string()),
+        sample_turn_index: Some(0),
+        sample_item_id: Some("tool-1".to_string()),
         redacted: false,
     }];
     report.files = UsageFileBreakdown {

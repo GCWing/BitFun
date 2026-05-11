@@ -85,7 +85,6 @@ fn usage_report_from_cli_session(session: &Session) -> SessionUsageReport {
                 UsageCoverageKey::SubagentScope,
                 UsageCoverageKey::RemoteSnapshotStats,
                 UsageCoverageKey::FileLineStats,
-                UsageCoverageKey::CostEstimates,
             ],
             notes: vec![
                 "CLI P0 report uses current in-memory session metadata only.".to_string(),

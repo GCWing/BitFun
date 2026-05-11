@@ -6,6 +6,9 @@ type ModelIdentitySource = SessionUsageReport['models'][number]['modelIdSource']
 const UNKNOWN_MODEL_ID = 'unknown_model';
 const LEGACY_MODEL_ROUND_LABEL_PATTERN = /^model\s+round\s+\d+$/i;
 const FILE_PATH_MIDDLE_ELLIPSIS_THRESHOLD = 48;
+export const USAGE_EXPORT_REDACT_PATHS_STORAGE_KEY = 'bitfun.sessionUsage.export.redactPaths';
+type UsageRedactPathsPreferenceListener = (redactPaths: boolean) => void;
+const usageRedactPathsPreferenceListeners = new Set<UsageRedactPathsPreferenceListener>();
 
 export function hasNoRecordedFileChanges(report: SessionUsageReport): boolean {
   return report.files.files.length === 0 &&
@@ -277,6 +280,113 @@ export function getUsageFileNameFromPath(pathLabel: string): string {
   return segments.at(-1) ?? pathLabel;
 }
 
+export function getUsageDisplayPathLabel(
+  pathLabel: string | undefined,
+  t: Translator,
+  options: {
+    redactPaths: boolean;
+    keepFileName?: boolean;
+  }
+): string {
+  const normalizedPath = pathLabel?.trim();
+  if (!normalizedPath) {
+    return t('usage.unavailable');
+  }
+  if (!options.redactPaths) {
+    return normalizedPath;
+  }
+
+  const redactedPath = t('usage.export.redactedPath');
+  if (!options.keepFileName) {
+    return redactedPath;
+  }
+
+  const fileName = getUsageFileNameFromPath(normalizedPath);
+  return fileName && fileName !== normalizedPath ? `${redactedPath}/${fileName}` : redactedPath;
+}
+
 export function getRedactedLabel(t: Translator): string {
   return t('usage.redacted');
+}
+
+export function getUsageExportRedactPathsPreference(): boolean {
+  try {
+    const stored = globalThis.window?.localStorage?.getItem(USAGE_EXPORT_REDACT_PATHS_STORAGE_KEY);
+    return stored === null ? true : stored !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+export function setUsageExportRedactPathsPreference(redactPaths: boolean): void {
+  try {
+    globalThis.window?.localStorage?.setItem(
+      USAGE_EXPORT_REDACT_PATHS_STORAGE_KEY,
+      redactPaths ? 'true' : 'false',
+    );
+  } catch {
+    // Ignore storage failures; the export action should still work.
+  }
+  usageRedactPathsPreferenceListeners.forEach(listener => listener(redactPaths));
+}
+
+export function subscribeUsageExportRedactPathsPreference(
+  listener: UsageRedactPathsPreferenceListener
+): () => void {
+  usageRedactPathsPreferenceListeners.add(listener);
+  return () => {
+    usageRedactPathsPreferenceListeners.delete(listener);
+  };
+}
+
+export function buildSessionUsageExportMarkdown(
+  markdown: string,
+  report: SessionUsageReport | undefined,
+  options: {
+    redactPaths: boolean;
+    t: Translator;
+  }
+): string {
+  if (!options.redactPaths || !report) {
+    return markdown;
+  }
+
+  const redactedPath = options.t('usage.export.redactedPath');
+  const replacements = new Map<string, string>();
+
+  addPathReplacement(replacements, report.workspace.pathLabel, redactedPath);
+  for (const file of report.files.files) {
+    if (!file.redacted) {
+      const fileName = getUsageFileNameFromPath(file.pathLabel);
+      addPathReplacement(replacements, file.pathLabel, `${redactedPath}/${fileName}`);
+    }
+  }
+
+  return [...replacements.entries()]
+    .sort((a, b) => b[0].length - a[0].length)
+    .reduce((value, [pathLabel, replacement]) => (
+      value.replace(new RegExp(escapeRegExp(pathLabel), 'g'), replacement)
+    ), markdown);
+}
+
+function addPathReplacement(
+  replacements: Map<string, string>,
+  value: string | undefined,
+  replacement: string
+): void {
+  const normalizedValue = value?.trim();
+  if (!normalizedValue) {
+    return;
+  }
+  replacements.set(normalizedValue, replacement);
+  const alternateSeparatorValue = normalizedValue.includes('\\')
+    ? normalizedValue.replace(/\\/g, '/')
+    : normalizedValue.replace(/\//g, '\\');
+  if (alternateSeparatorValue !== normalizedValue) {
+    replacements.set(alternateSeparatorValue, replacement);
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

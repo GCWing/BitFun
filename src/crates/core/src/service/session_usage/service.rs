@@ -233,7 +233,6 @@ fn build_coverage(
         UsageCoverageKey::CachedTokens,
         UsageCoverageKey::TokenDetailBreakdown,
         UsageCoverageKey::FileLineStats,
-        UsageCoverageKey::CostEstimates,
     ];
     if !available.contains(&UsageCoverageKey::ModelRoundTiming) {
         missing.push(UsageCoverageKey::ModelRoundTiming);
@@ -420,6 +419,10 @@ fn build_model_breakdown(
 ) -> Vec<UsageModelBreakdown> {
     let mut by_model: HashMap<String, UsageModelBreakdown> = HashMap::new();
     let mut span_counts_by_model: HashMap<String, u64> = HashMap::new();
+    let turn_indexes_by_id: HashMap<&str, usize> = turns
+        .iter()
+        .map(|turn| (turn.turn_id.as_str(), turn.turn_index))
+        .collect();
     for record in token_records {
         let row = by_model
             .entry(record.model_id.clone())
@@ -431,6 +434,8 @@ fn build_model_breakdown(
                 total_tokens: Some(0),
                 cached_tokens: None,
                 duration_ms: None,
+                sample_turn_id: None,
+                sample_turn_index: None,
             });
 
         row.call_count += 1;
@@ -440,27 +445,43 @@ fn build_model_breakdown(
         if record.cached_tokens_available {
             row.cached_tokens = Some(row.cached_tokens.unwrap_or(0) + record.cached_tokens as u64);
         }
+        set_turn_anchor_if_missing(
+            &mut row.sample_turn_id,
+            &mut row.sample_turn_index,
+            &record.turn_id,
+            turn_indexes_by_id.get(record.turn_id.as_str()).copied(),
+        );
     }
 
-    for round in turns.iter().flat_map(|turn| turn.model_rounds.iter()) {
-        let Some(duration_ms) = model_round_duration_ms(round) else {
-            continue;
-        };
-        let model_id = model_round_label(round);
-        let row = by_model
-            .entry(model_id.clone())
-            .or_insert_with(|| UsageModelBreakdown {
-                model_id: model_id.clone(),
-                call_count: 0,
-                input_tokens: None,
-                output_tokens: None,
-                total_tokens: None,
-                cached_tokens: None,
-                duration_ms: Some(0),
-            });
+    for turn in turns {
+        for round in &turn.model_rounds {
+            let Some(duration_ms) = model_round_duration_ms(round) else {
+                continue;
+            };
+            let model_id = model_round_label(round);
+            let row = by_model
+                .entry(model_id.clone())
+                .or_insert_with(|| UsageModelBreakdown {
+                    model_id: model_id.clone(),
+                    call_count: 0,
+                    input_tokens: None,
+                    output_tokens: None,
+                    total_tokens: None,
+                    cached_tokens: None,
+                    duration_ms: Some(0),
+                    sample_turn_id: None,
+                    sample_turn_index: None,
+                });
 
-        row.duration_ms = Some(row.duration_ms.unwrap_or(0) + duration_ms);
-        *span_counts_by_model.entry(model_id).or_default() += 1;
+            row.duration_ms = Some(row.duration_ms.unwrap_or(0) + duration_ms);
+            set_turn_anchor_if_missing(
+                &mut row.sample_turn_id,
+                &mut row.sample_turn_index,
+                &turn.turn_id,
+                Some(turn.turn_index),
+            );
+            *span_counts_by_model.entry(model_id).or_default() += 1;
+        }
     }
 
     for (model_id, span_count) in span_counts_by_model {
@@ -478,43 +499,56 @@ fn build_tool_breakdown(turns: &[DialogTurnData]) -> Vec<UsageToolBreakdown> {
     let mut by_tool: HashMap<String, UsageToolBreakdown> = HashMap::new();
     let mut durations_by_tool: HashMap<String, Vec<u64>> = HashMap::new();
 
-    for tool in iter_tools(turns) {
-        let label = redact_usage_label(&tool.tool_name, 80);
-        let row = by_tool
-            .entry(label.value.clone())
-            .or_insert_with(|| UsageToolBreakdown {
-                tool_name: label.value.clone(),
-                category: classify_tool_usage(&tool.tool_name, Some(&tool.tool_call.input)),
-                call_count: 0,
-                success_count: 0,
-                error_count: 0,
-                duration_ms: Some(0),
-                p95_duration_ms: None,
-                queue_wait_ms: None,
-                preflight_ms: None,
-                confirmation_wait_ms: None,
-                execution_ms: None,
-                redacted: label.redacted,
-            });
-        row.call_count += 1;
-        match tool.tool_result.as_ref().map(|result| result.success) {
-            Some(true) => row.success_count += 1,
-            Some(false) => row.error_count += 1,
-            None => {}
-        }
-        let duration_ms = tool_duration_ms(tool).unwrap_or(0);
-        row.duration_ms = Some(row.duration_ms.unwrap_or(0) + duration_ms);
-        if duration_ms > 0 {
-            durations_by_tool
+    for turn in turns {
+        for tool in iter_turn_tools(turn) {
+            let label = redact_usage_label(&tool.tool_name, 80);
+            let row = by_tool
                 .entry(label.value.clone())
-                .or_default()
-                .push(duration_ms);
+                .or_insert_with(|| UsageToolBreakdown {
+                    tool_name: label.value.clone(),
+                    category: classify_tool_usage(&tool.tool_name, Some(&tool.tool_call.input)),
+                    call_count: 0,
+                    success_count: 0,
+                    error_count: 0,
+                    duration_ms: Some(0),
+                    p95_duration_ms: None,
+                    queue_wait_ms: None,
+                    preflight_ms: None,
+                    confirmation_wait_ms: None,
+                    execution_ms: None,
+                    sample_turn_id: None,
+                    sample_turn_index: None,
+                    sample_item_id: None,
+                    redacted: label.redacted,
+                });
+            row.call_count += 1;
+            match tool.tool_result.as_ref().map(|result| result.success) {
+                Some(true) => row.success_count += 1,
+                Some(false) => row.error_count += 1,
+                None => {}
+            }
+            let duration_ms = tool_duration_ms(tool).unwrap_or(0);
+            row.duration_ms = Some(row.duration_ms.unwrap_or(0) + duration_ms);
+            if duration_ms > 0 {
+                durations_by_tool
+                    .entry(label.value.clone())
+                    .or_default()
+                    .push(duration_ms);
+            }
+            add_optional_duration(&mut row.queue_wait_ms, tool.queue_wait_ms);
+            add_optional_duration(&mut row.preflight_ms, tool.preflight_ms);
+            add_optional_duration(&mut row.confirmation_wait_ms, tool.confirmation_wait_ms);
+            add_optional_duration(&mut row.execution_ms, tool.execution_ms);
+            set_item_anchor_if_missing(
+                &mut row.sample_turn_id,
+                &mut row.sample_turn_index,
+                &mut row.sample_item_id,
+                &turn.turn_id,
+                turn.turn_index,
+                &tool.id,
+            );
+            row.redacted |= label.redacted;
         }
-        add_optional_duration(&mut row.queue_wait_ms, tool.queue_wait_ms);
-        add_optional_duration(&mut row.preflight_ms, tool.preflight_ms);
-        add_optional_duration(&mut row.confirmation_wait_ms, tool.confirmation_wait_ms);
-        add_optional_duration(&mut row.execution_ms, tool.execution_ms);
-        row.redacted |= label.redacted;
     }
 
     let mut rows: Vec<_> = by_tool
@@ -732,29 +766,46 @@ fn build_error_breakdown(turns: &[DialogTurnData]) -> UsageErrorBreakdown {
     let mut examples = Vec::new();
 
     if model_errors > 0 {
+        let sample_model_error_turn = turns.iter().find(|turn| turn.status == TurnStatus::Error);
         examples.push(UsageErrorExample {
             label: "Model/runtime turn errors".to_string(),
             count: model_errors,
+            sample_turn_id: sample_model_error_turn.map(|turn| turn.turn_id.clone()),
+            sample_turn_index: sample_model_error_turn.map(|turn| turn.turn_index),
+            sample_item_id: None,
             redacted: false,
         });
     }
 
     let mut tool_error_counts: HashMap<String, UsageErrorExample> = HashMap::new();
-    for tool in iter_tools(turns).filter(|tool| {
-        tool.tool_result
-            .as_ref()
-            .is_some_and(|result| !result.success)
-    }) {
-        let label = redact_usage_label(&tool.tool_name, 80);
-        let row = tool_error_counts
-            .entry(label.value.clone())
-            .or_insert_with(|| UsageErrorExample {
-                label: label.value.clone(),
-                count: 0,
-                redacted: label.redacted,
-            });
-        row.count += 1;
-        row.redacted |= label.redacted;
+    for turn in turns {
+        for tool in iter_turn_tools(turn).filter(|tool| {
+            tool.tool_result
+                .as_ref()
+                .is_some_and(|result| !result.success)
+        }) {
+            let label = redact_usage_label(&tool.tool_name, 80);
+            let row = tool_error_counts
+                .entry(label.value.clone())
+                .or_insert_with(|| UsageErrorExample {
+                    label: label.value.clone(),
+                    count: 0,
+                    sample_turn_id: None,
+                    sample_turn_index: None,
+                    sample_item_id: None,
+                    redacted: label.redacted,
+                });
+            row.count += 1;
+            set_item_anchor_if_missing(
+                &mut row.sample_turn_id,
+                &mut row.sample_turn_index,
+                &mut row.sample_item_id,
+                &turn.turn_id,
+                turn.turn_index,
+                &tool.id,
+            );
+            row.redacted |= label.redacted;
+        }
     }
 
     let mut tool_examples: Vec<_> = tool_error_counts.into_values().collect();
@@ -893,6 +944,34 @@ fn tool_duration_ms(tool: &ToolItemData) -> Option<u64> {
 fn add_optional_duration(total: &mut Option<u64>, value: Option<u64>) {
     if let Some(value) = value {
         *total = Some(total.unwrap_or(0) + value);
+    }
+}
+
+fn set_turn_anchor_if_missing(
+    sample_turn_id: &mut Option<String>,
+    sample_turn_index: &mut Option<usize>,
+    turn_id: &str,
+    turn_index: Option<usize>,
+) {
+    if sample_turn_id.is_none() {
+        *sample_turn_id = Some(turn_id.to_string());
+    }
+    if sample_turn_index.is_none() {
+        *sample_turn_index = turn_index;
+    }
+}
+
+fn set_item_anchor_if_missing(
+    sample_turn_id: &mut Option<String>,
+    sample_turn_index: &mut Option<usize>,
+    sample_item_id: &mut Option<String>,
+    turn_id: &str,
+    turn_index: usize,
+    item_id: &str,
+) {
+    set_turn_anchor_if_missing(sample_turn_id, sample_turn_index, turn_id, Some(turn_index));
+    if sample_item_id.is_none() {
+        *sample_item_id = Some(item_id.to_string());
     }
 }
 
@@ -1204,6 +1283,73 @@ mod tests {
             assert_eq!(span.turn_id.as_deref(), Some("turn-7"));
             assert_eq!(span.turn_index, Some(7));
         }
+    }
+
+    #[test]
+    fn report_adds_representative_anchors_to_model_tool_and_error_rows() {
+        let request = test_request(None);
+        let mut failed_turn = test_turn_with_tools(
+            "turn-2",
+            2,
+            DialogTurnKind::UserDialog,
+            vec![test_tool_item(
+                "tool-failed",
+                "write_file",
+                Some(false),
+                120,
+                "D:/workspace/bitfun/src/main.rs",
+            )],
+        );
+        failed_turn.model_rounds[0].model_id = Some("model-a".to_string());
+        failed_turn.model_rounds[0].model_alias = Some("model-a".to_string());
+        failed_turn.model_rounds[0].duration_ms = Some(220);
+        let mut model_error_turn =
+            test_turn_with_tools("turn-4", 4, DialogTurnKind::UserDialog, vec![]);
+        model_error_turn.status = TurnStatus::Error;
+
+        let report = build_session_usage_report_from_turns(
+            request,
+            &[failed_turn, model_error_turn],
+            &[],
+            1_778_347_200_000,
+        );
+
+        let model = report
+            .models
+            .iter()
+            .find(|model| model.model_id == "model-a")
+            .expect("model row");
+        assert_eq!(model.sample_turn_id.as_deref(), Some("turn-2"));
+        assert_eq!(model.sample_turn_index, Some(2));
+
+        let tool = report
+            .tools
+            .iter()
+            .find(|tool| tool.tool_name == "write_file")
+            .expect("tool row");
+        assert_eq!(tool.sample_turn_id.as_deref(), Some("turn-2"));
+        assert_eq!(tool.sample_turn_index, Some(2));
+        assert_eq!(tool.sample_item_id.as_deref(), Some("tool-failed"));
+
+        let tool_error = report
+            .errors
+            .examples
+            .iter()
+            .find(|example| example.label == "write_file")
+            .expect("tool error example");
+        assert_eq!(tool_error.sample_turn_id.as_deref(), Some("turn-2"));
+        assert_eq!(tool_error.sample_turn_index, Some(2));
+        assert_eq!(tool_error.sample_item_id.as_deref(), Some("tool-failed"));
+
+        let model_error = report
+            .errors
+            .examples
+            .iter()
+            .find(|example| example.label == "Model/runtime turn errors")
+            .expect("model error example");
+        assert_eq!(model_error.sample_turn_id.as_deref(), Some("turn-4"));
+        assert_eq!(model_error.sample_turn_index, Some(4));
+        assert_eq!(model_error.sample_item_id, None);
     }
 
     #[test]

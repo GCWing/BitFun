@@ -62,7 +62,14 @@
       "openSectionDetails": "打开{{section}}详情",
       "jumpToTurn": "跳转到该轮次",
       "viewDetails": "详情",
-      "viewAllSection": "查看全部 {{count}} 项"
+      "viewAllSection": "查看全部 {{count}} 项",
+      "showAllRows": "显示全部 {{count}} 项",
+      "showFewerRows": "收起"
+    },
+    "export": {
+      "redactPaths": "脱敏路径",
+      "redactPathsHelp": "复制 Markdown 时替换项目和文件路径。",
+      "redactedPath": "[已脱敏路径]"
     },
     "coverage": {
       "complete": "数据完整",
@@ -93,7 +100,8 @@
       "notRecorded": "未记录",
       "modelNotRecorded": "未记录模型名称",
       "legacyModel": "旧会话模型未统计",
-      "inferredModel": "{{model}}（推测）"
+      "inferredModel": "{{model}}（推测）",
+      "p95SampleInsufficient": "样本不足"
     },
     "cacheCoverage": {
       "available": "已上报",
@@ -188,6 +196,9 @@
       "duration": "记录耗时",
       "p95": "P95",
       "execution": "执行",
+      "toolDuration": "总耗时",
+      "toolP95Duration": "P95 总耗时",
+      "toolExecutionDuration": "执行耗时",
       "file": "文件",
       "operations": "操作",
       "added": "新增",
@@ -220,9 +231,9 @@
       "toolTime": "基于已记录工具调用耗时计算；占比按已记录轮次耗时近似计算。",
       "cachedTokens": "当前服务商没有为这个会话上报缓存读取 Token 元数据；可用时仍会显示总 Token。",
       "cachedTokensPartial": "只有部分调用上报了缓存读取 Token 元数据，因此缓存 Token 合计只覆盖这些调用。",
-      "toolDuration": "该工具调用没有上报耗时元数据。",
-      "toolP95": "同一工具至少记录两次带耗时调用后才会显示 P95。",
-      "toolExecution": "该工具没有单独上报执行耗时字段。",
+      "toolDuration": "当前报告范围内该工具名称的总记录耗时，可能包含排队、预检查、确认等待和实际执行。",
+      "toolP95": "该工具总耗时的 95 分位值；同一工具至少有两次带耗时调用后才会显示。",
+      "toolExecution": "扣除排队、预检查和确认等待后的工具执行阶段耗时。旧会话可能没有这个字段。",
       "legacyModel": "这个会话创建时尚未记录逐轮模型名称，因此报告无法确认精确模型。",
       "inferredModel": "旧会话缺少逐轮模型名称，已根据会话的模型设置推测。",
       "filesUnavailable": "当前会话没有找到本地快照或可识别的文件编辑工具记录。",

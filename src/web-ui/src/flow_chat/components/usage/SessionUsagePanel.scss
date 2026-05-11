@@ -43,6 +43,8 @@
     align-items: center;
     gap: 6px;
     flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   &__badge {
@@ -123,6 +125,36 @@
 
   &__copy {
     flex: 0 0 auto;
+  }
+
+  &__export-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-xs);
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+
+    input {
+      width: 12px;
+      height: 12px;
+      margin: 0;
+      accent-color: var(--accent-primary);
+
+      &:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--accent-primary) 70%, transparent);
+        outline-offset: 2px;
+      }
+    }
+
+    span {
+      max-width: 92px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 
   &__help-value {
@@ -483,7 +515,8 @@
     color: var(--color-text-muted);
   }
 
-  &__turn-link {
+  &__turn-link,
+  &__row-anchor-link {
     display: block;
     max-width: 260px;
     padding: 0;
@@ -509,6 +542,41 @@
       outline-offset: 2px;
       border-radius: 3px;
     }
+  }
+
+  &__turn-indexes {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 160px;
+  }
+
+  &__turn-index-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent-primary);
+    font: inherit;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--accent-primary-hover, var(--accent-primary));
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--accent-primary) 70%, transparent);
+      outline-offset: 2px;
+      border-radius: 3px;
+    }
+  }
+
+  &__turn-index-overflow {
+    color: var(--color-text-muted);
+    font-size: 11px;
+    white-space: nowrap;
   }
 
   &__table-footer {

@@ -283,15 +283,17 @@ const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, turnId
     
     case 'tool':
       return (
-        <FlowToolCard
-          toolItem={item as FlowToolItem}
-          onConfirm={handleConfirm}
-          onReject={handleReject}
-          onOpenInEditor={handleOpenInEditor}
-          onOpenInPanel={handleOpenInPanel}
-          sessionId={sessionId}
-          turnId={turnId}
-        />
+        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+          <FlowToolCard
+            toolItem={item as FlowToolItem}
+            onConfirm={handleConfirm}
+            onReject={handleReject}
+            onOpenInEditor={handleOpenInEditor}
+            onOpenInPanel={handleOpenInPanel}
+            sessionId={sessionId}
+            turnId={turnId}
+          />
+        </div>
       );
 
     default:

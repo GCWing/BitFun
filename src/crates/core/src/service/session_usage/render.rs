@@ -404,7 +404,6 @@ fn coverage_key_label(key: &UsageCoverageKey) -> &'static str {
         UsageCoverageKey::SubagentScope => "subagent_scope",
         UsageCoverageKey::RemoteSnapshotStats => "remote_snapshot_stats",
         UsageCoverageKey::FileLineStats => "file_line_stats",
-        UsageCoverageKey::CostEstimates => "cost_estimates",
         UsageCoverageKey::WorkspaceIdentity => "workspace_identity",
     }
 }

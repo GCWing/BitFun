@@ -46,7 +46,7 @@ function usageReport(overrides: Partial<SessionUsageReport> = {}): SessionUsageR
     coverage: {
       level: 'partial',
       available: ['workspace_identity'],
-      missing: ['cost_estimates'],
+      missing: ['token_detail_breakdown'],
       notes: [],
     },
     time: {

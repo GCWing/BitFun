@@ -62,7 +62,14 @@
       "openSectionDetails": "Open {{section}} details",
       "jumpToTurn": "Jump to this turn",
       "viewDetails": "Details",
-      "viewAllSection": "View all {{count}}"
+      "viewAllSection": "View all {{count}}",
+      "showAllRows": "Show all {{count}}",
+      "showFewerRows": "Show fewer"
+    },
+    "export": {
+      "redactPaths": "Redact paths",
+      "redactPathsHelp": "Replace workspace and file paths when copying Markdown.",
+      "redactedPath": "[redacted path]"
     },
     "coverage": {
       "complete": "Complete data",
@@ -93,7 +100,8 @@
       "notRecorded": "Not recorded",
       "modelNotRecorded": "Model not recorded",
       "legacyModel": "Legacy model not tracked",
-      "inferredModel": "{{model}} (inferred)"
+      "inferredModel": "{{model}} (inferred)",
+      "p95SampleInsufficient": "Not enough samples"
     },
     "cacheCoverage": {
       "available": "Reported",
@@ -154,9 +162,9 @@
       "toolTime": "Recorded tool-call duration. The percentage uses recorded turn time and is approximate.",
       "cachedTokens": "The provider did not report cache-read token metadata for this session. Total token counts are still shown when available.",
       "cachedTokensPartial": "Only some calls reported cache-read token metadata, so the cached-token total covers those calls only.",
-      "toolDuration": "This tool call did not report timing metadata.",
-      "toolP95": "P95 appears after at least two timed calls are recorded for this tool.",
-      "toolExecution": "This tool did not report a separate execution-duration field.",
+      "toolDuration": "Total recorded time for this tool name in the report scope. It may include queueing, preflight checks, confirmation wait, and execution.",
+      "toolP95": "95th percentile of recorded total call durations for this tool. It is shown only after at least two timed calls.",
+      "toolExecution": "Time spent inside the tool execution phase after queueing, preflight checks, and confirmation wait. Older sessions may not have this field.",
       "legacyModel": "Older sessions did not store per-round model names, so this report cannot identify the exact model.",
       "inferredModel": "Inferred from the session model setting because older turns did not store per-round model names.",
       "filesUnavailable": "No file snapshot or file-edit tool record was found for this session.",
@@ -222,6 +230,9 @@
       "duration": "Recorded time",
       "p95": "P95",
       "execution": "Execution",
+      "toolDuration": "Total time",
+      "toolP95Duration": "P95 total",
+      "toolExecutionDuration": "Execution time",
       "file": "File",
       "operations": "Ops",
       "added": "Added",

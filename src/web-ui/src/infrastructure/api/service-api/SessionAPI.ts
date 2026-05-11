@@ -64,6 +64,8 @@ export interface SessionUsageReport {
     totalTokens?: number;
     cachedTokens?: number;
     durationMs?: number;
+    sampleTurnId?: string;
+    sampleTurnIndex?: number;
   }>;
   tools: Array<{
     toolName: string;
@@ -77,6 +79,9 @@ export interface SessionUsageReport {
     preflightMs?: number;
     confirmationWaitMs?: number;
     executionMs?: number;
+    sampleTurnId?: string;
+    sampleTurnIndex?: number;
+    sampleItemId?: string;
     redacted: boolean;
   }>;
   files: {
@@ -108,6 +113,9 @@ export interface SessionUsageReport {
     examples: Array<{
       label: string;
       count: number;
+      sampleTurnId?: string;
+      sampleTurnIndex?: number;
+      sampleItemId?: string;
       redacted: boolean;
     }>;
   };

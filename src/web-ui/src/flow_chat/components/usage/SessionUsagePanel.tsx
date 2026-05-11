@@ -19,11 +19,14 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { createDiffEditorTab } from '@/shared/utils/tabUtils';
 import { createLogger } from '@/shared/utils/logger';
 import {
+  FLOWCHAT_FOCUS_ITEM_EVENT,
   FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
+  type FlowChatFocusItemRequest,
   type FlowChatPinTurnToTopRequest,
 } from '../../events/flowchatNavigation';
 import {
   calculateShare,
+  buildSessionUsageExportMarkdown,
   formatUsageDuration,
   formatUsageNumber,
   formatUsagePercent,
@@ -34,12 +37,16 @@ import {
   getFileScopeHelp,
   getFileScopeLabel,
   getFileSummaryLabel,
+  getUsageDisplayPathLabel,
   getModelHelp,
   getModelLabel,
   getRedactedLabel,
   getSlowSpanHelp,
   getSlowSpanLabel,
   getToolCategoryLabel,
+  getUsageExportRedactPathsPreference,
+  setUsageExportRedactPathsPreference,
+  subscribeUsageExportRedactPathsPreference,
 } from './usageReportUtils';
 import type { SessionUsagePanelTab } from './sessionUsagePanelTypes';
 import './SessionUsagePanel.scss';
@@ -75,6 +82,7 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
   const [activeTab, setActiveTab] = useState<SessionUsagePanelTab>(initialTab ?? 'overview');
   const [copied, setCopied] = useState(false);
   const [copiedMeta, setCopiedMeta] = useState<'session' | 'workspace' | null>(null);
+  const [redactExportPaths, setRedactExportPaths] = useState(getUsageExportRedactPathsPreference);
   const tabRefs = useRef<Partial<Record<SessionUsagePanelTab, HTMLButtonElement | null>>>({});
 
   useEffect(() => {
@@ -83,15 +91,26 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
     }
   }, [initialTab]);
 
+  useEffect(() => (
+    subscribeUsageExportRedactPathsPreference(setRedactExportPaths)
+  ), []);
+
   const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(markdown);
+      await navigator.clipboard.writeText(buildSessionUsageExportMarkdown(markdown, report, {
+        redactPaths: redactExportPaths,
+        t,
+      }));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
       setCopied(false);
     }
-  }, [markdown]);
+  }, [markdown, redactExportPaths, report, t]);
+
+  const handleRedactExportPathsChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setUsageExportRedactPathsPreference(event.target.checked);
+  }, []);
 
   const handleCopyMeta = useCallback(async (
     value: string,
@@ -155,7 +174,10 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
 
   const coverageTone = getCoverageTone(report.coverage.level);
   const effectiveSessionId = sessionId ?? report.sessionId;
-  const effectiveWorkspacePath = workspacePath ?? report.workspace.pathLabel ?? t('usage.unavailable');
+  const effectiveWorkspacePath = workspacePath ?? report.workspace.pathLabel;
+  const displayedWorkspacePath = getUsageDisplayPathLabel(effectiveWorkspacePath, t, {
+    redactPaths: redactExportPaths,
+  });
   const coverageBadgeClassName =
     `session-usage-panel__badge session-usage-panel__badge--${coverageTone}` +
     (report.coverage.level !== 'complete' ? ' session-usage-panel__badge--hint' : '');
@@ -185,10 +207,10 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
               />
               <UsageMetaRow
                 label={t('usage.meta.workspacePath')}
-                value={effectiveWorkspacePath}
+                value={displayedWorkspacePath}
                 copyLabel={copiedMeta === 'workspace' ? t('usage.actions.copied') : t('usage.actions.copyWorkspacePath')}
                 copied={copiedMeta === 'workspace'}
-                onCopy={() => handleCopyMeta(effectiveWorkspacePath, 'workspace')}
+                onCopy={() => handleCopyMeta(displayedWorkspacePath, 'workspace')}
               />
             </div>
           </div>
@@ -199,6 +221,11 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
               {coverageBadge}
             </Tooltip>
           ) : coverageBadge}
+          <UsageExportRedactionToggle
+            checked={redactExportPaths}
+            onChange={handleRedactExportPathsChange}
+            className="session-usage-panel__export-option"
+          />
           <Tooltip content={copied ? t('usage.actions.copied') : t('usage.actions.copyMarkdown')}>
             <IconButton
               className="session-usage-panel__copy"
@@ -247,21 +274,47 @@ export const SessionUsagePanel: React.FC<SessionUsagePanelProps> = ({
         aria-labelledby={tabId(activeTab)}
       >
         {activeTab === 'overview' && <UsageOverview report={report} />}
-        {activeTab === 'models' && <UsageModels report={report} />}
-        {activeTab === 'tools' && <UsageTools report={report} />}
+        {activeTab === 'models' && <UsageModels report={report} sessionId={effectiveSessionId} />}
+        {activeTab === 'tools' && <UsageTools report={report} sessionId={effectiveSessionId} />}
         {activeTab === 'files' && (
           <UsageFiles
             report={report}
             sessionId={effectiveSessionId}
             workspacePath={workspacePath ?? report.workspace.pathLabel}
+            redactPaths={redactExportPaths}
           />
         )}
-        {activeTab === 'errors' && <UsageErrors report={report} />}
+        {activeTab === 'errors' && <UsageErrors report={report} sessionId={effectiveSessionId} />}
         {activeTab === 'slowest' && <UsageSlowest report={report} sessionId={effectiveSessionId} />}
       </main>
     </div>
   );
 };
+
+function UsageExportRedactionToggle({
+  checked,
+  onChange,
+  className,
+}: {
+  checked: boolean;
+  onChange: React.ChangeEventHandler<HTMLInputElement>;
+  className: string;
+}) {
+  const { t } = useTranslation('flow-chat');
+  return (
+    <Tooltip content={t('usage.export.redactPathsHelp')}>
+      <label className={className}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onChange}
+          aria-label={t('usage.export.redactPaths')}
+        />
+        <span>{t('usage.export.redactPaths')}</span>
+      </label>
+    </Tooltip>
+  );
+}
 
 function UsageMetaRow({
   label,
@@ -313,6 +366,7 @@ type UsageTableCell = string | UsageTableValueCell | UsageTableNodeCell;
 interface UsageTableHeader {
   id: string;
   label: string;
+  help?: string;
 }
 
 interface UsageTableRow {
@@ -354,6 +408,58 @@ function missingUsageValue(value: string, help?: string): UsageTableCell {
   };
 }
 
+function UsageRowAnchorLink({
+  label,
+  help,
+  sessionId,
+  turnIndex,
+  itemId,
+}: {
+  label: string;
+  help?: string;
+  sessionId?: string;
+  turnIndex?: number;
+  itemId?: string;
+}) {
+  const { t } = useTranslation('flow-chat');
+  const displayTurnIndex = typeof turnIndex === 'number' && Number.isFinite(turnIndex)
+    ? getDisplayTurnIndex(turnIndex)
+    : undefined;
+  const canJump = Boolean(sessionId && displayTurnIndex);
+
+  if (!canJump) {
+    return <UsageValue value={label} help={help} />;
+  }
+
+  const jumpHelp = t('usage.actions.jumpToTurn');
+  const node = (
+    <button
+      type="button"
+      className="session-usage-panel__row-anchor-link"
+      onClick={() => {
+        const request: FlowChatFocusItemRequest = {
+          sessionId: sessionId as string,
+          turnIndex: displayTurnIndex as number,
+          source: 'usage-report',
+        };
+        if (itemId) {
+          request.itemId = itemId;
+        }
+        globalEventBus.emit(FLOWCHAT_FOCUS_ITEM_EVENT, request, 'SessionUsagePanel');
+      }}
+      aria-label={`${jumpHelp}: ${label}`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <Tooltip content={help ? `${help} ${jumpHelp}` : jumpHelp}>
+      {node}
+    </Tooltip>
+  );
+}
+
 function UsageFilePathValue({ pathLabel }: { pathLabel: string }) {
   const node = (
     <span className="session-usage-panel__file-path-display">
@@ -362,6 +468,81 @@ function UsageFilePathValue({ pathLabel }: { pathLabel: string }) {
   );
 
   return <Tooltip content={pathLabel}>{node}</Tooltip>;
+}
+
+function UsageFileTurnIndexesValue({
+  file,
+  sessionId,
+  onJumpToTurn,
+}: {
+  file: SessionUsageReport['files']['files'][number];
+  sessionId?: string;
+  onJumpToTurn: (file: SessionUsageReport['files']['files'][number], rawTurnIndex: number) => void;
+}) {
+  const { t } = useTranslation('flow-chat');
+  const turnIndexes = (file.turnIndexes ?? []).filter(index => Number.isFinite(index));
+
+  if (turnIndexes.length === 0) {
+    return <UsageMissingValue value={t('usage.status.notRecorded')} help={t('usage.help.fileTurnIndexes')} />;
+  }
+
+  const displayIndexes = turnIndexes.map(getDisplayTurnIndex);
+  if (!sessionId) {
+    return (
+      <UsageValue
+        value={displayIndexes.map(index => formatUsageNumber(index, t)).join(', ')}
+        help={t('usage.help.fileTurnIndexes')}
+      />
+    );
+  }
+
+  const visibleTurnIndexes = turnIndexes.slice(0, 3);
+  const hiddenCount = Math.max(0, turnIndexes.length - visibleTurnIndexes.length);
+  return (
+    <span className="session-usage-panel__turn-indexes">
+      {visibleTurnIndexes.map(rawTurnIndex => {
+        const displayTurnIndex = getDisplayTurnIndex(rawTurnIndex);
+        const displayTurnText = formatUsageNumber(displayTurnIndex, t);
+        return (
+          <Tooltip key={rawTurnIndex} content={t('usage.actions.jumpToTurn')}>
+            <button
+              type="button"
+              className="session-usage-panel__turn-index-link"
+              onClick={() => onJumpToTurn(file, rawTurnIndex)}
+              aria-label={`${t('usage.actions.jumpToTurn')}: ${displayTurnText}`}
+            >
+              {displayTurnText}
+            </button>
+          </Tooltip>
+        );
+      })}
+      {hiddenCount > 0 && (
+        <Tooltip content={displayIndexes.map(index => formatUsageNumber(index, t)).join(', ')}>
+          <span className="session-usage-panel__turn-index-overflow">
+            +{formatUsageNumber(hiddenCount, t)}
+          </span>
+        </Tooltip>
+      )}
+    </span>
+  );
+}
+
+function getDisplayTurnIndex(rawTurnIndex: number): number {
+  return Math.max(0, Math.trunc(rawTurnIndex)) + 1;
+}
+
+function getStableFileToolAnchorId(
+  scope: SessionUsageReport['files']['scope'],
+  file: SessionUsageReport['files']['files'][number]
+): string | undefined {
+  if (
+    scope !== 'tool_inputs_only' ||
+    (file.turnIndexes?.length ?? 0) !== 1 ||
+    (file.operationIds?.length ?? 0) !== 1
+  ) {
+    return undefined;
+  }
+  return file.operationIds?.[0];
 }
 
 function getCompactFilePathLabel(pathLabel: string): string {
@@ -491,7 +672,7 @@ function UsageOverview({ report }: { report: SessionUsageReport }) {
   );
 }
 
-function UsageModels({ report }: { report: SessionUsageReport }) {
+function UsageModels({ report, sessionId }: { report: SessionUsageReport; sessionId?: string }) {
   const { t } = useTranslation('flow-chat');
   const hasModelDuration = report.models.some(model => model.durationMs !== undefined);
   const headers: UsageTableHeader[] = [
@@ -512,10 +693,18 @@ function UsageModels({ report }: { report: SessionUsageReport }) {
         const cached = formatUsageNumber(model.cachedTokens, t);
         const source = model.modelIdSource ?? (model.modelId === 'unknown_model' ? 'legacy_missing' : undefined);
         const modelHelp = getModelHelp(source, t, model.modelId);
+        const modelLabel = getModelLabel(model.modelId, t, source);
         const cells: UsageTableCell[] = [
-          modelHelp
-            ? { value: getModelLabel(model.modelId, t, source), help: modelHelp }
-            : getModelLabel(model.modelId, t, source),
+          {
+            node: (
+              <UsageRowAnchorLink
+                label={modelLabel}
+                help={modelHelp}
+                sessionId={sessionId}
+                turnIndex={model.sampleTurnIndex}
+              />
+            ),
+          },
           formatUsageNumber(model.callCount, t),
         ];
         if (hasModelDuration) {
@@ -541,47 +730,70 @@ function UsageModels({ report }: { report: SessionUsageReport }) {
   );
 }
 
-function UsageTools({ report }: { report: SessionUsageReport }) {
+function UsageTools({ report, sessionId }: { report: SessionUsageReport; sessionId?: string }) {
   const { t } = useTranslation('flow-chat');
+  const hasExecutionDuration = report.tools.some(tool => tool.executionMs !== undefined);
+  const headers: UsageTableHeader[] = [
+    { id: 'tool', label: t('usage.table.tool') },
+    { id: 'category', label: t('usage.table.category') },
+    { id: 'calls', label: t('usage.table.calls') },
+    { id: 'success', label: t('usage.table.success') },
+    { id: 'errors', label: t('usage.table.errors') },
+    { id: 'duration', label: t('usage.table.toolDuration'), help: t('usage.help.toolDuration') },
+    { id: 'p95', label: t('usage.table.toolP95Duration'), help: t('usage.help.toolP95') },
+    ...(hasExecutionDuration
+      ? [{ id: 'execution', label: t('usage.table.toolExecutionDuration'), help: t('usage.help.toolExecution') }]
+      : []),
+  ];
   return (
     <UsageTable
       empty={report.tools.length === 0}
       emptyLabel={t('usage.empty.tools')}
       emptyDescription={t('usage.empty.toolsDescription')}
-      headers={[
-        { id: 'tool', label: t('usage.table.tool') },
-        { id: 'category', label: t('usage.table.category') },
-        { id: 'calls', label: t('usage.table.calls') },
-        { id: 'success', label: t('usage.table.success') },
-        { id: 'errors', label: t('usage.table.errors') },
-        { id: 'duration', label: t('usage.table.duration') },
-        { id: 'p95', label: t('usage.table.p95') },
-        { id: 'execution', label: t('usage.table.execution') },
-      ]}
+      headers={headers}
       rows={report.tools.map((tool, index) => {
         const duration = formatUsageDuration(tool.durationMs, t);
         const p95 = formatUsageDuration(tool.p95DurationMs, t);
         const execution = formatUsageDuration(tool.executionMs, t);
+        const cells: UsageTableCell[] = [
+          {
+            node: (
+              <UsageRowAnchorLink
+                label={tool.redacted ? getRedactedLabel(t) : tool.toolName}
+                sessionId={sessionId}
+                turnIndex={tool.sampleTurnIndex}
+                itemId={tool.sampleItemId}
+              />
+            ),
+          },
+          getToolCategoryLabel(tool.category, t),
+          formatUsageNumber(tool.callCount, t),
+          formatUsageNumber(tool.successCount, t),
+          formatUsageNumber(tool.errorCount, t),
+          tool.durationMs === undefined
+            ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.toolDuration'))
+            : duration,
+          tool.p95DurationMs === undefined
+            ? missingUsageValue(
+              tool.durationMs === undefined
+                ? t('usage.status.timingNotRecorded')
+                : t('usage.status.p95SampleInsufficient'),
+              t('usage.help.toolP95')
+            )
+            : p95,
+        ];
+        if (hasExecutionDuration) {
+          cells.push(
+            tool.executionMs === undefined
+              ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.toolExecution'))
+              : execution
+          );
+        }
         return {
           id: tool.redacted
             ? `tool-${index}-redacted-${tool.category}`
             : `tool-${index}-${tool.category}-${tool.toolName}`,
-          cells: [
-            tool.redacted ? getRedactedLabel(t) : tool.toolName,
-            getToolCategoryLabel(tool.category, t),
-            formatUsageNumber(tool.callCount, t),
-            formatUsageNumber(tool.successCount, t),
-            formatUsageNumber(tool.errorCount, t),
-            tool.durationMs === undefined
-              ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.toolDuration'))
-              : duration,
-            tool.p95DurationMs === undefined
-              ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.toolP95'))
-              : p95,
-            tool.executionMs === undefined
-              ? missingUsageValue(t('usage.status.timingNotRecorded'), t('usage.help.toolExecution'))
-              : execution,
-          ],
+          cells,
         };
       })}
     />
@@ -592,14 +804,38 @@ function UsageFiles({
   report,
   sessionId,
   workspacePath,
+  redactPaths,
 }: {
   report: SessionUsageReport;
   sessionId?: string;
   workspacePath?: string;
+  redactPaths: boolean;
 }) {
   const { t } = useTranslation('flow-chat');
   const fileScopeHelp = getFileScopeHelp(report, t);
   const [openingDiffKey, setOpeningDiffKey] = useState<string | null>(null);
+
+  const handleJumpToFileTurn = useCallback((
+    file: SessionUsageReport['files']['files'][number],
+    rawTurnIndex: number
+  ) => {
+    const targetSessionId = file.sessionId ?? sessionId;
+    if (!targetSessionId) {
+      return;
+    }
+
+    const turnIndex = getDisplayTurnIndex(rawTurnIndex);
+    const request: FlowChatFocusItemRequest = {
+      sessionId: targetSessionId,
+      turnIndex,
+      source: 'usage-report',
+    };
+    const itemId = getStableFileToolAnchorId(report.files.scope, file);
+    if (itemId) {
+      request.itemId = itemId;
+    }
+    globalEventBus.emit(FLOWCHAT_FOCUS_ITEM_EVENT, request, 'SessionUsagePanel');
+  }, [report.files.scope, sessionId]);
 
   const handleOpenFileDiff = useCallback(async (file: SessionUsageReport['files']['files'][number]) => {
     if (!sessionId || file.redacted || report.files.scope !== 'snapshot_summary') {
@@ -649,6 +885,10 @@ function UsageFiles({
   const rows = useMemo(() => report.files.files.map((file, index) => {
     const operationId = file.operationIds?.[0];
     const resolvedPath = resolveUsageFilePath(file.pathLabel, workspacePath);
+    const displayPathLabel = getUsageDisplayPathLabel(file.pathLabel, t, {
+      redactPaths,
+      keepFileName: true,
+    });
     const diffKey = `${resolvedPath}:${operationId ?? ''}`;
     const canOpenDiff = canOpenUsageFileDiff(report.files.scope, file, sessionId);
     const actionCell: UsageTableNodeCell = {
@@ -681,17 +921,25 @@ function UsageFiles({
       file.redacted
         ? getRedactedLabel(t)
         : {
-          node: <UsageFilePathValue pathLabel={file.pathLabel} />,
+          node: <UsageFilePathValue pathLabel={displayPathLabel} />,
           className: 'session-usage-panel__file-path-cell',
         },
-      formatUsageNumber(file.operationCount, t),
-      formatUsageNumber(file.addedLines, t),
-      formatUsageNumber(file.deletedLines, t),
-      (file.turnIndexes ?? []).join(', ') || { value: t('usage.status.notRecorded'), help: t('usage.help.fileTurnIndexes') },
-      actionCell,
+        formatUsageNumber(file.operationCount, t),
+        formatUsageNumber(file.addedLines, t),
+        formatUsageNumber(file.deletedLines, t),
+        {
+          node: (
+            <UsageFileTurnIndexesValue
+              file={file}
+              sessionId={file.sessionId ?? sessionId}
+              onJumpToTurn={handleJumpToFileTurn}
+            />
+          ),
+        },
+        actionCell,
       ],
     };
-  }), [handleOpenFileDiff, openingDiffKey, report.files.files, report.files.scope, sessionId, t, workspacePath]);
+  }), [handleJumpToFileTurn, handleOpenFileDiff, openingDiffKey, redactPaths, report.files.files, report.files.scope, sessionId, t, workspacePath]);
 
   return (
     <section className="session-usage-panel__section">
@@ -722,7 +970,7 @@ function UsageFiles({
   );
 }
 
-function UsageErrors({ report }: { report: SessionUsageReport }) {
+function UsageErrors({ report, sessionId }: { report: SessionUsageReport; sessionId?: string }) {
   const { t } = useTranslation('flow-chat');
   return (
     <section className="session-usage-panel__section">
@@ -779,8 +1027,15 @@ function UsageErrors({ report }: { report: SessionUsageReport }) {
             : `error-${index}-${example.label}-${example.count}`,
           cells: [
             {
-              value: example.redacted ? getRedactedLabel(t) : example.label,
-              help: t('usage.help.errorExampleRow'),
+              node: (
+                <UsageRowAnchorLink
+                  label={example.redacted ? getRedactedLabel(t) : example.label}
+                  help={t('usage.help.errorExampleRow')}
+                  sessionId={sessionId}
+                  turnIndex={example.sampleTurnIndex}
+                  itemId={example.sampleItemId}
+                />
+              ),
             },
             {
               value: formatUsageNumber(example.count, t),
@@ -923,7 +1178,11 @@ function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, r
         <table className={['session-usage-panel__table', tableClassName].filter(Boolean).join(' ')}>
           <thead>
             <tr>
-              {headers.map(header => <th key={header.id}>{header.label}</th>)}
+              {headers.map(header => (
+                <th key={header.id}>
+                  <UsageTableHeaderLabel header={header} />
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -967,6 +1226,14 @@ function UsageTable({ empty, emptyLabel, emptyDescription, emptyHelp, headers, r
       )}
     </>
   );
+}
+
+function UsageTableHeaderLabel({ header }: { header: UsageTableHeader }) {
+  if (!header.help) {
+    return <span>{header.label}</span>;
+  }
+
+  return <UsageValue value={header.label} help={header.help} />;
 }
 
 SessionUsagePanel.displayName = 'SessionUsagePanel';

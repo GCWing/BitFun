@@ -1,6 +1,6 @@
 # Session Runtime Usage Report Design
 
-> Status: P0 and P1 implemented; P2 Desktop analysis surface partially implemented and under hardening review as of 2026-05-11
+> Status: P0 and P1 implemented; P2 Desktop analysis surface hardening mostly implemented as of 2026-05-11
 > Scope: `/usage`, Desktop Flow Chat usage reports, CLI usage reports, session runtime metrics, Chat-bottom usage entry
 > Non-goal: this document does not prescribe exact code edits or final UI copy.
 
@@ -14,16 +14,16 @@ Long BitFun sessions can include model streaming, tool execution, Git operations
 - Did context compression reduce or increase token pressure?
 - Can this summary be read later in the conversation, not only in a temporary popover?
 
-Claude Code's `/usage` is the closest product reference. Its current documentation says `/usage` shows detailed token statistics for the current session, including locally estimated cost, API duration, wall duration, and code changes. The same page also recommends using `/usage` or a status line for proactive context management. GitHub Copilot cloud agent exposes a session overview/log where users can track progress, token usage, session count, and session length. OpenAI Agents SDK and LangSmith are useful engineering references: both model agent work as traces/spans, with LLM generations, tool calls, custom events, token usage, cost, and timing breakdowns.
+Claude Code's `/usage` is the closest product reference. Anthropic describes it as a command that helps users understand Claude Code usage in the context of session and context-window management. GitHub Copilot cloud agent exposes a session overview/log where users can track progress, token usage, session count, and session length. OpenAI Agents SDK is the useful engineering reference: its usage API tracks requests and tokens per run/request, while tracing models agent work as spans for model generations, tool calls, handoffs, guardrails, and custom events.
 
 References:
 
-- [Claude Code usage and costs](https://code.claude.com/docs/en/costs)
+- [Claude Code session management and `/usage`](https://claude.com/blog/using-claude-code-session-management-and-1m-context)
 - [GitHub Copilot agent session tracking](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/track-copilot-sessions)
+- [OpenAI Agents SDK usage](https://openai.github.io/openai-agents-python/usage/)
 - [OpenAI Agents SDK tracing](https://openai.github.io/openai-agents-python/tracing/)
-- [LangSmith cost tracking](https://docs.langchain.com/langsmith/cost-tracking)
 
-External reference check: as of 2026-05-09, these sources still support the high-level direction above. Claude Code documents `/usage` as current-session token/cost/duration/change reporting with local cost estimates; GitHub Copilot exposes session overview/log surfaces with progress, token usage, session count, and session length; OpenAI Agents SDK models agent work as traces/spans for LLM generations and tool calls; LangSmith cost tracking depends on provider/model metadata and token-detail categories. Treat these as product references, not compatibility requirements. BitFun's implemented boundary is intentionally narrower: cost-adjacent reporting stops at token counts and token coverage.
+External reference check: as of 2026-05-11, these sources support a narrow usage-report scope. Claude Code frames `/usage` around understanding session usage and managing context; GitHub Copilot exposes session progress, token usage, session count, session length, and logs; OpenAI Agents SDK separates per-run/request token usage from deeper span tracing. Treat these as product references, not compatibility requirements. BitFun's boundary is intentionally narrower than a full tracing dashboard: it reports the current session's recorded runtime facts, their coverage, and safe navigation points back to the transcript or existing diff surfaces.
 
 ## Product Direction
 
@@ -33,9 +33,21 @@ The key product decision is:
 
 > `/usage` creates a durable, readable session report in the current conversation, while Desktop also exposes the same action from one compact button in the Chat input footer.
 
-The implemented report is intentionally a persisted-data report. It does not claim pure model streaming throughput, first-token latency, token-per-second speed, monetary cost, or live per-model timing unless a future runtime span contract provides those fields.
+The implemented report is intentionally a persisted-data report. It does not claim pure model streaming throughput, first-token latency, token-per-second speed, or live per-model timing unless a stable runtime span contract provides those fields.
 
 This avoids making usage insight feel hidden behind a temporary button. Users should be able to run `/usage`, scroll back to the report, search it, export it with the session, and compare it with file changes.
+
+## Closed Product Scope
+
+The closed product is a current-session runtime report. It answers:
+
+- How long the session spans and how much recorded work happened inside it.
+- Which token, model, tool, file, error, compression, and slow-work facts were recorded.
+- Which facts are complete, partial, or unavailable, with user-facing reasons near the affected values.
+- Which transcript turn or existing diff surface can be opened for verification.
+- Which report metadata should be copyable or exportable without exposing unnecessary path detail by default.
+
+The product is complete when `/usage` can generate a durable, model-invisible report from the current session, the Chat-bottom entry exposes the same action, the detail panel makes recorded facts understandable, and partial data is clearly labeled. Anything that changes runtime policy, recommends workflow changes, aggregates across sessions, or shows live status belongs outside this closed scope.
 
 ## Independent Third-Party Review
 
@@ -44,17 +56,17 @@ Verdict: the direction is reasonable, but the current draft needs a few product 
 - Use one structured report contract and surface-specific renderers instead of separate CLI/Desktop counters.
 - Store Desktop `/usage` as user-visible but model-invisible local output.
 - Start with existing persisted data, then improve accuracy with additive runtime spans.
-- Exclude monetary cost estimates, charts, and cross-session analytics until they have separate product ownership; keep the Chat-bottom action as a compact entry point backed by the same session-level contract.
+- Exclude charts, cross-session summaries, and automated optimization advice from the closed product scope; keep the Chat-bottom action as a compact entry point backed by the same session-level contract.
 
-The main remaining risk is not that the feature is too ambitious. The risk is that "usage reporting" accidentally becomes a second runtime control plane for budget, scheduler, retry, artifact, or context mutation behavior. The report should be an observability projection. It may consume runtime facts, but it must not decide scheduling, retries, context compaction, permissions, or cost governance.
+The main remaining risk is not that the feature is too ambitious. The risk is that "usage reporting" accidentally becomes a second runtime control plane for budget, scheduler, retry, artifact, or context mutation behavior. The report should be an observability projection. It may consume runtime facts, but it must not decide scheduling, retries, context compaction, permissions, or runtime governance.
 
-Before implementation, the design should explicitly define:
+The current implementation resolves the important boundaries as follows:
 
-- What exact session scope `/usage` reports: current session only, parent plus hidden subagents, visible side sessions, or all linked sessions.
-- How overlapping time is counted when model calls, tools, subagents, retries, and queues run concurrently.
-- Whether `/usage` can run during an active turn, and if so whether it inserts immediately, appends after the turn, or shows a point-in-time preview.
-- How cached tokens, reasoning tokens, local models, model aliases, and provider-specific token details are represented when data is partial.
-- What sensitive command, path, error, or metadata fields are allowed in a durable/exportable report.
+- Standard `/usage` reports the current session only.
+- Overlapping recorded spans use union accounting where supported, and the UI labels approximations.
+- `/usage` requires an idle session and returns friendly local feedback while a turn is active.
+- Cached tokens, reasoning tokens, local models, model aliases, and provider-specific token details are marked partial or unavailable when the source cannot prove them.
+- Durable/exportable reports use bounded labels, workspace-relative paths where possible, and copy/export path redaction by default.
 
 ## Relationship to Adjacent Runtime Plans
 
@@ -148,18 +160,9 @@ The detailed visual report exists alongside the Markdown snapshot. It uses the s
 
 ### Desktop Chat-Bottom Usage Entry
 
-The implemented Flow Chat entry is a compact action in the Chat input footer (`ChatInputWorkspaceStrip`) that generates `/usage` in the current chat. It intentionally avoids title/header placement and live timing shares until runtime span data is reliable enough.
+The implemented Flow Chat entry is a compact action in the Chat input footer (`ChatInputWorkspaceStrip`) that generates `/usage` in the current chat. It intentionally avoids title/header placement and live timing values.
 
-Possible future live states:
-
-| Width / available space | Display |
-| --- | --- |
-| Wide | `18m active | 61% model | 24% tools | 2 compact | 3 errors` |
-| Medium | `18m | model 61% | tools 24%` |
-| Narrow | small clock/activity icon + `18m` |
-| Very narrow | icon only, tooltip contains the summary |
-
-The Chat-bottom entry should never compete with the title/header row. It must preserve the input footer's workspace/branch controls, model selector, and send affordances. If future live values are added, lower-priority segments must hide before shrinking text beyond legibility.
+The Chat-bottom entry should never compete with the title/header row. It must preserve the input footer's workspace/branch controls, model selector, and send affordances. Its job is to start report generation, not to become a live status display.
 
 ## Current Reusable Capabilities
 
@@ -223,23 +226,24 @@ It also provides summary aggregation by model and session.
 The subsections below preserve the original gap analysis so later reviews can
 see why each work item existed. The current code review on 2026-05-11 checked
 the plan against `origin/main..HEAD` and found P0/P1 implemented, with P2
-partially implemented. "Done" means code and automated coverage exist in this
-branch; "Partial" means the foundation exists, but the remaining work below
-still needs product or technical signoff before the item should be considered
-complete.
+hardening implemented except for real long-session smoke checks and items now
+outside the closed scope. "Done" means code and automated coverage exist in
+this branch; "Partial" means the foundation exists, but the remaining work
+below still needs product or technical signoff before the item should be
+considered complete.
 
 | Area | Current status | Code evidence | Remaining work |
 | --- | --- | --- | --- |
-| Shared report service | Done | `src/crates/core/src/service/session_usage/{service.rs,types.rs,render.rs}` and `SessionAPI.getSessionUsageReport` | Keep the API contract stable while adding future analytics. |
+| Shared report service | Done | `src/crates/core/src/service/session_usage/{service.rs,types.rs,render.rs}` and `SessionAPI.getSessionUsageReport` | Keep the API contract stable while adding future report fields. |
 | Durable local report message | Done | `DialogTurnKind::LocalCommand`, `localCommandKind: 'usage_report'`, `modelVisible: false` | Keep usage report snapshots model-invisible through future history, export, and transcript changes. |
-| CLI `/usage` coverage | Done for interactive CLI | CLI `usage_*` coverage and the shared renderer | Top-level `bitfun usage --session` remains deferred. |
-| Model timing | Mostly done | Optional event and persisted fields for duration, provider/model identity, first chunk, visible output, stream duration, attempts, failure category, and token details | Throughput/TPS and provider-latency claims stay deferred until semantics are stable enough to avoid misleading users. |
+| CLI `/usage` coverage | Done for interactive CLI | CLI `usage_*` coverage and the shared renderer | Top-level `bitfun usage --session` is outside the closed product scope. |
+| Model timing | Mostly done | Optional event and persisted fields for duration, provider/model identity, first chunk, visible output, stream duration, attempts, failure category, and token details | Throughput/TPS and provider-latency claims are outside the closed product scope. |
 | Tool phase timing/classification | Mostly done | Optional terminal tool duration fields and `session_usage::classifier` coverage | Scheduler, budget, and backoff facts still depend on owning modules emitting typed facts. |
-| File correlation and diff links | Partial | Snapshot summaries, `UsageFileRow.operationIds`, and `SessionUsagePanel` diff actions | Transcript/tool-card anchor links and long-session row virtualization remain follow-up work. |
-| Token-only cost boundary | Done | Token-only locale guard coverage and no monetary DTO fields | Future billing or cost analytics must remain a separate feature surface. |
-| i18n and theme | Mostly done | Flow Chat locale alignment coverage, semantic style guard coverage, and quick-action localization coverage | Manual light/dark screenshot, keyboard, and accessibility pass is still needed before final UX signoff. |
-| Scope and workspace identity | Done for current session | Request carries workspace path/remote identity and DTO exposes `UsageWorkspace` | Hidden subagent and visible side-session aggregation remain open decisions. |
-| Redaction/export policy | Partial | Bounded labels, privacy flags, workspace-relative display, and copied metadata | Exact exported path redaction rules for local and remote paths still need a dedicated policy. |
+| File correlation and diff links | Mostly done | Snapshot summaries, `UsageFileRow.operationIds`, representative model/tool/error anchors, `SessionUsagePanel` diff actions, file-row turn jumps, tool-input-only file-row tool anchors, and panel-local long-session row caps | Exact per-call deep anchors for every aggregate row are outside the closed product scope. |
+| Token reporting boundary | Done | Token-focused locale guard coverage and DTO fields limited to runtime/session facts | Keep `/usage` centered on current-session observability. |
+| i18n and theme | Mostly done | Flow Chat locale alignment coverage, semantic style guard coverage, quick-action localization coverage, detail-panel tab keyboard semantics, and manual preview checks across Light, Slate, Dark, Midnight, Ink Charm, Ink Night, Cyber, and Tokyo Night | Final real-App long-session smoke and keyboard/focus pass are still needed before final UX signoff. |
+| Scope and workspace identity | Done for current session | Request carries workspace path/remote identity and DTO exposes `UsageWorkspace` | Hidden subagent and visible side-session aggregation are outside the closed product scope. |
+| Redaction/export policy | Mostly done | Bounded labels, privacy flags, workspace-relative display, copied metadata, and copy/export path redaction preference | Broader export formats stay outside the closed product scope. |
 
 ### 1. Shared session usage report service
 
@@ -341,19 +345,19 @@ Required change:
 - Add report fields for files changed, additions, deletions, and top changed files.
 - Link report rows to existing operation/turn/session/git diff opening paths.
 
-### 9. Token-only cost boundary
+### 9. Token reporting boundary
 
 Missing:
 
-- TokenUsageService stores tokens but not authoritative billing/cost data.
-- Different providers have different billing semantics for cache, reasoning tokens, subscriptions, local models, or gateway pricing.
+- TokenUsageService stores tokens, but not every provider reports the same token detail categories.
+- Cache, reasoning, audio/image, local-model, and gateway-mediated token details may be unavailable or partial.
 
 Required change:
 
-- `/usage` treats token counts as the only supported cost proxy.
-- Do not add monetary amounts, currencies, package/subscription language, price source metadata, or provider billing estimates to this report.
-- If the UI needs "cost" wording, it must point back to token counts and token coverage only.
-- Keep provider billing, pricing tables, and package semantics out of this milestone and out of persisted historical reports.
+- `/usage` reports token counts and token coverage only when the source data can support them.
+- Keep unavailable token categories visible as partial coverage instead of showing misleading zeros.
+- Keep token detail categories provider-agnostic in the DTO; provider-specific values can be optional structured fields, not prose.
+- Do not let token reporting become a recommendation, quota, or policy surface.
 
 ### 10. Internationalization and theme integration
 
@@ -374,14 +378,14 @@ Required change:
 Missing:
 
 - The current draft mostly keys reports by `sessionId`, but persisted session ids are only meaningful within a workspace/runtime identity.
-- It is not yet clear whether a parent session report includes hidden subagent sessions, visible `/btw` side sessions, Deep Review child sessions, or only the active chat.
+- The closed product reports only the active chat session. Hidden subagent sessions, visible `/btw` side sessions, and Deep Review child sessions are not silently aggregated.
 - Remote sessions need `remote_connection_id` / `remote_ssh_host` context, and snapshot data may be unavailable for remote workspaces.
 
 Required change:
 
 - Every report request and API adapter should include the same workspace identity fields used by session persistence: workspace path plus remote identity when present.
-- P0 default scope should be "current user-visible session". Hidden subagent usage may be included only when records carry reliable parent linkage; otherwise mark `subagent_scope` as partial.
-- Visible side sessions such as `/btw` should not be silently folded into the parent report in P0. They can be linked or summarized later when the relationship model is explicit.
+- Default scope is "current user-visible session".
+- Hidden subagent usage and visible side sessions such as `/btw` should not be silently folded into the parent report.
 - Add coverage keys such as `workspace_identity`, `subagent_scope`, and `remote_snapshot_stats`.
 
 ### 12. Time accounting and overlapping spans
@@ -424,7 +428,6 @@ Required change:
 - Do not render "Cached" as an authoritative P0 metric unless the source actually records it.
 - Add coverage metadata for `cached_tokens` and `token_detail_breakdown`.
 - Later span/event enrichment should carry provider token details as structured optional fields, not as provider-specific prose.
-- Cost-adjacent reporting must stop at token categories and counts; provider/model prices remain out of scope.
 
 ### 15. Privacy, redaction, and durable export policy
 
@@ -490,7 +493,6 @@ type SessionUsageReport = {
       | 'subagent_scope'
       | 'remote_snapshot_stats'
       | 'file_line_stats'
-      | 'cost_estimates' // missing/out-of-scope marker only; never a monetary data field
       | string
     >;
   };
@@ -602,12 +604,12 @@ Exact field names can change during implementation. The important boundary is th
 - The report is a point-in-time snapshot. It is not expected to update after more turns run.
 - Running `/usage` multiple times should append multiple reports in P0.
 - If `/usage` is invoked during an active turn, the implementation must either reject it with a friendly local-only message or insert a clearly marked in-progress snapshot without touching the active model/tool state.
-- A standard session report should not silently include visible side sessions. Hidden subagent inclusion requires reliable parent linkage and an explicit scope marker.
+- A standard session report should not silently include visible side sessions or hidden subagents.
 
 ### Chat-bottom usage entry
 
 - The Chat-bottom usage entry is a convenience, not the source of truth.
-- It should remain action-only at constrained widths; live metrics belong to a later design.
+- It should remain action-only at constrained widths; live metrics are outside the closed product scope.
 - It must not introduce horizontal overflow.
 - It must support keyboard focus, screen-reader labels, and tooltip summaries.
 - It should hide itself automatically when no active session or no reportable data exists.
@@ -625,9 +627,8 @@ Recommended tabs:
 - Errors
 - Slowest
 
-Timeline remains a future option. Current P2 uses the Slowest tab plus
-turn-level navigation because stable transcript/tool-card anchors are not yet
-available for every row type.
+Timeline is outside the closed product scope. Current P2 uses the Slowest tab
+plus representative transcript links instead of a full trace timeline.
 
 ## Milestone Execution Plan
 
@@ -639,7 +640,7 @@ Current milestone progress, verified against the current branch on 2026-05-11:
 | --- | --- | --- | --- |
 | P0: Safe `/usage` foundation | Complete | Shared report service/renderers, model-invisible local report items, CLI interactive `/usage`, Desktop report cards, repeated-report exclusion, and old-session/cache-unavailable fixtures are covered by Rust and Web UI tests. | Keep future changes within the same local-only and model-invisible contract. |
 | P1: Runtime spans and file correlation | Complete for the approved P1 scope | Optional model/tool runtime facts persist and aggregate; local usage reports are excluded from the next report span; snapshot-backed and recognized tool-input file rows are surfaced; missing model identity uses legacy-session copy instead of implementation labels. | Scheduler/budget/context/artifact facts remain projections only when their owning modules emit typed facts. Hidden subagents remain excluded by default. |
-| P2: Desktop analysis surface | Partial | Chat-bottom entry, detail panel tabs, copyable metadata, file diff actions, slow-span turn jumps, i18n coverage, and semantic style tests are present. | Stable transcript/tool-card anchors, long-session caps or virtualization, manual light/dark/accessibility checks, and exported path redaction policy still need completion. |
+| P2: Desktop analysis surface | Almost complete | Chat-bottom entry, detail panel tabs, accessible tab keyboard semantics, copyable metadata, file diff actions, slow-span turn jumps, representative model/tool/error anchors, file-row turn/tool-input anchors, panel-local long-list caps, user-confirmed Markdown copy path redaction, i18n coverage, semantic style tests, duplicate-localized-header guard, and manual preview checks across all built-in themes are present. | Real-App long-session smoke remains before final UX signoff. |
 
 ### Milestone P0: Safe `/usage` Foundation
 
@@ -663,7 +664,7 @@ Functional guardrails:
 
 - `/usage` must never call the model, enqueue an agent turn, mutate runtime scheduling, or trigger context compression.
 - The Desktop report must be stored as a local command/report item that is visible to the user but excluded from model-visible history.
-- P0 must not introduce cost estimates, live header UI, charts, cross-session analytics, or new runtime span persistence.
+- P0 must not introduce live header UI, charts, cross-session summaries, or new runtime span persistence.
 - Missing data must be represented by coverage metadata and partial-data copy, not by misleading zero values.
 - Old sessions must still deserialize and replay; sessions without token/snapshot data should still produce a partial report instead of failing.
 - P0 must not show cached-token counts as real if current events only record them as `0`.
@@ -788,7 +789,7 @@ P1 must move `/usage` from P0 approximation toward factual runtime accounting wi
    - Files: `src/web-ui/src/flow_chat/components/usage/*`, `src/web-ui/src/flow_chat/store/FlowChatStore.ts`, `src/web-ui/src/infrastructure/api/service-api/AgentAPI.ts`, and `src/web-ui/src/locales/*/flow-chat.json`.
    - Show model duration only when at least one model duration is recorded.
    - Keep error and coverage explanations visible through concise hover text plus detail-page descriptions.
-   - Avoid new claims such as exact token pricing or file-line changes unless the backend has the underlying fact.
+   - Avoid new claims such as exact throughput or file-line changes unless the backend has the underlying fact.
 
 5. Verify and review consistency.
    - Required checks: `pnpm run lint:web`, `pnpm run type-check:web`, `pnpm --dir src/web-ui run test:run`, `cargo check --workspace`, and `cargo test --workspace`.
@@ -831,7 +832,7 @@ P1 implementation review note (2026-05-11):
 
 ### Milestone P2: Responsive Desktop Analysis Surface
 
-Goal: add the interactive Desktop analysis panel and keep a compact Chat-bottom entry point after the report contract is stable. The implemented entry is a lightweight `/usage` trigger in the Chat input footer; title/header placement and live timing values remain deferred until span quality and layout needs justify a separate design.
+Goal: add the interactive Desktop analysis panel and keep a compact Chat-bottom entry point after the report contract is stable. The implemented entry is a lightweight `/usage` trigger in the Chat input footer; title/header placement and live timing values are outside the closed product scope.
 
 Included task groups:
 
@@ -840,7 +841,7 @@ Included task groups:
 | P2.0 | Chat-bottom action contract | Task 11 | Entry point that can generate the current session report |
 | P2.1 | Responsive Chat-bottom entry | Task 11 | `ChatInputWorkspaceStrip` usage action as a stable icon/text trigger |
 | P2.2 | Detailed report panel | Task 12 | Overview, Models, Tools, Files, Errors, and Slowest tabs using the shared DTO |
-| P2.3 | Diff and transcript links | Tasks 10, 12 | Snapshot-backed file rows open existing diff viewers; slow-span rows can jump to known turns; stable tool-card anchors remain follow-up |
+| P2.3 | Diff and transcript links | Tasks 10, 12 | Snapshot-backed file rows open existing diff viewers; slow-span rows can jump to known turns; model/tool/error aggregate rows expose representative anchors; file rows can jump to transcript turns; tool-input-only file rows can request tool-card focus when a single stable tool item id exists |
 | P2.4 | i18n, theme, accessibility hardening | Tasks 7, 11, 12 | Locale-safe labels, semantic colors, keyboard access, tooltips, and screen-reader labels |
 
 Functional guardrails:
@@ -858,7 +859,7 @@ Risk and drift controls:
 | Risk or drift | Mitigation | Stop condition |
 | --- | --- | --- |
 | Small windows become cluttered | Use container-aware priority collapse and icon-only fallback | Chat footer controls overlap or disappear in narrow desktop widths |
-| Future live summary causes reflow while streaming | Throttle updates and keep footer content dimensionally stable | Streaming causes visible layout jitter |
+| Live summary creeps back into the footer | Keep the entry action-only | Streaming causes visible layout jitter |
 | Panel becomes a debugger replacement | Keep default view summary-first and deep links back to existing transcript/diff surfaces | Panel starts duplicating raw tool output or full diffs |
 | i18n text overflows | Test `en-US`, `zh-CN`, and `zh-TW`; prefer card/list fallback over wide tables | Any required label clips in supported locales |
 | Theme contrast regresses | Use semantic tokens and light/dark checks | New colors bypass theme tokens |
@@ -870,7 +871,7 @@ Required verification before merging P2:
 - `pnpm --dir src/web-ui run test:run`
 - Component/layout tests for the usage trigger in wide and narrow Chat footer states.
 - Locale smoke checks for `en-US`, `zh-CN`, and `zh-TW`.
-- Light and dark theme screenshot or manual checks.
+- Manual preview checks across all built-in themes: Light, Slate, Dark, Midnight, Ink Charm, Ink Night, Cyber, and Tokyo Night.
 - Manual proof that existing file diff buttons and report-linked diff buttons open the same scopes.
 
 Rollback boundary:
@@ -881,23 +882,57 @@ Rollback boundary:
 P2 implementation progress note (2026-05-11):
 
 - P2.0/P2.1 entry placement matches current code: the usage action lives in `ChatInputWorkspaceStrip` at the Chat bottom, not in `FlowChatHeader` or the window title/header area.
-- P2.2 is implemented as a single detail-panel module today: `SessionUsagePanel.tsx`, `SessionUsagePanel.scss`, `sessionUsagePanelTypes.ts`, and `openSessionUsageReport.ts`. The panel includes Overview, Models, Tools, Files, Errors, and Slowest tabs. Splitting tab bodies into separate files is deferred until component size or ownership makes that cheaper than a consolidated module.
-- P2.3 is partially implemented. File rows open the existing snapshot diff viewer through `snapshotAPI.getOperationDiff` and `createDiffEditorTab`; no new diff renderer or mutation path is introduced. Slowest rows can jump to known turns through the existing Flow Chat pin-to-top event.
+- P2.2 is implemented as a single detail-panel module today: `SessionUsagePanel.tsx`, `SessionUsagePanel.scss`, `sessionUsagePanelTypes.ts`, and `openSessionUsageReport.ts`. The panel includes Overview, Models, Tools, Files, Errors, and Slowest tabs. Splitting tab bodies into separate files is a maintenance choice, not product scope.
+- P2.3 is partially implemented. File rows open the existing snapshot diff viewer through `snapshotAPI.getOperationDiff` and `createDiffEditorTab`; no new diff renderer or mutation path is introduced. Slowest rows can jump to known turns through the existing Flow Chat pin-to-top event. Model, tool, and error aggregate rows now carry optional representative anchors from core and route through the existing Flow Chat focus event. File-row turn indexes also use the focus event for transcript jumps, and tool-input-only file rows request tool-card focus only when a single stable tool item id is available.
 - The file diff action is intentionally enabled only for trustworthy snapshot-backed rows with a visible path and session id. Redacted rows, tool-input-only rows, and unavailable rows show a disabled placeholder with an explanation instead of attempting a best-effort open.
-- Remaining P2.3 work: stable transcript/tool-card anchors are still needed because the current report can preserve turn indexes and operation ids, but not every row type has a durable virtual-list anchor.
-- Remaining P2 hardening: add long-session row caps or virtualization, complete manual light/dark/accessibility checks, and finalize exported path redaction rules.
-- Verification evidence for current P2 slices: `SessionUsageComponents` covers detail tabs, file diff action, slowest turn jumps, copyable metadata, unavailable help, token-only copy, i18n behavior, and semantic color usage; broader web/Rust verification is tracked in the P1 review note above.
+- Exact per-call deep anchors are outside the closed product scope; aggregate rows link to representative sources instead of becoming a full occurrence explorer.
+- Remaining P2 hardening: complete real-App long-session smoke for scroll/jump feel. Panel-local long-session row caps, Markdown copy/export path redaction, detail-panel tab keyboard semantics, representative aggregate anchors, file-row turn/tool-input anchors, duplicate-localized-table-header guards, and built-in-theme preview checks are implemented in this branch. Do not touch Flow Chat's global virtual list or scroll layout for this work unless a separate navigation design is approved.
+- Verification evidence for current P2 slices: `SessionUsageComponents` covers detail tabs, file diff action, slowest turn jumps, copyable metadata, unavailable help, token-only copy, i18n behavior, duplicate localized table headers, and semantic color usage; manual preview checks covered Light, Slate, Dark, Midnight, Ink Charm, Ink Night, Cyber, and Tokyo Night. Broader web/Rust verification is tracked in the P1 review note above.
 
-### Deferred Beyond P2
+### Final Merge-Ready Execution Plan
 
-The following work is intentionally not part of the first three milestones:
+This plan was re-reviewed on 2026-05-11 after refreshing `origin/main`. The
+current branch is based on latest `origin/main`, and main has recent Flow Chat
+scroll-position, follow-output jitter, settings/usage, and theme work. The
+remaining usage-report work must therefore stay local to the usage-report
+surface.
 
-- Monetary cost estimates with provider/model pricing metadata.
-- Cross-session or project-level analytics.
+Compatibility guardrails for the final hardening batch:
+
+- Run `git fetch origin main:refs/remotes/origin/main` before starting.
+- Run `git merge-base --is-ancestor origin/main HEAD`; stop and rebase if it fails.
+- Run `git diff --name-only origin/main..HEAD` and confirm the batch does not touch unrelated mainline areas.
+- Do not modify `src/web-ui/src/flow_chat/components/modern/VirtualMessageList.tsx`, `src/web-ui/src/flow_chat/utils/flowChatScrollLayout.ts`, theme preset files, tray files, installer files, or settings basics files for P2 hardening unless a separate design review approves that scope.
+- Keep every final P2 change reversible by hiding the usage detail action or disabling one panel tab while leaving `/usage` Markdown reports available.
+
+Next executable stage:
+
+| Stage | Recommendation | Files allowed by default | Verification | Stop condition |
+| --- | --- | --- | --- | --- |
+| Final smoke and merge readiness | Run real Desktop long-session smoke, fix only usage-local defects, then prepare commit/PR | Usage panel/card styles, usage component tests, locale files, and this document | `pnpm run lint:web`, `pnpm run type-check:web`, `pnpm --dir src/web-ui run test:run`, `cargo check --workspace`, `cargo test --workspace`, real-App long-session smoke | Any fix requires Flow Chat global scroll/session-switch changes or shared theme token changes. |
+
+Detailed executable checklist:
+
+1. Launch the real Desktop app from this branch.
+2. Open or create a long session with enough model, tool, file, and error rows to exercise every detail tab.
+3. Generate `/usage` from the Chat-bottom entry and from the slash command if available.
+4. Check the report card, detail panel tabs, file table sticky action column, copy/export redaction toggle, representative transcript jumps, file diff actions, and keyboard focus order.
+5. Confirm that report generation does not trigger a model request, does not appear in the next report span, and does not make session switching or follow-output feel slower.
+6. Fix only usage-local issues found during the smoke pass.
+7. Re-run the full frontend and Rust verification commands.
+8. Rebase onto latest `origin/main`, split into a small commit set, and update the PR description around the closed product scope.
+
+### Explicitly Out Of Closed Scope
+
+The following work is intentionally not queued as follow-up for this usage-report product:
+
+- Cross-session or project-level summaries.
 - Export formats beyond existing conversation export behavior.
-- Automated recommendations such as "context is dominating cost" or "tool failures caused retry loops."
+- Automated recommendations such as context optimization advice or retry-loop diagnosis.
+- Live status metrics in the Chat footer or title/header.
+- Exact per-call occurrence browsing for every aggregate row.
 
-These items depend on trustworthy session-level data and should be planned as a separate economics/analytics effort after P2 is stable.
+If any of these become important later, they should start from a new product question instead of being treated as incomplete work in this milestone.
 
 ## Fine-Grained Execution Breakdown
 
@@ -907,7 +942,7 @@ This section turns the milestone plan into implementation-sized tasks. Each task
 
 - `/usage` must never trigger a model request.
 - `/usage` output must not be included in future model context unless a user explicitly quotes or references it in a later prompt.
-- P0 reports tokens and available timing only. P0 does not introduce cost estimates, charts, cross-session analytics, or live header UI.
+- P0 reports tokens and available timing only. P0 does not introduce charts, cross-session summaries, or live header UI.
 - Runtime metrics collection must be append-only or summary-only; do not add per-token persistence.
 - Shared report logic belongs in platform-agnostic Rust core or api-layer. Desktop, server, and CLI are adapters.
 - Desktop UI must use existing i18n, theme tokens, and component-library primitives.
@@ -973,7 +1008,7 @@ Files:
 Steps:
 
 1. Add `SessionUsageReport`, `UsageCoverage`, `UsageTimeBreakdown`, `UsageTokenBreakdown`, `UsageModelBreakdown`, `UsageToolBreakdown`, `UsageFileBreakdown`, `UsageCompressionBreakdown`, `UsageErrorBreakdown`, and `UsageSlowSpan` structs.
-2. Add `CoverageLevel::{Complete, Partial}` plus a stable list of missing-data keys such as `model_round_timing`, `tool_phase_timing`, `file_line_stats`, and `cost_estimates`.
+2. Add `CoverageLevel::{Complete, Partial}` plus a stable list of missing-data keys such as `model_round_timing`, `tool_phase_timing`, and `file_line_stats`.
 3. Use milliseconds and token counts in DTOs; keep formatting out of DTOs.
 4. Make optional fields explicit for data that is not reliable in P0.
 5. Add `schema_version`, `report_id`, `generated_at`, workspace identity, report scope, in-progress marker, and redaction metadata.
@@ -1065,7 +1100,7 @@ Files:
 
 Steps:
 
-1. Aggregate token records with `include_subagent=true` so parent and subagent usage can be reported together and separated later.
+1. Aggregate token records for the current session. Preserve subagent markers only as coverage metadata; do not silently fold hidden subagent usage into the default report.
 2. Aggregate persisted dialog turn durations for wall and active lower-bound estimates.
 3. Aggregate tool result `duration_ms` from persisted model round items.
 4. Identify context compression items by existing `ContextCompression` tool records and compression event metadata when available.
@@ -1073,7 +1108,7 @@ Steps:
 6. Resolve workspace identity before reading session, token, or snapshot data.
 7. Mark cached tokens as unavailable when the source records only subscriber-filled zeroes.
 8. Mark remote snapshot stats as unavailable when snapshot tracking is skipped for remote workspaces.
-9. Mark missing coverage keys for model round timing, tool phase timing, cached token detail, subagent scope, remote snapshot stats, and cost estimates in P0.
+9. Mark missing coverage keys for model round timing, tool phase timing, cached token detail, subagent scope, and remote snapshot stats in P0.
 
 Functional guardrails:
 
@@ -1118,7 +1153,7 @@ Steps:
 2. Add `render_usage_report_markdown(report)` for Desktop P0.
 3. Keep rendering deterministic: stable sort models/tools by duration or token count, then by label.
 4. Include a partial-data note when `coverage.level == Partial`.
-5. Do not render cost, money, price, billing, package, subscription, or invoice lines; render token counts and token coverage only.
+5. Render token counts and token coverage only; omit unrelated account, plan, or quota language.
 6. Render scope, generated time, and in-progress state in a compact way when they affect interpretation.
 7. Render unavailable cached tokens as unavailable/partial, not as `0`, unless the source proves the true value is zero.
 8. Bound and redact slowest-work labels, error examples, and path displays.
@@ -1309,8 +1344,8 @@ Functional guardrails:
 - Do not break existing event names or required fields consumed by Desktop, server, or CLI.
 - Do not emit per-token events.
 - Do not change model retry behavior as part of metrics instrumentation.
-- Do not derive authoritative cost from token details in this task.
-- Do not use display aliases such as `fast` for provider cost or model-level aggregation when the resolved model id is known.
+- Do not derive user-facing optimization conclusions from token details in this task.
+- Do not use display aliases such as `fast` for model-level aggregation when the resolved model id is known.
 
 Risks and mitigations:
 
@@ -1421,7 +1456,7 @@ Verification:
 
 ### Task 11: Responsive Chat-bottom usage entry
 
-Goal: add one compact Chat-bottom entry that generates the current session usage report without displaying live metrics. A live summary or header entry can be planned later when runtime spans and layout needs are reliable.
+Goal: add one compact Chat-bottom entry that generates the current session usage report without displaying live metrics. Live summaries and header entries are outside the closed product scope.
 
 Files:
 
@@ -1437,7 +1472,7 @@ Steps:
 3. Preserve Chat input footer workspace, branch, model, attachment, and send-control layout priority.
 4. Add tooltip and accessible label that describe the action, not live report values.
 5. Hide the entry when no active session exists.
-6. Keep live values out of the entry until a later span contract can support them.
+6. Keep live values out of the entry.
 7. Do not add a duplicate title/header entry while the Chat-bottom action is the product-approved entry point.
 
 Functional guardrails:
@@ -1454,7 +1489,7 @@ Risks and mitigations:
 | Risk | Mitigation |
 | --- | --- |
 | Small windows become cluttered | Use container-query or measured available-space collapse |
-| The Chat footer becomes too dynamic while streaming | Keep the implemented entry action-only; require a separate design before adding live values |
+| The Chat footer becomes too dynamic while streaming | Keep the implemented entry action-only |
 | Accessibility suffers in icon-only mode | Provide aria-label and tooltip with text summary |
 | Users confuse live action and historical report | Label report generated time and keep the entry action-only |
 
@@ -1481,7 +1516,7 @@ Steps:
 
 1. Open the panel from the Markdown/report-card action and Chat-bottom usage entry.
 2. Add tabs: Overview, Models, Tools, Files, Errors, Slowest.
-3. Use virtualized or capped lists for slowest spans and file rows.
+3. Use panel-local capped lists for slowest spans and file rows first; consider virtualization only in a separate design if caps are insufficient.
 4. Link file rows to existing diff open paths.
 5. Show partial coverage explanations close to affected metrics.
 6. Keep detail expansion routed through existing transcript/diff permissions instead of embedding raw details in the panel.
@@ -1498,7 +1533,7 @@ Risks and mitigations:
 | Risk | Mitigation |
 | --- | --- |
 | Panel becomes a second debugger UI | Keep the default view summary-first and hide raw detail behind existing transcript links |
-| Large sessions cause UI jank | Cap rows and virtualize long lists |
+| Large sessions cause UI jank | Cap rows inside the usage panel first; do not touch Flow Chat global virtualization without a separate design |
 | File links open wrong scope | Include explicit scope metadata and route through existing diff helpers |
 | Panel exposes more sensitive detail than transcript | Reuse existing detail surfaces and redaction policy |
 
@@ -1508,45 +1543,43 @@ Verification:
 - Manual checks on long sessions.
 - Existing Flow Chat rendering tests still pass.
 
-### Task 13: Token-only cost boundary and cross-session analytics
+### Task 13: Closed product scope guardrails
 
-Goal: lock the economics boundary so `/usage` remains token-level observability, not billing or package analytics.
+Goal: keep `/usage` focused on current-session observability and prevent scope drift into cross-session summaries, recommendations, or live runtime control.
 
 Files:
 
 - Harden: `src/crates/core/src/service/session_usage/render.rs`
 - Harden: `src/apps/cli/src/main.rs`
 - Update: `session-runtime-usage-report-design.md`
-- Test: token-only report and top-level CLI scope tests
+- Test: current-session report and top-level CLI scope tests
 
 Steps:
 
-1. Do not add optional monetary cost fields to the report DTO.
-2. Keep cost-adjacent reporting at input/output/total/cached token counts and token coverage.
-3. Separate cache read, cache write, input, output, and reasoning token categories only when providers expose them reliably.
-4. Add cross-session aggregation as a separate command or dashboard, not part of `/usage` P0.
-5. Keep top-level `bitfun usage --session <id>` out of scope until workspace-scoped persisted session lookup is designed.
+1. Keep the DTO limited to current-session runtime facts: tokens, timing, models, tools, files, errors, coverage, privacy, and navigation metadata.
+2. Separate cache read, cache write, input, output, and reasoning token categories only when providers expose them reliably.
+3. Keep cross-session aggregation, live footer metrics, and automated recommendations out of the closed product scope.
+4. Keep top-level `bitfun usage --session <id>` out of scope until workspace-scoped persisted session lookup is designed.
 
 Functional guardrails:
 
-- Do not show money, currency, price source, package, subscription, invoice, or billing language.
-- Do not imply token counts are authoritative billing.
-- Do not make cost estimates block or change `/usage` token reporting.
-- Do not backfill or rewrite historical reports with monetary cost data.
+- Do not show charts, cross-session trends, live runtime percentages, optimization recommendations, or scheduler actions in this report.
+- Do not imply token counts are a quota or policy decision.
+- Do not backfill or rewrite historical reports when newer runtime facts become available.
+- Preserve current-session scope markers and partial-coverage copy.
 
 Risks and mitigations:
 
 | Risk | Mitigation |
 | --- | --- |
-| User trusts estimate as invoice | Do not render monetary estimates at all |
-| Provider semantics drift | Keep provider billing outside the report contract |
-| Scope expands into analytics platform too early | Keep cross-session analytics behind a later milestone |
-| Historical reports become inconsistent after price updates | Persist token counts only; never rewrite them into monetary estimates |
+| User reads the report as an instruction to change workflow | Keep the copy descriptive and avoid recommendations |
+| Provider token semantics drift | Keep token detail fields optional and covered by partial-data markers |
+| Scope expands beyond the current session too early | Keep cross-session views out of this milestone |
+| Historical reports become inconsistent after runtime schema updates | Treat persisted reports as snapshots and regenerate a new report when needed |
 
 Verification:
 
 - Tests assert token reporting is present.
-- Tests assert monetary, price, billing, and package language is absent.
 - CLI test asserts top-level `usage` is not registered.
 
 ## Product Risks and Mitigations
@@ -1555,7 +1588,7 @@ Verification:
 | --- | --- | --- |
 | Usage report pollutes future model context | Higher token usage, confusing self-reference | Store as non-model-visible local command output |
 | Metrics look authoritative when data is partial | User mistrust | Include coverage state and "partial data" notes |
-| Token-count proxy is mistaken for provider billing | Billing confusion | Do not render money, price sources, packages, or invoice language |
+| Token counts are mistaken for a workflow instruction | User changes behavior based on partial data | Keep the report descriptive, show coverage, and avoid recommendations |
 | Chat footer becomes noisy or breaks small windows | Worse chat UX | Responsive priority collapse and tooltip-only narrow mode |
 | Report exposes sensitive command/file details | Privacy concern | Default to aggregate labels; detailed command/file rows follow existing transcript visibility rules |
 | Runtime tracing adds overhead | Slower sessions | Persist request/tool terminal summaries, not per-token events |
@@ -1581,7 +1614,7 @@ Minimum checks for implementation milestones:
 - Locale smoke tests for `en-US`, `zh-CN`, and `zh-TW`.
 - Theme screenshot/manual checks for dark and light modes.
 - Regression check that running `/usage` does not trigger a model request.
-- Fixture tests for old sessions, missing token records, cache-unavailable records, remote workspaces without snapshot stats, hidden subagent linkage, repeated reports, and active-session behavior.
+- Fixture tests for old sessions, missing token records, cache-unavailable records, remote workspaces without snapshot stats, hidden subagent exclusion, repeated reports, and active-session behavior.
 - Time-accounting tests where parent and child spans overlap, proving percentages use the intended denominator.
 - Redaction tests covering command labels, file paths, error examples, and omitted tool params/results.
 - Workspace identity tests proving a report cannot read a same-id session from another local or remote workspace.
@@ -1601,29 +1634,23 @@ cargo check --workspace
 cargo test --workspace
 ```
 
-## Open Decisions
+## Closed Product Decisions
 
-- Resolved in the current implementation: Desktop renders `/usage` as a dedicated local report card backed by structured metadata and Markdown fallback.
-- Resolved in the current implementation: CLI supports interactive chat `/usage`; top-level `bitfun usage --session <id>` waits for a separate workspace-scoped analytics design.
-- Resolved in the current implementation: monetary cost estimates are hidden entirely; token counts and token coverage are the only supported cost proxy.
-- Resolved after product review: BitFun startup does not force-run ACP requirement probes, because probing CLIs such as `opencode --version` can create surprising side effects.
-- Resolved after product review: packaged flashgrep resources are injected per target at build time instead of bundling every platform binary into each installer.
-- Resolved after product review: the compact usage entry lives in the Chat input footer as a lightweight `/usage` trigger; it does not display live model/tool percentages and no longer appears in the title/header area.
-- Resolved after product review: unavailable cache, tool timing, and file metrics include user-facing reasons in hover/help text.
-- Resolved after product review: model timing is labeled as recorded model-round time; per-model duration columns appear only when at least one model row has recorded duration facts.
-- Resolved after product review: the detail panel shows generated time, session ID, and project path as separate rows with copy controls for long values.
-- Resolved in P1: idle gap is computed as wall time minus the union of recorded active turn spans when those spans are available.
-- Resolved in the current implementation: report generation itself is a user-visible local command card, but it is excluded from report scope, timing, model/tool/file/error rows, and session activity ordering.
-- Resolved in the current implementation: `/usage` requires an idle session and returns local feedback while a turn is active.
-- Should a standard session report include hidden subagents by default when parent linkage is reliable, or should subagent totals be opt-in until the scheduler/event model is complete?
-- Should visible side sessions such as `/btw` appear only as links in the parent report, or be aggregated into a parent-with-side-sessions mode later?
-- Resolved in the current implementation: cached tokens are shown as unavailable when the source cannot prove a value; unknown cache metrics are never shown as `0`.
-- What exact path redaction rule should apply to workspace-relative, absolute local, and remote paths in exported usage reports?
-- What stable navigation contract should usage rows use for transcript and tool-card jumps beyond the current turn-level slow-span jump?
-- What row cap or virtualization threshold should P2 use for long model, tool, file, error, and slowest lists?
-- Should the detail panel stay as one consolidated module, or split into per-tab components once the current P2 hardening work is complete?
-- What manual acceptance baseline is required for light theme, dark theme, keyboard navigation, screen-reader labels, and small desktop widths before marking P2 complete?
-- Resolved in the current implementation: Desktop renders localized reports from DTOs when structured metadata exists, while Markdown remains a fallback and exportable snapshot.
+No remaining product decision blocks closure. The current implementation and this document define the closed scope as:
+
+- Desktop renders `/usage` as a dedicated local report card backed by structured metadata and Markdown fallback.
+- CLI supports interactive chat `/usage`; top-level `bitfun usage --session <id>` is outside the closed product scope.
+- The compact usage entry lives in the Chat input footer as a lightweight `/usage` trigger; it does not display live model/tool percentages and no longer appears in the title/header area.
+- Unavailable cache, tool timing, and file metrics include user-facing reasons in hover/help text.
+- Model timing is labeled as recorded model-round time; per-model duration columns appear only when at least one model row has recorded duration facts.
+- The detail panel shows generated time, session ID, and project path as separate rows with copy controls for long values.
+- Idle gap is computed as wall time minus the union of recorded active turn spans when those spans are available.
+- Report generation itself is a user-visible local command card, but it is excluded from report scope, timing, model/tool/file/error rows, and session activity ordering.
+- `/usage` requires an idle session and returns local feedback while a turn is active.
+- Cached tokens are shown as unavailable when the source cannot prove a value; unknown cache metrics are never shown as `0`.
+- Hidden subagents, visible side sessions, full trace timelines, exact per-call occurrence browsing, live status metrics, and cross-session summaries are outside the closed product scope.
+- Path redaction for Markdown copy/export defaults on, can be user-confirmed by checkbox, and remembers the last preference.
+- The detail panel stays consolidated unless normal maintenance proves a split is needed.
 
 ## Recommended First Cut
 
@@ -1637,5 +1664,5 @@ Historical first cut, now complete in the current branch, started with Milestone
 6. Keep one compact Chat-bottom entry point until live runtime values have a separate, reliable span contract and placement review.
 
 This delivered immediate user value while avoiding risky runtime rewrites. The
-remaining work is now concentrated in P2 hardening and explicitly deferred
-cross-session analytics, not the P0/P1 report contract.
+remaining work is now concentrated in P2 hardening, not the P0/P1 report
+contract.

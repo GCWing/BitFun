@@ -88,6 +88,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     activeSessionId: activeSession?.sessionId,
     virtualItems,
     virtualListRef,
+    onExpandExploreGroup: handleExpandGroup,
   });
 
   const contextValue: FlowChatContextValue = useMemo(() => ({
