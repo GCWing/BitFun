@@ -50,6 +50,7 @@ describe('buildDeepReviewCapacityQueueStateFromEvent', () => {
       subagentType: 'ReviewSecurity',
       dialogTurnId: 'turn-1',
       status: 'queued_for_capacity',
+      reason: 'provider_concurrency_limit',
       queuedReviewerCount: 2,
       activeReviewerCount: 1,
       effectiveParallelInstances: 2,

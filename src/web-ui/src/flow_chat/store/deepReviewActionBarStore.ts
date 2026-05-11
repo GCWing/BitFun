@@ -49,11 +49,19 @@ export type DeepReviewCapacityQueueAction =
   | 'cancel'
   | 'skip_optional';
 
+export type DeepReviewCapacityQueueReason =
+  | 'provider_rate_limit'
+  | 'provider_concurrency_limit'
+  | 'retry_after'
+  | 'local_concurrency_cap'
+  | 'temporary_overload';
+
 export interface DeepReviewCapacityQueueState {
   toolId?: string;
   subagentType?: string;
   dialogTurnId?: string;
   status: DeepReviewCapacityQueueStatus;
+  reason?: DeepReviewCapacityQueueReason;
   queuedReviewerCount: number;
   activeReviewerCount?: number;
   effectiveParallelInstances?: number;
@@ -85,9 +93,9 @@ export interface ReviewActionBarState {
   /** Whether the action bar is minimized (collapsed to a floating button) */
   minimized: boolean;
   /** Which fix action is currently in flight */
-  activeAction: 'fix' | 'fix-review' | 'resume' | null;
+  activeAction: 'fix' | 'fix-review' | 'resume' | 'retry' | null;
   /** Last user action that changed the action bar content */
-  lastSubmittedAction: 'fix' | 'fix-review' | 'resume' | null;
+  lastSubmittedAction: 'fix' | 'fix-review' | 'resume' | 'retry' | null;
   /** User-supplied custom instructions (from the textarea) */
   customInstructions: string;
   /** Error message when phase is fix_failed or review_error */
@@ -131,7 +139,7 @@ export interface ReviewActionBarState {
   toggleRemediation: (id: string) => void;
   toggleAllRemediation: () => void;
   toggleGroupRemediation: (groupId: RemediationGroupId) => void;
-  setActiveAction: (action: 'fix' | 'fix-review' | 'resume' | null) => void;
+  setActiveAction: (action: 'fix' | 'fix-review' | 'resume' | 'retry' | null) => void;
   setCustomInstructions: (value: string) => void;
   setSelectedRemediationIds: (ids: Set<string>) => void;
   dismiss: () => void;
@@ -159,8 +167,8 @@ const initialState = {
   selectedRemediationIds: new Set<string>(),
   dismissed: false,
   minimized: false,
-  activeAction: null as 'fix' | 'fix-review' | 'resume' | null,
-  lastSubmittedAction: null as 'fix' | 'fix-review' | 'resume' | null,
+  activeAction: null as 'fix' | 'fix-review' | 'resume' | 'retry' | null,
+  lastSubmittedAction: null as 'fix' | 'fix-review' | 'resume' | 'retry' | null,
   customInstructions: '',
   errorMessage: null as string | null,
   interruption: null as DeepReviewInterruption | null,
@@ -335,7 +343,7 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
         lastSubmittedAction: action,
         fixingRemediationIds: new Set(get().selectedRemediationIds),
       });
-    } else if (action === 'resume') {
+    } else if (action === 'resume' || action === 'retry') {
       set({
         activeAction: action,
         lastSubmittedAction: action,

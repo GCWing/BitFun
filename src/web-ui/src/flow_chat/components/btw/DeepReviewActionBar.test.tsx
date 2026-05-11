@@ -15,6 +15,7 @@ const buildRecoveryPlanMock = vi.hoisted(() => vi.fn(() => ({
 })));
 const controlDeepReviewQueueMock = vi.hoisted(() => vi.fn());
 const lowerDefaultReviewTeamMaxParallelReviewersMock = vi.hoisted(() => vi.fn());
+const flowChatSessionsMock = vi.hoisted(() => new Map<string, unknown>());
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -101,7 +102,7 @@ vi.mock('@/shared/utils/logger', () => ({
 vi.mock('../../store/FlowChatStore', () => ({
   flowChatStore: {
     getState: () => ({
-      sessions: new Map(),
+      sessions: flowChatSessionsMock,
       activeSessionId: null,
     }),
     subscribe: () => () => {},
@@ -178,6 +179,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
       allowBoundedAutoRetry: false,
       autoRetryElapsedGuardSeconds: 180,
     });
+    flowChatSessionsMock.clear();
     useReviewActionBarStore.getState().reset();
   });
 
@@ -189,6 +191,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     dom.window.close();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    flowChatSessionsMock.clear();
     useReviewActionBarStore.getState().reset();
   });
 
@@ -417,9 +420,12 @@ describeWithJsdom('DeepReviewActionBar', () => {
     useReviewActionBarStore.setState({
       capacityQueueState: {
         status: 'queued_for_capacity',
+        reason: 'provider_concurrency_limit',
         queuedReviewerCount: 2,
         activeReviewerCount: 1,
         optionalReviewerCount: 1,
+        queueElapsedMs: 12_000,
+        maxQueueWaitSeconds: 60,
         sessionConcurrencyHigh: true,
       },
     } as Partial<ReturnType<typeof useReviewActionBarStore.getState>>);
@@ -430,6 +436,8 @@ describeWithJsdom('DeepReviewActionBar', () => {
 
     expect(container.textContent).toContain('Reviewers waiting for capacity');
     expect(container.textContent).toContain('Queue wait does not count against reviewer runtime.');
+    expect(container.textContent).toContain('Reason: provider concurrency limit');
+    expect(container.textContent).toContain('Waited 12s of 1m 0s');
     expect(container.textContent).toContain('Your active session is busy.');
     expect(container.textContent).toContain('Run slower next time');
     expect(container.textContent).toContain('Open Review settings');
@@ -513,6 +521,89 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect((useReviewActionBarStore.getState() as unknown as {
       capacityQueueState: { status: string };
     }).capacityQueueState.status).toBe('paused_by_user');
+  });
+
+  it('starts a structured retry turn for explicit incomplete Deep Review slices', async () => {
+    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+
+    flowChatSessionsMock.set('deep-review-session', {
+      sessionId: 'deep-review-session',
+      sessionKind: 'deep_review',
+      deepReviewRunManifest: {
+        reviewMode: 'deep',
+        workPackets: [
+          {
+            packetId: 'reviewer:ReviewSecurity:group-1-of-2',
+            phase: 'reviewer',
+            launchBatch: 0,
+            subagentId: 'ReviewSecurity',
+            displayName: 'Security reviewer',
+            roleName: 'Security reviewer',
+            assignedScope: {
+              kind: 'review_target',
+              targetSource: 'session_files',
+              targetResolution: 'resolved',
+              targetTags: ['security'],
+              fileCount: 2,
+              files: ['src/auth.ts', 'src/session.ts'],
+              excludedFileCount: 0,
+              groupIndex: 1,
+              groupCount: 2,
+            },
+            allowedTools: ['Read', 'GetFileDiff'],
+            timeoutSeconds: 300,
+            requiredOutputFields: ['summary', 'findings'],
+            strategyLevel: 'deep',
+            strategyDirective: 'Review security-sensitive changes.',
+            model: 'fast-model',
+          },
+        ],
+      },
+    });
+
+    useReviewActionBarStore.getState().showActionBar({
+      childSessionId: 'deep-review-session',
+      parentSessionId: 'parent-session',
+      reviewMode: 'deep',
+      reviewData: {
+        review_mode: 'deep',
+        summary: { recommended_action: 'request_changes' },
+        reviewers: [
+          {
+            name: 'Security reviewer',
+            specialty: 'security',
+            status: 'partial_timeout',
+            summary: 'Timed out after completing src/session.ts.',
+            packet_id: 'reviewer:ReviewSecurity:group-1-of-2',
+            covered_files: ['src/session.ts'],
+            retry_scope_files: ['src/auth.ts'],
+          },
+        ],
+      },
+      phase: 'review_completed',
+    });
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    const retryButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Retry incomplete slices'));
+    expect(retryButton).toBeTruthy();
+
+    await act(async () => {
+      retryButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledTimes(1);
+    const [prompt, sessionId, displayMessage, agentType] = sendMessageMock.mock.calls[0];
+    expect(prompt).toContain('"retry_coverage"');
+    expect(prompt).toContain('"source_packet_id": "reviewer:ReviewSecurity:group-1-of-2"');
+    expect(prompt).toContain('"retry_scope_files"');
+    expect(sessionId).toBe('deep-review-session');
+    expect(displayMessage).toContain('Retry 1 incomplete');
+    expect(agentType).toBe('DeepReview');
   });
 
   it('shows distinct progress text after starting fix and re-review', async () => {

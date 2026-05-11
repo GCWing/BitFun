@@ -247,18 +247,6 @@
       "workspacePath": "项目路径"
     }
   },
-  "quickActions": {
-    "defaults": {
-      "commit": {
-        "label": "提交",
-        "prompt": "提交当前所有代码变更"
-      },
-      "createPr": {
-        "label": "创建 PR",
-        "prompt": "为当前分支创建 Pull Request"
-      }
-    }
-  },
   "agentCompanion": {
     "activity": {
       "starting": "启动中",
@@ -647,6 +635,9 @@
     "customInstructionsPlaceholder": "描述修复的额外要求或上下文信息...",
     "fillBackInput": "填入输入框",
     "fillBackInputHint": "将选中的修复计划填入输入框，供手动编辑",
+    "retryIncompleteSlices": "重试未完成切片（{{count}}）",
+    "retryIncompleteRequestDisplay": "重试 {{count}} 个未完成的 Deep Review 切片",
+    "retryIncompleteFailed": "无法重试未完成的 Deep Review 切片。",
     "fixCompletedMessage": "所有修复已成功应用。",
     "replaceInputConfirmTitle": "替换当前输入？",
     "replaceInputConfirmMessage": "输入框中已有文本，填入计划将替换当前草稿内容。",
@@ -691,6 +682,16 @@
       "title": "审核员正在等待容量",
       "pausedTitle": "队列已暂停",
       "detail": "排队等待时间不会计入审核员运行时长。",
+      "reason": "原因：{{reason}}",
+      "elapsed": "已等待 {{elapsed}}",
+      "elapsedWithMax": "已等待 {{elapsed}} / {{max}}",
+      "reasons": {
+        "providerRateLimit": "模型服务限速",
+        "providerConcurrencyLimit": "模型服务并发限制",
+        "retryAfter": "模型服务要求稍后重试",
+        "localConcurrencyCap": "本地审核员容量",
+        "temporaryOverload": "模型服务临时过载"
+      },
       "sessionBusy": "当前会话较忙，可暂停 Deep Review 或稍后继续。",
       "stopHint": "可使用停止按钮中断当前审核队列。",
       "pauseQueue": "暂停队列",
@@ -1197,7 +1198,12 @@
       "disableLabel": "忽略限时",
       "enableTooltip": "恢复超时限制",
       "enableLabel": "恢复限时",
-      "restoreShort": "恢复（剩余 {{seconds}} 秒）"
+      "restoreShort": "恢复（剩余 {{seconds}} 秒）",
+      "durationTooltip": "耗时 {{duration}}",
+      "completedDurationTooltip": "已完成，耗时 {{duration}}",
+      "failedDurationTooltip": "失败于 {{duration}} 后",
+      "failedDurationTooltipWithReason": "失败于 {{duration}} 后：{{reason}}",
+      "cancelledDurationTooltip": "已取消，耗时 {{duration}}"
     },
     "template": {
       "get": "获取模板:",

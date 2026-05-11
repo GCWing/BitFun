@@ -30,6 +30,15 @@
   color: var(--color-warning, #f59e0b);
 }
 
+.duration-text--completed-success {
+  color: var(--color-success, #22c55e);
+}
+
+.duration-text--completed-error,
+.duration-text--completed-cancelled {
+  color: var(--color-error, #ef4444);
+}
+
 .duration-elapsed {
   font-variant-numeric: tabular-nums;
 }

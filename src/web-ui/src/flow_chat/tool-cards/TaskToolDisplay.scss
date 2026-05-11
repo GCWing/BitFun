@@ -332,6 +332,15 @@
     }
   }
 
+  .duration-text--completed-success {
+    color: var(--color-success, #22c55e);
+  }
+
+  .duration-text--completed-error,
+  .duration-text--completed-cancelled {
+    color: var(--color-error, #ef4444);
+  }
+
   .section-header {
     display: flex;
     align-items: center;

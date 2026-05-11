@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildDeepReviewRetryPrompt,
   buildCodeReviewReportSections,
   buildCodeReviewReliabilityNotices,
+  extractDeepReviewRetryableSlices,
   formatCodeReviewReportMarkdown,
   getDefaultExpandedCodeReviewSectionIds,
 } from './codeReviewReport';
-import type { ReviewTeamManifestMember, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+import type {
+  ReviewTeamManifestMember,
+  ReviewTeamRunManifest,
+  ReviewTeamWorkPacket,
+} from '@/shared/services/reviewTeamService';
 
 function manifestMember(
   subagentId: string,
@@ -141,6 +147,44 @@ function buildRunManifest(): ReviewTeamRunManifest {
       manifestMember('ReviewFrontend', 'Frontend reviewer', 'not_applicable'),
       manifestMember('CustomInvalid', 'Custom invalid reviewer', 'invalid_tooling'),
     ],
+  };
+}
+
+function buildRetryWorkPacket(overrides: Partial<ReviewTeamWorkPacket> = {}): ReviewTeamWorkPacket {
+  return {
+    packetId: 'reviewer:ReviewSecurity:group-1-of-2',
+    phase: 'reviewer',
+    launchBatch: 0,
+    subagentId: 'ReviewSecurity',
+    displayName: 'Security reviewer',
+    roleName: 'Security reviewer',
+    assignedScope: {
+      kind: 'review_target',
+      targetSource: 'session_files',
+      targetResolution: 'resolved',
+      targetTags: ['security'],
+      fileCount: 3,
+      files: ['src/auth.ts', 'src/session.ts', 'src/audit.ts'],
+      excludedFileCount: 0,
+      groupIndex: 1,
+      groupCount: 2,
+    },
+    allowedTools: ['Read', 'GetFileDiff'],
+    timeoutSeconds: 300,
+    requiredOutputFields: ['summary', 'findings'],
+    strategyLevel: 'deep',
+    strategyDirective: 'Review security-sensitive changes.',
+    model: 'fast',
+    ...overrides,
+  };
+}
+
+function buildRetryRunManifest(
+  workPackets: ReviewTeamWorkPacket[] = [buildRetryWorkPacket()],
+): ReviewTeamRunManifest {
+  return {
+    ...buildRunManifest(),
+    workPackets,
   };
 }
 
@@ -588,6 +632,78 @@ describe('codeReviewReport', () => {
     });
 
     expect(markdown).toContain('Packet: reviewer:ReviewSecurity:group-1-of-3 (inferred)');
+  });
+
+  it('extracts explicit retry slices for partial timeout reviewers', () => {
+    const slices = extractDeepReviewRetryableSlices({
+      review_mode: 'deep',
+      reviewers: [
+        {
+          name: 'Security reviewer',
+          specialty: 'security',
+          status: 'partial_timeout',
+          summary: 'Timed out after two files.',
+          packet_id: 'reviewer:ReviewSecurity:group-1-of-2',
+          covered_files: ['src/session.ts'],
+          retry_scope_files: ['src/auth.ts'],
+        },
+      ],
+    }, buildRetryRunManifest());
+
+    expect(slices).toEqual([
+      {
+        sourcePacketId: 'reviewer:ReviewSecurity:group-1-of-2',
+        reviewerId: 'ReviewSecurity',
+        reviewerName: 'Security reviewer',
+        sourceStatus: 'partial_timeout',
+        coveredFiles: ['src/session.ts'],
+        retryScopeFiles: ['src/auth.ts'],
+        retryTimeoutSeconds: 150,
+      },
+    ]);
+
+    const prompt = buildDeepReviewRetryPrompt(slices);
+    expect(prompt).toContain('<deep_review_retry_tasks>');
+    expect(prompt).toContain('"retry_coverage"');
+    expect(prompt).toContain('"source_packet_id": "reviewer:ReviewSecurity:group-1-of-2"');
+    expect(prompt).toContain('"retry_scope_files"');
+  });
+
+  it('does not retry capacity skips with non-transient reasons', () => {
+    const slices = extractDeepReviewRetryableSlices({
+      review_mode: 'deep',
+      reviewers: [
+        {
+          name: 'Security reviewer',
+          specialty: 'security',
+          status: 'capacity_skipped',
+          summary: 'Skipped after an auth failure.',
+          packet_id: 'reviewer:ReviewSecurity:group-1-of-2',
+          capacity_reason: 'auth_error',
+          retry_scope_files: ['src/auth.ts'],
+        },
+      ],
+    }, buildRetryRunManifest());
+
+    expect(slices).toEqual([]);
+  });
+
+  it('does not infer retry scope without explicit unresolved files', () => {
+    const slices = extractDeepReviewRetryableSlices({
+      review_mode: 'deep',
+      reviewers: [
+        {
+          name: 'Security reviewer',
+          specialty: 'security',
+          status: 'partial_timeout',
+          summary: 'Timed out with no machine-readable remaining scope.',
+          packet_id: 'reviewer:ReviewSecurity:group-1-of-2',
+          covered_files: ['src/session.ts'],
+        },
+      ],
+    }, buildRetryRunManifest());
+
+    expect(slices).toEqual([]);
   });
 
   it('includes the run manifest when exporting a deep review report', () => {

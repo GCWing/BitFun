@@ -12,7 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { CubeLoading, Button } from '../../component-library';
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
-import type { ToolCardProps } from '../types/flow-chat';
+import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard } from './BaseToolCard';
 import { ToolCardIconSlot } from './ToolCardIconSlot';
 import { ToolCardStatusIcon } from './ToolCardStatusIcon';
@@ -25,6 +25,29 @@ import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
 import { AcpPermissionActions } from './AcpPermissionActions';
 import './TaskToolDisplay.scss';
 import './ModelThinkingDisplay.scss';
+
+function readTaskDurationMs(toolResult: FlowToolItem['toolResult'] | undefined): number | undefined {
+  const resultDuration = toolResult?.result?.duration;
+  if (typeof resultDuration === 'number') {
+    return resultDuration;
+  }
+  if (typeof toolResult?.duration_ms === 'number') {
+    return toolResult.duration_ms;
+  }
+  return undefined;
+}
+
+function readTaskErrorMessage(toolResult: FlowToolItem['toolResult'] | undefined): string | null {
+  if (typeof toolResult?.error === 'string' && toolResult.error.trim()) {
+    return toolResult.error.trim();
+  }
+  const result = toolResult?.result;
+  if (result && typeof result === 'object' && 'error' in result) {
+    const message = String((result as { error?: unknown }).error ?? '').trim();
+    return message || null;
+  }
+  return null;
+}
 
 export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   toolItem,
@@ -186,6 +209,15 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     (toolResult != null &&
       'success' in toolResult &&
       toolResult.success === false);
+  const taskDurationMs = readTaskDurationMs(toolResult);
+  const taskErrorMessage = readTaskErrorMessage(toolResult);
+  const completedDurationStatus = isFailed
+    ? 'error'
+    : status === 'cancelled'
+      ? 'cancelled'
+      : status === 'completed' && taskDurationMs != null
+        ? 'success'
+        : undefined;
 
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -286,11 +318,9 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                   }
                   showControls={true}
                   subagentSessionId={toolItem.subagentSessionId}
-                  completedDurationMs={
-                    status === 'completed' && toolResult?.result?.duration
-                      ? toolResult.result.duration
-                      : undefined
-                  }
+                  completedDurationMs={taskDurationMs}
+                  completedStatus={completedDurationStatus}
+                  completedFailureReason={isFailed ? taskErrorMessage ?? undefined : undefined}
                 />
                 {isFailed && (
                   <span className="task-failed-badge">{t('toolCards.taskTool.failed')}</span>

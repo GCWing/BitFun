@@ -221,6 +221,76 @@ function interpolate(template: string, options?: Record<string, unknown>): strin
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key) => String(options?.[key] ?? ''));
 }
 
+const USAGE_LOCALE_REQUIRED_KEYS = [
+  'usage.actions.openFileDiff',
+  'usage.actions.openSectionDetails',
+  'usage.actions.jumpToTurn',
+  'usage.actions.viewDetails',
+  'usage.actions.viewAllSection',
+  'usage.card.tokens',
+  'usage.status.modelNotRecorded',
+  'usage.status.legacyModel',
+  'usage.status.inferredModel',
+  'usage.metrics.errorRate',
+  'usage.sections.slowest',
+  'usage.empty.slowest',
+  'usage.empty.slowestDescription',
+  'usage.help.legacyModel',
+  'usage.help.inferredModel',
+  'usage.help.fileDiffUnavailable',
+  'usage.help.errors',
+  'usage.help.toolErrors',
+  'usage.help.modelErrors',
+  'usage.help.errorExamples',
+  'usage.help.errorExampleRow',
+  'usage.help.errorExampleCount',
+  'usage.help.slowestSpans',
+  'usage.help.slowestModelCall',
+  'usage.panel.errorScope',
+  'usage.tabs.slowest',
+  'usage.table.actions',
+  'usage.table.kind',
+  'usage.table.rowLimitSummary',
+  'usage.table.showAllRows',
+  'usage.table.showFewerRows',
+  'usage.slowestKinds.model',
+  'usage.slowestKinds.modelCall',
+  'usage.slowestKinds.tool',
+  'usage.slowestKinds.turn',
+  'usage.slowestLabels.modelCall',
+  'usage.slowestLabels.modelCallUnknown',
+];
+
+function getLocaleValue(messages: unknown, key: string): unknown {
+  return key
+    .split('.')
+    .reduce<unknown>((current, part) => {
+      if (!current || typeof current !== 'object') {
+        return undefined;
+      }
+      return (current as Record<string, unknown>)[part];
+    }, messages);
+}
+
+describe('Session usage locale coverage', () => {
+  it('keeps usage report strings available in every bundled locale', () => {
+    const locales = {
+      'en-US': enFlowChat,
+      'zh-CN': zhCnFlowChat,
+      'zh-TW': zhTwFlowChat,
+    };
+
+    for (const [locale, messages] of Object.entries(locales)) {
+      const missingKeys = USAGE_LOCALE_REQUIRED_KEYS.filter((key) => {
+        const value = getLocaleValue(messages, key);
+        return typeof value !== 'string' || value.trim().length === 0;
+      });
+
+      expect(missingKeys, `${locale} missing usage locale keys`).toEqual([]);
+    }
+  });
+});
+
 function usageReport(overrides: Partial<SessionUsageReport> = {}): SessionUsageReport {
   return {
     schemaVersion: 1,

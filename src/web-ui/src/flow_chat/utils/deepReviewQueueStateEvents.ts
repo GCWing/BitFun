@@ -20,6 +20,7 @@ export function buildDeepReviewCapacityQueueStateFromEvent(
     subagentType: queueState.subagentType,
     dialogTurnId: event.turnId,
     status: queueState.status,
+    reason: queueState.reason,
     queuedReviewerCount: Math.max(0, queueState.queuedReviewerCount ?? 0),
     activeReviewerCount: queueState.activeReviewerCount,
     effectiveParallelInstances: queueState.effectiveParallelInstances,

@@ -247,18 +247,6 @@
       "modelCallUnknown": "Model call"
     }
   },
-  "quickActions": {
-    "defaults": {
-      "commit": {
-        "label": "Commit",
-        "prompt": "Commit all current code changes"
-      },
-      "createPr": {
-        "label": "Create PR",
-        "prompt": "Create a Pull Request for the current branch"
-      }
-    }
-  },
   "agentCompanion": {
     "activity": {
       "starting": "Starting",
@@ -647,6 +635,9 @@
     "customInstructionsPlaceholder": "Describe additional requirements or context for the fix...",
     "fillBackInput": "Fill to input",
     "fillBackInputHint": "Copy selected fix plan to the input box for manual editing",
+    "retryIncompleteSlices": "Retry incomplete slices ({{count}})",
+    "retryIncompleteRequestDisplay": "Retry {{count}} incomplete Deep Review slice(s)",
+    "retryIncompleteFailed": "Unable to retry incomplete Deep Review slices.",
     "fixCompletedMessage": "All fixes applied successfully.",
     "replaceInputConfirmTitle": "Replace current input?",
     "replaceInputConfirmMessage": "The chat input already has text. Filling this plan will replace the current draft.",
@@ -691,6 +682,16 @@
       "title": "Reviewers waiting for capacity",
       "pausedTitle": "Queue paused",
       "detail": "Queue wait does not count against reviewer runtime.",
+      "reason": "Reason: {{reason}}",
+      "elapsed": "Waited {{elapsed}}",
+      "elapsedWithMax": "Waited {{elapsed}} of {{max}}",
+      "reasons": {
+        "providerRateLimit": "provider rate limit",
+        "providerConcurrencyLimit": "provider concurrency limit",
+        "retryAfter": "provider retry-after",
+        "localConcurrencyCap": "local reviewer capacity",
+        "temporaryOverload": "temporary provider overload"
+      },
       "sessionBusy": "Your active session is busy. Pause Deep Review or continue later.",
       "stopHint": "Use Stop to interrupt this review queue.",
       "pauseQueue": "Pause queue",
@@ -1197,7 +1198,12 @@
       "disableLabel": "Ignore limit",
       "enableTooltip": "Re-enable timeout",
       "enableLabel": "Restore limit",
-      "restoreShort": "Restore ({{seconds}}s left)"
+      "restoreShort": "Restore ({{seconds}}s left)",
+      "durationTooltip": "Duration {{duration}}",
+      "completedDurationTooltip": "Completed in {{duration}}",
+      "failedDurationTooltip": "Failed after {{duration}}",
+      "failedDurationTooltipWithReason": "Failed after {{duration}}: {{reason}}",
+      "cancelledDurationTooltip": "Cancelled after {{duration}}"
     },
     "template": {
       "get": "Get Template:",

@@ -41,6 +41,17 @@ function isRunningStatus(status: FlowItem['status'] | undefined): boolean {
   return status === 'preparing' || status === 'streaming' || status === 'running';
 }
 
+function readTaskDurationMs(toolResult: FlowToolItem['toolResult'] | undefined): number | undefined {
+  const resultDuration = toolResult?.result?.duration;
+  if (typeof resultDuration === 'number') {
+    return resultDuration;
+  }
+  if (typeof toolResult?.duration_ms === 'number') {
+    return toolResult.duration_ms;
+  }
+  return undefined;
+}
+
 function areFlowItemsEqual(prev: FlowItem[], next: FlowItem[]): boolean {
   if (prev === next) return true;
   if (prev.length !== next.length) return false;
@@ -266,7 +277,8 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
   const status = toolItem?.status;
   const toolResult = toolItem?.toolResult;
   const isRunning = status === 'preparing' || status === 'streaming' || status === 'running';
-  const isFailed = status === 'error';
+  const isFailed = status === 'error' || toolResult?.success === false;
+  const taskDurationMs = readTaskDurationMs(toolResult);
   const isCompleted = status === 'completed' && !isFailed;
   const subagentItems = useMemo(() => {
     if (isRunning) {
@@ -531,11 +543,9 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
           }
           showControls={true}
           subagentSessionId={subagentSessionId}
-          completedDurationMs={
-            isCompleted && toolResult?.result?.duration
-              ? toolResult.result.duration
-              : undefined
-          }
+          completedDurationMs={taskDurationMs}
+          completedStatus={isFailed ? 'error' : status === 'cancelled' ? 'cancelled' : isCompleted ? 'success' : undefined}
+          completedFailureReason={isFailed ? getErrorMessage() : undefined}
         />
         {isRunning && (
           <span className="task-detail-panel__header-loading">
