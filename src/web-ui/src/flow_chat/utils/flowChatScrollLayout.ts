@@ -7,7 +7,7 @@
 export const CHAT_INPUT_DROP_ZONE_BOTTOM_PX = 4;
 
 /** Space between the top edge of the input block and the end of scroll content */
-export const FLOWCHAT_MESSAGE_TAIL_CLEARANCE_PX = 4;
+export const FLOWCHAT_MESSAGE_TAIL_CLEARANCE_PX = 24;
 
 /** Space above the scroll-to-latest control (tighter than message tail; sits in overlay) */
 export const SCROLL_TO_LATEST_INPUT_CLEARANCE_PX = 6;
