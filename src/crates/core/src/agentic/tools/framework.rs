@@ -14,6 +14,7 @@ use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::get_path_manager_arc;
 use crate::service::git::{GitDiffParams, GitService};
+use crate::service::mcp::McpToolInfo;
 use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
 use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
 use crate::util::errors::BitFunResult;
@@ -603,6 +604,11 @@ pub trait Tool: Send + Sync {
     /// names so future tool registries can change naming without breaking
     /// provider routing.
     fn dynamic_provider_id(&self) -> Option<&str> {
+        None
+    }
+
+    /// Stable MCP metadata for dynamic tools.
+    fn mcp_info(&self) -> Option<McpToolInfo> {
         None
     }
 

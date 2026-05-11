@@ -503,7 +503,7 @@ pub struct McpUiResourcePermissions {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FetchMCPAppResourceRequest {
-    /// MCP server ID (e.g. from tool name mcp__{server_id}__{tool_name})
+    /// Authoritative MCP server ID for the tool/app.
     pub server_id: String,
     /// Full resource URI, e.g. "ui://my-server/widget"
     pub resource_uri: String,
@@ -541,13 +541,14 @@ pub async fn get_mcp_tool_ui_uri(
     _state: State<'_, AppState>,
     tool_name: String,
 ) -> Result<Option<String>, String> {
-    if !tool_name.starts_with("mcp__") {
-        return Ok(None);
-    }
     let registry = bitfun_core::agentic::tools::registry::get_global_tool_registry();
     let guard = registry.read().await;
+    let is_mcp_tool = guard.get_mcp_tool_info(&tool_name).is_some();
     let tool = guard.get_tool(&tool_name);
     drop(guard);
+    if !is_mcp_tool {
+        return Ok(None);
+    }
     Ok(tool.and_then(|t| t.ui_resource_uri()))
 }
 

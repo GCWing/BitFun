@@ -18,14 +18,19 @@ import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { AIModelConfig, ModeConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { notificationService } from '@/shared/notification-system';
+import type { McpToolInfo } from '@/shared/types/agent-api';
 import { createLogger } from '@/shared/utils/logger';
-import { isMcpToolName, parseMcpToolName } from '@/infrastructure/mcp/toolName';
 import { useNurseryStore } from '../nurseryStore';
 import { formatTokenCount } from './useTokenEstimate';
 
 const log = createLogger('TemplateConfigPage');
 
-interface ToolInfo { name: string; description: string; is_readonly: boolean; }
+interface ToolInfo {
+  name: string;
+  description: string;
+  is_readonly: boolean;
+  mcp_info?: McpToolInfo;
+}
 
 type TemplateDetail =
   | { type: 'tool'; tool: ToolInfo; isMcp: boolean }
@@ -34,16 +39,16 @@ type TemplateDetail =
 
 type ModelSlot = 'primary' | 'fast';
 
-function isMcpTool(name: string): boolean {
-  return isMcpToolName(name);
+function isMcpTool(tool: ToolInfo): boolean {
+  return Boolean(tool.mcp_info);
 }
 
-function getMcpServerName(toolName: string): string {
-  return parseMcpToolName(toolName)?.serverId ?? toolName;
+function getMcpServerName(tool: ToolInfo): string {
+  return tool.mcp_info?.server_id ?? tool.name;
 }
 
-function getMcpShortName(toolName: string): string {
-  return parseMcpToolName(toolName)?.toolName ?? toolName;
+function getMcpShortName(tool: ToolInfo): string {
+  return tool.mcp_info?.tool_name ?? tool.name;
 }
 
 type CtxSegKey = 'systemPrompt' | 'toolInjection' | 'rules' | 'memories';
@@ -171,7 +176,7 @@ const TemplateConfigPage: React.FC = () => {
 
   // Split tools into built-in vs MCP
   const builtinTools = useMemo(
-    () => availableTools.filter((t) => !isMcpTool(t.name)),
+    () => availableTools.filter((tool) => !isMcpTool(tool)),
     [availableTools],
   );
 
@@ -189,8 +194,8 @@ const TemplateConfigPage: React.FC = () => {
   const mcpToolsByServer = useMemo(() => {
     const map = new Map<string, ToolInfo[]>();
     for (const tool of availableTools) {
-      if (!isMcpTool(tool.name)) continue;
-      const server = getMcpServerName(tool.name);
+      if (!isMcpTool(tool)) continue;
+      const server = getMcpServerName(tool);
       if (!map.has(server)) map.set(server, []);
       map.get(server)!.push(tool);
     }
@@ -415,7 +420,7 @@ const TemplateConfigPage: React.FC = () => {
     <div className="tc-tool-list">
       {tools.map((tool) => {
         const enabled = agenticConfig?.enabled_tools?.includes(tool.name) ?? false;
-        const displayName = isMcp ? getMcpShortName(tool.name) : tool.name;
+        const displayName = isMcp ? getMcpShortName(tool) : tool.name;
         const selected = detail?.type === 'tool' && detail.tool.name === tool.name;
         return (
           <div
@@ -598,7 +603,7 @@ const TemplateConfigPage: React.FC = () => {
 
     if (detail.type === 'tool') {
       const { tool, isMcp } = detail;
-      const displayName = isMcp ? getMcpShortName(tool.name) : tool.name;
+      const displayName = isMcp ? getMcpShortName(tool) : tool.name;
       const enabled = agenticConfig?.enabled_tools?.includes(tool.name) ?? false;
       return (
         <aside className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
@@ -676,7 +681,7 @@ const TemplateConfigPage: React.FC = () => {
             ) : (
               <ul className="tc-template-detail__tool-names">
                 {serverTools.map((tool) => (
-                  <li key={tool.name}>{getMcpShortName(tool.name)}</li>
+                  <li key={tool.name}>{getMcpShortName(tool)}</li>
                 ))}
               </ul>
             )}

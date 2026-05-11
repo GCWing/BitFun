@@ -14,6 +14,8 @@ pub mod auth;
 pub mod config;
 pub mod protocol;
 pub mod server;
+mod tool_info;
+mod tool_name;
 
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -34,6 +36,10 @@ pub use adapter::{
 };
 
 pub use config::{ConfigLocation, MCPConfigService};
+pub use tool_info::McpToolInfo;
+pub use tool_name::{
+    build_mcp_tool_name, normalize_name_for_mcp, MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
+};
 
 /// MCP service interface.
 pub struct MCPService {

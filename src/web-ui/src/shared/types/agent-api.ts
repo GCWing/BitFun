@@ -43,6 +43,13 @@ export interface ToolInfo {
   is_readonly: boolean;
   is_concurrency_safe: boolean;
   needs_permissions: boolean;
+  mcp_info?: McpToolInfo;
+}
+
+export interface McpToolInfo {
+  server_id: string;
+  server_name: string;
+  tool_name: string;
 }
 
 export interface ToolExecutionRequest {

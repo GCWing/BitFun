@@ -4,6 +4,7 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use bitfun_core::agentic::{
     tools::framework::ToolUseContext,
@@ -27,6 +28,20 @@ pub struct ToolExecutionRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetToolInfoRequest {
+    pub tool_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpToolInfo {
+    pub server_id: String,
+    pub server_name: String,
+    pub tool_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolInfo {
     pub name: String,
     pub description: String,
@@ -34,6 +49,8 @@ pub struct ToolInfo {
     pub is_readonly: bool,
     pub is_concurrency_safe: bool,
     pub needs_permissions: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_info: Option<McpToolInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,6 +176,31 @@ async fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
     }
 }
 
+fn to_mcp_tool_info(info: bitfun_core::service::mcp::McpToolInfo) -> McpToolInfo {
+    McpToolInfo {
+        server_id: info.server_id,
+        server_name: info.server_name,
+        tool_name: info.tool_name,
+    }
+}
+
+async fn build_tool_info(tool: &Arc<dyn bitfun_core::agentic::tools::framework::Tool>) -> ToolInfo {
+    let description = tool
+        .description()
+        .await
+        .unwrap_or_else(|_| "No description available".to_string());
+
+    ToolInfo {
+        name: tool.name().to_string(),
+        description,
+        input_schema: tool.input_schema_for_model().await,
+        is_readonly: tool.is_readonly(),
+        is_concurrency_safe: tool.is_concurrency_safe(None),
+        needs_permissions: tool.needs_permissions(None),
+        mcp_info: tool.mcp_info().map(to_mcp_tool_info),
+    }
+}
+
 fn has_explicit_workspace_path(workspace_path: Option<&str>) -> bool {
     workspace_path.is_some_and(|path| !path.trim().is_empty())
 }
@@ -202,19 +244,7 @@ pub async fn get_all_tools_info() -> Result<Vec<ToolInfo>, String> {
     let mut tool_infos = Vec::new();
 
     for tool in tools {
-        let description = tool
-            .description()
-            .await
-            .unwrap_or_else(|_| "No description available".to_string());
-
-        tool_infos.push(ToolInfo {
-            name: tool.name().to_string(),
-            description,
-            input_schema: tool.input_schema_for_model().await,
-            is_readonly: tool.is_readonly(),
-            is_concurrency_safe: tool.is_concurrency_safe(None),
-            needs_permissions: tool.needs_permissions(None),
-        });
+        tool_infos.push(build_tool_info(&tool).await);
     }
 
     Ok(tool_infos)
@@ -229,43 +259,19 @@ pub async fn get_readonly_tools_info() -> Result<Vec<ToolInfo>, String> {
     let mut tool_infos = Vec::new();
 
     for tool in tools {
-        let description = tool
-            .description()
-            .await
-            .unwrap_or_else(|_| "No description available".to_string());
-
-        tool_infos.push(ToolInfo {
-            name: tool.name().to_string(),
-            description,
-            input_schema: tool.input_schema_for_model().await,
-            is_readonly: tool.is_readonly(),
-            is_concurrency_safe: tool.is_concurrency_safe(None),
-            needs_permissions: tool.needs_permissions(None),
-        });
+        tool_infos.push(build_tool_info(&tool).await);
     }
 
     Ok(tool_infos)
 }
 
 #[tauri::command]
-pub async fn get_tool_info(tool_name: String) -> Result<Option<ToolInfo>, String> {
+pub async fn get_tool_info(request: GetToolInfoRequest) -> Result<Option<ToolInfo>, String> {
     let tools = get_all_tools().await;
 
     for tool in tools {
-        if tool.name() == tool_name {
-            let description = tool
-                .description()
-                .await
-                .unwrap_or_else(|_| "No description available".to_string());
-
-            return Ok(Some(ToolInfo {
-                name: tool.name().to_string(),
-                description,
-                input_schema: tool.input_schema_for_model().await,
-                is_readonly: tool.is_readonly(),
-                is_concurrency_safe: tool.is_concurrency_safe(None),
-                needs_permissions: tool.needs_permissions(None),
-            }));
+        if tool.name() == request.tool_name {
+            return Ok(Some(build_tool_info(&tool).await));
         }
     }
 

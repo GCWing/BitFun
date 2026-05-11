@@ -13,7 +13,9 @@ import { createLogger } from '@/shared/utils/logger';
 import { MCPAPI, MCP_APPS_PROTOCOL_VERSION, type McpUiResourceCsp, type McpUiResourcePermissions, type McpUiMessageParams, type McpUiMessageResult, type McpAppMessageEvent, type McpAppMessageResponseEvent } from '@/infrastructure/api/service-api/MCPAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
-import { isMcpToolName, parseMcpToolName } from '@/infrastructure/mcp/toolName';
+import { isMcpToolName } from '@/infrastructure/mcp/toolName';
+import { getCachedToolInfo } from '@/infrastructure/mcp/toolInfoCache';
+import type { ToolInfo } from '@/shared/types/agent-api';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
 import { AcpPermissionActions } from './AcpPermissionActions';
@@ -159,6 +161,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     toolId,
     toolName: toolItem.toolName,
   });
+  const [resolvedToolInfo, setResolvedToolInfo] = useState<ToolInfo | null>(null);
 
   const getResultData = (): MCPToolResult | null => {
     if (!toolResult?.result) return null;
@@ -176,16 +179,34 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
 
   const resultData = getResultData();
 
-  const getToolInfo = () => {
-    const fullToolName = config.toolName;
-    const parsed = parseMcpToolName(fullToolName);
-    return {
-      toolName: parsed?.toolName ?? fullToolName,
-      serverId: parsed?.serverId ?? 'unknown',
-    };
-  };
+  useEffect(() => {
+    let cancelled = false;
 
-  const { toolName, serverId } = getToolInfo();
+    if (!isMcpToolName(config.toolName)) {
+      setResolvedToolInfo(null);
+      return;
+    }
+
+    getCachedToolInfo(config.toolName)
+      .then((info) => {
+        if (!cancelled) {
+          setResolvedToolInfo(info);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setResolvedToolInfo(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [config.toolName]);
+
+  const resolvedMcpToolName = resolvedToolInfo?.mcp_info?.tool_name ?? null;
+  const toolName = resolvedMcpToolName ?? config.toolName;
+  const serverId = resolvedToolInfo?.mcp_info?.server_id ?? null;
   const isFailed = status === 'error';
 
   const mcpAppIframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -275,7 +296,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
               toolInfo: {
                 id: tc?.id,
                 tool: {
-                  name: cfg.toolName,
+                  name: resolvedMcpToolName ?? cfg.toolName,
                   description: undefined,
                   inputSchema: { type: 'object' as const, properties: {}, additionalProperties: true }
                 }
@@ -474,7 +495,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [mcpAppState?.html, serverId]);
+  }, [mcpAppState?.html, serverId, resolvedMcpToolName]);
 
   const handleIframeLoad = useCallback(() => {
     /* iframe loaded, ref is ready for postMessage bridge */

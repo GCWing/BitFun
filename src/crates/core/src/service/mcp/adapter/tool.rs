@@ -5,6 +5,7 @@
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::service::mcp::{build_mcp_tool_name, McpToolInfo};
 use crate::service::mcp::protocol::{MCPTool, MCPToolResult};
 use crate::service::mcp::server::MCPConnection;
 use crate::util::errors::BitFunResult;
@@ -17,7 +18,7 @@ use std::sync::Arc;
 pub struct MCPToolWrapper {
     mcp_tool: MCPTool,
     connection: Arc<MCPConnection>,
-    provider_id: String,
+    server_id: String,
     server_name: String,
     full_name: String,
 }
@@ -32,11 +33,11 @@ impl MCPToolWrapper {
         server_id: String,
         server_name: String,
     ) -> Self {
-        let full_name = format!("mcp__{}__{}", server_id, mcp_tool.name);
+        let full_name = build_mcp_tool_name(&server_id, &mcp_tool.name);
         Self {
             mcp_tool,
             connection,
-            provider_id: server_id,
+            server_id,
             server_name,
             full_name,
         }
@@ -127,11 +128,19 @@ impl Tool for MCPToolWrapper {
     }
 
     fn dynamic_provider_id(&self) -> Option<&str> {
-        Some(&self.provider_id)
+        Some(&self.server_id)
     }
 
     fn user_facing_name(&self) -> String {
         format!("{} ({})", self.tool_title(), self.server_name)
+    }
+
+    fn mcp_info(&self) -> Option<McpToolInfo> {
+        Some(McpToolInfo {
+            server_id: self.server_id.clone(),
+            server_name: self.server_name.clone(),
+            tool_name: self.mcp_tool.name.clone(),
+        })
     }
 
     async fn is_enabled(&self) -> bool {

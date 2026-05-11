@@ -2,6 +2,7 @@
 
 use crate::agentic::tools::framework::Tool;
 use crate::agentic::tools::implementations::*;
+use crate::service::mcp::McpToolInfo;
 use crate::util::errors::BitFunResult;
 use bitfun_runtime_ports::{DynamicToolDescriptor, DynamicToolProvider, ToolDecorator};
 use indexmap::IndexMap;
@@ -22,6 +23,7 @@ impl ToolDecorator<ToolRef> for SnapshotToolDecorator {
 /// Tool registry - manages all available tools (using IndexMap to maintain registration order)
 pub struct ToolRegistry {
     tools: IndexMap<String, ToolRef>,
+    mcp_tools: IndexMap<String, McpToolInfo>,
     tool_decorator: ToolDecoratorRef,
 }
 
@@ -45,6 +47,7 @@ impl ToolRegistry {
     pub fn with_tool_decorator(tool_decorator: ToolDecoratorRef) -> Self {
         let mut registry = Self {
             tools: IndexMap::new(),
+            mcp_tools: IndexMap::new(),
             tool_decorator,
         };
 
@@ -93,8 +96,18 @@ impl ToolRegistry {
 
     /// Remove all tools from the MCP server
     pub fn unregister_mcp_server_tools(&mut self, server_id: &str) {
-        let prefix = format!("mcp__{}__", server_id);
-        self.unregister_tools_by_prefix(&prefix);
+        let to_remove: Vec<String> = self
+            .mcp_tools
+            .iter()
+            .filter(|(_, info)| info.server_id == server_id)
+            .map(|(tool_name, _)| tool_name.clone())
+            .collect();
+
+        for key in to_remove {
+            info!("Unregistering dynamic tool: tool_name={}", key);
+            self.tools.shift_remove(&key);
+            self.mcp_tools.shift_remove(&key);
+        }
     }
 
     /// Remove all tools whose registry name starts with the given prefix.
@@ -110,6 +123,7 @@ impl ToolRegistry {
         for key in to_remove {
             info!("Unregistering dynamic tool: tool_name={}", key);
             self.tools.shift_remove(&key);
+            self.mcp_tools.shift_remove(&key);
         }
         count
     }
@@ -190,12 +204,21 @@ impl ToolRegistry {
         // subsequent lookup returns the same runtime implementation.
         let tool = self.tool_decorator.decorate(tool);
         let name = tool.name().to_string();
+        if let Some(mcp_info) = tool.mcp_info() {
+            self.mcp_tools.insert(name.clone(), mcp_info);
+        } else {
+            self.mcp_tools.shift_remove(&name);
+        }
         self.tools.insert(name, tool);
     }
 
     /// Get tool
     pub fn get_tool(&self, name: &str) -> Option<Arc<dyn Tool>> {
         self.tools.get(name).cloned()
+    }
+
+    pub fn get_mcp_tool_info(&self, name: &str) -> Option<McpToolInfo> {
+        self.mcp_tools.get(name).cloned()
     }
 
     /// Get all tool names
@@ -220,12 +243,16 @@ impl DynamicToolProvider for ToolRegistry {
     ) -> bitfun_runtime_ports::PortResult<Vec<DynamicToolDescriptor>> {
         let mut descriptors = Vec::new();
 
-        for tool in self.tools.values() {
-            let Some(provider_id) = tool
-                .dynamic_provider_id()
-                .filter(|value| !value.is_empty())
-                .map(ToOwned::to_owned)
-            else {
+        for (name, tool) in self.tools.iter() {
+            let provider_id = if let Some(mcp_info) = self.mcp_tools.get(name) {
+                Some(mcp_info.server_id.clone())
+            } else {
+                tool.dynamic_provider_id()
+                    .filter(|value| !value.is_empty())
+                    .map(ToOwned::to_owned)
+            };
+
+            let Some(provider_id) = provider_id else {
                 continue;
             };
             let description = tool.description().await.map_err(|error| {
@@ -344,7 +371,6 @@ mod tests {
             Some("github__enterprise/prod")
         );
     }
-
     #[test]
     fn registry_exposes_controlhub_and_computer_use() {
         let registry = create_tool_registry();
