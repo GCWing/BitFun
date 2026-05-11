@@ -254,6 +254,27 @@ impl BrowserLauncher {
         *cache = None;
     }
 
+    /// Parse a `BrowserKind` from the CDP `/json/version` "Browser" field.
+    /// The field typically looks like `"HeadlessChrome/130.0..."` or
+    /// `"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"`
+    /// or `"Microsoft Edge/130.0..."`.
+    pub fn browser_kind_from_cdp_version(version_str: &str) -> Option<BrowserKind> {
+        let lower = version_str.to_ascii_lowercase();
+        if lower.contains("edg") || lower.contains("edge") {
+            Some(BrowserKind::Edge)
+        } else if lower.contains("brave") {
+            Some(BrowserKind::Brave)
+        } else if lower.contains("chromium") {
+            Some(BrowserKind::Chromium)
+        } else if lower.contains("chrome") {
+            Some(BrowserKind::Chrome)
+        } else if lower.contains("arc") {
+            Some(BrowserKind::Arc)
+        } else {
+            None
+        }
+    }
+
     pub fn browser_kind_from_config(value: &str) -> Option<BrowserKind> {
         match value.trim().to_ascii_lowercase().as_str() {
             "" | "default" => None,

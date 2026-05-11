@@ -104,26 +104,31 @@ pub async fn browser_control_get_status(
 ) -> Result<BrowserControlStatusResponse, String> {
     let port = request.port;
     let available = BrowserLauncher::is_cdp_available(port).await;
-    let kind = selected_browser_kind().await?;
+    let configured_kind = selected_browser_kind().await?;
 
-    let (version, page_count) = if available {
-        let ver = CdpClient::get_version(port)
-            .await
-            .ok()
-            .and_then(|v| v.browser);
+    let (version, page_count, actual_kind) = if available {
+        let ver_info = CdpClient::get_version(port).await.ok();
+        let ver = ver_info.as_ref().and_then(|v| v.browser.clone());
+        // Identify the actual browser from CDP version response.
+        let kind = ver
+            .as_deref()
+            .and_then(|v| BrowserLauncher::browser_kind_from_cdp_version(v))
+            .unwrap_or_else(|| configured_kind.clone());
+        // Only count targets of type "page" (real browser tabs),
+        // not service workers, browser targets, etc.
         let pages = CdpClient::list_pages(port)
             .await
             .ok()
-            .map(|p| p.len())
+            .map(|p| p.iter().filter(|t| t.page_type.as_deref() == Some("page")).count())
             .unwrap_or(0);
-        (ver, pages)
+        (ver, pages, kind)
     } else {
-        (None, 0)
+        (None, 0, configured_kind)
     };
 
     Ok(BrowserControlStatusResponse {
         cdp_available: available,
-        browser_kind: kind.to_string(),
+        browser_kind: actual_kind.to_string(),
         browser_version: version,
         port,
         page_count,

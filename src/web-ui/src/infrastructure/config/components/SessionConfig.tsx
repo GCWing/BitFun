@@ -1091,6 +1091,8 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         >
           {IS_TAURI_DESKTOP ? (
             <>
+              {/* Only show browser selector when CDP is not connected */}
+              {!browserCdpAvailable && (
               <ConfigPageRow
                 label={t('browserControl.preferredBrowser')}
                 description={t('browserControl.preferredBrowserDesc')}
@@ -1109,6 +1111,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                   />
                 </div>
               </ConfigPageRow>
+              )}
               <ConfigPageRow
                 label={t('browserControl.status')}
                 description={t('browserControl.statusDesc') || undefined}
