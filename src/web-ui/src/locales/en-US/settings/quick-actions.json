@@ -4,6 +4,18 @@
     "subtitle": "One-click AI actions after coding. Triggered from the lightning bolt icon in the chat header. AI completes them autonomously end-to-end."
   },
   "loading": "Loading...",
+  "quickActions": {
+    "defaults": {
+      "commit": {
+        "label": "Commit",
+        "prompt": "Commit all current code changes"
+      },
+      "createPr": {
+        "label": "Create PR",
+        "prompt": "Create a Pull Request for the current branch"
+      }
+    }
+  },
   "sections": {
     "builtin": {
       "title": "Built-in actions",

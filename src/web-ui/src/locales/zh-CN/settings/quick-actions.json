@@ -4,6 +4,18 @@
     "subtitle": "代码完成后的一键 AI 动作，从聊天窗口左上角的闪电图标触发，AI 自主端到端完成。"
   },
   "loading": "加载中...",
+  "quickActions": {
+    "defaults": {
+      "commit": {
+        "label": "提交",
+        "prompt": "提交当前所有代码变更"
+      },
+      "createPr": {
+        "label": "创建 PR",
+        "prompt": "为当前分支创建 Pull Request"
+      }
+    }
+  },
   "sections": {
     "builtin": {
       "title": "内置动作",

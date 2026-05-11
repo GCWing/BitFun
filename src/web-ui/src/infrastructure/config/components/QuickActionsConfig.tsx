@@ -21,6 +21,10 @@ import {
   DEFAULT_QUICK_ACTIONS,
   type QuickAction,
 } from '../services/AIExperienceConfigService';
+import {
+  normalizeQuickActionTextForStorage,
+  resolveQuickActionText,
+} from '../services/quickActionLocalization';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import './QuickActionsConfig.scss';
@@ -28,6 +32,8 @@ import './QuickActionsConfig.scss';
 const log = createLogger('QuickActionsConfig');
 
 const BUILTIN_IDS = new Set(['commit', 'create_pr']);
+
+type TranslationFn = (key: string, options?: Record<string, unknown>) => string;
 
 function getActionIcon(id: string, size = 15) {
   if (id === 'commit') return <GitCommitHorizontal size={size} />;
@@ -43,7 +49,7 @@ interface ActionFormModalProps {
   target: QuickAction | undefined;
   onClose: () => void;
   onSubmit: (label: string, prompt: string) => void;
-  t: (key: string) => string;
+  t: TranslationFn;
 }
 
 const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClose, onSubmit, t }) => {
@@ -54,12 +60,13 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
   // Sync form when target changes or modal opens.
   useEffect(() => {
     if (isOpen) {
-      setLabel(target?.label ?? '');
-      setPrompt(target?.prompt ?? '');
+      const targetText = target ? resolveQuickActionText(target, t) : undefined;
+      setLabel(targetText?.label ?? '');
+      setPrompt(targetText?.prompt ?? '');
       // Delay focus so the modal animation completes first.
       setTimeout(() => labelInputRef.current?.focus(), 80);
     }
-  }, [isOpen, target]);
+  }, [isOpen, t, target]);
 
   const canSubmit = label.trim().length > 0 && prompt.trim().length > 0;
 
@@ -145,52 +152,56 @@ interface ActionRowProps {
   onEdit: (action: QuickAction) => void;
   onDelete: (id: string) => void;
   canDelete: boolean;
-  t: (key: string) => string;
+  t: TranslationFn;
 }
 
-const ActionRow: React.FC<ActionRowProps> = ({ action, onToggle, onEdit, onDelete, canDelete, t }) => (
-  <div className="quick-actions-config__row">
-    <div className="quick-actions-config__row-icon">
-      {getActionIcon(action.id)}
-    </div>
+const ActionRow: React.FC<ActionRowProps> = ({ action, onToggle, onEdit, onDelete, canDelete, t }) => {
+  const actionText = resolveQuickActionText(action, t);
 
-    <div className="quick-actions-config__row-body">
-      <div className="quick-actions-config__row-label">{action.label}</div>
-      <div className="quick-actions-config__row-prompt">{action.prompt}</div>
-    </div>
+  return (
+    <div className="quick-actions-config__row">
+      <div className="quick-actions-config__row-icon">
+        {getActionIcon(action.id)}
+      </div>
 
-    <div className="quick-actions-config__row-controls">
-      <Switch
-        checked={action.enabled}
-        onChange={() => onToggle(action.id)}
-        size="small"
-      />
-      <IconButton
-        type="button"
-        size="small"
-        variant="ghost"
-        aria-label={t('edit.button')}
-        tooltip={t('edit.button')}
-        onClick={() => onEdit(action)}
-      >
-        <Pencil size={13} />
-      </IconButton>
-      {canDelete && (
+      <div className="quick-actions-config__row-body">
+        <div className="quick-actions-config__row-label">{actionText.label}</div>
+        <div className="quick-actions-config__row-prompt">{actionText.prompt}</div>
+      </div>
+
+      <div className="quick-actions-config__row-controls">
+        <Switch
+          checked={action.enabled}
+          onChange={() => onToggle(action.id)}
+          size="small"
+        />
         <IconButton
           type="button"
           size="small"
           variant="ghost"
-          aria-label={t('delete.button')}
-          tooltip={t('delete.button')}
-          onClick={() => onDelete(action.id)}
-          className="quick-actions-config__delete-btn"
+          aria-label={t('edit.button')}
+          tooltip={t('edit.button')}
+          onClick={() => onEdit(action)}
         >
-          <Trash2 size={13} />
+          <Pencil size={13} />
         </IconButton>
-      )}
+        {canDelete && (
+          <IconButton
+            type="button"
+            size="small"
+            variant="ghost"
+            aria-label={t('delete.button')}
+            tooltip={t('delete.button')}
+            onClick={() => onDelete(action.id)}
+            className="quick-actions-config__delete-btn"
+          >
+            <Trash2 size={13} />
+          </IconButton>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ── Main page ───────────────────────────────────────────────────────────────
 
@@ -252,10 +263,11 @@ const QuickActionsConfig: React.FC = () => {
       void persist([...actions, newAction]);
     } else if (modalTarget) {
       // Edit mode
-      void persist(actions.map(a => a.id === modalTarget.id ? { ...a, label, prompt } : a));
+      const normalizedText = normalizeQuickActionTextForStorage(modalTarget, label, prompt, t);
+      void persist(actions.map(a => a.id === modalTarget.id ? { ...a, ...normalizedText } : a));
     }
     setModalTarget(undefined);
-  }, [actions, modalTarget, persist]);
+  }, [actions, modalTarget, persist, t]);
 
   if (loading) {
     return (
