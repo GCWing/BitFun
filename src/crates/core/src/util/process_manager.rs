@@ -116,27 +116,21 @@ pub fn create_tokio_command<S: AsRef<std::ffi::OsStr>>(program: S) -> TokioComma
     cmd
 }
 
+#[cfg(unix)]
 pub fn configure_process_group(command: &mut TokioCommand) {
-    #[cfg(unix)]
-    {
-        command.process_group(0);
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = command;
-    }
+    command.process_group(0);
 }
 
+#[cfg(not(unix))]
+pub fn configure_process_group(_command: &mut TokioCommand) {}
+
+#[cfg(unix)]
 pub async fn terminate_child_process_tree(
     child: &mut Child,
-    #[cfg(unix)]
     graceful_timeout: Duration,
-    #[cfg(not(unix))]
-    _graceful_timeout: Duration,
 ) -> io::Result<()> {
     let pid = child.id();
 
-    #[cfg(unix)]
     if let Some(pid) = pid {
         let process_group = format!("-{}", pid);
         let _ = create_tokio_command("kill")
@@ -158,7 +152,19 @@ pub async fn terminate_child_process_tree(
         }
     }
 
-    #[cfg(windows)]
+    child.start_kill()?;
+    child.wait().await.map(|_| ())
+}
+
+#[cfg(windows)]
+pub async fn terminate_child_process_tree(
+    child: &mut Child,
+    graceful_timeout: Duration,
+) -> io::Result<()> {
+    let pid = child.id();
+
+    let _ = graceful_timeout;
+
     if let Some(pid) = pid {
         let _ = create_tokio_command("taskkill")
             .arg("/PID")

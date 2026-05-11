@@ -14,7 +14,6 @@ import {
   SessionPersonalizationConfig,
   SessionPermissionsConfig,
 } from '../../../infrastructure/config/components/SessionConfig';
-import AIRulesMemoryConfig from '../../../infrastructure/config/components/AIRulesMemoryConfig';
 import McpToolsConfig from '../../../infrastructure/config/components/McpToolsConfig';
 import AcpAgentsConfig from '../../../infrastructure/config/components/AcpAgentsConfig';
 import EditorConfig from '../../../infrastructure/config/components/EditorConfig';
@@ -61,7 +60,6 @@ const SettingsScene: React.FC = () => {
     case 'session-permissions':     Content = SessionPermissionsConfig;     break;
     case 'quick-actions':    Content = QuickActionsConfig;   break;
     case 'review':           Content = ReviewConfig;         break;
-    case 'ai-context':       Content = AIRulesMemoryConfig; break;
     case 'mcp-tools':        Content = McpToolsConfig;      break;
     case 'acp-agents':       Content = AcpAgentsConfig;     break;
     case 'editor':           Content = EditorConfig;         break;

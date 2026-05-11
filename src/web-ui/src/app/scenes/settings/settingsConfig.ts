@@ -13,7 +13,6 @@ export type ConfigTab =
   | 'session-permissions'
   | 'quick-actions'
   | 'review'
-  | 'ai-context'
   | 'mcp-tools'
   | 'acp-agents'
   // | 'lsp' // temporarily hidden from config center
@@ -186,12 +185,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           '\u5ba1\u6838',
           '\u4ee3\u7801\u5ba1\u6838',
         ],
-      },
-      {
-        id: 'ai-context',
-        labelKey: 'configCenter.tabs.aiContext',
-        descriptionKey: 'configCenter.tabDescriptions.aiContext',
-        keywords: ['rules', 'memory', 'context', 'rag', 'knowledge'],
       },
       {
         id: 'mcp-tools',

@@ -648,7 +648,6 @@ async fn clear_active_workspace_context(state: &State<'_, AppState>, app: &AppHa
         pool.stop_all().await;
     }
 
-    state.ai_rules_service.clear_workspace().await;
     state.agent_registry.clear_custom_subagents();
 
     #[cfg(target_os = "macos")]
@@ -679,21 +678,6 @@ async fn apply_active_workspace_context(
     clear_active_workspace_context(state, app).await;
 
     *state.workspace_path.write().await = Some(workspace_info.root_path.clone());
-
-    // Remote workspace roots are POSIX paths on the SSH host — not writable local directories on
-    // Windows. Snapshot hooks already skip file tracking for registered remote paths; avoid
-    // creating `/.bitfun` (or drive root) here which fails with access denied.
-    if let Err(e) = state
-        .ai_rules_service
-        .set_workspace(workspace_info.root_path.clone())
-        .await
-    {
-        warn!(
-            "Failed to set AI rules workspace: path={}, error={}",
-            workspace_info.root_path.display(),
-            e
-        );
-    }
 
     spawn_workspace_background_warmup(&*state, workspace_info.clone());
 

@@ -96,18 +96,6 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/review', key: 'extra.title' },
   ],
 
-  'ai-context': [
-    { ns: 'settings/ai-context', key: 'title' },
-    { ns: 'settings/ai-context', key: 'subtitle' },
-    { ns: 'settings/ai-context', key: 'scope.user' },
-    { ns: 'settings/ai-context', key: 'scope.project' },
-    { ns: 'settings/ai-context', key: 'memoryProjectPlaceholder' },
-    { ns: 'settings/ai-rules', key: 'title' },
-    { ns: 'settings/ai-rules', key: 'subtitle' },
-    { ns: 'settings/ai-memory', key: 'section.memoryList.title' },
-    { ns: 'settings/ai-memory', key: 'section.memoryList.description' },
-  ],
-
   'mcp-tools': [
     { ns: 'settings/mcp-tools', key: 'title' },
     { ns: 'settings/mcp-tools', key: 'subtitle' },

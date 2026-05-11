@@ -14,7 +14,6 @@
       "sessionPersonalization": "會話標題與 Agent 夥伴。",
       "sessionPermissions": "加速工作區搜尋、工具確認與逾時、Computer use、瀏覽器與偵錯。",
       "review": "深度審核策略、審核員模型與額外審核 Sub-Agent。",
-      "aiContext": "規則與記憶等 AI 上下文。",
       "mcpTools": "MCP 服務器與工具集成。",
       "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",
       "editor": "編輯器字體、顯示與格式化。",
@@ -33,9 +32,6 @@
       "sessionPersonalization": "個性化",
       "sessionPermissions": "權限管理",
       "review": "審核",
-      "aiRules": "規則",
-      "aiMemory": "記憶",
-      "aiContext": "規則 & 記憶",
       "skills": "技能",
       "mcpTools": "MCP",
       "acpAgents": "ACP Agent",
@@ -419,27 +415,6 @@
     "semanticSearchDesc": "基於語義理解的代碼搜索",
     "autoFix": "自動修復",
     "autoFixDesc": "自動修復代碼錯誤和警告"
-  },
-  "aiRules": {
-    "title": "規則",
-    "subtitle": "配置 AI 行為規則和約束",
-    "addRule": "添加規則",
-    "editRule": "編輯規則",
-    "deleteRule": "刪除規則",
-    "ruleName": "規則名稱",
-    "ruleContent": "規則內容",
-    "priority": "優先級",
-    "enabled": "啟用",
-    "noRules": "暫無規則",
-    "noRulesHint": "添加規則來約束 AI 的行為"
-  },
-  "aiMemory": {
-    "title": "記憶",
-    "subtitle": "管理 AI 的上下文記憶",
-    "clearMemory": "清除記憶",
-    "confirmClear": "確定要清除所有記憶嗎？此操作不可撤銷。",
-    "memorySize": "記憶大小",
-    "lastUpdated": "最後更新"
   },
   "modes": {
     "title": "模式",

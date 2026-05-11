@@ -15,7 +15,6 @@
       "sessionPermissions": "Accelerated workspace search, tool confirmation, Computer use, browser, and debug.",
       "quickActions": "One-click AI actions after coding. Built-in and customizable prompts.",
       "review": "Deep Review strategy, reviewer models, and extra Review Sub-Agents.",
-      "aiContext": "Rules and memory for AI context.",
       "mcpTools": "MCP servers and tool integrations.",
       "acpAgents": "External ACP agents such as opencode, Claude Code, and Codex.",
       "editor": "Editor font, display, and formatting.",
@@ -35,9 +34,6 @@
       "sessionPermissions": "Permissions",
       "quickActions": "Quick Actions",
       "review": "Review",
-      "aiRules": "Rules",
-      "aiMemory": "Memory",
-      "aiContext": "Rules & Memory",
       "skills": "Skills",
       "mcpTools": "MCP",
       "acpAgents": "ACP Agents",
@@ -421,27 +417,6 @@
     "semanticSearchDesc": "Semantic-based code search",
     "autoFix": "Auto Fix",
     "autoFixDesc": "Automatically fix code errors and warnings"
-  },
-  "aiRules": {
-    "title": "Rules",
-    "subtitle": "Configure AI behavior rules and constraints",
-    "addRule": "Add Rule",
-    "editRule": "Edit Rule",
-    "deleteRule": "Delete Rule",
-    "ruleName": "Rule Name",
-    "ruleContent": "Rule Content",
-    "priority": "Priority",
-    "enabled": "Enabled",
-    "noRules": "No rules",
-    "noRulesHint": "Add rules to constrain AI behavior"
-  },
-  "aiMemory": {
-    "title": "Memory",
-    "subtitle": "Manage AI context memory",
-    "clearMemory": "Clear Memory",
-    "confirmClear": "Are you sure you want to clear all memory? This action cannot be undone.",
-    "memorySize": "Memory Size",
-    "lastUpdated": "Last Updated"
   },
   "modes": {
     "title": "Modes",

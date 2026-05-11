@@ -15,7 +15,6 @@
       "sessionPermissions": "加速工作区搜索、工具确认与超时、Computer use、浏览器与调试。",
       "quickActions": "代码完成后的一键 AI 动作，支持内置和自定义指令。",
       "review": "深度审核策略、审核员模型与额外审核 Sub-Agent。",
-      "aiContext": "规则与记忆等 AI 上下文。",
       "mcpTools": "MCP 服务器与工具集成。",
       "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",
       "editor": "编辑器字体、显示与格式化。",
@@ -35,9 +34,6 @@
       "sessionPermissions": "权限管理",
       "quickActions": "快捷动作",
       "review": "审核",
-      "aiRules": "规则",
-      "aiMemory": "记忆",
-      "aiContext": "规则 & 记忆",
       "skills": "技能",
       "mcpTools": "MCP",
       "acpAgents": "ACP Agent",
@@ -421,27 +417,6 @@
     "semanticSearchDesc": "基于语义理解的代码搜索",
     "autoFix": "自动修复",
     "autoFixDesc": "自动修复代码错误和警告"
-  },
-  "aiRules": {
-    "title": "规则",
-    "subtitle": "配置 AI 行为规则和约束",
-    "addRule": "添加规则",
-    "editRule": "编辑规则",
-    "deleteRule": "删除规则",
-    "ruleName": "规则名称",
-    "ruleContent": "规则内容",
-    "priority": "优先级",
-    "enabled": "启用",
-    "noRules": "暂无规则",
-    "noRulesHint": "添加规则来约束 AI 的行为"
-  },
-  "aiMemory": {
-    "title": "记忆",
-    "subtitle": "管理 AI 的上下文记忆",
-    "clearMemory": "清除记忆",
-    "confirmClear": "确定要清除所有记忆吗？此操作不可撤销。",
-    "memorySize": "记忆大小",
-    "lastUpdated": "最后更新"
   },
   "modes": {
     "title": "模式",

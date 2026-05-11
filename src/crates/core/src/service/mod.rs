@@ -1,10 +1,8 @@
 //! Service layer module
 //!
-//! Contains core business logic: Workspace, Config, FileSystem, Git, Agentic, AIRules, MCP.
+//! Contains core business logic: Workspace, Config, FileSystem, Git, Agentic, MCP.
 
 pub(crate) mod agent_memory; // Agent memory prompt helpers
-pub mod ai_memory; // AI memory point management
-pub mod ai_rules; // AI rules management
 pub mod announcement; // Announcement / feature-demo / tips system
 pub(crate) mod bootstrap; // Workspace persona bootstrap helpers
 pub mod config; // Config management
@@ -33,8 +31,6 @@ pub mod workspace_runtime; // Workspace runtime layout / migration / initializat
 pub use terminal_core as terminal;
 
 // Re-export main components.
-pub use ai_memory::{AIMemory, AIMemoryManager, MemoryType};
-pub use ai_rules::AIRulesService;
 pub use announcement::{AnnouncementCard, AnnouncementScheduler, AnnouncementSchedulerRef};
 pub use bootstrap::reset_workspace_persona_files_to_default;
 pub use config::{ConfigManager, ConfigProvider, ConfigService};

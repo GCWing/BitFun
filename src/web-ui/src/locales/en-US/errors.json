@@ -104,13 +104,6 @@
       "copyDiagnostics": "Copy diagnostics"
     }
   },
-  "aiRules": {
-    "loadFailed": "Failed to load AI rules",
-    "createFailed": "Failed to create rule",
-    "updateFailed": "Failed to update rule",
-    "deleteFailed": "Failed to delete rule",
-    "toggleFailed": "Failed to toggle rule status"
-  },
   "terminal": {
     "createError": "Failed to create terminal",
     "executeError": "Failed to execute command",

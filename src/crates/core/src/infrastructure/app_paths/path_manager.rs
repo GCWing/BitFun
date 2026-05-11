@@ -334,12 +334,6 @@ impl PathManager {
         self.project_runtime_root(workspace_path).join("memory")
     }
 
-    /// Get project AI memories file: ~/.bitfun/projects/<workspace-slug>/ai_memories.json
-    pub fn project_ai_memories_file(&self, workspace_path: &Path) -> PathBuf {
-        self.project_runtime_root(workspace_path)
-            .join("ai_memories.json")
-    }
-
     fn project_runtime_slug(&self, workspace_path: &Path) -> String {
         let requested_path = workspace_path.to_path_buf();
         if let Some(slug) = self.cached_project_runtime_slug(&requested_path) {
