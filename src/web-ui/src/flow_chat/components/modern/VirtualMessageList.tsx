@@ -1553,15 +1553,15 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   }, [activeSession, isProcessing]);
 
   const scrollToLatestEndPositionInternal = useCallback((behavior: 'auto' | 'smooth') => {
-    if (virtuosoRef.current && virtualItems.length > 0) {
+    const scroller = scrollerElementRef.current;
+    if (scroller) {
       clearAllBottomReservationsForUserNavigation();
-      virtuosoRef.current.scrollToIndex({
-        index: virtualItems.length - 1,
-        align: 'end',
+      scroller.scrollTo({
+        top: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
         behavior,
       });
     }
-  }, [clearAllBottomReservationsForUserNavigation, virtualItems.length]);
+  }, [clearAllBottomReservationsForUserNavigation]);
 
   const requestTurnPinToTop = useCallback((turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }) => {
     const requestedPinMode = options?.pinMode ?? 'transient';
@@ -1896,15 +1896,15 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   });
 
   const scrollToPhysicalBottomAndClearPin = useCallback(() => {
-    if (virtuosoRef.current && virtualItems.length > 0) {
+    const scroller = scrollerElementRef.current;
+    if (scroller) {
       clearAllBottomReservationsForUserNavigation();
-      virtuosoRef.current.scrollToIndex({
-        index: virtualItems.length - 1,
-        align: 'end',
+      scroller.scrollTo({
+        top: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
         behavior: 'smooth',
       });
     }
-  }, [clearAllBottomReservationsForUserNavigation, virtualItems.length]);
+  }, [clearAllBottomReservationsForUserNavigation]);
 
   const scrollToLatestEndPosition = useCallback(() => {
     enterFollowOutput('jump-to-latest');

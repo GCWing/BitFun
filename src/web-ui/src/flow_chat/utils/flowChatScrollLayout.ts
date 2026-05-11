@@ -14,6 +14,7 @@ export const SCROLL_TO_LATEST_INPUT_CLEARANCE_PX = 6;
 
 const FALLBACK_INPUT_BLOCK_ACTIVE_PX = 96;
 const FALLBACK_INPUT_BLOCK_COLLAPSED_PX = 54;
+const NORMAL_INPUT_BLOCK_SAFE_PX = 96;
 
 /**
  * Height of the Virtuoso footer spacer needed so the last message clears the floating input.
@@ -23,11 +24,11 @@ export function computeFlowChatInputStackFooterPx(
   measuredInputHeight: number,
   isInputActive: boolean,
 ): number {
-  const inputBlock =
-    measuredInputHeight > 0
-      ? measuredInputHeight
-      : isInputActive
-        ? FALLBACK_INPUT_BLOCK_ACTIVE_PX
-        : FALLBACK_INPUT_BLOCK_COLLAPSED_PX;
+  const measuredInputBlock = measuredInputHeight > 0
+    ? measuredInputHeight
+    : isInputActive
+      ? FALLBACK_INPUT_BLOCK_ACTIVE_PX
+      : FALLBACK_INPUT_BLOCK_COLLAPSED_PX;
+  const inputBlock = Math.max(measuredInputBlock, NORMAL_INPUT_BLOCK_SAFE_PX);
   return inputBlock + CHAT_INPUT_DROP_ZONE_BOTTOM_PX + FLOWCHAT_MESSAGE_TAIL_CLEARANCE_PX;
 }
