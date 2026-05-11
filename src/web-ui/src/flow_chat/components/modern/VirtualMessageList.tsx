@@ -1591,58 +1591,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   }, [userMessageItems]);
 
   const performAutoFollowSync = useCallback(() => {
-    if (!latestTurnId) {
-      return;
-    }
-
-    const currentPinReservation = bottomReservationStateRef.current.pin;
-    const totalBottomCompensationPx = getTotalBottomCompensationPx();
-    const hasPendingLatestStickyPin = (
-      pendingTurnPin?.turnId === latestTurnId &&
-      pendingTurnPin.pinMode === 'sticky-latest'
-    );
-    const hasAppliedLatestStickyPin = (
-      currentPinReservation.mode === 'sticky-latest' &&
-      currentPinReservation.targetTurnId === latestTurnId
-    );
-    const shouldKeepStickyLatest = (
-      hasAppliedLatestStickyPin &&
-      currentPinReservation.floorPx > COMPENSATION_EPSILON_PX
-    );
-    const shouldPreserveSyntheticTail = (
-      hasAppliedLatestStickyPin &&
-      totalBottomCompensationPx > COMPENSATION_EPSILON_PX
-    );
-
-    if (hasPendingLatestStickyPin) {
-      return;
-    }
-
-    if (!hasAppliedLatestStickyPin) {
-      requestTurnPinToTop(latestTurnId, {
-        behavior: 'auto',
-        pinMode: 'sticky-latest',
-      });
-      return;
-    }
-
-    if (shouldKeepStickyLatest) {
-      return;
-    }
-
-    if (shouldPreserveSyntheticTail) {
-      return;
-    }
-
     scrollToLatestEndPositionInternal('auto');
-  }, [
-    getTotalBottomCompensationPx,
-    latestTurnId,
-    pendingTurnPin?.pinMode,
-    pendingTurnPin?.turnId,
-    requestTurnPinToTop,
-    scrollToLatestEndPositionInternal,
-  ]);
+  }, [scrollToLatestEndPositionInternal]);
 
   const {
     isFollowingOutput,
@@ -1674,15 +1624,9 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     },
     shouldSuspendAutoFollow,
     getAutoFollowDistanceFromBottom: (scroller) => (
-      Math.max(0, scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop - getTotalBottomCompensationPx())
+      Math.max(0, scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop)
     ),
-    onContinuousFollowFrame: () => {
-      // Keep sticky-latest pin floor aligned with the live DOM as collapses
-      // shrink the layout. Without this the pin reservation would lag for one
-      // RAF tick and the viewport would briefly land below the latest user
-      // message.
-      reconcileStickyPinReservation();
-    },
+    onContinuousFollowFrame: undefined,
   });
 
   useEffect(() => {
