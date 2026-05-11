@@ -191,19 +191,39 @@ pub fn render_usage_report_markdown(report: &SessionUsageReport) -> String {
     ));
 
     if !report.models.is_empty() {
+        let include_duration = report
+            .models
+            .iter()
+            .any(|model| model.duration_ms.is_some());
         out.push_str("## Models\n\n");
-        out.push_str(
-            "| Model | Calls | Input | Output | Total |\n| --- | ---: | ---: | ---: | ---: |\n",
-        );
+        if include_duration {
+            out.push_str("| Model | Calls | Recorded time | Input | Output | Total |\n| --- | ---: | --- | ---: | ---: | ---: |\n");
+        } else {
+            out.push_str(
+                "| Model | Calls | Input | Output | Total |\n| --- | ---: | ---: | ---: | ---: |\n",
+            );
+        }
         for model in &report.models {
-            out.push_str(&format!(
-                "| {} | {} | {} | {} | {} |\n",
-                escape_markdown(&model.model_id),
-                model.call_count,
-                format_optional_number(model.input_tokens),
-                format_optional_number(model.output_tokens),
-                format_optional_number(model.total_tokens)
-            ));
+            if include_duration {
+                out.push_str(&format!(
+                    "| {} | {} | {} | {} | {} | {} |\n",
+                    escape_markdown(&model.model_id),
+                    model.call_count,
+                    format_optional_duration(model.duration_ms),
+                    format_optional_number(model.input_tokens),
+                    format_optional_number(model.output_tokens),
+                    format_optional_number(model.total_tokens)
+                ));
+            } else {
+                out.push_str(&format!(
+                    "| {} | {} | {} | {} | {} |\n",
+                    escape_markdown(&model.model_id),
+                    model.call_count,
+                    format_optional_number(model.input_tokens),
+                    format_optional_number(model.output_tokens),
+                    format_optional_number(model.total_tokens)
+                ));
+            }
         }
         out.push('\n');
     }
@@ -436,6 +456,8 @@ mod tests {
             kind: UsageSlowSpanKind::Tool,
             duration_ms: 1200,
             redacted: true,
+            turn_id: None,
+            turn_index: None,
         });
 
         let rendered = render_usage_report_markdown(&report);

@@ -5,6 +5,11 @@ import type { DialogTurnData } from '@/shared/types/session-history';
 import { flowChatStore } from '../store/FlowChatStore';
 import type { DialogTurn, Session } from '../types/flow-chat';
 
+const UNKNOWN_MODEL_ID = 'unknown_model';
+const LEGACY_MODEL_LABEL = 'Legacy model not tracked';
+const LEGACY_MODEL_ROUND_LABEL_PATTERN = /^model\s+round\s+\d+$/i;
+type UsageModelIdentitySource = NonNullable<SessionUsageReport['models'][number]['modelIdSource']>;
+
 export interface UsageReportCommandParams {
   session: Session;
   isProcessing: boolean;
@@ -47,12 +52,13 @@ export async function runUsageReportCommand(
   let finalizedPendingTurn = false;
 
   try {
-    const report = await sessionAPI.getSessionUsageReport({
+    const rawReport = await sessionAPI.getSessionUsageReport({
       sessionId: params.session.sessionId,
       workspacePath: params.session.workspacePath,
       remoteConnectionId: params.session.remoteConnectionId,
       remoteSshHost: params.session.remoteSshHost,
     });
+    const report = enrichUsageReportModelIdentity(rawReport, params.session);
     const markdown = renderUsageReportMarkdown(report);
     const turn = pendingTurn
       ? updatePendingUsageReportTurn({
@@ -96,31 +102,66 @@ export async function runUsageReportCommand(
   }
 }
 
+export function enrichUsageReportModelIdentity(
+  report: SessionUsageReport,
+  session: Session
+): SessionUsageReport {
+  const inferredModelId = getInferableSessionModelId(session);
+
+  return {
+    ...report,
+    models: report.models.map(model => {
+      const identity = resolveModelIdentity(model.modelId, model.modelIdSource, inferredModelId);
+      return {
+        ...model,
+        modelId: identity.modelId,
+        modelIdSource: identity.source,
+      };
+    }),
+    slowest: report.slowest.map(span => {
+      if (span.kind !== 'model') {
+        return span;
+      }
+      const identity = resolveModelIdentity(span.label, span.modelIdSource, inferredModelId);
+      return {
+        ...span,
+        label: identity.modelId,
+        modelIdSource: identity.source,
+      };
+    }),
+  };
+}
+
 function updatePendingUsageReportTurn(params: {
   sessionId: string;
   dialogTurnId: string;
   markdown: string;
   report: SessionUsageReport;
 }): DialogTurn | null {
-  flowChatStore.updateDialogTurn(params.sessionId, params.dialogTurnId, turn => ({
-    ...turn,
-    status: 'completed',
-    userMessage: {
-      ...turn.userMessage,
-      content: params.markdown,
-      timestamp: params.report.generatedAt,
-      metadata: {
-        ...turn.userMessage.metadata,
-        reportId: params.report.reportId,
-        schemaVersion: params.report.schemaVersion,
-        generatedAt: params.report.generatedAt,
-        usageReportStatus: 'completed',
-        usageReport: params.report as unknown as Record<string, any>,
+  flowChatStore.updateDialogTurn(
+    params.sessionId,
+    params.dialogTurnId,
+    turn => ({
+      ...turn,
+      status: 'completed',
+      userMessage: {
+        ...turn.userMessage,
+        content: params.markdown,
+        timestamp: params.report.generatedAt,
+        metadata: {
+          ...turn.userMessage.metadata,
+          reportId: params.report.reportId,
+          schemaVersion: params.report.schemaVersion,
+          generatedAt: params.report.generatedAt,
+          usageReportStatus: 'completed',
+          usageReport: params.report as unknown as Record<string, any>,
+        },
       },
-    },
-    startTime: params.report.generatedAt,
-    endTime: params.report.generatedAt,
-  }));
+      startTime: params.report.generatedAt,
+      endTime: params.report.generatedAt,
+    }),
+    { touchActivity: false },
+  );
 
   return flowChatStore.getState().sessions
     .get(params.sessionId)
@@ -195,7 +236,7 @@ export function renderUsageReportMarkdown(report: SessionUsageReport): string {
       '| Label | Kind | Duration |',
       '| --- | --- | --- |',
       ...report.slowest.map(span =>
-        `| ${span.redacted ? 'redacted' : escapeMarkdown(span.label)} | ${span.kind} | ${formatDuration(span.durationMs)} |`
+        `| ${span.redacted ? 'redacted' : escapeMarkdown(formatUsageMarkdownLabel(span.label, span.modelIdSource))} | ${span.kind} | ${formatDuration(span.durationMs)} |`
       ),
       '',
     );
@@ -266,6 +307,71 @@ function formatDuration(value: number | undefined): string {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
   return remainingMinutes === 0 ? `${hours}h` : `${hours}h ${remainingMinutes}m`;
+}
+
+function getInferableSessionModelId(session: Session): string | undefined {
+  const modelId = session.config.modelName?.trim();
+  if (!modelId || isMissingModelId(modelId)) {
+    return undefined;
+  }
+  const normalizedModelId = modelId.toLowerCase();
+  if (
+    normalizedModelId === 'auto' ||
+    normalizedModelId === 'default' ||
+    normalizedModelId === 'primary' ||
+    normalizedModelId === 'fast' ||
+    isOpaqueModelIdentifier(modelId)
+  ) {
+    return undefined;
+  }
+  return modelId;
+}
+
+function isOpaqueModelIdentifier(modelId: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(modelId) ||
+    /^[0-9a-f]{32}$/i.test(modelId);
+}
+
+function resolveModelIdentity(
+  modelId: string | undefined,
+  source: UsageModelIdentitySource | undefined,
+  inferredModelId: string | undefined
+): {
+  modelId: string;
+  source: UsageModelIdentitySource;
+} {
+  if (modelId && !isMissingModelId(modelId)) {
+    return {
+      modelId,
+      source: source ?? 'recorded',
+    };
+  }
+
+  if (inferredModelId) {
+    return {
+      modelId: inferredModelId,
+      source: 'inferred_session_model',
+    };
+  }
+
+  return {
+    modelId: UNKNOWN_MODEL_ID,
+    source: source ?? 'legacy_missing',
+  };
+}
+
+function isMissingModelId(modelId: string | undefined): boolean {
+  return !modelId || modelId === UNKNOWN_MODEL_ID || LEGACY_MODEL_ROUND_LABEL_PATTERN.test(modelId.trim());
+}
+
+function formatUsageMarkdownLabel(
+  value: string,
+  source?: UsageModelIdentitySource
+): string {
+  if (source === 'inferred_session_model' && value && !isMissingModelId(value)) {
+    return `${value} (inferred)`;
+  }
+  return isMissingModelId(value) || source === 'legacy_missing' ? LEGACY_MODEL_LABEL : value;
 }
 
 function escapeMarkdown(value: string): string {

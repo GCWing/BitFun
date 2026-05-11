@@ -282,6 +282,10 @@ pub struct UsageSlowSpan {
     pub kind: UsageSlowSpanKind,
     pub duration_ms: u64,
     pub redacted: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

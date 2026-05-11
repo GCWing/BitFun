@@ -1905,6 +1905,16 @@ impl SessionManager {
                 thinking_items: Vec::new(),
                 start_time: completion_timestamp,
                 end_time: Some(completion_timestamp),
+                duration_ms: Some(0),
+                provider_id: None,
+                model_id: None,
+                model_alias: None,
+                first_chunk_ms: None,
+                first_visible_output_ms: None,
+                stream_duration_ms: None,
+                attempt_count: None,
+                failure_category: None,
+                token_details: None,
                 status: "completed".to_string(),
             });
         }
@@ -2266,6 +2276,16 @@ impl SessionManager {
             thinking_items: vec![],
             start_time: now,
             end_time: Some(now),
+            duration_ms: Some(0),
+            provider_id: None,
+            model_id: None,
+            model_alias: None,
+            first_chunk_ms: None,
+            first_visible_output_ms: None,
+            stream_duration_ms: None,
+            attempt_count: None,
+            failure_category: None,
+            token_details: None,
             status: "completed".to_string(),
         }];
 

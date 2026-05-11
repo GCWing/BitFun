@@ -15,6 +15,7 @@ import type {
   SessionTitleGeneratedEvent,
   SessionModelAutoMigratedEvent,
   ImageAnalysisEvent,
+  ModelRoundCompletedEvent,
   UserSteeringInjectedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { createLogger } from '@/shared/utils/logger';
@@ -31,6 +32,7 @@ export interface AgenticEventCallbacks {
   onImageAnalysisCompleted?: (event: ImageAnalysisEvent) => void;
   onDialogTurnStarted?: (event: AgenticEvent) => void;
   onModelRoundStarted?: (event: AgenticEvent) => void;
+  onModelRoundCompleted?: (event: ModelRoundCompletedEvent) => void;
   onTextChunk?: (event: TextChunkEvent) => void;
   onToolEvent?: (event: ToolEvent) => void;
   onDialogTurnCompleted?: (event: AgenticEvent) => void;
@@ -110,6 +112,14 @@ export class AgenticEventListener {
         const unlisten = agentAPI.onModelRoundStarted((event) => {
           logger.debug('Model round started:', event);
           callbacks.onModelRoundStarted?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onModelRoundCompleted) {
+        const unlisten = agentAPI.onModelRoundCompleted((event) => {
+          logger.debug('Model round completed:', event);
+          callbacks.onModelRoundCompleted?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }

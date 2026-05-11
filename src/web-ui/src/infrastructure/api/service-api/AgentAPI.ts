@@ -171,6 +171,22 @@ export interface UserSteeringInjectedEvent extends AgenticEvent {
   displayContent: string;
 }
 
+export interface ModelRoundCompletedEvent extends AgenticEvent {
+  turnId: string;
+  roundId: string;
+  hasToolCalls?: boolean;
+  durationMs?: number;
+  providerId?: string;
+  modelId?: string;
+  modelAlias?: string;
+  firstChunkMs?: number;
+  firstVisibleOutputMs?: number;
+  streamDurationMs?: number;
+  attemptCount?: number;
+  failureCategory?: string;
+  tokenDetails?: unknown;
+}
+
 export interface CompressionEvent extends AgenticEvent {
   compressionId: string;          
   
@@ -407,6 +423,10 @@ export class AgentAPI {
    
   onModelRoundStarted(callback: (event: AgenticEvent) => void): () => void {
     return api.listen<AgenticEvent>('agentic://model-round-started', callback);
+  }
+
+  onModelRoundCompleted(callback: (event: ModelRoundCompletedEvent) => void): () => void {
+    return api.listen<ModelRoundCompletedEvent>('agentic://model-round-completed', callback);
   }
 
    

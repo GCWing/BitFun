@@ -412,7 +412,12 @@ function handleCompleted(
     requiresConfirmation: false,
     acpPermission: undefined,
     isParamsStreaming: false,
-    endTime: Date.now()
+    endTime: Date.now(),
+    durationMs: toolEvent.duration_ms,
+    queueWaitMs: toolEvent.queue_wait_ms,
+    preflightMs: toolEvent.preflight_ms,
+    confirmationWaitMs: toolEvent.confirmation_wait_ms,
+    executionMs: toolEvent.execution_ms
   };
 
   store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, updates as any);
@@ -436,12 +441,18 @@ function handleFailed(
     toolResult: {
       result: null,
       success: false,
-      error: toolEvent.error
+      error: toolEvent.error,
+      duration_ms: toolEvent.duration_ms
     },
     status: 'error',
     requiresConfirmation: false,
     acpPermission: undefined,
-    endTime: Date.now()
+    endTime: Date.now(),
+    durationMs: toolEvent.duration_ms,
+    queueWaitMs: toolEvent.queue_wait_ms,
+    preflightMs: toolEvent.preflight_ms,
+    confirmationWaitMs: toolEvent.confirmation_wait_ms,
+    executionMs: toolEvent.execution_ms
   } as any);
 
   store.clearSessionNeedsAttention(sessionId);
@@ -467,12 +478,18 @@ function handleCancelled(
     toolResult: {
       result: null,
       success: false,
-      error: toolEvent.reason || 'User cancelled operation'
+      error: toolEvent.reason || 'User cancelled operation',
+      duration_ms: toolEvent.duration_ms
     },
     status: finalStatus,
     requiresConfirmation: false,
     acpPermission: undefined,
-    endTime: Date.now()
+    endTime: Date.now(),
+    durationMs: toolEvent.duration_ms,
+    queueWaitMs: toolEvent.queue_wait_ms,
+    preflightMs: toolEvent.preflight_ms,
+    confirmationWaitMs: toolEvent.confirmation_wait_ms,
+    executionMs: toolEvent.execution_ms
   } as any);
 
   store.clearSessionNeedsAttention(sessionId);

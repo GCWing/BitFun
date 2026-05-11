@@ -19,7 +19,7 @@ vi.mock('@/shared/notification-system', () => ({
   },
 }));
 
-const createSession = (): Session => ({
+const createSession = (overrides: Partial<Session> = {}): Session => ({
   sessionId: 'session-1',
   title: 'Session 1',
   dialogTurns: [],
@@ -34,9 +34,10 @@ const createSession = (): Session => ({
   mode: 'agentic',
   workspacePath: 'D:/workspace/BitFun',
   isTransient: false,
+  ...overrides,
 });
 
-const usageReport = (): SessionUsageReport => ({
+const usageReport = (overrides: Partial<SessionUsageReport> = {}): SessionUsageReport => ({
   schemaVersion: 1,
   reportId: 'usage-report-1',
   sessionId: 'session-1',
@@ -93,6 +94,7 @@ const usageReport = (): SessionUsageReport => ({
     fileContentsIncluded: false,
     redactedFields: [],
   },
+  ...overrides,
 });
 
 describe('runUsageReportCommand', () => {
@@ -155,5 +157,155 @@ describe('runUsageReportCommand', () => {
       usageReportStatus: 'completed',
     });
     expect(sessionApiMocks.saveSessionTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it('infers legacy model rows from the session model without showing raw missing-model copy', async () => {
+    const session = createSession({
+      config: { agentType: 'agentic', modelName: 'gpt-5.4' },
+    });
+    flowChatStore.setState((): FlowChatState => ({
+      sessions: new Map([['session-1', session]]),
+      activeSessionId: 'session-1',
+    }));
+    sessionApiMocks.getSessionUsageReport.mockResolvedValue(usageReport({
+      models: [{
+        modelId: 'unknown_model',
+        callCount: 2,
+        durationMs: 420,
+      }],
+      slowest: [{
+        label: 'unknown_model',
+        kind: 'model',
+        durationMs: 420,
+        redacted: false,
+      }],
+    }));
+    const { runUsageReportCommand } = await import('./usageReportService');
+
+    const result = await runUsageReportCommand({
+      session,
+      isProcessing: false,
+      busyMessage: 'busy',
+      noWorkspaceMessage: 'missing workspace',
+      failedTitle: 'failed',
+      unknownErrorMessage: 'unknown',
+      loadingMarkdown: 'Generating usage report...',
+    });
+
+    expect(result.report?.models[0]).toMatchObject({
+      modelId: 'gpt-5.4',
+      modelIdSource: 'inferred_session_model',
+    });
+    expect(result.report?.slowest[0]).toMatchObject({
+      label: 'gpt-5.4',
+      modelIdSource: 'inferred_session_model',
+    });
+    expect(result.report?.slowest[0].label).not.toBe('unknown_model');
+
+    const finalTurn = flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0];
+    expect(finalTurn?.userMessage.metadata?.usageReport).toMatchObject({
+      models: [expect.objectContaining({
+        modelId: 'gpt-5.4',
+        modelIdSource: 'inferred_session_model',
+      })],
+    });
+    expect(finalTurn?.userMessage.content).toContain('gpt-5.4 (inferred)');
+    expect(finalTurn?.userMessage.content).not.toContain('Model not recorded');
+  });
+
+  it('does not infer legacy model rows from opaque session model identifiers', async () => {
+    const opaqueModelId = '019e0c07-c7bc-73f1-b1d6-5260ed215fe0';
+    const session = createSession({
+      config: { agentType: 'agentic', modelName: opaqueModelId },
+    });
+    flowChatStore.setState((): FlowChatState => ({
+      sessions: new Map([['session-1', session]]),
+      activeSessionId: 'session-1',
+    }));
+    sessionApiMocks.getSessionUsageReport.mockResolvedValue(usageReport({
+      models: [{
+        modelId: 'unknown_model',
+        callCount: 1,
+        durationMs: 120,
+      }],
+      slowest: [{
+        label: 'unknown_model',
+        kind: 'model',
+        durationMs: 120,
+        redacted: false,
+      }],
+    }));
+    const { runUsageReportCommand } = await import('./usageReportService');
+
+    const result = await runUsageReportCommand({
+      session,
+      isProcessing: false,
+      busyMessage: 'busy',
+      noWorkspaceMessage: 'missing workspace',
+      failedTitle: 'failed',
+      unknownErrorMessage: 'unknown',
+      loadingMarkdown: 'Generating usage report...',
+    });
+
+    expect(result.report?.models[0]).toMatchObject({
+      modelId: 'unknown_model',
+      modelIdSource: 'legacy_missing',
+    });
+    expect(result.report?.slowest[0]).toMatchObject({
+      label: 'unknown_model',
+      modelIdSource: 'legacy_missing',
+    });
+
+    const finalTurn = flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0];
+    expect(finalTurn?.userMessage.content).toContain('Legacy model not tracked');
+    expect(finalTurn?.userMessage.content).not.toContain(opaqueModelId);
+    expect(finalTurn?.userMessage.content).not.toContain('(inferred)');
+  });
+
+  it('treats legacy model round placeholders as missing model identity', async () => {
+    const session = createSession({
+      config: { agentType: 'agentic', modelName: '019e0c07-c7bc-73f1-b1d6-5260ed215fe0' },
+    });
+    flowChatStore.setState((): FlowChatState => ({
+      sessions: new Map([['session-1', session]]),
+      activeSessionId: 'session-1',
+    }));
+    sessionApiMocks.getSessionUsageReport.mockResolvedValue(usageReport({
+      models: [{
+        modelId: 'model round 0',
+        callCount: 1,
+        durationMs: 120,
+      }],
+      slowest: [{
+        label: 'model round 0',
+        kind: 'model',
+        durationMs: 120,
+        redacted: false,
+      }],
+    }));
+    const { runUsageReportCommand } = await import('./usageReportService');
+
+    const result = await runUsageReportCommand({
+      session,
+      isProcessing: false,
+      busyMessage: 'busy',
+      noWorkspaceMessage: 'missing workspace',
+      failedTitle: 'failed',
+      unknownErrorMessage: 'unknown',
+      loadingMarkdown: 'Generating usage report...',
+    });
+
+    expect(result.report?.models[0]).toMatchObject({
+      modelId: 'unknown_model',
+      modelIdSource: 'legacy_missing',
+    });
+    expect(result.report?.slowest[0]).toMatchObject({
+      label: 'unknown_model',
+      modelIdSource: 'legacy_missing',
+    });
+
+    const finalTurn = flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0];
+    expect(finalTurn?.userMessage.content).toContain('Legacy model not tracked');
+    expect(finalTurn?.userMessage.content).not.toContain('model round');
   });
 });

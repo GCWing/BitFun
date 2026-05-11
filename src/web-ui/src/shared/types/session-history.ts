@@ -125,6 +125,16 @@ export interface ModelRoundData {
   thinkingItems?: ThinkingItemData[];
   startTime: number;
   endTime?: number;
+  durationMs?: number;
+  providerId?: string;
+  modelId?: string;
+  modelAlias?: string;
+  firstChunkMs?: number;
+  firstVisibleOutputMs?: number;
+  streamDurationMs?: number;
+  attemptCount?: number;
+  failureCategory?: string;
+  tokenDetails?: unknown;
   status: string;
 }
 
@@ -167,6 +177,10 @@ export interface ToolItemData {
   startTime: number;
   endTime?: number;
   durationMs?: number;
+  queueWaitMs?: number;
+  preflightMs?: number;
+  confirmationWaitMs?: number;
+  executionMs?: number;
   orderIndex?: number;
   status?: string;
   interruptionReason?: 'app_restart';

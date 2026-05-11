@@ -842,7 +842,25 @@ export class FlowChatStore {
       backendTurnIndex: turnIndex,
     };
 
-    this.addDialogTurn(params.sessionId, dialogTurn);
+    this.setState(prev => {
+      const currentSession = prev.sessions.get(params.sessionId);
+      if (!currentSession) return prev;
+
+      if (currentSession.dialogTurns.some(turn => turn.id === dialogTurn.id)) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(params.sessionId, {
+        ...currentSession,
+        dialogTurns: [...currentSession.dialogTurns, dialogTurn],
+      });
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
     return dialogTurn;
   }
 
@@ -896,7 +914,12 @@ export class FlowChatStore {
     });
   }
 
-  public updateDialogTurn(sessionId: string, dialogTurnId: string, updater: (turn: DialogTurn) => DialogTurn): void {
+  public updateDialogTurn(
+    sessionId: string,
+    dialogTurnId: string,
+    updater: (turn: DialogTurn) => DialogTurn,
+    options?: { touchActivity?: boolean }
+  ): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session) return prev;
@@ -908,7 +931,9 @@ export class FlowChatStore {
       const updatedSession = {
         ...session,
         dialogTurns: updatedDialogTurns,
-        lastActiveAt: Date.now()
+        lastActiveAt: options?.touchActivity === false
+          ? session.lastActiveAt
+          : Date.now()
       };
 
       const newSessions = new Map(prev.sessions);
@@ -1579,9 +1604,13 @@ export class FlowChatStore {
               startTime: (item as any).startTime || item.timestamp,
               endTime: (item as any).endTime,
               status: item.status,
-              durationMs: (item as any).endTime 
-                ? (item as any).endTime - (item as any).startTime 
-                : undefined
+              durationMs: (item as any).durationMs ?? ((item as any).endTime
+                ? (item as any).endTime - (item as any).startTime
+                : undefined),
+              queueWaitMs: (item as any).queueWaitMs,
+              preflightMs: (item as any).preflightMs,
+              confirmationWaitMs: (item as any).confirmationWaitMs,
+              executionMs: (item as any).executionMs,
             }));
           
           const thinkingItems = round.items
@@ -1606,6 +1635,16 @@ export class FlowChatStore {
             thinkingItems,
             startTime: round.startTime,
             endTime: round.endTime || Date.now(),
+            durationMs: round.durationMs,
+            providerId: round.providerId,
+            modelId: round.modelId,
+            modelAlias: round.modelAlias,
+            firstChunkMs: round.firstChunkMs,
+            firstVisibleOutputMs: round.firstVisibleOutputMs,
+            streamDurationMs: round.streamDurationMs,
+            attemptCount: round.attemptCount,
+            failureCategory: round.failureCategory,
+            tokenDetails: round.tokenDetails,
             status: round.status
           };
         }),
@@ -1902,6 +1941,11 @@ export class FlowChatStore {
               aiIntent: tool.aiIntent,
               startTime: tool.startTime,
               endTime: tool.endTime,
+              durationMs: tool.durationMs,
+              queueWaitMs: tool.queueWaitMs,
+              preflightMs: tool.preflightMs,
+              confirmationWaitMs: tool.confirmationWaitMs,
+              executionMs: tool.executionMs,
               timestamp: tool.startTime,
               status: normalizeRecoveredToolStatus(
                 tool.status,
@@ -1938,6 +1982,16 @@ export class FlowChatStore {
           status: normalizedRoundStatus,
           startTime: round.startTime ?? round.timestamp,
           endTime: round.endTime,
+          durationMs: round.durationMs,
+          providerId: round.providerId,
+          modelId: round.modelId,
+          modelAlias: round.modelAlias,
+          firstChunkMs: round.firstChunkMs,
+          firstVisibleOutputMs: round.firstVisibleOutputMs,
+          streamDurationMs: round.streamDurationMs,
+          attemptCount: round.attemptCount,
+          failureCategory: round.failureCategory,
+          tokenDetails: round.tokenDetails,
           timestamp: round.timestamp,
         };
       }),

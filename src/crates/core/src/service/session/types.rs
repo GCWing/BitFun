@@ -283,6 +283,62 @@ pub struct ModelRoundData {
     pub start_time: u64,
     #[serde(skip_serializing_if = "Option::is_none", alias = "end_time")]
     pub end_time: Option<u64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "duration_ms"
+    )]
+    pub duration_ms: Option<u64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "provider_id"
+    )]
+    pub provider_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "model_id")]
+    pub model_id: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "model_alias"
+    )]
+    pub model_alias: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "first_chunk_ms"
+    )]
+    pub first_chunk_ms: Option<u64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "first_visible_output_ms"
+    )]
+    pub first_visible_output_ms: Option<u64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "stream_duration_ms"
+    )]
+    pub stream_duration_ms: Option<u64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_count"
+    )]
+    pub attempt_count: Option<u32>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "failure_category"
+    )]
+    pub failure_category: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "token_details"
+    )]
+    pub token_details: Option<serde_json::Value>,
     pub status: String,
 }
 
@@ -372,6 +428,30 @@ pub struct ToolItemData {
     pub end_time: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none", alias = "duration_ms")]
     pub duration_ms: Option<u64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "queue_wait_ms"
+    )]
+    pub queue_wait_ms: Option<u64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "preflight_ms"
+    )]
+    pub preflight_ms: Option<u64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "confirmation_wait_ms"
+    )]
+    pub confirmation_wait_ms: Option<u64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "execution_ms"
+    )]
+    pub execution_ms: Option<u64>,
 
     /// Original order index (to restore the correct insertion order)
     #[serde(skip_serializing_if = "Option::is_none", alias = "order_index")]
@@ -649,7 +729,10 @@ impl DialogTurnData {
 
 #[cfg(test)]
 mod tests {
-    use super::{DialogTurnData, DialogTurnKind, SessionMetadata, UserMessageData};
+    use super::{
+        DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, ToolItemData,
+        UserMessageData,
+    };
     use crate::agentic::core::SessionKind;
 
     #[test]
@@ -756,5 +839,89 @@ mod tests {
 
         assert!(!metadata.is_subagent());
         assert!(metadata.is_standard());
+    }
+
+    #[test]
+    fn persisted_runtime_span_fields_are_optional_and_round_trip() {
+        let legacy_round_payload = serde_json::json!({
+            "id": "round-legacy",
+            "turnId": "turn-1",
+            "roundIndex": 0,
+            "timestamp": 1,
+            "textItems": [],
+            "toolItems": [],
+            "thinkingItems": [],
+            "startTime": 1,
+            "endTime": 2,
+            "status": "completed"
+        });
+
+        let legacy_round: ModelRoundData =
+            serde_json::from_value(legacy_round_payload).expect("legacy round should deserialize");
+        assert_eq!(legacy_round.duration_ms, None);
+        assert_eq!(legacy_round.model_id, None);
+        assert_eq!(legacy_round.first_chunk_ms, None);
+
+        let round_payload = serde_json::json!({
+            "id": "round-1",
+            "turnId": "turn-1",
+            "roundIndex": 0,
+            "timestamp": 1,
+            "textItems": [],
+            "toolItems": [],
+            "thinkingItems": [],
+            "startTime": 1,
+            "endTime": 121,
+            "durationMs": 120,
+            "providerId": "provider-a",
+            "modelId": "model-a",
+            "modelAlias": "Model A",
+            "firstChunkMs": 10,
+            "firstVisibleOutputMs": 12,
+            "streamDurationMs": 90,
+            "attemptCount": 2,
+            "failureCategory": "rate_limit",
+            "tokenDetails": { "reasoningTokens": 7 },
+            "status": "completed"
+        });
+
+        let round: ModelRoundData =
+            serde_json::from_value(round_payload).expect("P1 round should deserialize");
+        assert_eq!(round.duration_ms, Some(120));
+        assert_eq!(round.provider_id.as_deref(), Some("provider-a"));
+        assert_eq!(round.model_id.as_deref(), Some("model-a"));
+        assert_eq!(round.first_visible_output_ms, Some(12));
+        assert_eq!(round.attempt_count, Some(2));
+        assert_eq!(round.failure_category.as_deref(), Some("rate_limit"));
+
+        let encoded = serde_json::to_value(&round).expect("round should serialize");
+        assert_eq!(encoded["durationMs"], 120);
+        assert_eq!(encoded["modelId"], "model-a");
+        assert_eq!(encoded["firstChunkMs"], 10);
+
+        let tool_payload = serde_json::json!({
+            "id": "tool-1",
+            "toolName": "write_file",
+            "toolCall": { "id": "call-1", "input": { "file_path": "src/main.rs" } },
+            "startTime": 5,
+            "endTime": 105,
+            "durationMs": 100,
+            "queueWaitMs": 7,
+            "preflightMs": 11,
+            "confirmationWaitMs": 13,
+            "executionMs": 69,
+            "status": "completed"
+        });
+
+        let tool: ToolItemData =
+            serde_json::from_value(tool_payload).expect("P1 tool should deserialize");
+        assert_eq!(tool.queue_wait_ms, Some(7));
+        assert_eq!(tool.preflight_ms, Some(11));
+        assert_eq!(tool.confirmation_wait_ms, Some(13));
+        assert_eq!(tool.execution_ms, Some(69));
+
+        let encoded = serde_json::to_value(&tool).expect("tool should serialize");
+        assert_eq!(encoded["queueWaitMs"], 7);
+        assert_eq!(encoded["executionMs"], 69);
     }
 }

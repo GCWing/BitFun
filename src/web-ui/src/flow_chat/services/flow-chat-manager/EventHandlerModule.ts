@@ -22,6 +22,7 @@ import type { NotificationAction } from '../../../shared/notification-system/typ
 import { createLogger } from '@/shared/utils/logger';
 import type {
   ImageAnalysisEvent,
+  ModelRoundCompletedEvent,
   SessionModelAutoMigratedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
@@ -393,6 +394,9 @@ export async function initializeEventListeners(
     },
     onModelRoundStarted: (event) => {
       handleModelRoundStart(context, event);
+    },
+    onModelRoundCompleted: (event) => {
+      handleModelRoundComplete(context, event);
     },
     onDialogTurnCompleted: (event) => {
       handleDialogTurnComplete(context, event, onTodoWriteResult);
@@ -1545,6 +1549,68 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
   context.flowChatStore.addModelRound(sessionId, turnId, modelRound);
   scheduleModelResponseStatus(context, sessionId, turnId, roundId);
   
+  immediateSaveDialogTurn(context, sessionId, turnId);
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Handle model round completed event.
+ */
+function handleModelRoundComplete(context: FlowChatContext, event: ModelRoundCompletedEvent): void {
+  const sessionId = event?.sessionId ?? (event as any)?.session_id;
+  const turnId = event?.turnId ?? (event as any)?.turn_id;
+  const roundId = event?.roundId ?? (event as any)?.round_id;
+  const subagentParentInfo = normalizeSubagentParentInfo(event);
+
+  if (subagentParentInfo) {
+    attachSubagentSessionToParentTool(subagentParentInfo, sessionId);
+  }
+
+  if (!sessionId || !turnId || !roundId) {
+    log.warn('ModelRoundCompleted missing identity fields', { event });
+    return;
+  }
+
+  if (!shouldProcessEvent(sessionId, turnId, 'data', 'ModelRoundCompleted')) {
+    return;
+  }
+
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
+  const dialogTurn = session?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
+  const round = dialogTurn?.modelRounds.find(modelRound => modelRound.id === roundId);
+  if (!round) {
+    log.debug('Model round not found (model round complete)', { sessionId, turnId, roundId });
+    return;
+  }
+
+  const durationMs = optionalNumber(event.durationMs ?? (event as any).duration_ms);
+  const completedAt = Date.now();
+  const endTime = round.endTime ?? (durationMs !== undefined ? round.startTime + durationMs : completedAt);
+
+  context.flowChatStore.updateModelRound(sessionId, turnId, roundId, current => ({
+    ...current,
+    isStreaming: false,
+    isComplete: true,
+    status: current.status === 'error' || current.status === 'cancelled'
+      ? current.status
+      : 'completed',
+    endTime,
+    durationMs,
+    providerId: event.providerId ?? (event as any).provider_id,
+    modelId: event.modelId ?? (event as any).model_id,
+    modelAlias: event.modelAlias ?? (event as any).model_alias,
+    firstChunkMs: optionalNumber(event.firstChunkMs ?? (event as any).first_chunk_ms),
+    firstVisibleOutputMs: optionalNumber(event.firstVisibleOutputMs ?? (event as any).first_visible_output_ms),
+    streamDurationMs: optionalNumber(event.streamDurationMs ?? (event as any).stream_duration_ms),
+    attemptCount: optionalNumber(event.attemptCount ?? (event as any).attempt_count),
+    failureCategory: event.failureCategory ?? (event as any).failure_category,
+    tokenDetails: event.tokenDetails ?? (event as any).token_details,
+  }));
+
   immediateSaveDialogTurn(context, sessionId, turnId);
 }
 

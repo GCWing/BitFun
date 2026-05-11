@@ -252,14 +252,28 @@ export interface CompletedToolEvent extends BaseToolEvent<'Completed'> {
   result: unknown;
   result_for_assistant?: string;
   duration_ms: number;
+  queue_wait_ms?: number;
+  preflight_ms?: number;
+  confirmation_wait_ms?: number;
+  execution_ms?: number;
 }
 
 export interface FailedToolEvent extends BaseToolEvent<'Failed'> {
   error: string;
+  duration_ms?: number;
+  queue_wait_ms?: number;
+  preflight_ms?: number;
+  confirmation_wait_ms?: number;
+  execution_ms?: number;
 }
 
 export interface CancelledToolEvent extends BaseToolEvent<'Cancelled'> {
   reason: string;
+  duration_ms?: number;
+  queue_wait_ms?: number;
+  preflight_ms?: number;
+  confirmation_wait_ms?: number;
+  execution_ms?: number;
 }
 
 export type FlowToolEvent =

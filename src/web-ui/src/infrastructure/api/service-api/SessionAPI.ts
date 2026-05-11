@@ -10,6 +10,8 @@ export interface SessionUsageReportRequest {
   remoteSshHost?: string;
 }
 
+export type UsageModelIdentitySource = 'recorded' | 'inferred_session_model' | 'legacy_missing';
+
 export interface SessionUsageReport {
   schemaVersion: number;
   reportId: string;
@@ -55,6 +57,7 @@ export interface SessionUsageReport {
   };
   models: Array<{
     modelId: string;
+    modelIdSource?: UsageModelIdentitySource;
     callCount: number;
     inputTokens?: number;
     outputTokens?: number;
@@ -113,6 +116,9 @@ export interface SessionUsageReport {
     kind: 'model' | 'tool' | 'turn';
     durationMs: number;
     redacted: boolean;
+    turnId?: string;
+    turnIndex?: number;
+    modelIdSource?: UsageModelIdentitySource;
   }>;
   privacy: {
     promptContentIncluded: boolean;

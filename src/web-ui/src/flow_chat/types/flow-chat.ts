@@ -84,6 +84,11 @@ export interface FlowToolItem extends FlowItem {
   aiIntent?: string; // AI rationale for calling the tool.
   startTime?: number;  // Tool start time.
   endTime?: number;    // Tool end time.
+  durationMs?: number;
+  queueWaitMs?: number;
+  preflightMs?: number;
+  confirmationWaitMs?: number;
+  executionMs?: number;
   
   // Streaming parameter buffering.
   isParamsStreaming?: boolean;  // Params are streaming in.
@@ -145,6 +150,16 @@ export interface ModelRound {
   status: 'pending' | 'streaming' | 'completed' | 'cancelled' | 'error' | 'pending_confirmation';
   startTime: number;
   endTime?: number;
+  durationMs?: number;
+  providerId?: string;
+  modelId?: string;
+  modelAlias?: string;
+  firstChunkMs?: number;
+  firstVisibleOutputMs?: number;
+  streamDurationMs?: number;
+  attemptCount?: number;
+  failureCategory?: string;
+  tokenDetails?: unknown;
   error?: string;
   renderHints?: ModelRoundRenderHints;
 }

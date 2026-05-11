@@ -74,7 +74,7 @@ describe('FlowChatStore local usage reports', () => {
   });
 
   it('inserts a local usage report as user-visible content', () => {
-    const session = createSession();
+    const session = createSession({ lastActiveAt: 1234 });
     flowChatStore.setState(() => ({
       sessions: new Map([[session.sessionId, session]]),
       activeSessionId: session.sessionId,
@@ -96,6 +96,44 @@ describe('FlowChatStore local usage reports', () => {
       localCommandKind: 'usage_report',
       modelVisible: false,
     });
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.lastActiveAt)
+      .toBe(1234);
+  });
+
+  it('can update local usage reports without touching session activity', () => {
+    const session = createSession({ lastActiveAt: 4321 });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    const turn = flowChatStore.addLocalUsageReportTurn({
+      sessionId: session.sessionId,
+      markdown: '# Loading',
+      reportId: 'usage-1',
+      schemaVersion: 1,
+      generatedAt: 10,
+      status: 'loading',
+    });
+
+    expect(turn).not.toBeNull();
+    flowChatStore.updateDialogTurn(
+      session.sessionId,
+      turn!.id,
+      current => ({
+        ...current,
+        status: 'completed',
+        userMessage: {
+          ...current.userMessage,
+          content: '# Complete',
+        },
+      }),
+      { touchActivity: false },
+    );
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId);
+    expect(stored?.dialogTurns[0].userMessage.content).toBe('# Complete');
+    expect(stored?.lastActiveAt).toBe(4321);
   });
 
   it('appends repeated usage reports as separate snapshots', () => {
