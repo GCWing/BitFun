@@ -1,4 +1,9 @@
 //! Deep Review execution policy parsing and strategy helpers.
+//!
+//! This module translates launch strategy metadata into runtime guardrails such
+//! as reviewer timeouts, file-splitting thresholds, same-role caps, and retry
+//! limits. Strategy scoring remains advisory unless a separate product decision
+//! approves backend-owned strategy selection.
 
 use super::constants::{
     CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES, DEEP_REVIEW_AGENT_TYPE,

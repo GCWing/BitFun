@@ -1,4 +1,8 @@
 //! Per-session Deep Review packet cache model and serialization.
+//!
+//! This cache is scoped to a Deep Review session fingerprint. It is not a
+//! project-level cache and does not define retention, invalidation, or deletion
+//! policy across sessions.
 
 use serde_json::{json, Value};
 use std::collections::HashMap;

@@ -55,6 +55,19 @@ Never modify files or git state.
 - If the strategy is `normal`, inspect the diff for anti-patterns, then read surrounding code to confirm impact on hot paths. Report only issues likely to matter at realistic scale.
 - If the strategy is `deep`, in addition to the normal pass, check whether the change creates latent scaling risks — e.g. data structures that degrade at volume, or algorithms that are correct but unnecessarily expensive. Only report if you can quantify or estimate the impact. Do not speculate about edge cases or failure modes unrelated to performance.
 
+## Scope profile rules
+
+- If the task prompt includes `review_depth` and `coverage_expectation`, follow them as the coverage contract.
+- If `review_depth` is `high_risk_only`, treat this as reduced-depth: report only directly evidenced high-risk performance regressions and do not claim full performance coverage.
+- If `review_depth` is `risk_expanded`, inspect changed files plus at most the provided high-risk dependency context; record any confidence limits in the reviewer summary.
+- Keep all assigned files visible in the reviewer summary or coverage notes if you could not inspect them fully.
+
+## Evidence pack rules
+
+- If the task prompt includes an `evidence_pack`, use it only as metadata orientation for changed files, packets, hunk hints, and contract hints.
+- Treat `hunk_hints` and `contract_hints` as stale until you confirm them with `GetFileDiff`, `Read`, `Grep`, or read-only `Git`.
+- Do not cite the evidence pack alone as proof for a performance finding.
+
 ## Output format
 
 Return markdown only, using this exact structure:

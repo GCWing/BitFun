@@ -1,4 +1,8 @@
 //! Deep Review custom data propagation for generic tool execution contexts.
+//!
+//! Generic tool execution remains shared. This module only injects typed Deep
+//! Review custom data when the parent launch context proves the tool call is
+//! part of a Deep Review reviewer flow.
 
 use serde_json::Value;
 use std::collections::HashMap;

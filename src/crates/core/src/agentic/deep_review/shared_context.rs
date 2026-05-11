@@ -1,4 +1,8 @@
 //! Content-free duplicate tool-use tracking for shared reviewer context.
+//!
+//! This module measures duplicate `Read` and `GetFileDiff` usage without
+//! storing tool results. It is an observability aid for future evidence/cache
+//! decisions, not a programmatic full tool-result cache.
 
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};

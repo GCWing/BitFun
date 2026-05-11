@@ -10,6 +10,8 @@ You will receive:
 
 - the original review target
 - the user focus, if any
+- the scope profile (`review_depth`, `coverage_expectation`, and related limits), if provided
+- the metadata-only evidence pack, if provided
 - the outputs from the Business Logic Reviewer, Performance Reviewer, Security Reviewer, Architecture Reviewer, and Frontend Reviewer (if present)
 - if file splitting was used, outputs from **multiple same-role instances** (e.g. "Security Reviewer [group 1/3]", "Security Reviewer [group 2/3]")
 
@@ -43,6 +45,19 @@ Be especially skeptical of:
 - If the team strategy was `quick`, focus on confirming or rejecting each finding efficiently. If a finding's evidence is thin, reject it rather than spending time verifying.
 - If the team strategy was `normal`, validate each finding's logical consistency and evidence quality. Spot-check code only when a claim needs verification.
 - If the team strategy was `deep`, cross-validate findings across reviewers for consistency. For each finding, verify the evidence supports the conclusion and the suggested fix is safe. Pay extra attention to findings that overlap across reviewers or across same-role instances from file splitting.
+
+## Scope profile rules
+
+- If `review_depth` is `high_risk_only` or `risk_expanded`, treat the review as reduced-depth and do not validate any summary that claims full-depth coverage.
+- Preserve `coverage_expectation` in your decision summary or coverage notes when it limits confidence.
+- Reject or downgrade findings that require broader exploration than the declared scope profile allows unless a reviewer supplied direct evidence.
+- Keep skipped, reduced, or not-fully-inspected files visible in coverage notes instead of hiding them.
+
+## Evidence pack rules
+
+- Use `evidence_pack` only as metadata orientation for changed files, packets, hunk hints, and contract hints.
+- Treat `hunk_hints` and `contract_hints` as stale until a reviewer report or your own targeted spot-check confirms them with `GetFileDiff`, `Read`, `Grep`, or read-only `Git`.
+- Reject or downgrade findings that rely on the evidence pack alone.
 
 ## Cross-reviewer overlap handling
 

@@ -60,6 +60,19 @@ Never modify files or git state.
 - If the strategy is `normal`, check i18n, React performance patterns, and accessibility in changed components. Verify frontend-backend API contract alignment.
 - If the strategy is `deep`, thorough React analysis: effect dependencies, memoization, virtualization. Full accessibility audit. State management pattern review. Cross-layer contract verification.
 
+## Scope profile rules
+
+- If the task prompt includes `review_depth` and `coverage_expectation`, follow them as the coverage contract.
+- If `review_depth` is `high_risk_only`, treat this as reduced-depth: report only directly evidenced high-risk frontend issues and do not claim full frontend coverage.
+- If `review_depth` is `risk_expanded`, inspect changed files plus at most the provided high-risk dependency context; record any confidence limits in the reviewer summary.
+- Keep all assigned files visible in the reviewer summary or coverage notes if you could not inspect them fully.
+
+## Evidence pack rules
+
+- If the task prompt includes an `evidence_pack`, use it only as metadata orientation for changed files, packets, hunk hints, and contract hints.
+- Treat `hunk_hints` and `contract_hints` as stale until you confirm them with `GetFileDiff`, `Read`, `Grep`, or read-only `Git`.
+- Do not cite the evidence pack alone as proof for a frontend finding.
+
 ## Output format
 
 Return markdown only, using this exact structure:

@@ -1,4 +1,10 @@
 //! Deep Review-specific TaskTool adapter helpers.
+//!
+//! This module adapts generic TaskTool execution to Deep Review policy,
+//! manifests, queue events, retry metadata, and report reliability signals.
+//! Shared mechanics such as queue wait timing live under
+//! `agentic::subagent_runtime`; Deep Review-specific admission and event
+//! semantics stay here.
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::deep_review::queue::extract_retry_after_seconds;
@@ -19,10 +25,12 @@ use crate::agentic::deep_review_policy::{
 use crate::agentic::events::{
     DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus, ErrorCategory,
 };
+use crate::agentic::subagent_runtime::queue_timing::QueueWaitTimer;
 use crate::util::errors::{BitFunError, BitFunResult};
 use serde_json::{json, Value};
 use std::collections::HashSet;
-use tokio::time::{sleep, Duration, Instant};
+use std::time::{Duration, Instant};
+use tokio::time::sleep;
 
 #[cfg(test)]
 const DEEP_REVIEW_QUEUE_POLL_INTERVAL: Duration = Duration::from_millis(10);
@@ -593,24 +601,17 @@ pub(crate) async fn wait_for_provider_capacity_retry(
     max_wait_seconds: u64,
     is_optional_reviewer: bool,
 ) -> DeepReviewProviderQueueWaitOutcome {
-    let started_at = Instant::now();
+    let mut queue_timer = QueueWaitTimer::start(Instant::now());
     let max_wait = Duration::from_secs(max_wait_seconds);
-    let mut paused_since: Option<Instant> = None;
-    let mut paused_total = Duration::ZERO;
     let optional_reviewer_count = is_optional_reviewer.then_some(1);
 
     record_deep_review_runtime_provider_capacity_queue(dialog_turn_id, reason);
 
     loop {
         let now = Instant::now();
-        let current_pause_elapsed = paused_since
-            .map(|paused_at| now.saturating_duration_since(paused_at))
-            .unwrap_or_default();
-        let queue_elapsed = now
-            .saturating_duration_since(started_at)
-            .saturating_sub(paused_total)
-            .saturating_sub(current_pause_elapsed);
-        let queue_elapsed_ms = u64::try_from(queue_elapsed.as_millis()).unwrap_or(u64::MAX);
+        let queue_snapshot = queue_timer.snapshot(now);
+        let queue_elapsed = queue_snapshot.queue_elapsed;
+        let queue_elapsed_ms = queue_snapshot.queue_elapsed_ms;
         let active_reviewers = deep_review_active_reviewer_count(dialog_turn_id);
         let effective_parallel_instances = deep_review_effective_parallel_instances(
             dialog_turn_id,
@@ -647,9 +648,7 @@ pub(crate) async fn wait_for_provider_capacity_retry(
         }
 
         if control_snapshot.paused {
-            if paused_since.is_none() {
-                paused_since = Some(now);
-            }
+            queue_timer.pause(now);
             emit_queue_state(
                 session_id,
                 dialog_turn_id,
@@ -669,11 +668,9 @@ pub(crate) async fn wait_for_provider_capacity_retry(
             continue;
         }
 
-        if let Some(paused_at) = paused_since.take() {
-            paused_total += now.saturating_duration_since(paused_at);
-        }
+        queue_timer.continue_now(now);
 
-        if queue_elapsed >= max_wait {
+        if queue_snapshot.is_expired(max_wait) {
             record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
             clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
             emit_queue_state(
@@ -745,22 +742,15 @@ pub(crate) async fn wait_for_reviewer_capacity(
     let reason = decision
         .reason
         .unwrap_or(DeepReviewCapacityQueueReason::LocalConcurrencyCap);
-    let started_at = Instant::now();
+    let mut queue_timer = QueueWaitTimer::start(Instant::now());
     let max_wait = Duration::from_secs(conc_policy.max_queue_wait_seconds);
-    let mut paused_since: Option<Instant> = None;
-    let mut paused_total = Duration::ZERO;
     let optional_reviewer_count = is_optional_reviewer.then_some(1);
 
     loop {
         let now = Instant::now();
-        let current_pause_elapsed = paused_since
-            .map(|paused_at| now.saturating_duration_since(paused_at))
-            .unwrap_or_default();
-        let queue_elapsed = now
-            .saturating_duration_since(started_at)
-            .saturating_sub(paused_total)
-            .saturating_sub(current_pause_elapsed);
-        let queue_elapsed_ms = u64::try_from(queue_elapsed.as_millis()).unwrap_or(u64::MAX);
+        let queue_snapshot = queue_timer.snapshot(now);
+        let queue_elapsed = queue_snapshot.queue_elapsed;
+        let queue_elapsed_ms = queue_snapshot.queue_elapsed_ms;
         let active_reviewers = deep_review_active_reviewer_count(dialog_turn_id);
         let effective_parallel_instances = deep_review_effective_parallel_instances(
             dialog_turn_id,
@@ -798,9 +788,7 @@ pub(crate) async fn wait_for_reviewer_capacity(
         }
 
         if control_snapshot.paused {
-            if paused_since.is_none() {
-                paused_since = Some(now);
-            }
+            queue_timer.pause(now);
             emit_queue_state(
                 session_id,
                 dialog_turn_id,
@@ -820,9 +808,7 @@ pub(crate) async fn wait_for_reviewer_capacity(
             continue;
         }
 
-        if let Some(paused_at) = paused_since.take() {
-            paused_total += now.saturating_duration_since(paused_at);
-        }
+        queue_timer.continue_now(now);
 
         if let Some(guard) =
             try_begin_deep_review_active_reviewer(dialog_turn_id, effective_parallel_instances)
@@ -848,7 +834,7 @@ pub(crate) async fn wait_for_reviewer_capacity(
             return Ok(DeepReviewQueueWaitOutcome::Ready { guard });
         }
 
-        if queue_elapsed >= max_wait {
+        if queue_snapshot.is_expired(max_wait) {
             let snapshot = record_deep_review_effective_concurrency_capacity_error(
                 dialog_turn_id,
                 conc_policy.max_parallel_instances,

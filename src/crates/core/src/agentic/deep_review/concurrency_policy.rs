@@ -1,4 +1,9 @@
 //! Deep Review concurrency limits and effective capacity learning.
+//!
+//! The policy here is product-specific: it learns an effective reviewer cap for
+//! Deep Review sessions and stores the Review Team capacity preferences. Shared
+//! queue timing or future generic admission primitives belong in
+//! `agentic::subagent_runtime` once they are proven independent of Deep Review.
 
 use super::execution_policy::{
     clamp_u64, clamp_usize, reviewer_agent_type_count, DeepReviewExecutionPolicy,

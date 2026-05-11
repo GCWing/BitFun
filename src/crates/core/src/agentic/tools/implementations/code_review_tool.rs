@@ -364,6 +364,7 @@ impl CodeReviewTool {
                                     "cache_miss",
                                     "concurrency_limited",
                                     "partial_reviewer",
+                                    "reduced_scope",
                                     "retry_guidance",
                                     "skipped_reviewers",
                                     "token_budget_limited",
@@ -812,6 +813,7 @@ mod tests {
                 "cache_miss",
                 "concurrency_limited",
                 "partial_reviewer",
+                "reduced_scope",
                 "retry_guidance",
                 "skipped_reviewers",
                 "token_budget_limited",
@@ -1144,6 +1146,7 @@ mod tests {
         assert_eq!(diagnostics.shared_context_total_calls, 3);
         assert_eq!(diagnostics.shared_context_duplicate_calls, 1);
         assert_eq!(diagnostics.shared_context_duplicate_context_count, 1);
+        assert_eq!(diagnostics.shared_context_duplicate_savings_candidate_count, 1);
 
         let tool = CodeReviewTool::new();
         let mut context = tool_context(Some("DeepReview"));
@@ -1264,6 +1267,154 @@ mod tests {
             CodeReviewTool::reliability_contract_limit(Some("DeepReview"), Some("gpt-5-mini")),
             4
         );
+    }
+
+    #[test]
+    fn deep_review_defaults_include_reduced_scope_reliability_signal() {
+        let manifest = json!({
+            "reviewMode": "deep",
+            "scopeProfile": {
+                "reviewDepth": "high_risk_only",
+                "riskFocusTags": ["security"],
+                "maxDependencyHops": 0,
+                "optionalReviewerPolicy": "risk_matched_only",
+                "allowBroadToolExploration": false,
+                "coverageExpectation": "High-risk-only pass; changed files stay visible."
+            }
+        });
+        let mut input = json!({
+            "summary": {
+                "overall_assessment": "No blocking issues",
+                "risk_level": "low",
+                "recommended_action": "approve"
+            },
+            "issues": [],
+            "positive_points": []
+        });
+
+        CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
+
+        assert_eq!(
+            input["reliability_signals"],
+            json!([
+                {
+                    "kind": "reduced_scope",
+                    "severity": "info",
+                    "source": "manifest",
+                    "detail": "High-risk-only pass; changed files stay visible."
+                }
+            ])
+        );
+    }
+
+    #[test]
+    fn deep_review_legacy_manifest_without_scope_profile_has_no_reduced_scope_signal() {
+        let manifest = json!({
+            "reviewMode": "deep",
+            "workPackets": []
+        });
+        let mut input = json!({
+            "summary": {
+                "overall_assessment": "No blocking issues",
+                "risk_level": "low",
+                "recommended_action": "approve"
+            },
+            "issues": [],
+            "positive_points": []
+        });
+
+        CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
+
+        assert!(input.get("reliability_signals").is_none());
+    }
+
+    #[test]
+    fn deep_review_invalid_evidence_pack_becomes_manifest_reliability_signal() {
+        let manifest = json!({
+            "reviewMode": "deep",
+            "evidencePack": {
+                "version": 1,
+                "source": "target_manifest",
+                "changedFiles": ["src/lib.rs"],
+                "diffStat": {
+                    "fileCount": 1,
+                    "lineCountSource": "diff_stat"
+                },
+                "domainTags": ["core"],
+                "riskFocusTags": ["security"],
+                "packetIds": ["reviewer:ReviewSecurity"],
+                "hunkHints": [],
+                "contractHints": [],
+                "budget": {
+                    "maxChangedFiles": 80,
+                    "maxHunkHints": 80,
+                    "maxContractHints": 40,
+                    "omittedChangedFileCount": 0,
+                    "omittedHunkHintCount": 0,
+                    "omittedContractHintCount": 0
+                },
+                "privacy": {
+                    "content": "full_diff",
+                    "excludes": [
+                        "source_text",
+                        "full_diff",
+                        "model_output",
+                        "provider_raw_body",
+                        "full_file_contents"
+                    ]
+                }
+            }
+        });
+        let mut input = json!({
+            "summary": {
+                "overall_assessment": "No blocking issues",
+                "risk_level": "low",
+                "recommended_action": "approve"
+            },
+            "issues": [],
+            "positive_points": []
+        });
+
+        CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
+
+        let signals = input["reliability_signals"]
+            .as_array()
+            .expect("invalid evidence pack should emit a reliability signal");
+        assert_eq!(signals[0]["kind"], "context_pressure");
+        assert_eq!(signals[0]["severity"], "warning");
+        assert_eq!(signals[0]["source"], "manifest");
+        assert!(signals[0]["detail"]
+            .as_str()
+            .expect("signal should include detail")
+            .contains("privacy.content"));
+    }
+
+    #[test]
+    fn deep_review_full_depth_manifest_has_no_reduced_scope_signal() {
+        let manifest = json!({
+            "reviewMode": "deep",
+            "scopeProfile": {
+                "reviewDepth": "full_depth",
+                "riskFocusTags": ["security"],
+                "maxDependencyHops": "policy_limited",
+                "optionalReviewerPolicy": "full",
+                "allowBroadToolExploration": true,
+                "coverageExpectation": "Full-depth pass."
+            }
+        });
+        let mut input = json!({
+            "summary": {
+                "overall_assessment": "No blocking issues",
+                "risk_level": "low",
+                "recommended_action": "approve"
+            },
+            "issues": [],
+            "positive_points": []
+        });
+
+        CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
+
+        assert!(input.get("reliability_signals").is_none());
     }
 
     #[test]

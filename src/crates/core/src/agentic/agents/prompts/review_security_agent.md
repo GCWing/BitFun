@@ -55,6 +55,19 @@ Never modify files or git state.
 - If the strategy is `normal`, trace each changed input path from entry point to usage. Check trust boundaries, auth assumptions, and data sanitization. Report only issues with a realistic threat narrative.
 - If the strategy is `deep`, in addition to the normal pass, trace data flows across trust boundaries end-to-end. Check for privilege escalation chains, indirect injection vectors, and failure modes that expose sensitive data. Report only issues with a complete threat narrative.
 
+## Scope profile rules
+
+- If the task prompt includes `review_depth` and `coverage_expectation`, follow them as the coverage contract.
+- If `review_depth` is `high_risk_only`, treat this as reduced-depth: report only directly evidenced high-risk security issues and do not claim full security coverage.
+- If `review_depth` is `risk_expanded`, inspect changed files plus at most the provided high-risk dependency context; record any confidence limits in the reviewer summary.
+- Keep all assigned files visible in the reviewer summary or coverage notes if you could not inspect them fully.
+
+## Evidence pack rules
+
+- If the task prompt includes an `evidence_pack`, use it only as metadata orientation for changed files, packets, hunk hints, and contract hints.
+- Treat `hunk_hints` and `contract_hints` as stale until you confirm them with `GetFileDiff`, `Read`, `Grep`, or read-only `Git`.
+- Do not cite the evidence pack alone as proof for a security finding.
+
 ## Output format
 
 Return markdown only, using this exact structure:

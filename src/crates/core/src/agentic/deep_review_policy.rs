@@ -529,6 +529,7 @@ mod tests {
                 shared_context_total_calls: 3,
                 shared_context_duplicate_calls: 1,
                 shared_context_duplicate_context_count: 1,
+                shared_context_duplicate_savings_candidate_count: 1,
             };
         let facade_diagnostics: super::DeepReviewRuntimeDiagnostics = module_diagnostics.clone();
 

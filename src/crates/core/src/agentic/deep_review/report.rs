@@ -1,9 +1,15 @@
 //! Deep Review report enrichment, diagnostics logging, and cache write-through.
+//!
+//! Report enrichment must be honest about queue skips, retries, reduced-depth
+//! coverage, evidence hints, and cache reuse. Standard Code Review output
+//! should only receive Deep Review-only metadata when the tool context proves a
+//! Deep Review run is active.
 
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::core::CompressionContract;
+use crate::agentic::deep_review::manifest::{DeepReviewEvidencePack, DeepReviewScopeProfile};
 use crate::agentic::deep_review_policy::{
     deep_review_capacity_skip_count, deep_review_concurrency_cap_rejection_count,
     deep_review_runtime_diagnostics_snapshot, DeepReviewIncrementalCache,
@@ -345,6 +351,34 @@ pub(crate) fn fill_deep_review_reliability_signals(
     run_manifest: Option<&Value>,
     compression_contract: Option<&CompressionContract>,
 ) {
+    if let Some(scope_profile) = run_manifest.and_then(DeepReviewScopeProfile::from_manifest) {
+        if scope_profile.is_reduced_depth() {
+            let mut signal = json!({
+                "kind": "reduced_scope",
+                "severity": "info",
+                "source": "manifest"
+            });
+            if let Some(detail) = scope_profile.coverage_expectation() {
+                signal["detail"] = json!(detail);
+            }
+            push_reliability_signal_if_missing(input, signal);
+        }
+    }
+
+    if let Some(manifest) = run_manifest {
+        if let Err(error) = DeepReviewEvidencePack::from_manifest(manifest) {
+            push_reliability_signal_if_missing(
+                input,
+                json!({
+                    "kind": "context_pressure",
+                    "severity": "warning",
+                    "source": "manifest",
+                    "detail": format!("Evidence pack ignored: {}", error)
+                }),
+            );
+        }
+    }
+
     if let Some(token_budget) = run_manifest
         .and_then(|manifest| value_for_any_key(manifest, &["tokenBudget", "token_budget"]))
     {
@@ -504,6 +538,7 @@ pub(crate) fn log_deep_review_runtime_diagnostics(dialog_turn_id: Option<&str>) 
         shared_context_total_calls,
         shared_context_duplicate_calls,
         shared_context_duplicate_context_count,
+        shared_context_duplicate_savings_candidate_count,
     }) = deep_review_runtime_diagnostics_snapshot(dialog_turn_id)
     else {
         return;
@@ -524,7 +559,7 @@ pub(crate) fn log_deep_review_runtime_diagnostics(dialog_turn_id: Option<&str>) 
         serde_json::to_string(&capacity_skip_reason_counts).unwrap_or_else(|_| "{}".to_string());
 
     debug!(
-        "DeepReview runtime diagnostics: queue_wait_count={}, queue_wait_total_ms={}, queue_wait_max_ms={}, provider_capacity_queue_count={}, provider_capacity_retry_count={}, provider_capacity_retry_success_count={}, capacity_skip_count={}, provider_capacity_queue_reason_counts={}, provider_capacity_retry_reason_counts={}, provider_capacity_retry_success_reason_counts={}, capacity_skip_reason_counts={}, effective_parallel_min={}, effective_parallel_final={}, manual_queue_action_count={}, manual_retry_count={}, auto_retry_count={}, auto_retry_suppressed_reason_counts={}, shared_context_total_calls={}, shared_context_duplicate_calls={}, shared_context_duplicate_context_count={}",
+        "DeepReview runtime diagnostics: queue_wait_count={}, queue_wait_total_ms={}, queue_wait_max_ms={}, provider_capacity_queue_count={}, provider_capacity_retry_count={}, provider_capacity_retry_success_count={}, capacity_skip_count={}, provider_capacity_queue_reason_counts={}, provider_capacity_retry_reason_counts={}, provider_capacity_retry_success_reason_counts={}, capacity_skip_reason_counts={}, effective_parallel_min={}, effective_parallel_final={}, manual_queue_action_count={}, manual_retry_count={}, auto_retry_count={}, auto_retry_suppressed_reason_counts={}, shared_context_total_calls={}, shared_context_duplicate_calls={}, shared_context_duplicate_context_count={}, shared_context_duplicate_savings_candidate_count={}",
         queue_wait_count,
         queue_wait_total_ms,
         queue_wait_max_ms,
@@ -548,7 +583,8 @@ pub(crate) fn log_deep_review_runtime_diagnostics(dialog_turn_id: Option<&str>) 
         auto_retry_suppressed_reason_counts,
         shared_context_total_calls,
         shared_context_duplicate_calls,
-        shared_context_duplicate_context_count
+        shared_context_duplicate_context_count,
+        shared_context_duplicate_savings_candidate_count
     );
 }
 

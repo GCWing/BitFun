@@ -1,4 +1,9 @@
 //! Deep Review queue state, controls, and capacity error classification.
+//!
+//! This module owns reviewer-specific queue reasons, user controls, and
+//! provider/local capacity classification. Generic queue wait mechanics remain
+//! in `agentic::subagent_runtime`, so ordinary subagents do not inherit Deep
+//! Review product behavior by importing this module.
 
 use dashmap::DashMap;
 use serde::Serialize;
