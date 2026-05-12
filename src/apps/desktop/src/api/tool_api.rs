@@ -413,19 +413,6 @@ pub async fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecution
 }
 
 #[tauri::command]
-pub async fn is_tool_enabled(tool_name: String) -> Result<Option<bool>, String> {
-    let tools = get_all_tools().await;
-
-    for tool in tools {
-        if tool.name() == tool_name {
-            return Ok(Some(tool.is_enabled().await));
-        }
-    }
-
-    Ok(None)
-}
-
-#[tauri::command]
 pub async fn submit_user_answers(
     tool_id: String,
     answers: serde_json::Value,

@@ -40,15 +40,15 @@ type TemplateDetail =
 type ModelSlot = 'primary' | 'fast';
 
 function isMcpTool(tool: ToolInfo): boolean {
-  return tool.dynamic_info?.provider_kind === 'mcp' && Boolean(tool.dynamic_info.mcp);
+  return tool.dynamic_info?.providerKind === 'mcp' && Boolean(tool.dynamic_info.mcp);
 }
 
 function getMcpServerName(tool: ToolInfo): string {
-  return tool.dynamic_info?.mcp?.server_id ?? tool.name;
+  return tool.dynamic_info?.mcp?.serverId ?? tool.name;
 }
 
 function getMcpShortName(tool: ToolInfo): string {
-  return tool.dynamic_info?.mcp?.tool_name ?? tool.name;
+  return tool.dynamic_info?.mcp?.toolName ?? tool.name;
 }
 
 type CtxSegKey = 'systemPrompt' | 'toolInjection' | 'rules' | 'memories';

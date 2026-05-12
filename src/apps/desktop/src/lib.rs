@@ -584,7 +584,6 @@ pub async fn run() {
             get_tool_info,
             validate_tool_input,
             execute_tool,
-            is_tool_enabled,
             submit_user_answers,
             initialize_global_state,
             get_available_tools,

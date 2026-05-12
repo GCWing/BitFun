@@ -204,9 +204,9 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     };
   }, [config.toolName]);
 
-  const resolvedMcpToolName = resolvedToolInfo?.dynamic_info?.mcp?.tool_name ?? null;
+  const resolvedMcpToolName = resolvedToolInfo?.dynamic_info?.mcp?.toolName ?? null;
   const toolName = resolvedMcpToolName ?? config.toolName;
-  const serverId = resolvedToolInfo?.dynamic_info?.mcp?.server_id ?? null;
+  const serverId = resolvedToolInfo?.dynamic_info?.mcp?.serverId ?? null;
   const isFailed = status === 'error';
 
   const mcpAppIframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -250,7 +250,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     MCPAPI.getMCPToolUiUri(config.toolName)
       .then((uri) => setToolMetaUiUri(uri))
       .catch(() => setToolMetaUiUri(null));
-  }, [config.toolName, uiResourceUriFromResult, status, isFailed]);
+  }, [config.toolName, uiResourceUriFromResult, status, isFailed, toolId]);
 
   // Auto-expand when MCP App UI is ready so user sees the interactive UI immediately
   useEffect(() => {
@@ -541,7 +541,17 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
         );
       });
     return () => { cancelled = true; };
-  }, [uiResourceUri, serverId, status, isFailed]);
+  }, [
+    config.toolName,
+    isFailed,
+    resultData,
+    serverId,
+    status,
+    toolId,
+    toolMetaUiUri,
+    uiResourceUri,
+    uiResourceUriFromResult,
+  ]);
 
   const getContentSummary = () => {
     if (!resultData?.content && !uiResourceUri) return null;

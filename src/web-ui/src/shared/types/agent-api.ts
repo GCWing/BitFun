@@ -47,15 +47,15 @@ export interface ToolInfo {
 }
 
 export interface DynamicToolInfo {
-  provider_id: string;
-  provider_kind?: string;
+  providerId: string;
+  providerKind?: string;
   mcp?: DynamicMcpToolInfo;
 }
 
 export interface DynamicMcpToolInfo {
-  server_id: string;
-  server_name: string;
-  tool_name: string;
+  serverId: string;
+  serverName: string;
+  toolName: string;
 }
 
 export interface ToolExecutionRequest {

@@ -61,17 +61,6 @@ export class ToolAPI {
   }
 
    
-  async isToolEnabled(toolName: string): Promise<boolean> {
-    try {
-      return await api.invoke('is_tool_enabled', { 
-        request: { toolName } 
-      });
-    } catch (error) {
-      throw createTauriCommandError('is_tool_enabled', error, { toolName });
-    }
-  }
-
-   
   async confirmToolExecution(request: any): Promise<any> {
     try {
       const action = request.action || 'confirm';
@@ -111,16 +100,6 @@ export class ToolAPI {
         error, 
         request
       );
-    }
-  }
-
-  async cancelToolExecution(abortControllerId: string): Promise<any> {
-    try {
-      return await api.invoke('cancel_tool_execution', { 
-        request: { abortControllerId } 
-      });
-    } catch (error) {
-      throw createTauriCommandError('cancel_tool_execution', error, { abortControllerId });
     }
   }
 
