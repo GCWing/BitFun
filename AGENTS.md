@@ -95,6 +95,16 @@ await api.invoke('your_command', { request: { ... } });
 - Desktop-only integrations belong in `src/apps/desktop`, then flow back through transport/API layers.
 - In shared core, avoid host-specific APIs such as `tauri::AppHandle`; use shared abstractions such as `bitfun_events::EventEmitter`.
 
+### Remote compatibility
+
+- When adding features, consider remote workspace and remote control synchronization support from the start. Local-only behavior can silently leave remote scenarios incomplete.
+- If a feature cannot reasonably support remote workspaces, gate it or show a clear unsupported-state message instead of letting it fail with a generic error.
+
+### Agent loop behavior
+
+- Do not add hard-coded limits or pattern checks to the agent loop as a first response to looping behavior, such as blocking repeated tool calls by string or count alone.
+- Excessive hard-coding turns the agent loop into a brittle workflow engine. Investigate the root cause first: tool behavior, model interaction, session context packaging, prompt/tool schema design, or state synchronization issues.
+
 ## Architecture
 
 ### Core decomposition guardrails
