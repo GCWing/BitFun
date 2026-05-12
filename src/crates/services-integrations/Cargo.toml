@@ -19,6 +19,7 @@ bitfun-services-core = { path = "../services-core", optional = true }
 chrono = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 
@@ -31,5 +32,5 @@ announcement = []
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
 file-watch = ["notify"]
 mcp = []
-remote-ssh = ["tokio-util"]
+remote-ssh = ["sha2", "tokio-util"]
 product-full = ["announcement", "file-watch", "git", "mcp", "remote-ssh"]

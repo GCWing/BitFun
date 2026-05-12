@@ -50,6 +50,11 @@ const lightweightBoundaryRules = [
       'rmcp',
       'image',
       'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
     ],
   },
   {
@@ -72,6 +77,11 @@ const lightweightBoundaryRules = [
       'rmcp',
       'image',
       'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
     ],
   },
   {
@@ -91,6 +101,11 @@ const lightweightBoundaryRules = [
       'git2',
       'rmcp',
       'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
     ],
   },
 ];
@@ -159,6 +174,51 @@ const forbiddenContentRules = [
       {
         regex: /\bpub enum MCPServerStatus\b/,
         message: 'core MCP server process runtime must not redefine MCPServerStatus; use the integrations contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_ssh/workspace_state.rs',
+    patterns: [
+      {
+        regex: /\bpub const LOCAL_WORKSPACE_SSH_HOST\b/,
+        message: 'core remote SSH workspace runtime must not redefine LOCAL_WORKSPACE_SSH_HOST; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn normalize_remote_workspace_path\b/,
+        message: 'core remote SSH workspace runtime must not redefine remote path normalization; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn sanitize_ssh_connection_id_for_local_dir\b/,
+        message: 'core remote SSH workspace runtime must not redefine SSH connection id sanitization; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn sanitize_remote_mirror_path_component\b/,
+        message: 'core remote SSH workspace runtime must not redefine remote mirror path sanitization; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn sanitize_ssh_hostname_for_mirror\b/,
+        message: 'core remote SSH workspace runtime must not redefine SSH hostname mirror sanitization; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn remote_root_to_mirror_subpath\b/,
+        message: 'core remote SSH workspace runtime must not redefine remote mirror subpath mapping; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn workspace_logical_key\b/,
+        message: 'core remote SSH workspace runtime must not redefine workspace logical keys; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn local_workspace_stable_storage_id\b/,
+        message: 'core remote SSH workspace runtime must not redefine local workspace stable ids; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn remote_workspace_stable_id\b/,
+        message: 'core remote SSH workspace runtime must not redefine remote workspace stable ids; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn unresolved_remote_session_storage_key\b/,
+        message: 'core remote SSH workspace runtime must not redefine unresolved session keys; use the integrations contract',
       },
     ],
   },
@@ -259,6 +319,42 @@ function runManifestParserSelfTest() {
   for (const line of facadeNegativeCases) {
     if (rejectsGitImplementationLine(line)) {
       throw new Error(`facade parser accepted implementation line: ${line}`);
+    }
+  }
+
+  const cliBoundaryDeps = ['bitfun-cli', 'ratatui', 'crossterm', 'arboard', 'syntect-tui'];
+  for (const rule of lightweightBoundaryRules) {
+    for (const dep of cliBoundaryDeps) {
+      if (!rule.forbiddenDeps.includes(dep)) {
+        throw new Error(
+          `lightweight boundary rule for ${rule.crateName} must forbid CLI-only dependency: ${dep}`,
+        );
+      }
+    }
+  }
+
+  const remoteWorkspaceRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/remote_ssh/workspace_state.rs',
+  );
+  if (!remoteWorkspaceRule) {
+    throw new Error('missing remote SSH workspace_state boundary rule');
+  }
+  const remoteWorkspaceHelpers = [
+    'LOCAL_WORKSPACE_SSH_HOST',
+    'normalize_remote_workspace_path',
+    'sanitize_ssh_connection_id_for_local_dir',
+    'sanitize_remote_mirror_path_component',
+    'sanitize_ssh_hostname_for_mirror',
+    'remote_root_to_mirror_subpath',
+    'workspace_logical_key',
+    'local_workspace_stable_storage_id',
+    'remote_workspace_stable_id',
+    'unresolved_remote_session_storage_key',
+  ];
+  const ruleText = remoteWorkspaceRule.patterns.map((pattern) => pattern.regex.source).join('\n');
+  for (const helper of remoteWorkspaceHelpers) {
+    if (!ruleText.includes(helper)) {
+      throw new Error(`remote SSH workspace boundary rule must forbid helper: ${helper}`);
     }
   }
 }

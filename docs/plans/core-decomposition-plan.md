@@ -967,7 +967,7 @@ product-full = ["git", "mcp", "remote-ssh", "remote-connect", "announcement", "f
 
 - [x] 先迁移 `git`，因为边界相对清晰。
 - [ ] 再迁移 `remote-ssh`，保留 `ssh-remote` 语义。
-- [x] 先迁移 `remote-ssh` 的纯 contract/type，runtime manager / fs / terminal 仍保留在 core。
+- [x] 先迁移 `remote-ssh` 的纯 contract/type、workspace path/identity helper 与 unresolved-session-key helper，runtime manager / fs / terminal 仍保留在 core。
 - [ ] 再迁移 `mcp`，动态工具通过 `DynamicToolProvider` 接入。
 - [x] 先迁移 `mcp` 的纯 tool-name / tool-info / protocol types / config location / server type-status contract，config service / server process / adapter / auth / dynamic tools 仍保留在 core。
 - [x] 先迁移 `announcement` 的纯 types contract，scheduler / state store / content loader / remote fetch 仍保留在 core。
@@ -978,7 +978,7 @@ product-full = ["git", "mcp", "remote-ssh", "remote-connect", "announcement", "f
 **当前安全迁移状态（2026-05-12）：**
 
 - 已迁移到 `bitfun-services-integrations`：`service::file_watch`，通过 `file-watch` / `product-full` feature 启用，并保持 `core::service::file_watch` 旧路径。
-- `git` 已完成 DTO/params/graph/raw command output/text parser/arg builder、`GitError`、`GitService` runtime implementation 与 git utils 迁移；`bitfun-core::service::git::*` 仅保留 legacy facade re-export。`remote-ssh` 仅迁移了纯 contract/type，SSH runtime manager / fs / terminal 仍保留在 core；`mcp` 仅迁移了 tool-name / tool-info / protocol types / config location / server type-status contract，config service / json config / cursor format / jsonrpc / transport / server process / adapter / auth / dynamic tools 仍保留在 core；`announcement` 仅迁移了纯 types contract，scheduler / state store / content loader / remote fetch 仍保留在 core；`remote-connect` 尚未迁移。它们涉及 SSH runtime、MCP dynamic tool provider、remote agent submission 与 announcement config/path 边界，继续前需要单独确认端口方案与等价性测试。
+- `git` 已完成 DTO/params/graph/raw command output/text parser/arg builder、`GitError`、`GitService` runtime implementation 与 git utils 迁移；`bitfun-core::service::git::*` 仅保留 legacy facade re-export。`remote-ssh` 已迁移纯 contract/type、workspace path/identity helper 与 unresolved-session-key helper；SSH runtime manager / fs / terminal、password vault 与 PathManager-backed session mirror assembly 仍保留在 core。`mcp` 仅迁移了 tool-name / tool-info / protocol types / config location / server type-status contract，config service / json config / cursor format / jsonrpc / transport / server process / adapter / auth / dynamic tools 仍保留在 core；`announcement` 仅迁移了纯 types contract，scheduler / state store / content loader / remote fetch 仍保留在 core；`remote-connect` 尚未迁移。它们涉及 SSH runtime、MCP dynamic tool provider、remote agent submission 与 announcement config/path 边界，继续前需要单独确认端口方案与等价性测试。
 - 最新主干的 Deep Review capacity / cost / queue、context profile、evidence ledger、session manifest、stream dedupe、search remote/fallback 与 session rollback persistence 仍属于 core runtime 或对应产品 runtime，不在本轮 `services-integrations` 迁移范围内；如果后续迁移 remote-connect / MCP / search / session，需要先定义运行状态 port 合约和等价测试。
 
 **验证：**
@@ -1148,7 +1148,7 @@ default = []
 
 **当前收敛状态（2026-05-11）：**
 
-- 本轮不把 `remote-ssh` runtime、MCP runtime、`remote-connect`、announcement runtime、concrete tool implementations、tool registry、miniapp runtime/compiler/builtin、function-agent 运行逻辑声明为已迁移；它们继续作为 `bitfun-core` 的 product runtime assembly 拥有路径。`git` feature group 已外移；`remote-ssh` 目前只外移 contract/type；`mcp` 目前只外移 tool-name / tool-info / protocol types / config location / server type-status contract；`announcement` 目前只外移 types contract。
+- 本轮不把 `remote-ssh` runtime、MCP runtime、`remote-connect`、announcement runtime、concrete tool implementations、tool registry、miniapp runtime/compiler/builtin、function-agent 运行逻辑声明为已迁移；它们继续作为 `bitfun-core` 的 product runtime assembly 拥有路径。`git` feature group 已外移；`remote-ssh` 目前只外移 contract/type、workspace path/identity helper 与 unresolved-session-key helper；`mcp` 目前只外移 tool-name / tool-info / protocol types / config location / server type/status contract；`announcement` 目前只外移 types contract。
 - 新增 `scripts/check-core-boundaries.mjs`，用于阻止已拆出的 owner crate 反向依赖 `bitfun-core`。该脚本只证明 crate graph 方向，不替代产品等价性测试。
 - `default = []` 仍保持为后续独立评估项，本轮不调整默认 feature、构建脚本或 release 脚本。
 
@@ -1508,7 +1508,7 @@ cargo check --workspace
 
 - 已完成中等粒度 owner crate 成型的安全部分：`bitfun-services-core`、`bitfun-services-integrations`、`bitfun-agent-tools`、`bitfun-tool-packs`、`bitfun-product-domains` 均已加入 workspace。
 - 已迁移的模块均由 core facade re-export，未改变产品默认 feature、构建脚本或 release 脚本。
-- Git feature group 已闭环迁移到 `bitfun-services-integrations` 的 `git` feature：DTO/params/graph/raw command output/text parser/arg builder、`GitError`、`GitService` runtime implementation 与 git utils 均由 integrations owner crate 拥有，并通过 `bitfun-core::service::git::*` 保留旧路径兼容。`GitService` 所需的 Windows `libgit2` system-link 边界挂在该 crate 的 `git` feature 上；`bitfun-core` 仍因未迁移的 remote-connect runtime 保留其它 `git2` 使用。
+- Git feature group 已闭环迁移到 `bitfun-services-integrations` 的 `git` feature：DTO/params/graph/raw command output/text parser/arg builder、`GitError`、`GitService` runtime implementation 与 git utils 均由 integrations owner crate 拥有，并通过 `bitfun-core::service::git::*` 保留旧路径兼容。`GitService` 所需的 Windows `libgit2` system-link 边界挂在该 crate 的 `git` feature 上；`bitfun-core` 仍因未迁移的 remote-connect runtime 保留其它 `git2` 使用。remote-ssh 本轮进一步外移 workspace path/identity 与 unresolved-session-key helper，并用 owner crate contract test 锁定 normalized path、mirror subpath、hostname sanitization、stable id 和 unresolved key 输出；PathManager-backed mirror root、global workspace registry、SSH manager/fs/terminal/runtime 仍留在 core。
 - 未声明完成的 P2 剩余部分：remote-ssh runtime、MCP server/adapter/auth/dynamic tools、remote-connect 等重 service 迁移、concrete tool implementation 迁移、tool registry/provider 化、miniapp/function-agent 运行逻辑迁移。这些会触碰 `PathManager`、`BitFunError`、`ToolUseContext`、workspace service、snapshot wrapper、`AgentSubmissionPort` 或 AI service 边界，需要在继续前显式确认。
 - 本次 rebase 后重新核对最新主干 Deep Review capacity/cost/queue、context profile、evidence ledger 与 session manifest 变更：当前 PR 已完成 Git feature group 的 owner crate 归属迁移，但未改动这些 Deep Review 行为路径；后续迁移必须补端口设计和等价测试后再推进。
 - 本次 P2 后续复核结论：上述高耦合剩余项不是纯文件搬迁；若继续迁移会改变依赖方向或需要新增 port/provider 行为合约。因此当前 PR 将它们显式保留为 core-owned runtime，并通过 P3 boundary check 防止已拆 owner crate 回流依赖 core。
@@ -1549,6 +1549,7 @@ cargo check --workspace
 - P3 只能在 P2 剩余迁移闭环后启动：重 service 迁移、concrete tool implementation 迁移、tool registry/provider 化、miniapp/function-agent 运行逻辑迁移都必须先完成或显式保留为 core-owned runtime。
 - 最近 `origin/main` 的 Deep Review 变更增加了 context profile、evidence ledger、capacity/cost/queue 控制、`deep_review_run_manifest` / `deep_review_cache`、以及 review-team UI orchestration；最新主干还补充了 agent-stream tool-call dedupe、search remote/fallback、session rollback persistence 和 companion typewriter。P3 facade 收敛前必须确认这些行为要么仍由 core product runtime assembly 拥有，要么已有对应 owner crate + port/provider 合约和等价测试。
 - 最新主干的 mode-scoped subagent visibility 将 `agentic::agents` 重组为 definitions / registry / visibility 边界，并扩展了 desktop subagent API 与 Review Team 可见性测试；后续若迁移 agent registry，不能只做路径 re-export，必须保留 mode 可见性过滤、hidden/custom/review 分组语义和前后端 API contract。
+- 最新主干的 CLI 重构主要新增 TUI/theme/selector/dialog/chat-state 等 app-layer 代码，当前没有改变 `services-integrations` 的迁移归属；后续若调整 shared crate 边界，必须继续把 `bitfun-cli`、`ratatui`、`crossterm`、`arboard`、`syntect-tui` 等 CLI-only 依赖限制在 app adapter / presentation layer。
 - `ToolUseContext` 的 shared-context / evidence checkpoint hook、`TaskTool` / `CodeReviewTool` 的 Deep Review capacity flow、session manifest/cache persistence、rollback persisted-turn cleanup、search fallback chain 与 stream finish/tool-call contract 不能在 P3 中只通过 re-export 消失；如果外移，需要先补 boundary contract、旧路径兼容和对应 regression。
 - P3 的闭环检查应同时覆盖 Rust crate graph 与产品 runtime 行为：边界脚本只证明依赖方向，不能替代 Deep Review、MCP dynamic tools、remote connect、snapshot wrapping、miniapp/function-agent 的产品等价性验证。
 - 当前 PR 的 P3 范围按“显式保留 core-owned runtime + 强制 owner crate 边界”闭环；后续如果要继续外移这些 runtime 路径，需要作为新的迁移批次先补 port 设计、等价测试和用户确认。
@@ -1556,10 +1557,10 @@ cargo check --workspace
 **阶段复核与后续拆分（2026-05-12 rebase 后）：**
 
 - 当前分支保持小粒度：只包含 boundary check、facade/product runtime 注释、阶段文档和 Git feature group 归属迁移；不继续混入 remote-connect、MCP dynamic tools、tool registry、miniapp 或 function-agent runtime 迁移。
-- 本次 rebase 到 `fork/main` 的新增主干提交 `2e0e2dda` 没有和当前分支产生路径重叠；其 agent visibility 重构不改变本轮 `services-integrations` / service facade 迁移内容，但会把后续 agent registry/provider 外移的等价性门槛抬高。
+- 本次 rebase 到 `origin/main` 后，PR #680 的三颗等价提交已进入主干；新增 CLI 重构与 agent execution hardening 没有改变本轮 `services-integrations` / service facade 迁移内容，但会把后续 CLI 产品检查、agent registry/provider 与 session/tool runtime 外移的等价性门槛抬高。
 - 质量边界：本阶段只证明已拆 owner crate 不依赖回 `bitfun-core`，并证明 Git 旧路径仍通过当前 Rust workspace 检查；不声明 remote connect、MCP dynamic tools、snapshot wrapping、miniapp/function-agent runtime 的外移完成。
-- boundary check 已扩展到 `core-types`、`runtime-ports` 和 `agent-tools` 的轻量边界，并覆盖 Cargo inline 依赖和 dependency table 依赖声明，后续不能绕过脚本把重 runtime、concrete service 或 platform adapter 依赖带入这些 contract crate。
-- boundary check 也已锁定 `bitfun-core::service::git`、`bitfun-core::service::remote_ssh::types`、`bitfun-core::service::mcp::{tool_info,tool_name}`、`bitfun-core::service::mcp::protocol::types`、`bitfun-core::service::mcp::config::location` 和 `bitfun-core::service::announcement::types` 的旧路径 facade-only 状态，并禁止在 `MCPServerProcess` runtime 文件重新定义已外移的 server type/status contract。
+- boundary check 已扩展到 `core-types`、`runtime-ports` 和 `agent-tools` 的轻量边界，并覆盖 Cargo inline 依赖和 dependency table 依赖声明，后续不能绕过脚本把重 runtime、concrete service、platform adapter 或 CLI/TUI presentation 依赖带入这些 contract crate。
+- boundary check 也已锁定 `bitfun-core::service::git`、`bitfun-core::service::remote_ssh::types`、remote-ssh workspace path/identity/unresolved-key helper、`bitfun-core::service::mcp::{tool_info,tool_name}`、`bitfun-core::service::mcp::protocol::types`、`bitfun-core::service::mcp::config::location` 和 `bitfun-core::service::announcement::types` 的旧路径 facade-only 状态，并禁止在 `MCPServerProcess` runtime 文件重新定义已外移的 server type/status contract。
 - 后续迁移必须拆成可独立审核的提交：先补 port/provider 设计和等价测试，再按 `remote-ssh` runtime、MCP runtime、`remote-connect` 的顺序一次迁移一个 service feature group。
 - tool registry / concrete tool implementation 外移必须先有工具清单等价测试，并保留 dynamic provider metadata；不能把注册名解析、snapshot wrapper 或 runtime restriction 行为改成隐式约定。
 - 已新增内置工具清单基线测试，后续 registry/provider 外移必须先保持该清单和注册顺序等价，再评估 owner crate 边界。
