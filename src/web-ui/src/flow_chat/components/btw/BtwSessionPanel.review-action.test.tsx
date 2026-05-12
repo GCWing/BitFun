@@ -183,6 +183,38 @@ function createReviewSession(): Session {
   } as Session;
 }
 
+function createCompletedDeepReviewWithoutResult(): Session {
+  const childSession = createReviewSession();
+  return {
+    ...childSession,
+    dialogTurns: childSession.dialogTurns.map((turn) => ({
+      ...turn,
+      modelRounds: turn.modelRounds.map((round) => ({
+        ...round,
+        items: [{
+          id: 'reviewer-task',
+          type: 'tool',
+          timestamp: 2,
+          status: 'completed',
+          toolName: 'Task',
+          toolCall: {
+            id: 'task-security',
+            input: { subagent_type: 'ReviewSecurity' },
+          },
+          toolResult: {
+            success: true,
+            result: {
+              summary: {
+                overall_assessment: 'Security reviewer found no blockers.',
+              },
+            },
+          },
+        }],
+      })),
+    })),
+  } as Session;
+}
+
 describe('BtwSessionPanel review action bar integration', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -241,5 +273,34 @@ describe('BtwSessionPanel review action bar integration', () => {
       phase: 'review_completed',
     });
     expect(useReviewActionBarStore.getState().remediationItems).toEqual([]);
+  });
+
+  it('shows a resumable Deep Review action bar when the run completed without a structured report', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createCompletedDeepReviewWithoutResult()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      childSessionId: 'deep-review-child',
+      phase: 'review_interrupted',
+      interruption: expect.objectContaining({
+        canResume: true,
+        resultRecoveryReason: 'missing_submit_code_review',
+      }),
+    });
   });
 });

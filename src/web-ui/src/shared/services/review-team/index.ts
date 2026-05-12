@@ -710,24 +710,6 @@ export async function saveDefaultReviewTeamConcurrencyPolicy(
   });
 }
 
-export async function lowerDefaultReviewTeamMaxParallelReviewers(): Promise<ReviewTeamConcurrencyPolicy> {
-  const current = await loadDefaultReviewTeamConfig();
-  const currentPolicy = concurrencyPolicyFromStoredConfig(current);
-  const nextPolicy = {
-    ...currentPolicy,
-    maxParallelInstances: Math.max(1, currentPolicy.maxParallelInstances - 1),
-  };
-  await saveDefaultReviewTeamConfig({
-    ...current,
-    max_parallel_reviewers: nextPolicy.maxParallelInstances,
-    max_queue_wait_seconds: nextPolicy.maxQueueWaitSeconds,
-    allow_provider_capacity_queue: nextPolicy.allowProviderCapacityQueue,
-    allow_bounded_auto_retry: nextPolicy.allowBoundedAutoRetry,
-    auto_retry_elapsed_guard_seconds: nextPolicy.autoRetryElapsedGuardSeconds,
-  });
-  return nextPolicy;
-}
-
 export async function saveDefaultReviewTeamStrategyLevel(
   strategyLevel: ReviewStrategyLevel,
 ): Promise<void> {

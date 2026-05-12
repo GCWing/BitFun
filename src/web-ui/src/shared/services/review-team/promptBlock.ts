@@ -408,7 +408,7 @@ export function buildReviewTeamPromptBlockContent(
     '- If a skipped reviewer has reason invalid_tooling, report it as a configuration issue and do not reduce confidence in the reviewers that did run.',
     '- If target_resolution is unknown, conditional reviewers may be activated conservatively; report that as coverage context.',
     `- Run the active core reviewer roles first: ${formatManifestList(manifest.coreReviewers, 'none')}.`,
-    '- Launch reviewer Tasks by launch_batch. Do not launch a later reviewer batch until every reviewer Task in the earlier batch has completed, failed, timed out, or returned partial_timeout.',
+    '- Launch reviewer Tasks by launch_batch priority. Earlier batches get reviewer capacity first; queued later-batch Tasks may start automatically as soon as reviewer capacity frees.',
     '- Never launch more reviewer Tasks in one batch than max_parallel_instances. If stagger_seconds is greater than 0, wait that many seconds before starting the next launch_batch.',
     '- Run ReviewJudge only after the reviewer batch finishes, as the quality-gate pass.',
     '- If other extra reviewers are configured and enabled, run them in parallel with the locked reviewers whenever possible.',

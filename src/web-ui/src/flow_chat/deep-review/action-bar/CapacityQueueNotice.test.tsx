@@ -41,7 +41,6 @@ describe('CapacityQueueNotice', () => {
         onContinueQueue={vi.fn()}
         onSkipOptionalQueuedReviewers={vi.fn()}
         onCancelQueuedReviewers={vi.fn()}
-        onRunSlowerNextTime={vi.fn()}
         onOpenReviewSettings={vi.fn()}
       />,
     );
@@ -53,7 +52,7 @@ describe('CapacityQueueNotice', () => {
     expect(html).toContain('Waited 12s of 1m 0s');
     expect(html).toContain('Pause queue');
     expect(html).toContain('Skip optional extras');
-    expect(html).toContain('Run slower next time');
+    expect(html).not.toContain('Run slower next time');
   });
 
   it('renders launch-batch waiting as a concrete queue reason', () => {
@@ -72,7 +71,6 @@ describe('CapacityQueueNotice', () => {
         onContinueQueue={vi.fn()}
         onSkipOptionalQueuedReviewers={vi.fn()}
         onCancelQueuedReviewers={vi.fn()}
-        onRunSlowerNextTime={vi.fn()}
         onOpenReviewSettings={vi.fn()}
       />,
     );
@@ -100,7 +98,6 @@ describe('CapacityQueueNotice', () => {
         onContinueQueue={vi.fn()}
         onSkipOptionalQueuedReviewers={vi.fn()}
         onCancelQueuedReviewers={vi.fn()}
-        onRunSlowerNextTime={vi.fn()}
         onOpenReviewSettings={vi.fn()}
       />,
     );
@@ -141,7 +138,6 @@ describe('CapacityQueueNotice', () => {
         onContinueQueue={vi.fn()}
         onSkipOptionalQueuedReviewers={vi.fn()}
         onCancelQueuedReviewers={vi.fn()}
-        onRunSlowerNextTime={vi.fn()}
         onOpenReviewSettings={vi.fn()}
       />,
     );
@@ -166,7 +162,6 @@ describe('CapacityQueueNotice', () => {
         onContinueQueue={vi.fn()}
         onSkipOptionalQueuedReviewers={vi.fn()}
         onCancelQueuedReviewers={vi.fn()}
-        onRunSlowerNextTime={vi.fn()}
         onOpenReviewSettings={vi.fn()}
       />,
     );

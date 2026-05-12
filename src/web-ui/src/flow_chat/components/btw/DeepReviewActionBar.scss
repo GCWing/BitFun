@@ -973,6 +973,17 @@
     font-weight: 500;
   }
 
+  &__partial-list {
+    margin: 6px 0 0;
+    padding-left: 16px;
+  }
+
+  &__partial-text {
+    margin: 4px 0;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+  }
+
   /* Error attribution */
   &__attribution {
     display: flex;

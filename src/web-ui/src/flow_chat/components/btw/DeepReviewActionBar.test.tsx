@@ -14,7 +14,6 @@ const buildRecoveryPlanMock = vi.hoisted(() => vi.fn(() => ({
   summaryText: '1 completed reviewer will be preserved; 1 reviewer will be rerun',
 })));
 const controlDeepReviewQueueMock = vi.hoisted(() => vi.fn());
-const lowerDefaultReviewTeamMaxParallelReviewersMock = vi.hoisted(() => vi.fn());
 const flowChatSessionsMock = vi.hoisted(() => new Map<string, unknown>());
 
 vi.mock('react-i18next', () => ({
@@ -86,10 +85,6 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   agentAPI: {
     controlDeepReviewQueue: controlDeepReviewQueueMock,
   },
-}));
-
-vi.mock('@/shared/services/reviewTeamService', () => ({
-  lowerDefaultReviewTeamMaxParallelReviewers: lowerDefaultReviewTeamMaxParallelReviewersMock,
 }));
 
 vi.mock('@/infrastructure/event-bus', () => ({
@@ -192,13 +187,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
     confirmWarningMock.mockResolvedValue(true);
     eventBusEmitMock.mockReturnValue(false);
     continueDeepReviewSessionMock.mockResolvedValue(undefined);
-    lowerDefaultReviewTeamMaxParallelReviewersMock.mockResolvedValue({
-      maxParallelInstances: 1,
-      maxQueueWaitSeconds: 120,
-      allowProviderCapacityQueue: true,
-      allowBoundedAutoRetry: false,
-      autoRetryElapsedGuardSeconds: 180,
-    });
     flowChatSessionsMock.clear();
     useReviewActionBarStore.getState().reset();
   });
@@ -479,7 +467,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(container.textContent).toContain('Reason: provider concurrency limit');
     expect(container.textContent).toContain('Waited 12s of 1m 0s');
     expect(container.textContent).toContain('Your active session is busy.');
-    expect(container.textContent).toContain('Run slower next time');
+    expect(container.textContent).not.toContain('Run slower next time');
     expect(container.textContent).toContain('Open Review settings');
 
     const pauseButton = Array.from(container.querySelectorAll('button'))
@@ -495,17 +483,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
       capacityQueueState: { status: string };
     }).capacityQueueState.status).toBe('paused_by_user');
     expect(container.textContent).toContain('Queue paused');
-
-    const runSlowerButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Run slower next time'));
-    expect(runSlowerButton).toBeTruthy();
-
-    await act(async () => {
-      runSlowerButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(lowerDefaultReviewTeamMaxParallelReviewersMock).toHaveBeenCalledTimes(1);
 
     const openSettingsButton = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Open Review settings'));
@@ -680,44 +657,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect((useReviewActionBarStore.getState() as unknown as {
       capacityQueueState: { status: string };
     }).capacityQueueState.status).toBe('queued_for_capacity');
-  });
-
-  it('shows the settings update reason when run-slower fails', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-    const { notificationService } = await import('@/shared/notification-system');
-    lowerDefaultReviewTeamMaxParallelReviewersMock.mockRejectedValueOnce(
-      new Error('config store unavailable'),
-    );
-
-    useReviewActionBarStore.getState().showCapacityQueueBar({
-      childSessionId: 'child-session',
-      parentSessionId: 'parent-session',
-      capacityQueueState: {
-        status: 'queued_for_capacity',
-        reason: 'local_concurrency_cap',
-        queuedReviewerCount: 1,
-      },
-    });
-
-    await act(async () => {
-      root.render(<DeepReviewActionBar />);
-    });
-
-    const runSlowerButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Run slower next time'));
-    expect(runSlowerButton).toBeTruthy();
-
-    await act(async () => {
-      runSlowerButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(notificationService.error).toHaveBeenCalledWith(
-      expect.stringContaining('config store unavailable'),
-    );
-    expect(notificationService.error).toHaveBeenCalledWith(
-      expect.stringContaining('Open Review settings'),
-    );
   });
 
   it('starts a structured retry turn for explicit incomplete Deep Review slices', async () => {

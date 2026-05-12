@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from '../types/flow-chat';
-import { buildDeepReviewContinuationPrompt, deriveDeepReviewInterruption } from './deepReviewContinuation';
+import {
+  buildDeepReviewContinuationPrompt,
+  deriveDeepReviewInterruption,
+  deriveDeepReviewResultRecoveryInterruption,
+} from './deepReviewContinuation';
 import type { AiErrorDetail } from '@/shared/ai-errors/aiErrorPresenter';
 
 function createDeepReviewSession(overrides: Partial<Session> = {}): Session {
@@ -508,5 +512,72 @@ describe('deepReviewContinuation', () => {
     expect(prompt).toContain('Only reuse completed reviewer outputs when the current review target fingerprint still matches.');
     expect(prompt).toContain('reviewer:ReviewBusinessLogic');
     expect(prompt).toContain('target_file_set_changed');
+  });
+
+  it('continues a completed review that missed the final structured report without rerunning completed reviewers', () => {
+    const session = createDeepReviewSession({
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          sessionId: 'deep-review-session',
+          timestamp: 1,
+          status: 'completed',
+          userMessage: {
+            id: 'user-1',
+            content: 'Original command:\n/DeepReview review latest commit',
+            timestamp: 1,
+          },
+          startTime: 1,
+          modelRounds: [
+            {
+              id: 'round-1',
+              index: 0,
+              startTime: 1,
+              isStreaming: false,
+              isComplete: true,
+              status: 'completed',
+              items: [
+                {
+                  id: 'tool-1',
+                  type: 'tool',
+                  toolName: 'Task',
+                  toolCall: {
+                    id: 'call-security',
+                    input: { subagent_type: 'ReviewSecurity' },
+                  },
+                  toolResult: {
+                    result: { text: 'Security reviewer found no blocking issues.' },
+                    success: true,
+                  },
+                  startTime: 1,
+                  timestamp: 1,
+                  status: 'completed',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const interruption = deriveDeepReviewResultRecoveryInterruption(
+      session,
+      'missing_submit_code_review',
+    );
+    const prompt = buildDeepReviewContinuationPrompt(interruption!);
+
+    expect(interruption).toMatchObject({
+      phase: 'review_interrupted',
+      canResume: true,
+      resultRecoveryReason: 'missing_submit_code_review',
+    });
+    expect(interruption?.recommendedActions.map((action) => action.code)).toEqual([
+      'continue',
+      'copy_diagnostics',
+    ]);
+    expect(prompt).toContain('The previous Deep Review ended without a usable structured submit_code_review result.');
+    expect(prompt).toContain('First reconstruct and submit the missing final report from preserved reviewer outputs.');
+    expect(prompt).toContain('Do not rerun completed reviewer work just to regenerate the report.');
+    expect(prompt).toContain('ReviewSecurity: completed');
   });
 });

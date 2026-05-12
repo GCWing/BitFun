@@ -556,31 +556,13 @@ impl DeepReviewBudgetTracker {
         parent_dialog_turn_id: &str,
         max_active_reviewers: usize,
         launch_batch: u64,
-        packet_id: Option<&str>,
+        _packet_id: Option<&str>,
     ) -> Result<Option<DeepReviewActiveReviewerGuard<'a>>, DeepReviewPolicyViolation> {
         let now = Instant::now();
         let mut budget = self
             .turns
             .entry(parent_dialog_turn_id.to_string())
             .or_insert_with(|| DeepReviewTurnBudget::new(now));
-
-        if let Some((&earliest_active_batch, _)) =
-            budget.active_reviewer_launch_batches.iter().next()
-        {
-            if earliest_active_batch < launch_batch {
-                let packet_label = packet_id
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .unwrap_or("unknown");
-                return Err(DeepReviewPolicyViolation::new(
-                    "deep_review_launch_batch_blocked",
-                    format!(
-                        "Reviewer packet '{}' is in launch_batch {}, but launch_batch {} still has active reviewer(s). Wait for earlier-batch reviewers to finish, timeout, or be cancelled before launching this packet. If the queue remains blocked, pause or cancel the queued reviewers from the Review Team action bar and retry with a lower max parallel reviewer setting.",
-                        packet_label, launch_batch, earliest_active_batch
-                    ),
-                ));
-            }
-        }
 
         if budget.active_reviewers >= max_active_reviewers {
             return Ok(None);
@@ -822,31 +804,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn launch_batch_admission_blocks_later_batch_while_earlier_batch_is_active() {
+    fn launch_batch_admission_allows_later_batch_when_reviewer_capacity_is_free() {
         let tracker = DeepReviewBudgetTracker::default();
-        let turn_id = "turn-launch-batch-blocked";
+        let turn_id = "turn-launch-batch-fill-free-slot";
         let _first_batch = tracker
             .try_begin_active_reviewer_for_launch_batch(turn_id, 2, 1, Some("packet-a"))
             .expect("batch admission should not fail")
             .expect("first reviewer should start");
 
-        let violation = match tracker.try_begin_active_reviewer_for_launch_batch(
-            turn_id,
-            2,
-            2,
-            Some("packet-b"),
-        ) {
-            Err(violation) => violation,
-            Ok(_) => panic!("later launch batch should wait while earlier batch is active"),
-        };
+        let second_batch = tracker
+            .try_begin_active_reviewer_for_launch_batch(turn_id, 2, 2, Some("packet-b"))
+            .expect("later batch admission should not fail when reviewer capacity is free");
 
-        assert_eq!(violation.code, "deep_review_launch_batch_blocked");
-        assert!(violation.message.contains("packet-b"));
-        assert!(violation.message.contains("launch_batch 2"));
-        assert!(violation.message.contains("launch_batch 1"));
-        assert!(violation
-            .message
-            .contains("Wait for earlier-batch reviewers"));
+        assert!(
+            second_batch.is_some(),
+            "later batch should fill a freed reviewer slot instead of waiting for the earlier batch to drain"
+        );
     }
 
     #[test]

@@ -6,6 +6,10 @@ import {
 import type { FlowToolItem, Session } from '../types/flow-chat';
 
 export type DeepReviewContinuationPhase = 'review_interrupted' | 'resume_blocked';
+export type DeepReviewResultRecoveryReason =
+  | 'missing_submit_code_review'
+  | 'invalid_submit_code_review'
+  | 'wrong_review_mode';
 export type DeepReviewReviewerStatus =
   | 'completed'
   | 'partial_timeout'
@@ -33,6 +37,7 @@ export interface DeepReviewInterruption {
   recommendedActions: AiErrorAction[];
   reviewers: DeepReviewReviewerProgress[];
   runManifest?: Session['deepReviewRunManifest'];
+  resultRecoveryReason?: DeepReviewResultRecoveryReason;
 }
 
 const RESUME_BLOCKING_CATEGORIES = new Set([
@@ -41,6 +46,15 @@ const RESUME_BLOCKING_CATEGORIES = new Set([
   'auth',
   'permission',
 ]);
+
+const RESULT_RECOVERY_MESSAGES: Record<DeepReviewResultRecoveryReason, string> = {
+  missing_submit_code_review:
+    'Deep Review completed, but BitFun did not receive a structured submit_code_review result.',
+  invalid_submit_code_review:
+    'Deep Review submitted a structured result that BitFun could not read.',
+  wrong_review_mode:
+    'Deep Review submitted a standard Code Review result instead of a Deep Review result.',
+};
 
 export function deriveDeepReviewInterruption(
   session: Session,
@@ -88,6 +102,36 @@ export function deriveDeepReviewInterruption(
   };
 }
 
+export function deriveDeepReviewResultRecoveryInterruption(
+  session: Session,
+  reason: DeepReviewResultRecoveryReason,
+): DeepReviewInterruption | null {
+  if (session.sessionKind !== 'deep_review') {
+    return null;
+  }
+
+  const errorDetail = normalizeAiErrorDetail({
+    category: 'model_error',
+    retryable: true,
+    actionHints: ['continue', 'copy_diagnostics'],
+    rawMessage: RESULT_RECOVERY_MESSAGES[reason],
+  });
+  const presentation = getAiErrorPresentation(errorDetail);
+
+  return {
+    phase: 'review_interrupted',
+    childSessionId: session.sessionId,
+    parentSessionId: session.btwOrigin?.parentSessionId ?? session.parentSessionId,
+    originalTarget: findOriginalTarget(session),
+    errorDetail,
+    canResume: true,
+    recommendedActions: presentation.actions,
+    reviewers: collectReviewerProgress(session),
+    runManifest: session.deepReviewRunManifest,
+    resultRecoveryReason: reason,
+  };
+}
+
 export function buildDeepReviewContinuationPrompt(interruption: DeepReviewInterruption): string {
   const reviewerLines = interruption.reviewers.length
     ? interruption.reviewers
@@ -118,11 +162,20 @@ export function buildDeepReviewContinuationPrompt(interruption: DeepReviewInterr
   const incrementalCacheBlock = formatIncrementalReviewCacheGuidance(
     interruption.runManifest,
   );
+  const resultRecoveryRules = interruption.resultRecoveryReason
+    ? [
+        '- The previous Deep Review ended without a usable structured submit_code_review result.',
+        '- First reconstruct and submit the missing final report from preserved reviewer outputs.',
+        '- Do not rerun completed reviewer work just to regenerate the report.',
+        '- If preserved reviewer output is insufficient, rerun only missing, failed, timed-out, or cancelled reviewers before submitting the report.',
+      ]
+    : [];
 
   return [
     'Continue the interrupted Deep Review in this same session.',
     '',
     'Recovery rules:',
+    ...resultRecoveryRules,
     '- Do not restart completed reviewer work unless the existing result is clearly incomplete or unusable.',
     '- Do not re-run skipped, non-applicable, or policy-ineligible reviewers; keep them recorded as skipped coverage.',
     ...retryBudgetRules,

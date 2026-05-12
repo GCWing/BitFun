@@ -38,7 +38,6 @@ import {
 } from '../../utils/deepReviewExperience';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
-import { lowerDefaultReviewTeamMaxParallelReviewers } from '@/shared/services/reviewTeamService';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { ConfigTab } from '@/app/scenes/settings/settingsConfig';
@@ -228,22 +227,6 @@ export const ReviewActionBar: React.FC = () => {
 
     applyLocalAction();
   }, [capacityQueueState, childSessionId, t]);
-
-  const handleRunSlowerNextTime = useCallback(async () => {
-    try {
-      const nextPolicy = await lowerDefaultReviewTeamMaxParallelReviewers();
-      notificationService.success(t('deepReviewActionBar.capacityQueue.runSlowerSaved', {
-        count: nextPolicy.maxParallelInstances,
-        defaultValue: `Next Deep Review will use up to ${nextPolicy.maxParallelInstances} parallel reviewers.`,
-      }));
-    } catch (error) {
-      log.warn('Failed to lower DeepReview max parallel reviewers', error);
-      notificationService.error(t('deepReviewActionBar.capacityQueue.runSlowerFailedWithReason', {
-        reason: normalizeActionErrorMessage(error),
-        defaultValue: 'Failed to update Review settings: {{reason}}. Open Review settings and lower Review Team max parallel reviewers manually.',
-      }));
-    }
-  }, [t]);
 
   const handleOpenReviewSettings = useCallback(() => {
     openSettingsTab('review');
@@ -789,7 +772,6 @@ export const ReviewActionBar: React.FC = () => {
             'cancel',
             store.cancelQueuedReviewers,
           )}
-          onRunSlowerNextTime={handleRunSlowerNextTime}
           onOpenReviewSettings={handleOpenReviewSettings}
         />
       )}

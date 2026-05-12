@@ -13,7 +13,6 @@ import {
   loadDefaultReviewTeamConfig,
   loadReviewTeamProjectStrategyOverride,
   loadReviewTeamRateLimitStatus,
-  lowerDefaultReviewTeamMaxParallelReviewers,
   prepareDefaultReviewTeamForLaunch,
   resolveDefaultReviewTeam,
   saveDefaultReviewTeamConcurrencyPolicy,
@@ -221,30 +220,6 @@ describe('reviewTeamService', () => {
         allow_bounded_auto_retry: true,
         auto_retry_elapsed_guard_seconds: 240,
       }),
-    );
-  });
-
-  it('lowers the next review max parallel reviewers without going below one', async () => {
-    vi.mocked(configAPI.getConfig)
-      .mockResolvedValueOnce(storedConfigWithExtra([], { max_parallel_reviewers: 3 }))
-      .mockResolvedValueOnce(storedConfigWithExtra([], { max_parallel_reviewers: 1 }));
-
-    await expect(lowerDefaultReviewTeamMaxParallelReviewers()).resolves.toMatchObject({
-      maxParallelInstances: 2,
-    });
-    expect(configAPI.setConfig).toHaveBeenNthCalledWith(
-      1,
-      'ai.review_teams.default',
-      expect.objectContaining({ max_parallel_reviewers: 2 }),
-    );
-
-    await expect(lowerDefaultReviewTeamMaxParallelReviewers()).resolves.toMatchObject({
-      maxParallelInstances: 1,
-    });
-    expect(configAPI.setConfig).toHaveBeenNthCalledWith(
-      2,
-      'ai.review_teams.default',
-      expect.objectContaining({ max_parallel_reviewers: 1 }),
     );
   });
 

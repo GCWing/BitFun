@@ -1656,19 +1656,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn deep_review_capacity_queue_waits_for_previous_launch_batch_without_lowering_cap() {
+    async fn deep_review_capacity_queue_starts_later_batch_when_reviewer_capacity_frees() {
         use crate::agentic::deep_review::task_adapter::DeepReviewLaunchBatchInfo;
         use crate::agentic::deep_review_policy::{
             deep_review_capacity_skip_count, deep_review_effective_parallel_instances,
             try_begin_deep_review_active_reviewer_for_launch_batch, DeepReviewConcurrencyPolicy,
         };
 
-        let turn_id = "turn-launch-batch-queue-wait";
-        let tool_id = "tool-launch-batch-queue-wait";
-        let occupied =
+        let turn_id = "turn-launch-batch-fill-free-slot";
+        let tool_id = "tool-launch-batch-fill-free-slot";
+        let occupied_a =
             try_begin_deep_review_active_reviewer_for_launch_batch(turn_id, 2, 1, Some("packet-a"))
                 .expect("launch batch admission should not fail")
                 .expect("first batch reviewer should start");
+        let occupied_b =
+            try_begin_deep_review_active_reviewer_for_launch_batch(turn_id, 2, 1, Some("packet-b"))
+                .expect("launch batch admission should not fail")
+                .expect("second first-batch reviewer should start");
         let policy = DeepReviewConcurrencyPolicy {
             max_parallel_instances: 2,
             stagger_seconds: 0,
@@ -1700,22 +1704,23 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
         assert!(
             !handle.is_finished(),
-            "later launch batch should wait while an earlier batch is active"
+            "later launch batch should wait while reviewer capacity is full"
         );
-        drop(occupied);
+        drop(occupied_a);
 
         let outcome = tokio::time::timeout(tokio::time::Duration::from_millis(500), handle)
             .await
-            .expect("later launch batch should become ready after earlier batch finishes")
+            .expect("later launch batch should become ready as soon as reviewer capacity frees")
             .expect("spawned wait should not panic")
             .expect("queue wait should resolve");
 
         match outcome {
             super::DeepReviewQueueWaitOutcome::Ready { .. } => {}
             super::DeepReviewQueueWaitOutcome::Skipped { .. } => {
-                panic!("later launch batch should not expire while an earlier batch is active");
+                panic!("later launch batch should not expire after reviewer capacity frees");
             }
         }
+        drop(occupied_b);
         assert_eq!(deep_review_capacity_skip_count(turn_id), 0);
         assert_eq!(deep_review_effective_parallel_instances(turn_id, 2), 2);
     }
