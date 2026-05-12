@@ -1,4 +1,4 @@
-use super::{Agent, RequestContextPolicy};
+use crate::agentic::agents::{Agent, RequestContextPolicy};
 use async_trait::async_trait;
 
 /// Internal helper that holds the common metadata and behaviour for

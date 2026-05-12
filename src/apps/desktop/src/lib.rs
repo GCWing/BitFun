@@ -662,6 +662,7 @@ pub async fn run() {
             get_subagent_configs,
             set_subagent_config,
             list_subagents,
+            list_visible_subagents,
             get_subagent_detail,
             delete_subagent,
             create_subagent,

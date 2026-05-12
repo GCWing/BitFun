@@ -3,7 +3,7 @@
 use crate::api::app_state::AppState;
 use bitfun_core::agentic::agents::{
     AgentCategory, AgentInfo, CustomSubagent, CustomSubagentConfig, CustomSubagentDetail,
-    CustomSubagentKind, SubAgentSource,
+    CustomSubagentKind, SubAgentSource, SubagentListScope, SubagentQueryContext,
 };
 use bitfun_core::service::config::types::SubAgentConfig;
 use log::warn;
@@ -20,6 +20,13 @@ pub struct ListSubagentsRequest {
     pub workspace_path: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListVisibleSubagentsRequest {
+    pub workspace_path: Option<String>,
+    pub parent_agent_type: String,
+}
+
 fn workspace_root_from_request(workspace_path: Option<&str>) -> Option<PathBuf> {
     workspace_path
         .filter(|path| !path.is_empty())
@@ -34,7 +41,12 @@ pub async fn list_subagents(
     let workspace = workspace_root_from_request(request.workspace_path.as_deref());
     let list = state
         .agent_registry
-        .get_subagents_info(workspace.as_deref())
+        .get_subagents_for_query(&SubagentQueryContext {
+            parent_agent_type: None,
+            workspace_root: workspace.as_deref(),
+            list_scope: SubagentListScope::RegistryManagement,
+            include_disabled: true,
+        })
         .await;
 
     let result = match request.source {
@@ -46,6 +58,23 @@ pub async fn list_subagents(
     };
 
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn list_visible_subagents(
+    state: State<'_, AppState>,
+    request: ListVisibleSubagentsRequest,
+) -> Result<Vec<AgentInfo>, String> {
+    let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    Ok(state
+        .agent_registry
+        .get_subagents_for_query(&SubagentQueryContext {
+            parent_agent_type: Some(request.parent_agent_type.as_str()),
+            workspace_root: workspace.as_deref(),
+            list_scope: SubagentListScope::TaskVisible,
+            include_disabled: false,
+        })
+        .await)
 }
 
 #[derive(Debug, Clone, Deserialize)]

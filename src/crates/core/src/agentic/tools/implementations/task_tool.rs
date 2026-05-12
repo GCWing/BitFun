@@ -1,4 +1,6 @@
-use crate::agentic::agents::{get_agent_registry, AgentInfo};
+use crate::agentic::agents::{
+    get_agent_registry, AgentInfo, SubagentListScope, SubagentQueryContext,
+};
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::deep_review::task_adapter::{
     self as deep_review_task_adapter, DeepReviewLaunchBatchInfo,
@@ -25,8 +27,6 @@ use async_trait::async_trait;
 use log::warn;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::path::Path;
-
 pub struct TaskTool;
 
 const LARGE_TASK_PROMPT_SOFT_LINE_LIMIT: usize = 180;
@@ -435,27 +435,30 @@ assistant: "I'm going to use the Task tool to launch the greeting-responder agen
         )
     }
 
-    async fn build_description(&self, workspace_root: Option<&Path>) -> String {
-        let agents = self.get_enabled_agents(workspace_root).await;
+    async fn build_description(&self, context: Option<&ToolUseContext>) -> String {
+        let agents = self.get_enabled_agents(context).await;
         let agent_descriptions = self.format_agent_descriptions(&agents);
         self.render_description(agent_descriptions)
     }
 
-    async fn get_enabled_agents(&self, workspace_root: Option<&Path>) -> Vec<AgentInfo> {
+    async fn get_enabled_agents(&self, context: Option<&ToolUseContext>) -> Vec<AgentInfo> {
         let registry = get_agent_registry();
+        let workspace_root = context.and_then(|ctx| ctx.workspace_root());
         if let Some(workspace_root) = workspace_root {
             registry.load_custom_subagents(workspace_root).await;
         }
         registry
-            .get_subagents_info(workspace_root)
+            .get_subagents_for_query(&SubagentQueryContext {
+                parent_agent_type: context.and_then(|ctx| ctx.agent_type.as_deref()),
+                workspace_root,
+                list_scope: SubagentListScope::TaskVisible,
+                include_disabled: false,
+            })
             .await
-            .into_iter()
-            .filter(|agent| agent.enabled) // Only return enabled subagents
-            .collect()
     }
 
-    async fn get_agents_types(&self, workspace_root: Option<&Path>) -> Vec<String> {
-        self.get_enabled_agents(workspace_root)
+    async fn get_agents_types(&self, context: Option<&ToolUseContext>) -> Vec<String> {
+        self.get_enabled_agents(context)
             .await
             .into_iter()
             .map(|agent| agent.id)
@@ -477,9 +480,7 @@ impl Tool for TaskTool {
         &self,
         context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        Ok(self
-            .build_description(context.and_then(|ctx| ctx.workspace_root()))
-            .await)
+        Ok(self.build_description(context).await)
     }
 
     fn input_schema(&self) -> Value {
@@ -666,8 +667,7 @@ impl Tool for TaskTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("Required parameters: subagent_type, prompt, description. Missing subagent_type".to_string()))?
             .to_string();
-        let workspace_root = context.workspace_root();
-        let all_agent_types = self.get_agents_types(workspace_root).await;
+        let all_agent_types = self.get_agents_types(Some(context)).await;
         if !all_agent_types.contains(&subagent_type) {
             return Err(BitFunError::tool(format!(
                 "subagent_type {} is not valid, must be one of: {}",
@@ -1409,9 +1409,11 @@ mod tests {
     use crate::agentic::deep_review_policy::{
         DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewSubagentRole,
     };
-    use crate::agentic::tools::framework::Tool;
+    use crate::agentic::tools::framework::{Tool, ToolUseContext};
+    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::BitFunError;
     use serde_json::json;
+    use std::collections::HashMap;
 
     #[test]
     fn task_schema_accepts_optional_model_id() {
@@ -1493,6 +1495,42 @@ mod tests {
             policy.effective_timeout_seconds(DeepReviewSubagentRole::Judge, Some(900)),
             Some(240)
         );
+    }
+
+    #[tokio::test]
+    async fn description_with_context_filters_restricted_subagents_by_parent_agent() {
+        let tool = TaskTool::new();
+        let agentic_context = ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some("agentic".to_string()),
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: None,
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        };
+        let deep_review_context = ToolUseContext {
+            agent_type: Some("DeepReview".to_string()),
+            ..agentic_context.clone()
+        };
+
+        let agentic_description = tool
+            .description_with_context(Some(&agentic_context))
+            .await
+            .expect("agentic description should render");
+        assert!(agentic_description.contains("<agent type=\"Explore\">"));
+        assert!(!agentic_description.contains("<agent type=\"ReviewSecurity\">"));
+        assert!(!agentic_description.contains("<agent type=\"ResearchSpecialist\">"));
+
+        let deep_review_description = tool
+            .description_with_context(Some(&deep_review_context))
+            .await
+            .expect("deep review description should render");
+        assert!(deep_review_description.contains("<agent type=\"ReviewSecurity\">"));
+        assert!(!deep_review_description.contains("<agent type=\"ResearchSpecialist\">"));
     }
 
     #[test]

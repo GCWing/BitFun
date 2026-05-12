@@ -40,6 +40,7 @@ vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({
 vi.mock('@/infrastructure/api/service-api/SubagentAPI', () => ({
   SubagentAPI: {
     listSubagents: vi.fn(),
+    listVisibleSubagents: vi.fn(),
     updateSubagentConfig: vi.fn(),
   },
 }));
@@ -331,7 +332,7 @@ describe('reviewTeamService', () => {
     vi.mocked(configAPI.getConfig).mockResolvedValue(
       storedConfigWithExtra(['ExtraEnabled', 'ExtraDisabled']),
     );
-    vi.mocked(SubagentAPI.listSubagents).mockResolvedValue([
+    vi.mocked(SubagentAPI.listVisibleSubagents).mockResolvedValue([
       ...coreSubagents(false),
       subagent('ExtraEnabled', true, 'user', 'fast', true, true),
       subagent('ExtraDisabled', false, 'project', 'fast', true, true),

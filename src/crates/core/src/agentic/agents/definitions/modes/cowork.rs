@@ -2,7 +2,7 @@
 //!
 //! A collaborative mode that prioritizes early clarification and lightweight progress tracking.
 
-use super::Agent;
+use crate::agentic::agents::Agent;
 use async_trait::async_trait;
 
 pub struct CoworkMode {

@@ -66,6 +66,7 @@ vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({
 vi.mock('@/infrastructure/api/service-api/SubagentAPI', () => ({
   SubagentAPI: {
     listSubagents: vi.fn(async () => []),
+    listVisibleSubagents: vi.fn(async () => []),
     updateSubagentConfig: vi.fn(async () => undefined),
   },
 }));

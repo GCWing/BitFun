@@ -2,7 +2,7 @@
 //!
 //! Dedicated agent for perceiving and operating the user's local computer.
 
-use super::Agent;
+use crate::agentic::agents::Agent;
 use async_trait::async_trait;
 
 pub struct ComputerUseMode {

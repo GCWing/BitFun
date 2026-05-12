@@ -3,7 +3,7 @@
 //! This agent can use Read/Grep/Glob/LS tools to gather context before
 //! submitting a code review, reducing false positives from missing context.
 
-use super::Agent;
+use crate::agentic::agents::Agent;
 use async_trait::async_trait;
 
 pub struct CodeReviewAgent {

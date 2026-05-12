@@ -7,6 +7,14 @@ import { api } from './ApiClient';
 
 
 export type SubagentSource = 'builtin' | 'project' | 'user';
+export type BuiltinSubagentExposure = 'public' | 'restricted' | 'hidden';
+
+export interface SubagentVisibilitySummary {
+  exposure: BuiltinSubagentExposure;
+  allowedParentAgentIds: string[];
+  deniedParentAgentIds: string[];
+  showInGlobalRegistry: boolean;
+}
 
 export interface SubagentInfo {
   id: string;
@@ -21,11 +29,17 @@ export interface SubagentInfo {
   path?: string;
    
   model?: string;
+  visibility?: SubagentVisibilitySummary;
 }
 
 export interface ListSubagentsOptions {
   source?: SubagentSource;
   workspacePath?: string;
+}
+
+export interface ListVisibleSubagentsOptions {
+  workspacePath?: string;
+  parentAgentType: string;
 }
 
 export interface ReloadSubagentsOptions {
@@ -90,6 +104,12 @@ export const SubagentAPI = {
   async listSubagents(options?: ListSubagentsOptions): Promise<SubagentInfo[]> {
     return api.invoke<SubagentInfo[]>('list_subagents', {
       request: options ?? {},
+    });
+  },
+
+  async listVisibleSubagents(options: ListVisibleSubagentsOptions): Promise<SubagentInfo[]> {
+    return api.invoke<SubagentInfo[]>('list_visible_subagents', {
+      request: options,
     });
   },
 

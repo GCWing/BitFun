@@ -125,7 +125,10 @@ const ReviewConfig: React.FC = () => {
       const [loadedTeam, loadedModels, loadedSubagents] = await Promise.all([
         loadDefaultReviewTeam(workspacePath || undefined),
         configAPI.getConfig('ai.models'),
-        SubagentAPI.listSubagents({ workspacePath: workspacePath || undefined }),
+        SubagentAPI.listVisibleSubagents({
+          workspacePath: workspacePath || undefined,
+          parentAgentType: 'DeepReview',
+        }),
       ]);
       setTeam(loadedTeam);
       setModels(Array.isArray(loadedModels) ? loadedModels as AIModelConfig[] : []);

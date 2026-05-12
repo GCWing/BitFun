@@ -1,43 +1,33 @@
-use super::Agent;
+use crate::agentic::agents::Agent;
 use async_trait::async_trait;
 
-pub struct DeepResearchAgent {
+pub struct DeepResearchMode {
     default_tools: Vec<String>,
 }
 
-impl Default for DeepResearchAgent {
+impl Default for DeepResearchMode {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl DeepResearchAgent {
+impl DeepResearchMode {
     pub fn new() -> Self {
         Self {
             default_tools: vec![
-                // Sub-agent orchestration — parallel research via Task
                 "Task".to_string(),
-                // Web research (used in planning phase & direct lookups)
                 "WebSearch".to_string(),
                 "WebFetch".to_string(),
-                // Codebase / file exploration
                 "Read".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
                 "LS".to_string(),
-                // File output (save report)
                 "Write".to_string(),
-                // Needed to append/continue a report when a prior Write was
-                // truncated by max_tokens (recovery path injects an "use Edit
-                // to continue" hint into result_for_assistant).
                 "Edit".to_string(),
-                // Terminal — run commands to gather data (e.g. git log, curl, jq)
                 "Bash".to_string(),
                 "TerminalControl".to_string(),
                 "ControlHub".to_string(),
-                // Task tracking
                 "TodoWrite".to_string(),
-                // Pro mode: Phase 0 ambiguity clarification + Phase 5 GAP confirmation
                 "AskUserQuestion".to_string(),
             ],
         }
@@ -45,7 +35,7 @@ impl DeepResearchAgent {
 }
 
 #[async_trait]
-impl Agent for DeepResearchAgent {
+impl Agent for DeepResearchMode {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -77,11 +67,11 @@ impl Agent for DeepResearchAgent {
 
 #[cfg(test)]
 mod tests {
-    use super::{Agent, DeepResearchAgent};
+    use super::{Agent, DeepResearchMode};
 
     #[test]
     fn has_expected_default_tools() {
-        let agent = DeepResearchAgent::new();
+        let agent = DeepResearchMode::new();
         let tools = agent.default_tools();
         assert!(
             tools.contains(&"Task".to_string()),
@@ -105,7 +95,7 @@ mod tests {
 
     #[test]
     fn always_uses_default_prompt_template() {
-        let agent = DeepResearchAgent::new();
+        let agent = DeepResearchMode::new();
         assert_eq!(
             agent.prompt_template_name(Some("gpt-5.1")),
             "deep_research_agent"

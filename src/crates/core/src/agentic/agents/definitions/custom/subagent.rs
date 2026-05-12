@@ -176,7 +176,6 @@ impl CustomSubagent {
         let model = model.unwrap_or(&self.model);
 
         let mut metadata = serde_yaml::Mapping::new();
-        // Required fields
         metadata.insert(
             Value::String("name".into()),
             Value::String(self.name.clone()),
@@ -185,7 +184,6 @@ impl CustomSubagent {
             Value::String("description".into()),
             Value::String(self.description.clone()),
         );
-        // Optional fields: only save if not default values
         if !Self::is_default_tools(&self.tools) {
             metadata.insert(
                 Value::String("tools".into()),

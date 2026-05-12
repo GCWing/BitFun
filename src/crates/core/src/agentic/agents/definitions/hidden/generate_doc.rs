@@ -1,68 +1,56 @@
-//! Plan Mode
-
-use super::{Agent, RequestContextPolicy};
+use crate::agentic::agents::Agent;
 use async_trait::async_trait;
-pub struct PlanMode {
+
+pub struct GenerateDocAgent {
     default_tools: Vec<String>,
 }
 
-impl Default for PlanMode {
+impl Default for GenerateDocAgent {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl PlanMode {
+impl GenerateDocAgent {
     pub fn new() -> Self {
         Self {
             default_tools: vec![
-                "Task".to_string(),
                 "LS".to_string(),
                 "Read".to_string(),
-                "Write".to_string(),
-                "Edit".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
-                "AskUserQuestion".to_string(),
-                "CreatePlan".to_string(),
-                "ControlHub".to_string(),
             ],
         }
     }
 }
 
 #[async_trait]
-impl Agent for PlanMode {
+impl Agent for GenerateDocAgent {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn id(&self) -> &str {
-        "Plan"
+        "GenerateDoc"
     }
 
     fn name(&self) -> &str {
-        "Plan"
+        "GenerateDoc"
     }
 
     fn description(&self) -> &str {
-        "Clarify request and create an implementation plan before executing the task"
+        "Agent for generating documentation such as AGENTS.md, CLAUDE.md, README.md, etc."
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
-        "plan_mode"
+        "generate_doc_agent"
     }
 
     fn default_tools(&self) -> Vec<String> {
         self.default_tools.clone()
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::instructions_and_layout()
-    }
-
     fn is_readonly(&self) -> bool {
-        // only modify plan file, not modify project code
-        true
+        false
     }
 }

@@ -1,62 +1,63 @@
-use super::Agent;
+use crate::agentic::agents::{Agent, RequestContextPolicy};
 use async_trait::async_trait;
 
-pub struct DeepReviewAgent {
+pub struct ReviewFixerAgent {
     default_tools: Vec<String>,
 }
 
-impl Default for DeepReviewAgent {
+impl Default for ReviewFixerAgent {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl DeepReviewAgent {
+impl ReviewFixerAgent {
     pub fn new() -> Self {
         Self {
             default_tools: vec![
-                "Task".to_string(),
                 "Read".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
                 "LS".to_string(),
                 "GetFileDiff".to_string(),
-                "Git".to_string(),
-                "submit_code_review".to_string(),
-                "AskUserQuestion".to_string(),
                 "Edit".to_string(),
                 "Write".to_string(),
                 "Bash".to_string(),
                 "TodoWrite".to_string(),
+                "Git".to_string(),
             ],
         }
     }
 }
 
 #[async_trait]
-impl Agent for DeepReviewAgent {
+impl Agent for ReviewFixerAgent {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn id(&self) -> &str {
-        "DeepReview"
+        "ReviewFixer"
     }
 
     fn name(&self) -> &str {
-        "DeepReview"
+        "Review Fixer"
     }
 
     fn description(&self) -> &str {
-        r#"Local deep-review orchestrator that builds a parallel Code Review Team for substantial changes. It dispatches independent specialist reviewers for business logic, performance, and security, can perform user-approved remediation plus incremental re-review, and then runs a quality-inspector pass before producing a consolidated report."#
+        r#"Bounded implementation subagent for deep-review remediation. Use it only after validated review findings exist and you want a minimal safe fix plus a concise verification summary before the next incremental review pass."#
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
-        "deep_review_agent"
+        "review_fixer_agent"
     }
 
     fn default_tools(&self) -> Vec<String> {
         self.default_tools.clone()
+    }
+
+    fn request_context_policy(&self) -> RequestContextPolicy {
+        RequestContextPolicy::instructions_only()
     }
 
     fn is_readonly(&self) -> bool {
@@ -66,16 +67,18 @@ impl Agent for DeepReviewAgent {
 
 #[cfg(test)]
 mod tests {
-    use super::{Agent, DeepReviewAgent};
+    use super::{Agent, ReviewFixerAgent};
+    use crate::agentic::agents::RequestContextPolicy;
 
     #[test]
-    fn deep_review_agent_has_team_orchestration_tools() {
-        let agent = DeepReviewAgent::new();
+    fn review_fixer_agent_has_edit_and_verify_tools() {
+        let agent = ReviewFixerAgent::new();
         let tools = agent.default_tools();
 
-        assert!(tools.contains(&"Task".to_string()));
-        assert!(tools.contains(&"submit_code_review".to_string()));
-        assert!(tools.contains(&"AskUserQuestion".to_string()));
+        assert_eq!(
+            agent.request_context_policy(),
+            RequestContextPolicy::instructions_only()
+        );
         assert!(tools.contains(&"Edit".to_string()));
         assert!(tools.contains(&"Write".to_string()));
         assert!(tools.contains(&"Bash".to_string()));

@@ -1,7 +1,6 @@
 //! Debug Mode - Evidence-driven debugging mode
 
-use super::prompt_builder::{PromptBuilder, PromptBuilderContext};
-use super::Agent;
+use crate::agentic::agents::{Agent, PromptBuilder, PromptBuilderContext};
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{DebugModeConfig, LanguageDebugTemplate};
 use crate::service::lsp::project_detector::{ProjectDetector, ProjectInfo};

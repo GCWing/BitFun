@@ -3,7 +3,7 @@
 //! Orchestrates a full software development sprint through specialized roles:
 //! Think → Plan → Build → Review → Test → Ship
 
-use super::Agent;
+use crate::agentic::agents::Agent;
 use async_trait::async_trait;
 
 pub struct TeamMode {

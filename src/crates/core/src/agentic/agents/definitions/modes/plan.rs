@@ -1,40 +1,30 @@
-//! Claw Mode
+//! Plan Mode
 
-use super::{Agent, RequestContextPolicy};
+use crate::agentic::agents::{Agent, RequestContextPolicy};
 use async_trait::async_trait;
-pub struct ClawMode {
+pub struct PlanMode {
     default_tools: Vec<String>,
 }
 
-impl Default for ClawMode {
+impl Default for PlanMode {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ClawMode {
+impl PlanMode {
     pub fn new() -> Self {
         Self {
             default_tools: vec![
                 "Task".to_string(),
+                "LS".to_string(),
                 "Read".to_string(),
                 "Write".to_string(),
                 "Edit".to_string(),
-                "Delete".to_string(),
-                "Bash".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
-                "WebSearch".to_string(),
-                "Skill".to_string(),
-                "Git".to_string(),
-                "TerminalControl".to_string(),
-                "SessionControl".to_string(),
-                "SessionMessage".to_string(),
-                "SessionHistory".to_string(),
-                "Cron".to_string(),
-                // Browser, terminal, and routing metadata live under ControlHub.
-                // Local desktop/system control is delegated to the ComputerUse
-                // agent/tool instead of being surfaced as a ControlHub domain.
+                "AskUserQuestion".to_string(),
+                "CreatePlan".to_string(),
                 "ControlHub".to_string(),
             ],
         }
@@ -42,25 +32,25 @@ impl ClawMode {
 }
 
 #[async_trait]
-impl Agent for ClawMode {
+impl Agent for PlanMode {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn id(&self) -> &str {
-        "Claw"
+        "Plan"
     }
 
     fn name(&self) -> &str {
-        "Claw"
+        "Plan"
     }
 
     fn description(&self) -> &str {
-        "Personal assistant for daily tasks"
+        "Clarify request and create an implementation plan before executing the task"
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
-        "claw_mode"
+        "plan_mode"
     }
 
     fn default_tools(&self) -> Vec<String> {
@@ -68,10 +58,11 @@ impl Agent for ClawMode {
     }
 
     fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::full_without_layout()
+        RequestContextPolicy::instructions_and_layout()
     }
 
     fn is_readonly(&self) -> bool {
-        false
+        // only modify plan file, not modify project code
+        true
     }
 }

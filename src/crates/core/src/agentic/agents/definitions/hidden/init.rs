@@ -1,4 +1,4 @@
-use super::Agent;
+use crate::agentic::agents::Agent;
 use async_trait::async_trait;
 
 pub struct InitAgent {

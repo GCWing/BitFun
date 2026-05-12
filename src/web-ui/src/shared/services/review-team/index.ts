@@ -1120,7 +1120,7 @@ export async function loadDefaultReviewTeam(
   const [definition, storedConfig, subagents, rawModels] = await Promise.all([
     loadDefaultReviewTeamDefinition(),
     loadDefaultReviewTeamConfig(),
-    SubagentAPI.listSubagents({ workspacePath }),
+    SubagentAPI.listVisibleSubagents({ workspacePath, parentAgentType: 'DeepReview' }),
     configAPI.getConfig('ai.models').catch(() => undefined),
   ]);
 

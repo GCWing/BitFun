@@ -1,10 +1,9 @@
+use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
 use crate::agentic::agents::Agent;
 use crate::infrastructure::get_path_manager_arc;
 use log::error;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-
-use super::{CustomSubagent, CustomSubagentKind};
 
 /// Existing subagent directory and its source
 #[derive(Debug, Clone)]
@@ -31,7 +30,6 @@ impl CustomSubagentLoader {
     pub fn get_possible_paths(workspace_root: &Path) -> Vec<SubagentDirEntry> {
         let mut entries = Vec::new();
 
-        // Project subagent paths
         for (parent, sub) in PROJECT_AGENT_SUBDIRS {
             let p = workspace_root.join(parent).join(sub);
             if p.exists() && p.is_dir() {
@@ -42,7 +40,6 @@ impl CustomSubagentLoader {
             }
         }
 
-        // User subagents: agents under bitfun user config
         let pm = get_path_manager_arc();
         let bitfun_agents = pm.user_agents_dir();
         if bitfun_agents.exists() && bitfun_agents.is_dir() {
@@ -52,11 +49,10 @@ impl CustomSubagentLoader {
             });
         }
 
-        // User subagents: ~/.claude/agents, ~/.cursor/agents, ~/.codex/agents
         if let Some(home) = dirs::home_dir() {
             for (parent, sub) in PROJECT_AGENT_SUBDIRS {
                 if *parent == ".bitfun" {
-                    continue; // bitfun user path already handled by path_manager
+                    continue;
                 }
                 let p = home.join(parent).join(sub);
                 if p.exists() && p.is_dir() {

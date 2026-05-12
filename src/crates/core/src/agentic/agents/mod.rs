@@ -2,64 +2,43 @@
 //!
 //! Provides flexible mode selection with different system prompts and tool sets
 
-mod custom_subagents;
+mod definitions;
 mod prompt_builder;
-mod readonly_subagent;
 mod registry;
-// Modes
-mod agentic_mode;
-mod claw_mode;
-mod computer_use_mode;
-mod cowork_mode;
-mod debug_mode;
-mod plan_mode;
-mod team_mode;
-// Built-in subagents
-mod deep_research_agent;
-mod explore_agent;
-mod file_finder_agent;
-mod research_specialist_agent;
-mod review_fixer_agent;
-mod review_specialist_agents;
-// Hidden agents
-mod code_review_agent;
-mod deep_review_agent;
-mod generate_doc_agent;
-mod init_agent;
 
 use crate::util::errors::{BitFunError, BitFunResult};
-pub use agentic_mode::AgenticMode;
 use async_trait::async_trait;
-pub use claw_mode::ClawMode;
-pub use code_review_agent::CodeReviewAgent;
-pub use computer_use_mode::ComputerUseMode;
-pub use cowork_mode::CoworkMode;
-pub use custom_subagents::{CustomSubagent, CustomSubagentKind};
-pub use debug_mode::DebugMode;
-pub use deep_research_agent::DeepResearchAgent;
-pub use deep_review_agent::DeepReviewAgent;
-pub use explore_agent::ExploreAgent;
-pub use file_finder_agent::FileFinderAgent;
-pub use generate_doc_agent::GenerateDocAgent;
-pub use init_agent::InitAgent;
-pub use plan_mode::PlanMode;
+pub use definitions::custom::{CustomSubagent, CustomSubagentKind};
+pub use definitions::hidden::{
+    CodeReviewAgent, DeepReviewAgent, GenerateDocAgent, InitAgent,
+};
+pub use definitions::modes::{
+    AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, PlanMode, TeamMode,
+};
+pub use definitions::review::{
+    ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,
+    PerformanceReviewerAgent, ReviewFixerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
+};
+pub use definitions::subagents::{
+    ComputerUseMode, ExploreAgent, FileFinderAgent, ResearchSpecialistAgent,
+};
+pub use definitions::shared::ReadonlySubagent;
 pub use prompt_builder::{
     PromptBuilder, PromptBuilderContext, RemoteExecutionHints, RequestContextPolicy,
     RequestContextSection,
 };
-pub use readonly_subagent::ReadonlySubagent;
-pub use registry::{
-    get_agent_registry, AgentCategory, AgentInfo, AgentRegistry, CustomSubagentConfig,
-    CustomSubagentDetail, SubAgentSource,
+pub use registry::{get_agent_registry, AgentRegistry, CustomSubagentDetail};
+pub use registry::catalog::{
+    builtin_agent_specs, BuiltinAgentSpec,
 };
-pub use research_specialist_agent::ResearchSpecialistAgent;
-pub use review_fixer_agent::ReviewFixerAgent;
-pub use review_specialist_agents::{
-    ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,
-    PerformanceReviewerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
+pub use registry::types::{
+    AgentCategory, AgentInfo, CustomSubagentConfig, SubAgentSource, SubagentListScope,
+    SubagentQueryContext,
+};
+pub use registry::visibility::{
+    BuiltinSubagentExposure, SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
 use std::any::Any;
-pub use team_mode::TeamMode;
 
 // Include embedded prompts generated at compile time
 include!(concat!(env!("OUT_DIR"), "/embedded_agents_prompt.rs"));
