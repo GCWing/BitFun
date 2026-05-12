@@ -204,9 +204,9 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     };
   }, [config.toolName]);
 
-  const resolvedMcpToolName = resolvedToolInfo?.mcp_info?.tool_name ?? null;
+  const resolvedMcpToolName = resolvedToolInfo?.dynamic_info?.mcp?.tool_name ?? null;
   const toolName = resolvedMcpToolName ?? config.toolName;
-  const serverId = resolvedToolInfo?.mcp_info?.server_id ?? null;
+  const serverId = resolvedToolInfo?.dynamic_info?.mcp?.server_id ?? null;
   const isFailed = status === 'error';
 
   const mcpAppIframeRef = useRef<HTMLIFrameElement | null>(null);

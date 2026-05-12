@@ -35,10 +35,20 @@ pub struct GetToolInfoRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct McpToolInfo {
+pub struct DynamicMcpToolInfo {
     pub server_id: String,
     pub server_name: String,
     pub tool_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicToolInfo {
+    pub provider_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<DynamicMcpToolInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,7 +60,7 @@ pub struct ToolInfo {
     pub is_concurrency_safe: bool,
     pub needs_permissions: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub mcp_info: Option<McpToolInfo>,
+    pub dynamic_info: Option<DynamicToolInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,11 +186,21 @@ async fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
     }
 }
 
-fn to_mcp_tool_info(info: bitfun_core::service::mcp::McpToolInfo) -> McpToolInfo {
-    McpToolInfo {
+fn to_dynamic_mcp_tool_info(info: bitfun_core::service::mcp::McpToolInfo) -> DynamicMcpToolInfo {
+    DynamicMcpToolInfo {
         server_id: info.server_id,
         server_name: info.server_name,
         tool_name: info.tool_name,
+    }
+}
+
+fn to_dynamic_tool_info(
+    info: bitfun_core::agentic::tools::framework::DynamicToolInfo,
+) -> DynamicToolInfo {
+    DynamicToolInfo {
+        provider_id: info.provider_id,
+        provider_kind: info.provider_kind,
+        mcp: info.mcp.map(to_dynamic_mcp_tool_info),
     }
 }
 
@@ -197,7 +217,7 @@ async fn build_tool_info(tool: &Arc<dyn bitfun_core::agentic::tools::framework::
         is_readonly: tool.is_readonly(),
         is_concurrency_safe: tool.is_concurrency_safe(None),
         needs_permissions: tool.needs_permissions(None),
-        mcp_info: tool.mcp_info().map(to_mcp_tool_info),
+        dynamic_info: tool.dynamic_tool_info().map(to_dynamic_tool_info),
     }
 }
 

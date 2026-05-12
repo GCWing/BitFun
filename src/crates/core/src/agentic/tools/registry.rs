@@ -1,8 +1,7 @@
 //! Tool registry
 
-use crate::agentic::tools::framework::Tool;
+use crate::agentic::tools::framework::{DynamicToolInfo, Tool};
 use crate::agentic::tools::implementations::*;
-use crate::service::mcp::McpToolInfo;
 use crate::util::errors::BitFunResult;
 use bitfun_runtime_ports::{DynamicToolDescriptor, DynamicToolProvider, ToolDecorator};
 use indexmap::IndexMap;
@@ -11,6 +10,12 @@ use std::sync::Arc;
 
 type ToolRef = Arc<dyn Tool>;
 type ToolDecoratorRef = Arc<dyn ToolDecorator<ToolRef>>;
+
+#[derive(Debug, Clone)]
+struct DynamicToolMetadata {
+    provider_id: String,
+    info: DynamicToolInfo,
+}
 
 struct SnapshotToolDecorator;
 
@@ -23,7 +28,7 @@ impl ToolDecorator<ToolRef> for SnapshotToolDecorator {
 /// Tool registry - manages all available tools (using IndexMap to maintain registration order)
 pub struct ToolRegistry {
     tools: IndexMap<String, ToolRef>,
-    mcp_tools: IndexMap<String, McpToolInfo>,
+    dynamic_tools: IndexMap<String, DynamicToolMetadata>,
     tool_decorator: ToolDecoratorRef,
 }
 
@@ -47,7 +52,7 @@ impl ToolRegistry {
     pub fn with_tool_decorator(tool_decorator: ToolDecoratorRef) -> Self {
         let mut registry = Self {
             tools: IndexMap::new(),
-            mcp_tools: IndexMap::new(),
+            dynamic_tools: IndexMap::new(),
             tool_decorator,
         };
 
@@ -97,16 +102,22 @@ impl ToolRegistry {
     /// Remove all tools from the MCP server
     pub fn unregister_mcp_server_tools(&mut self, server_id: &str) {
         let to_remove: Vec<String> = self
-            .mcp_tools
+            .dynamic_tools
             .iter()
-            .filter(|(_, info)| info.server_id == server_id)
+            .filter(|(_, metadata)| {
+                metadata
+                    .info
+                    .mcp
+                    .as_ref()
+                    .is_some_and(|info| info.server_id == server_id)
+            })
             .map(|(tool_name, _)| tool_name.clone())
             .collect();
 
         for key in to_remove {
             info!("Unregistering dynamic tool: tool_name={}", key);
             self.tools.shift_remove(&key);
-            self.mcp_tools.shift_remove(&key);
+            self.dynamic_tools.shift_remove(&key);
         }
     }
 
@@ -123,7 +134,7 @@ impl ToolRegistry {
         for key in to_remove {
             info!("Unregistering dynamic tool: tool_name={}", key);
             self.tools.shift_remove(&key);
-            self.mcp_tools.shift_remove(&key);
+            self.dynamic_tools.shift_remove(&key);
         }
         count
     }
@@ -204,10 +215,24 @@ impl ToolRegistry {
         // subsequent lookup returns the same runtime implementation.
         let tool = self.tool_decorator.decorate(tool);
         let name = tool.name().to_string();
-        if let Some(mcp_info) = tool.mcp_info() {
-            self.mcp_tools.insert(name.clone(), mcp_info);
+        let dynamic_info = tool.dynamic_tool_info().and_then(|info| {
+            if info.provider_id.trim().is_empty() {
+                None
+            } else {
+                Some(info)
+            }
+        });
+
+        if let Some(info) = dynamic_info {
+            self.dynamic_tools.insert(
+                name.clone(),
+                DynamicToolMetadata {
+                    provider_id: info.provider_id.clone(),
+                    info,
+                },
+            );
         } else {
-            self.mcp_tools.shift_remove(&name);
+            self.dynamic_tools.shift_remove(&name);
         }
         self.tools.insert(name, tool);
     }
@@ -217,8 +242,10 @@ impl ToolRegistry {
         self.tools.get(name).cloned()
     }
 
-    pub fn get_mcp_tool_info(&self, name: &str) -> Option<McpToolInfo> {
-        self.mcp_tools.get(name).cloned()
+    pub fn get_dynamic_tool_info(&self, name: &str) -> Option<DynamicToolInfo> {
+        self.dynamic_tools
+            .get(name)
+            .map(|metadata| metadata.info.clone())
     }
 
     /// Get all tool names
@@ -244,15 +271,7 @@ impl DynamicToolProvider for ToolRegistry {
         let mut descriptors = Vec::new();
 
         for (name, tool) in self.tools.iter() {
-            let provider_id = if let Some(mcp_info) = self.mcp_tools.get(name) {
-                Some(mcp_info.server_id.clone())
-            } else {
-                tool.dynamic_provider_id()
-                    .filter(|value| !value.is_empty())
-                    .map(ToOwned::to_owned)
-            };
-
-            let Some(provider_id) = provider_id else {
+            let Some(metadata) = self.dynamic_tools.get(name) else {
                 continue;
             };
             let description = tool.description().await.map_err(|error| {
@@ -266,7 +285,7 @@ impl DynamicToolProvider for ToolRegistry {
                 name: tool.name().to_string(),
                 description,
                 input_schema: tool.input_schema_for_model().await,
-                provider_id: Some(provider_id),
+                provider_id: Some(metadata.provider_id.clone()),
             });
         }
 
@@ -279,7 +298,9 @@ mod tests {
     use super::create_tool_registry;
     use super::ToolRef;
     use super::ToolRegistry;
-    use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+    use crate::agentic::tools::framework::{
+        DynamicToolInfo, Tool, ToolResult, ToolUseContext, ValidationResult,
+    };
     use async_trait::async_trait;
     use bitfun_runtime_ports::DynamicToolProvider;
     use serde_json::json;
@@ -288,7 +309,7 @@ mod tests {
 
     struct DynamicMetadataTool {
         name: String,
-        provider_id: Option<String>,
+        dynamic_info: Option<DynamicToolInfo>,
     }
 
     #[async_trait]
@@ -306,7 +327,11 @@ mod tests {
         }
 
         fn dynamic_provider_id(&self) -> Option<&str> {
-            self.provider_id.as_deref()
+            self.dynamic_info.as_ref().map(|info| info.provider_id.as_str())
+        }
+
+        fn dynamic_tool_info(&self) -> Option<DynamicToolInfo> {
+            self.dynamic_info.clone()
         }
 
         async fn validate_input(
@@ -334,7 +359,32 @@ mod tests {
     fn dynamic_tool(name: &str, provider_id: Option<&str>) -> ToolRef {
         Arc::new(DynamicMetadataTool {
             name: name.to_string(),
-            provider_id: provider_id.map(ToOwned::to_owned),
+            dynamic_info: provider_id.map(|provider_id| DynamicToolInfo {
+                provider_id: provider_id.to_string(),
+                provider_kind: None,
+                mcp: None,
+            }),
+        })
+    }
+
+    fn mcp_dynamic_tool(
+        name: &str,
+        _provider_id: Option<&str>,
+        server_id: &str,
+        server_name: &str,
+        tool_name: &str,
+    ) -> ToolRef {
+        Arc::new(DynamicMetadataTool {
+            name: name.to_string(),
+            dynamic_info: Some(DynamicToolInfo {
+                provider_id: server_id.to_string(),
+                provider_kind: Some("mcp".to_string()),
+                mcp: Some(crate::service::mcp::McpToolInfo {
+                    server_id: server_id.to_string(),
+                    server_name: server_name.to_string(),
+                    tool_name: tool_name.to_string(),
+                }),
+            }),
         })
     }
 
@@ -369,6 +419,39 @@ mod tests {
         assert_eq!(
             descriptors[0].provider_id.as_deref(),
             Some("github__enterprise/prod")
+        );
+    }
+
+    #[tokio::test]
+    async fn dynamic_tool_provider_prefers_mcp_registry_metadata() {
+        let mut registry = ToolRegistry::new();
+        registry.register_tool(mcp_dynamic_tool(
+            "mcp__github__search_repos",
+            Some("stale-provider-id"),
+            "github-server-id",
+            "GitHub",
+            "search_repos",
+        ));
+
+        let descriptors = registry
+            .list_dynamic_tools()
+            .await
+            .expect("list dynamic tools");
+
+        let descriptor = descriptors
+            .into_iter()
+            .find(|item| item.name == "mcp__github__search_repos")
+            .expect("mcp descriptor");
+
+        assert_eq!(descriptor.provider_id.as_deref(), Some("github-server-id"));
+        assert_eq!(
+            registry
+                .get_dynamic_tool_info("mcp__github__search_repos")
+                .expect("mcp metadata")
+                .mcp
+                .expect("mcp subtype metadata")
+                .tool_name,
+            "search_repos"
         );
     }
     #[test]

@@ -33,6 +33,13 @@ pub enum ToolPathBackend {
     RemoteWorkspace,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DynamicToolInfo {
+    pub provider_id: String,
+    pub provider_kind: Option<String>,
+    pub mcp: Option<McpToolInfo>,
+}
+
 #[derive(Debug, Clone)]
 pub struct ToolPathResolution {
     pub requested_path: String,
@@ -607,9 +614,13 @@ pub trait Tool: Send + Sync {
         None
     }
 
-    /// Stable MCP metadata for dynamic tools.
-    fn mcp_info(&self) -> Option<McpToolInfo> {
-        None
+    /// Rich metadata for dynamic tools. Prefer this over encoding dynamic ownership in tool names.
+    fn dynamic_tool_info(&self) -> Option<DynamicToolInfo> {
+        self.dynamic_provider_id().map(|provider_id| DynamicToolInfo {
+            provider_id: provider_id.to_string(),
+            provider_kind: None,
+            mcp: None,
+        })
     }
 
     /// User friendly name

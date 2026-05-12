@@ -543,7 +543,9 @@ pub async fn get_mcp_tool_ui_uri(
 ) -> Result<Option<String>, String> {
     let registry = bitfun_core::agentic::tools::registry::get_global_tool_registry();
     let guard = registry.read().await;
-    let is_mcp_tool = guard.get_mcp_tool_info(&tool_name).is_some();
+    let is_mcp_tool = guard
+        .get_dynamic_tool_info(&tool_name)
+        .is_some_and(|info| info.mcp.is_some());
     let tool = guard.get_tool(&tool_name);
     drop(guard);
     if !is_mcp_tool {

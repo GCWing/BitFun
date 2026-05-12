@@ -18,7 +18,7 @@ import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { AIModelConfig, ModeConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { notificationService } from '@/shared/notification-system';
-import type { McpToolInfo } from '@/shared/types/agent-api';
+import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import { createLogger } from '@/shared/utils/logger';
 import { useNurseryStore } from '../nurseryStore';
 import { formatTokenCount } from './useTokenEstimate';
@@ -29,7 +29,7 @@ interface ToolInfo {
   name: string;
   description: string;
   is_readonly: boolean;
-  mcp_info?: McpToolInfo;
+  dynamic_info?: DynamicToolInfo;
 }
 
 type TemplateDetail =
@@ -40,15 +40,15 @@ type TemplateDetail =
 type ModelSlot = 'primary' | 'fast';
 
 function isMcpTool(tool: ToolInfo): boolean {
-  return Boolean(tool.mcp_info);
+  return tool.dynamic_info?.provider_kind === 'mcp' && Boolean(tool.dynamic_info.mcp);
 }
 
 function getMcpServerName(tool: ToolInfo): string {
-  return tool.mcp_info?.server_id ?? tool.name;
+  return tool.dynamic_info?.mcp?.server_id ?? tool.name;
 }
 
 function getMcpShortName(tool: ToolInfo): string {
-  return tool.mcp_info?.tool_name ?? tool.name;
+  return tool.dynamic_info?.mcp?.tool_name ?? tool.name;
 }
 
 type CtxSegKey = 'systemPrompt' | 'toolInjection' | 'rules' | 'memories';

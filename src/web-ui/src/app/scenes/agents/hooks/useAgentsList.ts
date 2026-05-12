@@ -5,7 +5,7 @@ import { SubagentAPI } from '@/infrastructure/api/service-api/SubagentAPI';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import type { ModeConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
 import { useNotification } from '@/shared/notification-system';
-import type { McpToolInfo } from '@/shared/types/agent-api';
+import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { enrichCapabilities } from '../utils';
 import { STATIC_HIDDEN_AGENT_IDS, isAgentInOverviewZone } from '../agentVisibility';
@@ -19,7 +19,7 @@ export interface ToolInfo {
   name: string;
   description: string;
   is_readonly: boolean;
-  mcp_info?: McpToolInfo;
+  dynamic_info?: DynamicToolInfo;
 }
 
 interface UseAgentsListOptions {
