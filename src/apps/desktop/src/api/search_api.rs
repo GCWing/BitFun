@@ -77,12 +77,6 @@ async fn workspace_search_unavailable_message(
     state: &State<'_, AppState>,
     root_path: &str,
 ) -> Option<String> {
-    if !workspace_search_feature_enabled().await {
-        return Some(
-            "Workspace search is disabled. Enable it in Settings > Session Config to use accelerated workspace search.".to_string(),
-        );
-    }
-
     if is_remote_path(root_path.trim()).await {
         if lookup_remote_connection(root_path.trim()).await.is_none() {
             return Some("Remote workspace is not registered with BitFun SSH state".to_string());
@@ -93,6 +87,12 @@ async fn workspace_search_unavailable_message(
             return Some("Remote workspace search services are unavailable".to_string());
         }
         return None;
+    }
+
+    if !workspace_search_feature_enabled().await {
+        return Some(
+            "Workspace search is disabled. Enable it in Settings > Session Config to use accelerated workspace search.".to_string(),
+        );
     }
 
     if !workspace_search_daemon_available() {

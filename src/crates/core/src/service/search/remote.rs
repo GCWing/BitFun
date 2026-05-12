@@ -11,8 +11,8 @@ use crate::service::search::flashgrep::{
     drain_content_length_messages, ClientCapabilities, ClientInfo, ConsistencyMode, GlobOutcome,
     GlobParams, GlobRequest, InitializeParams, OpenRepoParams, PathScope, ProtocolClient,
     QuerySpec, RefreshPolicyConfig, RepoConfig, RepoRef, RepoStatus, Request, Response,
-    SearchModeConfig, SearchOutcome, SearchParams, SearchRequest, SearchResults, TaskRef,
-    TaskStatus,
+    SearchBackend, SearchModeConfig, SearchOutcome, SearchParams, SearchRequest, SearchResults,
+    TaskRef, TaskStatus,
 };
 use crate::service::search::flashgrep::{error::AppError, FlashgrepRepoSession};
 use crate::service::search::{
@@ -617,8 +617,9 @@ impl RemoteWorkspaceSearchService {
             request.exclude_file_types,
         )?;
         let max_results = request.max_results.filter(|limit| *limit > 0);
+        let primary_search_mode = remote_stdio_search_mode(request.output_mode);
         let query = QuerySpec {
-            pattern: request.pattern,
+            pattern: request.pattern.clone(),
             patterns: Vec::new(),
             case_insensitive: !request.case_sensitive,
             multiline: request.multiline,
@@ -631,12 +632,96 @@ impl RemoteWorkspaceSearchService {
             top_k_tokens: 6,
             max_count: None,
             global_max_results: max_results,
-            search_mode: remote_stdio_search_mode(request.output_mode),
+            search_mode: primary_search_mode,
         };
 
         let output_mode = request.output_mode;
-        let (backend, repo_status, raw_results) = session.search(query, scope).await?;
+        let (backend, repo_status, mut raw_results) = session.search(query, scope.clone()).await?;
+        // The bundled flashgrep daemon (v0.2.6) only emits summary statistics
+        // (`matched_lines`/`matched_occurrences`) when it falls back to the
+        // file-system scanner because the workspace has not been indexed yet.
+        // In that mode `LineMatches` returns no `hits`, no `matched_paths`,
+        // and no `file_counts`, leaving the UI showing "no results" even
+        // though the daemon reports thousands of matches. Re-issue the same
+        // query as `FilesWithMatches`, which the daemon does populate with
+        // the matching file paths, so the user at least sees the hit list
+        // while the index is being built.
+        let primary_has_details = !raw_results.hits.is_empty()
+            || !raw_results.file_counts.is_empty()
+            || !raw_results.file_match_counts.is_empty()
+            || !raw_results.matched_paths.is_empty();
+        if matches!(backend, SearchBackend::ScanFallback)
+            && !primary_has_details
+            && raw_results.matched_lines > 0
+            && !matches!(primary_search_mode, SearchModeConfig::FilesWithMatches)
+        {
+            log::info!(
+                "Remote workspace content search re-issuing as FilesWithMatches because daemon ScanFallback returned only summary statistics: pattern_chars={}, primary_search_mode={:?}, primary_matched_lines={}, primary_matched_occurrences={}",
+                request.pattern.chars().count(),
+                primary_search_mode,
+                raw_results.matched_lines,
+                raw_results.matched_occurrences,
+            );
+            let fallback_query = QuerySpec {
+                pattern: request.pattern.clone(),
+                patterns: Vec::new(),
+                case_insensitive: !request.case_sensitive,
+                multiline: request.multiline,
+                dot_matches_new_line: request.multiline,
+                fixed_strings: !request.use_regex,
+                word_regexp: request.whole_word,
+                line_regexp: false,
+                before_context: request.before_context,
+                after_context: request.after_context,
+                top_k_tokens: 6,
+                max_count: None,
+                global_max_results: max_results,
+                search_mode: SearchModeConfig::FilesWithMatches,
+            };
+            match session.search(fallback_query, scope).await {
+                Ok((_, _, fallback_results)) => {
+                    log::info!(
+                        "Remote workspace content search FilesWithMatches fallback succeeded: matched_paths={}, matched_lines={}, matched_occurrences={}",
+                        fallback_results.matched_paths.len(),
+                        fallback_results.matched_lines,
+                        fallback_results.matched_occurrences,
+                    );
+                    raw_results = fallback_results;
+                }
+                Err(error) => {
+                    // Surface the failure instead of silently keeping the
+                    // summary-only `raw_results` from the primary LineMatches
+                    // call. Otherwise the converter produces an empty result
+                    // list while `matched_lines > 0`, recreating the original
+                    // "found N lines but no results" UI inconsistency.
+                    log::warn!(
+                        "Remote workspace content search FilesWithMatches fallback failed: pattern_chars={}, primary_matched_lines={}, primary_matched_occurrences={}, error={}",
+                        request.pattern.chars().count(),
+                        raw_results.matched_lines,
+                        raw_results.matched_occurrences,
+                        error,
+                    );
+                    return Err(format!(
+                        "Remote workspace search returned only summary statistics for {primary_matched_lines} line(s) and the file-list fallback failed: {error}",
+                        primary_matched_lines = raw_results.matched_lines,
+                    ));
+                }
+            }
+        }
+
         let mut results = convert_stdio_search_results(&raw_results, output_mode);
+        log::debug!(
+            "Remote workspace content search converted: backend={:?}, repo_phase={:?}, hits={}, file_counts={}, file_match_counts={}, matched_paths={}, converted_results={}, matched_lines={}, matched_occurrences={}",
+            backend,
+            repo_status.phase,
+            raw_results.hits.len(),
+            raw_results.file_counts.len(),
+            raw_results.file_match_counts.len(),
+            raw_results.matched_paths.len(),
+            results.len(),
+            raw_results.matched_lines,
+            raw_results.matched_occurrences
+        );
         let truncated = max_results
             .map(|limit| results.len() >= limit)
             .unwrap_or(false);
@@ -1287,7 +1372,23 @@ fn convert_stdio_search_results(
 ) -> Vec<FileSearchResult> {
     match output_mode {
         ContentSearchOutputMode::Content => {
-            convert_stdio_hits_to_file_search_results(search_results)
+            let hit_results = convert_stdio_hits_to_file_search_results(search_results);
+            if !hit_results.is_empty() {
+                return hit_results;
+            }
+
+            let count_results = convert_stdio_file_counts_to_search_results(search_results);
+            if !count_results.is_empty() {
+                return count_results;
+            }
+
+            let match_count_results =
+                convert_stdio_file_match_counts_to_search_results(search_results);
+            if !match_count_results.is_empty() {
+                return match_count_results;
+            }
+
+            convert_stdio_matched_paths_to_file_only_results(search_results)
         }
         ContentSearchOutputMode::Count => {
             convert_stdio_file_counts_to_search_results(search_results)
@@ -1323,6 +1424,30 @@ fn convert_stdio_file_counts_to_search_results(
             match_type: SearchMatchType::Content,
             line_number: None,
             matched_content: Some(count.matched_lines.to_string()),
+            preview_before: None,
+            preview_inside: None,
+            preview_after: None,
+        })
+        .collect()
+}
+
+fn convert_stdio_file_match_counts_to_search_results(
+    search_results: &SearchResults,
+) -> Vec<FileSearchResult> {
+    search_results
+        .file_match_counts
+        .iter()
+        .map(|count| FileSearchResult {
+            path: count.path.clone(),
+            name: Path::new(&count.path)
+                .file_name()
+                .and_then(|file_name| file_name.to_str())
+                .unwrap_or(&count.path)
+                .to_string(),
+            is_directory: false,
+            match_type: SearchMatchType::Content,
+            line_number: None,
+            matched_content: Some(count.matched_occurrences.to_string()),
             preview_before: None,
             preview_inside: None,
             preview_after: None,
