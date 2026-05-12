@@ -67,6 +67,13 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
   completedFailureReason,
 }) => {
   const { t } = useTranslation('flow-chat');
+  const { elapsedMs, remainingMs } = useLiveElapsedTime(
+    startTime,
+    isRunning,
+    timeoutMs,
+    false,
+  );
+
   const {
     isTimeoutDisabled,
     isToggling,
@@ -75,14 +82,7 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
     extendTimeout,
     closePopover,
     remainingAtDisable,
-  } = useSubagentTimeoutControl(subagentSessionId, isRunning, timeoutMs, null);
-
-  const { elapsedMs, remainingMs } = useLiveElapsedTime(
-    startTime,
-    isRunning,
-    timeoutMs,
-    isTimeoutDisabled,
-  );
+  } = useSubagentTimeoutControl(subagentSessionId, isRunning, timeoutMs, remainingMs);
 
   const popoverRef = useRef<HTMLDivElement>(null);
 

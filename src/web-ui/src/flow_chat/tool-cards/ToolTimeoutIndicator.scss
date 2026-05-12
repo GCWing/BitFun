@@ -130,7 +130,8 @@
   right: 0;
   top: calc(100% + 4px);
   z-index: 10;
-  min-width: 160px;
+  width: max-content;
+  max-width: 150px;
   padding: 4px 0;
   border-radius: 6px;
   background: var(--color-bg-elevated);
@@ -150,6 +151,8 @@
   background: transparent;
   border: none;
   text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
 
   &:hover {
     background: var(--element-bg-soft);
