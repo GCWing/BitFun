@@ -484,7 +484,11 @@
     "buildDate": "构建日期",
     "commit": "提交",
     "branch": "分支",
-    "copyright": "© 2025 BitFun. All rights reserved."
+    "copyright": "© 2025 BitFun. All rights reserved.",
+    "openSource": "开源软件",
+    "openSourceDesc": "BitFun 使用了以下开源组件：",
+    "openSourceFootnote": "点击组件名称可打开其官方页面获取更多信息。",
+    "userAgreement": "用户协议"
   },
   "actions": {
     "confirm": "确认",
