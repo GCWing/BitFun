@@ -192,7 +192,7 @@ export default class EntryAbility extends RustAbility {
 
   private shareListening() {
     hilog.info(0x0000, 'vnext', 'shareListening');
-    if (this.remoteUrl.length !=0 || !this.shareStatus) {
+    if (this.remoteUrl.length != 0 && !this.shareStatus) {
       harmonyShare.on('knockShare', this.sendOnlyCallback);
       this.shareStatus = true;
     }
@@ -202,7 +202,7 @@ export default class EntryAbility extends RustAbility {
     this.shareStatus = false;
   }
   private sendOnlyCallback = (sharableTable: harmonyShare.SharableTarget) => {
-    if (this.remoteUrl.length == 0) {
+    if (this.remoteUrl.length != 0) {
       let content = this.remoteUrl;
       let shareData: systemShare.SharedData = new systemShare.SharedData({
         utd: uniformTypeDescriptor.UniformDataType.HYPERLINK,
