@@ -707,10 +707,15 @@
     "capacityQueue": {
       "title": "Reviewers waiting for capacity",
       "pausedTitle": "Queue paused",
+      "activeReviewerTitle": "Waiting for running reviewers",
+      "providerTitle": "Waiting for model capacity",
       "detail": "Queue wait does not count against reviewer runtime.",
+      "activeReviewerDetail": "Queued reviewers start when a running reviewer frees capacity. Queue wait does not count against reviewer runtime.",
+      "providerDetail": "BitFun is waiting for temporary model capacity. This wait does not count against reviewer runtime.",
       "reason": "Reason: {{reason}}",
       "elapsed": "Waited {{elapsed}}",
       "elapsedWithMax": "Waited {{elapsed}} of {{max}}",
+      "activeReviewerCount": "Running reviewers: {{count}}",
       "reasons": {
         "providerRateLimit": "provider rate limit",
         "providerConcurrencyLimit": "provider concurrency limit",

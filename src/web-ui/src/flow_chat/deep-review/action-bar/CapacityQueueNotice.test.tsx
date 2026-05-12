@@ -46,8 +46,8 @@ describe('CapacityQueueNotice', () => {
       />,
     );
 
-    expect(html).toContain('Reviewers waiting for capacity');
-    expect(html).toContain('Queue wait does not count against reviewer runtime.');
+    expect(html).toContain('Waiting for model capacity');
+    expect(html).toContain('BitFun is waiting for temporary model capacity.');
     expect(html).toContain('Reason: provider concurrency limit');
     expect(html).toContain('The model provider rejected another concurrent reviewer.');
     expect(html).toContain('Waited 12s of 1m 0s');
@@ -79,7 +79,36 @@ describe('CapacityQueueNotice', () => {
 
     expect(html).toContain('Reason: previous launch batch still running');
     expect(html).toContain('Waiting preserves the planned review order');
-    expect(html).toContain('Waited 4s of 1m 0s');
+    expect(html).toContain('Waiting for running reviewers');
+    expect(html).toContain('Running reviewers: 2');
+    expect(html).not.toContain('Waited 4s of 1m 0s');
+  });
+
+  it('explains active-reviewer waits without presenting max wait as a hard timeout', () => {
+    const html = renderToStaticMarkup(
+      <CapacityQueueNotice
+        capacityQueueState={{
+          status: 'queued_for_capacity',
+          reason: 'local_concurrency_cap',
+          queuedReviewerCount: 1,
+          activeReviewerCount: 2,
+          queueElapsedMs: 70_000,
+          maxQueueWaitSeconds: 60,
+        }}
+        supportsInlineQueueControls
+        onPauseQueue={vi.fn()}
+        onContinueQueue={vi.fn()}
+        onSkipOptionalQueuedReviewers={vi.fn()}
+        onCancelQueuedReviewers={vi.fn()}
+        onRunSlowerNextTime={vi.fn()}
+        onOpenReviewSettings={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain('Waiting for running reviewers');
+    expect(html).toContain('Queued reviewers start when a running reviewer frees capacity.');
+    expect(html).toContain('Running reviewers: 2');
+    expect(html).not.toContain('Waited 1m 10s of 1m 0s');
   });
 
   it('renders the specific reviewers currently waiting', () => {

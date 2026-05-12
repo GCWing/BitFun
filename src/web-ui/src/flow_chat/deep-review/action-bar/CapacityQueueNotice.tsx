@@ -64,6 +64,31 @@ const CAPACITY_QUEUE_REASON_DETAIL_KEYS: Record<DeepReviewCapacityQueueReason, {
   },
 };
 
+type CapacityQueueWaitMode = 'active_reviewer' | 'provider_capacity' | 'generic';
+
+function getCapacityQueueWaitMode(
+  capacityQueueState: DeepReviewCapacityQueueState,
+): CapacityQueueWaitMode {
+  if (
+    (capacityQueueState.reason === 'local_concurrency_cap'
+      || capacityQueueState.reason === 'launch_batch_blocked')
+    && (capacityQueueState.activeReviewerCount ?? 0) > 0
+  ) {
+    return 'active_reviewer';
+  }
+
+  if (
+    capacityQueueState.reason === 'provider_rate_limit'
+    || capacityQueueState.reason === 'provider_concurrency_limit'
+    || capacityQueueState.reason === 'retry_after'
+    || capacityQueueState.reason === 'temporary_overload'
+  ) {
+    return 'provider_capacity';
+  }
+
+  return 'generic';
+}
+
 function reviewerLabel(
   reviewer: NonNullable<DeepReviewCapacityQueueState['waitingReviewers']>[number],
 ): string {
@@ -97,7 +122,40 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
   const capacityQueueMaxWaitLabel = capacityQueueState.maxQueueWaitSeconds !== undefined
     ? formatElapsedTime(capacityQueueState.maxQueueWaitSeconds * 1000)
     : null;
+  const capacityQueueWaitMode = getCapacityQueueWaitMode(capacityQueueState);
+  const activeReviewerCount = capacityQueueState.activeReviewerCount ?? 0;
+  const capacityQueueTitle = capacityQueueState.status === 'paused_by_user'
+    ? t('deepReviewActionBar.capacityQueue.pausedTitle', {
+      defaultValue: 'Queue paused',
+    })
+    : capacityQueueWaitMode === 'active_reviewer'
+      ? t('deepReviewActionBar.capacityQueue.activeReviewerTitle', {
+        defaultValue: 'Waiting for running reviewers',
+      })
+      : capacityQueueWaitMode === 'provider_capacity'
+        ? t('deepReviewActionBar.capacityQueue.providerTitle', {
+          defaultValue: 'Waiting for model capacity',
+        })
+        : t('deepReviewActionBar.capacityQueue.title', {
+          defaultValue: 'Reviewers waiting for capacity',
+        });
+  const capacityQueueDetail = capacityQueueWaitMode === 'active_reviewer'
+    ? t('deepReviewActionBar.capacityQueue.activeReviewerDetail', {
+      defaultValue: 'Queued reviewers start when a running reviewer frees capacity. Queue wait does not count against reviewer runtime.',
+    })
+    : capacityQueueWaitMode === 'provider_capacity'
+      ? t('deepReviewActionBar.capacityQueue.providerDetail', {
+        defaultValue: 'BitFun is waiting for temporary model capacity. This wait does not count against reviewer runtime.',
+      })
+      : t('deepReviewActionBar.capacityQueue.detail', {
+        defaultValue: 'Queue wait does not count against reviewer runtime.',
+      });
   const waitingReviewers = capacityQueueState.waitingReviewers ?? [];
+  const showCapacityQueueMeta = Boolean(
+    capacityQueueReasonLabel
+      || capacityQueueElapsedLabel
+      || capacityQueueWaitMode === 'active_reviewer',
+  );
 
   return (
     <div className="deep-review-action-bar__capacity-queue" aria-live="polite">
@@ -105,20 +163,12 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
         <Clock size={14} className="deep-review-action-bar__capacity-queue-icon" />
         <div className="deep-review-action-bar__capacity-queue-copy">
           <span className="deep-review-action-bar__capacity-queue-title">
-            {capacityQueueState.status === 'paused_by_user'
-              ? t('deepReviewActionBar.capacityQueue.pausedTitle', {
-                defaultValue: 'Queue paused',
-              })
-              : t('deepReviewActionBar.capacityQueue.title', {
-                defaultValue: 'Reviewers waiting for capacity',
-              })}
+            {capacityQueueTitle}
           </span>
           <span className="deep-review-action-bar__capacity-queue-detail">
-            {t('deepReviewActionBar.capacityQueue.detail', {
-              defaultValue: 'Queue wait does not count against reviewer runtime.',
-            })}
+            {capacityQueueDetail}
           </span>
-          {(capacityQueueReasonLabel || capacityQueueElapsedLabel) && (
+          {showCapacityQueueMeta && (
             <span className="deep-review-action-bar__capacity-queue-meta">
               {capacityQueueReasonLabel && (
                 <span className="deep-review-action-bar__capacity-queue-chip">
@@ -130,7 +180,7 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
               )}
               {capacityQueueElapsedLabel && (
                 <span className="deep-review-action-bar__capacity-queue-chip">
-                  {capacityQueueMaxWaitLabel
+                  {capacityQueueMaxWaitLabel && capacityQueueWaitMode !== 'active_reviewer'
                     ? t('deepReviewActionBar.capacityQueue.elapsedWithMax', {
                       elapsed: capacityQueueElapsedLabel,
                       max: capacityQueueMaxWaitLabel,
@@ -140,6 +190,14 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
                       elapsed: capacityQueueElapsedLabel,
                       defaultValue: `Waited ${capacityQueueElapsedLabel}`,
                     })}
+                </span>
+              )}
+              {capacityQueueWaitMode === 'active_reviewer' && activeReviewerCount > 0 && (
+                <span className="deep-review-action-bar__capacity-queue-chip">
+                  {t('deepReviewActionBar.capacityQueue.activeReviewerCount', {
+                    count: activeReviewerCount,
+                    defaultValue: `Running reviewers: ${activeReviewerCount}`,
+                  })}
                 </span>
               )}
             </span>

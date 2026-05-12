@@ -474,8 +474,8 @@ describeWithJsdom('DeepReviewActionBar', () => {
       root.render(<DeepReviewActionBar />);
     });
 
-    expect(container.textContent).toContain('Reviewers waiting for capacity');
-    expect(container.textContent).toContain('Queue wait does not count against reviewer runtime.');
+    expect(container.textContent).toContain('Waiting for model capacity');
+    expect(container.textContent).toContain('BitFun is waiting for temporary model capacity.');
     expect(container.textContent).toContain('Reason: provider concurrency limit');
     expect(container.textContent).toContain('Waited 12s of 1m 0s');
     expect(container.textContent).toContain('Your active session is busy.');

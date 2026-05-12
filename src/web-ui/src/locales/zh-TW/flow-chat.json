@@ -707,10 +707,15 @@
     "capacityQueue": {
       "title": "審核員正在等待容量",
       "pausedTitle": "佇列已暫停",
+      "activeReviewerTitle": "等待執行中的審核員",
+      "providerTitle": "等待模型容量",
       "detail": "排隊等待時間不會計入審核員執行時長。",
+      "activeReviewerDetail": "排隊審核員會在執行中的審核員釋放容量後繼續啟動。排隊等待時間不會計入審核員執行時長。",
+      "providerDetail": "BitFun 正在等待暫時模型容量恢復。這裡的等待不會計入審核員執行時長。",
       "reason": "原因：{{reason}}",
       "elapsed": "已等待 {{elapsed}}",
       "elapsedWithMax": "已等待 {{elapsed}} / {{max}}",
+      "activeReviewerCount": "執行中的審核員：{{count}}",
       "reasons": {
         "providerRateLimit": "模型服務限速",
         "providerConcurrencyLimit": "模型服務並發限制",

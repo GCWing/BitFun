@@ -707,10 +707,15 @@
     "capacityQueue": {
       "title": "审核员正在等待容量",
       "pausedTitle": "队列已暂停",
+      "activeReviewerTitle": "等待运行中的审核员",
+      "providerTitle": "等待模型容量",
       "detail": "排队等待时间不会计入审核员运行时长。",
+      "activeReviewerDetail": "排队审核员会在运行中的审核员释放容量后继续启动。排队等待时间不会计入审核员运行时长。",
+      "providerDetail": "BitFun 正在等待临时模型容量恢复。这里的等待不会计入审核员运行时长。",
       "reason": "原因：{{reason}}",
       "elapsed": "已等待 {{elapsed}}",
       "elapsedWithMax": "已等待 {{elapsed}} / {{max}}",
+      "activeReviewerCount": "运行中的审核员：{{count}}",
       "reasons": {
         "providerRateLimit": "模型服务限速",
         "providerConcurrencyLimit": "模型服务并发限制",
