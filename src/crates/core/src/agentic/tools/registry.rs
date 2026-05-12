@@ -327,7 +327,9 @@ mod tests {
         }
 
         fn dynamic_provider_id(&self) -> Option<&str> {
-            self.dynamic_info.as_ref().map(|info| info.provider_id.as_str())
+            self.dynamic_info
+                .as_ref()
+                .map(|info| info.provider_id.as_str())
         }
 
         fn dynamic_tool_info(&self) -> Option<DynamicToolInfo> {

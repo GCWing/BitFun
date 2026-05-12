@@ -116,12 +116,12 @@
       height: min(var(--bitfun-agent-companion-pet-height, 96px), 100vh);
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
   }
 
   &__bubble-title,
-  &__bubble-status,
-  &__bubble-output {
+  &__bubble-status {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -132,6 +132,7 @@
     font-size: 11px;
     line-height: 1.25;
     font-weight: 650;
+    min-width: 0;
   }
 
   &__bubble-status {
@@ -142,15 +143,24 @@
   }
 
   &__bubble-output {
+    display: block;
     margin-top: 6px;
     min-height: 0;
     flex: 1;
     font-size: 10px;
     line-height: 1.35;
     color: rgba(31, 41, 55, 0.82);
-    white-space: normal;
-    text-overflow: clip;
+    white-space: pre-wrap;
     word-break: break-word;
+    overflow-wrap: anywhere;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
 
     &--typing::after {
       content: "";

@@ -118,6 +118,30 @@ async fn anthropic_extended_thinking_sse_produces_reasoning_and_text() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn anthropic_stream_closed_after_finish_reason_is_successful() {
+    let output = run_stream_fixture_with_options(
+        StreamFixtureProvider::Anthropic,
+        "stream/anthropic/closed_after_message_delta.sse",
+        StreamFixtureRunOptions {
+            anthropic_inline_think_in_text: false,
+            ..Default::default()
+        },
+    )
+    .await;
+
+    let result = output
+        .result
+        .expect("stream should complete after message_delta stop_reason");
+
+    assert_eq!(result.full_text, "Recovered title");
+    assert!(result.tool_calls.is_empty());
+    assert_eq!(
+        result.usage.as_ref().map(|usage| usage.total_token_count),
+        Some(7)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn anthropic_parallel_tool_use_keeps_arguments_separate_by_index() {
     let output = run_stream_fixture_with_options(
         StreamFixtureProvider::Anthropic,

@@ -12,6 +12,7 @@ import { ConfirmDialogRenderer } from '../component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { syncAgentCompanionDesktopWindow } from '@/infrastructure/config/services/AgentCompanionWindowService';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 import { buildAgentCompanionActivity, subscribeAgentCompanionActivity } from '@/flow_chat/utils/agentCompanionActivity';
 import { emitAgentCompanionActivity } from '@/flow_chat/services/AgentCompanionActivityBridge';
 import { FlowChatStore } from '@/flow_chat/store/FlowChatStore';
@@ -165,6 +166,8 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!isTauriRuntime()) return;
+
     const emitCurrentAgentCompanionActivity = () => {
       void emitAgentCompanionActivity(buildAgentCompanionActivity());
     };

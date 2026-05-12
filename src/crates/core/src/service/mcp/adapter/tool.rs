@@ -5,9 +5,9 @@
 use crate::agentic::tools::framework::{
     DynamicToolInfo, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::service::mcp::{build_mcp_tool_name, McpToolInfo};
 use crate::service::mcp::protocol::{MCPTool, MCPToolResult};
 use crate::service::mcp::server::MCPConnection;
+use crate::service::mcp::{build_mcp_tool_name, McpToolInfo};
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
 use log::{debug, error, info, warn};

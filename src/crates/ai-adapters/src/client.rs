@@ -17,9 +17,13 @@ use crate::types::ProxyConfig;
 use crate::types::*;
 use anyhow::Result;
 use format::ApiFormat;
+use log::warn;
 use reqwest::Client;
 use std::time::Duration;
 use tokio::sync::mpsc;
+
+const SEND_MESSAGE_STREAM_ATTEMPTS: usize = 10;
+const SEND_MESSAGE_RETRY_BASE_DELAY_MS: u64 = 500;
 
 /// Streamed response result with the parsed stream and optional raw SSE receiver.
 pub struct StreamResponse {
@@ -96,7 +100,7 @@ impl AIClient {
         tools: Option<Vec<ToolDefinition>>,
         extra_body: Option<serde_json::Value>,
     ) -> Result<StreamResponse> {
-        let max_tries = 3;
+        let max_tries = 10;
         match ApiFormat::parse(&self.config.format)? {
             ApiFormat::OpenAIChat => {
                 openai::chat::send_stream(self, messages, tools, extra_body, max_tries).await
@@ -132,10 +136,36 @@ impl AIClient {
         tools: Option<Vec<ToolDefinition>>,
         extra_body: Option<serde_json::Value>,
     ) -> Result<GeminiResponse> {
-        let stream_response = self
-            .send_message_stream_with_extra_body(messages, tools, extra_body)
-            .await?;
-        response_aggregator::aggregate_stream_response(stream_response).await
+        for attempt in 0..SEND_MESSAGE_STREAM_ATTEMPTS {
+            let stream_response = self
+                .send_message_stream_with_extra_body(
+                    messages.clone(),
+                    tools.clone(),
+                    extra_body.clone(),
+                )
+                .await?;
+
+            match response_aggregator::aggregate_stream_response(stream_response).await {
+                Ok(response) => return Ok(response),
+                Err(error)
+                    if attempt < SEND_MESSAGE_STREAM_ATTEMPTS - 1
+                        && is_transient_stream_error(&error.to_string()) =>
+                {
+                    let delay_ms = send_message_retry_delay_ms(attempt);
+                    warn!(
+                        "Retrying aggregated AI stream after transient error: attempt={}/{}, delay_ms={}, error={}",
+                        attempt + 1,
+                        SEND_MESSAGE_STREAM_ATTEMPTS,
+                        delay_ms,
+                        error
+                    );
+                    tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+
+        unreachable!("send_message retry loop always returns")
     }
 
     pub async fn test_connection(&self) -> Result<ConnectionTestResult> {
@@ -158,9 +188,99 @@ impl AIClient {
     }
 }
 
+fn send_message_retry_delay_ms(attempt_index: usize) -> u64 {
+    SEND_MESSAGE_RETRY_BASE_DELAY_MS * (1u64 << attempt_index.min(3))
+}
+
+fn is_transient_stream_error(error_message: &str) -> bool {
+    let msg = error_message.to_lowercase();
+
+    let non_retryable_keywords = [
+        "invalid api key",
+        "unauthorized",
+        "forbidden",
+        "model not found",
+        "unsupported model",
+        "invalid request",
+        "bad request",
+        "prompt is too long",
+        "content policy",
+        "proxy authentication required",
+        "provider quota",
+        "provider billing",
+        "insufficient_quota",
+        "insufficient quota",
+        "insufficient balance",
+        "not_enough_balance",
+        "not enough balance",
+        "余额不足",
+        "无可用资源包",
+        "账户已欠费",
+        "code=1113",
+        "\"code\":\"1113\"",
+        "client error 400",
+        "client error 401",
+        "client error 402",
+        "client error 403",
+        "client error 404",
+        "client error 413",
+        "client error 422",
+        "sse parsing error",
+        "schema error",
+        "unknown api format",
+    ];
+
+    if non_retryable_keywords.iter().any(|k| msg.contains(k)) {
+        return false;
+    }
+
+    [
+        "transport error",
+        "error decoding response body",
+        "stream closed before response completed",
+        "stream processing error",
+        "sse stream error",
+        "sse error",
+        "sse timeout",
+        "stream data timeout",
+        "timeout",
+        "request timeout",
+        "deadline exceeded",
+        "connection reset",
+        "connection closed",
+        "broken pipe",
+        "unexpected eof",
+        "connection refused",
+        "socket closed",
+        "temporarily unavailable",
+        "service unavailable",
+        "bad gateway",
+        "gateway timeout",
+        "overloaded",
+        "proxy",
+        "tunnel",
+        "dns",
+        "network",
+        "econnreset",
+        "econnrefused",
+        "etimedout",
+        "rate limit",
+        "too many requests",
+        "408",
+        "409",
+        "425",
+        "429",
+        "502",
+        "503",
+        "504",
+    ]
+    .iter()
+    .any(|k| msg.contains(k))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::AIClient;
+    use super::{is_transient_stream_error, AIClient};
     use crate::providers::{anthropic, gemini, gemini::GeminiMessageConverter, openai};
     use crate::types::ReasoningMode;
     use crate::types::{AIConfig, ToolDefinition};
@@ -819,5 +939,35 @@ mod tests {
             .expect("request should build");
 
         assert_eq!(request.timeout(), None);
+    }
+
+    #[test]
+    fn aggregated_send_message_retries_transient_stream_errors() {
+        for msg in [
+            "SSE Error: stream closed before response completed",
+            "Transport Error: error decoding response body",
+            "Anthropic API is temporarily overloaded",
+            "Gemini SSE stream timeout after 60s",
+            "OpenAI Streaming API error 503: service unavailable",
+        ] {
+            assert!(
+                is_transient_stream_error(msg),
+                "expected transient stream error: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn aggregated_send_message_does_not_retry_permanent_errors() {
+        for msg in [
+            "OpenAI Streaming API client error 401: unauthorized",
+            "SSE Parsing Error: missing field choices",
+            "Provider error: provider=glm, code=1113, message=余额不足或无可用资源包",
+        ] {
+            assert!(
+                !is_transient_stream_error(msg),
+                "expected permanent stream error: {msg}"
+            );
+        }
     }
 }

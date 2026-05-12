@@ -1,7 +1,6 @@
 use bitfun_core::agentic::context_profile::{
     ContextProfile, ContextProfilePolicy, ModelCapabilityProfile,
 };
-use bitfun_core::agentic::session::MicrocompactConfig;
 
 #[test]
 fn context_profile_maps_long_running_agents_to_long_task_profile() {
@@ -52,17 +51,8 @@ fn context_profile_long_task_policy_preserves_current_context_defaults() {
         false,
         ModelCapabilityProfile::Standard,
     );
-    let default_microcompact = MicrocompactConfig::default();
 
     assert_eq!(policy.profile, ContextProfile::LongTask);
-    assert_eq!(
-        policy.microcompact_config().keep_recent,
-        default_microcompact.keep_recent
-    );
-    assert!(
-        (policy.microcompact_config().trigger_ratio - default_microcompact.trigger_ratio).abs()
-            < f32::EPSILON
-    );
     assert_eq!(policy.compression_contract_limit, 8);
     assert_eq!(policy.subagent_concurrency_cap, 5);
     assert_eq!(policy.repeated_tool_signature_threshold, 3);
@@ -75,8 +65,6 @@ fn context_profile_conversation_policy_keeps_more_recent_chat_context() {
         ContextProfilePolicy::for_agent_context("Cowork", false, ModelCapabilityProfile::Standard);
 
     assert_eq!(policy.profile, ContextProfile::Conversation);
-    assert_eq!(policy.microcompact_config().keep_recent, 12);
-    assert!((policy.microcompact_config().trigger_ratio - 0.65).abs() < f32::EPSILON);
     assert_eq!(policy.compression_contract_limit, 4);
     assert_eq!(policy.subagent_concurrency_cap, 2);
     assert_eq!(policy.repeated_tool_signature_threshold, 4);

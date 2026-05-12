@@ -19,8 +19,8 @@ use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
-use bitfun_core::service::config::types::AIExperienceConfig;
 use bitfun_core::service::config::app_language::get_app_language;
+use bitfun_core::service::config::types::AIExperienceConfig;
 use bitfun_core::service::i18n::LocaleId;
 
 use crate::api::app_state::AppState;
@@ -165,12 +165,9 @@ async fn tray_toggle_desktop_pet(app: &AppHandle) -> Result<(), String> {
 
 /// Build and attach the system tray icon to the Tauri application.
 pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let pet_item = CheckMenuItemBuilder::with_id(
-        "toggle_desktop_pet",
-        STRINGS_EN_US.desktop_pet,
-    )
-    .checked(false)
-    .build(app)?;
+    let pet_item = CheckMenuItemBuilder::with_id("toggle_desktop_pet", STRINGS_EN_US.desktop_pet)
+        .checked(false)
+        .build(app)?;
     let show_item = MenuItemBuilder::with_id("show_window", STRINGS_EN_US.show_app).build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", STRINGS_EN_US.quit_app).build(app)?;
 

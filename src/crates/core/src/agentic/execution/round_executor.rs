@@ -32,7 +32,7 @@ pub struct RoundExecutor {
 }
 
 impl RoundExecutor {
-    const MAX_RETRIES_WITHOUT_OUTPUT: usize = 1;
+    const MAX_STREAM_ATTEMPTS: usize = 10;
     const RETRY_BASE_DELAY_MS: u64 = 500;
 
     fn has_user_visible_assistant_text(text: &str) -> bool {
@@ -102,7 +102,7 @@ impl RoundExecutor {
         )
         .await;
 
-        let max_attempts = Self::MAX_RETRIES_WITHOUT_OUTPUT + 1;
+        let max_attempts = Self::MAX_STREAM_ATTEMPTS;
         let mut attempt_index = 0usize;
         let (stream_result, send_to_stream_ms, stream_processing_ms) = loop {
             // Check cancellation before opening a model stream. This catches
@@ -145,22 +145,11 @@ impl RoundExecutor {
                 Err(e) => {
                     error!("AI request failed: {}", e);
                     let err_msg = e.to_string();
-                    let can_retry = attempt_index < max_attempts - 1
-                        && Self::is_transient_network_error(&err_msg);
-                    if can_retry {
-                        let delay_ms = Self::retry_delay_ms(attempt_index);
-                        warn!(
-                            "Retrying request after transient error with no output: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
-                            context.session_id,
-                            round_id,
-                            attempt_index + 1,
-                            max_attempts,
-                            delay_ms,
+                    if Self::is_transient_network_error(&err_msg) {
+                        return Err(BitFunError::AIClient(format!(
+                            "AI stream connection retry budget exhausted: {}",
                             err_msg
-                        );
-                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-                        attempt_index += 1;
-                        continue;
+                        )));
                     }
                     return Err(BitFunError::AIClient(err_msg));
                 }
@@ -208,29 +197,24 @@ impl RoundExecutor {
             {
                 Ok(result) => {
                     let stream_processing_ms = elapsed_ms_u64(stream_started_at);
-                    if Self::is_interrupted_invalid_tool_only(&result) {
+                    if Self::has_interrupted_invalid_tool_calls(&result) {
                         let err_msg = result.partial_recovery_reason.clone().unwrap_or_else(|| {
                             "Interrupted while streaming tool arguments".to_string()
                         });
-                        self.emit_failed_partial_tool_calls(
-                            &context,
-                            &result.tool_calls,
-                            &err_msg,
-                            event_subagent_parent_info.clone(),
-                        )
-                        .await;
 
-                        if attempt_index < max_attempts - 1
+                        if !Self::has_user_visible_assistant_text(&result.full_text)
+                            && attempt_index < max_attempts - 1
                             && Self::is_transient_network_error(&err_msg)
                         {
                             let delay_ms = Self::retry_delay_ms(attempt_index);
                             warn!(
-                                "Retrying stream because tool arguments were interrupted before valid JSON completed: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
+                                "Retrying stream because tool arguments were interrupted before valid JSON completed: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, invalid_tool_calls={}, error={}",
                                 context.session_id,
                                 round_id,
                                 attempt_index + 1,
                                 max_attempts,
                                 delay_ms,
+                                result.tool_calls.iter().filter(|tool_call| !tool_call.is_valid()).count(),
                                 err_msg
                             );
                             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
@@ -238,28 +222,97 @@ impl RoundExecutor {
                             continue;
                         }
 
-                        return Err(BitFunError::AIClient(err_msg));
+                        if Self::has_user_visible_assistant_text(&result.full_text) {
+                            warn!(
+                                "Dropping invalid partial tool calls from interrupted stream; preserving already-streamed assistant text: session_id={}, round_id={}, invalid_tool_calls={}, error={}",
+                                context.session_id,
+                                round_id,
+                                result.tool_calls.iter().filter(|tool_call| !tool_call.is_valid()).count(),
+                                err_msg
+                            );
+                            self.emit_failed_partial_tool_calls(
+                                &context,
+                                &result.tool_calls,
+                                &err_msg,
+                                event_subagent_parent_info.clone(),
+                            )
+                            .await;
+                            let mut recovered = result;
+                            recovered
+                                .tool_calls
+                                .retain(|tool_call| tool_call.is_valid());
+                            break (recovered, send_to_stream_ms, stream_processing_ms);
+                        }
+
+                        self.emit_failed_partial_tool_calls(
+                            &context,
+                            &result.tool_calls,
+                            &err_msg,
+                            event_subagent_parent_info.clone(),
+                        )
+                        .await;
+                        return Err(BitFunError::AIClient(format!(
+                            "Stream retry budget exhausted after {} attempts: {}",
+                            max_attempts, err_msg
+                        )));
                     }
 
                     let no_effective_output = !result.has_effective_output;
                     let is_partial_recovery = result.partial_recovery_reason.is_some();
+                    let partial_recovery_reason =
+                        result.partial_recovery_reason.as_deref().unwrap_or("");
 
-                    if Self::is_invalid_tool_only_without_text(&result)
+                    if is_partial_recovery
+                        && !Self::has_user_visible_assistant_text(&result.full_text)
+                        && !result.tool_calls.is_empty()
+                        && Self::is_transient_network_error(partial_recovery_reason)
                         && attempt_index < max_attempts - 1
                     {
                         let delay_ms = Self::retry_delay_ms(attempt_index);
                         warn!(
-                            "Retrying stream because provider returned only invalid tool arguments: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, tool_calls={}",
+                            "Retrying stream because tool calls arrived on an interrupted network stream without assistant text: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, tool_calls={}, reason={}",
                             context.session_id,
                             round_id,
                             attempt_index + 1,
                             max_attempts,
                             delay_ms,
-                            result.tool_calls.len()
+                            result.tool_calls.len(),
+                            partial_recovery_reason
                         );
                         tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                         attempt_index += 1;
                         continue;
+                    }
+
+                    if Self::is_invalid_tool_only_without_text(&result) {
+                        if attempt_index < max_attempts - 1 {
+                            let delay_ms = Self::retry_delay_ms(attempt_index);
+                            warn!(
+                                "Retrying stream because provider returned only invalid tool arguments: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, tool_calls={}",
+                                context.session_id,
+                                round_id,
+                                attempt_index + 1,
+                                max_attempts,
+                                delay_ms,
+                                result.tool_calls.len()
+                            );
+                            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                            attempt_index += 1;
+                            continue;
+                        }
+
+                        let err_msg = "Provider returned only invalid tool arguments";
+                        self.emit_failed_partial_tool_calls(
+                            &context,
+                            &result.tool_calls,
+                            err_msg,
+                            event_subagent_parent_info.clone(),
+                        )
+                        .await;
+                        return Err(BitFunError::AIClient(format!(
+                            "Stream retry budget exhausted after {} attempts: {}",
+                            max_attempts, err_msg
+                        )));
                     }
 
                     if no_effective_output && attempt_index < max_attempts - 1 {
@@ -309,6 +362,12 @@ impl RoundExecutor {
                         tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                         attempt_index += 1;
                         continue;
+                    }
+                    if Self::is_transient_network_error(&err_msg) {
+                        return Err(BitFunError::AIClient(format!(
+                            "Stream retry budget exhausted after {} attempts: {}",
+                            max_attempts, err_msg
+                        )));
                     }
                     return Err(stream_err.error);
                 }
@@ -972,10 +1031,19 @@ impl RoundExecutor {
         }
     }
 
-    fn is_interrupted_invalid_tool_only(result: &StreamResult) -> bool {
+    fn has_interrupted_invalid_tool_calls(result: &StreamResult) -> bool {
         result.partial_recovery_reason.is_some()
-            && result.full_text.is_empty()
             && !result.tool_calls.is_empty()
+            && result
+                .tool_calls
+                .iter()
+                .any(|tool_call| !tool_call.is_valid())
+    }
+
+    #[cfg(test)]
+    fn is_interrupted_invalid_tool_only(result: &StreamResult) -> bool {
+        Self::has_interrupted_invalid_tool_calls(result)
+            && result.full_text.is_empty()
             && result
                 .tool_calls
                 .iter()
@@ -1044,12 +1112,19 @@ impl RoundExecutor {
             "sse timeout",
             "stream data timeout",
             "timeout",
+            "request timeout",
+            "deadline exceeded",
             "connection reset",
+            "connection closed",
             "broken pipe",
             "unexpected eof",
             "connection refused",
+            "socket closed",
             "temporarily unavailable",
+            "service unavailable",
+            "bad gateway",
             "gateway timeout",
+            "overloaded",
             "proxy",
             "tunnel",
             "dns",
@@ -1059,7 +1134,13 @@ impl RoundExecutor {
             "etimedout",
             "rate limit",
             "too many requests",
+            "408",
+            "409",
+            "425",
             "429",
+            "502",
+            "503",
+            "504",
         ];
 
         if non_retryable_keywords.iter().any(|k| msg.contains(k)) {
@@ -1183,6 +1264,22 @@ mod tests {
 
         assert!(!RoundExecutor::is_transient_network_error(auth));
         assert!(!RoundExecutor::is_transient_network_error(billing));
+    }
+
+    #[test]
+    fn detects_common_transient_provider_and_gateway_errors() {
+        for msg in [
+            "Anthropic API is temporarily overloaded",
+            "OpenAI Streaming API error 503: service unavailable",
+            "Gemini SSE stream timeout after 60s",
+            "connection closed before message completed",
+            "deadline exceeded while reading response body",
+        ] {
+            assert!(
+                RoundExecutor::is_transient_network_error(msg),
+                "expected retryable network error: {msg}"
+            );
+        }
     }
 
     #[test]

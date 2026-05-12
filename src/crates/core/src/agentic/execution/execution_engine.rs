@@ -73,7 +73,6 @@ pub struct ContextCompactionOutcome {
 #[derive(Debug, Clone)]
 struct ContextHealthSnapshot {
     token_usage_ratio: f32,
-    microcompact_count: usize,
     full_compression_count: usize,
     compression_failure_count: u32,
     repeated_tool_signature_count: usize,
@@ -83,7 +82,6 @@ struct ContextHealthSnapshot {
 impl ContextHealthSnapshot {
     fn from_runtime_observations(
         token_usage_ratio: f32,
-        microcompact_count: usize,
         full_compression_count: usize,
         compression_failure_count: u32,
         recent_tool_signatures: &[String],
@@ -91,7 +89,6 @@ impl ContextHealthSnapshot {
     ) -> Self {
         Self {
             token_usage_ratio,
-            microcompact_count,
             full_compression_count,
             compression_failure_count,
             repeated_tool_signature_count: Self::repeated_tool_signature_count(
@@ -110,13 +107,12 @@ impl ContextHealthSnapshot {
 
     fn log(&self, session_id: &str, turn_id: &str, round_index: usize, stage: &str) {
         debug!(
-            "Context health snapshot: session_id={}, turn_id={}, round_index={}, stage={}, token_usage={:.3}, microcompact_count={}, full_compression_count={}, compression_failure_count={}, repeated_tool_signature_count={}, consecutive_failed_commands={}",
+            "Context health snapshot: session_id={}, turn_id={}, round_index={}, stage={}, token_usage={:.3}, full_compression_count={}, compression_failure_count={}, repeated_tool_signature_count={}, consecutive_failed_commands={}",
             session_id,
             turn_id,
             round_index,
             stage,
             self.token_usage_ratio,
-            self.microcompact_count,
             self.full_compression_count,
             self.compression_failure_count,
             self.repeated_tool_signature_count,
@@ -277,6 +273,38 @@ impl ExecutionEngine {
             args_str.len(),
             args_hash
         )
+    }
+
+    /// Detect periodic tool-signature loops in the trailing window.
+    ///
+    /// Returns `true` when the last `2 * threshold` rounds contain at most
+    /// `threshold` distinct signatures AND every signature in that window
+    /// appeared at least twice. Such windows have no new exploration and
+    /// represent the model toggling between a small fixed set of calls
+    /// (e.g. `A-B-A-B-A-B`, `A-B-C-A-B-C`).
+    ///
+    /// The window length is `2 * threshold` (rather than `threshold`) so the
+    /// strict consecutive check (`windows(2).all(eq)`) keeps owning the
+    /// `A-A-A` case at threshold rounds, and this detector only fires once
+    /// the alternating pattern has had room to repeat.
+    fn is_periodic_tool_signature_loop(recent_signatures: &[String], threshold: usize) -> bool {
+        let threshold = threshold.max(1);
+        let window_size = threshold.saturating_mul(2);
+        if window_size == 0 || recent_signatures.len() < window_size {
+            return false;
+        }
+
+        let tail = &recent_signatures[recent_signatures.len() - window_size..];
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        for sig in tail {
+            *counts.entry(sig.as_str()).or_insert(0) += 1;
+        }
+
+        if counts.len() > threshold {
+            return false;
+        }
+
+        counts.values().all(|&count| count >= 2)
     }
 
     fn assistant_has_tool_calls(message: &Message) -> bool {
@@ -1441,13 +1469,11 @@ impl ExecutionEngine {
             model_capability_profile,
         );
         debug!(
-            "Context profile policy selected: session_id={}, agent_type={}, profile={:?}, model_capability={:?}, microcompact_keep_recent={}, microcompact_trigger_ratio={:.2}, compression_contract_limit={}, subagent_concurrency_cap={}, repeated_tool_signature_threshold={}, consecutive_failed_command_threshold={}",
+            "Context profile policy selected: session_id={}, agent_type={}, profile={:?}, model_capability={:?}, compression_contract_limit={}, subagent_concurrency_cap={}, repeated_tool_signature_threshold={}, consecutive_failed_command_threshold={}",
             context.session_id,
             agent_type,
             context_profile_policy.profile,
             model_capability_profile,
-            context_profile_policy.microcompact_keep_recent,
-            context_profile_policy.microcompact_trigger_ratio,
             context_profile_policy.compression_contract_limit,
             context_profile_policy.subagent_concurrency_cap,
             context_profile_policy.repeated_tool_signature_threshold,
@@ -1501,7 +1527,6 @@ impl ExecutionEngine {
         // P0: Loop detection: track recent tool call signatures
         let mut recent_tool_signatures: Vec<String> = Vec::new();
         let mut loop_detected = false;
-        let mut microcompact_count = 0usize;
         let mut full_compression_count = 0usize;
         let mut compression_failure_count = 0u32;
 
@@ -1566,7 +1591,6 @@ impl ExecutionEngine {
 
         let enable_context_compression = session.config.enable_context_compression;
         let compression_threshold = session.config.compression_threshold;
-        let microcompact_config = context_profile_policy.microcompact_config();
 
         let mut execution_context_vars = context.context.clone();
         execution_context_vars.insert(
@@ -1618,7 +1642,20 @@ impl ExecutionEngine {
             }
 
             // Check and compress before sending AI request
-            let mut current_tokens =
+            //
+            // NOTE: There used to be a "microcompact" pre-pass here that
+            // silently rewrote older tool-result contents into a placeholder.
+            // It has been removed: it mutated already-sent message prefixes —
+            // killing provider KV-cache hits on every round — and stripped the
+            // model of memory of what it had already done, which directly
+            // drove repetitive tool-call loops in long exploratory subagents
+            // (see deep-review subagent loop incident, 2026-05-12).
+            //
+            // The remaining context-pressure layers are:
+            //   - L1: AI-summary based full compression (preserves semantics).
+            //   - L2: Emergency truncation (only if tokens still exceed the
+            //         provider context window after L1).
+            let current_tokens =
                 Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
             debug!(
                 "Round {} token usage before send: {} / {} tokens ({:.1}%)",
@@ -1627,42 +1664,6 @@ impl ExecutionEngine {
                 context_window,
                 (current_tokens as f32 / context_window as f32) * 100.0
             );
-
-            // L0: Microcompact — clear old compactable tool results before
-            // considering full compression.  This is a cheap, local-only
-            // operation that can free significant tokens.
-            let token_usage_ratio = current_tokens as f32 / context_window as f32;
-            if enable_context_compression && token_usage_ratio >= microcompact_config.trigger_ratio
-            {
-                if let Some(mc_result) =
-                    crate::agentic::session::compression::microcompact::microcompact_messages_with_evidence(
-                        &mut messages,
-                        &microcompact_config,
-                        crate::agentic::session::compression::microcompact::MicrocompactEvidenceScope {
-                            session_id: &context.session_id,
-                            turn_id: &context.dialog_turn_id,
-                        },
-                    )
-                {
-                    microcompact_count += 1;
-                    for event in mc_result.evidence_events.iter().cloned() {
-                        self.session_manager.append_evidence_event(event);
-                    }
-                    current_tokens = Self::estimate_request_tokens_internal(
-                        &mut messages,
-                        tool_definitions.as_deref(),
-                    );
-                    debug!(
-                        "Round {} after microcompact: cleared={}, kept={}, evidence_events={}, tokens now {} ({:.1}%)",
-                        round_index,
-                        mc_result.tools_cleared,
-                        mc_result.tools_kept,
-                        mc_result.evidence_events_preserved,
-                        current_tokens,
-                        (current_tokens as f32 / context_window as f32) * 100.0
-                    );
-                }
-            }
 
             let token_usage_ratio = current_tokens as f32 / context_window as f32;
             let should_compress =
@@ -1766,7 +1767,6 @@ impl ExecutionEngine {
                 Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
             ContextHealthSnapshot::from_runtime_observations(
                 ContextHealthSnapshot::token_usage_ratio(before_send_tokens, context_window),
-                microcompact_count,
                 full_compression_count,
                 compression_failure_count,
                 &recent_tool_signatures,
@@ -1914,7 +1914,6 @@ impl ExecutionEngine {
                 Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
             let after_round_health = ContextHealthSnapshot::from_runtime_observations(
                 ContextHealthSnapshot::token_usage_ratio(after_round_tokens, context_window),
-                microcompact_count,
                 full_compression_count,
                 compression_failure_count,
                 &recent_tool_signatures,
@@ -1946,6 +1945,31 @@ impl ExecutionEngine {
                     finalization_reason = Some("loop_detected");
                     break;
                 }
+            }
+
+            // Periodic-pattern loop detection.
+            //
+            // The strict consecutive check above only fires on `A-A-A` patterns.
+            // Real-world subagent loops often alternate between a small set of
+            // signatures (e.g. `A-B-A-B-A-B` when the model toggles a single
+            // argument such as the regex pattern, while every other call is
+            // identical). Such rounds never collapse to a single signature, so
+            // the model can stay stuck for hundreds of rounds without tripping
+            // the strict check.
+            //
+            // The periodic detector inspects the last `2 * max_consec` rounds:
+            // if at most `max_consec` distinct signatures appear AND every one
+            // of those signatures appears at least twice, the window contains
+            // no genuine new exploration and we treat it as a loop.
+            if Self::is_periodic_tool_signature_loop(&recent_tool_signatures, max_consec) {
+                let window_size = max_consec.max(1).saturating_mul(2);
+                warn!(
+                    "Loop detected: last {} rounds form a periodic tool-call pattern (<= {} distinct signatures, each repeated), stopping",
+                    window_size, max_consec
+                );
+                loop_detected = true;
+                finalization_reason = Some("loop_detected");
+                break;
             }
 
             // User-steering messages submitted while this turn is running: drain and inject
@@ -2515,6 +2539,105 @@ mod tests {
     }
 
     #[test]
+    fn periodic_loop_detector_ignores_short_windows() {
+        let signatures: Vec<String> = vec!["A".to_string(), "B".to_string(), "A".to_string()];
+        assert!(!ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_catches_consecutive_identical_window() {
+        let signatures: Vec<String> = std::iter::repeat_n("A".to_string(), 6).collect();
+        assert!(ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_catches_alternating_pattern() {
+        // A-B-A-B-A-B is a stable period-2 loop with 3 distinct rounds per
+        // signature. The strict consecutive check cannot see this because no
+        // two adjacent rounds share the same signature.
+        let signatures: Vec<String> = ["A", "B", "A", "B", "A", "B"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert!(ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_catches_three_signature_cycle() {
+        // A-B-C-A-B-C: window size 6, three distinct signatures, each twice.
+        let signatures: Vec<String> = ["A", "B", "C", "A", "B", "C"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert!(ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_skips_genuine_progress() {
+        // Six distinct signatures means each tool call is a new exploration
+        // step - not a loop, even if the same tool name keeps appearing.
+        let signatures: Vec<String> = ["A", "B", "C", "D", "E", "F"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert!(!ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_skips_when_a_signature_appears_only_once() {
+        // A-B-A-B-A-C: trailing window has 3 distinct signatures, but C
+        // appeared exactly once - the model is still introducing new work.
+        let signatures: Vec<String> = ["A", "B", "A", "B", "A", "C"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert!(!ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_only_inspects_trailing_window() {
+        // The first 4 rounds were genuine exploration, but the last 6 are a
+        // stable A-B alternation. We should still flag the loop.
+        let signatures: Vec<String> = ["X1", "X2", "X3", "X4", "A", "B", "A", "B", "A", "B"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert!(ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_treats_threshold_zero_like_one() {
+        let signatures: Vec<String> = ["A", "A"].iter().map(|s| (*s).to_string()).collect();
+        // A two-round window of identical signatures with threshold 0 should
+        // still register as a loop (threshold is clamped to 1, window = 2).
+        assert!(ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            0
+        ));
+    }
+
+    #[test]
     fn context_health_snapshot_scores_repeated_tool_signatures() {
         let signatures = vec![
             r#"Bash:{"command":"cargo test"}"#.to_string(),
@@ -2523,10 +2646,9 @@ mod tests {
         ];
 
         let snapshot =
-            ContextHealthSnapshot::from_runtime_observations(0.82, 2, 1, 0, &signatures, &[]);
+            ContextHealthSnapshot::from_runtime_observations(0.82, 1, 0, &signatures, &[]);
 
         assert!((snapshot.token_usage_ratio - 0.82).abs() < f32::EPSILON);
-        assert_eq!(snapshot.microcompact_count, 2);
         assert_eq!(snapshot.full_compression_count, 1);
         assert_eq!(snapshot.compression_failure_count, 0);
         assert_eq!(snapshot.repeated_tool_signature_count, 3);
@@ -2541,8 +2663,7 @@ mod tests {
             command_result("Git", false, Some(128)),
         ];
 
-        let snapshot =
-            ContextHealthSnapshot::from_runtime_observations(0.44, 0, 0, 2, &[], &messages);
+        let snapshot = ContextHealthSnapshot::from_runtime_observations(0.44, 0, 2, &[], &messages);
 
         assert_eq!(snapshot.repeated_tool_signature_count, 0);
         assert_eq!(snapshot.consecutive_failed_commands, 2);

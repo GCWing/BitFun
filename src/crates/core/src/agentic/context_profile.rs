@@ -3,7 +3,6 @@
 //! Profiles keep context behavior aligned with the shape of the agent workload
 //! without exposing more knobs to the UI.
 
-use crate::agentic::session::compression::microcompact::MicrocompactConfig;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,8 +76,6 @@ impl ModelCapabilityProfile {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ContextProfilePolicy {
     pub profile: ContextProfile,
-    pub microcompact_keep_recent: usize,
-    pub microcompact_trigger_ratio: f32,
     pub compression_contract_limit: usize,
     pub subagent_concurrency_cap: usize,
     pub repeated_tool_signature_threshold: usize,
@@ -160,13 +157,6 @@ impl ContextProfilePolicy {
         policy
     }
 
-    pub fn microcompact_config(&self) -> MicrocompactConfig {
-        MicrocompactConfig {
-            keep_recent: self.microcompact_keep_recent,
-            trigger_ratio: self.microcompact_trigger_ratio,
-        }
-    }
-
     pub fn effective_subagent_max_concurrency(&self, configured: usize) -> usize {
         configured.clamp(1, self.subagent_concurrency_cap)
     }
@@ -186,11 +176,8 @@ impl ContextProfilePolicy {
     }
 
     fn long_task() -> Self {
-        let default_microcompact = MicrocompactConfig::default();
         Self {
             profile: ContextProfile::LongTask,
-            microcompact_keep_recent: default_microcompact.keep_recent,
-            microcompact_trigger_ratio: default_microcompact.trigger_ratio,
             compression_contract_limit: 8,
             subagent_concurrency_cap: 5,
             repeated_tool_signature_threshold: 3,
@@ -201,8 +188,6 @@ impl ContextProfilePolicy {
     fn conversation() -> Self {
         Self {
             profile: ContextProfile::Conversation,
-            microcompact_keep_recent: 12,
-            microcompact_trigger_ratio: 0.65,
             compression_contract_limit: 4,
             subagent_concurrency_cap: 2,
             repeated_tool_signature_threshold: 4,
@@ -211,7 +196,6 @@ impl ContextProfilePolicy {
     }
 
     fn apply_weak_model_override(&mut self) {
-        self.microcompact_keep_recent = self.microcompact_keep_recent.min(8);
         self.compression_contract_limit = self.compression_contract_limit.min(4);
         self.subagent_concurrency_cap = self.subagent_concurrency_cap.min(2);
         self.repeated_tool_signature_threshold = self.repeated_tool_signature_threshold.min(2);

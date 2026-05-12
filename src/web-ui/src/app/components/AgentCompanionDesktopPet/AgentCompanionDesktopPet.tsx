@@ -19,7 +19,6 @@ const WINDOW_HORIZONTAL_GAP = 8;
 const MAX_VISIBLE_BUBBLES = 2;
 const BUBBLE_GAP = 6;
 const BUBBLE_WIDTH = 146;
-const BUBBLE_OUTPUT_VISIBLE_CHARS = 64;
 const BUBBLE_OUTPUT_TYPEWRITER_INTERVAL_MS = 28;
 const WINDOW_EDGE_BUFFER = 4;
 const POINTER_HOVER_POLL_INTERVAL_MS = 120;
@@ -39,37 +38,18 @@ function seedTypewriterOutput(target: string): string {
   return target.slice(0, -1);
 }
 
-function commonSuffixPrefixLength(value: string, target: string): number {
-  const maxLength = Math.min(value.length, target.length);
-  for (let length = maxLength; length > 0; length -= 1) {
-    if (value.slice(-length) === target.slice(0, length)) {
-      return length;
-    }
-  }
-  return 0;
-}
-
 function advanceTypewriterOutput(visible: string, target: string): string {
   if (visible === target) {
     return visible;
   }
 
-  if (target.startsWith(visible)) {
-    return target.slice(0, visible.length + 1);
+  if (!target.startsWith(visible)) {
+    return target;
   }
 
-  const overlapLength = commonSuffixPrefixLength(visible, target);
-  return target.slice(0, Math.min(target.length, overlapLength + 1));
-}
-
-function formatBubbleOutput(output: string, target: string): string {
-  const visibleOutput = output.length > BUBBLE_OUTPUT_VISIBLE_CHARS
-    ? output.slice(-BUBBLE_OUTPUT_VISIBLE_CHARS)
-    : output;
-  const hasHiddenPrefix = target.length > BUBBLE_OUTPUT_VISIBLE_CHARS
-    || output.length > BUBBLE_OUTPUT_VISIBLE_CHARS;
-
-  return hasHiddenPrefix ? `...${visibleOutput}` : visibleOutput;
+  const gap = target.length - visible.length;
+  const step = Math.max(1, Math.floor(gap / 8));
+  return target.slice(0, visible.length + step);
 }
 
 export const AgentCompanionDesktopPet: React.FC = () => {
@@ -85,6 +65,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   const [petFrameSize, setPetFrameSize] = useState<{ width: number; height: number } | null>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const bubblesRef = useRef<HTMLDivElement>(null);
+  const outputRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
   const lastActivitySequenceRef = useRef(0);
   const lastActivityEmittedAtRef = useRef(0);
   const petPointerSessionRef = useRef<{
@@ -200,6 +181,12 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   }, [typedOutputBySessionId]);
 
   useLayoutEffect(() => {
+    outputRefs.current.forEach(element => {
+      element.scrollTop = element.scrollHeight;
+    });
+  }, [typedOutputBySessionId]);
+
+  useLayoutEffect(() => {
     const bubbleCount = tasks.length;
     const bubbleElements = Array.from(bubblesRef.current?.children ?? [])
       .slice(0, MAX_VISIBLE_BUBBLES);
@@ -229,6 +216,14 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       Math.min(WINDOW_MAX_WIDTH, Math.ceil(measuredDockWidth)),
     );
 
+    if (!Number.isFinite(nextWidth) || !Number.isFinite(nextHeight)) {
+      log.warn('Skipped invalid Agent companion window resize', {
+        width: nextWidth,
+        height: nextHeight,
+      });
+      return;
+    }
+
     void import('@tauri-apps/api/core')
       .then(({ invoke }) => invoke('resize_agent_companion_desktop_pet', {
         width: nextWidth,
@@ -256,8 +251,9 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       });
 
     void tauriWindow.scaleFactor()
-      .then(nextScaleFactor => {
-        scaleFactor = nextScaleFactor;
+      .then(rawScaleFactor => {
+        const nextScaleFactor = Number(rawScaleFactor);
+        scaleFactor = Number.isFinite(nextScaleFactor) && nextScaleFactor > 0 ? nextScaleFactor : 1;
       })
       .catch(error => {
         log.warn('Failed to read Agent companion window scale factor', error);
@@ -276,7 +272,8 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     });
 
     void tauriWindow.onScaleChanged(event => {
-      scaleFactor = event.payload.scaleFactor;
+      const nextScaleFactor = Number(event.payload.scaleFactor);
+      scaleFactor = Number.isFinite(nextScaleFactor) && nextScaleFactor > 0 ? nextScaleFactor : 1;
     }).then(unlisten => {
       if (disposed) {
         unlisten();
@@ -305,8 +302,9 @@ export const AgentCompanionDesktopPet: React.FC = () => {
         }
 
         const hitboxRect = hitbox.getBoundingClientRect();
-        const pointerX = (pointer.x - windowPosition.x) / scaleFactor;
-        const pointerY = (pointer.y - windowPosition.y) / scaleFactor;
+        const safeScaleFactor = Number.isFinite(scaleFactor) && scaleFactor > 0 ? scaleFactor : 1;
+        const pointerX = (pointer.x - windowPosition.x) / safeScaleFactor;
+        const pointerY = (pointer.y - windowPosition.y) / safeScaleFactor;
         const isPointerInsideHitbox = pointerX >= hitboxRect.left
           && pointerX <= hitboxRect.right
           && pointerY >= hitboxRect.top
@@ -479,10 +477,20 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                   const visibleOutput = typedOutput?.visible ?? seedTypewriterOutput(task.latestOutput);
                   const targetOutput = typedOutput?.target ?? task.latestOutput;
                   const isTyping = visibleOutput !== targetOutput;
+                  const sessionId = task.sessionId;
 
                   return (
-                    <span className={`bitfun-agent-companion-window__bubble-output${isTyping ? ' bitfun-agent-companion-window__bubble-output--typing' : ''}`}>
-                      {formatBubbleOutput(visibleOutput, targetOutput)}
+                    <span
+                      ref={element => {
+                        if (element) {
+                          outputRefs.current.set(sessionId, element);
+                        } else {
+                          outputRefs.current.delete(sessionId);
+                        }
+                      }}
+                      className={`bitfun-agent-companion-window__bubble-output${isTyping ? ' bitfun-agent-companion-window__bubble-output--typing' : ''}`}
+                    >
+                      {visibleOutput}
                     </span>
                   );
                 })()}

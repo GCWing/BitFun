@@ -616,11 +616,12 @@ pub trait Tool: Send + Sync {
 
     /// Rich metadata for dynamic tools. Prefer this over encoding dynamic ownership in tool names.
     fn dynamic_tool_info(&self) -> Option<DynamicToolInfo> {
-        self.dynamic_provider_id().map(|provider_id| DynamicToolInfo {
-            provider_id: provider_id.to_string(),
-            provider_kind: None,
-            mcp: None,
-        })
+        self.dynamic_provider_id()
+            .map(|provider_id| DynamicToolInfo {
+                provider_id: provider_id.to_string(),
+                provider_kind: None,
+                mcp: None,
+            })
     }
 
     /// User friendly name
