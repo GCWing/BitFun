@@ -482,15 +482,13 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       return;
     }
 
-    if (hasRemediationPlan) {
-      store.showActionBar({
-        childSessionId,
-        parentSessionId: parentSessionId ?? null,
-        reviewData: latestReviewData,
-        reviewMode,
-        phase: 'review_completed',
-      });
-    }
+    store.showActionBar({
+      childSessionId,
+      parentSessionId: parentSessionId ?? null,
+      reviewData: latestReviewData,
+      reviewMode,
+      phase: 'review_completed',
+    });
   }, [childSession, childSessionId, parentSessionId, isReviewSession, isDeepReview]);
 
   // Restore persisted review action state on mount

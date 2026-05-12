@@ -272,6 +272,16 @@ function mergeCapacityQueueState(
 
   const waitingReviewers = [...reviewerMap.values()];
   if (waitingReviewers.length === 0) {
+    if (isTerminalQueueStatus(incoming.status) && incoming.queuedReviewerCount > 0) {
+      return {
+        ...incoming,
+        status: current?.status === 'paused_by_user' ? 'paused_by_user' : 'queued_for_capacity',
+        queuedReviewerCount: incoming.queuedReviewerCount,
+        optionalReviewerCount: incoming.optionalReviewerCount ?? 0,
+        waitingReviewers: [],
+      };
+    }
+
     return null;
   }
 

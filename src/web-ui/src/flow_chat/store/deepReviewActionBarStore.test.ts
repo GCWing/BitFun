@@ -347,6 +347,45 @@ describe('deepReviewActionBarStore', () => {
       expect(bar().capacityQueueState).toBeNull();
       expect(bar().phase).toBe('idle');
     });
+
+    it('keeps the capacity queue visible when a terminal reviewer event reports more queued reviewers', () => {
+      bar().showCapacityQueueBar({
+        childSessionId: 'child-1',
+        parentSessionId: 'parent-1',
+        capacityQueueState: {
+          toolId: 'task-security',
+          subagentType: 'ReviewSecurity',
+          status: 'queued_for_capacity',
+          reason: 'local_concurrency_cap',
+          queuedReviewerCount: 1,
+          waitingReviewers: [{
+            toolId: 'task-security',
+            subagentType: 'ReviewSecurity',
+            displayName: 'Security reviewer',
+            status: 'queued_for_capacity',
+            reason: 'local_concurrency_cap',
+          }],
+        },
+      });
+
+      bar().applyCapacityQueueState({
+        toolId: 'task-security',
+        subagentType: 'ReviewSecurity',
+        status: 'running',
+        reason: 'launch_batch_blocked',
+        queuedReviewerCount: 1,
+        activeReviewerCount: 1,
+        waitingReviewers: [],
+      });
+
+      expect(bar().capacityQueueState).toMatchObject({
+        status: 'queued_for_capacity',
+        queuedReviewerCount: 1,
+        activeReviewerCount: 1,
+      });
+      expect(bar().capacityQueueState?.waitingReviewers).toEqual([]);
+      expect(bar().phase).toBe('review_waiting_capacity');
+    });
   });
 
   describe('toggleRemediation with completed items', () => {

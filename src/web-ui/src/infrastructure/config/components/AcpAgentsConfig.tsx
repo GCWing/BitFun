@@ -7,6 +7,7 @@ import {
   FileJson,
   LoaderCircle,
   Plus,
+  RefreshCw,
   Save,
   Search,
   Terminal,
@@ -199,12 +200,13 @@ function getAgentRowStatus({
 }: {
   configured: boolean;
   enabled: boolean;
-  runnable: boolean;
+  runnable?: boolean;
   probePending: boolean;
 }): AgentRowStatus {
   if (probePending) return 'checking';
   if (!configured) return runnable ? 'ready' : 'not_installed';
-  return enabled && runnable ? 'enabled' : 'invalid';
+  if (!enabled) return 'invalid';
+  return runnable === false ? 'invalid' : 'enabled';
 }
 
 function CapabilityBadge({
@@ -385,7 +387,7 @@ const AcpAgentsConfig: React.FC = () => {
     options: { showLoading?: boolean; refreshRequirements?: boolean } = {}
   ) => {
     const showLoading = options.showLoading ?? true;
-    const refreshRequirements = options.refreshRequirements ?? true;
+    const refreshRequirements = options.refreshRequirements ?? false;
     try {
       if (showLoading) {
         setLoading(true);
@@ -505,7 +507,8 @@ const AcpAgentsConfig: React.FC = () => {
       setConfig(configToSave);
       setJsonConfig(formatConfig(configToSave));
       setDirty(false);
-      void refreshRequirementProbes({ force: true, notifyOnError: false });
+      requirementProbeCache = null;
+      setRequirementProbes([]);
       notifySuccess(t('notifications.saveSuccess'));
     } catch (error) {
       log.error('Failed to save ACP agent config', error);
@@ -620,6 +623,15 @@ const AcpAgentsConfig: React.FC = () => {
               >
                 <FileJson size={14} />
                 {showJsonEditor ? t('actions.closeJson') : t('actions.editJson')}
+              </Button>
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() => { void refreshRequirementProbes({ force: true }); }}
+                isLoading={probingRequirements}
+              >
+                <RefreshCw size={14} />
+                {t('actions.refresh')}
               </Button>
               <Button
                 variant="secondary"
