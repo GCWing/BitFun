@@ -1,7 +1,7 @@
 /// Theme and style definitions
 
 use ratatui::style::{Color, Modifier, Style};
-use std::io::IsTerminal;
+use std::io::{IsTerminal, Read};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::{Duration, Instant};
