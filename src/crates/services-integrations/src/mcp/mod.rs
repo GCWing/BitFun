@@ -6,10 +6,12 @@
 mod tool_info;
 mod tool_name;
 
+pub mod auth;
 pub mod config;
 pub mod protocol;
 pub mod server;
 
+pub use auth::*;
 pub use config::*;
 pub use protocol::*;
 pub use server::*;

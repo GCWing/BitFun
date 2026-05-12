@@ -1,18 +1,26 @@
 #![cfg(feature = "mcp")]
 
+use bitfun_services_integrations::mcp::auth::{
+    MCPRemoteOAuthCredentialVault, MCPRemoteOAuthSessionSnapshot, MCPRemoteOAuthStatus,
+};
 use bitfun_services_integrations::mcp::config::ConfigLocation;
-use bitfun_services_integrations::mcp::config::{config_to_cursor_format, parse_cursor_format};
+use bitfun_services_integrations::mcp::config::{
+    config_to_cursor_format, format_mcp_json_config_value, parse_cursor_format,
+    validate_mcp_json_config,
+};
 use bitfun_services_integrations::mcp::protocol::{
+    MCPCapability, MCPError, MCPPromptMessageContent, MCPPromptMessageContentBlock, MCPRequest,
     create_initialize_request, create_ping_request, create_tools_call_request,
-    create_tools_list_request, default_protocol_version, MCPCapability, MCPError,
-    MCPPromptMessageContent, MCPPromptMessageContentBlock, MCPRequest,
+    create_tools_list_request, default_protocol_version,
 };
 use bitfun_services_integrations::mcp::server::{
     MCPServerConfig, MCPServerStatus, MCPServerTransport, MCPServerType,
 };
 use bitfun_services_integrations::mcp::{
-    build_mcp_tool_name, normalize_name_for_mcp, McpToolInfo, MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
+    MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX, McpToolInfo, build_mcp_tool_name, normalize_name_for_mcp,
 };
+use rmcp::transport::auth::StoredCredentials;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn mcp_tool_name_contract_matches_existing_wire_format() {
@@ -213,6 +221,85 @@ fn mcp_config_location_preserves_kebab_case_wire_contract() {
 }
 
 #[test]
+fn mcp_json_config_helpers_preserve_load_format_and_save_validation_contract() {
+    let legacy_array = serde_json::json!([
+        {
+            "id": "local",
+            "name": "Local",
+            "type": "local",
+            "command": "npx"
+        }
+    ]);
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(
+            &format_mcp_json_config_value(Some(&legacy_array)).unwrap()
+        )
+        .unwrap(),
+        serde_json::json!({
+            "mcpServers": {
+                "local": {
+                    "id": "local",
+                    "name": "Local",
+                    "type": "local",
+                    "command": "npx"
+                }
+            }
+        })
+    );
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&format_mcp_json_config_value(None).unwrap())
+            .unwrap(),
+        serde_json::json!({ "mcpServers": {} })
+    );
+
+    validate_mcp_json_config(&serde_json::json!({
+        "mcpServers": {
+            "remote": {
+                "type": "sse",
+                "url": "https://example.com/sse",
+                "headers": {
+                    "Authorization": "Bearer token"
+                }
+            }
+        }
+    }))
+    .expect("valid remote SSE config");
+
+    assert_eq!(
+        validate_mcp_json_config(&serde_json::json!({}))
+            .unwrap_err()
+            .to_string(),
+        "Config missing 'mcpServers' field"
+    );
+    assert_eq!(
+        validate_mcp_json_config(&serde_json::json!({
+            "mcpServers": {
+                "bad": {
+                    "type": "container",
+                    "command": "docker"
+                }
+            }
+        }))
+        .unwrap_err()
+        .to_string(),
+        "Server 'bad' has unsupported 'type' value: 'container'"
+    );
+    assert_eq!(
+        validate_mcp_json_config(&serde_json::json!({
+            "mcpServers": {
+                "bad": {
+                    "source": "remote",
+                    "command": "npx"
+                }
+            }
+        }))
+        .unwrap_err()
+        .to_string(),
+        "Server 'bad' source='remote' conflicts with command-based configuration"
+    );
+}
+
+#[test]
 fn mcp_server_type_and_status_preserve_lowercase_wire_contract() {
     assert_eq!(
         serde_json::to_value(MCPServerType::Local).unwrap(),
@@ -274,6 +361,73 @@ fn mcp_server_config_preserves_transport_defaults_and_validation_contract() {
     remote
         .validate()
         .expect("remote streamable-http config is valid");
+}
+
+#[test]
+fn mcp_oauth_session_snapshot_preserves_camel_case_status_contract() {
+    let snapshot = MCPRemoteOAuthSessionSnapshot::new(
+        "remote-server",
+        MCPRemoteOAuthStatus::AwaitingBrowser,
+        Some("https://auth.example.com/start".to_string()),
+        Some("http://127.0.0.1:49152/oauth/callback".to_string()),
+        None,
+    );
+
+    assert_eq!(
+        serde_json::to_value(&snapshot).unwrap(),
+        serde_json::json!({
+            "serverId": "remote-server",
+            "status": "awaitingBrowser",
+            "authorizationUrl": "https://auth.example.com/start",
+            "redirectUri": "http://127.0.0.1:49152/oauth/callback"
+        })
+    );
+}
+
+#[tokio::test]
+async fn mcp_oauth_credential_vault_uses_injected_data_dir_and_roundtrips_credentials() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let data_dir = std::env::temp_dir().join(format!(
+        "bitfun-mcp-oauth-vault-contract-{}-{}",
+        std::process::id(),
+        unique
+    ));
+
+    let vault = MCPRemoteOAuthCredentialVault::new(data_dir.clone());
+    let credentials = StoredCredentials {
+        client_id: "client-123".to_string(),
+        token_response: None,
+    };
+
+    vault
+        .store("server-a", &credentials)
+        .await
+        .expect("store credentials");
+
+    assert!(data_dir.join(".mcp_oauth_vault.key").exists());
+    assert!(data_dir.join("mcp_oauth_vault.json").exists());
+
+    let loaded = vault
+        .load("server-a")
+        .await
+        .expect("load credentials")
+        .expect("stored credentials");
+    assert_eq!(loaded.client_id, "client-123");
+    assert!(loaded.token_response.is_none());
+
+    vault.clear("server-a").await.expect("clear credentials");
+    assert!(
+        vault
+            .load("server-a")
+            .await
+            .expect("load after clear")
+            .is_none()
+    );
+
+    let _ = std::fs::remove_dir_all(data_dir);
 }
 
 #[test]

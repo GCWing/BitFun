@@ -228,6 +228,56 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/service/mcp/config/json_config.rs',
+    patterns: [
+      {
+        regex: /\bfn normalize_source\b/,
+        message: 'core MCP JSON config facade must not redefine source normalization; use the integrations helper',
+      },
+      {
+        regex: /\bfn normalize_transport\b/,
+        message: 'core MCP JSON config facade must not redefine transport normalization; use the integrations helper',
+      },
+      {
+        regex: /\bfn normalize_legacy_type\b/,
+        message: 'core MCP JSON config facade must not redefine legacy type normalization; use the integrations helper',
+      },
+      {
+        regex: /\bconfig_value\.get\("mcpServers"\)\.is_none\(\)/,
+        message: 'core MCP JSON config facade must not inline save validation; use the integrations helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/mcp/auth.rs',
+    patterns: [
+      {
+        regex: /\bstruct VaultFile\b/,
+        message: 'core MCP auth facade must not own OAuth vault storage; use the integrations owner crate',
+      },
+      {
+        regex: /\bconst NONCE_LEN\b/,
+        message: 'core MCP auth facade must not own OAuth vault encryption; use the integrations owner crate',
+      },
+      {
+        regex: /\bfn encrypt_value\b/,
+        message: 'core MCP auth facade must not own OAuth vault encryption; use the integrations owner crate',
+      },
+      {
+        regex: /\bfn decrypt_value\b/,
+        message: 'core MCP auth facade must not own OAuth vault encryption; use the integrations owner crate',
+      },
+      {
+        regex: /\bAuthorizationManager::new\b/,
+        message: 'core MCP auth facade must not assemble OAuth authorization manager internals; use the integrations owner crate',
+      },
+      {
+        regex: /\bOAuthState::new\b/,
+        message: 'core MCP auth facade must not assemble OAuth authorization state internals; use the integrations owner crate',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/service/mcp/protocol/jsonrpc.rs',
     patterns: [
       {
@@ -446,6 +496,48 @@ function runManifestParserSelfTest() {
   for (const helper of remoteWorkspaceHelpers) {
     if (!ruleText.includes(helper)) {
       throw new Error(`remote SSH workspace boundary rule must forbid helper: ${helper}`);
+    }
+  }
+
+  const mcpJsonConfigRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/mcp/config/json_config.rs',
+  );
+  if (!mcpJsonConfigRule) {
+    throw new Error('missing MCP JSON config boundary rule');
+  }
+  const mcpJsonConfigHelpers = [
+    'normalize_source',
+    'normalize_transport',
+    'normalize_legacy_type',
+    'mcpServers',
+  ];
+  const mcpJsonConfigRuleText = mcpJsonConfigRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const helper of mcpJsonConfigHelpers) {
+    if (!mcpJsonConfigRuleText.includes(helper)) {
+      throw new Error(`MCP JSON config boundary rule must forbid helper: ${helper}`);
+    }
+  }
+
+  const mcpAuthRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/mcp/auth.rs',
+  );
+  if (!mcpAuthRule) {
+    throw new Error('missing MCP auth boundary rule');
+  }
+  const mcpAuthHelpers = [
+    'VaultFile',
+    'NONCE_LEN',
+    'encrypt_value',
+    'decrypt_value',
+    'AuthorizationManager::new',
+    'OAuthState::new',
+  ];
+  const mcpAuthRuleText = mcpAuthRule.patterns.map((pattern) => pattern.regex.source).join('\n');
+  for (const helper of mcpAuthHelpers) {
+    if (!mcpAuthRuleText.includes(escapeRegex(helper))) {
+      throw new Error(`MCP auth boundary rule must forbid helper: ${helper}`);
     }
   }
 
