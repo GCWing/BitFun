@@ -7,6 +7,7 @@ const sendMessageMock = vi.hoisted(() => vi.fn());
 const eventBusEmitMock = vi.hoisted(() => vi.fn());
 const confirmWarningMock = vi.hoisted(() => vi.fn());
 const continueDeepReviewSessionMock = vi.hoisted(() => vi.fn());
+const buildErrorAttributionMock = vi.hoisted(() => vi.fn(() => null));
 const buildRecoveryPlanMock = vi.hoisted(() => vi.fn(() => ({
   willPreserve: ['ReviewSecurity'],
   willRerun: ['ReviewPerformance'],
@@ -14,7 +15,6 @@ const buildRecoveryPlanMock = vi.hoisted(() => vi.fn(() => ({
   summaryText: '1 completed reviewer will be preserved; 1 reviewer will be rerun',
 })));
 const controlDeepReviewQueueMock = vi.hoisted(() => vi.fn());
-const lowerDefaultReviewTeamMaxParallelReviewersMock = vi.hoisted(() => vi.fn());
 const flowChatSessionsMock = vi.hoisted(() => new Map<string, unknown>());
 
 vi.mock('react-i18next', () => ({
@@ -88,10 +88,6 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   },
 }));
 
-vi.mock('@/shared/services/reviewTeamService', () => ({
-  lowerDefaultReviewTeamMaxParallelReviewers: lowerDefaultReviewTeamMaxParallelReviewersMock,
-}));
-
 vi.mock('@/infrastructure/event-bus', () => ({
   globalEventBus: {
     emit: eventBusEmitMock,
@@ -133,7 +129,7 @@ vi.mock('../../utils/deepReviewExperience', () => ({
   aggregateReviewerProgress: () => [],
   buildReviewerProgressSummary: () => null,
   extractPartialReviewData: () => null,
-  buildErrorAttribution: () => null,
+  buildErrorAttribution: buildErrorAttributionMock,
   buildRecoveryPlan: buildRecoveryPlanMock,
   evaluateDegradationOptions: () => [],
 }));
@@ -192,13 +188,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     confirmWarningMock.mockResolvedValue(true);
     eventBusEmitMock.mockReturnValue(false);
     continueDeepReviewSessionMock.mockResolvedValue(undefined);
-    lowerDefaultReviewTeamMaxParallelReviewersMock.mockResolvedValue({
-      maxParallelInstances: 1,
-      maxQueueWaitSeconds: 120,
-      allowProviderCapacityQueue: true,
-      allowBoundedAutoRetry: false,
-      autoRetryElapsedGuardSeconds: 180,
-    });
+    buildErrorAttributionMock.mockReturnValue(null);
     flowChatSessionsMock.clear();
     useReviewActionBarStore.getState().reset();
   });
@@ -479,7 +469,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(container.textContent).toContain('Reason: provider concurrency limit');
     expect(container.textContent).toContain('Waited 12s of 1m 0s');
     expect(container.textContent).toContain('Your active session is busy.');
-    expect(container.textContent).toContain('Run slower next time');
+    expect(container.textContent).not.toContain('Run slower next time');
     expect(container.textContent).toContain('Open Review settings');
 
     const pauseButton = Array.from(container.querySelectorAll('button'))
@@ -495,17 +485,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
       capacityQueueState: { status: string };
     }).capacityQueueState.status).toBe('paused_by_user');
     expect(container.textContent).toContain('Queue paused');
-
-    const runSlowerButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Run slower next time'));
-    expect(runSlowerButton).toBeTruthy();
-
-    await act(async () => {
-      runSlowerButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(lowerDefaultReviewTeamMaxParallelReviewersMock).toHaveBeenCalledTimes(1);
 
     const openSettingsButton = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Open Review settings'));
@@ -680,44 +659,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect((useReviewActionBarStore.getState() as unknown as {
       capacityQueueState: { status: string };
     }).capacityQueueState.status).toBe('queued_for_capacity');
-  });
-
-  it('shows the settings update reason when run-slower fails', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-    const { notificationService } = await import('@/shared/notification-system');
-    lowerDefaultReviewTeamMaxParallelReviewersMock.mockRejectedValueOnce(
-      new Error('config store unavailable'),
-    );
-
-    useReviewActionBarStore.getState().showCapacityQueueBar({
-      childSessionId: 'child-session',
-      parentSessionId: 'parent-session',
-      capacityQueueState: {
-        status: 'queued_for_capacity',
-        reason: 'local_concurrency_cap',
-        queuedReviewerCount: 1,
-      },
-    });
-
-    await act(async () => {
-      root.render(<DeepReviewActionBar />);
-    });
-
-    const runSlowerButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Run slower next time'));
-    expect(runSlowerButton).toBeTruthy();
-
-    await act(async () => {
-      runSlowerButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(notificationService.error).toHaveBeenCalledWith(
-      expect.stringContaining('config store unavailable'),
-    );
-    expect(notificationService.error).toHaveBeenCalledWith(
-      expect.stringContaining('Open Review settings'),
-    );
   });
 
   it('starts a structured retry turn for explicit incomplete Deep Review slices', async () => {
@@ -1011,6 +952,16 @@ describeWithJsdom('DeepReviewActionBar', () => {
 
   it('keeps Deep Review interruption actions in one row without a standalone retry or recovery toggle', async () => {
     const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+    buildErrorAttributionMock.mockReturnValue({
+      category: 'network',
+      title: 'Network issue',
+      severity: 'warning',
+      description: 'Please retry later, or check your network and model service status.',
+      actions: [
+        { code: 'retry', labelKey: 'errors:ai.actions.retry' },
+        { code: 'copy_diagnostics', labelKey: 'errors:ai.actions.copyDiagnostics' },
+      ],
+    });
 
     useReviewActionBarStore.getState().showInterruptedActionBar({
       childSessionId: 'deep-review-session',
@@ -1047,12 +998,18 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(buttonTexts.some((text) => text.includes('Copy diagnostics'))).toBe(true);
     expect(buttonTexts.some((text) => text.includes('Retry'))).toBe(false);
     expect(buttonTexts.some((text) => text.includes('Show recovery plan'))).toBe(false);
+    expect(container.querySelectorAll('.deep-review-action-bar__attribution button')).toHaveLength(0);
+    expect(container.querySelector('.deep-review-action-bar__attribution-actions')).toBeNull();
     expect(container.textContent).toContain('1 completed reviewers will be preserved');
     expect(container.textContent).toContain('1 reviewers will be rerun');
   });
 
-  it('minimizes and disables the continue action after a resume request starts successfully', async () => {
+  it('minimizes and hides stale interruption controls after a resume request starts successfully', async () => {
     const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
+    let resolveContinuation: (() => void) | null = null;
+    continueDeepReviewSessionMock.mockReturnValueOnce(new Promise<void>((resolve) => {
+      resolveContinuation = resolve;
+    }));
 
     useReviewActionBarStore.getState().showInterruptedActionBar({
       childSessionId: 'deep-review-session',
@@ -1086,9 +1043,17 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(continueDeepReviewSessionMock).toHaveBeenCalledTimes(1);
     expect(state.phase).toBe('resume_running');
     expect(state.minimized).toBe(true);
+    expect(state.activeAction).toBe('resume');
+    expect(container.textContent).toContain('Continuing review');
+    expect(container.textContent).not.toContain('Deep review interrupted');
+    expect(Array.from(container.querySelectorAll('button'))
+      .some((button) => button.textContent?.includes('Continue review'))).toBe(false);
+    expect(Array.from(container.querySelectorAll('button'))
+      .some((button) => button.textContent?.includes('Copy diagnostics'))).toBe(false);
 
-    const restoredContinueButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Continue review')) as HTMLButtonElement | undefined;
-    expect(restoredContinueButton?.disabled).toBe(true);
+    await act(async () => {
+      resolveContinuation?.();
+      await Promise.resolve();
+    });
   });
 });

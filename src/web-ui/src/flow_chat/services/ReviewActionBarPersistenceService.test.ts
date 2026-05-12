@@ -22,9 +22,47 @@ vi.mock('../store/FlowChatStore', () => ({
   },
 }));
 
+function createMetadata(overrides: Record<string, unknown> = {}) {
+  return {
+    sessionId: 'session-1',
+    sessionName: 'Test Session',
+    agentType: 'agentic',
+    modelName: 'auto',
+    createdAt: 1000,
+    lastActiveAt: 1000,
+    turnCount: 1,
+    messageCount: 1,
+    toolCallCount: 0,
+    status: 'active',
+    tags: [],
+    ...overrides,
+  };
+}
+
+function createStoreSession(overrides: Record<string, unknown> = {}) {
+  return {
+    sessionId: 'session-1',
+    title: 'Test Session',
+    dialogTurns: [],
+    status: 'idle',
+    config: { agentType: 'agentic', modelName: 'auto' },
+    createdAt: 1000,
+    lastActiveAt: 1000,
+    error: null,
+    sessionKind: 'deep_review',
+    workspacePath: '/workspace/project',
+    ...overrides,
+  };
+}
+
 describe('ReviewActionBarPersistenceService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (sessionAPI.saveSessionMetadata as any).mockResolvedValue(undefined);
+    (sessionAPI.loadSessionMetadata as any).mockResolvedValue(undefined);
+    (flowChatStore.getState as any).mockReturnValue({
+      sessions: new Map(),
+    });
   });
 
   afterEach(() => {
@@ -79,12 +117,13 @@ describe('ReviewActionBarPersistenceService', () => {
     });
 
     it('saves metadata with reviewActionState when session exists', async () => {
-      const mockSession = {
-        workspacePath: '/workspace/project',
-        remoteConnectionId: undefined,
-        remoteSshHost: undefined,
-      };
+      const mockSession = createStoreSession();
+      const existingMetadata = createMetadata({
+        sessionName: 'Existing Session',
+        customMetadata: { kind: 'deep_review' },
+      });
 
+      (sessionAPI.loadSessionMetadata as any).mockResolvedValue(existingMetadata);
       (flowChatStore.getState as any).mockReturnValue({
         sessions: new Map([['session-1', mockSession]]),
       });
@@ -111,6 +150,9 @@ describe('ReviewActionBarPersistenceService', () => {
       expect(sessionAPI.saveSessionMetadata).toHaveBeenCalledTimes(1);
       const [metadata, workspacePath] = (sessionAPI.saveSessionMetadata as any).mock.calls[0];
       expect(metadata.sessionId).toBe('session-1');
+      expect(metadata.sessionName).toBe('Existing Session');
+      expect(metadata.agentType).toBe('agentic');
+      expect(metadata.modelName).toBe('auto');
       expect(metadata.reviewActionState).toEqual({
         version: 1,
         phase: 'review_completed',
@@ -122,13 +164,64 @@ describe('ReviewActionBarPersistenceService', () => {
       expect(workspacePath).toBe('/workspace/project');
     });
 
+    it('builds complete metadata when no existing metadata is available', async () => {
+      const mockSession = createStoreSession({
+        title: 'Fresh Review',
+        createdAt: 2000,
+        lastActiveAt: 2500,
+      });
+
+      (sessionAPI.loadSessionMetadata as any).mockResolvedValue(null);
+      (flowChatStore.getState as any).mockReturnValue({
+        sessions: new Map([['session-1', mockSession]]),
+      });
+
+      await persistReviewActionState({
+        childSessionId: 'session-1',
+        parentSessionId: null,
+        reviewMode: 'deep',
+        phase: 'review_completed',
+        reviewData: null,
+        remediationItems: [],
+        selectedRemediationIds: new Set(),
+        dismissed: false,
+        minimized: false,
+        activeAction: null,
+        customInstructions: '',
+        errorMessage: null,
+        interruption: null,
+        completedRemediationIds: new Set(),
+        fixingRemediationIds: new Set(),
+        remainingFixIds: [],
+      } as any);
+
+      expect(sessionAPI.saveSessionMetadata).toHaveBeenCalledTimes(1);
+      const [metadata] = (sessionAPI.saveSessionMetadata as any).mock.calls[0];
+      expect(metadata).toMatchObject({
+        sessionId: 'session-1',
+        sessionName: 'Fresh Review',
+        agentType: 'agentic',
+        modelName: 'auto',
+        status: 'active',
+        reviewActionState: {
+          version: 1,
+          phase: 'review_completed',
+          completedRemediationIds: [],
+          minimized: false,
+          customInstructions: '',
+          persistedAt: expect.any(Number),
+        },
+      });
+      expect(Array.isArray(metadata.tags)).toBe(true);
+    });
+
     it('passes remote connection info when available', async () => {
-      const mockSession = {
-        workspacePath: '/workspace/project',
+      const mockSession = createStoreSession({
         remoteConnectionId: 'remote-1',
         remoteSshHost: 'ssh-host-1',
-      };
+      });
 
+      (sessionAPI.loadSessionMetadata as any).mockResolvedValue(createMetadata());
       (flowChatStore.getState as any).mockReturnValue({
         sessions: new Map([['session-1', mockSession]]),
       });
@@ -161,11 +254,23 @@ describe('ReviewActionBarPersistenceService', () => {
 
   describe('clearPersistedReviewState', () => {
     it('saves metadata with undefined reviewActionState', async () => {
+      (sessionAPI.loadSessionMetadata as any).mockResolvedValue(createMetadata({
+        reviewActionState: {
+          version: 1,
+          phase: 'review_completed',
+          completedRemediationIds: [],
+          minimized: false,
+          customInstructions: '',
+          persistedAt: 1000,
+        },
+      }));
+
       await clearPersistedReviewState('session-1', '/workspace/project');
 
       expect(sessionAPI.saveSessionMetadata).toHaveBeenCalledTimes(1);
       const [metadata] = (sessionAPI.saveSessionMetadata as any).mock.calls[0];
       expect(metadata.sessionId).toBe('session-1');
+      expect(metadata.sessionName).toBe('Test Session');
       expect(metadata.reviewActionState).toBeUndefined();
     });
   });

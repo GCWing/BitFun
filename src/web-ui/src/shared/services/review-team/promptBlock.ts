@@ -5,6 +5,7 @@ import {
   REVIEW_STRATEGY_PROFILES,
 } from './strategy';
 import { toManifestMember } from './manifestMembers';
+import type { ReviewDomainTag } from '../reviewTargetClassifier';
 import type {
   DeepReviewEvidencePack,
   DeepReviewScopeProfile,
@@ -23,6 +24,22 @@ import type {
 
 // Prompt formatting consumes an already-built manifest. Keep launch policy and
 // side effects in the manifest/service layers so this stays deterministic.
+const LOCALE_ONLY_REVIEW_DISQUALIFYING_TAGS: ReviewDomainTag[] = [
+  'frontend_ui',
+  'frontend_style',
+  'frontend_contract',
+  'desktop_contract',
+  'web_server_contract',
+  'transport',
+  'api_layer',
+  'ai_adapter',
+  'test',
+  'docs',
+  'config',
+  'generated_or_lock',
+  'unknown',
+];
+
 function formatResponsibilities(items: string[]): string {
   return items.map((item) => `    - ${item}`).join('\n');
 }
@@ -205,6 +222,28 @@ function formatScopeProfileBlock(profile?: DeepReviewScopeProfile): string {
   ].join('\n');
 }
 
+function isLocaleOnlyReviewTarget(manifest: ReviewTeamRunManifest): boolean {
+  const includedFiles = manifest.target.files.filter((file) => !file.excluded);
+  return includedFiles.length > 0 && includedFiles.every((file) =>
+    file.tags.includes('frontend_i18n') &&
+    !file.tags.some((tag) => LOCALE_ONLY_REVIEW_DISQUALIFYING_TAGS.includes(tag))
+  );
+}
+
+function formatLocaleOnlyReviewGuardrail(manifest: ReviewTeamRunManifest): string | null {
+  if (!isLocaleOnlyReviewTarget(manifest)) {
+    return null;
+  }
+
+  return [
+    'Locale-only review guardrail:',
+    '- The assigned files are locale/i18n resources only.',
+    '- Keep ReviewFrontend focused on changed keys, missing or stale translations, placeholder parity, ICU or Fluent syntax, component tag parity, accelerator or formatting consistency, and cross-locale meaning drift.',
+    '- Do not broaden into React performance, accessibility, or frontend-backend API contract review unless the locale diff directly references a changed UI/API contract key that requires one-hop verification.',
+    '- Prefer GetFileDiff and targeted key lookup before full-file reads. If a full-file read is necessary, explain the exact key family being verified.',
+  ].join('\n');
+}
+
 function incrementalReviewCacheToPromptPayload(plan: ReviewTeamIncrementalReviewCachePlan) {
   return {
     source: plan.source,
@@ -369,10 +408,12 @@ export function buildReviewTeamPromptBlockContent(
   const commonStrategyRules = REVIEW_STRATEGY_COMMON_RULES.reviewerPromptRules
     .map((rule) => `- ${rule}`)
     .join('\n');
+  const localeOnlyReviewGuardrail = formatLocaleOnlyReviewGuardrail(manifest);
 
   return [
     manifestBlock,
     formatScopeProfileBlock(manifest.scopeProfile),
+    ...(localeOnlyReviewGuardrail ? [localeOnlyReviewGuardrail] : []),
     formatEvidencePackBlock(manifest.evidencePack),
     formatPreReviewSummaryBlock(manifest.preReviewSummary),
     formatSharedContextCacheBlock(manifest.sharedContextCache),
@@ -408,7 +449,7 @@ export function buildReviewTeamPromptBlockContent(
     '- If a skipped reviewer has reason invalid_tooling, report it as a configuration issue and do not reduce confidence in the reviewers that did run.',
     '- If target_resolution is unknown, conditional reviewers may be activated conservatively; report that as coverage context.',
     `- Run the active core reviewer roles first: ${formatManifestList(manifest.coreReviewers, 'none')}.`,
-    '- Launch reviewer Tasks by launch_batch. Do not launch a later reviewer batch until every reviewer Task in the earlier batch has completed, failed, timed out, or returned partial_timeout.',
+    '- Launch reviewer Tasks by launch_batch priority. Earlier batches get reviewer capacity first; queued later-batch Tasks may start automatically as soon as reviewer capacity frees.',
     '- Never launch more reviewer Tasks in one batch than max_parallel_instances. If stagger_seconds is greater than 0, wait that many seconds before starting the next launch_batch.',
     '- Run ReviewJudge only after the reviewer batch finishes, as the quality-gate pass.',
     '- If other extra reviewers are configured and enabled, run them in parallel with the locked reviewers whenever possible.',

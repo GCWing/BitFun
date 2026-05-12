@@ -698,12 +698,23 @@
     "partialResultsDescription": "{{completed}}/{{total}} 個 reviewer 已完成",
     "partialIssues": "發現 {{count}} 個問題",
     "partialRemediationItems": "{{count}} 個修復項",
+    "partialReviewerSummaries": "{{count}} 條審核員摘要",
     "contextOverflowTitle": "上下文超出限制，請選擇處理方式：",
     "longRunningHint": "審核仍在進行中，可能需要更長時間...",
     "elapsedTime": "已運行 {{time}}",
     "recoveryPreserve": "{{count}} 個已完成的 reviewer 將保留",
     "recoveryRerun": "{{count}} 個 reviewer 將重新運行",
     "recoverySkip": "{{count}} 個 reviewer 將被跳過",
+    "manualCancel": {
+      "title": "審核已停止",
+      "description": "你已停止本次深度審核。已完成的審核員結果會保留，可在準備好後繼續剩餘審核。"
+    },
+    "resultRecovery": {
+      "title": "深度審核需要補全結果",
+      "missingSubmitCodeReview": "審核已結束，但 BitFun 沒有收到可確認的結構化結果。繼續會保留已完成的審核員結果，並要求 agent 補交缺失的審核報告。",
+      "invalidSubmitCodeReview": "審核回傳了 BitFun 無法讀取的結果。繼續會保留已完成的審核員結果，並要求 agent 修復報告。",
+      "wrongReviewMode": "審核回傳了標準程式碼審核結果。繼續會保留已完成的審核員結果，並要求 agent 提交深度審核報告。"
+    },
     "capacityQueue": {
       "title": "審核員正在等待容量",
       "pausedTitle": "佇列已暫停",
@@ -711,6 +722,7 @@
       "providerTitle": "等待模型容量",
       "detail": "排隊等待時間不會計入審核員執行時長。",
       "activeReviewerDetail": "排隊審核員會在執行中的審核員釋放容量後繼續啟動。排隊等待時間不會計入審核員執行時長。",
+      "longLaunchBatchWaitDetail": "該審核員等待時間已超過設定的佇列窗口，因為前一批審核員仍在執行。你可以繼續等待、暫停佇列、取消排隊審核員，或開啟審核設定。",
       "providerDetail": "BitFun 正在等待暫時模型容量恢復。這裡的等待不會計入審核員執行時長。",
       "reason": "原因：{{reason}}",
       "elapsed": "已等待 {{elapsed}}",
@@ -725,8 +737,8 @@
         "temporaryOverload": "模型服務暫時過載"
       },
       "reasonDetails": {
-        "providerRateLimit": "模型服務正在限速。BitFun 會短暫等待；如果反覆出現，可以降低 Review Team 並行審核員數量。",
-        "providerConcurrencyLimit": "模型服務拒絕了新的並發審核員。BitFun 會在容量恢復後重試；如果持續發生，建議降低審核員並行數。",
+        "providerRateLimit": "模型服務正在限速。BitFun 會短暫等待，並在容量恢復後繼續。",
+        "providerConcurrencyLimit": "模型服務拒絕了新的並發審核員。BitFun 會在容量恢復後重試。",
         "retryAfter": "模型服務要求稍後重試。這裡的等待不會消耗審核員執行時間。",
         "localConcurrencyCap": "目前 Review Team 審核員並行上限已滿。已有審核員完成後，該審核員會繼續啟動。",
         "launchBatchBlocked": "前一啟動批次仍在執行。等待可以保持計畫中的審核順序，避免後續批次提前執行。",
@@ -742,11 +754,7 @@
       "continueQueue": "繼續佇列",
       "cancelQueued": "取消排隊審核員",
       "skipOptionalQueued": "略過選用擴充",
-      "runSlowerNextTime": "下次降低並發",
       "openReviewSettings": "開啟審核設定",
-      "runSlowerSaved": "下次 Deep Review 最多會使用 {{count}} 個並行審核員。",
-      "runSlowerFailed": "更新審核設定失敗。",
-      "runSlowerFailedWithReason": "更新審核設定失敗：{{reason}}。可以開啟審核設定並手動降低 Review Team 最大並行審核員數量。",
       "controlFailed": "佇列控制不可用，因為該審核員缺少會話、輪次或工具識別碼。可使用停止按鈕中斷審核，或等待佇列狀態重新整理後再試。",
       "controlFailedWithReason": "佇列控制失敗：{{reason}}。請重試；如果佇列卡住，可以使用停止來中斷審核。",
       "controlPartiallyFailedWithReason": "佇列控制已部分生效；{{total}} 位審核員中有 {{failed}} 位失敗：{{reason}}。請等待佇列狀態重新整理後重試；如果佇列卡住，可以使用停止來中斷審核。"

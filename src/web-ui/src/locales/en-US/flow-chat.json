@@ -698,12 +698,23 @@
     "partialResultsDescription": "{{completed}}/{{total}} reviewers completed",
     "partialIssues": "{{count}} issues found",
     "partialRemediationItems": "{{count}} remediation items",
+    "partialReviewerSummaries": "{{count}} reviewer summaries",
     "contextOverflowTitle": "Context limit reached. Choose how to proceed:",
     "longRunningHint": "Review is still running. This may take a few more minutes.",
     "elapsedTime": "Running for {{time}}",
     "recoveryPreserve": "{{count}} completed reviewers will be preserved",
     "recoveryRerun": "{{count}} reviewers will be rerun",
     "recoverySkip": "{{count}} reviewers will be skipped",
+    "manualCancel": {
+      "title": "Review stopped",
+      "description": "You stopped this Deep Review. Completed reviewer output is preserved, and you can continue the remaining work when ready."
+    },
+    "resultRecovery": {
+      "title": "Deep review needs a report",
+      "missingSubmitCodeReview": "The review finished, but BitFun did not receive a structured result to confirm. Continue preserves completed reviewer work and asks the agent to submit the missing report.",
+      "invalidSubmitCodeReview": "The review returned a result BitFun could not read. Continue preserves completed reviewer work and asks the agent to repair the report.",
+      "wrongReviewMode": "The review returned a standard Code Review result. Continue preserves completed reviewer work and asks the agent to submit the Deep Review report."
+    },
     "capacityQueue": {
       "title": "Reviewers waiting for capacity",
       "pausedTitle": "Queue paused",
@@ -711,6 +722,7 @@
       "providerTitle": "Waiting for model capacity",
       "detail": "Queue wait does not count against reviewer runtime.",
       "activeReviewerDetail": "Queued reviewers start when a running reviewer frees capacity. Queue wait does not count against reviewer runtime.",
+      "longLaunchBatchWaitDetail": "This reviewer has waited longer than the configured queue window because an earlier reviewer batch is still running. You can keep waiting, pause the queue, cancel queued reviewers, or open Review settings.",
       "providerDetail": "BitFun is waiting for temporary model capacity. This wait does not count against reviewer runtime.",
       "reason": "Reason: {{reason}}",
       "elapsed": "Waited {{elapsed}}",
@@ -725,8 +737,8 @@
         "temporaryOverload": "temporary provider overload"
       },
       "reasonDetails": {
-        "providerRateLimit": "The model provider is rate-limiting requests. BitFun will wait briefly; reducing Review Team parallel reviewers can help if this repeats.",
-        "providerConcurrencyLimit": "The model provider rejected another concurrent reviewer. BitFun will retry after capacity opens; lower reviewer parallelism if it keeps happening.",
+        "providerRateLimit": "The model provider is rate-limiting requests. BitFun will wait briefly and continue when capacity returns.",
+        "providerConcurrencyLimit": "The model provider rejected another concurrent reviewer. BitFun will retry after capacity opens.",
         "retryAfter": "The model provider asked BitFun to retry later. Waiting here avoids spending reviewer runtime while the provider cools down.",
         "localConcurrencyCap": "The configured Review Team reviewer limit is full. This reviewer will start after an active reviewer finishes.",
         "launchBatchBlocked": "An earlier launch batch is still running. Waiting preserves the planned review order and prevents a later batch from overtaking it.",
@@ -742,11 +754,7 @@
       "continueQueue": "Continue queue",
       "cancelQueued": "Cancel queued reviewers",
       "skipOptionalQueued": "Skip optional extras",
-      "runSlowerNextTime": "Run slower next time",
       "openReviewSettings": "Open Review settings",
-      "runSlowerSaved": "Next Deep Review will use up to {{count}} parallel reviewers.",
-      "runSlowerFailed": "Failed to update Review settings.",
-      "runSlowerFailedWithReason": "Failed to update Review settings: {{reason}}. Open Review settings and lower Review Team max parallel reviewers manually.",
       "controlFailed": "Queue control is unavailable because this reviewer is missing session, turn, or tool identifiers. Use Stop to interrupt the review, or wait for the queue state to refresh.",
       "controlFailedWithReason": "Queue control failed: {{reason}}. Try again, or use Stop to interrupt the review if the queue is stuck.",
       "controlPartiallyFailedWithReason": "Queue control partly applied; {{failed}} of {{total}} reviewers failed: {{reason}}. Wait for the queue state to refresh, then retry or use Stop if it is stuck."

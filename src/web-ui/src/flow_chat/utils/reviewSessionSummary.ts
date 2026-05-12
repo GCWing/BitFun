@@ -21,6 +21,11 @@ export interface CodeReviewResultData {
   remediation_plan?: string[];
 }
 
+export type CodeReviewResultLookup =
+  | { status: 'valid'; result: CodeReviewResultData }
+  | { status: 'missing'; reason: 'no_submit_code_review' }
+  | { status: 'invalid'; reason: 'unreadable_submit_code_review' };
+
 export interface ReviewResultSummary {
   issueCount: number;
   riskLevel: CodeReviewSummaryData['risk_level'];
@@ -48,9 +53,12 @@ function parseReviewResult(result: unknown): CodeReviewResultData | null {
   return null;
 }
 
-export function findLatestCodeReviewResult(session?: Session | null): CodeReviewResultData | null {
+export function findLatestCodeReviewResultState(session?: Session | null): CodeReviewResultLookup {
   if (!session) {
-    return null;
+    return {
+      status: 'missing',
+      reason: 'no_submit_code_review',
+    };
   }
 
   // Scan dialog turns from newest to oldest
@@ -66,15 +74,30 @@ export function findLatestCodeReviewResult(session?: Session | null): CodeReview
           if (toolItem.toolName === 'submit_code_review') {
             const parsed = parseReviewResult(toolItem.toolResult?.result);
             if (parsed) {
-              return parsed;
+              return {
+                status: 'valid',
+                result: parsed,
+              };
             }
+            return {
+              status: 'invalid',
+              reason: 'unreadable_submit_code_review',
+            };
           }
         }
       }
     }
   }
 
-  return null;
+  return {
+    status: 'missing',
+    reason: 'no_submit_code_review',
+  };
+}
+
+export function findLatestCodeReviewResult(session?: Session | null): CodeReviewResultData | null {
+  const state = findLatestCodeReviewResultState(session);
+  return state.status === 'valid' ? state.result : null;
 }
 
 export function summarizeCodeReviewResult(result?: CodeReviewResultData | null): ReviewResultSummary {

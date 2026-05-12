@@ -52,4 +52,26 @@ describe('buildInterruptionDiagnostics', () => {
     expect(diagnostics).toContain('... [truncated]');
     expect(diagnostics.length).toBeLessThan(1500);
   });
+
+  it('expands terse presenter diagnostics when the interruption has a raw failure message', () => {
+    const diagnostics = buildInterruptionDiagnostics(
+      {
+        category: 'unknown',
+        rawMessage: 'Conversation execution failed after ReviewSecurity completed.',
+      },
+      {
+        ...presentation,
+        category: 'unknown',
+        titleKey: 'errors:ai.executionFailed',
+        messageKey: 'errors:ai.genericSuggestion',
+        diagnostics: 'category=unknown',
+      },
+      t,
+    );
+
+    expect(diagnostics).toContain('=== Deep Review Interruption Diagnostics ===');
+    expect(diagnostics).toContain('Error type: unknown (unknown)');
+    expect(diagnostics).toContain('raw message: Conversation execution failed after ReviewSecurity completed.');
+    expect(diagnostics).not.toBe('category=unknown');
+  });
 });

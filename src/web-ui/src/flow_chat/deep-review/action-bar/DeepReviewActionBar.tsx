@@ -8,7 +8,6 @@ import {
   Loader2,
   MessageSquare,
 } from 'lucide-react';
-import { Button } from '@/component-library';
 import {
   useReviewActionBarStore,
   type DeepReviewCapacityQueueAction,
@@ -38,7 +37,6 @@ import {
 } from '../../utils/deepReviewExperience';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
-import { lowerDefaultReviewTeamMaxParallelReviewers } from '@/shared/services/reviewTeamService';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { ConfigTab } from '@/app/scenes/settings/settingsConfig';
@@ -157,6 +155,7 @@ export const ReviewActionBar: React.FC = () => {
   const isDeepReview = reviewMode === 'deep';
   const hasInterruption = isDeepReview && Boolean(interruption);
   const isResumeRunning = phase === 'resume_running';
+  const showInterruptionDetails = hasInterruption && !isResumeRunning;
   const showCapacityQueueNotice = isDeepReview &&
     Boolean(capacityQueueState) &&
     capacityQueueState?.status !== 'running' &&
@@ -228,22 +227,6 @@ export const ReviewActionBar: React.FC = () => {
 
     applyLocalAction();
   }, [capacityQueueState, childSessionId, t]);
-
-  const handleRunSlowerNextTime = useCallback(async () => {
-    try {
-      const nextPolicy = await lowerDefaultReviewTeamMaxParallelReviewers();
-      notificationService.success(t('deepReviewActionBar.capacityQueue.runSlowerSaved', {
-        count: nextPolicy.maxParallelInstances,
-        defaultValue: `Next Deep Review will use up to ${nextPolicy.maxParallelInstances} parallel reviewers.`,
-      }));
-    } catch (error) {
-      log.warn('Failed to lower DeepReview max parallel reviewers', error);
-      notificationService.error(t('deepReviewActionBar.capacityQueue.runSlowerFailedWithReason', {
-        reason: normalizeActionErrorMessage(error),
-        defaultValue: 'Failed to update Review settings: {{reason}}. Open Review settings and lower Review Team max parallel reviewers manually.',
-      }));
-    }
-  }, [t]);
 
   const handleOpenReviewSettings = useCallback(() => {
     openSettingsTab('review');
@@ -572,24 +555,26 @@ export const ReviewActionBar: React.FC = () => {
       if (!confirmed) return;
     }
 
-    store.setActiveAction('resume');
+    const resumeBaselineTurnId = childSession?.dialogTurns.at(-1)?.id ?? null;
+    store.setActiveAction('resume', { baselineTurnId: resumeBaselineTurnId });
     store.updatePhase('resume_running');
+    store.minimize();
     try {
       await continueDeepReviewSession(interruption, t('deepReviewActionBar.resumeRequestDisplay', {
         defaultValue: 'Continue interrupted Deep Review',
       }), { force: !interruption.canResume });
-      store.minimize();
     } catch (error) {
       log.error('Failed to continue interrupted Deep Review', { childSessionId, error });
       const message = t('deepReviewActionBar.resumeFailedMessage', {
         defaultValue: 'Unable to continue Deep Review. Check the model settings or try again later.',
       });
       store.updatePhase('resume_failed', message);
+      store.restore();
       notificationService.error(message, { duration: 5000 });
     } finally {
       store.setActiveAction(null);
     }
-  }, [childSessionId, interruption, store, t]);
+  }, [childSession, childSessionId, interruption, store, t]);
 
   const handleContinueFix = useCallback(async () => {
     if (!reviewData || !childSessionId || remainingFixIds.length === 0) return;
@@ -789,60 +774,37 @@ export const ReviewActionBar: React.FC = () => {
             'cancel',
             store.cancelQueuedReviewers,
           )}
-          onRunSlowerNextTime={handleRunSlowerNextTime}
           onOpenReviewSettings={handleOpenReviewSettings}
         />
       )}
 
       <PartialResultsPanel
-        progressSummary={hasInterruption ? progressSummary : null}
+        progressSummary={showInterruptionDetails ? progressSummary : null}
         partialResults={partialResults}
         showPartialResults={showPartialResults}
         onTogglePartialResults={() => setShowPartialResults(!showPartialResults)}
       />
 
       {/* Error attribution card */}
-      {hasInterruption && errorAttribution && (
-        <div className={`deep-review-action-bar__attribution deep-review-action-bar__attribution--${errorAttribution.severity}`}>
+      {showInterruptionDetails && errorAttribution && (
+        <div
+          className={`deep-review-action-bar__attribution deep-review-action-bar__attribution--${errorAttribution.severity}`}
+          role="status"
+          aria-live="polite"
+        >
           <span className="deep-review-action-bar__attribution-message">
             {t(errorAttribution.description, { defaultValue: '' })}
           </span>
-          {errorAttribution.actions.length > 0 && (
-            <div className="deep-review-action-bar__attribution-actions">
-              {errorAttribution.actions.map((action) => (
-                <Button
-                  key={action.code}
-                  variant="secondary"
-                  size="small"
-                  onClick={() => {
-                    if (action.code === 'open_model_settings') {
-                      openSettingsTab('models');
-                    } else if (action.code === 'switch_model') {
-                      openSettingsTab('models');
-                    } else if (action.code === 'retry' || action.code === 'continue') {
-                      void handleContinueReview();
-                    } else if (action.code === 'wait_and_retry') {
-                      void handleContinueReview();
-                    } else if (action.code === 'copy_diagnostics') {
-                      void handleCopyDiagnostics();
-                    }
-                  }}
-                >
-                  {t(action.labelKey, { defaultValue: action.code })}
-                </Button>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
       {/* Recovery plan preview */}
-      {hasInterruption && recoveryPlan && (
+      {showInterruptionDetails && recoveryPlan && (
         <RecoveryPlanPreview recoveryPlan={recoveryPlan} />
       )}
 
       {/* Context overflow degradation options */}
-      {hasInterruption && interruption?.errorDetail?.category === 'context_overflow' && (
+      {showInterruptionDetails && interruption?.errorDetail?.category === 'context_overflow' && (
         <div className="deep-review-action-bar__degradation">
           <span className="deep-review-action-bar__degradation-title">
             {t('deepReviewActionBar.contextOverflowTitle', {
@@ -960,7 +922,7 @@ export const ReviewActionBar: React.FC = () => {
         isDeepReview={isDeepReview}
         retryableSliceCount={retryableSlices.length}
         remediationItemCount={remediationItems.length}
-        hasInterruption={hasInterruption}
+        hasInterruption={showInterruptionDetails}
         partialResultsAvailable={Boolean(partialResults?.hasPartialResults)}
         activeAction={activeAction}
         isFixDisabled={isFixDisabled}

@@ -80,9 +80,11 @@ describe('shouldProcessEvent', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    resetFlowChatStore();
   });
 
   afterEach(() => {
+    resetFlowChatStore();
     stateMachineManager.clear();
   });
 
@@ -129,6 +131,132 @@ describe('shouldProcessEvent', () => {
     expect(
       shouldProcessEvent(mockSessionId, mockTurnId, 'data', 'TextChunk'),
     ).toBe(false);
+  });
+
+  it('recovers active latest-turn data when the state machine was reset to idle', () => {
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        mockSessionId,
+        {
+          sessionId: mockSessionId,
+          title: 'Test Session',
+          dialogTurns: [{
+            id: mockTurnId,
+            sessionId: mockSessionId,
+            userMessage: {
+              id: 'user-1',
+              content: 'Continue review',
+              timestamp: 1000,
+            },
+            modelRounds: [],
+            status: 'processing',
+            startTime: 1000,
+          }],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 1000,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: mockSessionId,
+    }));
+    stateMachineManager.getOrCreate(mockSessionId);
+
+    expect(
+      shouldProcessEvent(mockSessionId, mockTurnId, 'data', 'ToolEvent'),
+    ).toBe(true);
+    expect(stateMachineManager.getCurrentState(mockSessionId)).toBe(SessionExecutionState.PROCESSING);
+    expect(stateMachineManager.get(mockSessionId)?.getContext().currentDialogTurnId).toBe(mockTurnId);
+  });
+
+  it('does not recover idle data for an old non-latest turn', () => {
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        mockSessionId,
+        {
+          sessionId: mockSessionId,
+          title: 'Test Session',
+          dialogTurns: [
+            {
+              id: mockTurnId,
+              sessionId: mockSessionId,
+              userMessage: {
+                id: 'user-1',
+                content: 'Old turn',
+                timestamp: 1000,
+              },
+              modelRounds: [],
+              status: 'processing',
+              startTime: 1000,
+            },
+            {
+              id: 'newer-turn',
+              sessionId: mockSessionId,
+              userMessage: {
+                id: 'user-2',
+                content: 'New turn',
+                timestamp: 2000,
+              },
+              modelRounds: [],
+              status: 'processing',
+              startTime: 2000,
+            },
+          ],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 1000,
+          lastActiveAt: 2000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: mockSessionId,
+    }));
+    stateMachineManager.getOrCreate(mockSessionId);
+
+    expect(
+      shouldProcessEvent(mockSessionId, mockTurnId, 'data', 'ToolEvent'),
+    ).toBe(false);
+    expect(stateMachineManager.getCurrentState(mockSessionId)).toBe(SessionExecutionState.IDLE);
+  });
+
+  it('does not recover idle data for a cancelled latest turn', () => {
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        mockSessionId,
+        {
+          sessionId: mockSessionId,
+          title: 'Test Session',
+          dialogTurns: [{
+            id: mockTurnId,
+            sessionId: mockSessionId,
+            userMessage: {
+              id: 'user-1',
+              content: 'Cancelled review',
+              timestamp: 1000,
+            },
+            modelRounds: [],
+            status: 'cancelled',
+            startTime: 1000,
+          }],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 1000,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: mockSessionId,
+    }));
+    stateMachineManager.getOrCreate(mockSessionId);
+
+    expect(
+      shouldProcessEvent(mockSessionId, mockTurnId, 'data', 'ToolEvent'),
+    ).toBe(false);
+    expect(stateMachineManager.getCurrentState(mockSessionId)).toBe(SessionExecutionState.IDLE);
   });
 
   it('returns false for data event when turn ID mismatches', () => {

@@ -20,7 +20,8 @@ export const PartialResultsPanel: React.FC<PartialResultsPanelProps> = ({
   onTogglePartialResults,
 }) => {
   const { t } = useTranslation('flow-chat');
-  const showSummary = Boolean(progressSummary && progressSummary.completed > 0);
+  const hasPartialDetails = Boolean(partialResults?.hasPartialResults);
+  const showSummary = Boolean(progressSummary && progressSummary.completed > 0 && hasPartialDetails);
 
   return (
     <>
@@ -66,6 +67,23 @@ export const PartialResultsPanel: React.FC<PartialResultsPanelProps> = ({
                   defaultValue: '{{count}} remediation items',
                 })}
               </span>
+            </div>
+          )}
+          {partialResults.completedReviewerSummaries.length > 0 && (
+            <div className="deep-review-action-bar__partial-section">
+              <span className="deep-review-action-bar__partial-section-title">
+                {t('deepReviewActionBar.partialReviewerSummaries', {
+                  count: partialResults.completedReviewerSummaries.length,
+                  defaultValue: '{{count}} reviewer summaries',
+                })}
+              </span>
+              <ul className="deep-review-action-bar__partial-list">
+                {partialResults.completedReviewerSummaries.map((summary, index) => (
+                  <li key={`${index}-${summary}`} className="deep-review-action-bar__partial-text">
+                    {summary}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

@@ -2,7 +2,7 @@ import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 
-const loadDefaultReviewTeam = vi.fn();
+const loadDefaultReviewTeam = vi.hoisted(() => vi.fn());
 const notificationFns = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
@@ -63,6 +63,11 @@ vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({
   },
 }));
 
+vi.mock('@/infrastructure/config/services/modelConfigs', () => ({
+  getModelDisplayName: (model: { name?: string; id?: string; model_name?: string }) =>
+    model.name ?? model.model_name ?? model.id ?? 'model',
+}));
+
 vi.mock('@/infrastructure/api/service-api/SubagentAPI', () => ({
   SubagentAPI: {
     listSubagents: vi.fn(async () => []),
@@ -84,15 +89,29 @@ vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
   useCurrentWorkspace: () => ({ workspacePath: 'D:/workspace/project' }),
 }));
 
-vi.mock('@/shared/services/reviewTeamService', async () => {
-  const actual = await vi.importActual<typeof import('@/shared/services/reviewTeamService')>(
-    '@/shared/services/reviewTeamService',
-  );
-  return {
-    ...actual,
-    loadDefaultReviewTeam,
-  };
-});
+vi.mock('@/shared/services/reviewTeamService', () => ({
+  DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY: {
+    maxConcurrentReviewers: 4,
+  },
+  DEFAULT_REVIEW_TEAM_EXECUTION_POLICY: {
+    reviewerTimeoutSeconds: 300,
+    judgeTimeoutSeconds: 240,
+    reviewerFileSplitThreshold: 20,
+    maxSameRoleInstances: 3,
+  },
+  DEFAULT_REVIEW_TEAM_MODEL: 'fast',
+  FALLBACK_REVIEW_TEAM_DEFINITION: {
+    id: 'default-review-team',
+    name: 'Code Review Team',
+    members: [],
+  },
+  REVIEW_STRATEGY_DEFINITIONS: {
+    quick: { label: 'Quick' },
+    normal: { label: 'Normal' },
+    deep: { label: 'Deep' },
+  },
+  loadDefaultReviewTeam,
+}));
 
 let JSDOMCtor: (new (
   html?: string,

@@ -37,6 +37,9 @@ use tokio::time::sleep;
 const DEEP_REVIEW_QUEUE_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[cfg(not(test))]
 const DEEP_REVIEW_QUEUE_POLL_INTERVAL: Duration = Duration::from_secs(1);
+pub(crate) const DEEP_REVIEW_PROVIDER_CAPACITY_MAX_RETRY_ATTEMPTS: usize = 3;
+const DEEP_REVIEW_PROVIDER_CAPACITY_BACKOFF_MULTIPLIER: u64 = 3;
+const DEEP_REVIEW_PROVIDER_CAPACITY_MAX_BACKOFF_SECONDS: u64 = 600;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeepReviewQueueWaitSkipReason {
@@ -59,6 +62,7 @@ pub(crate) enum DeepReviewQueueWaitOutcome {
 pub(crate) enum DeepReviewProviderQueueWaitOutcome {
     ReadyToRetry {
         queue_elapsed_ms: u64,
+        early_capacity_probe: bool,
     },
     Skipped {
         queue_elapsed_ms: u64,
@@ -514,6 +518,39 @@ pub(crate) fn provider_capacity_queue_wait_seconds(
     .filter(|seconds| *seconds > 0)
 }
 
+pub(crate) fn provider_capacity_queue_wait_seconds_for_attempt(
+    decision: &DeepReviewCapacityQueueDecision,
+    conc_policy: &DeepReviewConcurrencyPolicy,
+    retry_attempt_index: usize,
+) -> Option<u64> {
+    let base_wait_seconds = provider_capacity_queue_wait_seconds(decision, conc_policy)?;
+    if decision.retry_after_seconds.is_some() {
+        return Some(base_wait_seconds);
+    }
+
+    let multiplier = DEEP_REVIEW_PROVIDER_CAPACITY_BACKOFF_MULTIPLIER.saturating_pow(
+        u32::try_from(retry_attempt_index)
+            .unwrap_or(u32::MAX)
+            .min(8),
+    );
+    Some(
+        base_wait_seconds
+            .saturating_mul(multiplier)
+            .min(DEEP_REVIEW_PROVIDER_CAPACITY_MAX_BACKOFF_SECONDS),
+    )
+    .filter(|seconds| *seconds > 0)
+}
+
+fn provider_capacity_wait_can_wake_on_active_reviewer_release(
+    reason: DeepReviewCapacityQueueReason,
+) -> bool {
+    matches!(
+        reason,
+        DeepReviewCapacityQueueReason::ProviderConcurrencyLimit
+            | DeepReviewCapacityQueueReason::TemporaryOverload
+    )
+}
+
 pub(crate) fn capacity_skip_result_for_provider_reason(
     reason: DeepReviewCapacityQueueReason,
     dialog_turn_id: &str,
@@ -707,6 +744,9 @@ pub(crate) async fn wait_for_provider_capacity_retry(
     let mut queue_timer = QueueWaitTimer::start(Instant::now());
     let max_wait = Duration::from_secs(max_wait_seconds);
     let optional_reviewer_count = is_optional_reviewer.then_some(1);
+    let initial_active_reviewers = deep_review_active_reviewer_count(dialog_turn_id);
+    let can_wake_on_active_reviewer_release =
+        provider_capacity_wait_can_wake_on_active_reviewer_release(reason);
 
     record_deep_review_runtime_provider_capacity_queue(dialog_turn_id, reason);
 
@@ -737,7 +777,7 @@ pub(crate) async fn wait_for_provider_capacity_retry(
                 optional_reviewer_count,
                 Some(effective_parallel_instances),
                 queue_elapsed_ms,
-                conc_policy.max_queue_wait_seconds,
+                max_wait_seconds,
             )
             .await;
             return DeepReviewProviderQueueWaitOutcome::Skipped {
@@ -764,7 +804,7 @@ pub(crate) async fn wait_for_provider_capacity_retry(
                 optional_reviewer_count,
                 Some(effective_parallel_instances),
                 queue_elapsed_ms,
-                conc_policy.max_queue_wait_seconds,
+                max_wait_seconds,
             )
             .await;
             sleep(DEEP_REVIEW_QUEUE_POLL_INTERVAL).await;
@@ -788,10 +828,40 @@ pub(crate) async fn wait_for_provider_capacity_retry(
                 optional_reviewer_count,
                 Some(effective_parallel_instances),
                 queue_elapsed_ms,
-                conc_policy.max_queue_wait_seconds,
+                max_wait_seconds,
             )
             .await;
-            return DeepReviewProviderQueueWaitOutcome::ReadyToRetry { queue_elapsed_ms };
+            return DeepReviewProviderQueueWaitOutcome::ReadyToRetry {
+                queue_elapsed_ms,
+                early_capacity_probe: false,
+            };
+        }
+
+        if can_wake_on_active_reviewer_release
+            && initial_active_reviewers > 0
+            && active_reviewers < initial_active_reviewers
+        {
+            record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
+            clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
+            emit_queue_state(
+                session_id,
+                dialog_turn_id,
+                tool_id,
+                subagent_type,
+                DeepReviewQueueStatus::Running,
+                Some(reason),
+                0,
+                active_reviewers,
+                optional_reviewer_count,
+                Some(effective_parallel_instances),
+                queue_elapsed_ms,
+                max_wait_seconds,
+            )
+            .await;
+            return DeepReviewProviderQueueWaitOutcome::ReadyToRetry {
+                queue_elapsed_ms,
+                early_capacity_probe: true,
+            };
         }
 
         emit_queue_state(
@@ -806,7 +876,7 @@ pub(crate) async fn wait_for_provider_capacity_retry(
             optional_reviewer_count,
             Some(effective_parallel_instances),
             queue_elapsed_ms,
-            conc_policy.max_queue_wait_seconds,
+            max_wait_seconds,
         )
         .await;
 

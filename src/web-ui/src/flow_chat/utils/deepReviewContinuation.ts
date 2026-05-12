@@ -6,6 +6,11 @@ import {
 import type { FlowToolItem, Session } from '../types/flow-chat';
 
 export type DeepReviewContinuationPhase = 'review_interrupted' | 'resume_blocked';
+export type DeepReviewResultRecoveryReason =
+  | 'missing_submit_code_review'
+  | 'invalid_submit_code_review'
+  | 'wrong_review_mode';
+export type DeepReviewInterruptionReason = 'manual_cancelled';
 export type DeepReviewReviewerStatus =
   | 'completed'
   | 'partial_timeout'
@@ -33,6 +38,8 @@ export interface DeepReviewInterruption {
   recommendedActions: AiErrorAction[];
   reviewers: DeepReviewReviewerProgress[];
   runManifest?: Session['deepReviewRunManifest'];
+  resultRecoveryReason?: DeepReviewResultRecoveryReason;
+  interruptionReason?: DeepReviewInterruptionReason;
 }
 
 const RESUME_BLOCKING_CATEGORIES = new Set([
@@ -41,6 +48,15 @@ const RESUME_BLOCKING_CATEGORIES = new Set([
   'auth',
   'permission',
 ]);
+
+const RESULT_RECOVERY_MESSAGES: Record<DeepReviewResultRecoveryReason, string> = {
+  missing_submit_code_review:
+    'Deep Review completed, but BitFun did not receive a structured submit_code_review result.',
+  invalid_submit_code_review:
+    'Deep Review submitted a structured result that BitFun could not read.',
+  wrong_review_mode:
+    'Deep Review submitted a standard Code Review result instead of a Deep Review result.',
+};
 
 export function deriveDeepReviewInterruption(
   session: Session,
@@ -85,10 +101,42 @@ export function deriveDeepReviewInterruption(
     recommendedActions: presentation.actions,
     reviewers: collectReviewerProgress(session),
     runManifest: session.deepReviewRunManifest,
+    interruptionReason: wasManuallyCancelled ? 'manual_cancelled' : undefined,
+  };
+}
+
+export function deriveDeepReviewResultRecoveryInterruption(
+  session: Session,
+  reason: DeepReviewResultRecoveryReason,
+): DeepReviewInterruption | null {
+  if (session.sessionKind !== 'deep_review') {
+    return null;
+  }
+
+  const errorDetail = normalizeAiErrorDetail({
+    category: 'model_error',
+    retryable: true,
+    actionHints: ['continue', 'copy_diagnostics'],
+    rawMessage: RESULT_RECOVERY_MESSAGES[reason],
+  });
+  const presentation = getAiErrorPresentation(errorDetail);
+
+  return {
+    phase: 'review_interrupted',
+    childSessionId: session.sessionId,
+    parentSessionId: session.btwOrigin?.parentSessionId ?? session.parentSessionId,
+    originalTarget: findOriginalTarget(session),
+    errorDetail,
+    canResume: true,
+    recommendedActions: presentation.actions,
+    reviewers: collectReviewerProgress(session),
+    runManifest: session.deepReviewRunManifest,
+    resultRecoveryReason: reason,
   };
 }
 
 export function buildDeepReviewContinuationPrompt(interruption: DeepReviewInterruption): string {
+  const wasManuallyCancelled = interruption.interruptionReason === 'manual_cancelled';
   const reviewerLines = interruption.reviewers.length
     ? interruption.reviewers
         .map((reviewer) => {
@@ -114,15 +162,33 @@ export function buildDeepReviewContinuationPrompt(interruption: DeepReviewInterr
         manifestSkippedReviewers.join('\n'),
       ]
     : [];
-  const retryBudgetRules = formatRetryBudgetRules(interruption.runManifest);
+  const retryBudgetRules = wasManuallyCancelled
+    ? formatManualCancelRetryBudgetRules()
+    : formatRetryBudgetRules(interruption.runManifest);
   const incrementalCacheBlock = formatIncrementalReviewCacheGuidance(
     interruption.runManifest,
   );
+  const manualCancelRules = wasManuallyCancelled
+    ? [
+        '- The previous interruption was requested by the user. Treat it as a user stop/pause, not as a model failure or reviewer timeout.',
+        '- Preserve completed reviewer output and continue only unfinished reviewer work where enough context exists.',
+      ]
+    : [];
+  const resultRecoveryRules = interruption.resultRecoveryReason
+    ? [
+        '- The previous Deep Review ended without a usable structured submit_code_review result.',
+        '- First reconstruct and submit the missing final report from preserved reviewer outputs.',
+        '- Do not rerun completed reviewer work just to regenerate the report.',
+        '- If preserved reviewer output is insufficient, rerun only missing, failed, timed-out, or cancelled reviewers before submitting the report.',
+      ]
+    : [];
 
   return [
     'Continue the interrupted Deep Review in this same session.',
     '',
     'Recovery rules:',
+    ...manualCancelRules,
+    ...resultRecoveryRules,
     '- Do not restart completed reviewer work unless the existing result is clearly incomplete or unusable.',
     '- Do not re-run skipped, non-applicable, or policy-ineligible reviewers; keep them recorded as skipped coverage.',
     ...retryBudgetRules,
@@ -138,11 +204,7 @@ export function buildDeepReviewContinuationPrompt(interruption: DeepReviewInterr
     reviewerLines,
     ...manifestBlock,
     ...incrementalCacheBlock,
-    '',
-    'Last error:',
-    `- category: ${interruption.errorDetail.category ?? 'unknown'}`,
-    interruption.errorDetail.providerCode ? `- provider code: ${interruption.errorDetail.providerCode}` : '- provider code: unknown',
-    interruption.errorDetail.requestId ? `- request id: ${interruption.errorDetail.requestId}` : '- request id: unknown',
+    ...formatLastInterruptionBlock(interruption),
   ].join('\n');
 }
 
@@ -193,6 +255,38 @@ function formatRetryBudgetRules(
     ...baseRules,
     `- Retry budget from manifest: max_retries_per_role = ${maxRetriesPerRole}.`,
     '- For each retry, use the same subagent_type with retry = true, reduce the scope to missing evidence, downgrade strategy when possible, and use a shorter timeout.',
+  ];
+}
+
+function formatManualCancelRetryBudgetRules(): string[] {
+  return [
+    '- Treat partial_timeout reviewers as preserved partial evidence. Re-run them only when useful evidence is missing or unusable.',
+    '- User cancellation does not consume reviewer retry budget.',
+    '- Do not expose internal retry-budget settings or names such as max retry counts in the user-facing reply.',
+    '- An initial timed-out or cancelled reviewer attempt does not by itself mean reviewer retry budget is exhausted.',
+    '- Use retry=true only when the Task tool permits structured retry_coverage for partial_timeout or transient capacity failure. Otherwise continue missing or user-cancelled reviewer work as normal continuation work when possible, or report reduced coverage without internal budget jargon.',
+  ];
+}
+
+function formatLastInterruptionBlock(interruption: DeepReviewInterruption): string[] {
+  if (interruption.interruptionReason === 'manual_cancelled') {
+    return [
+      '',
+      'Last interruption:',
+      '- reason: user_cancelled',
+    ];
+  }
+
+  return [
+    '',
+    'Last error:',
+    `- category: ${interruption.errorDetail.category ?? 'unknown'}`,
+    interruption.errorDetail.providerCode
+      ? `- provider code: ${interruption.errorDetail.providerCode}`
+      : '- provider code: unknown',
+    interruption.errorDetail.requestId
+      ? `- request id: ${interruption.errorDetail.requestId}`
+      : '- request id: unknown',
   ];
 }
 

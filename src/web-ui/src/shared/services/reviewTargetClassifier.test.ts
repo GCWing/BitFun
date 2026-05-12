@@ -53,6 +53,26 @@ describe('reviewTargetClassifier', () => {
     expect(target.tags).toEqual(['backend_core']);
   });
 
+  it('classifies installer and core locale resources as i18n targets', () => {
+    const target = classifyReviewTargetFromFiles(
+      [
+        'src/web-ui/src/locales/zh-TW/flow-chat.json',
+        'src/crates/core/locales/zh-TW.ftl',
+        'BitFun-Installer/src/i18n/locales/zh-TW.json',
+      ],
+      'session_files',
+    );
+
+    expect(target.resolution).toBe('resolved');
+    expect(target.tags).toEqual(
+      expect.arrayContaining(['frontend_i18n', 'installer_ui']),
+    );
+    expect(target.files.every((file) => file.tags.includes('frontend_i18n'))).toBe(true);
+    expect(target.files.find((file) =>
+      file.normalizedPath === 'BitFun-Installer/src/i18n/locales/zh-TW.json',
+    )?.tags).toEqual(expect.arrayContaining(['frontend_i18n', 'installer_ui']));
+  });
+
   it('returns an unknown target when no file list is available', () => {
     const target = createUnknownReviewTargetClassification('unknown');
 

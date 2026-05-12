@@ -183,6 +183,77 @@ function createReviewSession(): Session {
   } as Session;
 }
 
+function createCompletedDeepReviewWithoutResult(): Session {
+  const childSession = createReviewSession();
+  return {
+    ...childSession,
+    dialogTurns: childSession.dialogTurns.map((turn) => ({
+      ...turn,
+      modelRounds: turn.modelRounds.map((round) => ({
+        ...round,
+        items: [{
+          id: 'reviewer-task',
+          type: 'tool',
+          timestamp: 2,
+          status: 'completed',
+          toolName: 'Task',
+          toolCall: {
+            id: 'task-security',
+            input: { subagent_type: 'ReviewSecurity' },
+          },
+          toolResult: {
+            success: true,
+            result: {
+              summary: {
+                overall_assessment: 'Security reviewer found no blockers.',
+              },
+            },
+          },
+        }],
+      })),
+    })),
+  } as Session;
+}
+
+function createInterruptedDeepReviewWithoutResult(): Session {
+  const childSession = createCompletedDeepReviewWithoutResult();
+  return {
+    ...childSession,
+    status: 'error',
+    error: 'previous execution failed',
+    dialogTurns: childSession.dialogTurns.map((turn) => ({
+      ...turn,
+      status: 'error',
+      error: 'previous execution failed',
+    })),
+  } as Session;
+}
+
+function createCancelledResumeDeepReview(): Session {
+  const childSession = createInterruptedDeepReviewWithoutResult();
+  return {
+    ...childSession,
+    status: 'idle',
+    error: null,
+    dialogTurns: [
+      ...childSession.dialogTurns,
+      {
+        id: 'turn-2',
+        sessionId: 'deep-review-child',
+        userMessage: {
+          id: 'user-2',
+          content: 'Continue interrupted Deep Review',
+          timestamp: 2,
+        },
+        modelRounds: [],
+        status: 'cancelled',
+        startTime: 2,
+        timestamp: 2,
+      },
+    ],
+  } as Session;
+}
+
 describe('BtwSessionPanel review action bar integration', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -241,5 +312,127 @@ describe('BtwSessionPanel review action bar integration', () => {
       phase: 'review_completed',
     });
     expect(useReviewActionBarStore.getState().remediationItems).toEqual([]);
+  });
+
+  it('shows a resumable Deep Review action bar when the run completed without a structured report', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createCompletedDeepReviewWithoutResult()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      childSessionId: 'deep-review-child',
+      phase: 'review_interrupted',
+      interruption: expect.objectContaining({
+        canResume: true,
+        resultRecoveryReason: 'missing_submit_code_review',
+      }),
+    });
+  });
+
+  it('does not restore a stale interruption while a resume request is starting', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createInterruptedDeepReviewWithoutResult()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    const store = useReviewActionBarStore.getState();
+    store.showInterruptedActionBar({
+      childSessionId: 'deep-review-child',
+      parentSessionId: 'parent-session',
+      interruption: {
+        phase: 'review_interrupted',
+        childSessionId: 'deep-review-child',
+        parentSessionId: 'parent-session',
+        originalTarget: '/DeepReview review latest commit',
+        errorDetail: { category: 'unknown', rawMessage: 'previous execution failed' },
+        canResume: true,
+        recommendedActions: [],
+        reviewers: [],
+      },
+    });
+    store.setActiveAction('resume', { baselineTurnId: 'turn-1' });
+    store.updatePhase('resume_running');
+    store.minimize();
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      childSessionId: 'deep-review-child',
+      phase: 'resume_running',
+      minimized: true,
+    });
+  });
+
+  it('restores the interrupted action bar when a resumed Deep Review is cancelled by the user', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createCancelledResumeDeepReview()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    const store = useReviewActionBarStore.getState();
+    store.showInterruptedActionBar({
+      childSessionId: 'deep-review-child',
+      parentSessionId: 'parent-session',
+      interruption: {
+        phase: 'review_interrupted',
+        childSessionId: 'deep-review-child',
+        parentSessionId: 'parent-session',
+        originalTarget: '/DeepReview review latest commit',
+        errorDetail: { category: 'unknown', rawMessage: 'previous execution failed' },
+        canResume: true,
+        recommendedActions: [],
+        reviewers: [],
+      },
+    });
+    store.setActiveAction('resume', { baselineTurnId: 'turn-1' });
+    store.updatePhase('resume_running');
+    store.minimize();
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      childSessionId: 'deep-review-child',
+      phase: 'review_interrupted',
+      minimized: false,
+      interruption: expect.objectContaining({
+        interruptionReason: 'manual_cancelled',
+      }),
+    });
   });
 });

@@ -698,12 +698,23 @@
     "partialResultsDescription": "{{completed}}/{{total}} 个 reviewer 已完成",
     "partialIssues": "发现 {{count}} 个问题",
     "partialRemediationItems": "{{count}} 个修复项",
+    "partialReviewerSummaries": "{{count}} 条审核员摘要",
     "contextOverflowTitle": "上下文超出限制，请选择处理方式：",
     "longRunningHint": "审核仍在进行中，可能需要更长时间...",
     "elapsedTime": "已运行 {{time}}",
     "recoveryPreserve": "{{count}} 个已完成的 reviewer 将保留",
     "recoveryRerun": "{{count}} 个 reviewer 将重新运行",
     "recoverySkip": "{{count}} 个 reviewer 将被跳过",
+    "manualCancel": {
+      "title": "审核已停止",
+      "description": "你已停止本次深度审核。已完成的审核员结果会保留，可在准备好后继续剩余审核。"
+    },
+    "resultRecovery": {
+      "title": "深度审核需要补全结果",
+      "missingSubmitCodeReview": "审核已结束，但 BitFun 没有收到可确认的结构化结果。继续会保留已完成的审核员结果，并要求 agent 补交缺失的审核报告。",
+      "invalidSubmitCodeReview": "审核返回了 BitFun 无法读取的结果。继续会保留已完成的审核员结果，并要求 agent 修复报告。",
+      "wrongReviewMode": "审核返回了标准代码审核结果。继续会保留已完成的审核员结果，并要求 agent 提交深度审核报告。"
+    },
     "capacityQueue": {
       "title": "审核员正在等待容量",
       "pausedTitle": "队列已暂停",
@@ -711,6 +722,7 @@
       "providerTitle": "等待模型容量",
       "detail": "排队等待时间不会计入审核员运行时长。",
       "activeReviewerDetail": "排队审核员会在运行中的审核员释放容量后继续启动。排队等待时间不会计入审核员运行时长。",
+      "longLaunchBatchWaitDetail": "该审核员等待时间已超过配置的队列窗口，因为前一批审核员仍在运行。你可以继续等待、暂停队列、取消排队审核员，或打开审核设置。",
       "providerDetail": "BitFun 正在等待临时模型容量恢复。这里的等待不会计入审核员运行时长。",
       "reason": "原因：{{reason}}",
       "elapsed": "已等待 {{elapsed}}",
@@ -725,8 +737,8 @@
         "temporaryOverload": "模型服务临时过载"
       },
       "reasonDetails": {
-        "providerRateLimit": "模型服务正在限速。BitFun 会短暂等待；如果反复出现，可以降低 Review Team 并行审核员数量。",
-        "providerConcurrencyLimit": "模型服务拒绝了新的并发审核员。BitFun 会在容量恢复后重试；如果持续发生，建议降低审核员并行数。",
+        "providerRateLimit": "模型服务正在限速。BitFun 会短暂等待，并在容量恢复后继续。",
+        "providerConcurrencyLimit": "模型服务拒绝了新的并发审核员。BitFun 会在容量恢复后重试。",
         "retryAfter": "模型服务要求稍后重试。这里的等待不会消耗审核员运行时间。",
         "localConcurrencyCap": "当前 Review Team 审核员并行上限已满。已有审核员完成后，该审核员会继续启动。",
         "launchBatchBlocked": "前一启动批次仍在运行。等待可以保持计划中的审核顺序，避免后续批次提前执行。",
@@ -742,11 +754,7 @@
       "continueQueue": "继续队列",
       "cancelQueued": "取消排队审核员",
       "skipOptionalQueued": "跳过可选扩展",
-      "runSlowerNextTime": "下次降低并发",
       "openReviewSettings": "打开审核设置",
-      "runSlowerSaved": "下次 Deep Review 最多会使用 {{count}} 个并行审核员。",
-      "runSlowerFailed": "更新审核设置失败。",
-      "runSlowerFailedWithReason": "更新审核设置失败：{{reason}}。可以打开审核设置并手动降低 Review Team 最大并行审核员数量。",
       "controlFailed": "队列控制不可用，因为该审核员缺少会话、轮次或工具标识。可使用停止按钮中断审核，或等待队列状态刷新后再试。",
       "controlFailedWithReason": "队列控制失败：{{reason}}。请重试；如果队列卡住，可以使用停止来中断审核。",
       "controlPartiallyFailedWithReason": "队列控制已部分生效；{{total}} 位审核员中有 {{failed}} 位失败：{{reason}}。请等待队列状态刷新后重试；如果队列卡住，可以使用停止来中断审核。"

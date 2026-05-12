@@ -121,6 +121,8 @@ export interface ReviewActionBarState {
   fixingRemediationIds: Set<string>;
   /** Last dialog turn that existed before the current fix request was submitted */
   fixingBaselineTurnId: string | null;
+  /** Last dialog turn that existed before the current resume request was submitted */
+  resumeBaselineTurnId: string | null;
   /** IDs of items remaining when a fix was interrupted */
   remainingFixIds: string[];
   /** User's option choice for needs_decision items: map of item id -> option index */
@@ -194,6 +196,7 @@ const initialState = {
   completedRemediationIds: new Set<string>(),
   fixingRemediationIds: new Set<string>(),
   fixingBaselineTurnId: null as string | null,
+  resumeBaselineTurnId: null as string | null,
   remainingFixIds: [] as string[],
   decisionSelections: {} as Record<string, number>,
   capacityQueueState: null as DeepReviewCapacityQueueState | null,
@@ -334,6 +337,7 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       completedRemediationIds: preservedCompleted,
       fixingRemediationIds: new Set(),
       fixingBaselineTurnId: null,
+      resumeBaselineTurnId: null,
       remainingFixIds: [],
       decisionSelections: {},
       capacityQueueState: null,
@@ -360,6 +364,7 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       completedRemediationIds: new Set(),
       fixingRemediationIds: new Set(),
       fixingBaselineTurnId: null,
+      resumeBaselineTurnId: null,
       remainingFixIds: [],
       decisionSelections: {},
       capacityQueueState: null,
@@ -388,6 +393,7 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
         : new Set(),
       fixingRemediationIds: new Set(),
       fixingBaselineTurnId: null,
+      resumeBaselineTurnId: null,
       remainingFixIds: [],
       decisionSelections: {},
       capacityQueueState: withNormalizedWaitingReviewers(capacityQueueState),
@@ -409,6 +415,7 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
         completedRemediationIds: nextCompleted,
         fixingRemediationIds: new Set(),
         fixingBaselineTurnId: null,
+        resumeBaselineTurnId: null,
         remainingFixIds: [],
       });
     } else {
@@ -416,6 +423,7 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
         phase,
         errorMessage: errorMessage ?? null,
         ...(phase !== 'fix_running' ? { fixingBaselineTurnId: null } : {}),
+        ...(phase !== 'resume_running' ? { resumeBaselineTurnId: null } : {}),
       });
     }
   },
@@ -502,6 +510,9 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
       set({
         activeAction: action,
         lastSubmittedAction: action,
+        ...(action === 'resume'
+          ? { resumeBaselineTurnId: options?.baselineTurnId ?? null }
+          : {}),
       });
     } else {
       set({ activeAction: action });
@@ -520,6 +531,7 @@ export const useReviewActionBarStore = create<ReviewActionBarState>((set, get) =
     phase: 'review_completed',
     remainingFixIds: [],
     fixingBaselineTurnId: null,
+    resumeBaselineTurnId: null,
     activeAction: null,
     lastSubmittedAction: null,
   }),

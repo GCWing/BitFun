@@ -205,11 +205,16 @@ impl TaskTool {
         )
     }
 
-    fn deep_review_provider_capacity_queue_wait_seconds(
+    fn deep_review_provider_capacity_queue_wait_seconds_for_attempt(
         decision: &crate::agentic::deep_review_policy::DeepReviewCapacityQueueDecision,
         conc_policy: &DeepReviewConcurrencyPolicy,
+        retry_attempt_index: usize,
     ) -> Option<u64> {
-        deep_review_task_adapter::provider_capacity_queue_wait_seconds(decision, conc_policy)
+        deep_review_task_adapter::provider_capacity_queue_wait_seconds_for_attempt(
+            decision,
+            conc_policy,
+            retry_attempt_index,
+        )
     }
 
     async fn wait_for_deep_review_provider_capacity_retry(
@@ -1098,6 +1103,7 @@ impl Tool for TaskTool {
         let prepared_prompt = prompt;
         let mut provider_capacity_retry_reason: Option<DeepReviewCapacityQueueReason> = None;
         let mut provider_capacity_queue_elapsed_ms = 0_u64;
+        let mut provider_capacity_retry_attempts = 0_usize;
         let result = loop {
             let parent_info = SubagentParentInfo {
                 tool_call_id: tool_call_id.clone(),
@@ -1140,7 +1146,9 @@ impl Tool for TaskTool {
                             {
                                 drop(deep_review_active_guard.take());
 
-                                if provider_capacity_retry_reason.is_some() {
+                                if provider_capacity_retry_attempts
+                                    >= deep_review_task_adapter::DEEP_REVIEW_PROVIDER_CAPACITY_MAX_RETRY_ATTEMPTS
+                                {
                                     let (data, assistant_message) = Self::deep_review_capacity_skip_result_for_provider_queue_outcome(
                                         reason,
                                         &dialog_turn_id,
@@ -1177,9 +1185,10 @@ impl Tool for TaskTool {
                                 }
 
                                 if let Some(max_wait_seconds) =
-                                    Self::deep_review_provider_capacity_queue_wait_seconds(
+                                    Self::deep_review_provider_capacity_queue_wait_seconds_for_attempt(
                                         &decision,
                                         conc_policy,
+                                        provider_capacity_retry_attempts,
                                     )
                                 {
                                     match Self::wait_for_deep_review_provider_capacity_retry(
@@ -1196,8 +1205,11 @@ impl Tool for TaskTool {
                                     {
                                         DeepReviewProviderQueueWaitOutcome::ReadyToRetry {
                                             queue_elapsed_ms,
+                                            early_capacity_probe,
                                         } => {
-                                            provider_capacity_queue_elapsed_ms = queue_elapsed_ms;
+                                            provider_capacity_queue_elapsed_ms =
+                                                provider_capacity_queue_elapsed_ms
+                                                    .saturating_add(queue_elapsed_ms);
                                             let effective_parallel_instances =
                                                 deep_review_effective_parallel_instances(
                                                     &dialog_turn_id,
@@ -1257,6 +1269,11 @@ impl Tool for TaskTool {
                                                 }
                                             }
                                             provider_capacity_retry_reason = Some(reason);
+                                            if !early_capacity_probe {
+                                                provider_capacity_retry_attempts =
+                                                    provider_capacity_retry_attempts
+                                                        .saturating_add(1);
+                                            }
                                             Self::record_deep_review_provider_capacity_retry(
                                                 &dialog_turn_id,
                                                 reason,
@@ -1267,13 +1284,16 @@ impl Tool for TaskTool {
                                             queue_elapsed_ms,
                                             skip_reason,
                                         } => {
+                                            provider_capacity_queue_elapsed_ms =
+                                                provider_capacity_queue_elapsed_ms
+                                                    .saturating_add(queue_elapsed_ms);
                                             let (data, assistant_message) = Self::deep_review_capacity_skip_result_for_provider_queue_outcome(
                                                 reason,
                                                 &dialog_turn_id,
                                                 &subagent_type,
                                                 conc_policy,
                                                 start_time.elapsed().as_millis(),
-                                                queue_elapsed_ms,
+                                                provider_capacity_queue_elapsed_ms,
                                                 Some(skip_reason),
                                             );
                                             return Ok(vec![ToolResult::Result {
@@ -1405,8 +1425,8 @@ impl Tool for TaskTool {
 #[cfg(test)]
 mod tests {
     use super::TaskTool;
-    use crate::agentic::agents::{get_agent_registry, Agent, AgentCategory, SubAgentSource};
     use crate::agentic::agents::CustomSubagentConfig;
+    use crate::agentic::agents::{get_agent_registry, Agent, AgentCategory, SubAgentSource};
     use crate::agentic::deep_review::task_adapter as deep_review_task_adapter;
     use crate::agentic::deep_review_policy::{
         DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewSubagentRole,
@@ -1811,19 +1831,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn deep_review_capacity_queue_waits_for_previous_launch_batch_without_lowering_cap() {
+    async fn deep_review_capacity_queue_starts_later_batch_when_reviewer_capacity_frees() {
         use crate::agentic::deep_review::task_adapter::DeepReviewLaunchBatchInfo;
         use crate::agentic::deep_review_policy::{
             deep_review_capacity_skip_count, deep_review_effective_parallel_instances,
             try_begin_deep_review_active_reviewer_for_launch_batch, DeepReviewConcurrencyPolicy,
         };
 
-        let turn_id = "turn-launch-batch-queue-wait";
-        let tool_id = "tool-launch-batch-queue-wait";
-        let occupied =
+        let turn_id = "turn-launch-batch-fill-free-slot";
+        let tool_id = "tool-launch-batch-fill-free-slot";
+        let occupied_a =
             try_begin_deep_review_active_reviewer_for_launch_batch(turn_id, 2, 1, Some("packet-a"))
                 .expect("launch batch admission should not fail")
                 .expect("first batch reviewer should start");
+        let occupied_b =
+            try_begin_deep_review_active_reviewer_for_launch_batch(turn_id, 2, 1, Some("packet-b"))
+                .expect("launch batch admission should not fail")
+                .expect("second first-batch reviewer should start");
         let policy = DeepReviewConcurrencyPolicy {
             max_parallel_instances: 2,
             stagger_seconds: 0,
@@ -1855,22 +1879,23 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
         assert!(
             !handle.is_finished(),
-            "later launch batch should wait while an earlier batch is active"
+            "later launch batch should wait while reviewer capacity is full"
         );
-        drop(occupied);
+        drop(occupied_a);
 
         let outcome = tokio::time::timeout(tokio::time::Duration::from_millis(500), handle)
             .await
-            .expect("later launch batch should become ready after earlier batch finishes")
+            .expect("later launch batch should become ready as soon as reviewer capacity frees")
             .expect("spawned wait should not panic")
             .expect("queue wait should resolve");
 
         match outcome {
             super::DeepReviewQueueWaitOutcome::Ready { .. } => {}
             super::DeepReviewQueueWaitOutcome::Skipped { .. } => {
-                panic!("later launch batch should not expire while an earlier batch is active");
+                panic!("later launch batch should not expire after reviewer capacity frees");
             }
         }
+        drop(occupied_b);
         assert_eq!(deep_review_capacity_skip_count(turn_id), 0);
         assert_eq!(deep_review_effective_parallel_instances(turn_id, 2), 2);
     }
@@ -2568,9 +2593,38 @@ mod tests {
         );
 
         assert_eq!(
-            TaskTool::deep_review_provider_capacity_queue_wait_seconds(&decision, &policy),
+            TaskTool::deep_review_provider_capacity_queue_wait_seconds_for_attempt(
+                &decision, &policy, 0,
+            ),
             Some(30)
         );
+    }
+
+    #[test]
+    fn deep_review_provider_queue_wait_uses_exponential_backoff_attempts() {
+        use crate::agentic::deep_review_policy::DeepReviewConcurrencyPolicy;
+
+        let policy = DeepReviewConcurrencyPolicy {
+            max_parallel_instances: 3,
+            stagger_seconds: 0,
+            max_queue_wait_seconds: 60,
+            batch_extras_separately: true,
+            allow_bounded_auto_retry: false,
+            auto_retry_elapsed_guard_seconds: 180,
+        };
+        let decision = TaskTool::deep_review_capacity_decision_for_provider_error(
+            &BitFunError::ai("Provider error: code=429, message=too many concurrent requests"),
+        );
+
+        let waits = (0..3)
+            .map(|attempt| {
+                TaskTool::deep_review_provider_capacity_queue_wait_seconds_for_attempt(
+                    &decision, &policy, attempt,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(waits, vec![Some(60), Some(180), Some(540)]);
     }
 
     #[test]
@@ -2590,9 +2644,146 @@ mod tests {
         );
 
         assert_eq!(
-            TaskTool::deep_review_provider_capacity_queue_wait_seconds(&decision, &policy),
+            TaskTool::deep_review_provider_capacity_queue_wait_seconds_for_attempt(
+                &decision, &policy, 0,
+            ),
             None
         );
+    }
+
+    #[tokio::test]
+    async fn deep_review_provider_capacity_queue_retries_when_active_reviewer_frees_capacity() {
+        use crate::agentic::deep_review::task_adapter::DeepReviewProviderQueueWaitOutcome;
+        use crate::agentic::deep_review_policy::{
+            try_begin_deep_review_active_reviewer, DeepReviewCapacityQueueReason,
+            DeepReviewConcurrencyPolicy,
+        };
+
+        let turn_id = "turn-provider-queue-active-release";
+        let tool_id = "tool-provider-queue-active-release";
+        let occupied = try_begin_deep_review_active_reviewer(turn_id, 2)
+            .expect("precondition should occupy another reviewer slot");
+        let policy = DeepReviewConcurrencyPolicy {
+            max_parallel_instances: 2,
+            stagger_seconds: 0,
+            max_queue_wait_seconds: 60,
+            batch_extras_separately: true,
+            allow_bounded_auto_retry: false,
+            auto_retry_elapsed_guard_seconds: 180,
+        };
+        let turn_id_owned = turn_id.to_string();
+        let tool_id_owned = tool_id.to_string();
+
+        let handle = tokio::spawn(async move {
+            TaskTool::wait_for_deep_review_provider_capacity_retry(
+                "session-provider-queue-active-release",
+                &turn_id_owned,
+                &tool_id_owned,
+                "ReviewSecurity",
+                &policy,
+                DeepReviewCapacityQueueReason::ProviderConcurrencyLimit,
+                60,
+                false,
+            )
+            .await
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
+        assert!(
+            !handle.is_finished(),
+            "provider queue should keep waiting while no additional reviewer capacity freed"
+        );
+        drop(occupied);
+
+        let outcome = tokio::time::timeout(tokio::time::Duration::from_millis(500), handle)
+            .await
+            .expect("provider queue should wake when another active reviewer frees capacity")
+            .expect("spawned wait should not panic");
+
+        match outcome {
+            DeepReviewProviderQueueWaitOutcome::ReadyToRetry {
+                queue_elapsed_ms,
+                early_capacity_probe,
+            } => {
+                assert!(
+                    queue_elapsed_ms < 500,
+                    "early capacity wake should not wait for the full backoff window"
+                );
+                assert!(
+                    early_capacity_probe,
+                    "active reviewer release should be marked as an early provider capacity probe"
+                );
+            }
+            DeepReviewProviderQueueWaitOutcome::Skipped { .. } => {
+                panic!("provider queue should retry after active reviewer capacity frees")
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn deep_review_provider_retry_after_wait_ignores_active_reviewer_release() {
+        use crate::agentic::deep_review::task_adapter::DeepReviewProviderQueueWaitOutcome;
+        use crate::agentic::deep_review_policy::{
+            try_begin_deep_review_active_reviewer, DeepReviewCapacityQueueReason,
+            DeepReviewConcurrencyPolicy,
+        };
+
+        let turn_id = "turn-provider-retry-after-hard-wait";
+        let tool_id = "tool-provider-retry-after-hard-wait";
+        let occupied = try_begin_deep_review_active_reviewer(turn_id, 2)
+            .expect("precondition should occupy another reviewer slot");
+        let policy = DeepReviewConcurrencyPolicy {
+            max_parallel_instances: 2,
+            stagger_seconds: 0,
+            max_queue_wait_seconds: 1,
+            batch_extras_separately: true,
+            allow_bounded_auto_retry: false,
+            auto_retry_elapsed_guard_seconds: 180,
+        };
+        let turn_id_owned = turn_id.to_string();
+        let tool_id_owned = tool_id.to_string();
+
+        let handle = tokio::spawn(async move {
+            TaskTool::wait_for_deep_review_provider_capacity_retry(
+                "session-provider-retry-after-hard-wait",
+                &turn_id_owned,
+                &tool_id_owned,
+                "ReviewSecurity",
+                &policy,
+                DeepReviewCapacityQueueReason::RetryAfter,
+                1,
+                false,
+            )
+            .await
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
+        drop(occupied);
+        tokio::time::sleep(tokio::time::Duration::from_millis(120)).await;
+        assert!(
+            !handle.is_finished(),
+            "retry-after waits should not be interrupted by local reviewer capacity release"
+        );
+
+        let outcome = tokio::time::timeout(tokio::time::Duration::from_millis(1500), handle)
+            .await
+            .expect("retry-after wait should eventually finish")
+            .expect("spawned wait should not panic");
+
+        match outcome {
+            DeepReviewProviderQueueWaitOutcome::ReadyToRetry {
+                early_capacity_probe,
+                ..
+            } => {
+                assert!(
+                    !early_capacity_probe,
+                    "retry-after completion should be a natural cooldown retry"
+                );
+            }
+            DeepReviewProviderQueueWaitOutcome::Skipped { .. } => {
+                panic!("retry-after wait should retry after its bounded cooldown")
+            }
+        }
     }
 
     #[tokio::test]
@@ -2703,7 +2894,9 @@ mod tests {
             .expect("spawned wait should not panic");
 
         match outcome {
-            DeepReviewProviderQueueWaitOutcome::ReadyToRetry { queue_elapsed_ms } => {
+            DeepReviewProviderQueueWaitOutcome::ReadyToRetry {
+                queue_elapsed_ms, ..
+            } => {
                 assert!(queue_elapsed_ms >= 900);
             }
             DeepReviewProviderQueueWaitOutcome::Skipped { .. } => {

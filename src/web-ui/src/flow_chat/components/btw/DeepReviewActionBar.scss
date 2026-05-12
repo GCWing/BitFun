@@ -973,29 +973,64 @@
     font-weight: 500;
   }
 
+  &__partial-list {
+    margin: 6px 0 0;
+    padding-left: 16px;
+  }
+
+  &__partial-text {
+    margin: 4px 0;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+  }
+
   /* Error attribution */
   &__attribution {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px 12px;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 12px;
     border-radius: 8px;
     font-size: 12px;
+    border: 1px solid var(--border-subtle, var(--border-base));
+    background: color-mix(in srgb, var(--color-bg-secondary) 82%, transparent);
+
+    &::before {
+      content: '';
+      flex: 0 0 auto;
+      width: 6px;
+      height: 6px;
+      margin-top: 6px;
+      border-radius: 999px;
+      background: var(--color-text-tertiary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-text-tertiary) 10%, transparent);
+    }
 
     &--warning {
-      background: color-mix(in srgb, var(--color-warning, #f59e0b) 8%, var(--color-bg-secondary));
-      border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 18%, transparent);
+      background: color-mix(in srgb, var(--color-warning, #f59e0b) 7%, var(--color-bg-secondary));
+      border-color: color-mix(in srgb, var(--color-warning, #f59e0b) 18%, var(--border-base));
+
+      &::before {
+        background: var(--color-warning, #f59e0b);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warning, #f59e0b) 14%, transparent);
+      }
     }
 
     &--error {
-      background: color-mix(in srgb, var(--color-error, #ef4444) 8%, var(--color-bg-secondary));
-      border: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 18%, transparent);
+      background: color-mix(in srgb, var(--color-error, #ef4444) 7%, var(--color-bg-secondary));
+      border-color: color-mix(in srgb, var(--color-error, #ef4444) 18%, var(--border-base));
+
+      &::before {
+        background: var(--color-error, #ef4444);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error, #ef4444) 14%, transparent);
+      }
     }
   }
 
   &__attribution-message {
+    flex: 1 1 auto;
     color: var(--color-text-secondary);
-    line-height: 1.5;
+    line-height: 1.45;
   }
 
   /* Recovery plan */

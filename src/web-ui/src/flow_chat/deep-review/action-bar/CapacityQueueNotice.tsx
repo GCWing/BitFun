@@ -4,7 +4,6 @@ import {
   Clock,
   Pause,
   Play,
-  Settings,
   SkipForward,
 } from 'lucide-react';
 import { Button } from '@/component-library';
@@ -21,7 +20,6 @@ interface CapacityQueueNoticeProps {
   onContinueQueue: () => void | Promise<void>;
   onSkipOptionalQueuedReviewers: () => void | Promise<void>;
   onCancelQueuedReviewers: () => void | Promise<void>;
-  onRunSlowerNextTime: () => void | Promise<void>;
   onOpenReviewSettings: () => void | Promise<void>;
 }
 
@@ -40,11 +38,11 @@ const CAPACITY_QUEUE_REASON_DETAIL_KEYS: Record<DeepReviewCapacityQueueReason, {
 }> = {
   provider_rate_limit: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.providerRateLimit',
-    defaultValue: 'The model provider is rate-limiting requests. BitFun will wait briefly; reducing Review Team parallel reviewers can help if this repeats.',
+    defaultValue: 'The model provider is rate-limiting requests. BitFun will wait briefly and continue when capacity returns.',
   },
   provider_concurrency_limit: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.providerConcurrencyLimit',
-    defaultValue: 'The model provider rejected another concurrent reviewer. BitFun will retry after capacity opens; lower reviewer parallelism if it keeps happening.',
+    defaultValue: 'The model provider rejected another concurrent reviewer. BitFun will retry after capacity opens.',
   },
   retry_after: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.retryAfter',
@@ -102,7 +100,6 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
   onContinueQueue,
   onSkipOptionalQueuedReviewers,
   onCancelQueuedReviewers,
-  onRunSlowerNextTime,
   onOpenReviewSettings,
 }) => {
   const { t } = useTranslation('flow-chat');
@@ -124,6 +121,11 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
     : null;
   const capacityQueueWaitMode = getCapacityQueueWaitMode(capacityQueueState);
   const activeReviewerCount = capacityQueueState.activeReviewerCount ?? 0;
+  const isLongLaunchBatchWait = capacityQueueState.reason === 'launch_batch_blocked'
+    && activeReviewerCount > 0
+    && capacityQueueState.queueElapsedMs !== undefined
+    && capacityQueueState.maxQueueWaitSeconds !== undefined
+    && capacityQueueState.queueElapsedMs > capacityQueueState.maxQueueWaitSeconds * 1000;
   const capacityQueueTitle = capacityQueueState.status === 'paused_by_user'
     ? t('deepReviewActionBar.capacityQueue.pausedTitle', {
       defaultValue: 'Queue paused',
@@ -205,6 +207,13 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
           {capacityQueueReasonDetail && (
             <span className="deep-review-action-bar__capacity-queue-detail">
               {capacityQueueReasonDetail}
+            </span>
+          )}
+          {isLongLaunchBatchWait && (
+            <span className="deep-review-action-bar__capacity-queue-detail">
+              {t('deepReviewActionBar.capacityQueue.longLaunchBatchWaitDetail', {
+                defaultValue: 'This reviewer has waited longer than the configured queue window because an earlier reviewer batch is still running. You can keep waiting, pause the queue, cancel queued reviewers, or open Review settings.',
+              })}
             </span>
           )}
           {capacityQueueState.sessionConcurrencyHigh && (
@@ -326,16 +335,6 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
             </Button>
           </>
         )}
-        <Button
-          variant="ghost"
-          size="small"
-          onClick={() => void onRunSlowerNextTime()}
-        >
-          <Settings size={13} />
-          {t('deepReviewActionBar.capacityQueue.runSlowerNextTime', {
-            defaultValue: 'Run slower next time',
-          })}
-        </Button>
         <Button
           variant="ghost"
           size="small"

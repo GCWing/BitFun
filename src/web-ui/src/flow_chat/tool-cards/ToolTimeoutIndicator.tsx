@@ -155,6 +155,7 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
   if (!isRunning) return null;
 
   const hasTimeout = Boolean(timeoutMs && timeoutMs > 0);
+  const canControlTimeout = showControls && hasTimeout && Boolean(subagentSessionId);
   const displayRemaining = isTimeoutDisabled ? null : remainingMs;
 
   // Determine warning threshold: remaining < 20% of original timeout.
@@ -185,7 +186,7 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
         )}
       </span>
 
-      {showControls && hasTimeout && (
+      {canControlTimeout && (
         <div className="timeout-control-wrapper" ref={popoverRef}>
           <button
             type="button"

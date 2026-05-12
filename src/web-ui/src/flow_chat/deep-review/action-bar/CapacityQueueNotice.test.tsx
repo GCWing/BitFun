@@ -41,7 +41,6 @@ describe('CapacityQueueNotice', () => {
         onContinueQueue={vi.fn()}
         onSkipOptionalQueuedReviewers={vi.fn()}
         onCancelQueuedReviewers={vi.fn()}
-        onRunSlowerNextTime={vi.fn()}
         onOpenReviewSettings={vi.fn()}
       />,
     );
@@ -53,7 +52,7 @@ describe('CapacityQueueNotice', () => {
     expect(html).toContain('Waited 12s of 1m 0s');
     expect(html).toContain('Pause queue');
     expect(html).toContain('Skip optional extras');
-    expect(html).toContain('Run slower next time');
+    expect(html).not.toContain('Run slower next time');
   });
 
   it('renders launch-batch waiting as a concrete queue reason', () => {
@@ -72,7 +71,6 @@ describe('CapacityQueueNotice', () => {
         onContinueQueue={vi.fn()}
         onSkipOptionalQueuedReviewers={vi.fn()}
         onCancelQueuedReviewers={vi.fn()}
-        onRunSlowerNextTime={vi.fn()}
         onOpenReviewSettings={vi.fn()}
       />,
     );
@@ -82,6 +80,56 @@ describe('CapacityQueueNotice', () => {
     expect(html).toContain('Waiting for running reviewers');
     expect(html).toContain('Running reviewers: 2');
     expect(html).not.toContain('Waited 4s of 1m 0s');
+  });
+
+  it('explains launch-batch waits that outlast the configured queue window', () => {
+    const html = renderToStaticMarkup(
+      <CapacityQueueNotice
+        capacityQueueState={{
+          status: 'queued_for_capacity',
+          reason: 'launch_batch_blocked',
+          queuedReviewerCount: 1,
+          activeReviewerCount: 1,
+          queueElapsedMs: 90_000,
+          maxQueueWaitSeconds: 60,
+        }}
+        supportsInlineQueueControls
+        onPauseQueue={vi.fn()}
+        onContinueQueue={vi.fn()}
+        onSkipOptionalQueuedReviewers={vi.fn()}
+        onCancelQueuedReviewers={vi.fn()}
+        onOpenReviewSettings={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain('waited longer than the configured queue window');
+    expect(html).toContain('Cancel queued reviewers');
+    expect(html).toContain('Open Review settings');
+    expect(html).not.toContain('Run slower next time');
+    expect(html).not.toContain('Waited 1m 30s of 1m 0s');
+  });
+
+  it('does not show the long launch-batch detail before the queue window is exceeded', () => {
+    const html = renderToStaticMarkup(
+      <CapacityQueueNotice
+        capacityQueueState={{
+          status: 'queued_for_capacity',
+          reason: 'launch_batch_blocked',
+          queuedReviewerCount: 1,
+          activeReviewerCount: 1,
+          queueElapsedMs: 30_000,
+          maxQueueWaitSeconds: 60,
+        }}
+        supportsInlineQueueControls
+        onPauseQueue={vi.fn()}
+        onContinueQueue={vi.fn()}
+        onSkipOptionalQueuedReviewers={vi.fn()}
+        onCancelQueuedReviewers={vi.fn()}
+        onOpenReviewSettings={vi.fn()}
+      />,
+    );
+
+    expect(html).not.toContain('waited longer than the configured queue window');
   });
 
   it('explains active-reviewer waits without presenting max wait as a hard timeout', () => {
@@ -100,7 +148,6 @@ describe('CapacityQueueNotice', () => {
         onContinueQueue={vi.fn()}
         onSkipOptionalQueuedReviewers={vi.fn()}
         onCancelQueuedReviewers={vi.fn()}
-        onRunSlowerNextTime={vi.fn()}
         onOpenReviewSettings={vi.fn()}
       />,
     );
@@ -141,7 +188,6 @@ describe('CapacityQueueNotice', () => {
         onContinueQueue={vi.fn()}
         onSkipOptionalQueuedReviewers={vi.fn()}
         onCancelQueuedReviewers={vi.fn()}
-        onRunSlowerNextTime={vi.fn()}
         onOpenReviewSettings={vi.fn()}
       />,
     );
@@ -166,7 +212,6 @@ describe('CapacityQueueNotice', () => {
         onContinueQueue={vi.fn()}
         onSkipOptionalQueuedReviewers={vi.fn()}
         onCancelQueuedReviewers={vi.fn()}
-        onRunSlowerNextTime={vi.fn()}
         onOpenReviewSettings={vi.fn()}
       />,
     );

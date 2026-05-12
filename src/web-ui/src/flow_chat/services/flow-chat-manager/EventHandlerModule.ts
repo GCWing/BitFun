@@ -96,6 +96,13 @@ function isStreamingExecutionState(state: SessionExecutionState): boolean {
   return state === SessionExecutionState.PROCESSING || state === SessionExecutionState.FINISHING;
 }
 
+const RECOVERABLE_IDLE_TURN_STATUSES = new Set<DialogTurn['status']>([
+  'pending',
+  'image_analyzing',
+  'processing',
+  'finishing',
+]);
+
 export function isAppWindowFocused(): boolean {
   if (typeof document === 'undefined') {
     return true;
@@ -121,6 +128,59 @@ function logDroppedDataEvent(
     turnId,
     ...details,
   });
+}
+
+function recoverIdleLatestTurnDataEvent(
+  eventName: string,
+  sessionId: string,
+  turnId: string | null,
+  currentState: SessionExecutionState,
+  currentDialogTurnId: string | null
+): boolean {
+  if (
+    currentState !== SessionExecutionState.IDLE ||
+    !turnId ||
+    currentDialogTurnId
+  ) {
+    return false;
+  }
+
+  const session = FlowChatStore.getInstance().getState().sessions.get(sessionId);
+  const latestTurn = session?.dialogTurns[session.dialogTurns.length - 1];
+  if (
+    !latestTurn ||
+    latestTurn.id !== turnId ||
+    !RECOVERABLE_IDLE_TURN_STATUSES.has(latestTurn.status)
+  ) {
+    return false;
+  }
+
+  const machine = stateMachineManager.get(sessionId);
+  const machineContext = machine?.getContext();
+  if (machineContext) {
+    machineContext.currentDialogTurnId = turnId;
+  }
+
+  void stateMachineManager
+    .transition(sessionId, SessionExecutionEvent.START, {
+      taskId: sessionId,
+      dialogTurnId: turnId,
+    })
+    .catch(error => {
+      log.error('State machine transition failed while recovering active data event', {
+        sessionId,
+        turnId,
+        eventName,
+        error,
+      });
+    });
+
+  log.debug('Recovered active data event after idle state', {
+    sessionId,
+    turnId,
+    eventName,
+  });
+  return true;
 }
 
 function handleDeepReviewQueueStateChanged(event: DeepReviewQueueStateChangedEvent): void {
@@ -331,6 +391,16 @@ export function shouldProcessEvent(
   }
 
   if (!isStreamingExecutionState(currentState)) {
+    if (recoverIdleLatestTurnDataEvent(
+      eventName,
+      sessionId,
+      turnId,
+      currentState,
+      context.currentDialogTurnId,
+    )) {
+      return true;
+    }
+
     logDroppedDataEvent(eventName, sessionId, turnId, {
       reason: 'state_not_accepting_data',
       currentState,

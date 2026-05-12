@@ -24,8 +24,12 @@ import {globalEventBus} from '@/infrastructure/event-bus';
 import {notificationService} from '@/shared/notification-system';
 import {createLogger} from '@/shared/utils/logger';
 import {settleStoppedReviewSessionState} from '../../utils/reviewSessionStop';
-import {findLatestCodeReviewResult} from '../../utils/reviewSessionSummary';
-import {deriveDeepReviewInterruption} from '../../utils/deepReviewContinuation';
+import {findLatestCodeReviewResult, findLatestCodeReviewResultState} from '../../utils/reviewSessionSummary';
+import {
+  deriveDeepReviewInterruption,
+  deriveDeepReviewResultRecoveryInterruption,
+  type DeepReviewResultRecoveryReason,
+} from '../../utils/deepReviewContinuation';
 import {buildReviewRemediationItems, type CodeReviewRemediationData} from '../../utils/codeReviewRemediation';
 import {ReviewActionBar} from './DeepReviewActionBar';
 import {type ReviewActionMode, type ReviewActionPhase, useReviewActionBarStore} from '../../store/deepReviewActionBarStore';
@@ -384,7 +388,10 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   useEffect(() => {
     if (!isReviewSession || !childSessionId || !childSession) return;
 
-    const latestReviewData = findLatestCodeReviewResult(childSession) as DeepReviewActionData | null;
+    const latestReviewResultState = findLatestCodeReviewResultState(childSession);
+    const latestReviewData = latestReviewResultState.status === 'valid'
+      ? latestReviewResultState.result as DeepReviewActionData
+      : null;
     const reviewMode: ReviewActionMode = isDeepReview ? 'deep' : 'standard';
     const latestReviewMode = latestReviewData?.review_mode ?? 'standard';
     const lastTurn = childSession.dialogTurns[childSession.dialogTurns.length - 1];
@@ -394,8 +401,70 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     const deepReviewInterruption = isDeepReview
       ? deriveDeepReviewInterruption(childSession)
       : null;
+    const resultRecoveryReason: DeepReviewResultRecoveryReason | null =
+      isDeepReview && isComplete
+        ? latestReviewResultState.status === 'missing'
+          ? 'missing_submit_code_review'
+          : latestReviewResultState.status === 'invalid'
+            ? 'invalid_submit_code_review'
+            : latestReviewData && latestReviewMode !== 'deep'
+              ? 'wrong_review_mode'
+              : null
+        : null;
+    const resultRecoveryInterruption = resultRecoveryReason
+      ? deriveDeepReviewResultRecoveryInterruption(childSession, resultRecoveryReason)
+      : null;
 
     const store = useReviewActionBarStore.getState();
+    const isCurrentResumeRunning =
+      store.childSessionId === childSessionId &&
+      store.phase === 'resume_running';
+    if (isCurrentResumeRunning) {
+      const resumeTurnHasStarted =
+        !store.resumeBaselineTurnId ||
+        lastTurn?.id !== store.resumeBaselineTurnId;
+
+      if (!resumeTurnHasStarted) {
+        return;
+      }
+
+      if (turnStatus === 'error') {
+        store.updatePhase('resume_failed', lastTurn?.error ?? childSession.error ?? undefined);
+        store.restore();
+        return;
+      }
+
+      if (turnStatus === 'cancelled' && deepReviewInterruption) {
+        store.showInterruptedActionBar({
+          childSessionId,
+          parentSessionId: parentSessionId ?? null,
+          interruption: deepReviewInterruption,
+        });
+        store.restore();
+        return;
+      }
+
+      if (turnStatus !== 'completed') {
+        return;
+      }
+    }
+
+    if (resultRecoveryInterruption) {
+      const canShowResultRecovery =
+        store.childSessionId !== childSessionId ||
+        store.phase === 'idle' ||
+        store.phase === 'review_waiting_capacity' ||
+        store.phase === 'resume_running';
+
+      if (canShowResultRecovery) {
+        store.showInterruptedActionBar({
+          childSessionId,
+          parentSessionId: parentSessionId ?? null,
+          interruption: resultRecoveryInterruption,
+        });
+      }
+      return;
+    }
 
     if (isDeepReview && (!latestReviewData || latestReviewMode !== 'deep') && deepReviewInterruption) {
       store.showInterruptedActionBar({

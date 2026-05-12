@@ -14,7 +14,7 @@ export function buildInterruptionDiagnostics(
   presentation: AiErrorPresentation,
   t: Translate,
 ): string {
-  if (presentation.diagnostics) {
+  if (presentation.diagnostics && !presentation.diagnostics.trim().startsWith('category=')) {
     return presentation.diagnostics;
   }
 

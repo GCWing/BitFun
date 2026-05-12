@@ -61,5 +61,6 @@ describe('PartialResultsPanel', () => {
     expect(html).toContain('Hide partial results');
     expect(html).toContain('1 issues found');
     expect(html).toContain('1 remediation items');
+    expect(html).toContain('Security completed');
   });
 });

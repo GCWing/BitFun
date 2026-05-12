@@ -13,7 +13,6 @@ import {
   loadDefaultReviewTeamConfig,
   loadReviewTeamProjectStrategyOverride,
   loadReviewTeamRateLimitStatus,
-  lowerDefaultReviewTeamMaxParallelReviewers,
   prepareDefaultReviewTeamForLaunch,
   resolveDefaultReviewTeam,
   saveDefaultReviewTeamConcurrencyPolicy,
@@ -222,30 +221,6 @@ describe('reviewTeamService', () => {
         allow_bounded_auto_retry: true,
         auto_retry_elapsed_guard_seconds: 240,
       }),
-    );
-  });
-
-  it('lowers the next review max parallel reviewers without going below one', async () => {
-    vi.mocked(configAPI.getConfig)
-      .mockResolvedValueOnce(storedConfigWithExtra([], { max_parallel_reviewers: 3 }))
-      .mockResolvedValueOnce(storedConfigWithExtra([], { max_parallel_reviewers: 1 }));
-
-    await expect(lowerDefaultReviewTeamMaxParallelReviewers()).resolves.toMatchObject({
-      maxParallelInstances: 2,
-    });
-    expect(configAPI.setConfig).toHaveBeenNthCalledWith(
-      1,
-      'ai.review_teams.default',
-      expect.objectContaining({ max_parallel_reviewers: 2 }),
-    );
-
-    await expect(lowerDefaultReviewTeamMaxParallelReviewers()).resolves.toMatchObject({
-      maxParallelInstances: 1,
-    });
-    expect(configAPI.setConfig).toHaveBeenNthCalledWith(
-      2,
-      'ai.review_teams.default',
-      expect.objectContaining({ max_parallel_reviewers: 1 }),
     );
   });
 
@@ -834,6 +809,55 @@ describe('reviewTeamService', () => {
     expect(promptBlock).toContain('set retry to true');
     expect(promptBlock).toContain('Each reviewer Task prompt must include the matching work packet verbatim.');
     expect(promptBlock).toContain('If the reviewer omits packet_id but the Task was launched from a packet, infer the packet_id from the Task description or work packet and mark packet_status_source as inferred.');
+  });
+
+  it('adds a locale-only guardrail for i18n-only frontend review targets', () => {
+    const team = resolveDefaultReviewTeam(
+      coreSubagents(),
+      storedConfigWithExtra(),
+    );
+    const target = classifyReviewTargetFromFiles(
+      [
+        'src/web-ui/src/locales/zh-TW/flow-chat.json',
+        'src/crates/core/locales/zh-TW.ftl',
+        'BitFun-Installer/src/i18n/locales/zh-TW.json',
+      ],
+      'session_files',
+    );
+
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      workspacePath: WORKSPACE_PATH,
+      target,
+    });
+    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
+
+    expect(promptBlock).toContain('Locale-only review guardrail:');
+    expect(promptBlock).toContain('placeholder parity');
+    expect(promptBlock).toContain('Do not broaden into React performance');
+    expect(promptBlock).toContain('BitFun-Installer/src/i18n/locales/zh-TW.json');
+    expect(promptBlock).not.toContain('BitFun-Installer/src/i18n/BitFun-Installer/src/i18n/locales/zh-TW.json');
+  });
+
+  it('does not add the locale-only guardrail for mixed locale and component targets', () => {
+    const team = resolveDefaultReviewTeam(
+      coreSubagents(),
+      storedConfigWithExtra(),
+    );
+    const target = classifyReviewTargetFromFiles(
+      [
+        'src/web-ui/src/locales/zh-TW/flow-chat.json',
+        'src/web-ui/src/flow_chat/deep-review/action-bar/CapacityQueueNotice.tsx',
+      ],
+      'session_files',
+    );
+
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      workspacePath: WORKSPACE_PATH,
+      target,
+    });
+    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
+
+    expect(promptBlock).not.toContain('Locale-only review guardrail:');
   });
 
   it('pre-generates a compact diff summary for reviewer orientation', () => {

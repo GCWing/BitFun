@@ -119,6 +119,18 @@ const PATH_TAG_RULES: PathTagRule[] = [
     evidence: 'Frontend locale file changed',
   },
   {
+    id: 'core-locales',
+    tags: ['frontend_i18n'],
+    match: { pathPrefixes: ['src/crates/core/locales/'], extensions: ['.ftl'] },
+    evidence: 'Core locale file changed',
+  },
+  {
+    id: 'installer-locales',
+    tags: ['frontend_i18n', 'installer_ui'],
+    match: { pathPrefixes: ['BitFun-Installer/src/i18n/locales/'], extensions: ['.json'] },
+    evidence: 'Installer locale file changed',
+  },
+  {
     id: 'web-ui-style',
     tags: ['frontend_style'],
     match: {
