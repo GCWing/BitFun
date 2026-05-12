@@ -24,6 +24,7 @@ const WINDOW_EDGE_BUFFER = 4;
 const POINTER_HOVER_POLL_INTERVAL_MS = 120;
 /** Clicks shorter/smaller than this use `show_main_window`; beyond it we start a native drag. */
 const PET_DRAG_THRESHOLD_PX = 8;
+const IS_WINDOWS_WEBVIEW = /\bWindows\b/i.test(window.navigator.userAgent);
 
 interface TypewriterOutputState {
   target: string;
@@ -235,6 +236,10 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   }, [activePetSize.height, activePetSize.width, tasks]);
 
   useEffect(() => {
+    if (IS_WINDOWS_WEBVIEW) {
+      return;
+    }
+
     const tauriWindow = getCurrentWindow();
     let disposed = false;
     let windowPosition: { x: number; y: number } | null = null;

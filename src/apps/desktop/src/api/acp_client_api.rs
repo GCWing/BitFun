@@ -264,15 +264,15 @@ pub async fn start_acp_dialog_turn(
     tokio::spawn(async move {
         let mut current_round_id: Option<String> = None;
         let result = service
-        .prompt_agent_stream(
-            &request.client_id,
-            request.user_input,
-            request.workspace_path,
-            request.remote_connection_id,
-            request.session_id.clone(),
-            session_storage_path,
-            request.timeout_seconds,
-            |event| {
+            .prompt_agent_stream(
+                &request.client_id,
+                request.user_input,
+                request.workspace_path,
+                request.remote_connection_id,
+                request.session_id.clone(),
+                session_storage_path,
+                request.timeout_seconds,
+                |event| {
                     match event {
                         AcpClientStreamEvent::ModelRoundStarted {
                             round_id,

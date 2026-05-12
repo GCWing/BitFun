@@ -522,6 +522,10 @@ fn resize_agent_companion_window(
     );
     let scale_factor = window.scale_factor().unwrap_or(1.0);
     let size = agent_companion_window_effective_size(window);
+    if (size.width - width).abs() < 0.5 && (size.height - height).abs() < 0.5 {
+        return;
+    }
+
     let old_position = window
         .outer_position()
         .ok()
@@ -620,7 +624,16 @@ pub async fn resize_agent_companion_desktop_pet(
 ) -> Result<(), String> {
     let _guard = agent_companion_window_ops().lock().await;
     if let Some(window) = app.get_webview_window(AGENT_COMPANION_WINDOW_LABEL) {
-        resize_agent_companion_window(&app, &window, width, height);
+        let app_for_resize = app.clone();
+        let window_for_resize = window.clone();
+        window
+            .run_on_main_thread(move || {
+                resize_agent_companion_window(&app_for_resize, &window_for_resize, width, height);
+            })
+            .map_err(|e| {
+                warn!("Failed to schedule Agent companion window resize: {}", e);
+                format!("Failed to schedule Agent companion window resize: {}", e)
+            })?;
     }
     Ok(())
 }
