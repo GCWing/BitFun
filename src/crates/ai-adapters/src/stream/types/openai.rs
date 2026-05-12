@@ -205,7 +205,6 @@ impl OpenAISSEData {
             finish_reason,
             ..
         } = first_choice;
-        let mut finish_reason = finish_reason;
         let Delta {
             reasoning_content,
             reasoning_details,
@@ -246,7 +245,7 @@ impl OpenAISSEData {
                 thinking_signature: None,
                 tool_call: None,
                 usage: usage.take(),
-                finish_reason: finish_reason.take(),
+                finish_reason: None,
                 provider_metadata: None,
             });
         }
@@ -260,14 +259,28 @@ impl OpenAISSEData {
                     thinking_signature: None,
                     tool_call: Some(UnifiedToolCall::from(tool_call)),
                     usage: if is_first_event { usage.take() } else { None },
-                    finish_reason: if is_first_event {
-                        finish_reason.take()
-                    } else {
-                        None
-                    },
+                    finish_reason: None,
                     provider_metadata: None,
                 });
             }
+        }
+
+        if let Some(finish_reason) = finish_reason {
+            if let Some(last_response) = responses.last_mut() {
+                last_response.finish_reason = Some(finish_reason);
+                return responses;
+            }
+
+            responses.push(UnifiedResponse {
+                text: None,
+                reasoning_content: None,
+                thinking_signature: None,
+                tool_call: None,
+                usage,
+                finish_reason: Some(finish_reason),
+                provider_metadata: None,
+            });
+            return responses;
         }
 
         if responses.is_empty() {
@@ -373,8 +386,8 @@ mod tests {
                 .and_then(|tool| tool.id.as_deref()),
             Some("call_2")
         );
-        assert_eq!(responses[0].finish_reason.as_deref(), Some("tool_calls"));
-        assert!(responses[1].finish_reason.is_none());
+        assert!(responses[0].finish_reason.is_none());
+        assert_eq!(responses[1].finish_reason.as_deref(), Some("tool_calls"));
         assert!(responses[0].usage.is_some());
         assert!(responses[1].usage.is_none());
     }
@@ -479,7 +492,7 @@ mod tests {
         assert_eq!(responses[0].text.as_deref(), Some("hello"));
         assert!(responses[0].tool_call.is_none());
         assert!(responses[0].usage.is_some());
-        assert_eq!(responses[0].finish_reason.as_deref(), Some("tool_calls"));
+        assert!(responses[0].finish_reason.is_none());
 
         assert!(responses[1].text.is_none());
         assert_eq!(
@@ -490,7 +503,7 @@ mod tests {
             Some("call_1")
         );
         assert!(responses[1].usage.is_none());
-        assert!(responses[1].finish_reason.is_none());
+        assert_eq!(responses[1].finish_reason.as_deref(), Some("tool_calls"));
     }
 
     #[test]

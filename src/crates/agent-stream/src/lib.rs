@@ -14,6 +14,7 @@ use futures::{Stream, StreamExt};
 use log::{debug, error, trace};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Instant;
@@ -248,6 +249,7 @@ struct StreamContext {
 
     // Current tool call state
     pending_tool_calls: PendingToolCalls,
+    finalized_tool_call_ids: HashSet<String>,
 
     // Counters and flags
     stream_started_at: Instant,
@@ -282,6 +284,7 @@ impl StreamContext {
             usage: None,
             provider_metadata: None,
             pending_tool_calls: PendingToolCalls::default(),
+            finalized_tool_call_ids: HashSet::new(),
             stream_started_at: Instant::now(),
             first_chunk_ms: None,
             first_visible_output_ms: None,
@@ -336,6 +339,13 @@ impl StreamContext {
         } else {
             finalized.tool_id.clone()
         };
+        if !self.finalized_tool_call_ids.insert(tool_id.clone()) {
+            debug!(
+                "Skipping duplicate finalized tool call in stream: tool_id={}, tool_name={}",
+                tool_id, tool_name
+            );
+            return;
+        }
         self.tool_calls.push(ToolCall {
             tool_id,
             tool_name,
@@ -1222,6 +1232,53 @@ mod tests {
         assert_eq!(result.tool_calls.len(), 1);
         assert_eq!(result.tool_calls[0].arguments, json!({"a": 1}));
         assert_eq!(result.usage.as_ref().map(|u| u.total_token_count), Some(9));
+    }
+
+    #[tokio::test]
+    async fn skips_duplicate_finalized_tool_call_id_from_tail_chunks() {
+        let processor = build_processor();
+        let stream = iter(vec![
+            Ok(UnifiedResponse {
+                tool_call: Some(UnifiedToolCall {
+                    tool_call_index: None,
+                    id: Some("call_1".to_string()),
+                    name: Some("tool_a".to_string()),
+                    arguments: Some("{\"a\":1}".to_string()),
+                    arguments_is_snapshot: false,
+                }),
+                finish_reason: Some("tool_calls".to_string()),
+                ..Default::default()
+            }),
+            Ok(UnifiedResponse {
+                tool_call: Some(UnifiedToolCall {
+                    tool_call_index: None,
+                    id: Some("call_1".to_string()),
+                    name: Some("tool_a".to_string()),
+                    arguments: Some("{\"a\":1}".to_string()),
+                    arguments_is_snapshot: false,
+                }),
+                ..Default::default()
+            }),
+        ])
+        .boxed();
+
+        let result = processor
+            .process_stream(
+                stream,
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                None,
+                &CancellationToken::new(),
+            )
+            .await
+            .expect("stream result");
+
+        assert_eq!(result.tool_calls.len(), 1);
+        assert_eq!(result.tool_calls[0].tool_id, "call_1");
+        assert_eq!(result.tool_calls[0].arguments, json!({"a": 1}));
     }
 
     #[tokio::test]
