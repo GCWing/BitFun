@@ -81,6 +81,7 @@ mod tests {
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::SessionContextStore;
     use crate::infrastructure::PathManager;
+    use crate::service::session::{DialogTurnData, UserMessageData};
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::Duration;
@@ -299,6 +300,116 @@ mod tests {
 
         assert!(matches!(restored.state, SessionState::Idle));
         assert_eq!(metadata.unread_completion, None);
+    }
+
+    #[tokio::test]
+    async fn rollback_context_deletes_persisted_turns_from_target() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Rollback session".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        for index in 0..3 {
+            let turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session.session_id.clone(),
+                UserMessageData {
+                    id: format!("turn-{index}-user"),
+                    content: format!("prompt {index}"),
+                    timestamp: index as u64,
+                    metadata: None,
+                },
+            );
+            persistence_manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+
+        {
+            let mut active = manager
+                .sessions
+                .get_mut(&session.session_id)
+                .expect("session should be active");
+            active.dialog_turn_ids = vec![
+                "turn-0".to_string(),
+                "turn-1".to_string(),
+                "turn-2".to_string(),
+            ];
+        }
+        persistence_manager
+            .save_turn_context_snapshot(
+                workspace.path(),
+                &session.session_id,
+                0,
+                &[crate::agentic::core::Message::user("prompt 0".to_string())],
+            )
+            .await
+            .expect("snapshot 0 should save");
+        persistence_manager
+            .save_turn_context_snapshot(
+                workspace.path(),
+                &session.session_id,
+                1,
+                &[
+                    crate::agentic::core::Message::user("prompt 0".to_string()),
+                    crate::agentic::core::Message::user("prompt 1".to_string()),
+                ],
+            )
+            .await
+            .expect("snapshot 1 should save");
+
+        manager
+            .rollback_context_to_turn_start(workspace.path(), &session.session_id, 1)
+            .await
+            .expect("rollback should succeed");
+
+        let turns = persistence_manager
+            .load_session_turns(workspace.path(), &session.session_id)
+            .await
+            .expect("turns should load");
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].user_message.content, "prompt 0");
+        assert!(persistence_manager
+            .load_turn_context_snapshot(workspace.path(), &session.session_id, 1)
+            .await
+            .expect("snapshot load should succeed")
+            .is_none());
+
+        manager.sessions.remove(&session.session_id);
+        let restored = manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("session should restore");
+        assert_eq!(restored.dialog_turn_ids, vec!["turn-0".to_string()]);
+        assert_eq!(
+            manager
+                .context_store
+                .get_context_messages(&session.session_id)
+                .len(),
+            1
+        );
+
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.turn_count, 1);
     }
 
     #[test]
@@ -1755,8 +1866,13 @@ impl SessionManager {
                 .await?;
         }
 
-        // 4) Delete snapshots from target_turn (inclusive) onwards
+        // 4) Delete persisted turns and snapshots from target_turn (inclusive) onwards.
+        // Runtime restore rebuilds history from persisted turn files, so removing only
+        // context snapshots would make rolled-back prompts reappear after reload.
         if self.config.enable_persistence {
+            self.persistence_manager
+                .delete_dialog_turns_from(workspace_path, session_id, target_turn)
+                .await?;
             self.persistence_manager
                 .delete_turn_context_snapshots_from(workspace_path, session_id, target_turn)
                 .await?;
