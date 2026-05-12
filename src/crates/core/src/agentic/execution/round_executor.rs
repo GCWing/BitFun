@@ -277,20 +277,15 @@ impl RoundExecutor {
                         continue;
                     }
 
-                    if is_partial_recovery && attempt_index < max_attempts - 1 {
-                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                    if is_partial_recovery {
                         warn!(
-                            "Retrying stream after partial recovery: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, reason={}",
+                            "Accepting stream partial recovery without retry: session_id={}, round_id={}, attempt={}/{}, reason={}",
                             context.session_id,
                             round_id,
                             attempt_index + 1,
                             max_attempts,
-                            delay_ms,
                             result.partial_recovery_reason.as_deref().unwrap_or("unknown")
                         );
-                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-                        attempt_index += 1;
-                        continue;
                     }
 
                     break (result, send_to_stream_ms, stream_processing_ms);
@@ -777,7 +772,11 @@ impl RoundExecutor {
             .filter(|(_, tc)| {
                 tc.tool_name == "Write"
                     && tc.arguments.get("content").is_none()
-                    && tc.arguments.get("file_path").and_then(|v| v.as_str()).is_some()
+                    && tc
+                        .arguments
+                        .get("file_path")
+                        .and_then(|v| v.as_str())
+                        .is_some()
             })
             .map(|(i, _)| i)
             .collect();
@@ -835,10 +834,7 @@ impl RoundExecutor {
             content_messages.push(AIMessage::user(content_prompt));
 
             // Send the content-generation request (no tools, pure text output)
-            let full_text = match ai_client
-                .send_message_stream(content_messages, None)
-                .await
-            {
+            let full_text = match ai_client.send_message_stream(content_messages, None).await {
                 Ok(response) => {
                     let mut text = String::new();
                     let mut stream = response.stream;
@@ -1251,7 +1247,8 @@ mod tests {
 
     #[test]
     fn extract_bitfun_contents_with_tags() {
-        let text = "Some preamble\n<bitfun_contents>\nfn main() {}\n</bitfun_contents>\nSome trailing";
+        let text =
+            "Some preamble\n<bitfun_contents>\nfn main() {}\n</bitfun_contents>\nSome trailing";
         assert_eq!(extract_bitfun_contents(text), "fn main() {}");
     }
 
