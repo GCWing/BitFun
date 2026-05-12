@@ -5,8 +5,10 @@ use bitfun_services_integrations::mcp::auth::{
 };
 use bitfun_services_integrations::mcp::config::ConfigLocation;
 use bitfun_services_integrations::mcp::config::{
-    config_to_cursor_format, format_mcp_json_config_value, parse_cursor_format,
-    validate_mcp_json_config,
+    config_to_cursor_format, format_mcp_json_config_value, get_mcp_remote_authorization_source,
+    get_mcp_remote_authorization_value, has_mcp_remote_authorization, has_mcp_remote_oauth,
+    has_mcp_remote_xaa, merge_mcp_server_config_sources, normalize_mcp_authorization_value,
+    parse_cursor_format, remove_mcp_authorization_keys, validate_mcp_json_config,
 };
 use bitfun_services_integrations::mcp::protocol::{
     MCPCapability, MCPError, MCPPromptMessageContent, MCPPromptMessageContentBlock, MCPRequest,
@@ -20,7 +22,35 @@ use bitfun_services_integrations::mcp::{
     MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX, McpToolInfo, build_mcp_tool_name, normalize_name_for_mcp,
 };
 use rmcp::transport::auth::StoredCredentials;
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+fn make_mcp_config(
+    id: &str,
+    location: ConfigLocation,
+    server_type: MCPServerType,
+    command: Option<&str>,
+    url: Option<&str>,
+) -> MCPServerConfig {
+    MCPServerConfig {
+        id: id.to_string(),
+        name: id.to_string(),
+        server_type,
+        transport: None,
+        command: command.map(str::to_string),
+        args: Vec::new(),
+        env: HashMap::new(),
+        headers: HashMap::new(),
+        url: url.map(str::to_string),
+        auto_start: true,
+        enabled: true,
+        location,
+        capabilities: Vec::new(),
+        settings: Default::default(),
+        oauth: None,
+        xaa: None,
+    }
+}
 
 #[test]
 fn mcp_tool_name_contract_matches_existing_wire_format() {
@@ -297,6 +327,109 @@ fn mcp_json_config_helpers_preserve_load_format_and_save_validation_contract() {
         .to_string(),
         "Server 'bad' source='remote' conflicts with command-based configuration"
     );
+}
+
+#[test]
+fn mcp_config_merge_helpers_preserve_precedence_and_dedup_contract() {
+    let merged = merge_mcp_server_config_sources([
+        vec![make_mcp_config(
+            "github-user",
+            ConfigLocation::User,
+            MCPServerType::Remote,
+            None,
+            Some("https://example.com/mcp"),
+        )],
+        vec![
+            make_mcp_config(
+                "github-user",
+                ConfigLocation::Project,
+                MCPServerType::Remote,
+                None,
+                Some("https://project.example.com/mcp"),
+            ),
+            make_mcp_config(
+                "github-project",
+                ConfigLocation::Project,
+                MCPServerType::Remote,
+                None,
+                Some("https://example.com/mcp"),
+            ),
+        ],
+    ]);
+
+    assert_eq!(merged.len(), 2);
+    assert_eq!(merged[0].id, "github-user");
+    assert_eq!(merged[0].location, ConfigLocation::Project);
+    assert_eq!(
+        merged[0].url.as_deref(),
+        Some("https://project.example.com/mcp")
+    );
+    assert_eq!(merged[1].id, "github-project");
+    assert_eq!(merged[1].location, ConfigLocation::Project);
+
+    let deduped = merge_mcp_server_config_sources([
+        vec![make_mcp_config(
+            "github-user",
+            ConfigLocation::User,
+            MCPServerType::Remote,
+            None,
+            Some("https://example.com/mcp"),
+        )],
+        vec![make_mcp_config(
+            "github-project",
+            ConfigLocation::Project,
+            MCPServerType::Remote,
+            None,
+            Some("https://example.com/mcp"),
+        )],
+    ]);
+    assert_eq!(deduped.len(), 1);
+    assert_eq!(deduped[0].id, "github-project");
+    assert_eq!(deduped[0].location, ConfigLocation::Project);
+}
+
+#[test]
+fn mcp_config_authorization_helpers_preserve_header_precedence_and_normalization() {
+    let mut config = make_mcp_config(
+        "remote-auth",
+        ConfigLocation::User,
+        MCPServerType::Remote,
+        None,
+        Some("https://example.com/mcp"),
+    );
+    config
+        .env
+        .insert("Authorization".to_string(), "legacy-token".to_string());
+    config.headers.insert(
+        "Authorization".to_string(),
+        "Bearer header-token".to_string(),
+    );
+
+    assert_eq!(
+        get_mcp_remote_authorization_value(&config).as_deref(),
+        Some("Bearer header-token")
+    );
+    assert_eq!(
+        get_mcp_remote_authorization_source(&config),
+        Some("headers")
+    );
+    assert!(has_mcp_remote_authorization(&config));
+    assert!(!has_mcp_remote_oauth(&config));
+    assert!(!has_mcp_remote_xaa(&config));
+    assert_eq!(
+        normalize_mcp_authorization_value("plain-token").as_deref(),
+        Some("Bearer plain-token")
+    );
+    assert_eq!(
+        normalize_mcp_authorization_value("Bearer existing").as_deref(),
+        Some("Bearer existing")
+    );
+    assert_eq!(normalize_mcp_authorization_value("   "), None);
+
+    remove_mcp_authorization_keys(&mut config.headers);
+    remove_mcp_authorization_keys(&mut config.env);
+    assert_eq!(get_mcp_remote_authorization_value(&config), None);
+    assert_eq!(get_mcp_remote_authorization_source(&config), None);
 }
 
 #[test]

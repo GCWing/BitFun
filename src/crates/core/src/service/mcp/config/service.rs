@@ -1,5 +1,10 @@
+use bitfun_services_integrations::mcp::config::{
+    get_mcp_remote_authorization_source, get_mcp_remote_authorization_value,
+    has_mcp_remote_authorization, has_mcp_remote_oauth, has_mcp_remote_xaa,
+    merge_mcp_server_config_sources, normalize_mcp_authorization_value, parse_mcp_config_array,
+    remove_mcp_authorization_keys,
+};
 use log::{info, warn};
-use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use crate::service::config::ConfigService;
@@ -14,161 +19,40 @@ pub struct MCPConfigService {
 }
 
 impl MCPConfigService {
-    const AUTHORIZATION_KEYS: [&'static str; 3] =
-        ["Authorization", "authorization", "AUTHORIZATION"];
-
-    fn config_signature(config: &MCPServerConfig) -> String {
-        let env: BTreeMap<_, _> = config.env.clone().into_iter().collect();
-        let headers: BTreeMap<_, _> = config.headers.clone().into_iter().collect();
-        serde_json::json!({
-            "serverType": config.server_type,
-            "transport": config.resolved_transport().as_str(),
-            "command": config.command,
-            "args": config.args,
-            "env": env,
-            "headers": headers,
-            "url": config.url,
-            "oauth": config.oauth,
-            "xaa": config.xaa,
-        })
-        .to_string()
-    }
-
-    fn precedence(location: ConfigLocation) -> u8 {
-        match location {
-            ConfigLocation::BuiltIn => 0,
-            ConfigLocation::User => 1,
-            ConfigLocation::Project => 2,
-        }
-    }
-
-    fn merge_configs(
-        merged: &mut Vec<MCPServerConfig>,
-        source: Vec<MCPServerConfig>,
-        signature_index: &mut HashMap<String, usize>,
-        id_index: &mut HashMap<String, usize>,
-    ) {
-        for config in source {
-            let config_id = config.id.clone();
-            let signature = Self::config_signature(&config);
-
-            if let Some(existing_index) = id_index.get(&config_id).copied() {
-                let previous = &merged[existing_index];
-                warn!(
-                    "Overriding MCP config by id: id={} previous_location={:?} new_location={:?}",
-                    config_id, previous.location, config.location
-                );
-
-                let previous_signature = Self::config_signature(previous);
-                merged[existing_index] = config;
-                signature_index.remove(&previous_signature);
-                signature_index.insert(signature, existing_index);
-                continue;
-            }
-
-            if let Some(existing_index) = signature_index.get(&signature).copied() {
-                let previous = &merged[existing_index];
-                if Self::precedence(previous.location) <= Self::precedence(config.location) {
-                    warn!(
-                        "Deduplicating MCP config by content signature: previous_id={} previous_location={:?} replacement_id={} replacement_location={:?}",
-                        previous.id, previous.location, config_id, config.location
-                    );
-
-                    id_index.remove(&previous.id);
-                    merged[existing_index] = config;
-                    id_index.insert(config_id, existing_index);
-                    signature_index.insert(signature, existing_index);
-                }
-                continue;
-            }
-
-            let next_index = merged.len();
-            signature_index.insert(signature, next_index);
-            id_index.insert(config_id, next_index);
-            merged.push(config);
-        }
-    }
-
     fn parse_config_array(
         &self,
         servers: &[serde_json::Value],
         location: ConfigLocation,
     ) -> Vec<MCPServerConfig> {
-        servers
-            .iter()
-            .filter_map(
-                |value| match serde_json::from_value::<MCPServerConfig>(value.clone()) {
-                    Ok(mut config) => {
-                        config.location = location;
-                        Some(config)
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Failed to parse MCP config item at {:?} scope: {}",
-                            location, e
-                        );
-                        None
-                    }
-                },
-            )
-            .collect()
+        parse_mcp_config_array(servers, location)
     }
 
     fn normalize_authorization_value(value: &str) -> Option<String> {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            return None;
-        }
-
-        if trimmed.to_ascii_lowercase().starts_with("bearer ")
-            || trimmed.contains(char::is_whitespace)
-        {
-            return Some(trimmed.to_string());
-        }
-
-        Some(format!("Bearer {}", trimmed))
-    }
-
-    fn config_authorization_from_map(
-        map: &std::collections::HashMap<String, String>,
-    ) -> Option<String> {
-        Self::AUTHORIZATION_KEYS
-            .iter()
-            .find_map(|key| map.get(*key).cloned())
-            .filter(|value| !value.trim().is_empty())
+        normalize_mcp_authorization_value(value)
     }
 
     fn remove_authorization_keys(map: &mut std::collections::HashMap<String, String>) {
-        for key in Self::AUTHORIZATION_KEYS {
-            map.remove(key);
-        }
+        remove_mcp_authorization_keys(map);
     }
 
     pub fn get_remote_authorization_value(config: &MCPServerConfig) -> Option<String> {
-        Self::config_authorization_from_map(&config.headers)
-            .or_else(|| Self::config_authorization_from_map(&config.env))
+        get_mcp_remote_authorization_value(config)
     }
 
     pub fn get_remote_authorization_source(config: &MCPServerConfig) -> Option<&'static str> {
-        if Self::config_authorization_from_map(&config.headers).is_some() {
-            Some("headers")
-        } else if Self::config_authorization_from_map(&config.env).is_some() {
-            Some("env")
-        } else {
-            None
-        }
+        get_mcp_remote_authorization_source(config)
     }
 
     pub fn has_remote_authorization(config: &MCPServerConfig) -> bool {
-        Self::get_remote_authorization_value(config).is_some()
+        has_mcp_remote_authorization(config)
     }
 
     pub fn has_remote_oauth(config: &MCPServerConfig) -> bool {
-        config.oauth.is_some()
+        has_mcp_remote_oauth(config)
     }
 
     pub fn has_remote_xaa(config: &MCPServerConfig) -> bool {
-        config.xaa.is_some()
+        has_mcp_remote_xaa(config)
     }
 
     /// Creates a new MCP configuration service.
@@ -195,30 +79,11 @@ impl MCPConfigService {
             }
         };
 
-        let mut configs = Vec::new();
-        let mut signature_index = HashMap::new();
-        let mut id_index = HashMap::new();
-
-        Self::merge_configs(
-            &mut configs,
+        Ok(merge_mcp_server_config_sources([
             builtin_configs,
-            &mut signature_index,
-            &mut id_index,
-        );
-        Self::merge_configs(
-            &mut configs,
             user_configs,
-            &mut signature_index,
-            &mut id_index,
-        );
-        Self::merge_configs(
-            &mut configs,
             project_configs,
-            &mut signature_index,
-            &mut id_index,
-        );
-
-        Ok(configs)
+        ]))
     }
 
     /// Loads built-in configurations.
@@ -450,6 +315,7 @@ impl MCPConfigService {
 mod tests {
     use super::*;
     use crate::service::mcp::server::MCPServerType;
+    use std::collections::HashMap;
 
     fn make_config(
         id: &str,
@@ -476,81 +342,6 @@ mod tests {
             oauth: None,
             xaa: None,
         }
-    }
-
-    #[test]
-    fn merge_configs_prefers_higher_precedence_when_ids_match() {
-        let mut merged = Vec::new();
-        let mut signature_index = HashMap::new();
-        let mut id_index = HashMap::new();
-
-        MCPConfigService::merge_configs(
-            &mut merged,
-            vec![make_config(
-                "github",
-                ConfigLocation::User,
-                MCPServerType::Remote,
-                None,
-                Some("https://example.com/mcp"),
-            )],
-            &mut signature_index,
-            &mut id_index,
-        );
-        MCPConfigService::merge_configs(
-            &mut merged,
-            vec![make_config(
-                "github",
-                ConfigLocation::Project,
-                MCPServerType::Remote,
-                None,
-                Some("https://project.example.com/mcp"),
-            )],
-            &mut signature_index,
-            &mut id_index,
-        );
-
-        assert_eq!(merged.len(), 1);
-        assert_eq!(merged[0].location, ConfigLocation::Project);
-        assert_eq!(
-            merged[0].url.as_deref(),
-            Some("https://project.example.com/mcp")
-        );
-    }
-
-    #[test]
-    fn merge_configs_deduplicates_same_server_content_across_ids() {
-        let mut merged = Vec::new();
-        let mut signature_index = HashMap::new();
-        let mut id_index = HashMap::new();
-
-        MCPConfigService::merge_configs(
-            &mut merged,
-            vec![make_config(
-                "github-user",
-                ConfigLocation::User,
-                MCPServerType::Remote,
-                None,
-                Some("https://example.com/mcp"),
-            )],
-            &mut signature_index,
-            &mut id_index,
-        );
-        MCPConfigService::merge_configs(
-            &mut merged,
-            vec![make_config(
-                "github-project",
-                ConfigLocation::Project,
-                MCPServerType::Remote,
-                None,
-                Some("https://example.com/mcp"),
-            )],
-            &mut signature_index,
-            &mut id_index,
-        );
-
-        assert_eq!(merged.len(), 1);
-        assert_eq!(merged[0].id, "github-project");
-        assert_eq!(merged[0].location, ConfigLocation::Project);
     }
 
     #[test]

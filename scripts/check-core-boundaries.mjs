@@ -249,6 +249,31 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/service/mcp/config/service.rs',
+    patterns: [
+      {
+        regex: /\bconst AUTHORIZATION_KEYS\b/,
+        message: 'core MCP config service facade must not own authorization key constants; use the integrations helper',
+      },
+      {
+        regex: /\bfn config_signature\b/,
+        message: 'core MCP config service facade must not own merge signatures; use the integrations helper',
+      },
+      {
+        regex: /\bfn precedence\b/,
+        message: 'core MCP config service facade must not own merge precedence; use the integrations helper',
+      },
+      {
+        regex: /\bfn config_authorization_from_map\b/,
+        message: 'core MCP config service facade must not own authorization extraction; use the integrations helper',
+      },
+      {
+        regex: /\bBTreeMap\b/,
+        message: 'core MCP config service facade must not rebuild stable merge signatures; use the integrations helper',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/service/mcp/auth.rs',
     patterns: [
       {
@@ -517,6 +542,28 @@ function runManifestParserSelfTest() {
   for (const helper of mcpJsonConfigHelpers) {
     if (!mcpJsonConfigRuleText.includes(helper)) {
       throw new Error(`MCP JSON config boundary rule must forbid helper: ${helper}`);
+    }
+  }
+
+  const mcpConfigServiceRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/mcp/config/service.rs',
+  );
+  if (!mcpConfigServiceRule) {
+    throw new Error('missing MCP config service boundary rule');
+  }
+  const mcpConfigServiceHelpers = [
+    'AUTHORIZATION_KEYS',
+    'config_signature',
+    'precedence',
+    'config_authorization_from_map',
+    'BTreeMap',
+  ];
+  const mcpConfigServiceRuleText = mcpConfigServiceRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const helper of mcpConfigServiceHelpers) {
+    if (!mcpConfigServiceRuleText.includes(helper)) {
+      throw new Error(`MCP config service boundary rule must forbid helper: ${helper}`);
     }
   }
 
