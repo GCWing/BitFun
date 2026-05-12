@@ -618,6 +618,8 @@
     }
   },
   "deepReviewActionBar": {
+    "reviewRunningDeep": "Deep review in progress...",
+    "reviewRunningStandard": "Review in progress...",
     "reviewCompleted": "Deep review completed",
     "fixRunning": "Fixing in progress...",
     "fixCompleted": "Fix completed",
@@ -635,6 +637,8 @@
     "fixAndReviewRunning": "Fixing \u0026 preparing re-review...",
     "minimizedDeep": "Deep Review",
     "minimizedStandard": "Code Review",
+    "minimizedReviewRunningDeep": "Deep Review running",
+    "minimizedReviewRunningStandard": "Code Review running",
     "minimizedFix": "Fixing",
     "minimizedFixReview": "Fixing and re-reviewing",
     "minimizedFixCompleted": "Fix completed",

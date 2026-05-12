@@ -43,8 +43,11 @@
 
 .bitfun-markdown-editor__mode-toolbar {
   display: flex;
-  justify-content: flex-end;
-  padding: $size-gap-3 $size-gap-4;
+  align-items: center;
+  justify-content: space-between;
+  gap: $size-gap-3;
+  min-height: 34px;
+  padding: 4px $size-gap-3;
   border-bottom: 1px solid var(--border-subtle, #{$border-subtle});
   background: color-mix(in srgb, var(--color-bg-flowchat) 92%, var(--color-bg-elevated, #fff));
   flex-shrink: 0;
@@ -53,7 +56,30 @@
 .bitfun-markdown-editor__mode-toggle {
   display: inline-flex;
   align-items: center;
-  gap: $size-gap-2;
+  gap: 4px;
+}
+
+.bitfun-markdown-editor__toolbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.bitfun-markdown-editor__toolbar-button.btn-sm,
+.bitfun-markdown-editor__toolbar-button {
+  min-height: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 5px;
+  font-size: var(--font-size-xs);
+  line-height: 1;
+}
+
+.bitfun-markdown-editor__copy-button.btn-icon-only,
+.bitfun-markdown-editor__copy-button {
+  width: 26px;
+  padding: 0;
 }
 
 .bitfun-markdown-editor__unsafe-body {

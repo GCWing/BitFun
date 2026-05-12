@@ -86,6 +86,37 @@ function failedTaskItem(): FlowToolItem {
   };
 }
 
+function reviewTaskItem(
+  status: FlowToolItem['status'],
+  subagentType = 'ReviewFrontend',
+  description = `Review frontend [packet reviewer:${subagentType}:group-1-of-1]`,
+): FlowToolItem {
+  return {
+    id: 'task-tool-1',
+    type: 'tool',
+    toolName: 'Task',
+    timestamp: Date.now(),
+    status,
+    toolCall: {
+      id: 'task-call-1',
+      input: {
+        description,
+        prompt: 'Review frontend code',
+        subagent_type: subagentType,
+      },
+    },
+    toolResult:
+      status === 'completed'
+        ? {
+            success: true,
+            result: {
+              duration: 1000,
+            },
+          }
+        : undefined,
+  };
+}
+
 describeWithJsdom('TaskToolDisplay', () => {
   let dom: { window: Window & typeof globalThis };
   let container: HTMLDivElement;
@@ -142,6 +173,58 @@ describeWithJsdom('TaskToolDisplay', () => {
 
     await act(async () => {
       card!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
+  });
+
+  it('keeps Deep Review reviewer task cards collapsed when they start running', async () => {
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={reviewTaskItem('completed')}
+          config={config}
+          sessionId="parent-session"
+        />,
+      );
+    });
+
+    expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={reviewTaskItem('streaming')}
+          config={config}
+          sessionId="parent-session"
+        />,
+      );
+    });
+
+    expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
+  });
+
+  it('keeps extra Deep Review reviewer task cards collapsed from packet metadata', async () => {
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={reviewTaskItem('completed', 'ExtraReadonlyReview')}
+          config={config}
+          sessionId="parent-session"
+        />,
+      );
+    });
+
+    expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={reviewTaskItem('running', 'ExtraReadonlyReview')}
+          config={config}
+          sessionId="parent-session"
+        />,
+      );
     });
 
     expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);

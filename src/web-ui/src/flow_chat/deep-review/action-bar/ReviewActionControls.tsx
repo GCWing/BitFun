@@ -3,6 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Copy, Eye, Play, RotateCcw } from 'lucide-react';
 import { Button, Tooltip } from '@/component-library';
 import type { ReviewActionPhase } from '../../store/deepReviewActionBarStore';
+import { CodeReviewReportExportActions } from '../../tool-cards/CodeReviewReportExportActions';
+
+type ExportableReviewData = React.ComponentProps<typeof CodeReviewReportExportActions>['reviewData'];
+type ExportableRunManifest = React.ComponentProps<typeof CodeReviewReportExportActions>['runManifest'];
 
 interface ReviewActionControlsProps {
   phase: ReviewActionPhase;
@@ -16,6 +20,8 @@ interface ReviewActionControlsProps {
   isResumeRunning: boolean;
   remainingFixIds: string[];
   modelRecoveryAction: 'switch_model' | 'open_model_settings' | null;
+  reviewData?: ExportableReviewData | null;
+  runManifest?: ExportableRunManifest;
   onRetryIncompleteSlices: () => void | Promise<void>;
   onStartFixing: (rerunReview: boolean) => void | Promise<void>;
   onFillBackInput: () => void | Promise<void>;
@@ -40,6 +46,8 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
   isResumeRunning,
   remainingFixIds,
   modelRecoveryAction,
+  reviewData,
+  runManifest,
   onRetryIncompleteSlices,
   onStartFixing,
   onFillBackInput,
@@ -103,6 +111,15 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             </Button>
           </Tooltip>
         </>
+      )}
+
+      {phase === 'review_completed' && reviewData && (
+        <CodeReviewReportExportActions
+          reviewData={reviewData}
+          runManifest={runManifest}
+          actions={['open']}
+          variant="footer"
+        />
       )}
 
       {hasInterruption && (

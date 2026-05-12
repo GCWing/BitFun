@@ -49,6 +49,46 @@ function readTaskErrorMessage(toolResult: FlowToolItem['toolResult'] | undefined
   return null;
 }
 
+function readStringValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function readTaskSubagentType(input: unknown): string {
+  if (!input || typeof input !== 'object') {
+    return '';
+  }
+  const data = input as Record<string, unknown>;
+  return (
+    readStringValue(data.subagent_type) ||
+    readStringValue(data.subagentType) ||
+    readStringValue(data.agent_type) ||
+    readStringValue(data.agentType)
+  );
+}
+
+function isDeepReviewReviewerTask(toolItem: FlowToolItem): boolean {
+  if (toolItem.toolName?.toLowerCase() !== 'task') {
+    return false;
+  }
+
+  const input = toolItem.toolCall?.input;
+  const subagentType = readTaskSubagentType(input);
+  if (!subagentType) {
+    return false;
+  }
+
+  if (getReviewerContextBySubagentId(subagentType) || /^Review[A-Z0-9_]/.test(subagentType)) {
+    return true;
+  }
+
+  if (!input || typeof input !== 'object') {
+    return false;
+  }
+
+  const description = readStringValue((input as Record<string, unknown>).description);
+  return /\bpacket\s+(reviewer|judge):/i.test(description);
+}
+
 export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   toolItem,
   interruptionNote,
@@ -62,7 +102,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const { toolCall, toolResult, status, requiresConfirmation, userConfirmed } = toolItem;
   const toolId = toolItem.id ?? toolCall?.id;
   
-  // Restore collapse state; default to collapsed until running.
+  // Restore collapse state; default to collapsed.
   const [isExpanded, setIsExpanded] = useState(() => {
     const savedState = taskCollapseStateManager.getCollapsedOrUndefined(toolItem.id);
     if (savedState !== undefined) {
@@ -72,6 +112,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   });
   
   const isRunning = status === 'preparing' || status === 'streaming' || status === 'running';
+  const keepCollapsedWhileRunning = isDeepReviewReviewerTask(toolItem);
   
   const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
     toolId,
@@ -99,11 +140,11 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       
       if (status === 'completed') {
         updateCardExpandedState(false, 'auto');
-      } else if (isRunning) {
+      } else if (isRunning && !keepCollapsedWhileRunning) {
         updateCardExpandedState(true, 'auto');
       }
     }
-  }, [isRunning, status, updateCardExpandedState]);
+  }, [isRunning, keepCollapsedWhileRunning, status, updateCardExpandedState]);
   
   useLayoutEffect(() => {
     taskCollapseStateManager.setCollapsed(toolItem.id, !isExpanded);

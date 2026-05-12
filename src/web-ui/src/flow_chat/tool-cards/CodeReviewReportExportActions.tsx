@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Check, Copy, FileDown, FilePenLine, Loader2 } from 'lucide-react';
+import { Check, Copy, Download, FilePenLine, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Tooltip } from '@/component-library';
+import { Button, Tooltip } from '@/component-library';
 import { notificationService } from '@/shared/notification-system';
 import { createMarkdownEditorTab } from '@/shared/utils/tabUtils';
 import {
@@ -14,7 +14,13 @@ import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService'
 interface CodeReviewReportExportActionsProps {
   reviewData: CodeReviewReportData;
   runManifest?: ReviewTeamRunManifest;
+  actions?: CodeReviewReportExportAction[];
+  variant?: 'icon' | 'footer';
 }
+
+type CodeReviewReportExportAction = 'copy' | 'open' | 'save';
+
+const DEFAULT_EXPORT_ACTIONS: CodeReviewReportExportAction[] = ['copy', 'open', 'save'];
 
 function timestampForFileName(): string {
   return new Date()
@@ -41,10 +47,13 @@ function downloadMarkdownInBrowser(fileName: string, markdown: string): void {
 export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActionsProps> = ({
   reviewData,
   runManifest,
+  actions = DEFAULT_EXPORT_ACTIONS,
+  variant = 'icon',
 }) => {
   const { t } = useTranslation('flow-chat');
   const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
+  const visibleActions = useMemo(() => new Set(actions), [actions]);
 
   const markdownLabels = useMemo<Partial<CodeReviewReportMarkdownLabels>>(() => ({
     titleStandard: t('toolCards.codeReview.report.titleStandard', { defaultValue: 'Code Review Report' }),
@@ -212,39 +221,67 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
     }
   }, [fileName, markdown, t]);
 
+  if (variant === 'footer') {
+    return (
+      <div
+        className="code-review-report-actions code-review-report-actions--footer"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {visibleActions.has('open') && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="small"
+            className="code-review-report-actions__footer-button"
+            onClick={handleOpenInEditor}
+          >
+            <FilePenLine size={14} />
+            {t('toolCards.codeReview.export.openMarkdown', { defaultValue: 'Open as Markdown' })}
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="code-review-report-actions" onClick={(event) => event.stopPropagation()}>
-      <Tooltip content={t('toolCards.codeReview.export.copyMarkdown', { defaultValue: 'Copy Markdown' })} placement="top">
-        <button
-          type="button"
-          className="code-review-report-actions__button"
-          onClick={handleCopy}
-          aria-label={t('toolCards.codeReview.export.copyMarkdown', { defaultValue: 'Copy Markdown' })}
-        >
-          {copied ? <Check size={14} /> : <Copy size={14} />}
-        </button>
-      </Tooltip>
-      <Tooltip content={t('toolCards.codeReview.export.openMarkdown', { defaultValue: 'Open as Markdown' })} placement="top">
-        <button
-          type="button"
-          className="code-review-report-actions__button"
-          onClick={handleOpenInEditor}
-          aria-label={t('toolCards.codeReview.export.openMarkdown', { defaultValue: 'Open as Markdown' })}
-        >
-          <FilePenLine size={14} />
-        </button>
-      </Tooltip>
-      <Tooltip content={t('toolCards.codeReview.export.saveMarkdown', { defaultValue: 'Save Markdown' })} placement="top">
-        <button
-          type="button"
-          className="code-review-report-actions__button"
-          onClick={handleSave}
-          disabled={saving}
-          aria-label={t('toolCards.codeReview.export.saveMarkdown', { defaultValue: 'Save Markdown' })}
-        >
-          {saving ? <Loader2 className="animate-spin" size={14} /> : <FileDown size={14} />}
-        </button>
-      </Tooltip>
+      {visibleActions.has('copy') && (
+        <Tooltip content={t('toolCards.codeReview.export.copyMarkdown', { defaultValue: 'Copy Markdown' })} placement="top">
+          <button
+            type="button"
+            className="code-review-report-actions__button"
+            onClick={handleCopy}
+            aria-label={t('toolCards.codeReview.export.copyMarkdown', { defaultValue: 'Copy Markdown' })}
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+          </button>
+        </Tooltip>
+      )}
+      {visibleActions.has('open') && (
+        <Tooltip content={t('toolCards.codeReview.export.openMarkdown', { defaultValue: 'Open as Markdown' })} placement="top">
+          <button
+            type="button"
+            className="code-review-report-actions__button"
+            onClick={handleOpenInEditor}
+            aria-label={t('toolCards.codeReview.export.openMarkdown', { defaultValue: 'Open as Markdown' })}
+          >
+            <FilePenLine size={14} />
+          </button>
+        </Tooltip>
+      )}
+      {visibleActions.has('save') && (
+        <Tooltip content={t('toolCards.codeReview.export.saveMarkdown', { defaultValue: 'Save Markdown' })} placement="top">
+          <button
+            type="button"
+            className="code-review-report-actions__button"
+            onClick={handleSave}
+            disabled={saving}
+            aria-label={t('toolCards.codeReview.export.saveMarkdown', { defaultValue: 'Save Markdown' })}
+          >
+            {saving ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+          </button>
+        </Tooltip>
+      )}
     </div>
   );
 };

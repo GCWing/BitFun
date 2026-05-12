@@ -618,6 +618,8 @@
     }
   },
   "deepReviewActionBar": {
+    "reviewRunningDeep": "深度審核進行中...",
+    "reviewRunningStandard": "審核進行中...",
     "reviewCompleted": "深度審核已完成",
     "fixRunning": "正在修復...",
     "fixCompleted": "修復完成",
@@ -635,6 +637,8 @@
     "fixAndReviewRunning": "正在修復\u0026準備重審...",
     "minimizedDeep": "深度審核",
     "minimizedStandard": "程式碼審核",
+    "minimizedReviewRunningDeep": "深度審核進行中",
+    "minimizedReviewRunningStandard": "程式碼審核進行中",
     "minimizedFix": "正在修復",
     "minimizedFixReview": "修復並重審中",
     "minimizedFixCompleted": "修復完成",

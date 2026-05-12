@@ -613,13 +613,13 @@ export class AgentAPI {
     action: { type: 'disable' } | { type: 'restore' } | { type: 'extend'; seconds: number },
   ): Promise<void> {
     const actionPayload = action.type === 'disable'
-      ? { type: 'Disable', payload: null }
+      ? { type: 'Disable' }
       : action.type === 'restore'
-        ? { type: 'Restore', payload: null }
+        ? { type: 'Restore' }
         : { type: 'Extend', payload: { seconds: action.seconds } };
     try {
       await api.invoke<void>('set_subagent_timeout', {
-        request: { session_id: sessionId, action: actionPayload },
+        request: { sessionId, action: actionPayload },
       });
     } catch (error) {
       throw createTauriCommandError('set_subagent_timeout', error, { sessionId, action: action.type });

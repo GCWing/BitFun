@@ -20,6 +20,13 @@ describe('deepReviewActionBarStore', () => {
     vi.clearAllMocks();
   });
 
+  it('does not expose a hard dismiss state or action', () => {
+    const s = bar() as unknown as Record<string, unknown>;
+
+    expect('dismissed' in s).toBe(false);
+    expect('dismiss' in s).toBe(false);
+  });
+
   describe('showActionBar', () => {
     it('initializes with default selected remediation IDs', () => {
       bar().showActionBar({

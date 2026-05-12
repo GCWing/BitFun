@@ -9,6 +9,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import {
+  getReviewActionBarStateForSession,
   useReviewActionBarStore,
   type DeepReviewCapacityQueueAction,
   type DeepReviewCapacityQueueState,
@@ -99,12 +100,17 @@ interface PendingDecisionAction {
   selectedIds: Set<string>;
 }
 
+interface ReviewActionBarProps {
+  childSessionId?: string;
+}
+
 const PHASE_CONFIG: Record<ReviewActionPhase, {
   icon: React.ComponentType<{ size?: number | string; style?: React.CSSProperties; className?: string }>;
   iconClass: string;
   variant: 'success' | 'warning' | 'error' | 'info' | 'loading';
 }> = {
   idle: { icon: Clock, iconClass: '', variant: 'info' },
+  review_running: { icon: Loader2, iconClass: 'deep-review-action-bar__icon--loading', variant: 'loading' },
   review_completed: { icon: CheckCircle, iconClass: 'deep-review-action-bar__icon--success', variant: 'success' },
   fix_running: { icon: Loader2, iconClass: 'deep-review-action-bar__icon--loading', variant: 'loading' },
   fix_completed: { icon: CheckCircle, iconClass: 'deep-review-action-bar__icon--success', variant: 'success' },
@@ -119,9 +125,13 @@ const PHASE_CONFIG: Record<ReviewActionPhase, {
   review_error: { icon: AlertTriangle, iconClass: 'deep-review-action-bar__icon--error', variant: 'error' },
 };
 
-export const ReviewActionBar: React.FC = () => {
+export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId: scopedChildSessionId }) => {
   const { t } = useTranslation('flow-chat');
   const store = useReviewActionBarStore();
+  const scopedState = scopedChildSessionId
+    ? getReviewActionBarStateForSession(store, scopedChildSessionId)
+    : null;
+  const actionState = scopedState ?? store;
   const {
     childSessionId,
     reviewMode,
@@ -129,7 +139,6 @@ export const ReviewActionBar: React.FC = () => {
     reviewData,
     remediationItems,
     selectedRemediationIds,
-    dismissed,
     activeAction,
     lastSubmittedAction,
     customInstructions,
@@ -140,7 +149,7 @@ export const ReviewActionBar: React.FC = () => {
     remainingFixIds,
     decisionSelections,
     capacityQueueState,
-  } = store;
+  } = actionState;
 
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [showRemediationList, setShowRemediationList] = useState(true);
@@ -292,7 +301,7 @@ export const ReviewActionBar: React.FC = () => {
 
   // ---- long-running hint ----
   useEffect(() => {
-    if (phase !== 'fix_running' && phase !== 'resume_running') {
+    if (phase !== 'review_running' && phase !== 'fix_running' && phase !== 'resume_running') {
       setElapsedMs(0);
       setLongRunningNotified(false);
       return;
@@ -336,17 +345,17 @@ export const ReviewActionBar: React.FC = () => {
   ), [decisionGateItems, decisionSelections]);
 
   const handleToggleRemediation = useCallback((id: string) => {
-    store.toggleRemediation(id);
-  }, [store]);
+    store.toggleRemediation(id, childSessionId ?? undefined);
+  }, [childSessionId, store]);
 
   const handleToggleAll = useCallback(() => {
-    store.toggleAllRemediation();
-  }, [store]);
+    store.toggleAllRemediation(childSessionId ?? undefined);
+  }, [childSessionId, store]);
 
   const handleToggleGroup = useCallback((groupId: string) => {
     if (groupId === 'ungrouped') return;
-    store.toggleGroupRemediation(groupId as RemediationGroupId);
-  }, [store]);
+    store.toggleGroupRemediation(groupId as RemediationGroupId, childSessionId ?? undefined);
+  }, [childSessionId, store]);
 
   const handleToggleDecisionExpansion = useCallback((id: string) => {
     setExpandedDecisionIds((prev) => {
@@ -388,7 +397,7 @@ export const ReviewActionBar: React.FC = () => {
       rerunReview,
       reviewMode,
       completedItems: [...completedRemediationIds],
-      decisionSelections: store.decisionSelections,
+      decisionSelections,
     });
 
     if (!prompt) return;
@@ -398,8 +407,9 @@ export const ReviewActionBar: React.FC = () => {
     }
 
     const baselineTurnId = childSession?.dialogTurns.at(-1)?.id ?? null;
-    store.setActiveAction(action, { baselineTurnId });
-    store.updatePhase('fix_running');
+    store.setActiveAction(action, { baselineTurnId }, childSessionId);
+    store.updatePhase('fix_running', undefined, childSessionId);
+    store.minimize(childSessionId ?? undefined);
 
     try {
       await flowChatManager.sendMessage(
@@ -427,7 +437,8 @@ export const ReviewActionBar: React.FC = () => {
       log.error('Failed to start review remediation', { childSessionId, reviewMode, rerunReview, error });
       const msg = error instanceof Error ? error.message : String(error);
       const isTimeout = /timeout/i.test(msg);
-      store.updatePhase(isTimeout ? 'fix_timeout' : 'fix_failed', msg);
+      store.updatePhase(isTimeout ? 'fix_timeout' : 'fix_failed', msg, childSessionId);
+      store.restore(childSessionId ?? undefined);
       notificationService.error(
         error instanceof Error
           ? error.message
@@ -437,9 +448,9 @@ export const ReviewActionBar: React.FC = () => {
         { duration: 5000 },
       );
     } finally {
-      store.setActiveAction(null);
+      store.setActiveAction(null, undefined, childSessionId);
     }
-  }, [reviewData, childSessionId, childSession, selectedRemediationIds, remediationItems, completedRemediationIds, customInstructions, reviewMode, isDeepReview, store, t]);
+  }, [reviewData, childSessionId, childSession, selectedRemediationIds, remediationItems, completedRemediationIds, customInstructions, reviewMode, isDeepReview, decisionSelections, store, t]);
 
   const handleConfirmDecisionGate = useCallback(async () => {
     if (!pendingDecisionAction || decisionGateMissingSelection) {
@@ -458,7 +469,7 @@ export const ReviewActionBar: React.FC = () => {
   const handleRetryIncompleteSlices = useCallback(async () => {
     if (!childSessionId || retryableSlices.length === 0) return;
 
-    store.setActiveAction('retry');
+    store.setActiveAction('retry', undefined, childSessionId);
     try {
       await flowChatManager.sendMessage(
         buildDeepReviewRetryPrompt(retryableSlices),
@@ -470,7 +481,7 @@ export const ReviewActionBar: React.FC = () => {
         'DeepReview',
         'agentic',
       );
-      store.minimize();
+      store.minimize(childSessionId);
     } catch (error) {
       log.error('Failed to start DeepReview retry slices', { childSessionId, error });
       const message = error instanceof Error
@@ -480,7 +491,7 @@ export const ReviewActionBar: React.FC = () => {
         });
       notificationService.error(message, { duration: 5000 });
     } finally {
-      store.setActiveAction(null);
+      store.setActiveAction(null, undefined, childSessionId);
     }
   }, [childSessionId, retryableSlices, store, t]);
 
@@ -492,7 +503,7 @@ export const ReviewActionBar: React.FC = () => {
       selectedIds: selectedRemediationIds,
       rerunReview: false,
       reviewMode,
-      decisionSelections: store.decisionSelections,
+      decisionSelections,
     });
 
     if (customInstructions.trim()) {
@@ -528,12 +539,12 @@ export const ReviewActionBar: React.FC = () => {
       mode: 'replace',
     });
 
-    store.dismiss();
-  }, [reviewData, selectedRemediationIds, customInstructions, reviewMode, store, t]);
+    store.minimize(childSessionId ?? undefined);
+  }, [reviewData, childSessionId, selectedRemediationIds, customInstructions, reviewMode, decisionSelections, store, t]);
 
   const handleMinimize = useCallback(() => {
-    store.minimize();
-  }, [store]);
+    store.minimize(childSessionId ?? undefined);
+  }, [childSessionId, store]);
 
   const handleContinueReview = useCallback(async () => {
     if (!interruption) return;
@@ -556,9 +567,9 @@ export const ReviewActionBar: React.FC = () => {
     }
 
     const resumeBaselineTurnId = childSession?.dialogTurns.at(-1)?.id ?? null;
-    store.setActiveAction('resume', { baselineTurnId: resumeBaselineTurnId });
-    store.updatePhase('resume_running');
-    store.minimize();
+    store.setActiveAction('resume', { baselineTurnId: resumeBaselineTurnId }, childSessionId ?? undefined);
+    store.updatePhase('resume_running', undefined, childSessionId ?? undefined);
+    store.minimize(childSessionId ?? undefined);
     try {
       await continueDeepReviewSession(interruption, t('deepReviewActionBar.resumeRequestDisplay', {
         defaultValue: 'Continue interrupted Deep Review',
@@ -568,11 +579,11 @@ export const ReviewActionBar: React.FC = () => {
       const message = t('deepReviewActionBar.resumeFailedMessage', {
         defaultValue: 'Unable to continue Deep Review. Check the model settings or try again later.',
       });
-      store.updatePhase('resume_failed', message);
-      store.restore();
+      store.updatePhase('resume_failed', message, childSessionId ?? undefined);
+      store.restore(childSessionId ?? undefined);
       notificationService.error(message, { duration: 5000 });
     } finally {
-      store.setActiveAction(null);
+      store.setActiveAction(null, undefined, childSessionId ?? undefined);
     }
   }, [childSession, childSessionId, interruption, store, t]);
 
@@ -580,7 +591,7 @@ export const ReviewActionBar: React.FC = () => {
     if (!reviewData || !childSessionId || remainingFixIds.length === 0) return;
 
     const remainingSet = new Set(remainingFixIds);
-    store.setSelectedRemediationIds(remainingSet);
+    store.setSelectedRemediationIds(remainingSet, childSessionId);
 
     await handleStartFixing(false, remainingSet);
   }, [reviewData, childSessionId, remainingFixIds, store, handleStartFixing]);
@@ -662,6 +673,10 @@ export const ReviewActionBar: React.FC = () => {
     }
 
     switch (phase) {
+      case 'review_running':
+        return t(isDeepReview ? 'deepReviewActionBar.reviewRunningDeep' : 'deepReviewActionBar.reviewRunningStandard', {
+          defaultValue: isDeepReview ? 'Deep review in progress...' : 'Review in progress...',
+        });
       case 'review_completed':
         return t(isDeepReview ? 'reviewActionBar.reviewCompletedDeep' : 'reviewActionBar.reviewCompletedStandard', {
           defaultValue: isDeepReview ? 'Deep review completed' : 'Review completed',
@@ -716,7 +731,7 @@ export const ReviewActionBar: React.FC = () => {
     }
   }, [phase, isDeepReview, t, hasInterruption, interruption, errorAttribution, lastSubmittedAction]);
 
-  if (dismissed || phase === 'idle' || !childSessionId) {
+  if (phase === 'idle' || !childSessionId) {
     return null;
   }
 
@@ -737,7 +752,7 @@ export const ReviewActionBar: React.FC = () => {
       />
 
       {/* Running progress */}
-      {(phase === 'fix_running' || phase === 'resume_running') && progressSummary && (
+      {(['review_running', 'fix_running', 'resume_running'].includes(phase)) && progressSummary && (
         <div className="deep-review-action-bar__progress">
           <span className="deep-review-action-bar__progress-text">
             {progressSummary.text}
@@ -760,19 +775,19 @@ export const ReviewActionBar: React.FC = () => {
           supportsInlineQueueControls={supportsInlineQueueControls}
           onContinueQueue={() => handleCapacityQueueAction(
             'continue',
-            store.continueCapacityQueue,
+            () => store.continueCapacityQueue(childSessionId ?? undefined),
           )}
           onPauseQueue={() => handleCapacityQueueAction(
             'pause',
-            store.pauseCapacityQueue,
+            () => store.pauseCapacityQueue(childSessionId ?? undefined),
           )}
           onSkipOptionalQueuedReviewers={() => handleCapacityQueueAction(
             'skip_optional',
-            store.skipOptionalQueuedReviewers,
+            () => store.skipOptionalQueuedReviewers(childSessionId ?? undefined),
           )}
           onCancelQueuedReviewers={() => handleCapacityQueueAction(
             'cancel',
-            store.cancelQueuedReviewers,
+            () => store.cancelQueuedReviewers(childSessionId ?? undefined),
           )}
           onOpenReviewSettings={handleOpenReviewSettings}
         />
@@ -846,7 +861,9 @@ export const ReviewActionBar: React.FC = () => {
           onToggleGroup={handleToggleGroup}
           onToggleList={() => setShowRemediationList(!showRemediationList)}
           onToggleDecisionExpansion={handleToggleDecisionExpansion}
-          onSetDecisionSelection={store.setDecisionSelection}
+          onSetDecisionSelection={(itemId, optionIndex) =>
+            store.setDecisionSelection(itemId, optionIndex, childSessionId ?? undefined)
+          }
         />
       )}
 
@@ -857,8 +874,12 @@ export const ReviewActionBar: React.FC = () => {
           customInstructions={customInstructions}
           rerunReview={pendingDecisionAction.rerunReview}
           confirmDisabled={decisionGateMissingSelection}
-          onSelectDecision={store.setDecisionSelection}
-          onCustomInstructionsChange={store.setCustomInstructions}
+          onSelectDecision={(itemId, optionIndex) =>
+            store.setDecisionSelection(itemId, optionIndex, childSessionId ?? undefined)
+          }
+          onCustomInstructionsChange={(value) =>
+            store.setCustomInstructions(value, childSessionId ?? undefined)
+          }
           onConfirm={handleConfirmDecisionGate}
           onCancel={handleCancelDecisionGate}
         />
@@ -910,7 +931,7 @@ export const ReviewActionBar: React.FC = () => {
                 defaultValue: 'Describe additional requirements or context for the fix...',
               })}
               value={customInstructions}
-              onChange={(e) => store.setCustomInstructions(e.target.value)}
+              onChange={(e) => store.setCustomInstructions(e.target.value, childSessionId ?? undefined)}
               rows={2}
             />
           )}
@@ -929,6 +950,7 @@ export const ReviewActionBar: React.FC = () => {
         isResumeRunning={isResumeRunning}
         remainingFixIds={remainingFixIds}
         modelRecoveryAction={modelRecoveryAction}
+        reviewData={reviewData}
         onRetryIncompleteSlices={handleRetryIncompleteSlices}
         onStartFixing={handleStartFixing}
         onFillBackInput={handleFillBackInput}
@@ -937,7 +959,7 @@ export const ReviewActionBar: React.FC = () => {
         onCopyDiagnostics={handleCopyDiagnostics}
         onViewPartialResults={handleViewPartialResults}
         onContinueFix={handleContinueFix}
-        onSkipRemainingFixes={store.skipRemainingFixes}
+        onSkipRemainingFixes={() => store.skipRemainingFixes(childSessionId ?? undefined)}
         onMinimize={handleMinimize}
       />
     </div>

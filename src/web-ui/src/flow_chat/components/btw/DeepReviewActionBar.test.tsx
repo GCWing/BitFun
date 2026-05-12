@@ -255,6 +255,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(sendMessageMock).toHaveBeenCalledTimes(1);
     const state = useReviewActionBarStore.getState();
     expect(state.phase).toBe('fix_running');
+    expect(state.minimized).toBe(true);
     expect(state.fixingBaselineTurnId).toBe('review-turn-1');
     expect(container.textContent).toContain('Fix the incorrect branch.');
     expect(container.textContent).toContain('Fixing');
@@ -339,10 +340,10 @@ describeWithJsdom('DeepReviewActionBar', () => {
 
     expect(confirmWarningMock).toHaveBeenCalledTimes(1);
     expect(eventBusEmitMock).not.toHaveBeenCalledWith('fill-chat-input', expect.anything());
-    expect(useReviewActionBarStore.getState().dismissed).toBe(false);
+    expect(useReviewActionBarStore.getState().minimized).toBe(false);
   });
 
-  it('fills chat input without confirmation when current input is empty', async () => {
+  it('fills chat input and minimizes the action bar when current input is empty', async () => {
     const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
 
     eventBusEmitMock.mockImplementation((event: string, payload: { getValue?: () => string }) => {
@@ -379,7 +380,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(eventBusEmitMock).toHaveBeenCalledWith('fill-chat-input', expect.objectContaining({
       mode: 'replace',
     }));
-    expect(useReviewActionBarStore.getState().dismissed).toBe(true);
+    expect(useReviewActionBarStore.getState().minimized).toBe(true);
   });
 
   it('minimizes action bar when close button is clicked', async () => {
@@ -408,7 +409,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const state = useReviewActionBarStore.getState();
-    expect(state.dismissed).toBe(false);
     expect(state.minimized).toBe(true);
   });
 

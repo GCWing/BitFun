@@ -9,7 +9,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { MEditor } from '../meditor';
 import type { EditorInstance } from '../meditor';
 import { analyzeMarkdownEditability, type MarkdownEditabilityAnalysis } from '../meditor/utils/tiptapMarkdown';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Check, Copy } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
@@ -95,6 +95,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const [unsafeViewMode, setUnsafeViewMode] = useState<'source' | 'preview'>('source');
   const [loading, setLoading] = useState(!!filePath);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [editability, setEditability] = useState<MarkdownEditabilityAnalysis>(() => analyzeMarkdownEditability(initialContent));
   const editorRef = useRef<EditorInstance>(null);
   const isUnmountedRef = useRef(false);
@@ -556,6 +557,16 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     saveFileContent();
   }, [saveFileContent]);
 
+  const handleCopyMarkdown = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(contentRef.current);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch (err) {
+      log.warn('Failed to copy markdown editor content', err);
+    }
+  }, []);
+
   useEffect(() => {
     if (!jumpToLine) {
       return;
@@ -653,6 +664,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               type="button"
               size="small"
               variant={unsafeViewMode === 'source' ? 'primary' : 'secondary'}
+              className="bitfun-markdown-editor__toolbar-button"
               onClick={() => setUnsafeViewMode('source')}
               aria-pressed={unsafeViewMode === 'source'}
             >
@@ -662,10 +674,29 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               type="button"
               size="small"
               variant={unsafeViewMode === 'preview' ? 'primary' : 'secondary'}
+              className="bitfun-markdown-editor__toolbar-button"
               onClick={() => setUnsafeViewMode('preview')}
               aria-pressed={unsafeViewMode === 'preview'}
             >
               {t('editor.markdownEditor.preview')}
+            </Button>
+          </div>
+          <div className="bitfun-markdown-editor__toolbar-actions">
+            <Button
+              type="button"
+              size="small"
+              variant="secondary"
+              iconOnly
+              className="bitfun-markdown-editor__toolbar-button bitfun-markdown-editor__copy-button"
+              onClick={() => void handleCopyMarkdown()}
+              aria-label={copied
+                ? t('editor.markdownEditor.copiedMarkdown', { defaultValue: 'Copied Markdown' })
+                : t('editor.markdownEditor.copyMarkdown', { defaultValue: 'Copy Markdown' })}
+              title={copied
+                ? t('editor.markdownEditor.copiedMarkdown', { defaultValue: 'Copied Markdown' })
+                : t('editor.markdownEditor.copyMarkdown', { defaultValue: 'Copy Markdown' })}
+            >
+              {copied ? <Check size={13} /> : <Copy size={13} />}
             </Button>
           </div>
         </div>
@@ -741,6 +772,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             type="button"
             size="small"
             variant={viewMode === 'preview' ? 'primary' : 'secondary'}
+            className="bitfun-markdown-editor__toolbar-button"
             onClick={() => setViewMode('preview')}
             aria-pressed={viewMode === 'preview'}
           >
@@ -750,10 +782,29 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             type="button"
             size="small"
             variant={viewMode === 'markdown' ? 'primary' : 'secondary'}
+            className="bitfun-markdown-editor__toolbar-button"
             onClick={() => setViewMode('markdown')}
             aria-pressed={viewMode === 'markdown'}
           >
             {t('editor.markdownEditor.markdown')}
+          </Button>
+        </div>
+        <div className="bitfun-markdown-editor__toolbar-actions">
+          <Button
+            type="button"
+            size="small"
+            variant="secondary"
+            iconOnly
+            className="bitfun-markdown-editor__toolbar-button bitfun-markdown-editor__copy-button"
+            onClick={() => void handleCopyMarkdown()}
+            aria-label={copied
+              ? t('editor.markdownEditor.copiedMarkdown', { defaultValue: 'Copied Markdown' })
+              : t('editor.markdownEditor.copyMarkdown', { defaultValue: 'Copy Markdown' })}
+            title={copied
+              ? t('editor.markdownEditor.copiedMarkdown', { defaultValue: 'Copied Markdown' })
+              : t('editor.markdownEditor.copyMarkdown', { defaultValue: 'Copy Markdown' })}
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />}
           </Button>
         </div>
       </div>

@@ -21,9 +21,13 @@ const AGENT_LOCALES = {
 const REQUIRED_ACTION_BAR_KEYS = [
   'deepReviewActionBar.minimize',
   'deepReviewActionBar.restore',
+  'deepReviewActionBar.reviewRunningDeep',
+  'deepReviewActionBar.reviewRunningStandard',
   'deepReviewActionBar.fixAndReviewRunning',
   'deepReviewActionBar.minimizedDeep',
   'deepReviewActionBar.minimizedStandard',
+  'deepReviewActionBar.minimizedReviewRunningDeep',
+  'deepReviewActionBar.minimizedReviewRunningStandard',
   'deepReviewActionBar.minimizedFix',
   'deepReviewActionBar.minimizedFixReview',
   'deepReviewActionBar.minimizedFixCompleted',

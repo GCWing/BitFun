@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { BtwSessionPanel } from './BtwSessionPanel';
 import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
+import { loadPersistedReviewState } from '../../services/ReviewActionBarPersistenceService';
 import type { FlowChatState, Session } from '../../types/flow-chat';
 
 let flowChatState: FlowChatState;
@@ -229,6 +230,80 @@ function createInterruptedDeepReviewWithoutResult(): Session {
   } as Session;
 }
 
+function createRunningDeepReviewSession(): Session {
+  const childSession = createCompletedDeepReviewWithoutResult();
+  return {
+    ...childSession,
+    status: 'running',
+    dialogTurns: childSession.dialogTurns.map((turn) => ({
+      ...turn,
+      status: 'processing',
+      modelRounds: turn.modelRounds.map((round) => ({
+        ...round,
+        isStreaming: true,
+        isComplete: false,
+        status: 'streaming',
+      })),
+    })),
+  } as Session;
+}
+
+function createPendingDeepReviewSession(): Session {
+  const childSession = createRunningDeepReviewSession();
+  return {
+    ...childSession,
+    dialogTurns: childSession.dialogTurns.map((turn) => ({
+      ...turn,
+      status: 'pending',
+    })),
+  } as Session;
+}
+
+function createParentSessionWithId(sessionId: string): Session {
+  return {
+    sessionId,
+    title: sessionId,
+    dialogTurns: [],
+    status: 'idle',
+    config: {},
+    createdAt: 1,
+    lastActiveAt: 1,
+    error: null,
+  } as Session;
+}
+
+function cloneReviewSessionWithId(
+  session: Session,
+  sessionId: string,
+  parentSessionId: string,
+): Session {
+  return {
+    ...session,
+    sessionId,
+    parentSessionId,
+    title: sessionId,
+    dialogTurns: session.dialogTurns.map((turn, turnIndex) => ({
+      ...turn,
+      id: `${sessionId}-turn-${turnIndex + 1}`,
+      sessionId,
+      userMessage: turn.userMessage
+        ? {
+            ...turn.userMessage,
+            id: `${sessionId}-user-${turnIndex + 1}`,
+          }
+        : undefined,
+      modelRounds: turn.modelRounds.map((round, roundIndex) => ({
+        ...round,
+        id: `${sessionId}-round-${turnIndex + 1}-${roundIndex + 1}`,
+        items: round.items.map((item, itemIndex) => ({
+          ...item,
+          id: `${sessionId}-item-${turnIndex + 1}-${roundIndex + 1}-${itemIndex + 1}`,
+        })),
+      })),
+    })),
+  } as Session;
+}
+
 function createCancelledResumeDeepReview(): Session {
   const childSession = createInterruptedDeepReviewWithoutResult();
   return {
@@ -249,6 +324,31 @@ function createCancelledResumeDeepReview(): Session {
         status: 'cancelled',
         startTime: 2,
         timestamp: 2,
+      },
+    ],
+  } as Session;
+}
+
+function createCancelledFixDeepReview(): Session {
+  const childSession = createReviewSession();
+  return {
+    ...childSession,
+    status: 'idle',
+    error: null,
+    dialogTurns: [
+      ...childSession.dialogTurns,
+      {
+        id: 'fix-turn-1',
+        sessionId: 'deep-review-child',
+        userMessage: {
+          id: 'fix-user-1',
+          content: 'Fix review findings',
+          timestamp: 3,
+        },
+        modelRounds: [],
+        status: 'cancelled',
+        startTime: 3,
+        timestamp: 3,
       },
     ],
   } as Session;
@@ -312,6 +412,224 @@ describe('BtwSessionPanel review action bar integration', () => {
       phase: 'review_completed',
     });
     expect(useReviewActionBarStore.getState().remediationItems).toEqual([]);
+  });
+
+  it('shows the running review action as minimized while Deep Review is still processing', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createRunningDeepReviewSession()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      childSessionId: 'deep-review-child',
+      phase: 'review_running',
+      minimized: true,
+    });
+  });
+
+  it('shows the running review action as minimized while Deep Review is pending', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createPendingDeepReviewSession()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      childSessionId: 'deep-review-child',
+      phase: 'review_running',
+      minimized: true,
+    });
+  });
+
+  it('keeps minimized running review action bars isolated across simultaneous reviews', async () => {
+    const firstParent = createParentSessionWithId('parent-session-1');
+    const secondParent = createParentSessionWithId('parent-session-2');
+    const firstChild = cloneReviewSessionWithId(
+      createRunningDeepReviewSession(),
+      'deep-review-child-1',
+      firstParent.sessionId,
+    );
+    const secondChild = cloneReviewSessionWithId(
+      createRunningDeepReviewSession(),
+      'deep-review-child-2',
+      secondParent.sessionId,
+    );
+
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        [firstParent.sessionId, firstParent],
+        [secondParent.sessionId, secondParent],
+        [firstChild.sessionId, firstChild],
+        [secondChild.sessionId, secondChild],
+      ]),
+      activeSessionId: firstChild.sessionId,
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <>
+          <BtwSessionPanel
+            childSessionId={firstChild.sessionId}
+            parentSessionId={firstParent.sessionId}
+            workspacePath="D:/workspace/project"
+          />
+          <BtwSessionPanel
+            childSessionId={secondChild.sessionId}
+            parentSessionId={secondParent.sessionId}
+            workspacePath="D:/workspace/project"
+          />
+        </>,
+      );
+    });
+
+    expect(container.querySelectorAll('.btw-session-panel__minimized-button')).toHaveLength(2);
+  });
+
+  it('keeps bottom breathing room when the review action is minimized', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createRunningDeepReviewSession()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    const body = container.querySelector<HTMLElement>('.btw-session-panel__body');
+    expect(body?.style.paddingBottom).toBe('96px');
+  });
+
+  it('restores the minimized running action when capacity waiting ends before the review finishes', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createRunningDeepReviewSession()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    await act(async () => {
+      useReviewActionBarStore.getState().showCapacityQueueBar({
+        childSessionId: 'deep-review-child',
+        parentSessionId: 'parent-session',
+        capacityQueueState: {
+          toolId: 'task-security',
+          subagentType: 'ReviewSecurity',
+          status: 'queued_for_capacity',
+          queuedReviewerCount: 1,
+          waitingReviewers: [{
+            toolId: 'task-security',
+            subagentType: 'ReviewSecurity',
+            status: 'queued_for_capacity',
+          }],
+        },
+      });
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      childSessionId: 'deep-review-child',
+      phase: 'review_waiting_capacity',
+      minimized: false,
+    });
+
+    await act(async () => {
+      useReviewActionBarStore.getState().applyCapacityQueueState({
+        toolId: 'task-security',
+        subagentType: 'ReviewSecurity',
+        status: 'running',
+        queuedReviewerCount: 0,
+        waitingReviewers: [],
+      });
+      await Promise.resolve();
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      childSessionId: 'deep-review-child',
+      phase: 'review_running',
+      minimized: true,
+    });
+    expect(container.querySelector('.btw-session-panel__minimized-button')).toBeTruthy();
+  });
+
+  it('lets persisted action state replace the running review placeholder', async () => {
+    vi.mocked(loadPersistedReviewState).mockResolvedValueOnce({
+      version: 1,
+      phase: 'fix_running',
+      completedRemediationIds: [],
+      minimized: true,
+      customInstructions: 'Keep the fix focused.',
+      persistedAt: 2,
+    });
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createRunningDeepReviewSession()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      childSessionId: 'deep-review-child',
+      phase: 'fix_running',
+      minimized: true,
+      customInstructions: 'Keep the fix focused.',
+    });
   });
 
   it('shows a resumable Deep Review action bar when the run completed without a structured report', async () => {
@@ -385,6 +703,51 @@ describe('BtwSessionPanel review action bar integration', () => {
       childSessionId: 'deep-review-child',
       phase: 'resume_running',
       minimized: true,
+    });
+  });
+
+  it('marks a stopped fix run as interrupted and restores the action bar state', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createCancelledFixDeepReview()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    const store = useReviewActionBarStore.getState();
+    store.showActionBar({
+      childSessionId: 'deep-review-child',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        summary: { recommended_action: 'request_changes' },
+        remediation_plan: ['Fix issue 1'],
+      },
+      reviewMode: 'deep',
+      phase: 'review_completed',
+    });
+    const itemId = useReviewActionBarStore.getState().remediationItems[0]?.id;
+    expect(itemId).toBeTruthy();
+    store.setSelectedRemediationIds(new Set([itemId!]));
+    store.setActiveAction('fix', { baselineTurnId: 'turn-1' });
+    store.updatePhase('fix_running');
+    store.minimize();
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      childSessionId: 'deep-review-child',
+      phase: 'fix_interrupted',
+      minimized: false,
+      remainingFixIds: [itemId],
     });
   });
 

@@ -3,6 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { ReviewActionControls } from './ReviewActionControls';
 
+vi.mock('../../tool-cards/CodeReviewReportExportActions', () => ({
+  CodeReviewReportExportActions: ({ actions, variant }: { actions?: string[]; variant?: string }) => (
+    <span data-actions={actions?.join(',')} data-variant={variant}>Open as Markdown</span>
+  ),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => {
@@ -68,6 +74,21 @@ describe('ReviewActionControls', () => {
     expect(html).toContain('Start fixing');
     expect(html).toContain('Fix and re-review');
     expect(html).toContain('Fill to input');
+  });
+
+  it('places Open as Markdown in the completed review action row', () => {
+    const html = renderToStaticMarkup(
+      <ReviewActionControls
+        {...baseProps}
+        phase="review_completed"
+        remediationItemCount={1}
+        reviewData={{ summary: { recommended_action: 'request_changes' } } as any}
+      />,
+    );
+
+    expect(html).toContain('Open as Markdown');
+    expect(html).toContain('data-actions="open"');
+    expect(html).toContain('data-variant="footer"');
   });
 
   it('renders interruption recovery, diagnostics, and partial-results actions', () => {

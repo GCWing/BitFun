@@ -181,7 +181,7 @@
     z-index: 12;
   }
 
-  // Action bar is now a floating card above the bottom, so no extra scroll padding needed.
+  // The body owns bottom breathing room so the floating card does not cover the final lines.
   &--has-action-bar &__scroll-to-bottom {
     bottom: 140px;
   }
