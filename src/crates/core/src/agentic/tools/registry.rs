@@ -405,45 +405,56 @@ mod tests {
     #[test]
     fn registry_preserves_builtin_tool_manifest_for_owner_migration() {
         let registry = create_tool_registry();
+        let expected_names = vec![
+            "LS",
+            "Read",
+            "Glob",
+            "Grep",
+            "Write",
+            "Edit",
+            "Delete",
+            "Bash",
+            "TerminalControl",
+            "SessionControl",
+            "SessionMessage",
+            "SessionHistory",
+            "TodoWrite",
+            "Cron",
+            "Task",
+            "Skill",
+            "AskUserQuestion",
+            "WebSearch",
+            "WebFetch",
+            "ListMCPResources",
+            "ReadMCPResource",
+            "ListMCPPrompts",
+            "GetMCPPrompt",
+            "GenerativeUI",
+            "GetFileDiff",
+            "Log",
+            "Git",
+            "CreatePlan",
+            "submit_code_review",
+            "InitMiniApp",
+            "ControlHub",
+            "ComputerUse",
+            "Playbook",
+        ];
 
         assert_eq!(
             registry.get_tool_names(),
-            vec![
-                "LS",
-                "Read",
-                "Glob",
-                "Grep",
-                "Write",
-                "Edit",
-                "Delete",
-                "Bash",
-                "TerminalControl",
-                "SessionControl",
-                "SessionMessage",
-                "SessionHistory",
-                "TodoWrite",
-                "Cron",
-                "Task",
-                "Skill",
-                "AskUserQuestion",
-                "WebSearch",
-                "WebFetch",
-                "ListMCPResources",
-                "ReadMCPResource",
-                "ListMCPPrompts",
-                "GetMCPPrompt",
-                "GenerativeUI",
-                "GetFileDiff",
-                "Log",
-                "Git",
-                "CreatePlan",
-                "submit_code_review",
-                "InitMiniApp",
-                "ControlHub",
-                "ComputerUse",
-                "Playbook",
-            ],
+            expected_names,
             "builtin tool manifest must stay stable before moving registry ownership"
+        );
+        let runtime_names = registry
+            .get_all_tools()
+            .iter()
+            .map(|tool| tool.name().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            runtime_names,
+            registry.get_tool_names(),
+            "runtime tool collection order must match registry key order"
         );
     }
 
@@ -455,13 +466,24 @@ mod tests {
             Some("github__enterprise/prod"),
         ));
         registry.register_tool(dynamic_tool("mcp__encoded__without_metadata", None));
+        registry.register_tool(dynamic_tool("docs_lookup", Some("docs/provider")));
 
         let descriptors = registry
             .list_dynamic_tools()
             .await
             .expect("list dynamic tools");
 
-        assert_eq!(descriptors.len(), 1);
+        assert_eq!(
+            descriptors
+                .iter()
+                .map(|descriptor| (descriptor.name.as_str(), descriptor.provider_id.as_deref()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("external_search", Some("github__enterprise/prod")),
+                ("docs_lookup", Some("docs/provider")),
+            ],
+            "dynamic provider descriptors must keep explicit metadata and registration order"
+        );
         assert_eq!(descriptors[0].name, "external_search");
         assert_eq!(
             descriptors[0].provider_id.as_deref(),
@@ -517,19 +539,32 @@ mod tests {
     #[test]
     fn registry_wraps_file_modification_tools_for_snapshot_tracking() {
         let registry = create_tool_registry();
-        let tool = registry
-            .get_tool("Write")
-            .expect("Write tool should be registered");
+        for tool_name in ["Write", "Edit", "Delete"] {
+            let tool = registry
+                .get_tool(tool_name)
+                .unwrap_or_else(|| panic!("{tool_name} tool should be registered"));
 
-        let assistant_text = tool.render_result_for_assistant(&json!({
-            "success": true,
-            "file_path": "E:/Projects/demo.txt"
-        }));
+            let assistant_text = tool.render_result_for_assistant(&json!({
+                "success": true,
+                "file_path": "E:/Projects/demo.txt"
+            }));
 
+            assert!(
+                assistant_text.contains("snapshot system"),
+                "expected snapshot wrapper text for {tool_name}, got: {assistant_text}"
+            );
+        }
+
+        let read_text = registry
+            .get_tool("Read")
+            .expect("Read tool should be registered")
+            .render_result_for_assistant(&json!({
+                "content": "hello",
+                "file_path": "E:/Projects/demo.txt"
+            }));
         assert!(
-            assistant_text.contains("snapshot system"),
-            "expected snapshot wrapper text, got: {}",
-            assistant_text
+            !read_text.contains("snapshot system"),
+            "readonly tool should not be snapshot wrapped: {read_text}"
         );
     }
 }

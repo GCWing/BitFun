@@ -178,6 +178,97 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/service/mcp/server/config.rs',
+    patterns: [
+      {
+        regex: /\bpub enum MCPServerTransport\b/,
+        message: 'core MCP server config facade must not redefine MCPServerTransport; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct MCPServerOAuthConfig\b/,
+        message: 'core MCP server config facade must not redefine OAuth config; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct MCPServerXaaConfig\b/,
+        message: 'core MCP server config facade must not redefine XAA config; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct MCPServerConfig\b/,
+        message: 'core MCP server config facade must not redefine server config; use the integrations contract',
+      },
+      {
+        regex: /\bfn default_true\b/,
+        message: 'core MCP server config facade must not redefine config serde defaults; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn resolved_transport\b/,
+        message: 'core MCP server config facade must not redefine transport defaults; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn validate\b/,
+        message: 'core MCP server config facade must not redefine config validation; use the integrations contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/mcp/config/cursor_format.rs',
+    patterns: [
+      {
+        regex: /\bfn parse_source\b/,
+        message: 'core MCP cursor facade must not redefine source parsing; use the integrations contract',
+      },
+      {
+        regex: /\bfn parse_transport\b/,
+        message: 'core MCP cursor facade must not redefine transport parsing; use the integrations contract',
+      },
+      {
+        regex: /\bfn parse_legacy_type\b/,
+        message: 'core MCP cursor facade must not redefine legacy type parsing; use the integrations contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/mcp/protocol/jsonrpc.rs',
+    patterns: [
+      {
+        regex: /\bfn serialize_params\b/,
+        message: 'core MCP jsonrpc facade must not redefine request parameter serialization; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn create_initialize_request\b/,
+        message: 'core MCP jsonrpc facade must not redefine initialize request builders; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn create_resources_list_request\b/,
+        message: 'core MCP jsonrpc facade must not redefine resources/list request builders; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn create_resources_read_request\b/,
+        message: 'core MCP jsonrpc facade must not redefine resources/read request builders; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn create_prompts_list_request\b/,
+        message: 'core MCP jsonrpc facade must not redefine prompts/list request builders; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn create_prompts_get_request\b/,
+        message: 'core MCP jsonrpc facade must not redefine prompts/get request builders; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn create_tools_list_request\b/,
+        message: 'core MCP jsonrpc facade must not redefine tools/list request builders; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn create_tools_call_request\b/,
+        message: 'core MCP jsonrpc facade must not redefine tools/call request builders; use the integrations contract',
+      },
+      {
+        regex: /\bpub fn create_ping_request\b/,
+        message: 'core MCP jsonrpc facade must not redefine ping request builders; use the integrations contract',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/service/remote_ssh/workspace_state.rs',
     patterns: [
       {
@@ -355,6 +446,56 @@ function runManifestParserSelfTest() {
   for (const helper of remoteWorkspaceHelpers) {
     if (!ruleText.includes(helper)) {
       throw new Error(`remote SSH workspace boundary rule must forbid helper: ${helper}`);
+    }
+  }
+
+  const mcpJsonrpcRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/mcp/protocol/jsonrpc.rs',
+  );
+  if (!mcpJsonrpcRule) {
+    throw new Error('missing MCP JSON-RPC boundary rule');
+  }
+  const mcpJsonrpcHelpers = [
+    'serialize_params',
+    'create_initialize_request',
+    'create_resources_list_request',
+    'create_resources_read_request',
+    'create_prompts_list_request',
+    'create_prompts_get_request',
+    'create_tools_list_request',
+    'create_tools_call_request',
+    'create_ping_request',
+  ];
+  const mcpJsonrpcRuleText = mcpJsonrpcRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const helper of mcpJsonrpcHelpers) {
+    if (!mcpJsonrpcRuleText.includes(helper)) {
+      throw new Error(`MCP JSON-RPC boundary rule must forbid helper: ${helper}`);
+    }
+  }
+
+  const mcpServerConfigRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/mcp/server/config.rs',
+  );
+  if (!mcpServerConfigRule) {
+    throw new Error('missing MCP server config boundary rule');
+  }
+  const mcpServerConfigContracts = [
+    'MCPServerTransport',
+    'MCPServerOAuthConfig',
+    'MCPServerXaaConfig',
+    'MCPServerConfig',
+    'default_true',
+    'resolved_transport',
+    'validate',
+  ];
+  const mcpServerConfigRuleText = mcpServerConfigRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of mcpServerConfigContracts) {
+    if (!mcpServerConfigRuleText.includes(contract)) {
+      throw new Error(`MCP server config boundary rule must forbid contract: ${contract}`);
     }
   }
 }
