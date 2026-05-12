@@ -44,12 +44,73 @@ function createSession(turnStatus: DialogTurn['status']): Session {
   };
 }
 
+function createStreamingSessionWithText(content: string): Session {
+  const turn = createTurn('processing');
+  turn.modelRounds = [{
+    id: 'round-1',
+    index: 0,
+    items: [{
+      id: 'text-1',
+      type: 'text',
+      timestamp: 1500,
+      status: 'streaming',
+      content,
+      isStreaming: true,
+    }],
+    isStreaming: true,
+    isComplete: false,
+    status: 'streaming',
+    startTime: 1500,
+  }];
+
+  return {
+    ...createSession('processing'),
+    dialogTurns: [turn],
+  };
+}
+
+function createCompletedSessionWithText(content: string): Session {
+  const turn = createTurn('completed');
+  turn.modelRounds = [{
+    id: 'round-1',
+    index: 0,
+    items: [{
+      id: 'text-1',
+      type: 'text',
+      timestamp: 1500,
+      status: 'completed',
+      content,
+      isStreaming: false,
+    }],
+    isStreaming: false,
+    isComplete: true,
+    status: 'completed',
+    startTime: 1500,
+    endTime: 2000,
+  }];
+
+  return {
+    ...createSession('completed'),
+    dialogTurns: [turn],
+    hasUnreadCompletion: 'completed',
+    lastFinishedAt: 2100,
+  };
+}
+
 async function putStateMachineInFinishing(): Promise<void> {
   await stateMachineManager.transition('session-1', SessionExecutionEvent.START, {
     taskId: 'session-1',
     dialogTurnId: 'turn-1',
   });
   await stateMachineManager.transition('session-1', SessionExecutionEvent.BACKEND_STREAM_COMPLETED);
+}
+
+async function putStateMachineInStreaming(): Promise<void> {
+  await stateMachineManager.transition('session-1', SessionExecutionEvent.START, {
+    taskId: 'session-1',
+    dialogTurnId: 'turn-1',
+  });
+  await stateMachineManager.transition('session-1', SessionExecutionEvent.TEXT_CHUNK_RECEIVED);
 }
 
 describe('buildAgentCompanionActivity', () => {
@@ -87,6 +148,36 @@ describe('buildAgentCompanionActivity', () => {
     expect(buildAgentCompanionActivity()).toEqual({
       mood: 'rest',
       tasks: [],
+    });
+  });
+
+  it('keeps the latest output source anchored to the newest text', async () => {
+    const oldText = 'Older context that should not stay visible in the companion bubble. ';
+    const latestText = 'Newest streaming words should keep appearing normally at the end';
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-1', createStreamingSessionWithText(oldText.repeat(4) + latestText)]]),
+      activeSessionId: 'session-1',
+    }));
+    await putStateMachineInStreaming();
+
+    const activity = buildAgentCompanionActivity();
+
+    expect(activity.tasks[0].latestOutput).toContain(latestText);
+    expect(activity.tasks[0].latestOutput?.endsWith('...')).toBe(false);
+  });
+
+  it('keeps the final assistant output visible after completion', () => {
+    const finalText = 'Final analysis summary remains visible in the companion bubble.';
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-1', createCompletedSessionWithText(finalText)]]),
+      activeSessionId: 'session-1',
+    }));
+
+    const activity = buildAgentCompanionActivity();
+
+    expect(activity.tasks[0]).toMatchObject({
+      state: 'completed',
+      latestOutput: finalText,
     });
   });
 });

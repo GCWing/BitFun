@@ -2,7 +2,7 @@ import { FlowChatStore } from '../store/FlowChatStore';
 import { stateMachineManager } from '../state-machine/SessionStateMachineManager';
 import { ProcessingPhase, type SessionStateMachine } from '../state-machine/types';
 import { deriveChatInputPetMood, type ChatInputPetMood } from './chatInputPetMood';
-import type { DialogTurn, Session } from '../types/flow-chat';
+import type { DialogTurn, FlowTextItem, FlowThinkingItem, Session } from '../types/flow-chat';
 
 export type AgentCompanionTaskState =
   | 'running'
@@ -19,6 +19,7 @@ export interface AgentCompanionTaskStatus {
   state: AgentCompanionTaskState;
   labelKey: string;
   defaultLabel: string;
+  latestOutput?: string;
   startedAt: number;
   updatedAt: number;
 }
@@ -44,6 +45,7 @@ const TRANSIENT_TURN_STATUSES = new Set<DialogTurn['status']>([
   'finishing',
   'cancelling',
 ]);
+const LATEST_OUTPUT_MAX_CHARS = 512;
 
 function ensureTaskOrder(sessionId: string): number {
   const existingOrder = taskOrderBySessionId.get(sessionId);
@@ -68,6 +70,59 @@ function pruneTaskOrder(activeTasks: AgentCompanionTaskStatus[]): void {
 
 function sessionTitle(session: Session): string {
   return session.title?.trim() || 'Session';
+}
+
+function markdownToPlainText(markdown: string): string {
+  return markdown
+    .replace(/```[\s\S]*?```/g, match => match.replace(/```[^\n]*\n?|```/g, ' '))
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '')
+    .replace(/[*_~]{1,3}/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function truncateLatestOutput(text: string): string {
+  if (text.length <= LATEST_OUTPUT_MAX_CHARS) {
+    return text;
+  }
+
+  return text.slice(-LATEST_OUTPUT_MAX_CHARS);
+}
+
+function latestAssistantSnippet(turn: DialogTurn | undefined): string | undefined {
+  if (!turn) {
+    return undefined;
+  }
+
+  for (let roundIndex = turn.modelRounds.length - 1; roundIndex >= 0; roundIndex -= 1) {
+    const round = turn.modelRounds[roundIndex];
+    for (let itemIndex = round.items.length - 1; itemIndex >= 0; itemIndex -= 1) {
+      const item = round.items[itemIndex];
+      if (item.type === 'text' && item.runtimeStatus) {
+        continue;
+      }
+
+      const plainText = item.type === 'thinking'
+        ? markdownToPlainText((item as FlowThinkingItem).content)
+        : item.type === 'text'
+          ? (item as FlowTextItem).isMarkdown === false
+            ? (item as FlowTextItem).content.replace(/\s+/g, ' ').trim()
+            : markdownToPlainText((item as FlowTextItem).content)
+          : '';
+      if (plainText) {
+        return truncateLatestOutput(plainText);
+      }
+    }
+  }
+
+  return undefined;
 }
 
 function trackedDialogTurn(
@@ -190,6 +245,7 @@ function completionTask(session: Session): AgentCompanionTaskStatus | null {
     sessionId: session.sessionId,
     title: sessionTitle(session),
     mood: 'rest' as ChatInputPetMood,
+    latestOutput: latestAssistantSnippet(session.dialogTurns[session.dialogTurns.length - 1]),
     startedAt: session.lastFinishedAt || session.updatedAt || session.lastActiveAt || session.createdAt,
     updatedAt: session.lastFinishedAt || session.updatedAt || session.lastActiveAt || session.createdAt,
   };
@@ -250,6 +306,7 @@ export function buildAgentCompanionActivity(): AgentCompanionActivityPayload {
 
     if (mood !== 'rest') {
       const label = runningLabel(snapshot);
+      const turn = trackedDialogTurn(session, snapshot);
       tasks.push({
         sessionId: session.sessionId,
         title: sessionTitle(session),
@@ -257,6 +314,7 @@ export function buildAgentCompanionActivity(): AgentCompanionActivityPayload {
         state: label.state,
         labelKey: label.labelKey,
         defaultLabel: label.defaultLabel,
+        latestOutput: latestAssistantSnippet(turn),
         startedAt: snapshot?.context.stats.startTime || session.lastActiveAt || session.updatedAt || session.createdAt,
         updatedAt: snapshot?.context.lastUpdateTime || session.updatedAt || session.lastActiveAt || session.createdAt,
       });

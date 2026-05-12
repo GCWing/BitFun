@@ -18,12 +18,59 @@ const WINDOW_MAX_HEIGHT = 240;
 const WINDOW_HORIZONTAL_GAP = 8;
 const MAX_VISIBLE_BUBBLES = 2;
 const BUBBLE_GAP = 6;
-const BUBBLE_MIN_WIDTH = 132;
-const BUBBLE_MAX_WIDTH = 252;
+const BUBBLE_WIDTH = 146;
+const BUBBLE_OUTPUT_VISIBLE_CHARS = 64;
+const BUBBLE_OUTPUT_TYPEWRITER_INTERVAL_MS = 28;
 const WINDOW_EDGE_BUFFER = 4;
 const POINTER_HOVER_POLL_INTERVAL_MS = 120;
 /** Clicks shorter/smaller than this use `show_main_window`; beyond it we start a native drag. */
 const PET_DRAG_THRESHOLD_PX = 8;
+
+interface TypewriterOutputState {
+  target: string;
+  visible: string;
+}
+
+function seedTypewriterOutput(target: string): string {
+  if (target.length <= 1) {
+    return '';
+  }
+
+  return target.slice(0, -1);
+}
+
+function commonSuffixPrefixLength(value: string, target: string): number {
+  const maxLength = Math.min(value.length, target.length);
+  for (let length = maxLength; length > 0; length -= 1) {
+    if (value.slice(-length) === target.slice(0, length)) {
+      return length;
+    }
+  }
+  return 0;
+}
+
+function advanceTypewriterOutput(visible: string, target: string): string {
+  if (visible === target) {
+    return visible;
+  }
+
+  if (target.startsWith(visible)) {
+    return target.slice(0, visible.length + 1);
+  }
+
+  const overlapLength = commonSuffixPrefixLength(visible, target);
+  return target.slice(0, Math.min(target.length, overlapLength + 1));
+}
+
+function formatBubbleOutput(output: string, target: string): string {
+  const visibleOutput = output.length > BUBBLE_OUTPUT_VISIBLE_CHARS
+    ? output.slice(-BUBBLE_OUTPUT_VISIBLE_CHARS)
+    : output;
+  const hasHiddenPrefix = target.length > BUBBLE_OUTPUT_VISIBLE_CHARS
+    || output.length > BUBBLE_OUTPUT_VISIBLE_CHARS;
+
+  return hasHiddenPrefix ? `...${visibleOutput}` : visibleOutput;
+}
 
 export const AgentCompanionDesktopPet: React.FC = () => {
   const { t } = useTranslation('flow-chat');
@@ -32,6 +79,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   );
   const [mood, setMood] = useState<ChatInputPetMood>('rest');
   const [tasks, setTasks] = useState<AgentCompanionTaskStatus[]>([]);
+  const [typedOutputBySessionId, setTypedOutputBySessionId] = useState<Record<string, TypewriterOutputState>>({});
   const [isHoveringPet, setIsHoveringPet] = useState(false);
   const [isDraggingPet, setIsDraggingPet] = useState(false);
   const [petFrameSize, setPetFrameSize] = useState<{ width: number; height: number } | null>(null);
@@ -102,6 +150,55 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    setTypedOutputBySessionId(previous => {
+      const next: Record<string, TypewriterOutputState> = {};
+
+      tasks.forEach(task => {
+        if (!task.latestOutput) {
+          return;
+        }
+
+        const previousOutput = previous[task.sessionId];
+        next[task.sessionId] = previousOutput
+          ? { ...previousOutput, target: task.latestOutput }
+          : {
+            target: task.latestOutput,
+            visible: seedTypewriterOutput(task.latestOutput),
+          };
+      });
+
+      return next;
+    });
+  }, [tasks]);
+
+  useEffect(() => {
+    const hasTypingOutput = Object.values(typedOutputBySessionId)
+      .some(output => output.visible !== output.target);
+    if (!hasTypingOutput) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setTypedOutputBySessionId(previous => {
+        let changed = false;
+        const next: Record<string, TypewriterOutputState> = {};
+
+        Object.entries(previous).forEach(([sessionId, output]) => {
+          const visible = advanceTypewriterOutput(output.visible, output.target);
+          if (visible !== output.visible) {
+            changed = true;
+          }
+          next[sessionId] = { ...output, visible };
+        });
+
+        return changed ? next : previous;
+      });
+    }, BUBBLE_OUTPUT_TYPEWRITER_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [typedOutputBySessionId]);
+
   useLayoutEffect(() => {
     const bubbleCount = tasks.length;
     const bubbleElements = Array.from(bubblesRef.current?.children ?? [])
@@ -111,26 +208,15 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       0,
     ) + Math.max(0, bubbleElements.length - 1) * BUBBLE_GAP;
     const measuredBubbleHeight = bubblesRef.current?.scrollHeight ?? 0;
-    const targetBubbleHeight = bubbleCount > MAX_VISIBLE_BUBBLES
-      ? visibleBubbleHeight
-      : measuredBubbleHeight;
+    const targetBubbleHeight = bubbleCount === 1
+      ? activePetSize.height
+      : bubbleCount > MAX_VISIBLE_BUBBLES
+        ? visibleBubbleHeight
+        : measuredBubbleHeight;
     const nextHeight = bubbleCount > 0
       ? Math.max(activePetSize.height, Math.min(WINDOW_MAX_HEIGHT, targetBubbleHeight))
       : activePetSize.height;
-    const measuredBubbleWidth = bubbleCount > 0
-      ? Math.min(
-        BUBBLE_MAX_WIDTH,
-        Math.max(
-          BUBBLE_MIN_WIDTH,
-          bubblesRef.current?.scrollWidth ?? 0,
-          bubblesRef.current?.getBoundingClientRect().width ?? 0,
-          ...Array.from(bubblesRef.current?.children ?? []).map(child => {
-            const element = child as HTMLElement;
-            return Math.max(element.scrollWidth, element.getBoundingClientRect().width);
-          }),
-        ),
-      )
-      : 0;
+    const measuredBubbleWidth = bubbleCount > 0 ? BUBBLE_WIDTH : 0;
     const measuredDockWidth = bubbleCount > 0
       ? measuredBubbleWidth + WINDOW_HORIZONTAL_GAP + activePetSize.width + WINDOW_EDGE_BUFFER
       : Math.max(
@@ -357,6 +443,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     '--bitfun-agent-companion-pet-height': `${activePetSize.height}px`,
     '--bitfun-agent-companion-gap': `${WINDOW_HORIZONTAL_GAP}px`,
   } as React.CSSProperties;
+  const isSingleTask = tasks.length === 1;
 
   return (
     <main
@@ -370,7 +457,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
         {tasks.length > 0 && (
           <div
             ref={bubblesRef}
-            className="bitfun-agent-companion-window__bubbles"
+            className={`bitfun-agent-companion-window__bubbles${isSingleTask ? ' bitfun-agent-companion-window__bubbles--single' : ''}`}
             aria-live="polite"
             onDoubleClick={event => event.stopPropagation()}
           >
@@ -378,7 +465,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
               <button
                 type="button"
                 key={task.sessionId}
-                className={`bitfun-agent-companion-window__bubble bitfun-agent-companion-window__bubble--${task.state}`}
+                className={`bitfun-agent-companion-window__bubble bitfun-agent-companion-window__bubble--${task.state}${isSingleTask ? ' bitfun-agent-companion-window__bubble--single' : ''}`}
                 onClick={() => void openTaskSession(task)}
               >
                 <span className="bitfun-agent-companion-window__bubble-title">
@@ -387,6 +474,18 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                 <span className="bitfun-agent-companion-window__bubble-status">
                   {t(task.labelKey, { defaultValue: task.defaultLabel })}
                 </span>
+                {isSingleTask && task.latestOutput && (() => {
+                  const typedOutput = typedOutputBySessionId[task.sessionId];
+                  const visibleOutput = typedOutput?.visible ?? seedTypewriterOutput(task.latestOutput);
+                  const targetOutput = typedOutput?.target ?? task.latestOutput;
+                  const isTyping = visibleOutput !== targetOutput;
+
+                  return (
+                    <span className={`bitfun-agent-companion-window__bubble-output${isTyping ? ' bitfun-agent-companion-window__bubble-output--typing' : ''}`}>
+                      {formatBubbleOutput(visibleOutput, targetOutput)}
+                    </span>
+                  );
+                })()}
               </button>
             ))}
           </div>
