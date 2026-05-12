@@ -7,7 +7,9 @@ use super::connection::MCPConnection;
 use crate::service::mcp::protocol::{InitializeResult, MCPMessage, MCPServerInfo, MCPTransport};
 use crate::service::mcp::server::MCPServerTransport;
 use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_services_integrations::mcp::server::{MCPServerStatus, MCPServerType};
+use bitfun_services_integrations::mcp::server::{
+    MCPServerStatus, MCPServerType, is_mcp_auth_error_message, merge_mcp_remote_headers,
+};
 use log::{debug, error, info, warn};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -33,32 +35,6 @@ pub struct MCPServerProcess {
 }
 
 impl MCPServerProcess {
-    fn is_auth_error(error: &BitFunError) -> bool {
-        let msg = error.to_string().to_ascii_lowercase();
-        let patterns = [
-            "unauthorized",
-            "forbidden",
-            "auth required",
-            "authorization required",
-            "authentication required",
-            "authentication failed",
-            "oauth authorization required",
-            "oauth token refresh failed",
-            "token refresh failed",
-            "www-authenticate",
-            "invalid token",
-            "token expired",
-            "access token expired",
-            "refresh token",
-            "session expired",
-            "status code: 401",
-            "status code: 403",
-            " 401 ",
-            " 403 ",
-        ];
-        patterns.iter().any(|p| msg.contains(p))
-    }
-
     /// Creates a new server process instance.
     pub fn new(id: String, name: String, server_type: MCPServerType) -> Self {
         Self {
@@ -200,21 +176,7 @@ impl MCPServerProcess {
         );
         self.set_status(MCPServerStatus::Starting).await;
 
-        let mut merged_headers = config.headers.clone();
-        if !merged_headers.contains_key("Authorization")
-            && !merged_headers.contains_key("authorization")
-            && !merged_headers.contains_key("AUTHORIZATION")
-        {
-            // Backward compatibility: older BitFun configs store `Authorization` under `env`.
-            if let Some(value) = config
-                .env
-                .get("Authorization")
-                .or_else(|| config.env.get("authorization"))
-                .or_else(|| config.env.get("AUTHORIZATION"))
-            {
-                merged_headers.insert("Authorization".to_string(), value.clone());
-            }
-        }
+        let merged_headers = merge_mcp_remote_headers(&config.headers, &config.env);
 
         let connection = Arc::new(
             MCPConnection::new_remote(&self.id, url.to_string(), merged_headers, true).await?,
@@ -231,7 +193,7 @@ impl MCPServerProcess {
             self.message_rx = None;
             self.child = None;
             self.server_info = None;
-            if Self::is_auth_error(&e) {
+            if is_mcp_auth_error_message(&e.to_string()) {
                 self.set_status_with_error(MCPServerStatus::NeedsAuth, Some(e.to_string()))
                     .await;
             } else {
@@ -413,7 +375,7 @@ impl MCPServerProcess {
                                 "Health check failed: server_name={} error={}",
                                 server_name, e
                             );
-                            if MCPServerProcess::is_auth_error(&e) {
+                            if is_mcp_auth_error_message(&e.to_string()) {
                                 *status.write().await = MCPServerStatus::NeedsAuth;
                             } else {
                                 *status.write().await = MCPServerStatus::Reconnecting;
@@ -454,26 +416,5 @@ impl Drop for MCPServerProcess {
         if let Some(mut child) = self.child.take() {
             let _ = child.start_kill();
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::MCPServerProcess;
-    use crate::util::errors::BitFunError;
-
-    #[test]
-    fn detect_auth_error_patterns() {
-        let unauthorized =
-            BitFunError::MCPError("Handshake failed: Unauthorized (401)".to_string());
-        assert!(MCPServerProcess::is_auth_error(&unauthorized));
-
-        let oauth_refresh = BitFunError::MCPError(
-            "Ping failed: OAuth token refresh failed: no refresh token available".to_string(),
-        );
-        assert!(MCPServerProcess::is_auth_error(&oauth_refresh));
-
-        let generic = BitFunError::MCPError("Handshake failed: connection reset".to_string());
-        assert!(!MCPServerProcess::is_auth_error(&generic));
     }
 }

@@ -12,17 +12,22 @@ use bitfun_services_integrations::mcp::config::{
 };
 use bitfun_services_integrations::mcp::protocol::{
     MCPCapability, MCPError, MCPPromptMessageContent, MCPPromptMessageContentBlock, MCPRequest,
-    create_initialize_request, create_ping_request, create_tools_call_request,
-    create_tools_list_request, default_protocol_version,
+    MCPToolResultContent, create_initialize_request, create_mcp_client_info, create_ping_request,
+    create_tools_call_request, create_tools_list_request, default_protocol_version,
+    map_rmcp_initialize_result, map_rmcp_prompt, map_rmcp_prompt_message, map_rmcp_resource,
+    map_rmcp_tool, map_rmcp_tool_result,
 };
 use bitfun_services_integrations::mcp::server::{
-    MCPServerConfig, MCPServerStatus, MCPServerTransport, MCPServerType,
+    MCPServerConfig, MCPServerStatus, MCPServerTransport, MCPServerType, is_mcp_auth_error_message,
+    merge_mcp_remote_headers,
 };
 use bitfun_services_integrations::mcp::{
     MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX, McpToolInfo, build_mcp_tool_name, normalize_name_for_mcp,
 };
+use rmcp::model::{AnnotateAble, Annotations, Content, Icon, Meta, RawResource, ResourceContents};
 use rmcp::transport::auth::StoredCredentials;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn make_mcp_config(
@@ -102,6 +107,319 @@ fn mcp_protocol_capability_contract_matches_existing_default() {
             }
         })
     );
+}
+
+#[test]
+fn mcp_remote_client_info_declares_supported_client_capabilities() {
+    let info = create_mcp_client_info("BitFun", "1.0.0");
+
+    assert_eq!(info.client_info.name, "BitFun");
+    assert_eq!(info.client_info.version, "1.0.0");
+    assert!(info.capabilities.roots.is_some());
+    assert!(info.capabilities.sampling.is_some());
+    assert!(info.capabilities.elicitation.is_some());
+    assert_eq!(
+        info.capabilities
+            .elicitation
+            .as_ref()
+            .and_then(|cap| cap.schema_validation),
+        Some(true)
+    );
+}
+
+#[test]
+fn mcp_rmcp_initialize_mapping_preserves_server_identity_and_capabilities() {
+    let server_info = rmcp::model::ServerInfo {
+        protocol_version: rmcp::model::ProtocolVersion::LATEST,
+        capabilities: rmcp::model::ServerCapabilities {
+            tools: Some(rmcp::model::ToolsCapability {
+                list_changed: Some(true),
+            }),
+            resources: Some(rmcp::model::ResourcesCapability {
+                subscribe: Some(true),
+                list_changed: Some(false),
+            }),
+            prompts: Some(rmcp::model::PromptsCapability {
+                list_changed: Some(true),
+            }),
+            logging: Some(rmcp::model::JsonObject::new()),
+            ..Default::default()
+        },
+        server_info: rmcp::model::Implementation {
+            name: "docs-server".to_string(),
+            title: Some("Docs Server".to_string()),
+            version: "2.0.0".to_string(),
+            icons: None,
+            website_url: None,
+        },
+        instructions: Some("Fallback description".to_string()),
+    };
+
+    let mapped = map_rmcp_initialize_result(&server_info);
+
+    assert_eq!(
+        mapped.protocol_version,
+        rmcp::model::ProtocolVersion::LATEST.to_string()
+    );
+    assert_eq!(mapped.server_info.name, "docs-server");
+    assert_eq!(mapped.server_info.version, "2.0.0");
+    assert_eq!(
+        mapped.server_info.description.as_deref(),
+        Some("Docs Server")
+    );
+    assert_eq!(
+        mapped
+            .capabilities
+            .tools
+            .as_ref()
+            .map(|cap| cap.list_changed),
+        Some(true)
+    );
+    assert_eq!(
+        mapped
+            .capabilities
+            .resources
+            .as_ref()
+            .map(|cap| (cap.subscribe, cap.list_changed)),
+        Some((true, false))
+    );
+    assert!(mapped.capabilities.logging.is_some());
+}
+
+#[test]
+fn mcp_rmcp_mapping_preserves_remote_tool_resource_and_prompt_metadata() {
+    let mut tool_meta = Meta::default();
+    tool_meta.insert(
+        "ui".to_string(),
+        serde_json::json!({ "resourceUri": "ui://widget" }),
+    );
+    let tool = rmcp::model::Tool {
+        name: "search".into(),
+        title: Some("Search".to_string()),
+        description: Some("Find items".into()),
+        input_schema: Arc::new(serde_json::Map::new()),
+        output_schema: Some(Arc::new(serde_json::Map::from_iter([(
+            "type".to_string(),
+            serde_json::json!("object"),
+        )]))),
+        annotations: Some(
+            rmcp::model::ToolAnnotations::new()
+                .read_only(true)
+                .destructive(false)
+                .idempotent(true)
+                .open_world(true),
+        ),
+        icons: Some(vec![Icon {
+            src: "https://example.com/tool.png".to_string(),
+            mime_type: Some("image/png".to_string()),
+            sizes: Some(vec!["32x32".to_string()]),
+        }]),
+        meta: Some(tool_meta),
+    };
+    let mapped_tool = map_rmcp_tool(tool);
+    assert_eq!(mapped_tool.title.as_deref(), Some("Search"));
+    assert_eq!(
+        mapped_tool.output_schema,
+        Some(serde_json::json!({ "type": "object" }))
+    );
+    assert_eq!(
+        mapped_tool
+            .annotations
+            .as_ref()
+            .and_then(|annotations| annotations.read_only_hint),
+        Some(true)
+    );
+    assert_eq!(
+        mapped_tool
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.ui.as_ref())
+            .and_then(|ui| ui.resource_uri.as_deref()),
+        Some("ui://widget")
+    );
+
+    let mut resource_meta = Meta::default();
+    resource_meta.insert("source".to_string(), serde_json::json!("catalog"));
+    let resource = RawResource {
+        uri: "file:///tmp/report.md".to_string(),
+        name: "report".to_string(),
+        title: Some("Quarterly Report".to_string()),
+        description: Some("Report".to_string()),
+        mime_type: Some("text/markdown".to_string()),
+        size: Some(42),
+        icons: Some(vec![Icon {
+            src: "https://example.com/resource.png".to_string(),
+            mime_type: Some("image/png".to_string()),
+            sizes: Some(vec!["64x64".to_string()]),
+        }]),
+        meta: Some(resource_meta),
+    }
+    .annotate(Annotations {
+        audience: Some(vec![rmcp::model::Role::User]),
+        priority: Some(0.9),
+        last_modified: None,
+    });
+    let mapped_resource = map_rmcp_resource(resource);
+    assert_eq!(mapped_resource.title.as_deref(), Some("Quarterly Report"));
+    assert_eq!(mapped_resource.size, Some(42));
+    assert_eq!(
+        mapped_resource
+            .annotations
+            .as_ref()
+            .and_then(|annotations| annotations.audience.as_ref())
+            .cloned(),
+        Some(vec!["user".to_string()])
+    );
+    assert_eq!(
+        mapped_resource
+            .metadata
+            .as_ref()
+            .and_then(|meta| meta.get("source")),
+        Some(&serde_json::json!("catalog"))
+    );
+
+    let prompt = rmcp::model::Prompt {
+        name: "summarize".to_string(),
+        title: Some("Summarize".to_string()),
+        description: Some("Summarize content".to_string()),
+        arguments: Some(vec![rmcp::model::PromptArgument {
+            name: "topic".to_string(),
+            title: Some("Topic".to_string()),
+            description: Some("Topic to summarize".to_string()),
+            required: Some(true),
+        }]),
+        icons: Some(vec![Icon {
+            src: "https://example.com/prompt.png".to_string(),
+            mime_type: Some("image/png".to_string()),
+            sizes: Some(vec!["16x16".to_string()]),
+        }]),
+        meta: None,
+    };
+    let mapped_prompt = map_rmcp_prompt(prompt);
+    assert_eq!(mapped_prompt.title.as_deref(), Some("Summarize"));
+    assert_eq!(
+        mapped_prompt
+            .arguments
+            .as_ref()
+            .and_then(|arguments| arguments.first())
+            .and_then(|argument| argument.title.as_deref()),
+        Some("Topic")
+    );
+    assert!(mapped_prompt.icons.is_some());
+}
+
+#[test]
+fn mcp_rmcp_mapping_preserves_structured_results_and_resource_links() {
+    let resource_link = RawResource {
+        uri: "file:///tmp/output.json".to_string(),
+        name: "output".to_string(),
+        title: Some("Output".to_string()),
+        description: Some("Generated output".to_string()),
+        mime_type: Some("application/json".to_string()),
+        size: Some(7),
+        icons: None,
+        meta: None,
+    };
+    let mut result_meta = Meta::default();
+    result_meta.insert("traceId".to_string(), serde_json::json!("abc123"));
+    let result = rmcp::model::CallToolResult {
+        content: vec![
+            Content::text("done"),
+            Content::resource_link(resource_link),
+            Content::image("aGVsbG8=", "image/png"),
+        ],
+        structured_content: Some(serde_json::json!({ "ok": true })),
+        is_error: Some(false),
+        meta: Some(result_meta),
+    };
+
+    let mapped = map_rmcp_tool_result(result);
+
+    assert_eq!(
+        mapped.structured_content,
+        Some(serde_json::json!({ "ok": true }))
+    );
+    assert_eq!(
+        mapped.meta,
+        Some(serde_json::json!({ "traceId": "abc123" }))
+    );
+    assert!(matches!(
+        mapped.content.as_ref().and_then(|content| content.get(1)),
+        Some(MCPToolResultContent::ResourceLink { uri, .. }) if uri == "file:///tmp/output.json"
+    ));
+    assert!(matches!(
+        mapped.content.as_ref().and_then(|content| content.get(2)),
+        Some(MCPToolResultContent::Image { mime_type, .. }) if mime_type == "image/png"
+    ));
+}
+
+#[test]
+fn mcp_rmcp_mapping_preserves_prompt_message_blocks() {
+    let prompt_message = rmcp::model::PromptMessage {
+        role: rmcp::model::PromptMessageRole::User,
+        content: rmcp::model::PromptMessageContent::Text {
+            text: "hello".to_string(),
+        },
+    };
+    let mapped = map_rmcp_prompt_message(prompt_message);
+    assert!(matches!(
+        mapped.content,
+        MCPPromptMessageContent::Block(ref block)
+            if matches!(block.as_ref(), MCPPromptMessageContentBlock::Text { text } if text == "hello")
+    ));
+
+    let resource_link = RawResource {
+        uri: "file:///tmp/input.md".to_string(),
+        name: "input".to_string(),
+        title: None,
+        description: Some("input".to_string()),
+        mime_type: Some("text/markdown".to_string()),
+        size: None,
+        icons: None,
+        meta: None,
+    }
+    .no_annotation();
+    let prompt_message = rmcp::model::PromptMessage {
+        role: rmcp::model::PromptMessageRole::Assistant,
+        content: rmcp::model::PromptMessageContent::ResourceLink {
+            link: resource_link,
+        },
+    };
+    let mapped = map_rmcp_prompt_message(prompt_message);
+    assert!(matches!(
+        mapped.content,
+        MCPPromptMessageContent::Block(ref block)
+            if matches!(
+                block.as_ref(),
+                MCPPromptMessageContentBlock::ResourceLink { uri, .. }
+                    if uri == "file:///tmp/input.md"
+            )
+    ));
+
+    let embedded = rmcp::model::RawEmbeddedResource {
+        meta: Some(Meta::default()),
+        resource: ResourceContents::TextResourceContents {
+            uri: "file:///tmp/embedded.txt".to_string(),
+            mime_type: Some("text/plain".to_string()),
+            text: "embedded".to_string(),
+            meta: None,
+        },
+    }
+    .no_annotation();
+    let prompt_message = rmcp::model::PromptMessage {
+        role: rmcp::model::PromptMessageRole::Assistant,
+        content: rmcp::model::PromptMessageContent::Resource { resource: embedded },
+    };
+    let mapped = map_rmcp_prompt_message(prompt_message);
+    assert!(matches!(
+        mapped.content,
+        MCPPromptMessageContent::Block(ref block)
+            if matches!(
+                block.as_ref(),
+                MCPPromptMessageContentBlock::Resource { resource }
+                    if resource.uri == "file:///tmp/embedded.txt"
+            )
+    ));
 }
 
 #[test]
@@ -450,6 +768,55 @@ fn mcp_server_type_and_status_preserve_lowercase_wire_contract() {
         serde_json::from_value::<MCPServerStatus>(serde_json::json!("reconnecting")).unwrap(),
         MCPServerStatus::Reconnecting
     );
+}
+
+#[test]
+fn mcp_runtime_auth_error_classifier_preserves_process_status_contract() {
+    assert!(is_mcp_auth_error_message(
+        "Handshake failed: Unauthorized (401)"
+    ));
+    assert!(is_mcp_auth_error_message(
+        "Ping failed: OAuth token refresh failed: no refresh token available"
+    ));
+    assert!(is_mcp_auth_error_message(
+        "remote server returned status code: 403"
+    ));
+    assert!(!is_mcp_auth_error_message(
+        "Handshake failed: connection reset"
+    ));
+}
+
+#[test]
+fn mcp_runtime_remote_header_merge_preserves_legacy_env_authorization_fallback() {
+    let mut env = HashMap::new();
+    env.insert("Authorization".to_string(), "legacy-token".to_string());
+    env.insert("X-Env".to_string(), "env-only".to_string());
+
+    let headers = HashMap::new();
+    let merged = merge_mcp_remote_headers(&headers, &env);
+    assert_eq!(
+        merged.get("Authorization").map(String::as_str),
+        Some("legacy-token")
+    );
+    assert!(!merged.contains_key("X-Env"));
+
+    let mut explicit_headers = HashMap::new();
+    explicit_headers.insert(
+        "authorization".to_string(),
+        "Bearer header-token".to_string(),
+    );
+    let merged = merge_mcp_remote_headers(&explicit_headers, &env);
+    assert_eq!(
+        merged.get("authorization").map(String::as_str),
+        Some("Bearer header-token")
+    );
+    assert!(!merged.contains_key("Authorization"));
+
+    let mut empty_header = HashMap::new();
+    empty_header.insert("AUTHORIZATION".to_string(), String::new());
+    let merged = merge_mcp_remote_headers(&empty_header, &env);
+    assert_eq!(merged.get("AUTHORIZATION").map(String::as_str), Some(""));
+    assert!(!merged.contains_key("Authorization"));
 }
 
 #[test]

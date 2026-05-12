@@ -3,26 +3,30 @@
 //! Uses the official `rmcp` Rust SDK to implement the MCP Streamable HTTP client transport.
 
 use super::types::{
-    InitializeResult as BitFunInitializeResult, MCPAnnotations, MCPCapability, MCPPrompt,
-    MCPPromptArgument, MCPPromptMessage, MCPPromptMessageContent, MCPPromptMessageContentBlock,
-    MCPResource, MCPResourceContent, MCPResourceIcon, MCPServerInfo, MCPTool, MCPToolAnnotations,
-    MCPToolResult, MCPToolResultContent, PromptsGetResult, PromptsListResult, ResourcesListResult,
-    ResourcesReadResult, ToolsListResult,
+    InitializeResult as BitFunInitializeResult, MCPToolResult, PromptsGetResult, PromptsListResult,
+    ResourcesListResult, ResourcesReadResult, ToolsListResult,
 };
 use crate::service::mcp::auth::build_authorization_manager;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_services_integrations::mcp::config::normalize_mcp_authorization_value;
+use bitfun_services_integrations::mcp::protocol::{
+    create_mcp_client_info, map_rmcp_initialize_result, map_rmcp_prompt, map_rmcp_prompt_message,
+    map_rmcp_resource, map_rmcp_resource_content, map_rmcp_tool, map_rmcp_tool_result,
+};
 use futures::StreamExt;
 use log::{debug, error, info, warn};
 use reqwest::header::{
-    HeaderMap, HeaderName, HeaderValue, ACCEPT, CONTENT_TYPE, USER_AGENT, WWW_AUTHENTICATE,
+    ACCEPT, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue, USER_AGENT, WWW_AUTHENTICATE,
 };
+use rmcp::ClientHandler;
+use rmcp::RoleClient;
 use rmcp::model::{
-    CallToolRequestParam, ClientCapabilities, ClientInfo, Content, GetPromptRequestParam,
-    Implementation, JsonObject, LoggingLevel, LoggingMessageNotificationParam,
-    PaginatedRequestParam, ProtocolVersion, ReadResourceRequestParam, RequestNoParam,
-    ResourceContents,
+    CallToolRequestParam, ClientInfo, GetPromptRequestParam, JsonObject, LoggingLevel,
+    LoggingMessageNotificationParam, PaginatedRequestParam, ReadResourceRequestParam,
+    RequestNoParam,
 };
 use rmcp::service::RunningService;
+use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::auth::AuthorizationManager;
 use rmcp::transport::common::http_header::{
     EVENT_STREAM_MIME_TYPE, HEADER_LAST_EVENT_ID, HEADER_SESSION_ID, JSON_MIME_TYPE,
@@ -32,10 +36,6 @@ use rmcp::transport::streamable_http_client::{
     AuthRequiredError, SseError, StreamableHttpClient, StreamableHttpError,
     StreamableHttpPostResponse,
 };
-use rmcp::transport::StreamableHttpClientTransport;
-use rmcp::ClientHandler;
-use rmcp::RoleClient;
-use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::future::Future;
@@ -315,24 +315,6 @@ pub struct RemoteMCPTransport {
 }
 
 impl RemoteMCPTransport {
-    fn normalize_authorization_value(value: &str) -> Option<String> {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            return None;
-        }
-
-        // If already includes a scheme (e.g. `Bearer xxx`), keep as-is.
-        if trimmed.to_ascii_lowercase().starts_with("bearer ") {
-            return Some(trimmed.to_string());
-        }
-        if trimmed.contains(char::is_whitespace) {
-            return Some(trimmed.to_string());
-        }
-
-        // If the user provided a raw token, assume Bearer.
-        Some(format!("Bearer {}", trimmed))
-    }
-
     fn build_default_headers(headers: &HashMap<String, String>) -> HeaderMap {
         let mut header_map = HeaderMap::new();
 
@@ -346,7 +328,7 @@ impl RemoteMCPTransport {
             };
 
             let header_value_str = if header_name == reqwest::header::AUTHORIZATION {
-                match Self::normalize_authorization_value(value) {
+                match normalize_mcp_authorization_value(value) {
                     Some(v) => v,
                     None => continue,
                 }
@@ -481,26 +463,6 @@ impl RemoteMCPTransport {
         }
     }
 
-    fn build_client_info(client_name: &str, client_version: &str) -> ClientInfo {
-        ClientInfo {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: ClientCapabilities::builder()
-                .enable_roots()
-                .enable_sampling()
-                .enable_elicitation_with(rmcp::model::ElicitationCapability {
-                    schema_validation: Some(true),
-                })
-                .build(),
-            client_info: Implementation {
-                name: client_name.to_string(),
-                title: None,
-                version: client_version.to_string(),
-                icons: None,
-                website_url: None,
-            },
-        }
-    }
-
     /// Initializes the remote connection (Streamable HTTP handshake).
     pub async fn initialize(
         &self,
@@ -513,7 +475,7 @@ impl RemoteMCPTransport {
                 let info = service.peer().peer_info().ok_or_else(|| {
                     BitFunError::MCPError("Handshake succeeded but server info missing".to_string())
                 })?;
-                Ok(map_initialize_result(info))
+                Ok(map_rmcp_initialize_result(info))
             }
             ClientState::Connecting { transport } => {
                 let Some(transport) = transport.take() else {
@@ -523,7 +485,7 @@ impl RemoteMCPTransport {
                 };
 
                 let handler = BitFunRmcpClientHandler {
-                    info: Self::build_client_info(client_name, client_version),
+                    info: create_mcp_client_info(client_name, client_version),
                 };
 
                 drop(guard);
@@ -547,7 +509,7 @@ impl RemoteMCPTransport {
                     service: Arc::clone(&service),
                 };
 
-                Ok(map_initialize_result(info))
+                Ok(map_rmcp_initialize_result(info))
             }
         }
     }
@@ -591,7 +553,11 @@ impl RemoteMCPTransport {
         .await?
         .map_err(|e| BitFunError::MCPError(format!("MCP resources/list failed: {}", e)))?;
         Ok(ResourcesListResult {
-            resources: result.resources.into_iter().map(map_resource).collect(),
+            resources: result
+                .resources
+                .into_iter()
+                .map(map_rmcp_resource)
+                .collect(),
             next_cursor: result.next_cursor,
         })
     }
@@ -612,7 +578,7 @@ impl RemoteMCPTransport {
             contents: result
                 .contents
                 .into_iter()
-                .map(map_resource_content)
+                .map(map_rmcp_resource_content)
                 .collect(),
         })
     }
@@ -630,7 +596,7 @@ impl RemoteMCPTransport {
         .await?
         .map_err(|e| BitFunError::MCPError(format!("MCP prompts/list failed: {}", e)))?;
         Ok(PromptsListResult {
-            prompts: result.prompts.into_iter().map(map_prompt).collect(),
+            prompts: result.prompts.into_iter().map(map_rmcp_prompt).collect(),
             next_cursor: result.next_cursor,
         })
     }
@@ -667,7 +633,7 @@ impl RemoteMCPTransport {
             messages: result
                 .messages
                 .into_iter()
-                .map(map_prompt_message)
+                .map(map_rmcp_prompt_message)
                 .collect(),
         })
     }
@@ -686,7 +652,7 @@ impl RemoteMCPTransport {
         .map_err(|e| BitFunError::MCPError(format!("MCP tools/list failed: {}", e)))?;
 
         Ok(ToolsListResult {
-            tools: result.tools.into_iter().map(map_tool).collect(),
+            tools: result.tools.into_iter().map(map_rmcp_tool).collect(),
             next_cursor: result.next_cursor,
         })
     }
@@ -721,521 +687,6 @@ impl RemoteMCPTransport {
         .await?
         .map_err(|e| BitFunError::MCPError(format!("MCP tools/call failed: {}", e)))?;
 
-        Ok(map_tool_result(result))
-    }
-}
-
-fn map_initialize_result(info: &rmcp::model::ServerInfo) -> BitFunInitializeResult {
-    BitFunInitializeResult {
-        protocol_version: info.protocol_version.to_string(),
-        capabilities: map_server_capabilities(&info.capabilities),
-        server_info: MCPServerInfo {
-            name: info.server_info.name.clone(),
-            version: info.server_info.version.clone(),
-            description: info.server_info.title.clone().or(info.instructions.clone()),
-            vendor: None,
-        },
-    }
-}
-
-fn map_server_capabilities(cap: &rmcp::model::ServerCapabilities) -> MCPCapability {
-    MCPCapability {
-        resources: cap
-            .resources
-            .as_ref()
-            .map(|r| super::types::ResourcesCapability {
-                subscribe: r.subscribe.unwrap_or(false),
-                list_changed: r.list_changed.unwrap_or(false),
-            }),
-        prompts: cap
-            .prompts
-            .as_ref()
-            .map(|p| super::types::PromptsCapability {
-                list_changed: p.list_changed.unwrap_or(false),
-            }),
-        tools: cap.tools.as_ref().map(|t| super::types::ToolsCapability {
-            list_changed: t.list_changed.unwrap_or(false),
-        }),
-        logging: cap.logging.as_ref().map(|o| Value::Object(o.clone())),
-    }
-}
-
-fn map_tool(tool: rmcp::model::Tool) -> MCPTool {
-    let schema = Value::Object((*tool.input_schema).clone());
-    MCPTool {
-        name: tool.name.to_string(),
-        title: tool.title,
-        description: tool.description.map(|d| d.to_string()),
-        input_schema: schema,
-        output_schema: tool
-            .output_schema
-            .map(|schema| Value::Object((*schema).clone())),
-        icons: map_icons(tool.icons.as_ref()),
-        annotations: tool.annotations.map(map_tool_annotations),
-        meta: map_optional_via_json(tool.meta.as_ref()),
-    }
-}
-
-fn map_resource(resource: rmcp::model::Resource) -> MCPResource {
-    MCPResource {
-        uri: resource.uri.clone(),
-        name: resource.name.clone(),
-        title: resource.title.clone(),
-        description: resource.description.clone(),
-        mime_type: resource.mime_type.clone(),
-        icons: map_icons(resource.icons.as_ref()),
-        size: resource.size.map(u64::from),
-        annotations: map_annotations(resource.annotations.as_ref()),
-        metadata: map_meta_to_hash_map(resource.meta.as_ref()),
-    }
-}
-
-fn map_resource_content(contents: ResourceContents) -> MCPResourceContent {
-    match contents {
-        ResourceContents::TextResourceContents {
-            uri,
-            mime_type,
-            text,
-            meta,
-            ..
-        } => MCPResourceContent {
-            uri,
-            content: Some(text),
-            blob: None,
-            mime_type,
-            annotations: None,
-            meta: map_optional_via_json(meta.as_ref()),
-        },
-        ResourceContents::BlobResourceContents {
-            uri,
-            mime_type,
-            blob,
-            meta,
-            ..
-        } => MCPResourceContent {
-            uri,
-            content: None,
-            blob: Some(blob),
-            mime_type,
-            annotations: None,
-            meta: map_optional_via_json(meta.as_ref()),
-        },
-    }
-}
-
-fn map_prompt(prompt: rmcp::model::Prompt) -> MCPPrompt {
-    MCPPrompt {
-        name: prompt.name,
-        title: prompt.title,
-        description: prompt.description,
-        arguments: prompt.arguments.map(|args| {
-            args.into_iter()
-                .map(|a| MCPPromptArgument {
-                    name: a.name,
-                    title: a.title,
-                    description: a.description,
-                    required: a.required.unwrap_or(false),
-                })
-                .collect()
-        }),
-        icons: map_icons(prompt.icons.as_ref()),
-    }
-}
-
-fn map_prompt_message(message: rmcp::model::PromptMessage) -> MCPPromptMessage {
-    let role = match message.role {
-        rmcp::model::PromptMessageRole::User => "user",
-        rmcp::model::PromptMessageRole::Assistant => "assistant",
-    }
-    .to_string();
-
-    let content = match message.content {
-        rmcp::model::PromptMessageContent::Text { text } => {
-            MCPPromptMessageContent::Block(Box::new(MCPPromptMessageContentBlock::Text { text }))
-        }
-        rmcp::model::PromptMessageContent::Image { image } => {
-            MCPPromptMessageContent::Block(Box::new(MCPPromptMessageContentBlock::Image {
-                data: image.data.clone(),
-                mime_type: image.mime_type.clone(),
-            }))
-        }
-        rmcp::model::PromptMessageContent::Resource { resource } => {
-            let mut mapped = map_resource_content(resource.resource.clone());
-            if mapped.meta.is_none() {
-                mapped.meta = map_optional_via_json(resource.meta.as_ref());
-            }
-            mapped.annotations = map_annotations(resource.annotations.as_ref());
-            MCPPromptMessageContent::Block(Box::new(MCPPromptMessageContentBlock::Resource {
-                resource: Box::new(mapped),
-            }))
-        }
-        rmcp::model::PromptMessageContent::ResourceLink { link } => {
-            MCPPromptMessageContent::Block(Box::new(MCPPromptMessageContentBlock::ResourceLink {
-                uri: link.uri.clone(),
-                name: Some(link.name.clone()),
-                description: link.description.clone(),
-                mime_type: link.mime_type.clone(),
-            }))
-        }
-    };
-
-    MCPPromptMessage { role, content }
-}
-
-fn map_tool_result(result: rmcp::model::CallToolResult) -> MCPToolResult {
-    let mapped: Vec<MCPToolResultContent> = result
-        .content
-        .into_iter()
-        .filter_map(map_content_block)
-        .collect();
-
-    MCPToolResult {
-        content: if mapped.is_empty() {
-            None
-        } else {
-            Some(mapped)
-        },
-        is_error: result.is_error.unwrap_or(false),
-        structured_content: result.structured_content,
-        meta: map_optional_json_value(result.meta.as_ref()),
-    }
-}
-
-fn map_content_block(content: Content) -> Option<MCPToolResultContent> {
-    match content.raw {
-        rmcp::model::RawContent::Text(text) => Some(MCPToolResultContent::Text { text: text.text }),
-        rmcp::model::RawContent::Image(image) => Some(MCPToolResultContent::Image {
-            data: image.data,
-            mime_type: image.mime_type,
-        }),
-        rmcp::model::RawContent::Resource(resource) => Some(MCPToolResultContent::Resource {
-            resource: Box::new(map_resource_content(resource.resource)),
-        }),
-        rmcp::model::RawContent::Audio(audio) => Some(MCPToolResultContent::Audio {
-            data: audio.data,
-            mime_type: audio.mime_type,
-        }),
-        rmcp::model::RawContent::ResourceLink(link) => Some(MCPToolResultContent::ResourceLink {
-            uri: link.uri,
-            name: Some(link.name),
-            description: link.description,
-            mime_type: link.mime_type,
-        }),
-    }
-}
-
-fn map_icons(icons: Option<&Vec<rmcp::model::Icon>>) -> Option<Vec<MCPResourceIcon>> {
-    icons.map(|icons| {
-        icons
-            .iter()
-            .map(|icon| MCPResourceIcon {
-                src: icon.src.clone(),
-                mime_type: icon.mime_type.clone(),
-                sizes: icon.sizes.as_ref().map(|sizes| {
-                    Value::Array(sizes.iter().cloned().map(Value::String).collect::<Vec<_>>())
-                }),
-            })
-            .collect()
-    })
-}
-
-fn map_annotations(annotations: Option<&rmcp::model::Annotations>) -> Option<MCPAnnotations> {
-    annotations.map(|annotations| MCPAnnotations {
-        audience: annotations
-            .audience
-            .as_ref()
-            .map(|audience| audience.iter().map(map_role).collect()),
-        priority: annotations.priority.map(f64::from),
-        last_modified: annotations
-            .last_modified
-            .map(|timestamp| timestamp.to_rfc3339()),
-    })
-}
-
-fn map_tool_annotations(annotations: rmcp::model::ToolAnnotations) -> MCPToolAnnotations {
-    MCPToolAnnotations {
-        title: annotations.title,
-        read_only_hint: annotations.read_only_hint,
-        destructive_hint: annotations.destructive_hint,
-        idempotent_hint: annotations.idempotent_hint,
-        open_world_hint: annotations.open_world_hint,
-    }
-}
-
-fn map_role(role: &rmcp::model::Role) -> String {
-    match role {
-        rmcp::model::Role::User => "user",
-        rmcp::model::Role::Assistant => "assistant",
-    }
-    .to_string()
-}
-
-fn map_meta_to_hash_map(meta: Option<&rmcp::model::Meta>) -> Option<HashMap<String, Value>> {
-    meta.and_then(|meta| match serde_json::to_value(meta.clone()).ok()? {
-        Value::Object(map) => Some(map.into_iter().collect()),
-        _ => None,
-    })
-}
-
-fn map_optional_json_value<T>(value: Option<&T>) -> Option<Value>
-where
-    T: serde::Serialize,
-{
-    value.and_then(|value| serde_json::to_value(value).ok())
-}
-
-fn map_optional_via_json<T, U>(value: Option<&T>) -> Option<U>
-where
-    T: serde::Serialize,
-    U: DeserializeOwned,
-{
-    value
-        .and_then(|value| serde_json::to_value(value).ok())
-        .and_then(|value| serde_json::from_value(value).ok())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rmcp::model::{AnnotateAble, Annotations, Content, Icon, Meta, RawResource};
-    use serde_json::json;
-
-    #[test]
-    fn build_client_info_declares_supported_client_capabilities() {
-        let info = RemoteMCPTransport::build_client_info("BitFun", "1.0.0");
-
-        assert!(info.capabilities.roots.is_some());
-        assert!(info.capabilities.sampling.is_some());
-        assert!(info.capabilities.elicitation.is_some());
-        assert_eq!(
-            info.capabilities
-                .elicitation
-                .as_ref()
-                .and_then(|cap| cap.schema_validation),
-            Some(true)
-        );
-    }
-
-    #[test]
-    fn mapping_preserves_remote_tool_resource_and_prompt_metadata() {
-        let mut tool_meta = Meta::default();
-        tool_meta.insert("ui".to_string(), json!({ "resourceUri": "ui://widget" }));
-        let tool = rmcp::model::Tool {
-            name: "search".into(),
-            title: Some("Search".to_string()),
-            description: Some("Find items".into()),
-            input_schema: Arc::new(serde_json::Map::new()),
-            output_schema: Some(Arc::new(serde_json::Map::from_iter([(
-                "type".to_string(),
-                json!("object"),
-            )]))),
-            annotations: Some(
-                rmcp::model::ToolAnnotations::new()
-                    .read_only(true)
-                    .destructive(false)
-                    .idempotent(true)
-                    .open_world(true),
-            ),
-            icons: Some(vec![Icon {
-                src: "https://example.com/tool.png".to_string(),
-                mime_type: Some("image/png".to_string()),
-                sizes: Some(vec!["32x32".to_string()]),
-            }]),
-            meta: Some(tool_meta),
-        };
-        let mapped_tool = map_tool(tool);
-        assert_eq!(mapped_tool.title.as_deref(), Some("Search"));
-        assert_eq!(mapped_tool.output_schema, Some(json!({ "type": "object" })));
-        assert_eq!(
-            mapped_tool
-                .annotations
-                .as_ref()
-                .and_then(|annotations| annotations.read_only_hint),
-            Some(true)
-        );
-        assert_eq!(
-            mapped_tool
-                .meta
-                .as_ref()
-                .and_then(|meta| meta.ui.as_ref())
-                .and_then(|ui| ui.resource_uri.as_deref()),
-            Some("ui://widget")
-        );
-
-        let mut resource_meta = Meta::default();
-        resource_meta.insert("source".to_string(), json!("catalog"));
-        let resource = RawResource {
-            uri: "file:///tmp/report.md".to_string(),
-            name: "report".to_string(),
-            title: Some("Quarterly Report".to_string()),
-            description: Some("Report".to_string()),
-            mime_type: Some("text/markdown".to_string()),
-            size: Some(42),
-            icons: Some(vec![Icon {
-                src: "https://example.com/resource.png".to_string(),
-                mime_type: Some("image/png".to_string()),
-                sizes: Some(vec!["64x64".to_string()]),
-            }]),
-            meta: Some(resource_meta),
-        }
-        .annotate(Annotations {
-            audience: Some(vec![rmcp::model::Role::User]),
-            priority: Some(0.9),
-            last_modified: None,
-        });
-        let mapped_resource = map_resource(resource);
-        assert_eq!(mapped_resource.title.as_deref(), Some("Quarterly Report"));
-        assert_eq!(mapped_resource.size, Some(42));
-        assert_eq!(
-            mapped_resource
-                .annotations
-                .as_ref()
-                .and_then(|annotations| annotations.audience.as_ref())
-                .cloned(),
-            Some(vec!["user".to_string()])
-        );
-        assert_eq!(
-            mapped_resource
-                .metadata
-                .as_ref()
-                .and_then(|meta| meta.get("source")),
-            Some(&json!("catalog"))
-        );
-
-        let prompt = rmcp::model::Prompt {
-            name: "summarize".to_string(),
-            title: Some("Summarize".to_string()),
-            description: Some("Summarize content".to_string()),
-            arguments: Some(vec![rmcp::model::PromptArgument {
-                name: "topic".to_string(),
-                title: Some("Topic".to_string()),
-                description: Some("Topic to summarize".to_string()),
-                required: Some(true),
-            }]),
-            icons: Some(vec![Icon {
-                src: "https://example.com/prompt.png".to_string(),
-                mime_type: Some("image/png".to_string()),
-                sizes: Some(vec!["16x16".to_string()]),
-            }]),
-            meta: None,
-        };
-        let mapped_prompt = map_prompt(prompt);
-        assert_eq!(mapped_prompt.title.as_deref(), Some("Summarize"));
-        assert_eq!(
-            mapped_prompt
-                .arguments
-                .as_ref()
-                .and_then(|arguments| arguments.first())
-                .and_then(|argument| argument.title.as_deref()),
-            Some("Topic")
-        );
-        assert!(mapped_prompt.icons.is_some());
-    }
-
-    #[test]
-    fn mapping_preserves_structured_results_and_resource_links() {
-        let resource_link = RawResource {
-            uri: "file:///tmp/output.json".to_string(),
-            name: "output".to_string(),
-            title: Some("Output".to_string()),
-            description: Some("Generated output".to_string()),
-            mime_type: Some("application/json".to_string()),
-            size: Some(7),
-            icons: None,
-            meta: None,
-        };
-        let mut result_meta = Meta::default();
-        result_meta.insert("traceId".to_string(), json!("abc123"));
-        let result = rmcp::model::CallToolResult {
-            content: vec![
-                Content::text("done"),
-                Content::resource_link(resource_link),
-                Content::image("aGVsbG8=", "image/png"),
-            ],
-            structured_content: Some(json!({ "ok": true })),
-            is_error: Some(false),
-            meta: Some(result_meta),
-        };
-
-        let mapped = map_tool_result(result);
-        assert_eq!(mapped.structured_content, Some(json!({ "ok": true })));
-        assert_eq!(mapped.meta, Some(json!({ "traceId": "abc123" })));
-        assert!(matches!(
-            mapped.content.as_ref().and_then(|content| content.get(1)),
-            Some(MCPToolResultContent::ResourceLink { uri, .. }) if uri == "file:///tmp/output.json"
-        ));
-        assert!(matches!(
-            mapped.content.as_ref().and_then(|content| content.get(2)),
-            Some(MCPToolResultContent::Image { mime_type, .. }) if mime_type == "image/png"
-        ));
-    }
-
-    #[test]
-    fn mapping_preserves_prompt_message_blocks() {
-        let prompt_message = rmcp::model::PromptMessage {
-            role: rmcp::model::PromptMessageRole::User,
-            content: rmcp::model::PromptMessageContent::Text {
-                text: "hello".to_string(),
-            },
-        };
-        let mapped = map_prompt_message(prompt_message);
-        assert!(matches!(
-            mapped.content,
-            MCPPromptMessageContent::Block(ref block)
-                if matches!(block.as_ref(), MCPPromptMessageContentBlock::Text { text } if text == "hello")
-        ));
-
-        let resource_link = RawResource {
-            uri: "file:///tmp/input.md".to_string(),
-            name: "input".to_string(),
-            title: None,
-            description: Some("input".to_string()),
-            mime_type: Some("text/markdown".to_string()),
-            size: None,
-            icons: None,
-            meta: None,
-        }
-        .no_annotation();
-        let prompt_message = rmcp::model::PromptMessage {
-            role: rmcp::model::PromptMessageRole::Assistant,
-            content: rmcp::model::PromptMessageContent::ResourceLink {
-                link: resource_link,
-            },
-        };
-        let mapped = map_prompt_message(prompt_message);
-        assert!(matches!(
-            mapped.content,
-            MCPPromptMessageContent::Block(ref block)
-                if matches!(
-                    block.as_ref(),
-                    MCPPromptMessageContentBlock::ResourceLink { uri, .. }
-                        if uri == "file:///tmp/input.md"
-                )
-        ));
-
-        let embedded = rmcp::model::RawEmbeddedResource {
-            meta: Some(Meta::default()),
-            resource: ResourceContents::TextResourceContents {
-                uri: "file:///tmp/embedded.txt".to_string(),
-                mime_type: Some("text/plain".to_string()),
-                text: "embedded".to_string(),
-                meta: None,
-            },
-        }
-        .no_annotation();
-        let prompt_message = rmcp::model::PromptMessage {
-            role: rmcp::model::PromptMessageRole::Assistant,
-            content: rmcp::model::PromptMessageContent::Resource { resource: embedded },
-        };
-        let mapped = map_prompt_message(prompt_message);
-        assert!(matches!(
-            mapped.content,
-            MCPPromptMessageContent::Block(ref block)
-                if matches!(
-                    block.as_ref(),
-                    MCPPromptMessageContentBlock::Resource { resource }
-                        if resource.uri == "file:///tmp/embedded.txt"
-                )
-        ));
+        Ok(map_rmcp_tool_result(result))
     }
 }

@@ -175,6 +175,18 @@ const forbiddenContentRules = [
         regex: /\bpub enum MCPServerStatus\b/,
         message: 'core MCP server process runtime must not redefine MCPServerStatus; use the integrations contract',
       },
+      {
+        regex: /\bfn is_auth_error\b/,
+        message: 'core MCP server process runtime must not own auth error classification; use the integrations helper',
+      },
+      {
+        regex: /\bconst AUTHORIZATION_KEYS\b/,
+        message: 'core MCP server process runtime must not own remote authorization key constants; use the integrations helper',
+      },
+      {
+        regex: /\bcontains_key\("Authorization"\)/,
+        message: 'core MCP server process runtime must not inline legacy authorization header fallback; use the integrations helper',
+      },
     ],
   },
   {
@@ -299,6 +311,67 @@ const forbiddenContentRules = [
       {
         regex: /\bOAuthState::new\b/,
         message: 'core MCP auth facade must not assemble OAuth authorization state internals; use the integrations owner crate',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/mcp/protocol/transport_remote.rs',
+    patterns: [
+      {
+        regex: /\bfn normalize_authorization_value\b/,
+        message: 'core MCP remote transport must not redefine authorization normalization; use the integrations helper',
+      },
+      {
+        regex: /starts_with\("bearer "\)/,
+        message: 'core MCP remote transport must not inline bearer normalization; use the integrations helper',
+      },
+      {
+        regex: /\bfn build_client_info\b/,
+        message: 'core MCP remote transport must not own client capability construction; use the integrations helper',
+      },
+      {
+        regex: /\bClientCapabilities::builder\b/,
+        message: 'core MCP remote transport must not inline client capability construction; use the integrations helper',
+      },
+      {
+        regex: /\bfn map_(?:rmcp_)?initialize_result\b/,
+        message: 'core MCP remote transport must not own rmcp initialize mapping; use the integrations helper',
+      },
+      {
+        regex: /\bfn map_(?:rmcp_)?tool\b/,
+        message: 'core MCP remote transport must not own rmcp tool mapping; use the integrations helper',
+      },
+      {
+        regex: /\bfn map_(?:rmcp_)?resource\b/,
+        message: 'core MCP remote transport must not own rmcp resource mapping; use the integrations helper',
+      },
+      {
+        regex: /\bfn map_(?:rmcp_)?resource_content\b/,
+        message: 'core MCP remote transport must not own rmcp resource content mapping; use the integrations helper',
+      },
+      {
+        regex: /\bfn map_(?:rmcp_)?prompt\b/,
+        message: 'core MCP remote transport must not own rmcp prompt mapping; use the integrations helper',
+      },
+      {
+        regex: /\bfn map_(?:rmcp_)?prompt_message\b/,
+        message: 'core MCP remote transport must not own rmcp prompt message mapping; use the integrations helper',
+      },
+      {
+        regex: /\bfn map_(?:rmcp_)?tool_result\b/,
+        message: 'core MCP remote transport must not own rmcp tool result mapping; use the integrations helper',
+      },
+      {
+        regex: /\bfn map_(?:rmcp_)?content_block\b/,
+        message: 'core MCP remote transport must not own rmcp content block mapping; use the integrations helper',
+      },
+      {
+        regex: /\bfn map_(?:rmcp_)?icons\b/,
+        message: 'core MCP remote transport must not own rmcp icon mapping; use the integrations helper',
+      },
+      {
+        regex: /\bfn map_(?:rmcp_)?annotations\b/,
+        message: 'core MCP remote transport must not own rmcp annotation mapping; use the integrations helper',
       },
     ],
   },
@@ -524,6 +597,28 @@ function runManifestParserSelfTest() {
     }
   }
 
+  const mcpProcessRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/mcp/server/process.rs',
+  );
+  if (!mcpProcessRule) {
+    throw new Error('missing MCP server process boundary rule');
+  }
+  const mcpProcessHelpers = [
+    'MCPServerType',
+    'MCPServerStatus',
+    'is_auth_error',
+    'AUTHORIZATION_KEYS',
+    'contains_key\\("Authorization"\\)',
+  ];
+  const mcpProcessRuleText = mcpProcessRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const helper of mcpProcessHelpers) {
+    if (!mcpProcessRuleText.includes(helper)) {
+      throw new Error(`MCP server process boundary rule must forbid helper: ${helper}`);
+    }
+  }
+
   const mcpJsonConfigRule = forbiddenContentRules.find(
     (rule) => rule.path === 'src/crates/core/src/service/mcp/config/json_config.rs',
   );
@@ -585,6 +680,37 @@ function runManifestParserSelfTest() {
   for (const helper of mcpAuthHelpers) {
     if (!mcpAuthRuleText.includes(escapeRegex(helper))) {
       throw new Error(`MCP auth boundary rule must forbid helper: ${helper}`);
+    }
+  }
+
+  const mcpRemoteTransportRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/mcp/protocol/transport_remote.rs',
+  );
+  if (!mcpRemoteTransportRule) {
+    throw new Error('missing MCP remote transport boundary rule');
+  }
+  const mcpRemoteTransportHelpers = [
+    'normalize_authorization_value',
+    'starts_with\\("bearer "\\)',
+    'build_client_info',
+    'ClientCapabilities::builder',
+    'map_(?:rmcp_)?initialize_result',
+    'map_(?:rmcp_)?tool',
+    'map_(?:rmcp_)?resource',
+    'map_(?:rmcp_)?resource_content',
+    'map_(?:rmcp_)?prompt',
+    'map_(?:rmcp_)?prompt_message',
+    'map_(?:rmcp_)?tool_result',
+    'map_(?:rmcp_)?content_block',
+    'map_(?:rmcp_)?icons',
+    'map_(?:rmcp_)?annotations',
+  ];
+  const mcpRemoteTransportRuleText = mcpRemoteTransportRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const helper of mcpRemoteTransportHelpers) {
+    if (!mcpRemoteTransportRuleText.includes(helper)) {
+      throw new Error(`MCP remote transport boundary rule must forbid helper: ${helper}`);
     }
   }
 

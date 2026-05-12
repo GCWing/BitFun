@@ -1,10 +1,14 @@
 //! MCP server data contracts.
 
+mod runtime_helpers;
+
 use crate::mcp::config::ConfigLocation;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt;
+
+pub use runtime_helpers::{is_mcp_auth_error_message, merge_mcp_remote_headers};
 
 /// MCP server type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
