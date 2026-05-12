@@ -316,7 +316,7 @@ describe('codeReviewReport', () => {
 
     expect(sections.reviewerStats).toMatchObject({ total: 1, completed: 0, degraded: 1 });
     expect(sections.coverageNotes).toEqual([
-      'Security Reviewer timed out after producing partial output: Found likely token logging in src/auth.ts before timeout.',
+      'Security Reviewer stopped before completion after producing partial output: Found likely token logging in src/auth.ts before timeout.',
     ]);
   });
 
@@ -723,7 +723,7 @@ describe('codeReviewReport', () => {
     expect(markdown).toContain('Security Reviewer (security; Status: partial_timeout)');
     expect(markdown).toContain('Partial output: Found likely token logging in src/auth.ts before timeout.');
     expect(markdown).toContain(
-      'Security Reviewer timed out after producing partial output: Found likely token logging in src/auth.ts before timeout.',
+      'Security Reviewer stopped before completion after producing partial output: Found likely token logging in src/auth.ts before timeout.',
     );
   });
 

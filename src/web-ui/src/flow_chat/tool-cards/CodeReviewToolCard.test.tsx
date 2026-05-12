@@ -318,7 +318,7 @@ describe('CodeReviewToolCard', () => {
     expect(container.textContent).toContain('3 active');
   });
 
-  it('renders compact reliability status when a reviewer timed out with partial evidence', () => {
+  it('renders compact reliability status when a reviewer returned partial evidence', () => {
     const toolItem: FlowToolItem = {
       id: 'tool-1',
       type: 'tool',
@@ -375,7 +375,7 @@ describe('CodeReviewToolCard', () => {
     });
 
     expect(container.textContent).toContain('Review status');
-    expect(container.textContent).toContain('Reviewer timed out with partial result');
+    expect(container.textContent).toContain('Reviewer returned partial result');
     expect(container.textContent).toContain('1 reviewer result is partial; confidence is reduced.');
   });
 

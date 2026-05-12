@@ -44,6 +44,8 @@ const CONTEXT_COMPRESSION_TOOL_NAME: &str = "ContextCompression";
 const DEFAULT_SUBAGENT_MAX_CONCURRENCY: usize = 5;
 const MAX_SUBAGENT_MAX_CONCURRENCY: usize = 64;
 const SUBAGENT_TIMEOUT_GRACE_PERIOD: Duration = Duration::from_secs(10);
+const DEEP_REVIEW_REVIEWER_MAX_ROUNDS: usize = 60;
+const DEEP_REVIEW_REVIEWER_MAX_TOOL_CALLS: usize = 120;
 
 /// Subagent execution result
 ///
@@ -61,6 +63,12 @@ pub struct SubagentResult {
 pub enum SubagentResultStatus {
     Completed,
     PartialTimeout,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct SubagentExecutionBudget {
+    max_rounds: Option<usize>,
+    max_tool_calls: Option<usize>,
 }
 
 impl SubagentResult {
@@ -1824,6 +1832,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: turn_id.clone(),
             turn_index,
             agent_type: effective_agent_type.clone(),
+            max_rounds: None,
+            max_tool_calls: None,
             workspace: session_workspace,
             context: context_vars,
             subagent_parent_info: None,
@@ -2704,6 +2714,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions,
         } = request;
 
+        let is_deep_review_reviewer_context = Self::is_deep_review_reviewer_context(&context);
+        let execution_budget = Self::deep_review_reviewer_execution_budget(&context);
         let timeout_seconds = timeout_seconds.filter(|seconds| *seconds > 0);
         let timeout_error_message = match timeout_seconds {
             Some(seconds) => format!(
@@ -2729,6 +2741,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             context_profile_policy.profile,
             context_profile_policy.subagent_concurrency_cap
         );
+        if execution_budget.max_rounds.is_some() || execution_budget.max_tool_calls.is_some() {
+            debug!(
+                "Subagent execution budget selected: agent_type={}, max_rounds={:?}, max_tool_calls={:?}",
+                agent_type, execution_budget.max_rounds, execution_budget.max_tool_calls
+            );
+        }
 
         // Check cancel token (before creating session)
         if let Some(token) = cancel_token {
@@ -2885,6 +2903,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: dialog_turn_id.clone(),
             turn_index: 0,
             agent_type: agent_type.clone(),
+            max_rounds: execution_budget.max_rounds,
+            max_tool_calls: execution_budget.max_tool_calls,
             workspace: subagent_workspace,
             context,
             subagent_parent_info: subagent_parent_info.clone(),
@@ -3174,11 +3194,55 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         // Extract text response
         let response_text = match result {
-            Ok(exec_result) => match exec_result.final_message.content {
-                MessageContent::Mixed { text, .. } => text,
-                MessageContent::Text(text) => text,
-                _ => String::new(),
-            },
+            Ok(exec_result) => {
+                let response_text = match exec_result.final_message.content {
+                    MessageContent::Mixed { text, .. } => text,
+                    MessageContent::Text(text) => text,
+                    _ => String::new(),
+                };
+
+                if is_deep_review_reviewer_context && !exec_result.success {
+                    let reason = exec_result.completion_reason.clone();
+                    let partial_text = if response_text.trim().is_empty() {
+                        format!(
+                            "Subagent '{}' stopped before producing a final reviewer summary. Reason: {}.",
+                            agent_type, reason
+                        )
+                    } else {
+                        response_text
+                    };
+                    let mut partial_result = SubagentResult::partial_timeout(
+                        partial_text,
+                        format!(
+                            "Subagent '{}' stopped before finalizing because {}",
+                            agent_type, reason
+                        ),
+                    );
+                    if let Some(parent_info) = subagent_parent_info.as_ref() {
+                        let event = self.session_manager.record_subagent_partial_timeout(
+                            &parent_info.session_id,
+                            &parent_info.dialog_turn_id,
+                            &agent_type,
+                            &partial_result.text,
+                            Some(reason.as_str()),
+                        );
+                        partial_result = partial_result.with_ledger_event_id(event.event_id);
+                    }
+
+                    if let Err(cleanup_err) = self.cleanup_subagent_resources(&session_id).await {
+                        warn!(
+                            "Failed to cleanup subagent resources after bounded partial result: session={}, error={}",
+                            session_id, cleanup_err
+                        );
+                    }
+                    let mut registry = self.subagent_timeout_registry.write().await;
+                    registry.remove(&session_id);
+
+                    return Ok(partial_result);
+                }
+
+                response_text
+            }
             Err(e) => {
                 error!(
                     "Subagent execution failed: session={}, error={}",
@@ -3229,6 +3293,25 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             })?;
         let context_messages = self.load_session_context_messages(&parent_session).await?;
         ForkAgentContextSnapshot::from_parent_session(&parent_session, context_messages)
+    }
+
+    fn is_deep_review_reviewer_context(context: &HashMap<String, String>) -> bool {
+        context
+            .get("deep_review_subagent_role")
+            .is_some_and(|role| role == "reviewer")
+    }
+
+    fn deep_review_reviewer_execution_budget(
+        context: &HashMap<String, String>,
+    ) -> SubagentExecutionBudget {
+        if Self::is_deep_review_reviewer_context(context) {
+            SubagentExecutionBudget {
+                max_rounds: Some(DEEP_REVIEW_REVIEWER_MAX_ROUNDS),
+                max_tool_calls: Some(DEEP_REVIEW_REVIEWER_MAX_TOOL_CALLS),
+            }
+        } else {
+            SubagentExecutionBudget::default()
+        }
     }
 
     async fn ensure_hidden_btw_session(
@@ -3879,10 +3962,11 @@ pub fn get_global_coordinator() -> Option<Arc<ConversationCoordinator>> {
 mod tests {
     use super::{
         normalize_subagent_max_concurrency, resolve_agent_submission_turn_id,
-        ConversationCoordinator,
+        ConversationCoordinator, SubagentExecutionBudget,
     };
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use bitfun_runtime_ports::{AgentSubmissionRequest, AgentSubmissionSource};
+    use std::collections::HashMap;
 
     #[test]
     fn clamps_subagent_max_concurrency_into_safe_range() {
@@ -3929,6 +4013,31 @@ mod tests {
         assert_eq!(
             resolve_agent_submission_turn_id(&request),
             "legacy_metadata_turn"
+        );
+    }
+
+    #[test]
+    fn deep_review_reviewer_context_applies_bounded_execution_budget() {
+        let mut context = HashMap::new();
+        context.insert(
+            "deep_review_subagent_role".to_string(),
+            "reviewer".to_string(),
+        );
+
+        let budget = ConversationCoordinator::deep_review_reviewer_execution_budget(&context);
+
+        assert_eq!(budget.max_rounds, Some(60));
+        assert_eq!(budget.max_tool_calls, Some(120));
+
+        let mut judge_context = HashMap::new();
+        judge_context.insert("deep_review_subagent_role".to_string(), "judge".to_string());
+        assert_eq!(
+            ConversationCoordinator::deep_review_reviewer_execution_budget(&judge_context),
+            SubagentExecutionBudget::default()
+        );
+        assert_eq!(
+            ConversationCoordinator::deep_review_reviewer_execution_budget(&HashMap::new()),
+            SubagentExecutionBudget::default()
         );
     }
 

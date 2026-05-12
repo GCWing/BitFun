@@ -1600,7 +1600,7 @@
           "detail": "{{count}} reviewer launch hit a concurrency cap."
         },
         "partial_reviewer": {
-          "label": "Reviewer timed out with partial result",
+          "label": "Reviewer returned partial result",
           "detail": "{{count}} reviewer result is partial; confidence is reduced."
         },
         "reduced_scope": {

@@ -1600,7 +1600,7 @@
           "detail": "{{count}} 次审核员启动触发了并发上限。"
         },
         "partial_reviewer": {
-          "label": "审核者超时但有部分结果",
+          "label": "审核者返回了部分结果",
           "detail": "{{count}} 个审核者结果是部分结果，置信度已降低。"
         },
         "reduced_scope": {

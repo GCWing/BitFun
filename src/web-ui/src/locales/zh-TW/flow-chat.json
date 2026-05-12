@@ -1600,7 +1600,7 @@
           "detail": "{{count}} 次審核員啟動觸發了並行上限。"
         },
         "partial_reviewer": {
-          "label": "審核者逾時但有部分結果",
+          "label": "審核者傳回了部分結果",
           "detail": "{{count}} 個審核者結果是部分結果，信心已降低。"
         },
         "reduced_scope": {

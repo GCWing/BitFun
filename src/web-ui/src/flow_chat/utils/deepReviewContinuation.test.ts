@@ -207,7 +207,7 @@ describe('deepReviewContinuation', () => {
                     },
                     success: true,
                     resultForAssistant:
-                      "Subagent 'ReviewSecurity' timed out with partial result.",
+                      "Subagent 'ReviewSecurity' stopped before completion with partial result.",
                   },
                   startTime: 1,
                   timestamp: 1,

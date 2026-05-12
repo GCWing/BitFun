@@ -105,7 +105,7 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
         defaultValue: 'Reviewer launch was concurrency-limited',
       }),
       partial_reviewer: t('toolCards.codeReview.reliabilityStatus.partial_reviewer.label', {
-        defaultValue: 'Reviewer timed out with partial result',
+        defaultValue: 'Reviewer returned partial result',
       }),
       reduced_scope: t('toolCards.codeReview.reliabilityStatus.reduced_scope.label', {
         defaultValue: 'Reduced-depth coverage',

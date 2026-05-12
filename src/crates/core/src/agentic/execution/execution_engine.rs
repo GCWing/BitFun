@@ -10,7 +10,7 @@ use crate::agentic::agents::{
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
     render_system_reminder, Message, MessageContent, MessageHelper, MessageRole,
-    MessageSemanticKind, RequestReasoningTokenPolicy, Session,
+    MessageSemanticKind, RequestReasoningTokenPolicy, Session, ToolCall,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::execution::types::FinishReason;
@@ -277,6 +277,27 @@ impl ExecutionEngine {
             args_str.len(),
             args_hash
         )
+    }
+
+    fn tool_round_signature(tool_calls: &[ToolCall]) -> String {
+        let mut sigs: Vec<String> = tool_calls
+            .iter()
+            .map(|tc| {
+                let args_str = tc.arguments.to_string();
+                let args_summary = Self::tool_signature_args_summary(&args_str);
+                format!("{}:{}", tc.tool_name, args_summary)
+            })
+            .collect();
+        sigs.sort();
+        sigs.join("|")
+    }
+
+    fn tool_loop_signature(tool_calls: &[ToolCall], had_assistant_text: bool) -> Option<String> {
+        if tool_calls.is_empty() || had_assistant_text {
+            return None;
+        }
+
+        Some(Self::tool_round_signature(tool_calls))
     }
 
     fn assistant_has_tool_calls(message: &Message) -> bool {
@@ -1608,10 +1629,11 @@ impl ExecutionEngine {
 
         // Loop to execute model rounds
         loop {
-            if completed_rounds >= self.config.max_rounds {
+            let max_rounds = context.max_rounds.unwrap_or(self.config.max_rounds).max(1);
+            if completed_rounds >= max_rounds {
                 warn!(
                     "Reached max rounds limit: {}, stopping execution",
-                    self.config.max_rounds
+                    max_rounds
                 );
                 finalization_reason = Some("max_rounds");
                 break;
@@ -1893,19 +1915,15 @@ impl ExecutionEngine {
             }
 
             // P0: Consecutive same-tool-call loop detection
-            if !round_result.tool_calls.is_empty() {
-                let mut sigs: Vec<String> = round_result
-                    .tool_calls
-                    .iter()
-                    .map(|tc| {
-                        let args_str = tc.arguments.to_string();
-                        let args_summary = Self::tool_signature_args_summary(&args_str);
-                        format!("{}:{}", tc.tool_name, args_summary)
-                    })
-                    .collect();
-                sigs.sort();
-                let round_sig = sigs.join("|");
+            if let Some(round_sig) =
+                Self::tool_loop_signature(&round_result.tool_calls, round_result.had_assistant_text)
+            {
                 recent_tool_signatures.push(round_sig);
+                let max_consecutive_window = self.config.max_consecutive_same_tool.max(1);
+                if recent_tool_signatures.len() > max_consecutive_window {
+                    let discard_count = recent_tool_signatures.len() - max_consecutive_window;
+                    recent_tool_signatures.drain(0..discard_count);
+                }
             } else {
                 recent_tool_signatures.clear();
             }
@@ -1933,19 +1951,28 @@ impl ExecutionEngine {
                 &context_profile_policy,
             );
 
-            let max_consec = context_profile_policy
-                .effective_loop_threshold(self.config.max_consecutive_same_tool);
-            if recent_tool_signatures.len() >= max_consec {
-                let tail = &recent_tool_signatures[recent_tool_signatures.len() - max_consec..];
-                if tail.windows(2).all(|w| w[0] == w[1]) {
+            if let Some(max_tool_calls) = context.max_tool_calls.filter(|limit| *limit > 0) {
+                if total_tools >= max_tool_calls {
                     warn!(
-                        "Loop detected: {} consecutive rounds with identical tool signatures, stopping",
-                        max_consec
+                        "Reached max tool call limit: {}, stopping execution: turn={}, round={}, total_tools={}",
+                        max_tool_calls, context.dialog_turn_id, round_index, total_tools
                     );
-                    loop_detected = true;
-                    finalization_reason = Some("loop_detected");
+                    finalization_reason = Some("max_tool_calls");
                     break;
                 }
+            }
+
+            let repeated_tool_loop_threshold = context_profile_policy
+                .effective_loop_threshold(self.config.max_consecutive_same_tool);
+            if after_round_health.repeated_tool_signature_count >= repeated_tool_loop_threshold {
+                warn!(
+                    "Loop detected: identical tool signature repeated {} consecutive rounds, threshold={}, stopping",
+                    after_round_health.repeated_tool_signature_count,
+                    repeated_tool_loop_threshold
+                );
+                loop_detected = true;
+                finalization_reason = Some("loop_detected");
+                break;
             }
 
             // User-steering messages submitted while this turn is running: drain and inject
@@ -2227,7 +2254,7 @@ impl ExecutionEngine {
         let success = !loop_detected
             && !matches!(
                 effective_finish_reason,
-                "finalize_failed" | "empty_round" | "max_rounds"
+                "finalize_failed" | "empty_round" | "max_rounds" | "max_tool_calls"
             );
 
         // Emit dialog turn completed event
@@ -2291,6 +2318,7 @@ impl ExecutionEngine {
                 .unwrap_or_else(|| Message::assistant(String::new())),
             total_rounds: completed_rounds,
             success,
+            completion_reason: effective_finish_reason.to_string(),
             new_messages,
             finish_reason,
         })
@@ -2515,6 +2543,24 @@ mod tests {
     }
 
     #[test]
+    fn tool_loop_signature_skips_rounds_with_visible_text() {
+        let tool_calls = vec![ToolCall {
+            tool_id: "tool-1".to_string(),
+            tool_name: "Read".to_string(),
+            arguments: json!({ "file_path": "README.md" }),
+            raw_arguments: None,
+            is_error: false,
+            recovered_from_truncation: false,
+        }];
+
+        assert!(ExecutionEngine::tool_loop_signature(&tool_calls, true).is_none());
+        assert_eq!(
+            ExecutionEngine::tool_loop_signature(&tool_calls, false).as_deref(),
+            Some(r#"Read:{"file_path":"README.md"}"#)
+        );
+    }
+
+    #[test]
     fn context_health_snapshot_scores_repeated_tool_signatures() {
         let signatures = vec![
             r#"Bash:{"command":"cargo test"}"#.to_string(),
@@ -2531,6 +2577,23 @@ mod tests {
         assert_eq!(snapshot.compression_failure_count, 0);
         assert_eq!(snapshot.repeated_tool_signature_count, 3);
         assert_eq!(snapshot.consecutive_failed_commands, 0);
+    }
+
+    #[test]
+    fn context_health_snapshot_ignores_non_consecutive_repeated_tool_signatures() {
+        let signatures = vec![
+            r#"Grep:{"pattern":"welcome\\.project\\b"}"#.to_string(),
+            r#"Read:{"file_path":"src/web-ui/src/flow_chat/components/WelcomePanel.tsx"}"#
+                .to_string(),
+            r#"Grep:{"pattern":"welcome\\.project\\b"}"#.to_string(),
+            r#"Grep:{"pattern":"t\\(['\"]welcome\\.project['\"]\\)"}"#.to_string(),
+            r#"Grep:{"pattern":"welcome\\.project\\b"}"#.to_string(),
+        ];
+
+        let snapshot =
+            ContextHealthSnapshot::from_runtime_observations(0.82, 2, 1, 0, &signatures, &[]);
+
+        assert_eq!(snapshot.repeated_tool_signature_count, 0);
     }
 
     #[test]

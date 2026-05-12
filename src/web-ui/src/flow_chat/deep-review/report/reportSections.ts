@@ -134,7 +134,7 @@ function buildPartialReviewerCoverageNotes(reviewers: CodeReviewReviewer[] = [])
       if (!partialOutput || !PARTIAL_TIMEOUT_REVIEWER_STATUSES.has(reviewer.status)) {
         return null;
       }
-      return `${reviewer.name} timed out after producing partial output: ${partialOutput}`;
+      return `${reviewer.name} stopped before completion after producing partial output: ${partialOutput}`;
     })
     .filter((note): note is string => Boolean(note));
 }

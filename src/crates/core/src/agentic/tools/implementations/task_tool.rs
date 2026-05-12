@@ -1378,7 +1378,7 @@ impl Tool for TaskTool {
             );
             if max_retries > 0 && retries_used < max_retries {
                 format!(
-                    "\n\n<retry_guidance>This reviewer timed out. You may retry with 'retry: true' only if you can provide retry_coverage with source_packet_id, source_status='partial_timeout', covered_files, and a smaller retry_scope_files list. Retries used: {}/{}.</retry_guidance>",
+                    "\n\n<retry_guidance>This reviewer stopped before completion. You may retry with 'retry: true' only if you can provide retry_coverage with source_packet_id, source_status='partial_timeout', covered_files, and a smaller retry_scope_files list. Retries used: {}/{}.</retry_guidance>",
                     retries_used, max_retries
                 )
             } else {
@@ -1390,7 +1390,7 @@ impl Tool for TaskTool {
 
         let result_for_assistant = if result.is_partial_timeout() {
             format!(
-                "Subagent '{}' timed out with partial result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>{}",
+                "Subagent '{}' stopped before completion with partial result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>{}",
                 subagent_type, result.text, retry_hint
             )
         } else {

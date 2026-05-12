@@ -820,10 +820,17 @@ impl SessionManager {
         partial_output: &str,
         error_kind: Option<&str>,
     ) -> EvidenceLedgerEvent {
-        let summary = format!(
-            "Subagent {} timed out after producing partial output.",
-            subagent_type
-        );
+        let summary = if matches!(error_kind, None | Some("timeout")) {
+            format!(
+                "Subagent {} timed out after producing partial output.",
+                subagent_type
+            )
+        } else {
+            format!(
+                "Subagent {} stopped before completion after producing partial output.",
+                subagent_type
+            )
+        };
         let event = EvidenceLedgerEvent::new(
             session_id,
             turn_id,

@@ -144,7 +144,7 @@ function getReliabilityNoticeLabel(notice: ReviewReliabilityNotice, t: Translate
       cache_hit: 'Incremental cache reused reviewer output',
       cache_miss: 'Incremental cache missed or refreshed',
       concurrency_limited: 'Reviewer launch was concurrency-limited',
-      partial_reviewer: 'Reviewer timed out with partial result',
+      partial_reviewer: 'Reviewer returned partial result',
       reduced_scope: 'Reduced-depth coverage',
       retry_guidance: 'Retry guidance emitted',
       skipped_reviewers: 'Skipped reviewers',
