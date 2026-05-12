@@ -273,3 +273,88 @@ fn project_subagent_config_lookup_is_workspace_scoped() {
     );
     assert!(registry.has_project_custom_subagent("SharedReviewer"));
 }
+
+#[tokio::test]
+async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() {
+    let registry = AgentRegistry::new();
+    let workspace = PathBuf::from("D:/workspace/project-c");
+
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "zBuiltin".to_string(),
+        }),
+        AgentCategory::SubAgent,
+        Some(SubAgentSource::Builtin),
+        None,
+    );
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "ABuiltin".to_string(),
+        }),
+        AgentCategory::SubAgent,
+        Some(SubAgentSource::Builtin),
+        None,
+    );
+
+    let mut project_entries = HashMap::new();
+    project_entries.insert("zProject".to_string(), test_project_entry("zProject", true));
+    project_entries.insert("AProject".to_string(), test_project_entry("AProject", true));
+    registry
+        .write_project_subagents()
+        .insert(workspace.clone(), project_entries);
+
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "zUser".to_string(),
+        }),
+        AgentCategory::SubAgent,
+        Some(SubAgentSource::User),
+        Some(CustomSubagentConfig {
+            enabled: true,
+            model: "fast".to_string(),
+        }),
+    );
+    registry.register_agent(
+        Arc::new(TestAgent {
+            id: "AUser".to_string(),
+        }),
+        AgentCategory::SubAgent,
+        Some(SubAgentSource::User),
+        Some(CustomSubagentConfig {
+            enabled: true,
+            model: "fast".to_string(),
+        }),
+    );
+
+    let visible = registry
+        .get_subagents_for_query(&SubagentQueryContext {
+            parent_agent_type: None,
+            workspace_root: Some(&workspace),
+            list_scope: SubagentListScope::RegistryManagement,
+            include_disabled: false,
+        })
+        .await;
+
+    let ids: Vec<&str> = visible.iter().map(|agent| agent.id.as_str()).collect();
+    let expected = vec![
+        "ABuiltin",
+        "ComputerUse",
+        "Explore",
+        "FileFinder",
+        "ResearchSpecialist",
+        "ReviewArchitecture",
+        "ReviewBusinessLogic",
+        "ReviewFixer",
+        "ReviewFrontend",
+        "ReviewJudge",
+        "ReviewPerformance",
+        "ReviewSecurity",
+        "zBuiltin",
+        "AProject",
+        "zProject",
+        "AUser",
+        "zUser",
+    ];
+
+    assert_eq!(ids, expected);
+}

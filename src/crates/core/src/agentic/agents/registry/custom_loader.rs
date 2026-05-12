@@ -2,7 +2,6 @@ use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagent
 use crate::agentic::agents::Agent;
 use crate::infrastructure::get_path_manager_arc;
 use log::error;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Existing subagent directory and its source
@@ -22,6 +21,12 @@ const PROJECT_AGENT_SUBDIRS: &[(&str, &str)] = &[
 
 /// Custom subagent loader: discovers possible agent paths from project/user directories
 pub struct CustomSubagentLoader;
+
+struct CustomSubagentCandidate {
+    agent: CustomSubagent,
+    root_priority: usize,
+    path: PathBuf,
+}
 
 impl CustomSubagentLoader {
     /// Returns existing possible paths (directories) and their sources (project/user).
@@ -70,14 +75,16 @@ impl CustomSubagentLoader {
     /// Load custom subagents from all possible paths (only .md files).
     /// Agents with the same name are prioritized by path order: earlier paths have higher priority, later ones won't override already loaded agents with the same name.
     pub fn load_custom_subagents(workspace_root: &Path) -> Vec<CustomSubagent> {
-        let mut by_id: HashMap<String, CustomSubagent> = HashMap::new();
-        for entry in Self::get_possible_paths(workspace_root) {
+        let mut candidates = Vec::new();
+        for (root_priority, entry) in Self::get_possible_paths(workspace_root).into_iter().enumerate() {
             for md_path in Self::list_md_files(&entry.path) {
                 let path_str = md_path.to_string_lossy();
                 match CustomSubagent::from_file(path_str.as_ref(), entry.kind) {
-                    Ok(agent) => {
-                        by_id.entry(agent.id().to_string()).or_insert(agent);
-                    }
+                    Ok(agent) => candidates.push(CustomSubagentCandidate {
+                        agent,
+                        root_priority,
+                        path: md_path,
+                    }),
                     Err(e) => {
                         error!(
                             "Failed to load custom subagent from {}: {}",
@@ -88,7 +95,25 @@ impl CustomSubagentLoader {
                 }
             }
         }
-        by_id.into_values().collect()
+
+        candidates.sort_by(|a, b| {
+            a.root_priority
+                .cmp(&b.root_priority)
+                .then_with(|| a.agent.id().to_lowercase().cmp(&b.agent.id().to_lowercase()))
+                .then_with(|| a.agent.id().cmp(b.agent.id()))
+                .then_with(|| a.path.cmp(&b.path))
+        });
+
+        let mut ordered = Vec::new();
+        let mut seen_ids = std::collections::HashSet::new();
+        for candidate in candidates {
+            let id = candidate.agent.id().to_string();
+            if seen_ids.insert(id) {
+                ordered.push(candidate.agent);
+            }
+        }
+
+        ordered
     }
 
     /// List all .md files in directory (non-recursive)
@@ -103,6 +128,7 @@ impl CustomSubagentLoader {
                 out.push(p);
             }
         }
+        out.sort();
         out
     }
 }

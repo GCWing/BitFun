@@ -1405,6 +1405,8 @@ impl Tool for TaskTool {
 #[cfg(test)]
 mod tests {
     use super::TaskTool;
+    use crate::agentic::agents::{get_agent_registry, Agent, AgentCategory, SubAgentSource};
+    use crate::agentic::agents::CustomSubagentConfig;
     use crate::agentic::deep_review::task_adapter as deep_review_task_adapter;
     use crate::agentic::deep_review_policy::{
         DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewSubagentRole,
@@ -1412,8 +1414,60 @@ mod tests {
     use crate::agentic::tools::framework::{Tool, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::BitFunError;
+    use async_trait::async_trait;
     use serde_json::json;
     use std::collections::HashMap;
+    use std::sync::Arc;
+
+    struct PromptOrderTestAgent {
+        id: String,
+    }
+
+    #[async_trait]
+    impl Agent for PromptOrderTestAgent {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn id(&self) -> &str {
+            &self.id
+        }
+
+        fn name(&self) -> &str {
+            &self.id
+        }
+
+        fn description(&self) -> &str {
+            "Prompt ordering test agent"
+        }
+
+        fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
+            "test_prompt_order_agent"
+        }
+
+        fn default_tools(&self) -> Vec<String> {
+            vec!["Read".to_string()]
+        }
+    }
+
+    fn register_prompt_order_test_subagent(
+        id: &str,
+        source: SubAgentSource,
+        custom_config: Option<CustomSubagentConfig>,
+    ) {
+        get_agent_registry().register_agent(
+            Arc::new(PromptOrderTestAgent { id: id.to_string() }),
+            AgentCategory::SubAgent,
+            Some(source),
+            custom_config,
+        );
+    }
+
+    fn find_agent_block_index(description: &str, agent_id: &str) -> usize {
+        description
+            .find(&format!("<agent type=\"{}\">", agent_id))
+            .unwrap_or_else(|| panic!("expected agent block for {}", agent_id))
+    }
 
     #[test]
     fn task_schema_accepts_optional_model_id() {
@@ -1531,6 +1585,69 @@ mod tests {
             .expect("deep review description should render");
         assert!(deep_review_description.contains("<agent type=\"ReviewSecurity\">"));
         assert!(!deep_review_description.contains("<agent type=\"ResearchSpecialist\">"));
+    }
+
+    #[tokio::test]
+    async fn prompt_stability_description_with_context_renders_available_agents_in_stable_order() {
+        let tool = TaskTool::new();
+        let context = ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some("agentic".to_string()),
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: None,
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        };
+
+        let builtin_a = "AAAPromptOrderBuiltin";
+        let builtin_z = "ZZZPromptOrderBuiltin";
+        let user_a = "AAAPromptOrderUser";
+        let user_z = "ZZZPromptOrderUser";
+        register_prompt_order_test_subagent(builtin_z, SubAgentSource::Builtin, None);
+        register_prompt_order_test_subagent(builtin_a, SubAgentSource::Builtin, None);
+        register_prompt_order_test_subagent(
+            user_z,
+            SubAgentSource::User,
+            Some(CustomSubagentConfig {
+                enabled: true,
+                model: "fast".to_string(),
+            }),
+        );
+        register_prompt_order_test_subagent(
+            user_a,
+            SubAgentSource::User,
+            Some(CustomSubagentConfig {
+                enabled: true,
+                model: "fast".to_string(),
+            }),
+        );
+
+        let description = tool
+            .description_with_context(Some(&context))
+            .await
+            .expect("description should render");
+
+        let builtin_a_index = find_agent_block_index(&description, builtin_a);
+        let builtin_z_index = find_agent_block_index(&description, builtin_z);
+        let user_a_index = find_agent_block_index(&description, user_a);
+        let user_z_index = find_agent_block_index(&description, user_z);
+
+        assert!(
+            builtin_a_index < builtin_z_index,
+            "builtin subagents should be sorted alphabetically"
+        );
+        assert!(
+            builtin_z_index < user_a_index,
+            "builtin subagents should render before user subagents"
+        );
+        assert!(
+            user_a_index < user_z_index,
+            "user subagents should be sorted alphabetically"
+        );
     }
 
     #[test]

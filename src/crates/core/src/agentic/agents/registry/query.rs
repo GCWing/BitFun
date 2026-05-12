@@ -11,6 +11,27 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 impl AgentRegistry {
+    fn subagent_source_rank(source: Option<crate::agentic::agents::SubAgentSource>) -> u8 {
+        match source {
+            Some(crate::agentic::agents::SubAgentSource::Builtin) => 0,
+            Some(crate::agentic::agents::SubAgentSource::Project) => 1,
+            Some(crate::agentic::agents::SubAgentSource::User) => 2,
+            None => 3,
+        }
+    }
+
+    fn sort_subagents_for_presentation(mut result: Vec<AgentInfo>) -> Vec<AgentInfo> {
+        result.sort_by(|a, b| {
+            Self::subagent_source_rank(a.subagent_source)
+                .cmp(&Self::subagent_source_rank(b.subagent_source))
+                .then_with(|| a.id.to_lowercase().cmp(&b.id.to_lowercase()))
+                .then_with(|| a.id.cmp(&b.id))
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+                .then_with(|| a.name.cmp(&b.name))
+        });
+        result
+    }
+
     /// get agent tools from config
     /// if not set, return default tools
     /// mode config canonicalization is handled separately; this only reads resolved configuration
@@ -203,7 +224,7 @@ impl AgentRegistry {
                 );
             }
         }
-        result
+        Self::sort_subagents_for_presentation(result)
     }
 
     pub async fn can_parent_access_subagent(

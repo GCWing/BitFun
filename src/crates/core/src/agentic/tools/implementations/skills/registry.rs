@@ -151,43 +151,84 @@ fn dedupe_preserving_order(keys: Vec<String>) -> Vec<String> {
 
 fn sort_skills(mut skills: Vec<SkillInfo>) -> Vec<SkillInfo> {
     skills.sort_by(|a, b| {
-        let level_order = match a.level {
-            SkillLocation::Project => 0,
-            SkillLocation::User => 1,
-        }
-        .cmp(&match b.level {
-            SkillLocation::Project => 0,
-            SkillLocation::User => 1,
-        });
-
-        level_order
+        skill_level_rank(a.level)
+            .cmp(&skill_level_rank(b.level))
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            .then_with(|| a.name.cmp(&b.name))
             .then_with(|| a.key.cmp(&b.key))
     });
     skills
 }
 
+fn skill_level_rank(level: SkillLocation) -> u8 {
+    match level {
+        SkillLocation::Project => 0,
+        SkillLocation::User => 1,
+    }
+}
+
+fn skill_candidate_precedence(candidate: &SkillCandidate) -> (usize, u8, String, String, String) {
+    (
+        candidate.priority,
+        skill_level_rank(candidate.info.level),
+        candidate.info.name.to_lowercase(),
+        candidate.info.name.clone(),
+        candidate.info.key.clone(),
+    )
+}
+
+fn sort_resolved_skill_candidates(mut resolved: Vec<SkillCandidate>) -> Vec<SkillCandidate> {
+    resolved.sort_by(|a, b| skill_candidate_precedence(a).cmp(&skill_candidate_precedence(b)));
+    resolved
+}
+
+fn sort_skill_candidates_for_resolution(mut candidates: Vec<SkillCandidate>) -> Vec<SkillCandidate> {
+    candidates.sort_by(|a, b| {
+        skill_candidate_precedence(a)
+            .cmp(&skill_candidate_precedence(b))
+            .then_with(|| a.info.path.cmp(&b.info.path))
+    });
+    candidates
+}
+
+fn sort_remote_dir_entries(entries: &mut [crate::agentic::workspace::WorkspaceDirEntry]) {
+    entries.sort_by(|a, b| {
+        a.name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.path.cmp(&b.path))
+    });
+}
+
 fn resolve_visible_skills(candidates: Vec<SkillCandidate>) -> Vec<SkillInfo> {
     let mut by_name: HashMap<String, SkillCandidate> = HashMap::new();
-    for candidate in candidates {
+    for candidate in sort_skill_candidates_for_resolution(candidates) {
         match by_name.get(&candidate.info.name) {
-            Some(existing) if existing.priority <= candidate.priority => {}
+            Some(existing)
+                if skill_candidate_precedence(existing) <= skill_candidate_precedence(&candidate) => {}
             _ => {
                 by_name.insert(candidate.info.name.clone(), candidate);
             }
         }
     }
 
-    let mut resolved: Vec<SkillCandidate> = by_name.into_values().collect();
-    resolved.sort_by(|a, b| {
-        a.priority
-            .cmp(&b.priority)
-            .then_with(|| a.info.name.to_lowercase().cmp(&b.info.name.to_lowercase()))
-    });
-    resolved
+    sort_resolved_skill_candidates(by_name.into_values().collect())
         .into_iter()
         .map(|candidate| candidate.info)
         .collect()
+}
+
+fn sort_resolved_skills_for_presentation(skills: Vec<SkillInfo>) -> Vec<SkillInfo> {
+    let mut skills = skills;
+    skills.sort_by(|a, b| {
+        skill_level_rank(a.level)
+            .cmp(&skill_level_rank(b.level))
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.key.cmp(&b.key))
+    });
+    skills
 }
 
 fn filter_candidates_for_mode(
@@ -398,6 +439,14 @@ impl SkillRegistry {
             }
         }
 
+        skills.sort_by(|a, b| {
+            a.info
+                .dir_name
+                .to_lowercase()
+                .cmp(&b.info.dir_name.to_lowercase())
+                .then_with(|| a.info.dir_name.cmp(&b.info.dir_name))
+                .then_with(|| a.info.key.cmp(&b.info.key))
+        });
         skills
     }
 
@@ -436,10 +485,11 @@ impl SkillRegistry {
 
         let mut skills = Vec::new();
         for entry in roots {
-            let entries = match fs.read_dir(&entry.path).await {
+            let mut entries = match fs.read_dir(&entry.path).await {
                 Ok(value) => value,
                 Err(_) => continue,
             };
+            sort_remote_dir_entries(&mut entries);
 
             for item in entries {
                 if !item.is_dir || item.is_symlink {
@@ -723,7 +773,7 @@ impl SkillRegistry {
         let filtered = self
             .apply_mode_filters_for_workspace(candidates, workspace_root, agent_type)
             .await;
-        resolve_visible_skills(filtered)
+        sort_resolved_skills_for_presentation(resolve_visible_skills(filtered))
     }
 
     pub async fn get_resolved_skills_for_remote_workspace(
@@ -738,7 +788,7 @@ impl SkillRegistry {
         let filtered = self
             .apply_mode_filters_for_remote_workspace(candidates, fs, remote_root, agent_type)
             .await;
-        resolve_visible_skills(filtered)
+        sort_resolved_skills_for_presentation(resolve_visible_skills(filtered))
     }
 
     pub async fn get_mode_skill_infos_for_workspace(
