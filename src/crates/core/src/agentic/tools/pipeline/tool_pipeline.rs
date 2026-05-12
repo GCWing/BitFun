@@ -695,11 +695,7 @@ impl ToolPipeline {
         // Loop detection: refuse to execute the same tool call repeatedly with
         // identical arguments. Triggered on the (THRESHOLD + 1)-th consecutive
         // identical call within the per-session sliding window.
-        if self.check_and_record_tool_call(
-            &task.context.session_id,
-            &tool_name,
-            &tool_args,
-        ) {
+        if self.check_and_record_tool_call(&task.context.session_id, &tool_name, &tool_args) {
             let error_msg = format!(
                 "Tool-call loop blocked: '{}' was already called {} times in a row in this session with identical arguments. Refusing to execute this {}th identical call. Issue a different tool call, or stop tool-calling and respond to the user. If you wrote a file recently and want to continue it, its full content is already visible in your earlier tool_use message — use Edit with `old_string` taken from the end of that content; do not Read the file again.",
                 tool_name,

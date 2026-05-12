@@ -232,7 +232,11 @@ impl DeepReviewEvidencePack {
 
         let diff_stat = required_value_for_any_key(pack, &["diffStat", "diff_stat"], "diffStat")?;
         ensure_object(diff_stat, "diffStat")?;
-        required_u64_for_any_key(diff_stat, &["fileCount", "file_count"], "diffStat.fileCount")?;
+        required_u64_for_any_key(
+            diff_stat,
+            &["fileCount", "file_count"],
+            "diffStat.fileCount",
+        )?;
         required_string_for_any_key(
             diff_stat,
             &["lineCountSource", "line_count_source"],
@@ -268,8 +272,7 @@ impl DeepReviewEvidencePack {
         )?;
         for hint in contract_hints {
             ensure_object(hint, "contractHints[]")?;
-            let kind =
-                required_string_for_any_key(hint, &["kind"], "contractHints[].kind")?;
+            let kind = required_string_for_any_key(hint, &["kind"], "contractHints[].kind")?;
             if !matches!(
                 kind.as_str(),
                 "i18n_key" | "tauri_command" | "api_contract" | "config_key"
@@ -383,7 +386,10 @@ impl fmt::Display for DeepReviewEvidencePackValidationError {
     }
 }
 
-fn ensure_object(value: &Value, field: &'static str) -> Result<(), DeepReviewEvidencePackValidationError> {
+fn ensure_object(
+    value: &Value,
+    field: &'static str,
+) -> Result<(), DeepReviewEvidencePackValidationError> {
     if value.is_object() {
         Ok(())
     } else {
@@ -408,8 +414,9 @@ fn required_string_for_any_key(
     keys: &[&str],
     field: &'static str,
 ) -> Result<String, DeepReviewEvidencePackValidationError> {
-    string_for_any_key(value, keys)
-        .ok_or_else(|| DeepReviewEvidencePackValidationError::invalid_field(field, "expected non-empty string"))
+    string_for_any_key(value, keys).ok_or_else(|| {
+        DeepReviewEvidencePackValidationError::invalid_field(field, "expected non-empty string")
+    })
 }
 
 fn required_u64_for_any_key(
@@ -419,7 +426,9 @@ fn required_u64_for_any_key(
 ) -> Result<u64, DeepReviewEvidencePackValidationError> {
     required_value_for_any_key(value, keys, field)?
         .as_u64()
-        .ok_or_else(|| DeepReviewEvidencePackValidationError::invalid_field(field, "expected unsigned integer"))
+        .ok_or_else(|| {
+            DeepReviewEvidencePackValidationError::invalid_field(field, "expected unsigned integer")
+        })
 }
 
 fn required_array_for_any_key<'a>(
@@ -430,7 +439,9 @@ fn required_array_for_any_key<'a>(
 ) -> Result<&'a Vec<Value>, DeepReviewEvidencePackValidationError> {
     let array = required_value_for_any_key(value, keys, field)?
         .as_array()
-        .ok_or_else(|| DeepReviewEvidencePackValidationError::invalid_field(field, "expected array"))?;
+        .ok_or_else(|| {
+            DeepReviewEvidencePackValidationError::invalid_field(field, "expected array")
+        })?;
     if array.len() > max {
         return Err(DeepReviewEvidencePackValidationError::too_many_items(
             field,
@@ -689,8 +700,8 @@ mod tests {
             }
         });
 
-        let profile = DeepReviewScopeProfile::from_manifest(&manifest)
-            .expect("scope profile should parse");
+        let profile =
+            DeepReviewScopeProfile::from_manifest(&manifest).expect("scope profile should parse");
 
         assert_eq!(profile.review_depth(), "high_risk_only");
         assert_eq!(
@@ -702,7 +713,10 @@ mod tests {
             vec!["security", "cross_boundary_api_contracts"]
         );
         assert_eq!(profile.max_dependency_hops(), Some("0"));
-        assert_eq!(profile.optional_reviewer_policy(), Some("risk_matched_only"));
+        assert_eq!(
+            profile.optional_reviewer_policy(),
+            Some("risk_matched_only")
+        );
         assert!(!profile.allow_broad_tool_exploration());
         assert_eq!(profile.coverage_expectation(), Some("High-risk-only pass."));
         assert!(profile.is_reduced_depth());
@@ -722,8 +736,8 @@ mod tests {
             }
         });
 
-        let profile = DeepReviewScopeProfile::from_manifest(&manifest)
-            .expect("scope profile should parse");
+        let profile =
+            DeepReviewScopeProfile::from_manifest(&manifest).expect("scope profile should parse");
 
         assert_eq!(profile.review_depth(), "full_depth");
         assert_eq!(profile.max_dependency_hops(), Some("policy_limited"));
@@ -877,7 +891,10 @@ mod tests {
             .expect("snake-case evidence pack should validate")
             .expect("evidence pack should be present");
 
-        assert_eq!(pack.changed_files()[0], "src/web-ui/src/locales/en-US/flow-chat.json");
+        assert_eq!(
+            pack.changed_files()[0],
+            "src/web-ui/src/locales/en-US/flow-chat.json"
+        );
         assert_eq!(pack.contract_hint_count(), 1);
     }
 
