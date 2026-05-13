@@ -32,11 +32,11 @@ impl Tool for FileWriteTool {
         Ok(r#"Writes a file to the local filesystem.
 
 Usage:
-- This tool will overwrite the existing file if there is one at the provided path.
-- If this is an existing file, you MUST use the Read tool first to read the file's contents. This tool will fail if you did not read the file first.
+- This tool is for creating NEW files only. Calling Write on a path that already exists will be REJECTED with an error.
+- To MODIFY an existing file, use the Edit tool — it is the correct choice in almost every case.
+- To FULLY REWRITE an existing file (e.g. regenerate a generated file, replace a template), first call the Delete tool on that path, then call Write to create the new version. Do not try to "overwrite" via Write directly.
 - The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
 - ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
-- For existing files, prefer Read + targeted Edit calls. For new files or rewrites, preserve correctness and provide the complete intended file content when this tool is appropriate.
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
 - Do NOT include the file content in the tool call arguments. Only provide file_path. The system will prompt you separately to output the file content as plain text."#.to_string())
@@ -147,6 +147,28 @@ Usage:
                 vec![resolved.logical_path.clone()],
             )
             .await;
+
+        // Guard: refuse to overwrite an existing file — the model should use
+        // Edit instead.  This prevents accidental data loss from models that
+        // call Write repeatedly on the same file with incomplete content.
+        let file_already_exists = if resolved.uses_remote_workspace_backend() {
+            if let Some(ws_fs) = context.ws_fs() {
+                ws_fs.exists(&resolved.resolved_path).await.unwrap_or(false)
+            } else {
+                false
+            }
+        } else {
+            Path::new(&resolved.resolved_path).exists()
+        };
+
+        if file_already_exists {
+            return Err(BitFunError::tool(format!(
+                "File {} already exists. The Write tool is reserved for creating NEW files. \
+                 To modify the file, use the Edit tool. \
+                 To fully rewrite the file, first call the Delete tool on this path, then call Write again.",
+                resolved.logical_path
+            )));
+        }
 
         let content = input
             .get("content")
