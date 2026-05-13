@@ -19,6 +19,7 @@ thiserror = { workspace = true }
 log = { workspace = true }
 which = { workspace = true }
 similar = { workspace = true }
+regex = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }

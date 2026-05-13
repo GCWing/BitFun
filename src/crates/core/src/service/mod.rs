@@ -32,7 +32,7 @@ pub use terminal_core as terminal;
 
 // Re-export main components.
 pub use announcement::{AnnouncementCard, AnnouncementScheduler, AnnouncementSchedulerRef};
-pub use bitfun_services_core::{diff, system};
+pub use bitfun_services_core::{diagnostics, diff, system};
 pub use bitfun_services_integrations::file_watch;
 pub use bootstrap::reset_workspace_persona_files_to_default;
 pub use config::{ConfigManager, ConfigProvider, ConfigService};
