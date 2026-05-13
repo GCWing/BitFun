@@ -4,12 +4,15 @@
 
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
+use crate::agentic::MessageContent;
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
+use crate::agentic::tools::ToolPathOperation;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
+use crate::agentic::tools::framework::ToolUseContext;
+use crate::agentic::tools::implementations::file_write_tool::FileWriteTool;
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
-use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
 use crate::service::config::GlobalConfigManager;
 use crate::util::elapsed_ms_u64;
@@ -18,6 +21,7 @@ use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
@@ -214,7 +218,11 @@ impl RoundExecutor {
                                 attempt_index + 1,
                                 max_attempts,
                                 delay_ms,
-                                result.tool_calls.iter().filter(|tool_call| !tool_call.is_valid()).count(),
+                                result
+                                    .tool_calls
+                                    .iter()
+                                    .filter(|tool_call| !tool_call.is_valid())
+                                    .count(),
                                 err_msg
                             );
                             tokio::time::sleep(Duration::from_millis(delay_ms)).await;
@@ -227,7 +235,11 @@ impl RoundExecutor {
                                 "Dropping invalid partial tool calls from interrupted stream; preserving already-streamed assistant text: session_id={}, round_id={}, invalid_tool_calls={}, error={}",
                                 context.session_id,
                                 round_id,
-                                result.tool_calls.iter().filter(|tool_call| !tool_call.is_valid()).count(),
+                                result
+                                    .tool_calls
+                                    .iter()
+                                    .filter(|tool_call| !tool_call.is_valid())
+                                    .count(),
                                 err_msg
                             );
                             self.emit_failed_partial_tool_calls(
@@ -337,7 +349,10 @@ impl RoundExecutor {
                             round_id,
                             attempt_index + 1,
                             max_attempts,
-                            result.partial_recovery_reason.as_deref().unwrap_or("unknown")
+                            result
+                                .partial_recovery_reason
+                                .as_deref()
+                                .unwrap_or("unknown")
                         );
                     }
 
@@ -863,6 +878,14 @@ impl RoundExecutor {
                 .to_string();
             let tool_id = tc.tool_id.clone();
 
+            if let Some(error) = Self::write_content_preflight_error(context, &file_path).await {
+                debug!(
+                    "Skipping Write content generation after preflight failure: file_path={}, error={}",
+                    file_path, error
+                );
+                continue;
+            }
+
             // Emit Started event so the UI can show the tool card
             self.emit_event(
                 AgenticEvent::ToolEvent {
@@ -1020,6 +1043,39 @@ impl RoundExecutor {
         }
 
         Ok(tool_calls)
+    }
+
+    async fn write_content_preflight_error(
+        context: &RoundContext,
+        file_path: &str,
+    ) -> Option<String> {
+        let tool_context = Self::build_write_preflight_context(context);
+        let resolved = match tool_context.resolve_tool_path(file_path) {
+            Ok(resolved) => resolved,
+            Err(error) => return Some(error.to_string()),
+        };
+
+        if let Err(error) = tool_context.enforce_path_operation(ToolPathOperation::Write, &resolved)
+        {
+            return Some(error.to_string());
+        }
+
+        FileWriteTool::existing_file_error(&tool_context, &resolved).await
+    }
+
+    fn build_write_preflight_context(context: &RoundContext) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some(context.agent_type.clone()),
+            session_id: Some(context.session_id.clone()),
+            dialog_turn_id: Some(context.dialog_turn_id.clone()),
+            workspace: context.workspace.clone(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
+            workspace_services: context.workspace_services.clone(),
+        }
     }
 
     /// Emit event
@@ -1409,7 +1465,7 @@ fn detect_placeholder_patterns(content: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_bitfun_contents, RoundExecutor, StreamProcessor};
+    use super::{RoundExecutor, StreamProcessor, extract_bitfun_contents};
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use dashmap::DashMap;
     use std::sync::Arc;
@@ -1623,7 +1679,10 @@ mod tests {
     fn sanitization_preserves_xml_in_file_content() {
         // Real XML that should be part of the file
         let text = "<bitfun_contents>\n<config><name>test</name></config>\n</bitfun_contents>";
-        assert_eq!(extract_bitfun_contents(text), "<config><name>test</name></config>");
+        assert_eq!(
+            extract_bitfun_contents(text),
+            "<config><name>test</name></config>"
+        );
     }
 
     // --- Placeholder detection tests ---

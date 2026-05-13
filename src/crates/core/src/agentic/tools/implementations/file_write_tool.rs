@@ -1,10 +1,10 @@
-use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
-};
 use crate::agentic::tools::ToolPathOperation;
+use crate::agentic::tools::framework::{
+    Tool, ToolPathResolution, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::Path;
 use tokio::fs;
 
@@ -19,6 +19,177 @@ impl Default for FileWriteTool {
 impl FileWriteTool {
     pub fn new() -> Self {
         Self
+    }
+
+    pub(crate) async fn existing_file_error(
+        context: &ToolUseContext,
+        resolved: &ToolPathResolution,
+    ) -> Option<String> {
+        let file_already_exists = Self::file_exists(context, resolved).await;
+
+        file_already_exists.then(|| {
+            format!(
+                "File {} already exists. The Write tool is reserved for creating NEW files. \
+                 To modify the file, use the Edit tool. \
+                 To fully rewrite the file, first call the Delete tool on this path, then call Write again.",
+                resolved.logical_path
+            )
+        })
+    }
+
+    async fn file_exists(context: &ToolUseContext, resolved: &ToolPathResolution) -> bool {
+        if resolved.uses_remote_workspace_backend() {
+            if let Some(ws_fs) = context.ws_fs() {
+                ws_fs.exists(&resolved.resolved_path).await.unwrap_or(false)
+            } else {
+                false
+            }
+        } else {
+            Path::new(&resolved.resolved_path).exists()
+        }
+    }
+
+    async fn existing_file_matches_content(
+        context: &ToolUseContext,
+        resolved: &ToolPathResolution,
+        content: &str,
+    ) -> Option<bool> {
+        let existing = if resolved.uses_remote_workspace_backend() {
+            context
+                .ws_fs()?
+                .read_file(&resolved.resolved_path)
+                .await
+                .ok()?
+        } else {
+            fs::read(&resolved.resolved_path).await.ok()?
+        };
+
+        Some(existing == content.as_bytes())
+    }
+
+    fn write_success_result(
+        logical_path: &str,
+        bytes_written: usize,
+        status: &str,
+        assistant_message: String,
+    ) -> ToolResult {
+        ToolResult::Result {
+            data: json!({
+                "file_path": logical_path,
+                "bytes_written": bytes_written,
+                "success": true,
+                "status": status,
+                "message": assistant_message,
+            }),
+            result_for_assistant: Some(assistant_message),
+            image_attachments: None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FileWriteTool;
+    use crate::agentic::WorkspaceBinding;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+    use serde_json::json;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    fn local_context(root: PathBuf) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new(None, root)),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn validate_input_rejects_existing_file_before_content_generation() {
+        let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+        let existing_file = root.join("existing.md");
+        std::fs::write(&existing_file, "already here").expect("create existing file");
+
+        let tool = FileWriteTool::new();
+        let validation = tool
+            .validate_input(
+                &json!({ "file_path": "existing.md" }),
+                Some(&local_context(root.clone())),
+            )
+            .await;
+
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert!(!validation.result);
+        let message = validation.message.unwrap_or_default();
+        assert!(message.contains("already exists"));
+        assert!(message.contains("Edit tool"));
+    }
+
+    #[tokio::test]
+    async fn call_impl_treats_identical_existing_content_as_success() {
+        let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+        std::fs::write(root.join("existing.md"), "same content").expect("create existing file");
+
+        let tool = FileWriteTool::new();
+        let results = tool
+            .call(
+                &json!({ "file_path": "existing.md", "content": "same content" }),
+                &local_context(root.clone()),
+            )
+            .await
+            .expect("identical retry should be idempotent");
+
+        let _ = std::fs::remove_dir_all(&root);
+
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
+            panic!("expected result");
+        };
+        assert_eq!(data["success"], true);
+        assert_eq!(data["bytes_written"], 0);
+        assert_eq!(data["status"], "already_exists_same_content");
+        assert!(
+            result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .contains("do not call Write for this path again")
+        );
+    }
+
+    #[tokio::test]
+    async fn call_impl_rejects_different_existing_content() {
+        let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+        std::fs::write(root.join("existing.md"), "old content").expect("create existing file");
+
+        let tool = FileWriteTool::new();
+        let error = tool
+            .call(
+                &json!({ "file_path": "existing.md", "content": "new content" }),
+                &local_context(root.clone()),
+            )
+            .await
+            .expect_err("different content must not overwrite existing files");
+
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert!(error.to_string().contains("already exists"));
+        assert!(error.to_string().contains("Edit tool"));
     }
 }
 
@@ -35,6 +206,7 @@ Usage:
 - This tool is for creating NEW files only. Calling Write on a path that already exists will be REJECTED with an error.
 - To MODIFY an existing file, use the Edit tool — it is the correct choice in almost every case.
 - To FULLY REWRITE an existing file (e.g. regenerate a generated file, replace a template), first call the Delete tool on that path, then call Write to create the new version. Do not try to "overwrite" via Write directly.
+- After Write succeeds for a path, do not call Write for that path again in later rounds. Use Edit for any additional changes.
 - The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
 - ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
@@ -106,6 +278,23 @@ Usage:
                     meta: None,
                 };
             }
+
+            // If content is absent, RoundExecutor would otherwise launch a
+            // second model request to generate the full file. Reject existing
+            // targets here so we do not spend tokens producing content that
+            // Write must reject anyway. If a model already supplied content
+            // despite the public schema, defer to call_impl so identical
+            // retries can be treated as idempotent success.
+            if input.get("content").is_none() {
+                if let Some(error) = Self::existing_file_error(ctx, &resolved).await {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(error),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+            }
         }
 
         ValidationResult::default()
@@ -148,32 +337,28 @@ Usage:
             )
             .await;
 
-        // Guard: refuse to overwrite an existing file — the model should use
-        // Edit instead.  This prevents accidental data loss from models that
-        // call Write repeatedly on the same file with incomplete content.
-        let file_already_exists = if resolved.uses_remote_workspace_backend() {
-            if let Some(ws_fs) = context.ws_fs() {
-                ws_fs.exists(&resolved.resolved_path).await.unwrap_or(false)
-            } else {
-                false
-            }
-        } else {
-            Path::new(&resolved.resolved_path).exists()
-        };
-
-        if file_already_exists {
-            return Err(BitFunError::tool(format!(
-                "File {} already exists. The Write tool is reserved for creating NEW files. \
-                 To modify the file, use the Edit tool. \
-                 To fully rewrite the file, first call the Delete tool on this path, then call Write again.",
-                resolved.logical_path
-            )));
-        }
-
         let content = input
             .get("content")
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
+
+        if let Some(error) = Self::existing_file_error(context, &resolved).await {
+            if Self::existing_file_matches_content(context, &resolved, content).await == Some(true)
+            {
+                let result = Self::write_success_result(
+                    &resolved.logical_path,
+                    0,
+                    "already_exists_same_content",
+                    format!(
+                        "Write skipped because {} already exists with identical content. Treat this file as successfully created and do not call Write for this path again. Use Edit for any further changes.",
+                        resolved.logical_path
+                    ),
+                );
+                return Ok(vec![result]);
+            }
+
+            return Err(BitFunError::tool(error));
+        }
 
         if resolved.uses_remote_workspace_backend() {
             let ws_fs = context.ws_fs().ok_or_else(|| {
@@ -199,15 +384,16 @@ Usage:
                 })?;
         }
 
-        let result = ToolResult::Result {
-            data: json!({
-                "file_path": resolved.logical_path,
-                "bytes_written": content.len(),
-                "success": true
-            }),
-            result_for_assistant: Some(format!("Successfully wrote to {}", resolved.logical_path)),
-            image_attachments: None,
-        };
+        let result = Self::write_success_result(
+            &resolved.logical_path,
+            content.len(),
+            "created",
+            format!(
+                "Successfully created {} ({} bytes). The file now exists; do not call Write for this path again. Use Edit for any further changes.",
+                resolved.logical_path,
+                content.len()
+            ),
+        );
 
         Ok(vec![result])
     }
