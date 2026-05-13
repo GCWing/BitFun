@@ -43,6 +43,10 @@ Usage:
         .to_string())
     }
 
+    fn short_description(&self) -> String {
+        "Apply exact string replacements to an existing file.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

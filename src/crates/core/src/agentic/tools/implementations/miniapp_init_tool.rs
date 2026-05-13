@@ -1,6 +1,6 @@
 //! InitMiniApp tool — create a new MiniApp skeleton; AI then uses generic file tools to edit.
 
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
 use crate::infrastructure::events::{emit_global_event, BackendEvent};
 use crate::miniapp::try_get_global_miniapp_manager;
 use crate::miniapp::types::{
@@ -71,6 +71,14 @@ Input: name, description, icon, category. The tool creates the app directory and
 
 Returns app_id and the app root directory. Use the root directory and file names above with Read/Write/Edit to implement the app. The MiniApp uses window.app (app.fs, app.call, app.dialog, etc.) — see miniapp-dev skill for API reference."#
             .to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "Create a new MiniApp skeleton in the Toolbox.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

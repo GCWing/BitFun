@@ -29,6 +29,11 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolExposure {
+    Expanded,
+    Collapsed,
+}
 /// Tool use context
 #[derive(Debug, Clone)]
 pub struct ToolUseContext {
@@ -37,6 +42,7 @@ pub struct ToolUseContext {
     pub session_id: Option<String>,
     pub dialog_turn_id: Option<String>,
     pub workspace: Option<WorkspaceBinding>,
+    pub unlocked_collapsed_tools: Vec<String>,
     /// Extended context data passed from execution layer to tools.
     pub custom_data: HashMap<String, Value>,
     /// Desktop automation (Computer use); only set in BitFun desktop.
@@ -448,6 +454,7 @@ mod path_resolution_tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: Some(WorkspaceBinding::new(None, PathBuf::from(root))),
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,
@@ -463,6 +470,7 @@ mod path_resolution_tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,
@@ -538,6 +546,17 @@ pub trait Tool: Send + Sync {
         _context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
         self.description().await
+    }
+
+    /// Short description used in condensed tool listings such as GetToolSpec.
+    fn short_description(&self) -> String;
+
+    /// Default exposure level when building the model tool manifest.
+    ///
+    /// This is tool-owned metadata: registries and agent manifests may use it
+    /// as the baseline before applying any higher-level overrides.
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Expanded
     }
 
     /// Input mode definition - using JSON Schema
@@ -711,6 +730,10 @@ mod shared_context_tests {
             Ok("Read file".to_string())
         }
 
+        fn short_description(&self) -> String {
+            "Read file".to_string()
+        }
+
         fn input_schema(&self) -> Value {
             json!({
                 "type": "object",
@@ -751,6 +774,7 @@ mod shared_context_tests {
             session_id: Some("subagent-session".to_string()),
             dialog_turn_id: Some("subagent-turn".to_string()),
             workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
             custom_data,
             computer_use_host: None,
             cancellation_token: None,

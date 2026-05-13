@@ -427,6 +427,10 @@ impl Tool for GlobTool {
 "#.to_string())
     }
 
+    fn short_description(&self) -> String {
+        "Find files by glob pattern.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

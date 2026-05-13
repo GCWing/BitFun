@@ -1,5 +1,5 @@
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
 use crate::service::git::git_service::GitService;
@@ -303,6 +303,14 @@ Usage:
 "#
             .to_string(),
         )
+    }
+
+    fn short_description(&self) -> String {
+        "Show the diff for a file against its baseline snapshot or Git HEAD.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

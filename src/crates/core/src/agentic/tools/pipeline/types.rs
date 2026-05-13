@@ -69,6 +69,8 @@ pub struct ToolExecutionContext {
     pub workspace: Option<WorkspaceBinding>,
     pub context_vars: HashMap<String, String>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
+    pub collapsed_tools: Vec<String>,
+    pub unlocked_collapsed_tools: Vec<String>,
     /// Allowed tools list (whitelist)
     /// If empty, allow all registered tools
     /// If not empty, only allow tools in the list to be executed

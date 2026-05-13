@@ -4,15 +4,15 @@
 
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
-use crate::agentic::MessageContent;
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
-use crate::agentic::tools::ToolPathOperation;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::ToolUseContext;
 use crate::agentic::tools::implementations::file_write_tool::FileWriteTool;
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
+use crate::agentic::tools::ToolPathOperation;
+use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
 use crate::service::config::GlobalConfigManager;
 use crate::util::elapsed_ms_u64;
@@ -585,6 +585,8 @@ impl RoundExecutor {
                 workspace: context.workspace.clone(),
                 context_vars: context.context_vars.clone(),
                 subagent_parent_info,
+                collapsed_tools: context.collapsed_tools.clone(),
+                unlocked_collapsed_tools: context.unlocked_collapsed_tools.clone(),
                 allowed_tools: context.available_tools.clone(),
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 steering_interrupt: context.steering_interrupt.clone(),
@@ -1070,6 +1072,7 @@ impl RoundExecutor {
             session_id: Some(context.session_id.clone()),
             dialog_turn_id: Some(context.dialog_turn_id.clone()),
             workspace: context.workspace.clone(),
+            unlocked_collapsed_tools: context.unlocked_collapsed_tools.clone(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,
@@ -1465,7 +1468,7 @@ fn detect_placeholder_patterns(content: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RoundExecutor, StreamProcessor, extract_bitfun_contents};
+    use super::{extract_bitfun_contents, RoundExecutor, StreamProcessor};
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use dashmap::DashMap;
     use std::sync::Arc;

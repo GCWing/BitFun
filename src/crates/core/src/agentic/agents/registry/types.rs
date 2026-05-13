@@ -4,7 +4,7 @@ use crate::agentic::deep_review_policy::{
     REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE,
     REVIEW_JUDGE_AGENT_TYPE,
 };
-use crate::agentic::agents::Agent;
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides};
 use crate::agentic::agents::registry::visibility::{
     SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
@@ -51,6 +51,12 @@ pub struct CustomSubagentConfig {
     pub enabled: bool,
     /// used model ID
     pub model: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct AgentToolPolicy {
+    pub allowed_tools: Vec<String>,
+    pub exposure_overrides: AgentToolPolicyOverrides,
 }
 
 /// Agent category

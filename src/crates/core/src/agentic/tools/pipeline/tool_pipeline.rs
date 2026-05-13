@@ -313,6 +313,36 @@ pub struct ToolPipeline {
 }
 
 impl ToolPipeline {
+    fn validate_collapsed_tool_usage(task: &ToolTask) -> BitFunResult<()> {
+        let tool_name = task.tool_call.tool_name.as_str();
+        if tool_name == "GetToolSpec" {
+            return Ok(());
+        }
+
+        if !task
+            .context
+            .collapsed_tools
+            .iter()
+            .any(|collapsed| collapsed == tool_name)
+        {
+            return Ok(());
+        }
+
+        if task
+            .context
+            .unlocked_collapsed_tools
+            .iter()
+            .any(|loaded| loaded == tool_name)
+        {
+            return Ok(());
+        }
+
+        Err(BitFunError::Validation(format!(
+            "Tool '{}' is collapsed. Call GetToolSpec first with {{\"tool_name\":\"{}\"}} to read its full usage instructions and input schema, then try again.",
+            tool_name, tool_name
+        )))
+    }
+
     pub fn new(
         tool_registry: Arc<TokioRwLock<ToolRegistry>>,
         state_manager: Arc<ToolStateManager>,
@@ -781,6 +811,28 @@ impl ToolPipeline {
             return Err(err.into());
         }
 
+        if let Err(err) = Self::validate_collapsed_tool_usage(&task) {
+            let error_msg = err.to_string();
+            warn!("Collapsed tool usage validation failed: {}", error_msg);
+
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Failed {
+                        error: error_msg,
+                        is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
+                    },
+                )
+                .await;
+
+            return Err(err);
+        }
+
         let tool = {
             let registry = self.tool_registry.read().await;
             registry
@@ -1237,6 +1289,7 @@ impl ToolPipeline {
             session_id: Some(task.context.session_id.clone()),
             dialog_turn_id: Some(task.context.dialog_turn_id.clone()),
             workspace: task.context.workspace.clone(),
+            unlocked_collapsed_tools: task.context.unlocked_collapsed_tools.clone(),
             custom_data: {
                 let mut map = HashMap::new();
 
@@ -1545,6 +1598,8 @@ mod tests {
                 workspace: None,
                 context_vars: HashMap::new(),
                 subagent_parent_info: None,
+                collapsed_tools: Vec::new(),
+                unlocked_collapsed_tools: Vec::new(),
                 allowed_tools: Vec::new(),
                 runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
                 steering_interrupt: None,
@@ -1618,5 +1673,32 @@ mod tests {
         assert!(assistant_text.contains("\"exit_code\": 1"));
         assert!(assistant_text.contains("\"working_directory\": \"/private/tmp\""));
         assert!(!assistant_text.contains("completed with error"));
+    }
+
+    #[test]
+    fn collapsed_tool_requires_tool_catalog_unlock() {
+        let mut task = test_tool_task("tool_1", "WebFetch");
+        task.context.collapsed_tools = vec!["WebFetch".to_string()];
+
+        let err = ToolPipeline::validate_collapsed_tool_usage(&task)
+            .expect_err("collapsed tool should require GetToolSpec unlock");
+
+        assert!(err
+            .to_string()
+            .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}"));
+    }
+
+    #[test]
+    fn tool_catalog_rejects_reloading_already_unlocked_tool() {
+        let mut task = test_tool_task("tool_1", "GetToolSpec");
+        task.tool_call.arguments = json!({ "tool_name": "WebFetch" });
+        task.context.unlocked_collapsed_tools = vec!["WebFetch".to_string()];
+
+        let result = ToolPipeline::validate_collapsed_tool_usage(&task);
+
+        assert!(
+            result.is_ok(),
+            "GetToolSpec duplicate-load validation moved into GetToolSpec itself"
+        );
     }
 }

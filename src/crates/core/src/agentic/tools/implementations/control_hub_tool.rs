@@ -17,7 +17,7 @@ use crate::agentic::tools::browser_control::session_registry::{
     BrowserSession, BrowserSessionRegistry,
 };
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::service::config::{get_global_config_service, GlobalConfig};
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -1221,6 +1221,15 @@ impl Tool for ControlHubTool {
         Ok(Self::description_text())
     }
 
+    fn short_description(&self) -> String {
+        "Control browser, terminal, and desktop helper domains through one tool."
+            .to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
+    }
+
     async fn description_with_context(
         &self,
         _context: Option<&ToolUseContext>,
@@ -1469,6 +1478,7 @@ mod control_hub_tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: std::collections::HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,

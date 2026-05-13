@@ -315,6 +315,8 @@ mod tests {
                 workspace: None,
                 context_vars: HashMap::new(),
                 subagent_parent_info: None,
+                collapsed_tools: Vec::new(),
+                unlocked_collapsed_tools: Vec::new(),
                 allowed_tools: Vec::new(),
                 runtime_tool_restrictions: Default::default(),
                 steering_interrupt: None,

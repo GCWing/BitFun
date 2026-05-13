@@ -1,4 +1,6 @@
-use crate::agentic::tools::framework::{DynamicToolInfo, Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{
+    DynamicToolInfo, Tool, ToolExposure, ToolResult, ToolUseContext,
+};
 use crate::agentic::tools::registry::ToolRegistry;
 use crate::service::remote_ssh::workspace_state::is_remote_path;
 use crate::service::snapshot::service::SnapshotService;
@@ -362,6 +364,14 @@ impl Tool for WrappedTool {
         context: Option<&ToolUseContext>,
     ) -> crate::util::errors::BitFunResult<String> {
         self.original_tool.description_with_context(context).await
+    }
+
+    fn short_description(&self) -> String {
+        self.original_tool.short_description()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        self.original_tool.default_exposure()
     }
 
     fn input_schema(&self) -> Value {

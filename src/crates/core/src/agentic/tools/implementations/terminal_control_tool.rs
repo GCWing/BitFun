@@ -1,5 +1,5 @@
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -39,6 +39,14 @@ Actions:
 
 The terminal_session_id is returned inside <terminal_session_id>...</terminal_session_id> tags in BashTool results."#
             .to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "Interrupt or close a managed terminal session.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

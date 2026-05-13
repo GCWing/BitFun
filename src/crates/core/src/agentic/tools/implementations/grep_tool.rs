@@ -733,6 +733,10 @@ Usage:
 - Multiline matching: By default patterns match within single lines only. For cross-line patterns like `struct \{[\s\S]*?field`, use `multiline: true`"#.to_string())
     }
 
+    fn short_description(&self) -> String {
+        "Search file contents with ripgrep-powered pattern matching.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

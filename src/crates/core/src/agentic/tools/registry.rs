@@ -1,6 +1,6 @@
 //! Tool registry
 
-use crate::agentic::tools::framework::{DynamicToolInfo, Tool};
+use crate::agentic::tools::framework::{DynamicToolInfo, Tool, ToolExposure};
 use crate::agentic::tools::implementations::*;
 use crate::util::errors::BitFunResult;
 use bitfun_agent_tools::{
@@ -14,6 +14,9 @@ use std::sync::Arc;
 type ToolRef = Arc<dyn Tool>;
 type ToolDecoratorRef = Arc<dyn ToolDecorator<ToolRef>>;
 
+pub const GET_TOOL_SPEC_TOOL_NAME: &str = "GetToolSpec";
+
+#[derive(Debug, Clone)]
 struct SnapshotToolDecorator;
 
 impl ToolDecorator<ToolRef> for SnapshotToolDecorator {
@@ -138,31 +141,42 @@ impl ToolRegistry {
         self.register_tool(Arc::new(FileEditTool::new()));
         self.register_tool(Arc::new(DeleteFileTool::new()));
         self.register_tool(Arc::new(BashTool::new()));
+        // TaskTool, execute subagent
+        self.register_tool(Arc::new(TaskTool::new()));
+        // Skill tool
+        self.register_tool(Arc::new(SkillTool::new()));
+        // AskUserQuestion tool
+        self.register_tool(Arc::new(AskUserQuestionTool::new()));
+        // TodoWrite tool
+        self.register_tool(Arc::new(TodoWriteTool::new()));
+        // CreatePlan tool
+        self.register_tool(Arc::new(CreatePlanTool::new()));
+        // Code review submit tool
+        self.register_tool(Arc::new(CodeReviewTool::new()));
+
+        // GetToolSpec — the discovery entry point for collapsed tools.
+        self.register_tool(Arc::new(GetToolSpecTool::new()));
+
+        // GetFileDiff tool
+        self.register_tool(Arc::new(GetFileDiffTool::new()));
+        // Log tool (debug mode only)
+        self.register_tool(Arc::new(LogTool::new()));
+
         // TerminalControl is now accessible via ControlHub's "terminal" domain,
         // but we keep it registered separately for backward compatibility.
         self.register_tool(Arc::new(TerminalControlTool::new()));
+
         self.register_tool(Arc::new(SessionControlTool::new()));
         self.register_tool(Arc::new(SessionMessageTool::new()));
         self.register_tool(Arc::new(SessionHistoryTool::new()));
 
-        // TodoWrite tool
-        self.register_tool(Arc::new(TodoWriteTool::new()));
-
         // Cron scheduled jobs tool
         self.register_tool(Arc::new(CronTool::new()));
-
-        // TaskTool, execute subagent
-        self.register_tool(Arc::new(TaskTool::new()));
-
-        // Skill tool
-        self.register_tool(Arc::new(SkillTool::new()));
-
-        // AskUserQuestion tool
-        self.register_tool(Arc::new(AskUserQuestionTool::new()));
 
         // Web tool
         self.register_tool(Arc::new(WebSearchTool::new()));
         self.register_tool(Arc::new(WebFetchTool::new()));
+
         self.register_tool(Arc::new(ListMCPResourcesTool::new()));
         self.register_tool(Arc::new(ReadMCPResourceTool::new()));
         self.register_tool(Arc::new(ListMCPPromptsTool::new()));
@@ -170,20 +184,8 @@ impl ToolRegistry {
 
         self.register_tool(Arc::new(GenerativeUITool::new()));
 
-        // GetFileDiff tool
-        self.register_tool(Arc::new(GetFileDiffTool::new()));
-
-        // Log tool
-        self.register_tool(Arc::new(LogTool::new()));
-
         // Git version control tool
         self.register_tool(Arc::new(GitTool::new()));
-
-        // CreatePlan tool
-        self.register_tool(Arc::new(CreatePlanTool::new()));
-
-        // Code review submit tool
-        self.register_tool(Arc::new(CodeReviewTool::new()));
 
         // MiniApp Agent tool (single InitMiniApp)
         self.register_tool(Arc::new(InitMiniAppTool::new()));
@@ -211,6 +213,19 @@ impl ToolRegistry {
         self.inner.get_dynamic_tool_info(name)
     }
 
+    pub fn is_tool_collapsed(&self, name: &str) -> bool {
+        self.inner
+            .get_tool(name)
+            .is_some_and(|tool| tool.default_exposure() == ToolExposure::Collapsed)
+    }
+
+    pub fn get_collapsed_tool_names(&self) -> Vec<String> {
+        self.get_tool_names()
+            .into_iter()
+            .filter(|name| self.is_tool_collapsed(name))
+            .collect()
+    }
+
     /// Get all tool names
     pub fn get_tool_names(&self) -> Vec<String> {
         self.inner.get_tool_names()
@@ -224,6 +239,7 @@ impl ToolRegistry {
         );
         self.inner.get_all_tools()
     }
+
 }
 
 #[async_trait::async_trait]
@@ -289,6 +305,10 @@ mod tests {
 
         async fn description(&self) -> crate::util::errors::BitFunResult<String> {
             Ok("dynamic test tool".to_string())
+        }
+
+        fn short_description(&self) -> String {
+            "dynamic test tool".to_string()
         }
 
         fn input_schema(&self) -> Value {
@@ -383,15 +403,20 @@ mod tests {
             "Edit",
             "Delete",
             "Bash",
+            "Task",
+            "Skill",
+            "AskUserQuestion",
+            "TodoWrite",
+            "CreatePlan",
+            "submit_code_review",
+            "GetToolSpec",
+            "GetFileDiff",
+            "Log",
             "TerminalControl",
             "SessionControl",
             "SessionMessage",
             "SessionHistory",
-            "TodoWrite",
             "Cron",
-            "Task",
-            "Skill",
-            "AskUserQuestion",
             "WebSearch",
             "WebFetch",
             "ListMCPResources",
@@ -399,11 +424,7 @@ mod tests {
             "ListMCPPrompts",
             "GetMCPPrompt",
             "GenerativeUI",
-            "GetFileDiff",
-            "Log",
             "Git",
-            "CreatePlan",
-            "submit_code_review",
             "InitMiniApp",
             "ControlHub",
             "ComputerUse",
@@ -427,6 +448,16 @@ mod tests {
         );
     }
 
+    #[test]
+    fn registry_marks_collapsed_tools_for_get_tool_spec() {
+        let registry = create_tool_registry();
+
+        assert!(registry.is_tool_collapsed("WebFetch"));
+        assert!(registry.is_tool_collapsed("GetFileDiff"));
+        assert!(!registry.is_tool_collapsed("GetToolSpec"));
+        assert!(registry.is_tool_collapsed("Git"));
+    }
+
     #[tokio::test]
     async fn registry_preserves_readonly_tool_manifest_for_owner_migration() {
         let readonly_names = super::get_readonly_tools()
@@ -443,10 +474,15 @@ mod tests {
                 "Read",
                 "Glob",
                 "Grep",
-                "SessionHistory",
-                "TodoWrite",
                 "Skill",
                 "AskUserQuestion",
+                "TodoWrite",
+                "CreatePlan",
+                "submit_code_review",
+                "GetToolSpec",
+                "GetFileDiff",
+                "Log",
+                "SessionHistory",
                 "WebSearch",
                 "WebFetch",
                 "ListMCPResources",
@@ -454,10 +490,6 @@ mod tests {
                 "ListMCPPrompts",
                 "GetMCPPrompt",
                 "GenerativeUI",
-                "GetFileDiff",
-                "Log",
-                "CreatePlan",
-                "submit_code_review",
                 "Playbook",
             ],
             "readonly tool manifest must stay stable before moving registry ownership"

@@ -421,6 +421,10 @@ Usage notes:
         ))
     }
 
+    fn short_description(&self) -> String {
+        "Run commands in the persistent shell session.".to_string()
+    }
+
     async fn description_with_context(
         &self,
         context: Option<&ToolUseContext>,

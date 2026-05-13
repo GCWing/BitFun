@@ -21,6 +21,14 @@ const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 const PLACEHOLDER_SESSION_ID: &str = "{SESSION_ID}";
+const ADDITIONAL_TOOLS_PROMPT: &str = r#"# Additional Tools
+
+Some tools in the tool list are intentionally collapsed.
+Their listed descriptions are short summaries rather than full usage instructions.
+Before calling a collapsed tool, call `GetToolSpec` with its exact tool name to read its full definition and input schema.
+After reading the returned spec, call the real tool directly by its own name.
+If a tool spec is already available in the current conversation, do not call `GetToolSpec` for it again.
+"#;
 
 /// SSH remote host facts for system prompt (workspace tools run here, not on the local client).
 #[derive(Debug, Clone)]
@@ -41,6 +49,8 @@ pub struct PromptBuilderContext {
     pub remote_project_layout: Option<String>,
     /// When `Some(false)`, system prompt append Computer use text-only guidance (no screenshot tool output).
     pub supports_image_understanding: Option<bool>,
+    /// When true, append a static reminder that additional collapsed tools exist behind GetToolSpec.
+    pub has_additional_tools: bool,
 }
 
 impl PromptBuilderContext {
@@ -56,11 +66,17 @@ impl PromptBuilderContext {
             remote_execution: None,
             remote_project_layout: None,
             supports_image_understanding: None,
+            has_additional_tools: false,
         }
     }
 
     pub fn with_supports_image_understanding(mut self, supports: bool) -> Self {
         self.supports_image_understanding = Some(supports);
+        self
+    }
+
+    pub fn with_additional_tools_hint(mut self, has_additional_tools: bool) -> Self {
+        self.has_additional_tools = has_additional_tools;
         self
     }
 
@@ -400,6 +416,43 @@ The configured **primary model does not accept image inputs**. When using **`Com
             );
         }
 
+        if self.context.has_additional_tools {
+            result.push_str("\n\n");
+            result.push_str(ADDITIONAL_TOOLS_PROMPT);
+            result.push('\n');
+        }
+
         Ok(result.trim().to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PromptBuilder;
+    use super::PromptBuilderContext;
+
+    #[tokio::test]
+    async fn appends_additional_tools_section_when_hint_is_enabled() {
+        let context =
+            PromptBuilderContext::new("E:/workspace", None, None).with_additional_tools_hint(true);
+        let prompt = PromptBuilder::new(context)
+            .build_prompt_from_template("Base prompt")
+            .await
+            .expect("prompt should build");
+
+        assert!(prompt.contains("# Additional Tools"));
+        assert!(prompt.contains("short summaries rather than full usage instructions"));
+        assert!(prompt.contains("call `GetToolSpec` with its exact tool name"));
+    }
+
+    #[tokio::test]
+    async fn omits_additional_tools_section_when_hint_is_disabled() {
+        let context = PromptBuilderContext::new("E:/workspace", None, None);
+        let prompt = PromptBuilder::new(context)
+            .build_prompt_from_template("Base prompt")
+            .await
+            .expect("prompt should build");
+
+        assert!(!prompt.contains("# Additional Tools"));
     }
 }

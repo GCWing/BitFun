@@ -107,6 +107,10 @@ impl Tool for SkillTool {
         Ok(self.build_description_for_context(None).await)
     }
 
+    fn short_description(&self) -> String {
+        "Discover and load reusable skills for specialized workflows.".to_string()
+    }
+
     async fn description_with_context(
         &self,
         context: Option<&ToolUseContext>,
@@ -376,6 +380,7 @@ Use the remote project skill.
             session_id: None,
             dialog_turn_id: None,
             workspace: Some(workspace),
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: Default::default(),
             computer_use_host: None,
             cancellation_token: None,
@@ -415,6 +420,7 @@ Use the remote project skill.
             session_id: None,
             dialog_turn_id: None,
             workspace: Some(workspace),
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: Default::default(),
             computer_use_host: None,
             cancellation_token: None,

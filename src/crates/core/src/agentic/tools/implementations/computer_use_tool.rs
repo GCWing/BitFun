@@ -13,7 +13,7 @@ use crate::agentic::tools::computer_use_host::{
     COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE, COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
 use crate::agentic::tools::computer_use_optimizer::hash_screenshot_bytes;
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
 use crate::service::config::global::GlobalConfigManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::ToolImageAttachment;
@@ -1272,6 +1272,14 @@ impl Tool for ComputerUseTool {
 **`type_text`:** Type text; prefer clipboard for long content. Does **not** move the pointer — **Enter** **`key_chord`** may follow without a mandatory `screenshot` unless you moved the pointer since the last capture. If **`screenshot`** shows the correct chat is already open and the input may be focused, **try `type_text` first** before spending steps on `click_element` / `move_to_text`.",
             os, keys,
         ))
+    }
+
+    fn short_description(&self) -> String {
+        "Inspect the screen and control desktop input for computer-use tasks.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     async fn description_with_context(

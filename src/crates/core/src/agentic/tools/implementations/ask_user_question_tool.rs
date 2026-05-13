@@ -201,6 +201,10 @@ Usage notes:
 - Use multiSelect: true to allow multiple answers to be selected for a question"#.to_string())
     }
 
+    fn short_description(&self) -> String {
+        "Ask the user focused follow-up questions during execution.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

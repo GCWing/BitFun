@@ -68,6 +68,16 @@ impl Tool for MCPToolWrapper {
         Ok(self.descriptor.description.clone())
     }
 
+    fn short_description(&self) -> String {
+        let summary = self
+            .mcp_tool
+            .description
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("MCP tool");
+        format!("{} ({})", summary, self.server_name)
+    }
+
     fn input_schema(&self) -> Value {
         self.mcp_tool.input_schema.clone()
     }

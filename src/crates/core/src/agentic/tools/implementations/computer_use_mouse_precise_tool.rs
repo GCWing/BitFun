@@ -34,6 +34,10 @@ impl Tool for ComputerUseMousePreciseTool {
         )
     }
 
+    fn short_description(&self) -> String {
+        "Move the mouse pointer to precise absolute screen coordinates.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

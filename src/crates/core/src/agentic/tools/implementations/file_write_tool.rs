@@ -104,6 +104,7 @@ mod tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: Some(WorkspaceBinding::new(None, root)),
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,
@@ -212,6 +213,10 @@ Usage:
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
 - Do NOT include the file content in the tool call arguments. Only provide file_path. The system will prompt you separately to output the file content as plain text."#.to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "Write a new file or fully replace an existing file.".to_string()
     }
 
     fn input_schema(&self) -> Value {

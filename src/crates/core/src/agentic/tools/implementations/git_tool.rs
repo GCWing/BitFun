@@ -3,7 +3,7 @@
 //! Provides safe and convenient Git command execution functionality, reuses underlying GitService
 
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::service::git::{
     execute_git_command, execute_git_command_raw, GitAddParams, GitCommitParams, GitDiffParams,
@@ -833,6 +833,14 @@ When creating commits, use this format for the commit message:
             );
         }
         Ok(base)
+    }
+
+    fn short_description(&self) -> String {
+        "Inspect and operate on the Git repository.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

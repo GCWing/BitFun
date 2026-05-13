@@ -1,6 +1,8 @@
 //! GenerativeUI tool — renders LLM-generated HTML/SVG widgets.
 
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::agentic::tools::framework::{
+    Tool, ToolExposure, ToolResult, ToolUseContext, ValidationResult,
+};
 use crate::service::config::get_global_config_service;
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
@@ -330,6 +332,14 @@ Input rules:
             description.push_str(&theme_context);
         }
         Ok(description)
+    }
+
+    fn short_description(&self) -> String {
+        "Render visual HTML or SVG widgets in chat. Use when charts, visual structure, or lightweight interaction would communicate information more clearly and efficiently than plain text.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

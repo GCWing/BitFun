@@ -59,6 +59,10 @@ Usage:
             .to_string())
     }
 
+    fn short_description(&self) -> String {
+        "List files and directories in a workspace path.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

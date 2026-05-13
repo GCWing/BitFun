@@ -1,6 +1,8 @@
 //! Web tool implementation - WebSearchTool and URLFetcherTool
 
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::agentic::tools::framework::{
+    Tool, ToolExposure, ToolResult, ToolUseContext, ValidationResult,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::truncate_at_char_boundary;
 use async_trait::async_trait;
@@ -235,6 +237,14 @@ Advanced features:
         )
     }
 
+    fn short_description(&self) -> String {
+        "Search the web for up-to-date information and sources.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",
@@ -467,6 +477,14 @@ Example usage:
             .to_string())
     }
 
+    fn short_description(&self) -> String {
+        "Fetch content from a URL in raw, text, markdown, or JSON format.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",
@@ -647,6 +665,7 @@ mod tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: std::collections::HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,

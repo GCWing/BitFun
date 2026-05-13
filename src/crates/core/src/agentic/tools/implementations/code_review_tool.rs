@@ -590,6 +590,10 @@ impl Tool for CodeReviewTool {
         Ok(Self::description_for_language(lang.as_str()))
     }
 
+    fn short_description(&self) -> String {
+        "Submit a structured code review result.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         Self::input_schema_value()
     }
@@ -736,6 +740,7 @@ mod tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,

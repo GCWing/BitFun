@@ -25,6 +25,7 @@ impl AgenticMode {
                 "Grep".to_string(),
                 "Glob".to_string(),
                 "WebSearch".to_string(),
+                "WebFetch".to_string(),
                 "TodoWrite".to_string(),
                 "GenerativeUI".to_string(),
                 "Skill".to_string(),
@@ -32,6 +33,7 @@ impl AgenticMode {
                 "Git".to_string(),
                 "TerminalControl".to_string(),
                 "ControlHub".to_string(),
+                "InitMiniApp".to_string(),
             ],
         }
     }

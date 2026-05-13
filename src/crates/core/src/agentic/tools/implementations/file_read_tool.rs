@@ -221,6 +221,10 @@ Usage:
         ))
     }
 
+    fn short_description(&self) -> String {
+        "Read file contents from the current workspace.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

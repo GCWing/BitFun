@@ -2,11 +2,13 @@
 //!
 //! Dedicated agent for perceiving and operating the user's local computer.
 
-use crate::agentic::agents::Agent;
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides};
+use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
 pub struct ComputerUseMode {
     default_tools: Vec<String>,
+    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for ComputerUseMode {
@@ -17,6 +19,9 @@ impl Default for ComputerUseMode {
 
 impl ComputerUseMode {
     pub fn new() -> Self {
+        let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
+        tool_exposure_overrides.insert("ControlHub".to_string(), ToolExposure::Expanded);
+        tool_exposure_overrides.insert("ComputerUse".to_string(), ToolExposure::Expanded);
         Self {
             default_tools: vec![
                 "AskUserQuestion".to_string(),
@@ -27,6 +32,7 @@ impl ComputerUseMode {
                 "ControlHub".to_string(),
                 "ComputerUse".to_string(),
             ],
+            tool_exposure_overrides,
         }
     }
 }
@@ -55,6 +61,10 @@ impl Agent for ComputerUseMode {
 
     fn default_tools(&self) -> Vec<String> {
         self.default_tools.clone()
+    }
+
+    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
+        &self.tool_exposure_overrides
     }
 
     fn is_readonly(&self) -> bool {

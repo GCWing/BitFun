@@ -510,6 +510,10 @@ impl Tool for TaskTool {
         Ok(self.build_description(None).await)
     }
 
+    fn short_description(&self) -> String {
+        "Delegate work to a subagent task and collect the result.".to_string()
+    }
+
     async fn description_with_context(
         &self,
         context: Option<&ToolUseContext>,
@@ -1686,6 +1690,7 @@ mod tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,
@@ -1722,6 +1727,7 @@ mod tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,

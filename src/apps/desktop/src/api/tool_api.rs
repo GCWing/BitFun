@@ -178,6 +178,7 @@ async fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
         session_id: None,
         dialog_turn_id: None,
         workspace,
+        unlocked_collapsed_tools: Vec::new(),
         custom_data: HashMap::new(),
         computer_use_host: None,
         cancellation_token: None,

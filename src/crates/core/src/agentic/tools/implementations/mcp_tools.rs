@@ -1,7 +1,7 @@
 //! Built-in MCP resource/prompt tools.
 
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::service::mcp::adapter::PromptAdapter;
 use crate::service::mcp::get_global_mcp_service;
@@ -235,6 +235,14 @@ impl Tool for ListMCPResourcesTool {
         Ok("Lists MCP resources exposed by a connected MCP server. Use this before ReadMCPResource when you need to inspect available MCP-hosted files, docs, or structured context.".to_string())
     }
 
+    fn short_description(&self) -> String {
+        "List MCP resources exposed by a connected MCP server.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",
@@ -343,6 +351,14 @@ impl Tool for ReadMCPResourceTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok("Reads a specific MCP resource by URI from a connected MCP server. Use ListMCPResources first if you do not already know the resource URI.".to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "Read a specific MCP resource by URI from a connected MCP server.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {
@@ -459,6 +475,14 @@ impl Tool for ListMCPPromptsTool {
         Ok("Lists MCP prompts exposed by a connected MCP server. Use this before GetMCPPrompt when you need reusable server-provided prompt templates.".to_string())
     }
 
+    fn short_description(&self) -> String {
+        "List MCP prompts exposed by a connected MCP server.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",
@@ -567,6 +591,15 @@ impl Tool for GetMCPPromptTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok("Fetches a named MCP prompt template from a connected MCP server and renders it into plain text for the model. Pass prompt arguments when the server requires them.".to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "Fetch and render a named MCP prompt template from a connected MCP server."
+            .to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

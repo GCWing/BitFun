@@ -5,7 +5,7 @@ use crate::agentic::coordination::{
 };
 use crate::agentic::core::PromptEnvelope;
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -178,6 +178,15 @@ You must provide the target workspace as an absolute path, and you can optionall
 When overriding an existing session's agent_type, only switching between "agentic" and "Plan" is allowed. It will not switch coding sessions to or from "Cowork"."#
                 .to_string(),
         )
+    }
+
+    fn short_description(&self) -> String {
+        "Send a message to another agent session and receive the result asynchronously."
+            .to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

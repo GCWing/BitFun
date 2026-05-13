@@ -84,6 +84,10 @@ Important notes:
  - The tool will fail gracefully if permissions are insufficient"#.to_string())
     }
 
+    fn short_description(&self) -> String {
+        "Delete a file or directory from the filesystem.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

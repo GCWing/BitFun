@@ -6,8 +6,10 @@ mod definitions;
 mod prompt_builder;
 mod registry;
 
+use crate::agentic::tools::framework::ToolExposure;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use indexmap::IndexMap;
 pub use definitions::custom::{CustomSubagent, CustomSubagentKind};
 pub use definitions::hidden::{
     CodeReviewAgent, DeepReviewAgent, GenerateDocAgent, InitAgent,
@@ -32,8 +34,8 @@ pub use registry::catalog::{
     builtin_agent_specs, BuiltinAgentSpec,
 };
 pub use registry::types::{
-    AgentCategory, AgentInfo, CustomSubagentConfig, SubAgentSource, SubagentListScope,
-    SubagentQueryContext,
+    AgentCategory, AgentInfo, AgentToolPolicy, CustomSubagentConfig, SubAgentSource,
+    SubagentListScope, SubagentQueryContext,
 };
 pub use registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy, SubagentVisibilitySummary,
@@ -42,6 +44,11 @@ use std::any::Any;
 
 // Include embedded prompts generated at compile time
 include!(concat!(env!("OUT_DIR"), "/embedded_agents_prompt.rs"));
+
+pub type AgentToolPolicyOverrides = IndexMap<String, ToolExposure>;
+
+static EMPTY_AGENT_TOOL_POLICY_OVERRIDES: std::sync::LazyLock<AgentToolPolicyOverrides> =
+    std::sync::LazyLock::new(AgentToolPolicyOverrides::default);
 
 /// Agent trait defining the interface for all agents
 #[async_trait]
@@ -119,6 +126,13 @@ pub trait Agent: Send + Sync + 'static {
 
     /// Get the list of default tools for this agent
     fn default_tools(&self) -> Vec<String>;
+
+    /// Per-agent exposure overrides for allowed tools.
+    ///
+    /// Tools omitted here inherit their tool-defined default exposure.
+    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
+        &EMPTY_AGENT_TOOL_POLICY_OVERRIDES
+    }
 
     /// Whether this agent is read-only (prevents file modifications)
     fn is_readonly(&self) -> bool {

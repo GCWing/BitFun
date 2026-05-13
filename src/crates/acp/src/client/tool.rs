@@ -53,6 +53,13 @@ impl Tool for AcpAgentTool {
         ))
     }
 
+    fn short_description(&self) -> String {
+        format!(
+            "Delegate a task to the external ACP agent '{}'.",
+            self.display_name()
+        )
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

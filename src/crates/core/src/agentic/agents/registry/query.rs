@@ -2,7 +2,7 @@ use super::support::{get_mode_configs, get_subagent_configs, merge_dynamic_mcp_t
 use super::AgentRegistry;
 use crate::agentic::agents::registry::types::{is_review_agent_entry, AgentEntry};
 use crate::agentic::agents::{
-    AgentCategory, AgentInfo, SubagentListScope, SubagentQueryContext,
+    AgentCategory, AgentInfo, AgentToolPolicy, SubagentListScope, SubagentQueryContext,
 };
 use crate::agentic::tools::get_all_registered_tool_names;
 use crate::service::config::mode_config_canonicalizer::resolve_effective_tools;
@@ -32,17 +32,21 @@ impl AgentRegistry {
         result
     }
 
-    /// get agent tools from config
-    /// if not set, return default tools
-    /// mode config canonicalization is handled separately; this only reads resolved configuration
-    pub async fn get_agent_tools(
+    /// Resolve the current tool policy for an agent.
+    ///
+    /// This returns both the allowed tool set and any per-agent exposure
+    /// overrides that should be applied on top of tool defaults.
+    pub async fn get_agent_tool_policy(
         &self,
         agent_type: &str,
         workspace_root: Option<&Path>,
-    ) -> Vec<String> {
+    ) -> AgentToolPolicy {
         let entry = self.find_agent_entry(agent_type, workspace_root);
         let Some(entry) = entry else {
-            return Vec::new();
+            return AgentToolPolicy {
+                allowed_tools: Vec::new(),
+                exposure_overrides: Default::default(),
+            };
         };
         match entry.category {
             AgentCategory::Mode => {
@@ -54,11 +58,43 @@ impl AgentRegistry {
                     mode_configs.get(agent_type),
                     &valid_tools,
                 );
+                let allowed_tools = merge_dynamic_mcp_tools(resolved_tools, &registered_tool_names);
+                let allowed_tool_set: HashSet<&str> =
+                    allowed_tools.iter().map(String::as_str).collect();
+                let mut exposure_overrides = entry.agent.tool_exposure_overrides().clone();
+                exposure_overrides.retain(|tool_name, _| allowed_tool_set.contains(tool_name.as_str()));
 
-                merge_dynamic_mcp_tools(resolved_tools, &registered_tool_names)
+                AgentToolPolicy {
+                    allowed_tools,
+                    exposure_overrides,
+                }
             }
-            AgentCategory::SubAgent | AgentCategory::Hidden => entry.agent.default_tools(),
+            AgentCategory::SubAgent | AgentCategory::Hidden => {
+                let allowed_tools = entry.agent.default_tools();
+                let allowed_tool_set: HashSet<&str> =
+                    allowed_tools.iter().map(String::as_str).collect();
+                let mut exposure_overrides = entry.agent.tool_exposure_overrides().clone();
+                exposure_overrides.retain(|tool_name, _| allowed_tool_set.contains(tool_name.as_str()));
+
+                AgentToolPolicy {
+                    allowed_tools,
+                    exposure_overrides,
+                }
+            }
         }
+    }
+
+    /// get agent tools from config
+    /// if not set, return default tools
+    /// mode config canonicalization is handled separately; this only reads resolved configuration
+    pub async fn get_agent_tools(
+        &self,
+        agent_type: &str,
+        workspace_root: Option<&Path>,
+    ) -> Vec<String> {
+        self.get_agent_tool_policy(agent_type, workspace_root)
+            .await
+            .allowed_tools
     }
 
     /// get all mode agent information (including enabled status, used for frontend mode selector etc.)

@@ -1,8 +1,10 @@
-use crate::agentic::agents::{Agent, RequestContextPolicy};
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, RequestContextPolicy};
+use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
 pub struct ReviewFixerAgent {
     default_tools: Vec<String>,
+    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for ReviewFixerAgent {
@@ -13,6 +15,9 @@ impl Default for ReviewFixerAgent {
 
 impl ReviewFixerAgent {
     pub fn new() -> Self {
+        let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
+        tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Expanded);
+        tool_exposure_overrides.insert("Git".to_string(), ToolExposure::Expanded);
         Self {
             default_tools: vec![
                 "Read".to_string(),
@@ -26,6 +31,7 @@ impl ReviewFixerAgent {
                 "TodoWrite".to_string(),
                 "Git".to_string(),
             ],
+            tool_exposure_overrides,
         }
     }
 }
@@ -58,6 +64,10 @@ impl Agent for ReviewFixerAgent {
 
     fn request_context_policy(&self) -> RequestContextPolicy {
         RequestContextPolicy::instructions_only()
+    }
+
+    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
+        &self.tool_exposure_overrides
     }
 
     fn is_readonly(&self) -> bool {

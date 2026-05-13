@@ -19,9 +19,7 @@ use crate::agentic::image_analysis::{
     ImageLimits,
 };
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
-use crate::agentic::tools::{
-    get_all_registered_tools, SubagentParentInfo, ToolRuntimeRestrictions,
-};
+use crate::agentic::tools::{resolve_tool_manifest, ResolvedToolManifest, SubagentParentInfo, ToolRuntimeRestrictions};
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -35,7 +33,7 @@ use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -496,10 +494,46 @@ impl ExecutionEngine {
         turn_index == 0 && original_user_input.chars().count() <= 10
     }
 
+    fn collect_unlocked_collapsed_tools(
+        messages: &[Message],
+        collapsed_tools: &[String],
+    ) -> Vec<String> {
+        let collapsed_set: HashSet<&str> = collapsed_tools.iter().map(String::as_str).collect();
+        let mut unlocked = BTreeSet::new();
+
+        for message in messages {
+            let MessageContent::ToolResult {
+                tool_name,
+                result,
+                is_error,
+                ..
+            } = &message.content
+            else {
+                continue;
+            };
+
+            if *is_error || tool_name != "GetToolSpec" {
+                continue;
+            }
+
+            let Some(tool_name) = result.get("tool_name").and_then(|v| v.as_str())
+            else {
+                continue;
+            };
+
+            if collapsed_set.contains(tool_name) {
+                unlocked.insert(tool_name.to_string());
+            }
+        }
+
+        unlocked.into_iter().collect()
+    }
+
     async fn build_prompt_context(
         context: &ExecutionContext,
         model_name: &str,
         supports_image_understanding: bool,
+        has_additional_tools: bool,
     ) -> Option<PromptBuilderContext> {
         let workspace_path = context
             .workspace
@@ -511,7 +545,8 @@ impl ExecutionEngine {
             Some(context.session_id.clone()),
             Some(model_name.to_string()),
         )
-        .with_supports_image_understanding(supports_image_understanding);
+        .with_supports_image_understanding(supports_image_understanding)
+        .with_additional_tools_hint(has_additional_tools);
 
         let Some(workspace) = context.workspace.as_ref() else {
             return Some(base);
@@ -719,6 +754,8 @@ impl ExecutionEngine {
             workspace: context.workspace.clone(),
             messages: messages.to_vec(),
             available_tools: Vec::new(),
+            collapsed_tools: Vec::new(),
+            unlocked_collapsed_tools: Vec::new(),
             model_name: ai_client.config.model.clone(),
             agent_type,
             context_vars: execution_context_vars.clone(),
@@ -1480,7 +1517,54 @@ impl ExecutionEngine {
             context_profile_policy.consecutive_failed_command_threshold
         );
 
-        // 3. Get System Prompt from current Agent
+        // 3. Get available tools list (read tool configuration for current mode from global config)
+        let tool_policy = agent_registry
+            .get_agent_tool_policy(
+                &agent_type,
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+            )
+            .await;
+        let allowed_tools = tool_policy.allowed_tools.clone();
+        let enable_tools = context
+            .context
+            .get("enable_tools")
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(true);
+        let tool_manifest = if enable_tools {
+            debug!(
+                "Agent tools: agent={}, tool_count={}",
+                agent_type,
+                allowed_tools.len()
+            );
+            Some(
+                self.get_available_tools_and_definitions(
+                    &allowed_tools,
+                    &tool_policy.exposure_overrides,
+                    context.workspace.as_ref(),
+                    context.workspace_services.as_ref(),
+                    &agent_type,
+                    primary_supports_image_understanding,
+                )
+                .await,
+            )
+        } else {
+            None
+        };
+        let collapsed_tools = tool_manifest
+            .as_ref()
+            .map(|manifest| manifest.collapsed_tool_names.clone())
+            .unwrap_or_default();
+        let has_additional_tools = !collapsed_tools.is_empty();
+        let (available_tools, tool_definitions) = if let Some(manifest) = tool_manifest {
+            (manifest.allowed_tool_names, Some(manifest.tool_definitions))
+        } else {
+            (vec![], None)
+        };
+
+        // 4. Get System Prompt from current Agent
         debug!(
             "Building system prompt from agent: {}, model={}",
             current_agent.name(),
@@ -1490,6 +1574,7 @@ impl ExecutionEngine {
             &context,
             &ai_client.config.model,
             primary_supports_image_understanding,
+            has_additional_tools,
         )
         .await;
         let request_context_reminder = if let Some(prompt_context) = prompt_context.as_ref() {
@@ -1557,39 +1642,6 @@ impl ExecutionEngine {
                 .map(|m| format!("{:?}", m.role))
                 .collect::<Vec<_>>()
         );
-
-        // 4. Get available tools list (read tool configuration for current mode from global config)
-        let allowed_tools = agent_registry
-            .get_agent_tools(
-                &agent_type,
-                context
-                    .workspace
-                    .as_ref()
-                    .map(|workspace| workspace.root_path()),
-            )
-            .await;
-        let enable_tools = context
-            .context
-            .get("enable_tools")
-            .and_then(|v| v.parse::<bool>().ok())
-            .unwrap_or(true);
-        let (available_tools, tool_definitions) = if enable_tools {
-            debug!(
-                "Agent tools: agent={}, tool_count={}",
-                agent_type,
-                allowed_tools.len()
-            );
-            self.get_available_tools_and_definitions(
-                &allowed_tools,
-                context.workspace.as_ref(),
-                context.workspace_services.as_ref(),
-                &agent_type,
-                primary_supports_image_understanding,
-            )
-            .await
-        } else {
-            (vec![], None)
-        };
 
         let enable_context_compression = session.config.enable_context_compression;
         let compression_threshold = session.config.compression_threshold;
@@ -1786,6 +1838,8 @@ impl ExecutionEngine {
             if context.skip_tool_confirmation {
                 round_context_vars.insert("skip_tool_confirmation".to_string(), "true".to_string());
             }
+            let unlocked_collapsed_tools =
+                Self::collect_unlocked_collapsed_tools(&messages, &collapsed_tools);
             let round_context = RoundContext {
                 session_id: context.session_id.clone(),
                 subagent_parent_info: context.subagent_parent_info.clone(),
@@ -1795,6 +1849,8 @@ impl ExecutionEngine {
                 workspace: context.workspace.clone(),
                 messages: messages.clone(),
                 available_tools: available_tools.clone(),
+                collapsed_tools: collapsed_tools.clone(),
+                unlocked_collapsed_tools,
                 model_name: ai_client.config.model.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
@@ -2123,9 +2179,7 @@ impl ExecutionEngine {
                     }
                     warn!(
                         "Thinking-only round detected; injecting rescue reminder #{}: turn={}, round={}",
-                        thinking_only_rescue_attempts,
-                        context.dialog_turn_id,
-                        round_index
+                        thinking_only_rescue_attempts, context.dialog_turn_id, round_index
                     );
                     // Continue into the next round so the model gets a chance to act.
                 } else {
@@ -2419,17 +2473,13 @@ impl ExecutionEngine {
     /// Get available tool names and definitions: 1. Tool itself is enabled 2. Explicitly allowed in mode config
     async fn get_available_tools_and_definitions(
         &self,
-        mode_allowed_tools: &[String],
+        allowed_tools: &[String],
+        exposure_overrides: &crate::agentic::agents::AgentToolPolicyOverrides,
         workspace: Option<&crate::agentic::WorkspaceBinding>,
         workspace_services: Option<&crate::agentic::workspace::WorkspaceServices>,
         agent_type: &str,
         primary_supports_image_understanding: bool,
-    ) -> (Vec<String>, Option<Vec<ToolDefinition>>) {
-        // Use get_all_registered_tools to get all tools including MCP tools
-        let all_tools = get_all_registered_tools().await;
-
-        // Filter tools: 1) Check if enabled 2) Check if mode allows
-        let mut tool_definitions = Vec::new();
+    ) -> ResolvedToolManifest {
         let mut tool_opts_custom = HashMap::new();
         tool_opts_custom.insert(
             "primary_model_supports_image_understanding".to_string(),
@@ -2441,68 +2491,14 @@ impl ExecutionEngine {
             session_id: None,
             dialog_turn_id: None,
             workspace: workspace.cloned(),
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: tool_opts_custom,
             computer_use_host: None,
             cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: workspace_services.cloned(),
         };
-        for tool in &all_tools {
-            if !tool
-                .is_available_in_context(Some(&description_context))
-                .await
-            {
-                continue;
-            }
-
-            let tool_name = tool.name().to_string();
-            if mode_allowed_tools.contains(&tool_name) {
-                let description = tool
-                    .description_with_context(Some(&description_context))
-                    .await
-                    .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
-
-                let parameters = tool
-                    .input_schema_for_model_with_context(Some(&description_context))
-                    .await;
-
-                tool_definitions.push(ToolDefinition {
-                    name: tool.name().to_string(),
-                    description,
-                    parameters,
-                });
-            }
-        }
-
-        // Order tools for the model API: terminal → file-ish tools → **`ControlHub`**
-        // (unified desktop / browser / app / terminal / system control) last so the
-        // list matches “think with files first, act on UI last”.
-        let tool_ordering: HashMap<String, usize> = [
-            ("Task", 1),
-            ("Bash", 2),
-            ("TerminalControl", 3),
-            ("Glob", 4),
-            ("Grep", 5),
-            ("Read", 6),
-            ("Edit", 7),
-            ("Write", 8),
-            ("Delete", 9),
-            ("WebFetch", 10),
-            ("WebSearch", 11),
-            ("TodoWrite", 12),
-            ("Skill", 13),
-            ("Log", 14),
-            ("ControlHub", 15),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v))
-        .collect();
-        tool_definitions.sort_by_key(|tool| tool_ordering.get(&tool.name).unwrap_or(&100));
-
-        let enabled_tool_names: Vec<String> =
-            tool_definitions.iter().map(|d| d.name.clone()).collect();
-
-        (enabled_tool_names, Some(tool_definitions))
+        resolve_tool_manifest(allowed_tools, exposure_overrides, &description_context).await
     }
 
     /// Emit event
@@ -2748,6 +2744,54 @@ mod tests {
         assert!(!ExecutionEngine::assistant_has_tool_calls(
             &Message::assistant("done".to_string())
         ));
+    }
+
+    #[test]
+    fn collects_unlocked_collapsed_tools_from_visible_get_tool_spec_results() {
+        let visible_get_tool_spec_result = Message::tool_result(ToolResult {
+            tool_id: "tool-1".to_string(),
+            tool_name: "GetToolSpec".to_string(),
+            result: json!({
+                "tool_name": "WebFetch",
+            }),
+            result_for_assistant: None,
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        });
+        let hidden_get_tool_spec_result = Message::tool_result(ToolResult {
+            tool_id: "tool-2".to_string(),
+            tool_name: "GetToolSpec".to_string(),
+            result: json!({
+                "tool_name": "Read",
+            }),
+            result_for_assistant: None,
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        });
+        let failed_get_tool_spec_result = Message::tool_result(ToolResult {
+            tool_id: "tool-3".to_string(),
+            tool_name: "GetToolSpec".to_string(),
+            result: json!({
+                "tool_name": "GetFileDiff",
+            }),
+            result_for_assistant: None,
+            is_error: true,
+            duration_ms: Some(1),
+            image_attachments: None,
+        });
+
+        let unlocked = ExecutionEngine::collect_unlocked_collapsed_tools(
+            &[
+                visible_get_tool_spec_result,
+                hidden_get_tool_spec_result,
+                failed_get_tool_spec_result,
+            ],
+            &["WebFetch".to_string(), "GetFileDiff".to_string()],
+        );
+
+        assert_eq!(unlocked, vec!["WebFetch".to_string()]);
     }
 
     #[test]

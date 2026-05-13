@@ -1,7 +1,7 @@
 use super::util::normalize_path;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::infrastructure::PathManager;
 use crate::service::session::SessionTranscriptExportOptions;
@@ -150,6 +150,15 @@ Examples:
 5. Export a middle range: `turns=["2:5"]`"#
                 .to_string(),
         )
+    }
+
+    fn short_description(&self) -> String {
+        "Export an agent session transcript with an index for targeted history reads. Use this tool when you need the history of an agent session."
+            .to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

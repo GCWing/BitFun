@@ -48,6 +48,8 @@ pub struct RoundContext {
     pub workspace: Option<WorkspaceBinding>,
     pub messages: Vec<Message>,
     pub available_tools: Vec<String>,
+    pub collapsed_tools: Vec<String>,
+    pub unlocked_collapsed_tools: Vec<String>,
     pub model_name: String,
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,
