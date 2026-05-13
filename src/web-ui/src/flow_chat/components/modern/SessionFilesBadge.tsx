@@ -189,6 +189,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
 
   const statsCacheRef = useRef<StatsCache>({});
   const loadingFilesRef = useRef<Set<string>>(new Set());
+  const activeFilePathsRef = useRef<Set<string>>(new Set());
   const previousSessionIdRef = useRef<string | undefined>(undefined);
   const observedProcessingTurnIdRef = useRef<string | null>(null);
   const promptedReviewReadyTurnIdRef = useRef<string | null>(null);
@@ -228,6 +229,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       previousSessionIdRef.current = sessionId;
       statsCacheRef.current = {};
       loadingFilesRef.current.clear();
+      activeFilePathsRef.current = new Set(files.map(file => file.filePath));
       setFileStats(new Map());
       setIsExpanded(false);
       setIsReviewMenuOpen(false);
@@ -237,7 +239,37 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       promptedReviewReadyTurnIdRef.current = null;
       setLatestTurnSnapshot(getLatestTurnSnapshot(sessionId));
     }
-  }, [clearReviewReadyGlint, sessionId, t]);
+  }, [clearReviewReadyGlint, files, sessionId, t]);
+
+  useEffect(() => {
+    const activeFilePaths = new Set(files.map(file => file.filePath));
+    activeFilePathsRef.current = activeFilePaths;
+
+    setFileStats(prev => {
+      let changed = false;
+      const next = new Map<string, FileStats>();
+      prev.forEach((stat, filePath) => {
+        if (activeFilePaths.has(filePath)) {
+          next.set(filePath, stat);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+
+    for (const filePath of Object.keys(statsCacheRef.current)) {
+      if (!activeFilePaths.has(filePath)) {
+        delete statsCacheRef.current[filePath];
+      }
+    }
+
+    for (const filePath of Array.from(loadingFilesRef.current)) {
+      if (!activeFilePaths.has(filePath)) {
+        loadingFilesRef.current.delete(filePath);
+      }
+    }
+  }, [files]);
 
   useEffect(() => () => {
     if (reviewReadyGlintTimeoutRef.current) {
@@ -366,10 +398,12 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
               operationType,
             };
 
-            statsCacheRef.current[file.filePath] = {
-              stats,
-              timestamp: now,
-            };
+            if (activeFilePathsRef.current.has(file.filePath)) {
+              statsCacheRef.current[file.filePath] = {
+                stats,
+                timestamp: now,
+              };
+            }
           } catch (error) {
             log.warn('Failed to get file stats', { filePath: file.filePath, error });
             const fileName = file.filePath.split(/[/\\]/).pop() || file.filePath;
@@ -392,7 +426,11 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       setFileStats((prev) => {
         const newMap = new Map(prev);
         for (const { filePath, stats } of batchResults) {
-          if (stats && (stats.additions > 0 || stats.deletions > 0 || stats.error)) {
+          if (
+            activeFilePathsRef.current.has(filePath) &&
+            stats &&
+            (stats.additions > 0 || stats.deletions > 0 || stats.error)
+          ) {
             newMap.set(filePath, stats);
           }
         }

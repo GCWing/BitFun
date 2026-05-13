@@ -13,8 +13,6 @@ import { snapshotAPI } from '../../../infrastructure/api';
 import { useCurrentWorkspace } from '../../../infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
 import { runWithConcurrencyLimit } from '@/shared/utils/runWithConcurrencyLimit';
-import { flowChatStore } from '../../store/FlowChatStore';
-import type { FlowChatState } from '../../types/flow-chat';
 import './SessionFileModificationsBar.scss';
 
 const log = createLogger('SessionFileModificationsBar');
@@ -67,8 +65,6 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
   const { t } = useTranslation('flow-chat');
   const { files } = useSnapshotState(sessionId);
   const { workspace: currentWorkspace } = useCurrentWorkspace();
-  const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => flowChatStore.getState());
-  const [reviewFiles, setReviewFiles] = useState<SourceFile[]>([]);
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [fileStats, setFileStats] = useState<Map<string, FileStats>>(new Map());
@@ -77,6 +73,7 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
   // Cache to avoid repeated requests for the same file.
   const statsCacheRef = useRef<StatsCache>({});
   const loadingFilesRef = useRef<Set<string>>(new Set());
+  const activeSourceKeysRef = useRef<Set<string>>(new Set());
   const previousSessionIdRef = useRef<string | undefined>(undefined);
   const CACHE_TTL = 60000;
   /** Limit parallel Tauri IPC for diff stats so the webview stays responsive on large file lists. */
@@ -84,80 +81,17 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
 
   const initializedRef = useRef(false);
 
-  useEffect(() => flowChatStore.subscribe(setFlowChatState), []);
-
-  const reviewChildSessions = useMemo(() => {
-    if (!sessionId) {
-      return [];
-    }
-
-    return Array.from(flowChatState.sessions.values())
-      .filter((session) =>
-        session.parentSessionId === sessionId &&
-        (session.sessionKind === 'review' || session.sessionKind === 'deep_review'),
-      )
-      .map((session) => ({
-        sessionId: session.sessionId,
-        sourceKind: session.sessionKind as 'review' | 'deep_review',
-        freshness: `${session.lastActiveAt}:${session.lastFinishedAt ?? 0}:${session.updatedAt ?? 0}`,
-      }));
-  }, [flowChatState.sessions, sessionId]);
-
-  const reviewChildSessionsKey = useMemo(
-    () => reviewChildSessions
-      .map((session) => `${session.sessionId}:${session.sourceKind}:${session.freshness}`)
-      .join('|'),
-    [reviewChildSessions],
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!sessionId || reviewChildSessions.length === 0) {
-      setReviewFiles([]);
-      return;
-    }
-
-    Promise.all(
-      reviewChildSessions.map(async (child) => {
-        try {
-          const childFiles = await snapshotAPI.getSessionFiles(child.sessionId);
-          return childFiles.map((filePath): SourceFile => ({
-            filePath,
-            sourceSessionId: child.sessionId,
-            sourceKind: child.sourceKind,
-          }));
-        } catch (error) {
-          log.warn('Failed to load review child snapshot files', {
-            parentSessionId: sessionId,
-            childSessionId: child.sessionId,
-            error,
-          });
-          return [];
-        }
-      }),
-    ).then((groups) => {
-      if (!cancelled) {
-        setReviewFiles(groups.flat());
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [reviewChildSessions, reviewChildSessionsKey, sessionId]);
-
   const sourceFiles = useMemo<SourceFile[]>(() => {
-    const parentFiles = files.map((file): SourceFile => ({
+    return files.map((file): SourceFile => ({
       filePath: file.filePath,
       sourceSessionId: sessionId ?? '',
       sourceKind: 'parent',
     }));
-    return [...parentFiles, ...reviewFiles];
-  }, [files, reviewFiles, sessionId]);
+  }, [files, sessionId]);
 
   useEffect(() => {
     const activeKeys = new Set(sourceFiles.map(file => `${file.sourceSessionId}:${file.filePath}`));
+    activeSourceKeysRef.current = activeKeys;
     setFileStats(prev => {
       let changed = false;
       const next = new Map<string, FileStats>();
@@ -170,6 +104,18 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
       });
       return changed ? next : prev;
     });
+
+    for (const sourceKey of Object.keys(statsCacheRef.current)) {
+      if (!activeKeys.has(sourceKey)) {
+        delete statsCacheRef.current[sourceKey];
+      }
+    }
+
+    for (const sourceKey of Array.from(loadingFilesRef.current)) {
+      if (!activeKeys.has(sourceKey)) {
+        loadingFilesRef.current.delete(sourceKey);
+      }
+    }
   }, [sourceFiles]);
 
 
@@ -271,10 +217,12 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
               operationType,
             };
 
-            statsCacheRef.current[sourceKey] = {
-              stats,
-              timestamp: now,
-            };
+            if (activeSourceKeysRef.current.has(sourceKey)) {
+              statsCacheRef.current[sourceKey] = {
+                stats,
+                timestamp: now,
+              };
+            }
           } catch (error) {
             log.warn('Failed to get file stats', { filePath: file.filePath, error });
 
@@ -300,7 +248,11 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
       setFileStats((prev) => {
         const newMap = new Map(prev);
         for (const { sourceKey, stats } of batchResults) {
-          if (stats && (stats.additions > 0 || stats.deletions > 0 || stats.error)) {
+          if (
+            activeSourceKeysRef.current.has(sourceKey) &&
+            stats &&
+            (stats.additions > 0 || stats.deletions > 0 || stats.error)
+          ) {
             newMap.set(sourceKey, stats);
           }
         }

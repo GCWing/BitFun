@@ -52,6 +52,14 @@ struct SessionHistory {
 /// Per-side size budget: above this we avoid loading baseline/disk texts for UI badge stats.
 const SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES: u64 = 512 * 1024;
 
+#[derive(Debug, Clone)]
+struct SessionFileBoundary {
+    before_snapshot_id: Option<String>,
+    after_snapshot_id: Option<String>,
+    file_created_in_session: bool,
+    file_deleted_in_session: bool,
+}
+
 impl SessionHistory {
     fn new(session_id: String) -> Self {
         let now = SystemTime::now();
@@ -339,14 +347,24 @@ impl SnapshotCore {
         let Some(turn) = session.turns.get(&turn_index) else {
             return Vec::new();
         };
-        unique_paths(turn.operations.iter().map(|op| op.file_path.clone()))
+        unique_paths(
+            turn.operations
+                .iter()
+                .filter(|op| operation_is_completed_for_session_file(op))
+                .map(|op| op.file_path.clone()),
+        )
     }
 
     pub fn get_session_files(&self, session_id: &str) -> Vec<PathBuf> {
         let Some(session) = self.sessions.get(session_id) else {
             return Vec::new();
         };
-        unique_paths(session.all_operations_iter().map(|op| op.file_path.clone()))
+        unique_paths(
+            session
+                .all_operations_iter()
+                .filter(|op| operation_is_completed_for_session_file(op))
+                .map(|op| op.file_path.clone()),
+        )
     }
 
     pub fn get_session_operations(&self, session_id: &str) -> Vec<FileOperation> {
@@ -359,13 +377,22 @@ impl SnapshotCore {
     pub fn get_all_modified_files(&self) -> Vec<PathBuf> {
         let mut all = Vec::new();
         for session in self.sessions.values() {
-            all.extend(session.all_operations_iter().map(|op| op.file_path.clone()));
+            all.extend(
+                session
+                    .all_operations_iter()
+                    .filter(|op| operation_is_completed_for_session_file(op))
+                    .map(|op| op.file_path.clone()),
+            );
         }
         unique_paths(all.into_iter())
     }
 
     pub fn get_session_stats(&self, session_id: &str) -> SessionStats {
-        let ops = self.get_session_operations(session_id);
+        let ops: Vec<FileOperation> = self
+            .get_session_operations(session_id)
+            .into_iter()
+            .filter(|op| operation_is_completed_for_session_file(op))
+            .collect();
         let total_changes = ops.len();
         let total_files = unique_paths(ops.iter().map(|op| op.file_path.clone())).len();
         let total_turns = self.get_session_turns(session_id).len();
@@ -452,79 +479,33 @@ impl SnapshotCore {
             return Err(SnapshotError::SessionNotFound(session_id.to_string()));
         };
 
-        let first_op_for_file = session
-            .all_operations_iter()
-            .find(|op| op.file_path == file_path);
-        let file_created_in_session =
-            matches!(first_op_for_file, Some(op) if op.before_snapshot_id.is_none());
-
-        let load_first_before = || async {
-            let first_before = session
-                .all_operations_iter()
-                .find(|op| op.file_path == file_path)
-                .and_then(|op| op.before_snapshot_id.clone());
-
-            let Some(snapshot_id) = first_before else {
-                return String::new();
-            };
-
-            self.snapshot_system
-                .get_snapshot_content(&snapshot_id)
-                .await
-                .unwrap_or_default()
-        };
-
-        let before = if file_created_in_session {
+        let Some(boundary) = session_file_boundary(session, file_path) else {
             debug!(
-                "Using empty baseline for session-created file diff: file_path={:?} session_id={}",
+                "No completed session file operation found for diff: file_path={:?} session_id={}",
                 file_path, session_id
             );
-            String::new()
-        } else {
-            if let Some(baseline_id) = self
-                .snapshot_system
-                .get_baseline_snapshot_id(file_path)
-                .await
-            {
-                debug!(
-                    "Using baseline snapshot for diff: file_path={:?} baseline_id={}",
-                    file_path, baseline_id
-                );
-                match self
-                    .snapshot_system
-                    .get_snapshot_content(&baseline_id)
-                    .await
-                {
-                    Ok(content) => content,
-                    Err(e) => {
-                        warn!(
-                            "Failed to read baseline snapshot, falling back to first before snapshot: baseline_id={} error={}",
-                            baseline_id, e
-                        );
-                        load_first_before().await
-                    }
-                }
-            } else {
-                load_first_before().await
-            }
+            return Ok((String::new(), String::new()));
         };
 
-        let after = if file_path.exists() {
-            tokio::fs::read_to_string(file_path)
-                .await
-                .map_err(SnapshotError::Io)?
-        } else {
+        let before = self
+            .load_snapshot_text(boundary.before_snapshot_id.as_deref())
+            .await;
+        let after = if boundary.file_deleted_in_session {
             String::new()
+        } else {
+            self.load_snapshot_text(boundary.after_snapshot_id.as_deref())
+                .await
         };
 
         debug!(
-            "get_file_diff result: file_path={:?} session_id={} before_len={} after_len={} identical={} file_created_in_session={}",
+            "get_file_diff result: file_path={:?} session_id={} before_len={} after_len={} identical={} file_created_in_session={} file_deleted_in_session={}",
             file_path,
             session_id,
             before.len(),
             after.len(),
             before == after,
-            file_created_in_session
+            boundary.file_created_in_session,
+            boundary.file_deleted_in_session
         );
 
         Ok((before, after))
@@ -585,56 +566,37 @@ impl SnapshotCore {
             return Err(SnapshotError::SessionNotFound(session_id.to_string()));
         };
 
-        let file_created = session_file_created_in_session(session, file_path);
-
-        let workspace_bytes = if file_path.exists() {
-            tokio::fs::metadata(file_path)
-                .await
-                .map(|m| m.len())
-                .unwrap_or(SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES.saturating_add(1))
-        } else {
-            0
+        let Some(boundary) = session_file_boundary(session, file_path) else {
+            return Ok(SessionFileDiffStats {
+                file_path: file_path.to_string_lossy().to_string(),
+                lines_added: 0,
+                lines_removed: 0,
+                approximate: false,
+                change_kind: "modify".to_string(),
+            });
         };
 
-        let before_bytes = if file_created {
+        let before_bytes = self
+            .session_snapshot_recorded_size(boundary.before_snapshot_id.as_deref())
+            .await;
+        let after_bytes = if boundary.file_deleted_in_session {
             0
         } else {
-            let before_snapshot_id = if let Some(baseline_id) = self
-                .snapshot_system
-                .get_baseline_snapshot_id(file_path)
+            self.session_snapshot_recorded_size(boundary.after_snapshot_id.as_deref())
                 .await
-            {
-                Some(baseline_id)
-            } else {
-                session
-                    .all_operations_iter()
-                    .find(|op| op.file_path == file_path)
-                    .and_then(|op| op.before_snapshot_id.clone())
-            };
-
-            match before_snapshot_id {
-                None => 0,
-                Some(id) => self
-                    .snapshot_system
-                    .get_snapshot_recorded_size_bytes(&id)
-                    .await
-                    .unwrap_or(SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES.saturating_add(1)),
-            }
         };
 
-        let too_large = workspace_bytes > SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES
+        let too_large = after_bytes > SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES
             || before_bytes > SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES;
-
-        let path_exists = file_path.exists();
 
         if too_large {
             let agg = aggregate_operations_diff_summary_for_file(session, file_path);
-            let change_kind = change_kind_for_aggregate_path(file_created, path_exists);
+            let change_kind = change_kind_from_session_boundary(&boundary);
             debug!(
-                "get_session_file_diff_stats: approximate session_id={} file_path={:?} workspace_bytes={} before_bytes={} lines_added={} lines_removed={}",
+                "get_session_file_diff_stats: approximate session_id={} file_path={:?} after_bytes={} before_bytes={} lines_added={} lines_removed={}",
                 session_id,
                 file_path,
-                workspace_bytes,
+                after_bytes,
                 before_bytes,
                 agg.lines_added,
                 agg.lines_removed
@@ -650,7 +612,7 @@ impl SnapshotCore {
 
         let (before, after) = self.get_file_diff(file_path, session_id).await?;
         let summary = compute_diff_summary(&before, &after);
-        let change_kind = change_kind_from_diff_content(file_created, &before, &after);
+        let change_kind = change_kind_from_session_boundary(&boundary);
         debug!(
             "get_session_file_diff_stats: exact session_id={} file_path={:?} lines_added={} lines_removed={}",
             session_id,
@@ -665,6 +627,19 @@ impl SnapshotCore {
             approximate: false,
             change_kind: change_kind.to_string(),
         })
+    }
+
+    async fn session_snapshot_recorded_size(&self, snapshot_id: Option<&str>) -> u64 {
+        let Some(snapshot_id) = snapshot_id else {
+            return 0;
+        };
+        if snapshot_id.starts_with("empty_snapshot_") {
+            return 0;
+        }
+        self.snapshot_system
+            .get_snapshot_recorded_size_bytes(snapshot_id)
+            .await
+            .unwrap_or(SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES.saturating_add(1))
     }
 
     pub fn get_file_change_history(&self, file_path: &Path) -> Vec<FileChangeEntry> {
@@ -1000,12 +975,50 @@ impl SnapshotCore {
     }
 }
 
-fn session_file_created_in_session(session: &SessionHistory, file_path: &Path) -> bool {
-    session
+fn operation_is_completed_for_session_file(op: &FileOperation) -> bool {
+    if op.after_snapshot_id.is_some() {
+        return true;
+    }
+
+    if op.operation_type != OperationType::Delete {
+        return false;
+    }
+
+    op.tool_context.execution_time_ms > 0
+        || op.diff_summary.lines_added > 0
+        || op.diff_summary.lines_removed > 0
+        || op.diff_summary.lines_modified > 0
+}
+
+fn completed_session_operations_for_file<'a>(
+    session: &'a SessionHistory,
+    file_path: &Path,
+) -> Vec<&'a FileOperation> {
+    let mut operations: Vec<&FileOperation> = session
         .all_operations_iter()
-        .find(|op| op.file_path == file_path)
-        .map(|op| op.before_snapshot_id.is_none())
-        .unwrap_or(false)
+        .filter(|op| SnapshotCore::operation_matches_file_path(op, file_path))
+        .filter(|op| operation_is_completed_for_session_file(op))
+        .collect();
+
+    operations.sort_by_key(|op| (op.turn_index, op.seq_in_turn));
+    operations
+}
+
+fn session_file_boundary(
+    session: &SessionHistory,
+    file_path: &Path,
+) -> Option<SessionFileBoundary> {
+    let operations = completed_session_operations_for_file(session, file_path);
+    let first = operations.first()?;
+    let last = operations.last()?;
+
+    Some(SessionFileBoundary {
+        before_snapshot_id: first.before_snapshot_id.clone(),
+        after_snapshot_id: last.after_snapshot_id.clone(),
+        file_created_in_session: first.before_snapshot_id.is_none(),
+        file_deleted_in_session: last.operation_type == OperationType::Delete
+            && last.after_snapshot_id.is_none(),
+    })
 }
 
 fn aggregate_operations_diff_summary_for_file(
@@ -1014,7 +1027,9 @@ fn aggregate_operations_diff_summary_for_file(
 ) -> DiffSummary {
     let mut out = DiffSummary::default();
     for op in session.all_operations_iter() {
-        if op.file_path.as_path() == file_path {
+        if SnapshotCore::operation_matches_file_path(op, file_path)
+            && operation_is_completed_for_session_file(op)
+        {
             out.lines_added += op.diff_summary.lines_added;
             out.lines_removed += op.diff_summary.lines_removed;
             out.lines_modified += op.diff_summary.lines_modified;
@@ -1023,31 +1038,14 @@ fn aggregate_operations_diff_summary_for_file(
     out
 }
 
-fn change_kind_for_aggregate_path(
-    file_created_in_session: bool,
-    path_exists: bool,
-) -> &'static str {
-    if file_created_in_session {
+fn change_kind_from_session_boundary(boundary: &SessionFileBoundary) -> &'static str {
+    if boundary.file_created_in_session {
         "create"
-    } else if !path_exists {
+    } else if boundary.file_deleted_in_session {
         "delete"
     } else {
         "modify"
     }
-}
-
-fn change_kind_from_diff_content(
-    file_created_in_session: bool,
-    before: &str,
-    after: &str,
-) -> &'static str {
-    if file_created_in_session {
-        return "create";
-    }
-    if !before.is_empty() && after.is_empty() {
-        return "delete";
-    }
-    "modify"
 }
 
 fn sanitize_id(id: &str) -> String {
@@ -1151,4 +1149,139 @@ fn find_anchor_in_current(
     }
 
     Some(op_anchor_line.min(current_len))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::service::snapshot::snapshot_system::FileSnapshotSystem;
+    use crate::service::workspace_runtime::{WorkspaceRuntimeContext, WorkspaceRuntimeTarget};
+    use serde_json::json;
+    use std::fs;
+
+    struct TestRuntime {
+        core: SnapshotCore,
+        root: PathBuf,
+        workspace: PathBuf,
+    }
+
+    impl Drop for TestRuntime {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    async fn make_test_runtime(name: &str) -> TestRuntime {
+        let root =
+            std::env::temp_dir().join(format!("bitfun_snapshot_core_{}_{}", name, Uuid::new_v4()));
+        let workspace = root.join("workspace");
+        let runtime_root = root.join("runtime");
+        fs::create_dir_all(&workspace).unwrap();
+
+        let runtime_context = WorkspaceRuntimeContext::new(
+            WorkspaceRuntimeTarget::LocalWorkspace {
+                workspace_root: workspace.clone(),
+            },
+            runtime_root,
+        );
+        for dir in runtime_context.required_directories() {
+            fs::create_dir_all(dir).unwrap();
+        }
+
+        let snapshot_system = FileSnapshotSystem::new(runtime_context.clone());
+        let mut core = SnapshotCore::new(runtime_context, snapshot_system);
+        core.initialize().await.unwrap();
+
+        TestRuntime {
+            core,
+            root,
+            workspace,
+        }
+    }
+
+    #[tokio::test]
+    async fn session_file_diff_stats_use_completed_session_snapshots_not_current_workspace() {
+        let mut runtime = make_test_runtime("session_snapshots").await;
+        let file_path = runtime.workspace.join("src/lib.rs");
+        fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        tokio::fs::write(&file_path, "base\n").await.unwrap();
+
+        let operation_id = runtime
+            .core
+            .start_file_operation(
+                "session-1",
+                0,
+                file_path.clone(),
+                OperationType::Modify,
+                "Edit".to_string(),
+                json!({ "file_path": "src/lib.rs" }),
+                None,
+            )
+            .await
+            .unwrap();
+        tokio::fs::write(&file_path, "base\nsession\n")
+            .await
+            .unwrap();
+        runtime
+            .core
+            .complete_file_operation("session-1", &operation_id, 1)
+            .await
+            .unwrap();
+
+        tokio::fs::write(&file_path, "base\nsession\noutside\noutside2\n")
+            .await
+            .unwrap();
+
+        let stats = runtime
+            .core
+            .get_session_file_diff_stats("session-1", &file_path)
+            .await
+            .unwrap();
+        assert_eq!(stats.lines_added, 1);
+        assert_eq!(stats.lines_removed, 0);
+        assert_eq!(stats.change_kind, "modify");
+
+        let (before, after) = runtime
+            .core
+            .get_file_diff(&file_path, "session-1")
+            .await
+            .unwrap();
+        assert_eq!(before, "base\n");
+        assert_eq!(after, "base\nsession\n");
+    }
+
+    #[tokio::test]
+    async fn session_files_ignore_unfinished_operations() {
+        let mut runtime = make_test_runtime("unfinished_ops").await;
+        let file_path = runtime.workspace.join("src/lib.rs");
+        fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        tokio::fs::write(&file_path, "base\n").await.unwrap();
+
+        runtime
+            .core
+            .start_file_operation(
+                "session-1",
+                0,
+                file_path.clone(),
+                OperationType::Modify,
+                "Edit".to_string(),
+                json!({ "file_path": "src/lib.rs" }),
+                None,
+            )
+            .await
+            .unwrap();
+        tokio::fs::write(&file_path, "base\noutside\n")
+            .await
+            .unwrap();
+
+        assert!(runtime.core.get_session_files("session-1").is_empty());
+
+        let stats = runtime
+            .core
+            .get_session_file_diff_stats("session-1", &file_path)
+            .await
+            .unwrap();
+        assert_eq!(stats.lines_added, 0);
+        assert_eq!(stats.lines_removed, 0);
+    }
 }
