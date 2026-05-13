@@ -1,5 +1,6 @@
 //! Terminal API
 
+use bitfun_core::infrastructure::PathManager;
 use log::{error, warn};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -72,8 +73,8 @@ impl TerminalState {
     /// Get the scripts directory path for shell integration
     /// Uses the same path structure as PathManager
     fn get_scripts_dir() -> PathBuf {
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
+        PathManager::new().map(|p| p.home_dir())
+            .unwrap_or_else(|_| PathBuf::from("."))
             .join("bitfun")
             .join("temp")
             .join("scripts")
