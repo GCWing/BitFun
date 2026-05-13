@@ -96,6 +96,10 @@
     "level": {
       "description": "實時控制日誌輸出級別，修改後立即生效。"
     },
+    "sensitiveDiagnostics": {
+      "label": "包含敏感除錯資訊",
+      "description": "開啟後，本機日誌可能包含使用者 Prompt、模型請求與回應 payload、工具參數、檔案路徑以及 Webview 事件 payload，用於問題排查。BitFun 不會自動上傳這些日誌檔案。"
+    },
     "path": {
       "description": "本次啟動寫入日誌文件所在的目錄。"
     },
@@ -117,6 +121,7 @@
       "loadFailed": "加載日誌配置失敗",
       "saveFailed": "保存日誌級別失敗",
       "levelUpdated": "日誌級別已更新",
+      "sensitiveDiagnosticsUpdated": "敏感除錯資訊日誌偏好已更新",
       "refreshed": "運行時狀態已刷新",
       "openedFolder": "日誌文件夾已打開",
       "openFailed": "打開日誌文件夾失敗",

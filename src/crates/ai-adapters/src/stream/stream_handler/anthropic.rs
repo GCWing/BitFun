@@ -1,12 +1,12 @@
 use super::inline_think::InlineThinkParser;
 use super::stream_stats::StreamStats;
-use super::{next_stream_item, TimedStreamItem};
+use super::{TimedStreamItem, next_stream_item};
 use crate::stream::types::anthropic::{
     AnthropicSSEError, ContentBlock, ContentBlockDelta, ContentBlockStart, MessageDelta,
     MessageStart, Usage,
 };
 use crate::stream::types::unified::UnifiedResponse;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use eventsource_stream::Eventsource;
 use log::{error, trace};
 use reqwest::Response;
@@ -40,11 +40,7 @@ pub async fn handle_anthropic_stream(
             TimedStreamItem::End => {
                 if received_finish_reason {
                     for unified_response in inline_think_parser.flush() {
-                        trace!(
-                            target: AI_STREAM_RESPONSE_TARGET,
-                            "Anthropic unified response: {:?}",
-                            unified_response
-                        );
+                        trace_unified_response_if_useful(&unified_response);
                         stats.record_unified_response(&unified_response);
                         let _ = tx_event.send(Ok(unified_response));
                     }
@@ -77,9 +73,14 @@ pub async fn handle_anthropic_stream(
             }
         };
 
-        trace!(target: AI_STREAM_RESPONSE_TARGET, "Anthropic SSE: {:?}", sse);
+        let include_sensitive_diagnostics = crate::diagnostics::include_sensitive_diagnostics();
+        if include_sensitive_diagnostics {
+            trace!(target: AI_STREAM_RESPONSE_TARGET, "Anthropic SSE: {:?}", sse);
+        }
+
         let event_type = sse.event;
         let data = sse.data;
+        trace_anthropic_sse_event_if_useful(&event_type, &data);
         stats.record_sse_event(&event_type);
 
         if let Some(ref tx) = tx_raw_sse {
@@ -211,11 +212,7 @@ pub async fn handle_anthropic_stream(
             }
             "message_stop" => {
                 for unified_response in inline_think_parser.flush() {
-                    trace!(
-                        target: AI_STREAM_RESPONSE_TARGET,
-                        "Anthropic unified response: {:?}",
-                        unified_response
-                    );
+                    trace_unified_response_if_useful(&unified_response);
                     stats.record_unified_response(&unified_response);
                     let _ = tx_event.send(Ok(unified_response));
                 }
@@ -259,6 +256,92 @@ fn format_provider_error_from_sse_message(event_type: &str, data: &str) -> Optio
     Some(formatted)
 }
 
+fn should_trace_anthropic_sse_event(event_type: &str, _data: &str) -> bool {
+    event_type != "content_block_delta"
+}
+
+fn trace_anthropic_sse_event_if_useful(event_type: &str, data: &str) {
+    if should_log_full_stream_events(crate::diagnostics::include_sensitive_diagnostics()) {
+        return;
+    }
+
+    if !should_trace_anthropic_sse_event(event_type, data) {
+        return;
+    }
+
+    trace!(
+        target: AI_STREAM_RESPONSE_TARGET,
+        "Anthropic SSE event: event_type={}, data_bytes={}",
+        event_type,
+        data.len()
+    );
+}
+
+fn should_log_full_stream_events(include_sensitive_diagnostics: bool) -> bool {
+    include_sensitive_diagnostics
+}
+
+fn should_trace_unified_response(response: &UnifiedResponse) -> bool {
+    response.finish_reason.is_some()
+        || response.usage.is_some()
+        || response.provider_metadata.is_some()
+        || response.thinking_signature.is_some()
+        || response
+            .tool_call
+            .as_ref()
+            .is_some_and(|tool_call| tool_call.id.is_some() || tool_call.name.is_some())
+}
+
+fn trace_unified_response_if_useful(response: &UnifiedResponse) {
+    if should_log_full_stream_events(crate::diagnostics::include_sensitive_diagnostics()) {
+        trace!(
+            target: AI_STREAM_RESPONSE_TARGET,
+            "Anthropic unified response full: {:?}",
+            response
+        );
+        return;
+    }
+
+    if !should_trace_unified_response(response) {
+        return;
+    }
+
+    let tool_call_summary = response.tool_call.as_ref().map(|tool_call| {
+        format!(
+            "index={:?}, has_id={}, name={:?}, arguments_bytes={}, snapshot={}",
+            tool_call.tool_call_index,
+            tool_call.id.is_some(),
+            tool_call.name.as_deref(),
+            tool_call
+                .arguments
+                .as_ref()
+                .map(|value| value.len())
+                .unwrap_or(0),
+            tool_call.arguments_is_snapshot
+        )
+    });
+
+    trace!(
+        target: AI_STREAM_RESPONSE_TARGET,
+        "Anthropic unified response summary: text_chars={}, reasoning_chars={}, has_signature={}, tool_call={:?}, has_usage={}, finish_reason={:?}, has_provider_metadata={}",
+        response
+            .text
+            .as_ref()
+            .map(|value| value.chars().count())
+            .unwrap_or(0),
+        response
+            .reasoning_content
+            .as_ref()
+            .map(|value| value.chars().count())
+            .unwrap_or(0),
+        response.thinking_signature.is_some(),
+        tool_call_summary,
+        response.usage.is_some(),
+        response.finish_reason.as_deref(),
+        response.provider_metadata.is_some()
+    );
+}
+
 fn emit_normalized_response(
     inline_think_parser: &mut InlineThinkParser,
     tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
@@ -266,11 +349,7 @@ fn emit_normalized_response(
     unified_response: UnifiedResponse,
 ) {
     for normalized_response in inline_think_parser.normalize_response(unified_response) {
-        trace!(
-            target: AI_STREAM_RESPONSE_TARGET,
-            "Anthropic unified response: {:?}",
-            normalized_response
-        );
+        trace_unified_response_if_useful(&normalized_response);
         stats.record_unified_response(&normalized_response);
         let _ = tx_event.send(Ok(normalized_response));
     }
@@ -278,7 +357,11 @@ fn emit_normalized_response(
 
 #[cfg(test)]
 mod tests {
-    use super::format_provider_error_from_sse_message;
+    use super::{
+        format_provider_error_from_sse_message, should_log_full_stream_events,
+        should_trace_anthropic_sse_event, should_trace_unified_response,
+    };
+    use crate::stream::types::unified::{UnifiedResponse, UnifiedToolCall};
 
     #[test]
     fn extracts_glm_business_error_from_message_event() {
@@ -297,5 +380,62 @@ mod tests {
         let raw = r#"{"type":"message_delta","delta":{"stop_reason":null}}"#;
 
         assert!(format_provider_error_from_sse_message("message_delta", raw).is_none());
+    }
+
+    #[test]
+    fn suppresses_noisy_anthropic_delta_trace_but_keeps_errors() {
+        assert!(!should_trace_anthropic_sse_event(
+            "content_block_delta",
+            r#"{"delta":{"type":"text_delta","text":"hello"}}"#
+        ));
+        assert!(should_trace_anthropic_sse_event(
+            "error",
+            r#"{"error":{"message":"bad request"}}"#
+        ));
+        assert!(should_trace_anthropic_sse_event(
+            "message_start",
+            r#"{"message":{"model":"kimi-k2.6"}}"#
+        ));
+    }
+
+    #[test]
+    fn suppresses_chunk_unified_trace_but_keeps_boundaries_and_usage() {
+        assert!(!should_trace_unified_response(&UnifiedResponse {
+            text: Some("hello".to_string()),
+            ..UnifiedResponse::default()
+        }));
+
+        assert!(!should_trace_unified_response(&UnifiedResponse {
+            tool_call: Some(UnifiedToolCall {
+                tool_call_index: None,
+                id: None,
+                name: None,
+                arguments: Some("{\"path\"".to_string()),
+                arguments_is_snapshot: false,
+            }),
+            ..UnifiedResponse::default()
+        }));
+
+        assert!(should_trace_unified_response(&UnifiedResponse {
+            tool_call: Some(UnifiedToolCall {
+                tool_call_index: None,
+                id: Some("tool-1".to_string()),
+                name: Some("Read".to_string()),
+                arguments: None,
+                arguments_is_snapshot: false,
+            }),
+            ..UnifiedResponse::default()
+        }));
+
+        assert!(should_trace_unified_response(&UnifiedResponse {
+            finish_reason: Some("tool_use".to_string()),
+            ..UnifiedResponse::default()
+        }));
+    }
+
+    #[test]
+    fn full_anthropic_stream_trace_follows_sensitive_diagnostics_preference() {
+        assert!(should_log_full_stream_events(true));
+        assert!(!should_log_full_stream_events(false));
     }
 }

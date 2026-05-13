@@ -4,7 +4,7 @@
 
 use super::providers::ConfigProviderRegistry;
 use super::types::*;
-use crate::infrastructure::{try_get_path_manager_arc, PathManager};
+use crate::infrastructure::{PathManager, try_get_path_manager_arc};
 use crate::util::errors::*;
 use log::{debug, info, warn};
 
@@ -68,6 +68,9 @@ impl ConfigManager {
         };
 
         manager.load_or_create_config().await?;
+        bitfun_ai_adapters::diagnostics::set_include_sensitive_diagnostics(
+            manager.config.app.logging.include_sensitive_diagnostics,
+        );
 
         debug!("ConfigManager initialized at {:?}", manager.config_file);
         Ok(manager)
@@ -509,6 +512,8 @@ impl ConfigManager {
         self.check_and_broadcast_app_change(path).await;
         self.check_and_broadcast_debug_mode_change(old_config).await;
         self.check_and_broadcast_log_level_change(old_config).await;
+        self.check_and_broadcast_sensitive_diagnostics_change(old_config)
+            .await;
 
         self.providers
             .notify_config_changed(path, old_config, &self.config)
@@ -562,6 +567,29 @@ impl ConfigManager {
             use super::global::{ConfigUpdateEvent, GlobalConfigManager};
             GlobalConfigManager::broadcast_update(ConfigUpdateEvent::LogLevelUpdated { new_level })
                 .await;
+        }
+    }
+
+    /// Detects and broadcasts runtime sensitive diagnostics changes.
+    async fn check_and_broadcast_sensitive_diagnostics_change(&self, old_config: &GlobalConfig) {
+        let old_include = old_config.app.logging.include_sensitive_diagnostics;
+        let new_include = self.config.app.logging.include_sensitive_diagnostics;
+
+        if old_include != new_include {
+            debug!(
+                "App logging sensitive diagnostics preference changed: {} -> {}",
+                old_include, new_include
+            );
+
+            bitfun_ai_adapters::diagnostics::set_include_sensitive_diagnostics(new_include);
+
+            use super::global::{ConfigUpdateEvent, GlobalConfigManager};
+            GlobalConfigManager::broadcast_update(
+                ConfigUpdateEvent::LoggingSensitiveDiagnosticsUpdated {
+                    include_sensitive_diagnostics: new_include,
+                },
+            )
+            .await;
         }
     }
 }

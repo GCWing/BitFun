@@ -1,10 +1,16 @@
 import { configAPI } from '@/infrastructure/api';
-import { LogLevel, createLogger, logger } from '@/shared/utils/logger';
+import {
+  LogLevel,
+  createLogger,
+  logger,
+  setIncludeSensitiveDiagnostics,
+} from '@/shared/utils/logger';
 import type { BackendLogLevel } from '../types';
 import { configManager } from './ConfigManager';
 
 const log = createLogger('FrontendLogLevelSync');
 const LOGGING_LEVEL_PATH = 'app.logging.level';
+const LOGGING_INCLUDE_SENSITIVE_PATH = 'app.logging.include_sensitive_diagnostics';
 
 let initialized = false;
 
@@ -86,6 +92,11 @@ async function resolveInitialLogLevel(): Promise<string | undefined> {
   return undefined;
 }
 
+async function resolveInitialSensitiveDiagnosticsPreference(): Promise<boolean> {
+  const value = await configManager.getConfig<boolean>(LOGGING_INCLUDE_SENSITIVE_PATH);
+  return value ?? true;
+}
+
 export async function initializeFrontendLogLevelSync(): Promise<void> {
   if (initialized) {
     return;
@@ -94,16 +105,23 @@ export async function initializeFrontendLogLevelSync(): Promise<void> {
   initialized = true;
 
   configManager.onConfigChange((path, _oldValue, newValue) => {
-    if (path !== LOGGING_LEVEL_PATH) {
+    if (path === LOGGING_LEVEL_PATH) {
+      applyFrontendLogLevel(typeof newValue === 'string' ? newValue : undefined, 'config_change');
       return;
     }
 
-    applyFrontendLogLevel(typeof newValue === 'string' ? newValue : undefined, 'config_change');
+    if (path === LOGGING_INCLUDE_SENSITIVE_PATH) {
+      setIncludeSensitiveDiagnostics(typeof newValue === 'boolean' ? newValue : true);
+    }
   });
 
   try {
-    const initialLevel = await resolveInitialLogLevel();
+    const [initialLevel, includeSensitiveDiagnostics] = await Promise.all([
+      resolveInitialLogLevel(),
+      resolveInitialSensitiveDiagnosticsPreference(),
+    ]);
     applyFrontendLogLevel(initialLevel, 'startup');
+    setIncludeSensitiveDiagnostics(includeSensitiveDiagnostics);
   } catch (error) {
     log.error('Failed to initialize frontend log level sync', error);
   }

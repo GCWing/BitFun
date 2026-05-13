@@ -110,6 +110,10 @@
     "level": {
       "description": "实时控制日志输出级别，修改后立即生效。"
     },
+    "sensitiveDiagnostics": {
+      "label": "包含敏感调试信息",
+      "description": "开启后，本地日志可能包含用户 Prompt、模型请求和响应 payload、工具参数、文件路径以及 Webview 事件 payload，用于问题排查。BitFun 不会自动上传这些日志文件。"
+    },
     "path": {
       "description": "本次启动写入日志文件所在的目录。"
     },
@@ -131,6 +135,7 @@
       "loadFailed": "加载日志配置失败",
       "saveFailed": "保存日志级别失败",
       "levelUpdated": "日志级别已更新",
+      "sensitiveDiagnosticsUpdated": "敏感调试信息日志偏好已更新",
       "refreshed": "运行时状态已刷新",
       "openedFolder": "日志文件夹已打开",
       "openFailed": "打开日志文件夹失败",

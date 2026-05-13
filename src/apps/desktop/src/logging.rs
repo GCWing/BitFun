@@ -5,12 +5,12 @@ use chrono::Local;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::{
-    atomic::{AtomicU8, Ordering},
     OnceLock,
+    atomic::{AtomicU8, Ordering},
 };
 use std::thread;
-use tauri::{plugin::TauriPlugin, Runtime};
-use tauri_plugin_log::{fern, RotationStrategy, Target, TargetKind, TimezoneStrategy};
+use tauri::{Runtime, plugin::TauriPlugin};
+use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy, fern};
 
 const SESSION_DIR_PATTERN: &str = r"^\d{8}T\d{6}$";
 const MAX_LOG_SESSIONS: usize = 10;
@@ -309,6 +309,17 @@ pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>) -> TauriPlugin<R> 
         .level_for("opentelemetry_sdk", log::LevelFilter::Off)
         .level_for("opentelemetry-otlp", log::LevelFilter::Off)
         .level_for("notify", log::LevelFilter::Off)
+        // These targets can emit hot-path trace diagnostics during event
+        // routing. Keep debug diagnostics, warnings, and errors, but avoid
+        // drowning useful app traces in mechanical noise.
+        .level_for(
+            "bitfun_core::agentic::events::queue",
+            log::LevelFilter::Debug,
+        )
+        .level_for(
+            "bitfun_core::agentic::events::router",
+            log::LevelFilter::Debug,
+        )
         .level_for("hyper_util", log::LevelFilter::Info)
         .level_for("h2", log::LevelFilter::Info)
         .level_for("portable_pty", log::LevelFilter::Info)

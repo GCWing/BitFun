@@ -31,6 +31,7 @@ export type BackendLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'o
 
 export interface AppLoggingConfig {
   level: BackendLogLevel;
+  include_sensitive_diagnostics: boolean;
 }
 
 // Reserved; legacy `default_mode` in saved JSON is ignored by the app.

@@ -225,6 +225,7 @@ function BasicsAutoUpdateSection() {
 function BasicsLoggingSection() {
   const { t } = useTranslation('settings/basics');
   const [configLevel, setConfigLevel] = useState<BackendLogLevel>('info');
+  const [includeSensitiveDiagnostics, setIncludeSensitiveDiagnostics] = useState(true);
   const [runtimeInfo, setRuntimeInfo] = useState<RuntimeLoggingInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -252,12 +253,14 @@ function BasicsLoggingSection() {
     try {
       setLoading(true);
 
-      const [savedLevel, info] = await Promise.all([
+      const [savedLevel, savedIncludeSensitiveDiagnostics, info] = await Promise.all([
         configManager.getConfig<BackendLogLevel>('app.logging.level'),
+        configManager.getConfig<boolean>('app.logging.include_sensitive_diagnostics'),
         configAPI.getRuntimeLoggingInfo(),
       ]);
 
       setConfigLevel(savedLevel || info.effectiveLevel || 'info');
+      setIncludeSensitiveDiagnostics(savedIncludeSensitiveDiagnostics ?? true);
       setRuntimeInfo(info);
     } catch (error) {
       log.error('Failed to load logging config', error);
@@ -294,6 +297,27 @@ function BasicsLoggingSection() {
       }
     },
     [configLevel, showMessage, t]
+  );
+
+  const handleSensitiveDiagnosticsChange = useCallback(
+    async (checked: boolean) => {
+      const previousValue = includeSensitiveDiagnostics;
+      setIncludeSensitiveDiagnostics(checked);
+      setSaving(true);
+
+      try {
+        await configManager.setConfig('app.logging.include_sensitive_diagnostics', checked);
+        configManager.clearCache();
+        showMessage('success', t('logging.messages.sensitiveDiagnosticsUpdated'));
+      } catch (error) {
+        setIncludeSensitiveDiagnostics(previousValue);
+        log.error('Failed to update sensitive diagnostics logging preference', { checked, error });
+        showMessage('error', t('logging.messages.saveFailed'));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [includeSensitiveDiagnostics, showMessage, t]
   );
 
   const handleOpenFolder = useCallback(async () => {
@@ -340,6 +364,19 @@ function BasicsLoggingSection() {
                 disabled={saving}
               />
             </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('logging.sensitiveDiagnostics.label')}
+            description={t('logging.sensitiveDiagnostics.description')}
+            align="center"
+          >
+            <Switch
+              checked={includeSensitiveDiagnostics}
+              onChange={(e) => {
+                void handleSensitiveDiagnosticsChange(e.target.checked);
+              }}
+              disabled={saving}
+            />
           </ConfigPageRow>
           <ConfigPageRow
             label={t('logging.sections.path')}

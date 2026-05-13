@@ -53,6 +53,11 @@ pub enum ConfigUpdateEvent {
         /// New runtime log level.
         new_level: String,
     },
+    /// Runtime sensitive diagnostics preference updated.
+    LoggingSensitiveDiagnosticsUpdated {
+        /// Whether logs may include prompts, payloads, and other sensitive diagnostics.
+        include_sensitive_diagnostics: bool,
+    },
     /// AI models / default-model slots / agent-model mappings were reconciled
     /// after a model became unavailable (disabled, deleted, or otherwise
     /// invalid). Emitted whenever the config layer had to silently rewrite

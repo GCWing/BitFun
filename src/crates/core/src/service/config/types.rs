@@ -117,6 +117,9 @@ pub struct AppLoggingConfig {
     /// Runtime backend log level.
     /// Allowed values: trace, debug, info, warn, error, off.
     pub level: String,
+    /// Whether diagnostic logs may include sensitive troubleshooting payloads.
+    #[serde(default = "default_true")]
+    pub include_sensitive_diagnostics: bool,
 }
 
 /// Session-related UI preferences.
@@ -1294,6 +1297,7 @@ impl Default for AppLoggingConfig {
         Self {
             // Set to Debug in early development for easier diagnostics
             level: "debug".to_string(),
+            include_sensitive_diagnostics: true,
         }
     }
 }
@@ -1727,7 +1731,9 @@ impl AIModelConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{AIConfig, AIExperienceConfig, AIModelConfig, GlobalConfig, ReasoningMode};
+    use super::{
+        AIConfig, AIExperienceConfig, AIModelConfig, AppLoggingConfig, GlobalConfig, ReasoningMode,
+    };
 
     #[test]
     fn deserializes_compatibility_thinking_flag_into_reasoning_mode() {
@@ -1970,6 +1976,16 @@ mod tests {
         assert_eq!(config.stream_idle_timeout_secs, None);
         assert_eq!(config.subagent_max_concurrency, 5);
         assert!(config.review_teams.contains_key("default"));
+    }
+
+    #[test]
+    fn app_logging_defaults_to_sensitive_diagnostics_enabled() {
+        let config: AppLoggingConfig = serde_json::from_value(serde_json::json!({
+            "level": "trace"
+        }))
+        .expect("logging config without sensitive preference should deserialize");
+
+        assert!(config.include_sensitive_diagnostics);
     }
 
     #[test]

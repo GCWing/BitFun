@@ -110,6 +110,10 @@
     "level": {
       "description": "Controls log verbosity in real time. Changes apply immediately."
     },
+    "sensitiveDiagnostics": {
+      "label": "Include sensitive diagnostic data",
+      "description": "When enabled, local logs may include prompts, model request and response payloads, tool arguments, file paths, and webview event payloads for troubleshooting. BitFun does not upload these log files automatically."
+    },
     "path": {
       "description": "Directory where log files for this run are written."
     },
@@ -131,6 +135,7 @@
       "loadFailed": "Failed to load logging configuration",
       "saveFailed": "Failed to save logging level",
       "levelUpdated": "Logging level updated",
+      "sensitiveDiagnosticsUpdated": "Sensitive diagnostic logging preference updated",
       "refreshed": "Runtime status refreshed",
       "openedFolder": "Log folder opened",
       "openFailed": "Failed to open log folder",

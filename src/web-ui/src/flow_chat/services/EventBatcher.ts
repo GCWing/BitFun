@@ -9,7 +9,7 @@
  * - Supports different key generation strategies for normal and subagent events
  */
 
-import { createLogger } from '@/shared/utils/logger';
+import { areSensitiveDiagnosticsEnabled, createLogger } from '@/shared/utils/logger';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 
 const log = createLogger('EventBatcher');
@@ -27,6 +27,70 @@ export interface BatchedEvent<T = any> {
 
 export interface EventBatcherOptions {
   onFlush: (events: Array<{ key: string; payload: any }>) => void;
+}
+
+export interface BatchedEventLogSummary {
+  rawEventCount: number;
+  mergedEventCount: number;
+  events: Array<{
+    key: string;
+    strategy: MergeStrategy;
+    sourceCount: number;
+    timestamp: number;
+    eventType?: string;
+    toolName?: string;
+    paramsLength?: number;
+  }>;
+}
+
+export interface SensitiveBatchedEventLogPayload {
+  rawEventCount: number;
+  mergedEventCount: number;
+  mergedEvents: BatchedEvent[];
+}
+
+export function summarizeBatchedEventsForLog(bufferedEvents: BatchedEvent[]): BatchedEventLogSummary {
+  return {
+    rawEventCount: bufferedEvents.reduce((count, event) => count + event.sourceCount, 0),
+    mergedEventCount: bufferedEvents.length,
+    events: bufferedEvents.map(({ key, payload, strategy, sourceCount, timestamp }) => {
+      const toolEvent = payload?.toolEvent;
+      const params = toolEvent?.params;
+
+      return {
+        key,
+        strategy,
+        sourceCount,
+        timestamp,
+        eventType: toolEvent?.event_type,
+        toolName: toolEvent?.tool_name,
+        paramsLength: typeof params === 'string' ? params.length : undefined,
+      };
+    }),
+  };
+}
+
+export function getBatchedEventsLogPayload(
+  bufferedEvents: BatchedEvent[]
+): BatchedEventLogSummary | SensitiveBatchedEventLogPayload {
+  const rawEventCount = bufferedEvents.reduce((count, event) => count + event.sourceCount, 0);
+  const mergedEventCount = bufferedEvents.length;
+
+  if (!areSensitiveDiagnosticsEnabled()) {
+    return summarizeBatchedEventsForLog(bufferedEvents);
+  }
+
+  return {
+    rawEventCount,
+    mergedEventCount,
+    mergedEvents: bufferedEvents.map(({ key, payload, strategy, sourceCount, timestamp }) => ({
+      key,
+      payload,
+      strategy,
+      sourceCount,
+      timestamp,
+    })),
+  };
 }
 
 export class EventBatcher {
@@ -61,8 +125,6 @@ export class EventBatcher {
         existing.timestamp = Date.now();
       }
       existing.sourceCount += 1;
-
-      log.trace('Merged event', { key, strategy });
     } else {
       this.buffer.set(key, {
         key,
@@ -72,8 +134,6 @@ export class EventBatcher {
         sourceCount: 1,
         timestamp: Date.now()
       });
-
-      log.trace('Added new event', { key, strategy });
     }
 
     this.scheduleFlush();
@@ -112,25 +172,15 @@ export class EventBatcher {
 
     const startTime = nowMs();
     const bufferedEvents = Array.from(this.buffer.values());
-    const mergedEventCount = bufferedEvents.length;
-    const rawEventCount = bufferedEvents.reduce((count, event) => count + event.sourceCount, 0);
+    const logPayload = getBatchedEventsLogPayload(bufferedEvents);
+    const { rawEventCount, mergedEventCount } = logPayload;
 
     const events = bufferedEvents.map(({ key, payload }) => ({
       key,
       payload
     }));
 
-    log.trace('Flushing batched events', {
-      rawEventCount,
-      mergedEventCount,
-      mergedEvents: bufferedEvents.map(({ key, payload, strategy, sourceCount, timestamp }) => ({
-        key,
-        strategy,
-        sourceCount,
-        timestamp,
-        payload
-      }))
-    });
+    log.trace('Flushing batched events', logPayload);
 
     this.buffer = new Map();
     this.onFlush(events);
