@@ -57,6 +57,26 @@ const clearSessionUnreadCompletionAfterRender = (sessionId: string): void => {
 export const isBtwSessionPanelContent = (content: PanelContent | null | undefined): boolean =>
   content?.type === BTW_SESSION_PANEL_TYPE;
 
+const isRightPanelCollapsed = (): boolean => {
+  try {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    const layoutState = (window as unknown as {
+      __BITFUN_LAYOUT_STATE__?: { rightPanelCollapsed?: boolean };
+    }).__BITFUN_LAYOUT_STATE__;
+    return layoutState?.rightPanelCollapsed ?? false;
+  } catch {
+    return false;
+  }
+};
+
+const requestRightPanelExpansion = (): void => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new window.CustomEvent('expand-right-panel'));
+  }
+};
+
 export const buildBtwSessionPanelContent = (
   childSessionId: string,
   parentSessionId: string,
@@ -140,8 +160,22 @@ export function openBtwSessionInAuxPane(params: {
     params.workspacePath
   );
 
-  if (params.expand !== false && typeof window !== 'undefined') {
-    window.dispatchEvent(new window.CustomEvent('expand-right-panel'));
+  const duplicateCheckKey = content.metadata?.duplicateCheckKey;
+  const canvasStore = useAgentCanvasStore.getState();
+  if (duplicateCheckKey) {
+    const existing = canvasStore.findTabByMetadata({ duplicateCheckKey });
+    if (existing) {
+      if (params.expand !== false && isRightPanelCollapsed()) {
+        requestRightPanelExpansion();
+      }
+      canvasStore.switchToTab(existing.tab.id, existing.groupId);
+      clearSessionUnreadCompletionAfterRender(params.childSessionId);
+      return;
+    }
+  }
+
+  if (params.expand !== false) {
+    requestRightPanelExpansion();
   }
 
   createTab({
@@ -150,7 +184,7 @@ export function openBtwSessionInAuxPane(params: {
     data: content.data,
     metadata: content.metadata,
     checkDuplicate: true,
-    duplicateCheckKey: content.metadata?.duplicateCheckKey,
+    duplicateCheckKey,
     replaceExisting: false,
     mode: 'agent',
   });

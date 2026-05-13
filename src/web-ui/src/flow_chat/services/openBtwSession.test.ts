@@ -4,9 +4,33 @@ import { openBtwSessionInAuxPane } from './openBtwSession';
 const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
   clearSessionUnreadCompletion: vi.fn(),
+  findTabByMetadata: vi.fn(),
+  switchToTab: vi.fn(),
+  closeTab: vi.fn(),
 }));
 
 let animationFrameCallbacks: FrameRequestCallback[] = [];
+
+const stubWindowForPanelExpansion = (rightPanelCollapsed: boolean) => {
+  const dispatchEvent = vi.fn();
+  class TestCustomEvent {
+    readonly type: string;
+    readonly detail?: unknown;
+
+    constructor(type: string, init?: { detail?: unknown }) {
+      this.type = type;
+      this.detail = init?.detail;
+    }
+  }
+
+  vi.stubGlobal('window', {
+    CustomEvent: TestCustomEvent,
+    dispatchEvent,
+    __BITFUN_LAYOUT_STATE__: { rightPanelCollapsed },
+  });
+
+  return dispatchEvent;
+};
 
 vi.mock('@/infrastructure/i18n', () => ({
   i18nService: {
@@ -39,8 +63,9 @@ vi.mock('@/app/components/panels/content-canvas/stores', () => ({
       primaryGroup: { activeTabId: null, tabs: [] },
       secondaryGroup: { activeTabId: null, tabs: [] },
       tertiaryGroup: { activeTabId: null, tabs: [] },
-      findTabByMetadata: vi.fn(),
-      closeTab: vi.fn(),
+      findTabByMetadata: (...args: unknown[]) => mocks.findTabByMetadata(...args),
+      switchToTab: (...args: unknown[]) => mocks.switchToTab(...args),
+      closeTab: (...args: unknown[]) => mocks.closeTab(...args),
     }),
   },
 }));
@@ -72,6 +97,9 @@ describe('openBtwSessionInAuxPane', () => {
     animationFrameCallbacks = [];
     mocks.createTab.mockClear();
     mocks.clearSessionUnreadCompletion.mockClear();
+    mocks.findTabByMetadata.mockReset();
+    mocks.switchToTab.mockClear();
+    mocks.closeTab.mockClear();
     vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
       animationFrameCallbacks.push(callback);
       return animationFrameCallbacks.length;
@@ -109,5 +137,48 @@ describe('openBtwSessionInAuxPane', () => {
 
     animationFrameCallbacks.shift()?.(16);
     expect(mocks.clearSessionUnreadCompletion).toHaveBeenCalledWith('review-child');
+  });
+
+  it('switches to an existing aux pane tab without expanding the right panel again', () => {
+    const dispatchEvent = stubWindowForPanelExpansion(false);
+    mocks.findTabByMetadata.mockReturnValue({
+      tab: { id: 'existing-review-tab' },
+      groupId: 'secondary',
+    });
+
+    openBtwSessionInAuxPane({
+      childSessionId: 'review-child',
+      parentSessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+    });
+
+    expect(mocks.findTabByMetadata).toHaveBeenCalledWith({
+      duplicateCheckKey: 'btw-session-review-child',
+    });
+    expect(mocks.switchToTab).toHaveBeenCalledWith('existing-review-tab', 'secondary');
+    expect(mocks.createTab).not.toHaveBeenCalled();
+    expect(dispatchEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'expand-right-panel' }),
+    );
+  });
+
+  it('expands the right panel before switching to an existing aux pane tab when collapsed', () => {
+    const dispatchEvent = stubWindowForPanelExpansion(true);
+    mocks.findTabByMetadata.mockReturnValue({
+      tab: { id: 'existing-review-tab' },
+      groupId: 'secondary',
+    });
+
+    openBtwSessionInAuxPane({
+      childSessionId: 'review-child',
+      parentSessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+    });
+
+    expect(mocks.switchToTab).toHaveBeenCalledWith('existing-review-tab', 'secondary');
+    expect(mocks.createTab).not.toHaveBeenCalled();
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'expand-right-panel' }),
+    );
   });
 });

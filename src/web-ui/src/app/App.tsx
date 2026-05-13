@@ -15,11 +15,11 @@ import { syncAgentCompanionDesktopWindow } from '@/infrastructure/config/service
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { buildAgentCompanionActivity, subscribeAgentCompanionActivity } from '@/flow_chat/utils/agentCompanionActivity';
 import { emitAgentCompanionActivity } from '@/flow_chat/services/AgentCompanionActivityBridge';
-import { FlowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useWorkspaceContext } from '../infrastructure/contexts/WorkspaceContext';
 import SplashScreen from './components/SplashScreen/SplashScreen';
 import { useGlobalSceneShortcuts } from './hooks/useGlobalSceneShortcuts';
 import { useDebugInspector } from '@/infrastructure/debug/useDebugInspector';
+import { openAgentCompanionSession } from './services/openAgentCompanionSession';
 
 // Toolbar Mode
 import { ToolbarModeProvider } from '../flow_chat';
@@ -198,10 +198,7 @@ function App() {
           const sessionId = event.payload?.sessionId;
           if (!sessionId) return;
 
-          const flowChatStore = FlowChatStore.getInstance();
-          if (flowChatStore.getState().sessions.has(sessionId)) {
-            flowChatStore.switchSession(sessionId);
-          }
+          await openAgentCompanionSession(sessionId);
 
           try {
             const { invoke } = await import('@tauri-apps/api/core');

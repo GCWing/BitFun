@@ -580,7 +580,6 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           phase: 'review_completed',
           completedRemediationIds: currentActionState.completedRemediationIds,
         });
-        store.minimize(childSessionId);
       } else if (isComplete && currentActionState.phase === 'review_running') {
         store.showActionBar({
           childSessionId,

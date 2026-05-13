@@ -329,6 +329,27 @@ function createCancelledResumeDeepReview(): Session {
   } as Session;
 }
 
+function createCompletedResumeDeepReview(): Session {
+  const childSession = createReviewSession();
+  return {
+    ...childSession,
+    dialogTurns: [
+      createInterruptedDeepReviewWithoutResult().dialogTurns[0],
+      {
+        ...childSession.dialogTurns[0],
+        id: 'turn-2',
+        userMessage: {
+          id: 'user-2',
+          content: 'Continue interrupted Deep Review',
+          timestamp: 2,
+        },
+        startTime: 2,
+        timestamp: 2,
+      },
+    ],
+  } as Session;
+}
+
 function createCancelledFixDeepReview(): Session {
   const childSession = createReviewSession();
   return {
@@ -703,6 +724,51 @@ describe('BtwSessionPanel review action bar integration', () => {
       childSessionId: 'deep-review-child',
       phase: 'resume_running',
       minimized: true,
+    });
+  });
+
+  it('expands the action bar when a resumed Deep Review completes successfully', async () => {
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', createCompletedResumeDeepReview()],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    const store = useReviewActionBarStore.getState();
+    store.showInterruptedActionBar({
+      childSessionId: 'deep-review-child',
+      parentSessionId: 'parent-session',
+      interruption: {
+        phase: 'review_interrupted',
+        childSessionId: 'deep-review-child',
+        parentSessionId: 'parent-session',
+        originalTarget: '/DeepReview review latest commit',
+        errorDetail: { category: 'unknown', rawMessage: 'previous execution failed' },
+        canResume: true,
+        recommendedActions: [],
+        reviewers: [],
+      },
+    });
+    store.setActiveAction('resume', { baselineTurnId: 'turn-1' });
+    store.updatePhase('resume_running');
+    store.minimize();
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+    });
+
+    expect(useReviewActionBarStore.getState()).toMatchObject({
+      childSessionId: 'deep-review-child',
+      phase: 'review_completed',
+      minimized: false,
     });
   });
 
