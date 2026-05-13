@@ -6,5 +6,6 @@
 pub mod framework;
 pub mod input_validator;
 
+pub use bitfun_core_types::ToolImageAttachment;
 pub use framework::{ToolResult, ValidationResult};
 pub use input_validator::InputValidator;

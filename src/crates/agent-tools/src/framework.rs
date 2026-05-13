@@ -1,4 +1,4 @@
-use bitfun_ai_adapters::types::ToolImageAttachment;
+use bitfun_core_types::ToolImageAttachment;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

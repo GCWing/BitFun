@@ -5,6 +5,8 @@
 
 pub mod errors;
 pub mod session;
+pub mod tool_image_attachment;
 
 pub use errors::{AiErrorDetail, ErrorCategory};
 pub use session::SessionKind;
+pub use tool_image_attachment::ToolImageAttachment;

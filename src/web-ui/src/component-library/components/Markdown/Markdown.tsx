@@ -1130,7 +1130,7 @@ export const Markdown = React.memo<MarkdownProps>(({
     currentWorkspacePath
   ]);
   
-  const wrapperClassName = `markdown-renderer ${className} ${isStreaming && contentStr ? 'markdown-renderer--streaming' : ''}`.trim();
+  const wrapperClassName = `markdown-renderer ${className}`.trim();
 
   return (
     <div className={wrapperClassName}>

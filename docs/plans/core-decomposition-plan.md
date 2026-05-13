@@ -1513,6 +1513,48 @@ cargo check --workspace
 - 本次 rebase 后重新核对最新主干 Deep Review capacity/cost/queue、context profile、evidence ledger 与 session manifest 变更：当前 PR 已完成 Git feature group 的 owner crate 归属迁移，但未改动这些 Deep Review 行为路径；后续迁移必须补端口设计和等价测试后再推进。
 - 本次 P2 后续复核结论：上述高耦合剩余项不是纯文件搬迁；若继续迁移会改变依赖方向或需要新增 port/provider 行为合约。因此当前 PR 将它们显式保留为 core-owned runtime，并通过 P3 boundary check 防止已拆 owner crate 回流依赖 core。
 
+**后续风险重排（2026-05-13）：**
+
+当前文档的最终目标仍然成立，但后续不能把“feature 最小依赖”当成已经自然达成。低风险、可确定收益的保护项应前移；会触碰运行时语义的迁移项必须拆成单独评审。
+
+可提前进入下一批的小风险事项：
+
+- 补充 dependency profile / feature graph 基线：记录 `bitfun-core`、`bitfun-services-integrations --no-default-features`、单 feature owner crate、desktop、CLI、ACP 的 `cargo tree -e features` 预期，明确哪些目标允许出现 `rmcp`、`git2`、`image`、`tokio-tungstenite`、`bitfun-relay-server`、Tauri / CLI presentation 依赖。
+- 修正轻量 contract crate 的依赖泄漏，例如 `bitfun-agent-tools` 只应承载 tool DTO / contract；如果需要移动 `ToolImageAttachment` 一类纯 DTO，必须保留旧路径 re-export 和序列化 round-trip 测试。
+- 为 `services-core`、`tool-packs`、`product-domains` 补清晰的 feature group 说明和边界检查；允许先声明或测试空 feature，但不能声明对应 runtime 已迁移。
+- 扩展 boundary check，覆盖 feature graph 中的禁止依赖：`core-types`、`runtime-ports`、`agent-tools` 不能出现 concrete service、network/client、platform adapter、CLI/TUI 或 heavy integration 依赖。
+- 为高风险迁移建立迁移前快照测试：tool registry 清单与顺序、dynamic provider metadata、snapshot wrapper、MCP wire shape、remote-connect 消息字段、miniapp permission policy、function-agent 输入输出。
+
+本批执行状态：
+
+- 已扩展 `scripts/check-core-boundaries.mjs`，增加 dependency profile / feature graph 静态保护：`core-types` default profile 禁止非 DTO 依赖，`runtime-ports` default profile 禁止 service implementation 依赖，`agent-tools` contract profile 禁止依赖 `bitfun-ai-adapters`，`product-domains` default profile 禁止无条件拉入 `dirs`，`services-integrations` default profile 禁止无条件拉入 feature-gated integration 依赖。
+- 已将 `ToolImageAttachment` 提升到 `bitfun-core-types`，并由 `bitfun-ai-adapters`、`bitfun-agent-tools` 和 `bitfun-core::util::types` 保留旧路径兼容；`bitfun-agent-tools` 不再依赖 `bitfun-ai-adapters`。
+- 已将 `product-domains` 的 `dirs` 依赖限制到 `miniapp` feature，默认 profile 保持轻量。
+- 已补充 `ToolResult` image attachment 序列化 round-trip 测试，以及 tool registry readonly 工具清单快照测试；后续迁移 `ToolUseContext`、registry/provider 或 concrete tool implementation 前必须保持这些基线。
+- 本批 dependency profile 基线已验证：
+  - `cargo tree -p bitfun-core-types --depth 1 --edges features` 运行时依赖仅显示 `serde`，测试依赖显示 `serde_json`。
+  - `cargo tree -p bitfun-runtime-ports --depth 1 --edges features` 仅显示 `async-trait`、`serde`、`serde_json`。
+  - `cargo tree -p bitfun-agent-tools --depth 1 --edges features` 仅显示 `bitfun-core-types`、`serde`、`serde_json`。
+  - `cargo tree -p bitfun-product-domains --no-default-features --depth 1 --edges features` 仅显示 `serde`、`serde_json`，不会拉入 `dirs`。
+  - `cargo tree -p bitfun-services-integrations --no-default-features --depth 1 --edges features` 仅显示 `bitfun-events`、`serde`、`serde_json`、`log`、`tokio`。
+
+需要单独审视的高风险项：
+
+- `ToolUseContext`、tool registry/provider、concrete tool implementation 外移。
+- MCP dynamic tools、MCP adapter、server process / transport runtime 外移。
+- remote-connect、remote-SSH runtime、announcement runtime 外移。
+- miniapp runtime/compiler/builtin 与 function-agent 运行逻辑外移。
+- agent registry / subagent visibility 外移，特别是 hidden/custom/review 分组、mode-scoped visibility 和 desktop API contract。
+- `bitfun-core default = []`、per-product feature set、构建脚本或 release 能力调整。
+
+这些高风险项的进入条件：
+
+- 先有 port/provider 设计，且不依赖回 `bitfun-core`。
+- 先有迁移前后等价测试或脚本快照，不能只依赖 `cargo check`。
+- 保留旧公开路径兼容，或者明确记录需要用户确认的行为合约变化。
+- 产品完整 runtime 通过 `product-full` 保持同等能力；任一产品需要减少 feature 才能通过时必须暂停。
+- 每个 PR 只移动一个 runtime owner 或一个 feature group，不和默认 feature、构建脚本、依赖升级混合。
+
 **暂停条件：**
 
 - 某个迁移必须让产品 crate 减少 feature 才能通过。
@@ -1605,11 +1647,13 @@ git diff -- package.json scripts/dev.cjs scripts/desktop-tauri-build.mjs scripts
 5. 抽取 `bitfun-agent-stream`，迁移 stream processor 测试。
 6. 引入 runtime ports 初始边界；后续在 service 迁移中逐步打断 `service <-> agentic` concrete 循环。
 7. 抽取 `bitfun-services-core`。
-8. 抽取 `bitfun-services-integrations`，按 `git`、`remote-ssh`、`mcp`、`remote-connect` 顺序迁移 feature group。
-9. 拆解 agent tools 为 `bitfun-agent-tools` 和 `bitfun-tool-packs`。
-10. 抽取 `bitfun-product-domains`，承载 miniapp 和 function agents。
-11. 将 `bitfun-core` 收敛为 facade + product runtime assembly。
-12. 只有在全产品显式启用完整 runtime 且完整门禁通过后，单独评估 `bitfun-core default = []`。
+8. 抽取 `bitfun-services-integrations` 的低风险 feature group 和纯 helper，先闭环 `git`、remote-SSH contract/helper、MCP 纯 protocol/config/auth helper；不把 remote-connect 或 MCP dynamic runtime 顺带迁入。
+9. 前移低风险保护项：dependency profile / feature graph 基线、轻量 contract crate 依赖瘦身、feature group 说明、boundary check 扩展、迁移前快照测试。
+10. 拆解 agent tools 为 `bitfun-agent-tools` 和 `bitfun-tool-packs` 的 contract/provider 前置层；先锁定工具清单、dynamic provider metadata、snapshot wrapper 等价，再评估 `ToolUseContext` 和具体工具实现外移。
+11. 抽取 `bitfun-product-domains` 的纯 DTO / policy / builder 层；miniapp runtime/compiler/builtin 和 function-agent 运行逻辑必须作为单独高风险迁移评审。
+12. 分批迁移高风险 runtime：remote-SSH runtime、MCP runtime、remote-connect、tool registry/provider、miniapp/function-agent runtime、agent registry。每批只处理一个 owner，先补 port/provider 设计和等价测试。
+13. 将 `bitfun-core` 收敛为 facade + product runtime assembly，并验证它不再承载新的业务实现。
+14. 只有在全产品显式启用完整 runtime、dependency profile 证明收益、完整门禁通过后，单独评估 `bitfun-core default = []` 或 per-product feature set。
 
 冗余清理 PR 不进入上述主线序号。只有在满足 `0A.6` 的绝对等价要求时，才可以插入到相邻里程碑之间，并且不得与主线拆分 PR 混合。
 
@@ -1618,6 +1662,7 @@ git diff -- package.json scripts/dev.cjs scripts/desktop-tauri-build.mjs scripts
 ## 12. 完成标准
 
 - stream processor 和纯 service 测试可以在不编译完整产品 runtime 的情况下运行。
+- 至少有一组 dependency profile 证明低层 contract / owner crate 可以绕开 `bitfun-core` 和对应 heavy dependency；若只有极少数模块可做到，必须在文档中明确剩余阻塞 owner，而不能声明重构完成。
 - 产品构建脚本和 release/fast build 脚本没有因为 core 拆解被修改。
 - 产品 crate 仍拥有拆解前的完整能力集合。
 - `bitfun-core` 对现有调用方保持 import-compatible。

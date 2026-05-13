@@ -12,4 +12,4 @@ crate-type = ["rlib"]
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-bitfun-ai-adapters = { path = "../ai-adapters" }
+bitfun-core-types = { path = "../core-types" }

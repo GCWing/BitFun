@@ -459,6 +459,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn registry_preserves_readonly_tool_manifest_for_owner_migration() {
+        let readonly_names = super::get_readonly_tools()
+            .await
+            .expect("readonly tools")
+            .iter()
+            .map(|tool| tool.name().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            readonly_names,
+            vec![
+                "LS",
+                "Read",
+                "Glob",
+                "Grep",
+                "SessionHistory",
+                "TodoWrite",
+                "Skill",
+                "AskUserQuestion",
+                "WebSearch",
+                "WebFetch",
+                "ListMCPResources",
+                "ReadMCPResource",
+                "ListMCPPrompts",
+                "GetMCPPrompt",
+                "GenerativeUI",
+                "GetFileDiff",
+                "Log",
+                "CreatePlan",
+                "submit_code_review",
+                "Playbook",
+            ],
+            "readonly tool manifest must stay stable before moving registry ownership"
+        );
+    }
+
+    #[tokio::test]
     async fn dynamic_tool_provider_uses_explicit_provider_metadata() {
         let mut registry = ToolRegistry::new();
         registry.register_tool(dynamic_tool(

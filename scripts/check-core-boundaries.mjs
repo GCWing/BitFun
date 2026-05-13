@@ -89,6 +89,7 @@ const lightweightBoundaryRules = [
     reason: 'agent-tools must not depend on concrete service or product runtime implementations',
     forbiddenDeps: [
       'bitfun-core',
+      'bitfun-ai-adapters',
       'bitfun-services-core',
       'bitfun-services-integrations',
       'bitfun-tool-packs',
@@ -106,6 +107,129 @@ const lightweightBoundaryRules = [
       'crossterm',
       'arboard',
       'syntect-tui',
+    ],
+  },
+];
+
+const dependencyProfileRules = [
+  {
+    crateName: 'core-types',
+    profileName: 'default DTO profile',
+    reason: 'core-types default profile must stay DTO-only',
+    forbiddenNonOptionalDeps: [
+      'bitfun-core',
+      'bitfun-events',
+      'bitfun-ai-adapters',
+      'bitfun-agent-stream',
+      'bitfun-runtime-ports',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-agent-tools',
+      'bitfun-tool-packs',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'runtime-ports',
+    profileName: 'default ports profile',
+    reason: 'runtime-ports default profile must stay trait/DTO-only',
+    forbiddenNonOptionalDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-agent-stream',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-agent-tools',
+      'bitfun-tool-packs',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'agent-tools',
+    profileName: 'tool contract-only profile',
+    reason: 'agent-tools must stay a lightweight tool contract crate',
+    forbiddenNonOptionalDeps: [
+      'bitfun-ai-adapters',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'tauri',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'product-domains',
+    profileName: 'default product domain profile',
+    reason: 'product-domains default profile must not compile runtime/platform helpers',
+    forbiddenNonOptionalDeps: [
+      'dirs',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'tauri',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'services-integrations',
+    profileName: 'default integrations profile',
+    reason: 'services-integrations default profile must not compile feature-gated integrations',
+    forbiddenNonOptionalDeps: [
+      'aes-gcm',
+      'anyhow',
+      'async-trait',
+      'base64',
+      'bitfun-services-core',
+      'chrono',
+      'git2',
+      'notify',
+      'rand',
+      'rmcp',
+      'sha2',
+      'thiserror',
+      'tokio-util',
+      'tokio-tungstenite',
+      'bitfun-relay-server',
     ],
   },
 ];
@@ -506,6 +630,90 @@ function isManifestDependencyDeclaration(trimmedLine, depName) {
   return isInlineDependency || isDependencyTable;
 }
 
+function isDependencyListHeader(trimmedLine) {
+  return /^\[(?:target\.[^\]]+\.)?(?:dependencies|dev-dependencies|build-dependencies)\]$/.test(
+    trimmedLine,
+  );
+}
+
+function parseManifestDependencies(lines) {
+  const deps = [];
+  let inDependencyList = false;
+  let currentTable = null;
+  let currentInline = null;
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('#') || trimmed === '') {
+      return;
+    }
+
+    if (currentInline) {
+      if (/\boptional\s*=\s*true\b/.test(trimmed)) {
+        currentInline.optional = true;
+      }
+      if (trimmed.includes('}')) {
+        currentInline = null;
+      }
+      return;
+    }
+
+    const headerMatch = trimmed.match(/^\[(.+)]$/);
+    if (headerMatch) {
+      inDependencyList = isDependencyListHeader(trimmed);
+      currentTable = null;
+      for (const depName of collectKnownDependencyNames()) {
+        if (manifestDependencyHeaderPattern(depName).test(trimmed)) {
+          currentTable = {
+            name: depName,
+            line: index + 1,
+            optional: false,
+          };
+          deps.push(currentTable);
+          break;
+        }
+      }
+      return;
+    }
+
+    if (currentTable && /\boptional\s*=\s*true\b/.test(trimmed)) {
+      currentTable.optional = true;
+      return;
+    }
+
+    if (!inDependencyList) {
+      return;
+    }
+
+    const inlineMatch = trimmed.match(/^([A-Za-z0-9_-]+|"[A-Za-z0-9_-]+")\s*=/);
+    if (inlineMatch) {
+      const name = inlineMatch[1].replace(/^"|"$/g, '');
+      deps.push({
+        name,
+        line: index + 1,
+        optional: /\boptional\s*=\s*true\b/.test(trimmed),
+      });
+      if (trimmed.includes('{') && !trimmed.includes('}')) {
+        currentInline = deps[deps.length - 1];
+      }
+      return;
+    }
+
+  });
+
+  return deps;
+}
+
+function collectKnownDependencyNames() {
+  return Array.from(
+    new Set([
+      'bitfun-core',
+      ...lightweightBoundaryRules.flatMap((rule) => rule.forbiddenDeps),
+      ...dependencyProfileRules.flatMap((rule) => rule.forbiddenNonOptionalDeps),
+    ]),
+  );
+}
+
 function runManifestParserSelfTest() {
   const positiveCases = [
     'bitfun-core = { path = "../core" }',
@@ -530,6 +738,41 @@ function runManifestParserSelfTest() {
     if (isManifestDependencyDeclaration(line, 'bitfun-core')) {
       throw new Error(`manifest parser matched non-dependency declaration: ${line}`);
     }
+  }
+
+  const parsedDeps = parseManifestDependencies([
+    '[dependencies]',
+    'reqwest = { workspace = true, optional = true }',
+    'dirs = { workspace = true }',
+    'rmcp = { version = "0.12.0", default-features = false, features = [',
+    '    "auth",',
+    '], optional = true }',
+    '[dependencies.git2]',
+    'workspace = true',
+    'optional = true',
+    '[target.\'cfg(windows)\'.dependencies."bitfun-cli"]',
+    'path = "../../apps/cli"',
+    '[features]',
+    'image = []',
+  ]);
+  const parsedByName = new Map(parsedDeps.map((dep) => [dep.name, dep]));
+  if (parsedByName.get('reqwest')?.optional !== true) {
+    throw new Error('dependency profile parser must detect inline optional dependencies');
+  }
+  if (parsedByName.get('dirs')?.optional !== false) {
+    throw new Error('dependency profile parser must detect non-optional inline dependencies');
+  }
+  if (parsedByName.get('rmcp')?.optional !== true) {
+    throw new Error('dependency profile parser must detect multiline optional inline dependencies');
+  }
+  if (parsedByName.get('git2')?.optional !== true) {
+    throw new Error('dependency profile parser must detect optional dependency tables');
+  }
+  if (parsedByName.get('bitfun-cli')?.optional !== false) {
+    throw new Error('dependency profile parser must detect non-optional target dependency tables');
+  }
+  if (parsedByName.has('image')) {
+    throw new Error('dependency profile parser must ignore feature entries named like dependencies');
   }
 
   const acceptsGitFacadeLine = createFacadeLineChecker('bitfun_services_integrations::git');
@@ -570,6 +813,28 @@ function runManifestParserSelfTest() {
         );
       }
     }
+  }
+
+  const agentToolsRule = lightweightBoundaryRules.find((rule) => rule.crateName === 'agent-tools');
+  if (!agentToolsRule?.forbiddenDeps.includes('bitfun-ai-adapters')) {
+    throw new Error('agent-tools lightweight boundary must forbid bitfun-ai-adapters');
+  }
+
+  const productDomainProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'product-domains',
+  );
+  if (!productDomainProfile?.forbiddenNonOptionalDeps.includes('dirs')) {
+    throw new Error('product-domains default profile must forbid non-optional dirs');
+  }
+  const coreTypesProfile = dependencyProfileRules.find((rule) => rule.crateName === 'core-types');
+  if (!coreTypesProfile?.forbiddenNonOptionalDeps.includes('bitfun-ai-adapters')) {
+    throw new Error('core-types dependency profile must forbid ai-adapter dependencies');
+  }
+  const runtimePortsProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'runtime-ports',
+  );
+  if (!runtimePortsProfile?.forbiddenNonOptionalDeps.includes('bitfun-services-core')) {
+    throw new Error('runtime-ports dependency profile must forbid service implementations');
   }
 
   const remoteWorkspaceRule = forbiddenContentRules.find(
@@ -791,6 +1056,20 @@ function checkForbiddenManifestDeps(crateDir, forbiddenDeps, messageForDep) {
   });
 }
 
+function checkForbiddenNonOptionalManifestDeps(crateDir, forbiddenDeps, messageForDep) {
+  const manifestPath = join(crateDir, 'Cargo.toml');
+  const deps = parseManifestDependencies(readText(manifestPath).split(/\r?\n/));
+  for (const dep of deps) {
+    if (!dep.optional && forbiddenDeps.includes(dep.name)) {
+      failures.push({
+        path: manifestPath,
+        line: dep.line,
+        message: messageForDep(dep.name),
+      });
+    }
+  }
+}
+
 function checkRustImports(crateDir) {
   const srcDir = join(crateDir, 'src');
   try {
@@ -958,6 +1237,13 @@ for (const rule of lightweightBoundaryRules) {
   const messageForDep = (dep) => `${rule.reason}; forbidden dependency: ${dep}`;
   checkForbiddenManifestDeps(crateDir, rule.forbiddenDeps, messageForDep);
   checkForbiddenRustImports(crateDir, rule.forbiddenDeps, messageForDep);
+}
+
+for (const rule of dependencyProfileRules) {
+  const crateDir = join(ROOT, 'src', 'crates', rule.crateName);
+  const messageForDep = (dep) =>
+    `${rule.reason}; ${rule.profileName} forbids non-optional dependency: ${dep}`;
+  checkForbiddenNonOptionalManifestDeps(crateDir, rule.forbiddenNonOptionalDeps, messageForDep);
 }
 
 for (const facade of facadeOnlyFiles) {
