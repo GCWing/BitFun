@@ -343,6 +343,10 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     }
   }, []);
 
+  const onContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+  }, []);
+
   const clearPetPointerSession = (target: HTMLDivElement, pointerId: number) => {
     const session = petPointerSessionRef.current;
     if (!session || session.pointerId !== pointerId) {
@@ -451,6 +455,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
   return (
     <main
       className="bitfun-agent-companion-window"
+      onContextMenu={onContextMenu}
     >
       <div
         ref={dockRef}

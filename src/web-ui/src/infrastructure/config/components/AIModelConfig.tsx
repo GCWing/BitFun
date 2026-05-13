@@ -1922,6 +1922,8 @@ const AIModelConfig: React.FC = () => {
                     <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
                       <Input value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
                     </ConfigPageRow>
+                    {renderAuthRow()}
+                    {!authIsCli && renderApiKeyRow(`${t('form.apiKey')} *`)}
                     <ConfigPageRow label={`${t('form.baseUrl')} *`} align="center" wide>
                       <div className="bitfun-ai-model-config__control-stack">
                         <Input
@@ -1952,8 +1954,6 @@ const AIModelConfig: React.FC = () => {
                         )}
                       </div>
                     </ConfigPageRow>
-                    {renderAuthRow()}
-                    {!authIsCli && renderApiKeyRow(`${t('form.apiKey')} *`)}
                     <ConfigPageRow label={t('form.provider')} align="center" wide>
                       <Select value={editingConfig.provider || 'openai'} onChange={(value) => {
                         const provider = value as string;
