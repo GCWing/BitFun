@@ -82,22 +82,21 @@ impl ShellDetector {
 
         #[cfg(not(windows))]
         {
-            if let Some(zsh_path) = Self::find_zsh_with_which() {
-                return DetectedShell {
-                    shell_type: ShellType::Zsh,
-                    path: zsh_path.clone(),
-                    version: Self::get_shell_version(zsh_path.to_str().unwrap_or_default()),
-                    display_name: "zsh".to_string(),
-                };
-            } else if let Some(bash_path) = Self::find_bash_with_which() {
+            if let Some(bash_path) = Self::find_bash_with_which() {
                 return DetectedShell {
                     shell_type: ShellType::Bash,
                     path: bash_path.clone(),
                     version: Self::get_shell_version(bash_path.to_str().unwrap_or_default()),
                     display_name: "bash".to_string(),
                 };
-            }
-            {
+            } else if let Some(zsh_path) = Self::find_zsh_with_which() {
+                return DetectedShell {
+                    shell_type: ShellType::Zsh,
+                    path: zsh_path.clone(),
+                    version: Self::get_shell_version(zsh_path.to_str().unwrap_or_default()),
+                    display_name: "zsh".to_string(),
+                };
+            } else {
                 log::error!("bash not found");
             }
             // Try to use $SHELL environment variable
@@ -304,6 +303,7 @@ impl ShellDetector {
             PathBuf::from(format!("/usr/local/bin/{}", executable)),
             PathBuf::from(format!("/usr/bin/{}", executable)),
             PathBuf::from(format!("/bin/{}", executable)),
+            PathBuf::from(format!("/data/service/hnp/bin/{}", executable)),
         ];
 
         for path in candidates {
