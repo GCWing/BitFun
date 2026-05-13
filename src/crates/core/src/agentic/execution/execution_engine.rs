@@ -1527,6 +1527,8 @@ impl ExecutionEngine {
         // P0: Loop detection: track recent tool call signatures
         let mut recent_tool_signatures: Vec<String> = Vec::new();
         let mut loop_detected = false;
+        let mut loop_recovery_attempts: usize = 0;
+        const MAX_LOOP_RECOVERY_ATTEMPTS: usize = 3;
         let mut full_compression_count = 0usize;
         let mut compression_failure_count = 0u32;
 
@@ -1937,13 +1939,42 @@ impl ExecutionEngine {
             if recent_tool_signatures.len() >= max_consec {
                 let tail = &recent_tool_signatures[recent_tool_signatures.len() - max_consec..];
                 if tail.windows(2).all(|w| w[0] == w[1]) {
-                    warn!(
-                        "Loop detected: {} consecutive rounds with identical tool signatures, stopping",
-                        max_consec
-                    );
-                    loop_detected = true;
-                    finalization_reason = Some("loop_detected");
-                    break;
+                    if loop_recovery_attempts < MAX_LOOP_RECOVERY_ATTEMPTS {
+                        loop_recovery_attempts += 1;
+                        warn!(
+                            "Loop detected: {} consecutive rounds with identical tool signatures, injecting recovery prompt #{}",
+                            max_consec, loop_recovery_attempts
+                        );
+                        let reminder = format!(
+                            "<system_reminder>Loop detected: you have repeated the same tool call with identical arguments {} times in a row. \
+                            This means the approach is not making progress. You MUST now change your strategy: \
+                            (1) if the tool keeps failing, try a completely different approach or tool; \
+                            (2) if you are stuck, step back and reason about the root cause before acting; \
+                            (3) if the task is genuinely impossible with the available tools, provide a clear explanation to the user. \
+                            Do NOT repeat the same tool call again.</system_reminder>",
+                            max_consec
+                        );
+                        let user_msg = Message::user(reminder);
+                        messages.push(user_msg.clone());
+                        if let Err(e) = self
+                            .session_manager
+                            .add_message(&context.session_id, user_msg)
+                            .await
+                        {
+                            warn!("Failed to persist loop recovery reminder: {}", e);
+                        }
+                        // Clear the recent signatures so the detector resets after recovery.
+                        recent_tool_signatures.clear();
+                        // Do NOT break — continue the loop so the model gets a chance to recover.
+                    } else {
+                        warn!(
+                            "Loop detected: {} consecutive rounds with identical tool signatures, max recovery attempts ({}) exhausted, stopping",
+                            max_consec, MAX_LOOP_RECOVERY_ATTEMPTS
+                        );
+                        loop_detected = true;
+                        finalization_reason = Some("loop_detected");
+                        break;
+                    }
                 }
             }
 
@@ -1963,13 +1994,42 @@ impl ExecutionEngine {
             // no genuine new exploration and we treat it as a loop.
             if Self::is_periodic_tool_signature_loop(&recent_tool_signatures, max_consec) {
                 let window_size = max_consec.max(1).saturating_mul(2);
-                warn!(
-                    "Loop detected: last {} rounds form a periodic tool-call pattern (<= {} distinct signatures, each repeated), stopping",
-                    window_size, max_consec
-                );
-                loop_detected = true;
-                finalization_reason = Some("loop_detected");
-                break;
+                if loop_recovery_attempts < MAX_LOOP_RECOVERY_ATTEMPTS {
+                    loop_recovery_attempts += 1;
+                    warn!(
+                        "Loop detected: last {} rounds form a periodic tool-call pattern (<= {} distinct signatures, each repeated), injecting recovery prompt #{}",
+                        window_size, max_consec, loop_recovery_attempts
+                    );
+                    let reminder = format!(
+                        "<system_reminder>Loop detected: your last {} tool calls form a repeating pattern with no new progress. \
+                        You are cycling between the same actions without advancing the task. You MUST now change your strategy: \
+                        (1) try a completely different approach or tool; \
+                        (2) step back and reason about the root cause before acting; \
+                        (3) if the task is genuinely impossible with the available tools, provide a clear explanation to the user. \
+                        Do NOT repeat the same pattern of tool calls.</system_reminder>",
+                        window_size
+                    );
+                    let user_msg = Message::user(reminder);
+                    messages.push(user_msg.clone());
+                    if let Err(e) = self
+                        .session_manager
+                        .add_message(&context.session_id, user_msg)
+                        .await
+                    {
+                        warn!("Failed to persist periodic loop recovery reminder: {}", e);
+                    }
+                    // Clear the recent signatures so the detector resets after recovery.
+                    recent_tool_signatures.clear();
+                    // Do NOT break — continue the loop so the model gets a chance to recover.
+                } else {
+                    warn!(
+                        "Loop detected: last {} rounds form a periodic tool-call pattern, max recovery attempts ({}) exhausted, stopping",
+                        window_size, MAX_LOOP_RECOVERY_ATTEMPTS
+                    );
+                    loop_detected = true;
+                    finalization_reason = Some("loop_detected");
+                    break;
+                }
             }
 
             // User-steering messages submitted while this turn is running: drain and inject
