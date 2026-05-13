@@ -882,15 +882,28 @@ impl RoundExecutor {
 
             // Build a content-generation prompt
             let content_prompt = format!(
-                "Now output the complete file content for the file `{}`. \
-                 Output ONLY the raw file content wrapped in <bitfun_contents> tags. \
-                 Do NOT include any other text, explanation, or commentary outside the tags.\n\
+                "Now output the COMPLETE file content for the file `{file_path}`.\n\
+                 CRITICAL RULES — you MUST follow all of them:\n\
+                 1. Output the ENTIRE file content — every single line, every character that should end up on disk.\n\
+                 2. Do NOT abbreviate, summarize, or insert placeholder comments referring to omitted code, such as: \
+                 \"// ... rest of the code\", \"// rest omitted\", \"// implementation follows\", \"// existing code unchanged\", \
+                 \"// same as before\", \"# rest omitted\", \"# rest of file\", or any equivalent in any language. \
+                 If a section is unchanged, write it out in full anyway.\n\
+                 3. Literal `...` is allowed only when it is genuinely part of the file content (e.g. inside a string, \
+                 inside XML/JSON/YAML data, inside docs). Never use it as a stand-in for omitted code.\n\
+                 4. Wrap the content inside <bitfun_contents> tags exactly as shown below.\n\
+                 5. Do NOT output anything outside the <bitfun_contents> tags — no explanations, no commentary, \
+                 no thinking blocks, no markdown fences (```), no extra XML wrapper tags.\n\
+                 6. The text between the tags must be EXACTLY what gets written to disk — raw file content only.\n\
                  <bitfun_contents>\n",
-                file_path
+                file_path = file_path
             );
 
             let mut content_messages = ai_messages.to_vec();
+            // Add an assistant prefill to prime the model to output content directly
+            // inside the tags, reducing the chance of preamble text.
             content_messages.push(AIMessage::user(content_prompt));
+            content_messages.push(AIMessage::assistant("<bitfun_contents>\n".to_string()));
 
             // Send the content-generation request (no tools, pure text output)
             let full_text = match ai_client.send_message_stream(content_messages, None).await {
@@ -952,6 +965,19 @@ impl RoundExecutor {
                 warn!(
                     "Write content generation returned empty content for file_path={}",
                     file_path
+                );
+            }
+
+            // Detect strong "omission marker" phrases that indicate the model
+            // wrote a summary instead of the full file content. This is a
+            // best-effort warning only — we do not block the write, because
+            // Write must remain general enough to produce any kind of file
+            // (including ones that legitimately discuss these phrases).
+            if let Some(marker) = detect_placeholder_patterns(&content) {
+                warn!(
+                    "Write content for file_path={} contains an omission marker comment ({:?}); \
+                     the generated content may be an outline rather than the full file",
+                    file_path, marker
                 );
             }
 
@@ -1180,18 +1206,205 @@ fn extract_bitfun_contents(text: &str) -> String {
     const OPEN_TAG: &str = "<bitfun_contents>";
     const CLOSE_TAG: &str = "</bitfun_contents>";
 
-    if let Some(start) = text.find(OPEN_TAG) {
+    let raw = if let Some(start) = text.find(OPEN_TAG) {
         let content_start = start + OPEN_TAG.len();
         if let Some(end) = text[content_start..].find(CLOSE_TAG) {
-            return text[content_start..content_start + end].trim().to_string();
+            &text[content_start..content_start + end]
+        } else {
+            // Opening tag found but no closing tag — take everything after the
+            // opening tag (the model may still be streaming or forgot to close).
+            &text[content_start..]
         }
-        // Opening tag found but no closing tag — take everything after the
-        // opening tag (the model may still be streaming or forgot to close).
-        return text[content_start..].trim().to_string();
+    } else {
+        // No tags at all — return the full text as a fallback
+        text
+    };
+
+    sanitize_write_content(raw.trim())
+}
+
+/// Sanitize model-generated file content by stripping common artifacts that
+/// some models emit despite being told not to.
+fn sanitize_write_content(content: &str) -> String {
+    let mut s = content.to_string();
+
+    // Strip multi-line thinking/reasoning XML blocks (e.g. <think ...>..</think >)
+    // These are very common with reasoning models.
+    s = strip_thinking_blocks(&s);
+
+    // Strip leading/trailing markdown code fences (```lang ... ```)
+    // that some models wrap around file content.
+    s = strip_markdown_fences(&s);
+
+    // Trim leading/trailing whitespace left after stripping blocks
+    s.trim().to_string()
+}
+
+/// Strip thinking-style XML blocks from content. Handles multi-line blocks
+/// like `<think ...>content</think >` and `<reasoning>content</reasoning>`.
+/// Also handles non-standard formats like `<think\ncontent\n</think >` where
+/// the opening tag may not have a closing `>`.
+fn strip_thinking_blocks(content: &str) -> String {
+    let thinking_open_tags = ["<think", "<reasoning", "<reflection", "<analysis"];
+    let mut result = content.to_string();
+
+    for open_tag_prefix in &thinking_open_tags {
+        loop {
+            // Find the opening tag
+            let Some(open_start) = result.find(open_tag_prefix) else {
+                break;
+            };
+
+            // Find the end of the opening tag — look for '>' or newline
+            let after_open = &result[open_start..];
+            let tag_end_offset = after_open
+                .find(|c: char| c == '>' || c == '\n')
+                .unwrap_or(after_open.len());
+
+            // Extract tag name from <tagname...>
+            let tag_inner = &result[open_start + 1..open_start + tag_end_offset];
+            let tag_name = tag_inner.split_whitespace().next().unwrap_or("");
+
+            // Skip if tag_name is empty (shouldn't happen but guard)
+            if tag_name.is_empty() {
+                break;
+            }
+
+            // Build the closing tag. Note: some models output `</tagname >` with
+            // trailing space or `</tagname\n` with newline. Search broadly.
+            let close_tag_prefix = format!("</{}", tag_name);
+
+            // Find the closing tag
+            if let Some(close_pos) = result[open_start..].find(&close_tag_prefix) {
+                let abs_close_pos = open_start + close_pos;
+                // Find the end of the closing tag (next '>' or newline or end)
+                let close_end = result[abs_close_pos..]
+                    .find(|c: char| c == '>' || c == '\n')
+                    .map(|p| abs_close_pos + p + 1)
+                    .unwrap_or(result.len());
+                result = format!("{}{}", &result[..open_start], &result[close_end..]);
+            } else {
+                // No closing tag found — strip from open_start to end of opening
+                // tag line and continue
+                let line_end = after_open
+                    .find('\n')
+                    .map(|p| open_start + p + 1)
+                    .unwrap_or(result.len());
+                result = format!("{}{}", &result[..open_start], &result[line_end..]);
+            }
+        }
     }
 
-    // No tags at all — return the full text as a fallback
-    text.trim().to_string()
+    result
+}
+
+/// Strip markdown code fences that wrap the entire content.
+/// Handles ```lang\n...\n``` patterns at the outermost level.
+fn strip_markdown_fences(content: &str) -> String {
+    let trimmed = content.trim();
+    if !trimmed.starts_with("```") {
+        return content.to_string();
+    }
+
+    // Find the end of the opening fence line
+    let fence_end = trimmed.find('\n').unwrap_or(3);
+    // let _lang = &trimmed[3..fence_end].trim(); // language hint, ignored
+
+    // Check if content ends with ```
+    let inner = trimmed[fence_end + 1..].trim_end();
+    if inner.ends_with("```") {
+        return inner[..inner.len() - 3].trim_end().to_string();
+    }
+
+    // No closing fence — strip opening fence only
+    trimmed[fence_end + 1..].to_string()
+}
+
+/// Detect "omission marker" phrases that strongly indicate the model wrote a
+/// summary/outline instead of the full file. Returns the matched marker on the
+/// first hit, or `None` otherwise.
+///
+/// Design notes:
+/// - Only match phrases that are very unlikely to legitimately appear in real
+///   source/data files. Plain `...`, `…`, `TODO:` and `FIXME:` are NOT included
+///   because they show up in real code, docs, XML/JSON data, etc., and would
+///   trigger false positives on legitimate Write usage (the tool can write any
+///   kind of file).
+/// - Patterns are matched in a comment-like context (after `//`, `#`, `/*`, `--`,
+///   or `<!--`) to further reduce false positives on prose/data that happens to
+///   contain similar wording.
+/// - A single hit is enough to warn; we do not use a percentage threshold,
+///   because even one "// ... rest of the code" comment means the file is wrong.
+fn detect_placeholder_patterns(content: &str) -> Option<&'static str> {
+    if content.is_empty() {
+        return None;
+    }
+
+    // Phrases below are normalized to lowercase before comparison.
+    // Keep this list conservative — every entry should be something a
+    // careful human would essentially never write verbatim in a real file.
+    const OMISSION_MARKERS: &[&str] = &[
+        "... rest of the code",
+        "... rest of code",
+        "... rest of the file",
+        "... rest of file",
+        "... existing code",
+        "rest of the code unchanged",
+        "rest of the file unchanged",
+        "rest omitted for brevity",
+        "rest omitted",
+        "remainder omitted",
+        "implementation follows",
+        "implementation continues",
+        "implementation unchanged",
+        "existing code unchanged",
+        "existing implementation unchanged",
+        "code omitted for brevity",
+        "code omitted",
+        "previous code unchanged",
+        "same as before",
+        "(unchanged)",
+        "// snip",
+        "/* snip */",
+        "<!-- snip -->",
+        "<unchanged>",
+        "<omitted>",
+    ];
+
+    // Comment lead-ins we look for. Empty string means "no comment marker
+    // required" — used for the strongest phrases that are unmistakable on
+    // their own (e.g. `<!-- snip -->`).
+    const COMMENT_LEADS: &[&str] = &["//", "#", "/*", "--", "<!--", ";", "%"];
+
+    for raw_line in content.lines() {
+        let line = raw_line.trim().to_lowercase();
+        if line.is_empty() {
+            continue;
+        }
+
+        for marker in OMISSION_MARKERS {
+            let marker_lc = marker.to_lowercase();
+            if !line.contains(&marker_lc) {
+                continue;
+            }
+
+            // Markers that already contain a comment-style wrapper are accepted
+            // on their own.
+            let already_commented =
+                marker.starts_with("//") || marker.starts_with("/*") || marker.starts_with("<!--");
+            if already_commented {
+                return Some(marker);
+            }
+
+            // Otherwise require the line to look like a comment, so we don't
+            // flag prose/data lines that happen to mention the phrase.
+            if COMMENT_LEADS.iter().any(|lead| line.starts_with(lead)) {
+                return Some(marker);
+            }
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -1365,5 +1578,111 @@ mod tests {
     fn extract_bitfun_contents_empty() {
         let text = "<bitfun_contents></bitfun_contents>";
         assert_eq!(extract_bitfun_contents(text), "");
+    }
+
+    // --- Sanitization tests ---
+
+    #[test]
+    fn sanitization_strips_leading_thinking_block() {
+        let text = "<think\nLet me think about this...\n</think\nfn main() {}";
+        assert_eq!(extract_bitfun_contents(text), "fn main() {}");
+    }
+
+    #[test]
+    fn sanitization_strips_thinking_block_with_attrs() {
+        let text = "<think type=\"deep\">\nReasoning here\n</think\nfn main() {}";
+        assert_eq!(extract_bitfun_contents(text), "fn main() {}");
+    }
+
+    #[test]
+    fn sanitization_strips_markdown_fences() {
+        let text = "<bitfun_contents>\n```rust\nfn main() {}\n```\n</bitfun_contents>";
+        assert_eq!(extract_bitfun_contents(text), "fn main() {}");
+    }
+
+    #[test]
+    fn sanitization_strips_markdown_fences_without_tags() {
+        // Model ignored tag instructions but used markdown fences
+        let text = "```rust\nfn main() {}\n```";
+        assert_eq!(extract_bitfun_contents(text), "fn main() {}");
+    }
+
+    #[test]
+    fn sanitization_strips_xml_thinking_tags_with_content() {
+        let text = "<bitfun_contents>\n<thinking>\nI need to write a function\n</thinking>\nfn main() {}\n</bitfun_contents>";
+        assert_eq!(extract_bitfun_contents(text), "fn main() {}");
+    }
+
+    #[test]
+    fn sanitization_strips_reasoning_block() {
+        let text = "<bitfun_contents>\n<reasoning>\nAnalyzing code...\n</reasoning>\nfn main() {}\n</bitfun_contents>";
+        assert_eq!(extract_bitfun_contents(text), "fn main() {}");
+    }
+
+    #[test]
+    fn sanitization_preserves_xml_in_file_content() {
+        // Real XML that should be part of the file
+        let text = "<bitfun_contents>\n<config><name>test</name></config>\n</bitfun_contents>";
+        assert_eq!(extract_bitfun_contents(text), "<config><name>test</name></config>");
+    }
+
+    // --- Placeholder detection tests ---
+
+    #[test]
+    fn detect_placeholder_in_outline() {
+        use super::detect_placeholder_patterns;
+        let content = "fn main() {\n    // ... rest of the code\n}\n";
+        assert!(detect_placeholder_patterns(content).is_some());
+    }
+
+    #[test]
+    fn detect_placeholder_existing_code_unchanged_comment() {
+        use super::detect_placeholder_patterns;
+        let content = "class Foo {\n    # existing code unchanged\n    def bar(): pass\n}\n";
+        assert!(detect_placeholder_patterns(content).is_some());
+    }
+
+    #[test]
+    fn detect_placeholder_html_snip_marker() {
+        use super::detect_placeholder_patterns;
+        let content = "<html>\n  <!-- snip -->\n</html>\n";
+        assert!(detect_placeholder_patterns(content).is_some());
+    }
+
+    #[test]
+    fn no_false_positive_on_normal_code() {
+        use super::detect_placeholder_patterns;
+        let content = "fn main() {\n    println!(\"hello\");\n}\n\nstruct Foo {\n    x: i32,\n}\n";
+        assert!(detect_placeholder_patterns(content).is_none());
+    }
+
+    #[test]
+    fn no_false_positive_on_single_todo() {
+        use super::detect_placeholder_patterns;
+        // Plain TODO/FIXME comments must NOT trigger — they are common in real code.
+        let content = "fn main() {\n    println!(\"hello\");\n}\n\nfn helper() {\n    // TODO: refactor later\n    // FIXME: handle errors\n    42\n}\n";
+        assert!(detect_placeholder_patterns(content).is_none());
+    }
+
+    #[test]
+    fn no_false_positive_on_xml_with_ellipsis() {
+        use super::detect_placeholder_patterns;
+        // XML/data files that genuinely contain "..." or "rest of" as data must NOT trigger.
+        let content = "<doc>\n  <item>The rest of the story is told elsewhere.</item>\n  <item>Three dots: ...</item>\n</doc>\n";
+        assert!(detect_placeholder_patterns(content).is_none());
+    }
+
+    #[test]
+    fn no_false_positive_on_prose_mentioning_omission_phrase() {
+        use super::detect_placeholder_patterns;
+        // A markdown/doc file that talks about the phrase but isn't a code comment must NOT trigger.
+        let content = "# Style guide\n\nDo not write \"rest omitted for brevity\" inside committed source files.\n";
+        assert!(detect_placeholder_patterns(content).is_none());
+    }
+
+    #[test]
+    fn detect_placeholder_empty_content() {
+        use super::detect_placeholder_patterns;
+        assert!(detect_placeholder_patterns("").is_none());
     }
 }
