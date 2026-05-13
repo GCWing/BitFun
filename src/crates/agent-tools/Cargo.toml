@@ -13,3 +13,7 @@ crate-type = ["rlib"]
 serde = { workspace = true }
 serde_json = { workspace = true }
 bitfun-core-types = { path = "../core-types" }
+bitfun-runtime-ports = { path = "../runtime-ports" }
+
+[dev-dependencies]
+async-trait = { workspace = true }

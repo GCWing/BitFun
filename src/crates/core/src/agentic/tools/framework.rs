@@ -14,59 +14,20 @@ use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::get_path_manager_arc;
 use crate::service::git::{GitDiffParams, GitService};
-use crate::service::mcp::McpToolInfo;
 use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
 use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
-pub use bitfun_agent_tools::{ToolResult, ValidationResult};
+pub use bitfun_agent_tools::{
+    DynamicMcpToolInfo, DynamicToolInfo, ToolPathBackend, ToolPathResolution, ToolRenderOptions,
+    ToolResult, ValidationResult,
+};
 use log::warn;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ToolPathBackend {
-    Local,
-    RemoteWorkspace,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DynamicToolInfo {
-    pub provider_id: String,
-    pub provider_kind: Option<String>,
-    pub mcp: Option<McpToolInfo>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ToolPathResolution {
-    pub requested_path: String,
-    pub logical_path: String,
-    pub resolved_path: String,
-    pub backend: ToolPathBackend,
-    pub runtime_scope: Option<String>,
-    pub runtime_root: Option<PathBuf>,
-}
-
-impl ToolPathResolution {
-    pub fn uses_remote_workspace_backend(&self) -> bool {
-        matches!(self.backend, ToolPathBackend::RemoteWorkspace)
-    }
-
-    pub fn is_runtime_artifact(&self) -> bool {
-        self.runtime_scope.is_some()
-    }
-
-    pub fn logical_child_path(&self, absolute_child_path: &Path) -> Option<String> {
-        let scope = self.runtime_scope.as_deref()?;
-        let root = self.runtime_root.as_ref()?;
-        let relative = absolute_child_path.strip_prefix(root).ok()?;
-        let relative_str = relative.to_string_lossy().replace('\\', "/");
-        build_bitfun_runtime_uri(scope, &relative_str).ok()
-    }
-}
 
 /// Tool use context
 #[derive(Debug, Clone)]
@@ -212,6 +173,7 @@ impl ToolUseContext {
     pub fn enforce_tool_runtime_restrictions(&self, tool_name: &str) -> BitFunResult<()> {
         self.runtime_tool_restrictions
             .ensure_tool_allowed(tool_name)
+            .map_err(Into::into)
     }
 
     pub fn enforce_path_operation(
@@ -725,12 +687,6 @@ pub trait Tool: Send + Sync {
         }
         result
     }
-}
-
-/// Tool render options
-#[derive(Debug, Clone)]
-pub struct ToolRenderOptions {
-    pub verbose: bool,
 }
 
 #[cfg(test)]

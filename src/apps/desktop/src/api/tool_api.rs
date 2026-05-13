@@ -186,7 +186,9 @@ async fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
     }
 }
 
-fn to_dynamic_mcp_tool_info(info: bitfun_core::service::mcp::McpToolInfo) -> DynamicMcpToolInfo {
+fn to_dynamic_mcp_tool_info(
+    info: bitfun_core::agentic::tools::framework::DynamicMcpToolInfo,
+) -> DynamicMcpToolInfo {
     DynamicMcpToolInfo {
         server_id: info.server_id,
         server_name: info.server_name,

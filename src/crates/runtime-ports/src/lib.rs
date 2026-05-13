@@ -264,4 +264,36 @@ mod tests {
         assert_eq!(json["turnId"], "turn_1");
         assert!(json.get("fromTurnId").is_none());
     }
+
+    #[test]
+    fn dynamic_tool_descriptor_serializes_current_wire_shape() {
+        let descriptor = DynamicToolDescriptor {
+            name: "external_search".to_string(),
+            description: "Search external docs".to_string(),
+            input_schema: serde_json::json!({ "type": "object" }),
+            provider_id: Some("provider-a".to_string()),
+        };
+
+        let json = serde_json::to_value(descriptor).expect("serialize descriptor");
+
+        assert_eq!(json["name"], "external_search");
+        assert_eq!(json["description"], "Search external docs");
+        assert_eq!(json["inputSchema"]["type"], "object");
+        assert_eq!(json["providerId"], "provider-a");
+        assert!(json.get("provider_id").is_none());
+    }
+
+    #[test]
+    fn dynamic_tool_descriptor_omits_missing_provider_id() {
+        let descriptor = DynamicToolDescriptor {
+            name: "local_tool".to_string(),
+            description: "Local tool".to_string(),
+            input_schema: serde_json::json!({ "type": "object" }),
+            provider_id: None,
+        };
+
+        let json = serde_json::to_value(descriptor).expect("serialize descriptor");
+
+        assert!(json.get("providerId").is_none());
+    }
 }

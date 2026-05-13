@@ -971,14 +971,15 @@ product-full = ["git", "mcp", "remote-ssh", "remote-connect", "announcement", "f
 - [x] 迁移 `mcp` 的 PR2 runtime 与 dynamic provider：config service orchestration、server process / transport lifecycle、resource/prompt adapter、catalog cache、list-changed/reconnect policy、dynamic descriptor / provider / result rendering 均归属 `bitfun-services-integrations`。
 - [x] `bitfun-core` 保留 core `ConfigService` store adapter、OAuth data-dir 注入、`BitFunError` 映射、旧路径 facade 和全局 tool registry 组装；tool registry owner 化不混入本 PR。
 - [x] 先迁移 `announcement` 的纯 types contract，scheduler / state store / content loader / remote fetch 仍保留在 core。
-- [ ] 最后迁移 `remote-connect`，通过 `AgentSubmissionPort`、`SessionTranscriptReader`、`EventSink` 解耦 agent runtime。
+- [x] 先完成 `remote-connect` contract slice：remote chat/image/tool/session wire DTO 与 relay/bot session/submission request builder 由 `bitfun-services-integrations` 拥有，relay/bot session 创建通过 `AgentSubmissionPort`。
+- [ ] 后续完整迁移 `remote-connect` runtime 时，再通过 `SessionTranscriptReader`、`EventSink`、`RemoteControlStatePort` 与 image/queue/event/cancellation port 解耦 agent runtime。
 - [x] 已迁移的集成能力保持 core 旧路径 re-export。
 - [x] 产品完整 runtime 通过 `services-integrations/product-full` 启用已迁移集成能力。
 
 **当前安全迁移状态（2026-05-13）：**
 
 - 已迁移到 `bitfun-services-integrations`：`service::file_watch`，通过 `file-watch` / `product-full` feature 启用，并保持 `core::service::file_watch` 旧路径。
-- `git` 已完成 DTO/params/graph/raw command output/text parser/arg builder、`GitError`、`GitService` runtime implementation 与 git utils 迁移；`bitfun-core::service::git::*` 仅保留 legacy facade re-export。`remote-ssh` 已迁移纯 contract/type、workspace path/identity helper 与 unresolved-session-key helper；SSH runtime manager / fs / terminal、password vault 与 PathManager-backed session mirror assembly 仍保留在 core。`mcp` 已迁移 tool-name / tool-info / protocol types / config location / server type-status、server config、cursor-format、JSON-RPC request builder、JSON config format/validation helper、config merge / remote authorization helper、OAuth credential vault / authorization bootstrap contract、remote auth error classifier、legacy remote header fallback helper、transport Authorization 归一化 helper、remote client capability helper、rmcp 到 BitFun protocol 的纯映射 helper、resource/prompt adapter、catalog cache、list-changed/reconnect policy、config service save-load orchestration、server process / local-remote transport lifecycle、dynamic tool descriptor / provider / result rendering helper，并用 owner crate contract test 锁定 wire shape、transport default、validation message、Cursor 兼容格式、config precedence / dedup 语义、OAuth vault 存储路径注入、NeedsAuth 分类、旧 env Authorization fallback、remote client capabilities、remote result metadata / structured content 映射、config load/save/delete contract、unsupported remote transport contract、context resource selection 和 dynamic manifest；`bitfun-core` 继续负责 core `ConfigService` store adapter、OAuth data-dir 注入、`BitFunError` 映射、legacy facade 和全局 tool registry 组装。`announcement` 仅迁移了纯 types contract，scheduler / state store / content loader / remote fetch 仍保留在 core；`remote-connect` 尚未迁移。它们涉及 SSH runtime、remote agent submission、tool registry owner 化与 announcement config/path 边界，继续前需要单独确认端口方案与等价性测试。
+- `git` 已完成 DTO/params/graph/raw command output/text parser/arg builder、`GitError`、`GitService` runtime implementation 与 git utils 迁移；`bitfun-core::service::git::*` 仅保留 legacy facade re-export。`remote-ssh` 已迁移纯 contract/type、workspace path/identity helper 与 unresolved-session-key helper；SSH runtime manager / fs / terminal、password vault 与 PathManager-backed session mirror assembly 仍保留在 core。`mcp` 已迁移 tool-name / tool-info / protocol types / config location / server type-status、server config、cursor-format、JSON-RPC request builder、JSON config format/validation helper、config merge / remote authorization helper、OAuth credential vault / authorization bootstrap contract、remote auth error classifier、legacy remote header fallback helper、transport Authorization 归一化 helper、remote client capability helper、rmcp 到 BitFun protocol 的纯映射 helper、resource/prompt adapter、catalog cache、list-changed/reconnect policy、config service save-load orchestration、server process / local-remote transport lifecycle、dynamic tool descriptor / provider / result rendering helper，并用 owner crate contract test 锁定 wire shape、transport default、validation message、Cursor 兼容格式、config precedence / dedup 语义、OAuth vault 存储路径注入、NeedsAuth 分类、旧 env Authorization fallback、remote client capabilities、remote result metadata / structured content 映射、config load/save/delete contract、unsupported remote transport contract、context resource selection 和 dynamic manifest；`bitfun-core` 继续负责 core `ConfigService` store adapter、OAuth data-dir 注入、`BitFunError` 映射、legacy facade 和全局 tool registry 组装。`announcement` 仅迁移了纯 types contract，scheduler / state store / content loader / remote fetch 仍保留在 core；`remote-connect` 已完成 contract/request-builder slice，远程消息执行、image context、tracker event、cancel、terminal pre-warm 与 workspace/session restore 仍保留在 core。它们涉及 SSH runtime、remote agent submission runtime、tool registry owner 化与 announcement config/path 边界，继续前需要单独确认端口方案与等价性测试。
 - 最新主干的 Deep Review capacity / cost / queue、context profile、evidence ledger、session manifest、stream dedupe、search remote/fallback 与 session rollback persistence 仍属于 core runtime 或对应产品 runtime，不在本轮 `services-integrations` 迁移范围内；如果后续迁移 remote-connect / MCP / search / session，需要先定义运行状态 port 合约和等价测试。
 
 **验证：**
@@ -1040,11 +1041,11 @@ pub fn create_tool_registry() -> ToolRegistry {
 
 - [ ] 增加 registry 等价性测试：完整产品 registry 中的工具集合与拆分前一致。
 
-**当前安全迁移状态（2026-05-11）：**
+**当前安全迁移状态（2026-05-13）：**
 
-- 已迁移到 `bitfun-agent-tools`：`ToolResult`、`ValidationResult`、`InputValidator`，core 旧路径继续 re-export。
+- 已迁移到 `bitfun-agent-tools`：`ToolResult`、`ValidationResult`、`InputValidator`、dynamic tool metadata、tool render options、runtime restriction DTO 和 path resolution DTO；dynamic tool provider / decorator contract 已通过 `agent-tools` 提供兼容 re-export，原 `runtime-ports` 路径保持可用；core 旧路径继续 re-export，并只保留 `BitFunError` 映射与路径 containment helper。
 - 已新增 `bitfun-tool-packs` feature scaffold，默认 feature 为空，`product-full` 只聚合 feature，不注册或迁移任何工具实现。
-- `Tool` trait、`ToolUseContext`、registry 和具体工具实现仍在 core；它们直接连接 workspace service、snapshot wrapper、computer-use host、runtime restrictions 与 cancellation token，继续迁移前必须先确认可移植 tool context / provider port 方案，并补工具清单等价性测试。
+- `Tool` trait、`ToolUseContext`、registry 和具体工具实现仍在 core；它们直接连接 workspace service、snapshot wrapper、computer-use host、cancellation token 与 Deep Review checkpoint hook，继续迁移前必须先确认可移植 tool context / provider port 方案，并补工具清单等价性测试。
 - 最新主干新增的 Deep Review shared-context / evidence-ledger checkpoint hook 仍保留在 core 的 `ToolUseContext` 中；在设计独立 tool context / event port 前，不应把 `ToolUseContext` 或 registry 继续外移。
 
 **验证：**
@@ -1530,7 +1531,7 @@ cargo check --workspace
 - 已扩展 `scripts/check-core-boundaries.mjs`，增加 dependency profile / feature graph 静态保护：`core-types` default profile 禁止非 DTO 依赖，`runtime-ports` default profile 禁止 service implementation 依赖，`agent-tools` contract profile 禁止依赖 `bitfun-ai-adapters`，`product-domains` default profile 禁止无条件拉入 `dirs`，`services-integrations` default profile 禁止无条件拉入 feature-gated integration 依赖。
 - 已将 `ToolImageAttachment` 提升到 `bitfun-core-types`，并由 `bitfun-ai-adapters`、`bitfun-agent-tools` 和 `bitfun-core::util::types` 保留旧路径兼容；`bitfun-agent-tools` 不再依赖 `bitfun-ai-adapters`。
 - 已将 `product-domains` 的 `dirs` 依赖限制到 `miniapp` feature，默认 profile 保持轻量。
-- 已补充 `ToolResult` image attachment 序列化 round-trip 测试，以及 tool registry readonly 工具清单快照测试；后续迁移 `ToolUseContext`、registry/provider 或 concrete tool implementation 前必须保持这些基线。
+- 已补充 `ToolResult` image attachment、dynamic provider metadata、dynamic descriptor wire shape、runtime restrictions 与 path resolution contract 测试，以及 tool registry readonly / descriptor / stale metadata 工具清单快照测试；后续迁移 `ToolUseContext`、registry/provider 或 concrete tool implementation 前必须保持这些基线。
 - PR 1 已开始执行：remote-SSH workspace registry / ambiguous root resolution / legacy state snapshot 已迁入 `bitfun-services-integrations::remote_ssh::RemoteWorkspaceRegistry`，core 仅保留 local assistant path guard 与 SSH manager / file service / terminal manager 组装；announcement state persistence 已迁入 `bitfun-services-integrations::announcement::AnnouncementStateStore`，core 旧 `PathManager` 构造 API 继续委托并映射原错误类型。
 - 本批 dependency profile 基线已验证：
   - `cargo tree -p bitfun-core-types --depth 1 --edges features` 运行时依赖仅显示 `serde`，测试依赖显示 `serde_json`。
@@ -1588,9 +1589,9 @@ P2 后产品表面契约轨道（contract-only）：
    - 保留边界：`bitfun-core` 只保留 core `ConfigService` store adapter、OAuth data-dir 注入、`BitFunError` 映射、legacy facade 和与全局 tool registry 的组装调用；配置写入、OAuth、SSE/session 与 registry 行为不得在本 PR 中改变。
    - 后续切片：tool registry/provider owner 化需要放入 PR4，并先保留 dynamic provider metadata、工具清单顺序和 snapshot wrapper 等价测试。
    - 文档校正：P2 后补充文档中的 MCP runtime step 已由本 PR2 闭环；后续 MCP 相关工作只保留 tool registry/provider owner 化和 concrete tool implementation 迁移，不再重复迁移 config/process/transport lifecycle。
-3. remote-connect runtime：通过 `AgentSubmissionPort`、`SessionTranscriptReader`、`EventSink` 等 port 合约迁移 remote-connect / relay-facing runtime。验收重点是 message contract、session submission、remote control 同步与无真实网络依赖的 integration test。
-   - 进入前先复核产品表面契约轨道：如果 remote-connect 需要表达 source surface、thread environment、approval source 或 artifact ref，先补 contract-only DTO/port 和 round-trip/no-op tests，不改变现有 remote behavior。
-4. agent tools + `tool-packs` owner 化：`ToolUseContext` port 化、tool registry/provider 化、concrete tool implementation 按 feature group 迁移；必须保持 builtin/readonly/dynamic manifest、snapshot wrapping、runtime restrictions、cancellation 与 Deep Review tool flow 等价。
+3. 已完成：remote-connect contract slice：产品表面 DTO、remote chat/image/tool/session wire DTO 与 relay/bot session/submission request builder 已迁入 owner crate；完整 remote runtime 仍保留在 core，直到 `SessionTranscriptReader`、`EventSink`、`RemoteControlStatePort` 和 image/queue/event/cancellation port 补齐。
+   - 后续切片：完整 remote-connect runtime 迁移必须单独执行，不得混入 PR4 的 tool/provider owner 化。
+4. 进行中：agent tools + `tool-packs` owner 化：已先迁移纯 tool contract/provider metadata、runtime restriction DTO、path resolution DTO，并为 dynamic provider contract 提供 `agent-tools` 兼容 re-export；`ToolUseContext`、tool registry/provider 化、concrete tool implementation 按 feature group 迁移必须保持 builtin/readonly/dynamic manifest、snapshot wrapping、runtime restrictions、cancellation 与 Deep Review tool flow 等价。
 5. `product-domains` runtime + core facade finalization：迁移 miniapp runtime/compiler/builtin 与 function-agent 运行逻辑，最后把 `bitfun-core` 收敛为 facade + product runtime assembly；不在本 PR 中修改 `bitfun-core default = []` 或 per-product feature matrix。
 
 `bitfun-core default = []`、per-product feature set、构建矩阵和 release 能力调整仍作为重构完成后的独立评估，不计入上述 5 个 PR。
@@ -1637,7 +1638,7 @@ P2 后产品表面契约轨道（contract-only）：
 - 质量边界：本阶段证明已拆 owner crate 不依赖回 `bitfun-core`，并证明已迁移的 Git / remote-ssh helper 与 MCP config/process/transport/dynamic provider 旧路径或调用点仍通过当前 Rust workspace 检查；不声明 remote connect、tool registry/snapshot wrapping、miniapp/function-agent runtime 的外移完成。
 - boundary check 已扩展到 `core-types`、`runtime-ports` 和 `agent-tools` 的轻量边界，并覆盖 Cargo inline 依赖和 dependency table 依赖声明，后续不能绕过脚本把重 runtime、concrete service、platform adapter 或 CLI/TUI presentation 依赖带入这些 contract crate。
 - boundary check 也已锁定 `bitfun-core::service::git`、`bitfun-core::service::remote_ssh::types`、remote-ssh workspace path/identity/unresolved-key helper、`bitfun-core::service::mcp::{tool_info,tool_name}`、`bitfun-core::service::mcp::protocol::{types,jsonrpc}`、`bitfun-core::service::mcp::config::{location,cursor_format,json_config,service_helpers}`、`bitfun-core::service::mcp::server::config`、`bitfun-core::service::mcp::auth` 和 `bitfun-core::service::announcement::types` 的旧路径 facade-only / 禁止回流状态，并禁止在 `MCPServerProcess` runtime 文件重新定义已外移的 server type/status contract、auth error classifier 和 legacy remote header fallback helper，也禁止在 remote transport 重新实现 Authorization 归一化、client capability 构造和 rmcp result mapping。
-- 后续迁移必须拆成可独立审核的提交：先补 port/provider 设计和等价测试，再按 `remote-ssh` runtime、`remote-connect`、tool registry/provider 的顺序一次迁移一个 owner 主题。
+- 后续迁移必须拆成可独立审核的提交：先补 port/provider 设计和等价测试；`remote-connect` 完整 runtime、tool registry/provider、product-domain runtime 必须一次迁移一个 owner 主题。
 - tool registry / concrete tool implementation 外移必须先有工具清单等价测试，并保留 dynamic provider metadata；不能把注册名解析、snapshot wrapper 或 runtime restriction 行为改成隐式约定。
 - 已新增并扩展内置工具清单基线测试，后续 registry/provider 外移必须先保持该清单、注册顺序、runtime collection 顺序、dynamic provider metadata 顺序和修改类工具 snapshot wrapper 等价，再评估 owner crate 边界。
 - miniapp 与 function-agent runtime 外移必须先明确 Git/AI service、PathManager、process execution 和 permission policy 边界；如果需要行为合约变化，必须作为后续单独 PR 并先确认。
@@ -1688,7 +1689,7 @@ git diff -- package.json scripts/dev.cjs scripts/desktop-tauri-build.mjs scripts
 11. 已完成：PR 2 MCP runtime 与 dynamic tools；已迁移 config service orchestration、server process / transport lifecycle、adapter、dynamic tool/resource/prompt provider，core 保留 ConfigService store adapter、OAuth data-dir 注入、BitFunError 映射、legacy facade 和 registry assembly。
 12. P2 后前置轨道：产品表面 contract-only 补强，可在 PR3 前或 PR3 第一组提交中处理；只允许 DTO/port、round-trip/no-op tests 和 boundary check，不实现 CLI/Desktop/Remote/ACP UI 或命令变更。
 13. 已完成：PR 3 remote-connect runtime contract slice：产品表面 DTO 已以 contract-only 方式进入 `bitfun-core-types`；`bitfun-services-integrations` 新增 `remote-connect` feature，拥有 remote chat/image/tool/session wire DTO 与 relay/bot session/submission request builder；relay/bot 创建 session 已通过 `AgentSubmissionPort`。远程消息执行、image context、tracker event、cancel、terminal pre-warm 与 workspace/session restore 仍保留在 `bitfun-core` product runtime assembly，直到补齐 image/queue/event/cancellation port 后再迁移。
-14. 待执行：PR 4 agent tools + `tool-packs` owner 化。
+14. 进行中：PR 4 agent tools + `tool-packs` owner 化，当前仅处理低风险 contract / DTO 外移、provider contract 兼容 re-export 和边界防护。
 15. 待执行：PR 5 `product-domains` runtime + core facade finalization。
 16. 后续独立评估：`bitfun-core default = []` 或 per-product feature set。
 

@@ -7,5 +7,12 @@ pub mod framework;
 pub mod input_validator;
 
 pub use bitfun_core_types::ToolImageAttachment;
-pub use framework::{ToolResult, ValidationResult};
+pub use bitfun_runtime_ports::{
+    DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult, ToolDecorator,
+};
+pub use framework::{
+    DynamicMcpToolInfo, DynamicToolInfo, ToolPathBackend, ToolPathOperation, ToolPathPolicy,
+    ToolPathResolution, ToolRenderOptions, ToolRestrictionError, ToolResult,
+    ToolRuntimeRestrictions, ValidationResult,
+};
 pub use input_validator::InputValidator;

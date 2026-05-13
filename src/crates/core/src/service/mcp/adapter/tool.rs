@@ -3,7 +3,8 @@
 //! Wraps MCP tools as implementations of BitFun's `Tool` trait.
 
 use crate::agentic::tools::framework::{
-    DynamicToolInfo, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    DynamicMcpToolInfo, DynamicToolInfo, Tool, ToolRenderOptions, ToolResult, ToolUseContext,
+    ValidationResult,
 };
 use crate::service::mcp::protocol::{MCPTool, MCPToolResult};
 use crate::service::mcp::server::MCPConnection;
@@ -91,7 +92,11 @@ impl Tool for MCPToolWrapper {
         Some(DynamicToolInfo {
             provider_id: self.descriptor.provider_id.clone(),
             provider_kind: Some(self.descriptor.provider_kind.clone()),
-            mcp: Some(self.descriptor.tool_info.clone()),
+            mcp: Some(DynamicMcpToolInfo {
+                server_id: self.descriptor.tool_info.server_id.clone(),
+                server_name: self.descriptor.tool_info.server_name.clone(),
+                tool_name: self.descriptor.tool_info.tool_name.clone(),
+            }),
         })
     }
 

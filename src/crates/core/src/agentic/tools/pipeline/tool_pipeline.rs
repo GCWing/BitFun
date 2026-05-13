@@ -778,7 +778,7 @@ impl ToolPipeline {
                 )
                 .await;
 
-            return Err(err);
+            return Err(err.into());
         }
 
         let tool = {

@@ -3,7 +3,9 @@
 use crate::agentic::tools::framework::{DynamicToolInfo, Tool};
 use crate::agentic::tools::implementations::*;
 use crate::util::errors::BitFunResult;
-use bitfun_runtime_ports::{DynamicToolDescriptor, DynamicToolProvider, ToolDecorator};
+use bitfun_agent_tools::{
+    DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult, ToolDecorator,
+};
 use indexmap::IndexMap;
 use log::{debug, info, trace, warn};
 use std::sync::Arc;
@@ -265,21 +267,17 @@ impl ToolRegistry {
 
 #[async_trait::async_trait]
 impl DynamicToolProvider for ToolRegistry {
-    async fn list_dynamic_tools(
-        &self,
-    ) -> bitfun_runtime_ports::PortResult<Vec<DynamicToolDescriptor>> {
+    async fn list_dynamic_tools(&self) -> PortResult<Vec<DynamicToolDescriptor>> {
         let mut descriptors = Vec::new();
 
         for (name, tool) in self.tools.iter() {
             let Some(metadata) = self.dynamic_tools.get(name) else {
                 continue;
             };
-            let description = tool.description().await.map_err(|error| {
-                bitfun_runtime_ports::PortError::new(
-                    bitfun_runtime_ports::PortErrorKind::Backend,
-                    error.to_string(),
-                )
-            })?;
+            let description = tool
+                .description()
+                .await
+                .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))?;
 
             descriptors.push(DynamicToolDescriptor {
                 name: tool.name().to_string(),
@@ -299,10 +297,10 @@ mod tests {
     use super::ToolRef;
     use super::ToolRegistry;
     use crate::agentic::tools::framework::{
-        DynamicToolInfo, Tool, ToolResult, ToolUseContext, ValidationResult,
+        DynamicMcpToolInfo, DynamicToolInfo, Tool, ToolResult, ToolUseContext, ValidationResult,
     };
     use async_trait::async_trait;
-    use bitfun_runtime_ports::DynamicToolProvider;
+    use bitfun_agent_tools::DynamicToolProvider;
     use serde_json::json;
     use serde_json::Value;
     use std::sync::Arc;
@@ -381,7 +379,7 @@ mod tests {
             dynamic_info: Some(DynamicToolInfo {
                 provider_id: server_id.to_string(),
                 provider_kind: Some("mcp".to_string()),
-                mcp: Some(crate::service::mcp::McpToolInfo {
+                mcp: Some(DynamicMcpToolInfo {
                     server_id: server_id.to_string(),
                     server_name: server_name.to_string(),
                     tool_name: tool_name.to_string(),
@@ -525,6 +523,76 @@ mod tests {
         assert_eq!(
             descriptors[0].provider_id.as_deref(),
             Some("github__enterprise/prod")
+        );
+    }
+
+    #[tokio::test]
+    async fn dynamic_tool_provider_preserves_descriptor_shape_and_order() {
+        let mut registry = ToolRegistry::new();
+        registry.register_tool(dynamic_tool("external_search", Some("provider-a")));
+        registry.register_tool(dynamic_tool("local_docs", Some("provider-b")));
+
+        let descriptors = registry
+            .list_dynamic_tools()
+            .await
+            .expect("list dynamic tools");
+
+        let dynamic_descriptors = descriptors
+            .iter()
+            .map(|descriptor| {
+                (
+                    descriptor.name.as_str(),
+                    descriptor.description.as_str(),
+                    descriptor.input_schema.clone(),
+                    descriptor.provider_id.as_deref(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            dynamic_descriptors,
+            vec![
+                (
+                    "external_search",
+                    "dynamic test tool",
+                    json!({ "type": "object" }),
+                    Some("provider-a"),
+                ),
+                (
+                    "local_docs",
+                    "dynamic test tool",
+                    json!({ "type": "object" }),
+                    Some("provider-b"),
+                ),
+            ],
+            "dynamic descriptor shape and registration order must remain stable before provider owner migration"
+        );
+    }
+
+    #[tokio::test]
+    async fn registering_static_tool_clears_stale_dynamic_metadata_for_same_name() {
+        let mut registry = ToolRegistry::new();
+        registry.register_tool(dynamic_tool("external_search", Some("provider-a")));
+        assert!(
+            registry.get_dynamic_tool_info("external_search").is_some(),
+            "dynamic metadata should be registered before overwrite"
+        );
+
+        registry.register_tool(dynamic_tool("external_search", None));
+
+        assert!(
+            registry.get_dynamic_tool_info("external_search").is_none(),
+            "stale dynamic metadata must be removed when a static tool overwrites a dynamic tool"
+        );
+        let descriptors = registry
+            .list_dynamic_tools()
+            .await
+            .expect("list dynamic tools");
+        assert!(
+            descriptors
+                .iter()
+                .all(|descriptor| descriptor.name != "external_search"),
+            "stale dynamic descriptor must not leak after static overwrite"
         );
     }
 

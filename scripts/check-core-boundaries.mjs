@@ -318,6 +318,49 @@ const facadeOnlyFiles = [
 
 const forbiddenContentRules = [
   {
+    path: 'src/crates/core/src/agentic/tools/framework.rs',
+    patterns: [
+      {
+        regex: /\bpub struct DynamicMcpToolInfo\b/,
+        message: 'core tool framework must not redefine DynamicMcpToolInfo; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bpub struct DynamicToolInfo\b/,
+        message: 'core tool framework must not redefine DynamicToolInfo; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bpub struct ToolRenderOptions\b/,
+        message: 'core tool framework must not redefine ToolRenderOptions; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bpub enum ToolPathBackend\b/,
+        message: 'core tool framework must not redefine ToolPathBackend; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bpub struct ToolPathResolution\b/,
+        message: 'core tool framework must not redefine ToolPathResolution; use bitfun-agent-tools',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/restrictions.rs',
+    patterns: [
+      {
+        regex: /\bpub enum ToolPathOperation\b/,
+        message: 'core tool restrictions must not redefine ToolPathOperation; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bpub struct ToolPathPolicy\b/,
+        message: 'core tool restrictions must not redefine ToolPathPolicy; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bpub struct ToolRuntimeRestrictions\b/,
+        message:
+          'core tool restrictions must not redefine ToolRuntimeRestrictions; use bitfun-agent-tools',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/service/mcp/server/process.rs',
     patterns: [
       {
@@ -998,6 +1041,46 @@ function runManifestParserSelfTest() {
   const agentToolsRule = lightweightBoundaryRules.find((rule) => rule.crateName === 'agent-tools');
   if (!agentToolsRule?.forbiddenDeps.includes('bitfun-ai-adapters')) {
     throw new Error('agent-tools lightweight boundary must forbid bitfun-ai-adapters');
+  }
+  const coreToolFrameworkRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/tools/framework.rs',
+  );
+  if (!coreToolFrameworkRule) {
+    throw new Error('missing core tool framework boundary rule');
+  }
+  const coreToolFrameworkContracts = [
+    'DynamicMcpToolInfo',
+    'DynamicToolInfo',
+    'ToolRenderOptions',
+    'ToolPathBackend',
+    'ToolPathResolution',
+  ];
+  const coreToolFrameworkRuleText = coreToolFrameworkRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of coreToolFrameworkContracts) {
+    if (!coreToolFrameworkRuleText.includes(contract)) {
+      throw new Error(`core tool framework boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreToolRestrictionRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/tools/restrictions.rs',
+  );
+  if (!coreToolRestrictionRule) {
+    throw new Error('missing core tool restrictions boundary rule');
+  }
+  const coreToolRestrictionContracts = [
+    'ToolPathOperation',
+    'ToolPathPolicy',
+    'ToolRuntimeRestrictions',
+  ];
+  const coreToolRestrictionRuleText = coreToolRestrictionRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of coreToolRestrictionContracts) {
+    if (!coreToolRestrictionRuleText.includes(contract)) {
+      throw new Error(`core tool restrictions boundary rule must forbid contract: ${contract}`);
+    }
   }
 
   const productDomainProfile = dependencyProfileRules.find(
