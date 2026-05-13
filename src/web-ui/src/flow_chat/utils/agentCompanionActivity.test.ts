@@ -5,6 +5,25 @@ import { ProcessingPhase, SessionExecutionEvent, SessionExecutionState } from '.
 import type { DialogTurn, Session } from '../types/flow-chat';
 import { buildAgentCompanionActivity } from './agentCompanionActivity';
 
+function hasLoneSurrogate(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        return true;
+      }
+      index += 1;
+      continue;
+    }
+    if (code >= 0xdc00 && code <= 0xdfff) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function resetState(): void {
   flowChatStore.setState(() => ({
     sessions: new Map(),
@@ -164,6 +183,20 @@ describe('buildAgentCompanionActivity', () => {
 
     expect(activity.tasks[0].latestOutput).toContain(latestText);
     expect(activity.tasks[0].latestOutput?.endsWith('...')).toBe(false);
+  });
+
+  it('keeps truncated latest output well-formed for desktop pet events', async () => {
+    const content = '\uD83D\uDE00' + 'a'.repeat(511);
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-1', createStreamingSessionWithText(content)]]),
+      activeSessionId: 'session-1',
+    }));
+    await putStateMachineInStreaming();
+
+    const latestOutput = buildAgentCompanionActivity().tasks[0].latestOutput;
+
+    expect(latestOutput).toBeDefined();
+    expect(hasLoneSurrogate(latestOutput!)).toBe(false);
   });
 
   it('keeps the final assistant output visible after completion', () => {

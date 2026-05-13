@@ -3,6 +3,7 @@ import { stateMachineManager } from '../state-machine/SessionStateMachineManager
 import { ProcessingPhase, type SessionStateMachine } from '../state-machine/types';
 import { deriveChatInputPetMood, type ChatInputPetMood } from './chatInputPetMood';
 import type { DialogTurn, FlowTextItem, FlowThinkingItem, Session } from '../types/flow-chat';
+import { toWellFormedText } from '@/shared/utils/wellFormedText';
 
 export type AgentCompanionTaskState =
   | 'running'
@@ -69,7 +70,7 @@ function pruneTaskOrder(activeTasks: AgentCompanionTaskStatus[]): void {
 }
 
 function sessionTitle(session: Session): string {
-  return session.title?.trim() || 'Session';
+  return toWellFormedText(session.title?.trim() || 'Session');
 }
 
 function markdownToPlainText(markdown: string): string {
@@ -89,11 +90,12 @@ function markdownToPlainText(markdown: string): string {
 }
 
 function truncateLatestOutput(text: string): string {
-  if (text.length <= LATEST_OUTPUT_MAX_CHARS) {
-    return text;
+  const wellFormedText = toWellFormedText(text);
+  if (wellFormedText.length <= LATEST_OUTPUT_MAX_CHARS) {
+    return wellFormedText;
   }
 
-  return text.slice(-LATEST_OUTPUT_MAX_CHARS);
+  return toWellFormedText(wellFormedText.slice(-LATEST_OUTPUT_MAX_CHARS));
 }
 
 function latestAssistantSnippet(turn: DialogTurn | undefined): string | undefined {

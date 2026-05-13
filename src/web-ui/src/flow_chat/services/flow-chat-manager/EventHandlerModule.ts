@@ -10,6 +10,7 @@ import { agenticEventListener, type AgenticEventCallbacks } from '../AgenticEven
 import { 
   generateTextChunkKey, 
   generateToolEventKey,
+  normalizeParamsPartialFragment,
   parseEventKey,
   type FlowToolEvent,
   type SubagentParentInfo,
@@ -1573,8 +1574,8 @@ function handleToolEvent(
           toolEvent: {
             ...(existing.toolEvent as ParamsPartialToolEvent),
             params:
-              (existing.toolEvent as ParamsPartialToolEvent).params +
-              (incoming.toolEvent as ParamsPartialToolEvent).params
+              normalizeParamsPartialFragment((existing.toolEvent as ParamsPartialToolEvent).params) +
+              normalizeParamsPartialFragment((incoming.toolEvent as ParamsPartialToolEvent).params)
           }
         })
       );

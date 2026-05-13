@@ -9,6 +9,7 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn } from './types';
 import { immediateSaveDialogTurn } from './PersistenceModule';
 import { applyPendingAcpPermissionForTool } from './AcpPermissionToolCardModule';
+import { normalizeParamsPartialFragment } from '../EventBatcher';
 import type {
   CancelledToolEvent,
   CompletedToolEvent,
@@ -180,7 +181,10 @@ function applyParamsPartial(
       return;
     }
 
-    const incomingParams = toolEvent.params || '';
+    const incomingParams = normalizeParamsPartialFragment(toolEvent.params);
+    if (!incomingParams) {
+      return;
+    }
     const isWriteFullParamsSnapshot = isWriteTool && incomingParams.trimStart().startsWith('{');
     const newBuffer = isWriteFullParamsSnapshot ? incomingParams : prevBuffer + incomingParams;
     

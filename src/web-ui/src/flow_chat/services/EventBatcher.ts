@@ -214,6 +214,10 @@ export interface ParamsPartialToolEvent extends BaseToolEvent<'ParamsPartial'> {
   params: string;
 }
 
+export function normalizeParamsPartialFragment(params: unknown): string {
+  return typeof params === 'string' ? params : '';
+}
+
 export interface QueuedToolEvent extends BaseToolEvent<'Queued'> {
   position: number;
 }
