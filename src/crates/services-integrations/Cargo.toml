@@ -15,6 +15,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 bitfun-events = { path = "../events" }
+bitfun-runtime-ports = { path = "../runtime-ports", optional = true }
 aes-gcm = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
@@ -60,5 +61,13 @@ mcp = [
     "rmcp/transport-streamable-http-client-reqwest",
     "sse-stream",
 ]
+remote-connect = ["bitfun-runtime-ports"]
 remote-ssh = ["sha2", "tokio-util"]
-product-full = ["announcement", "file-watch", "git", "mcp", "remote-ssh"]
+product-full = [
+    "announcement",
+    "file-watch",
+    "git",
+    "mcp",
+    "remote-connect",
+    "remote-ssh",
+]

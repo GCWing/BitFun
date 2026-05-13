@@ -17,6 +17,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 
 use super::encryption;
+pub use bitfun_services_integrations::remote_connect::{
+    ActiveTurnSnapshot, AssistantEntry, ChatImageAttachment, ChatMessage, ChatMessageItem,
+    ImageAttachment, RecentWorkspaceEntry, RemoteToolStatus, SessionInfo,
+};
 
 fn current_workspace_path() -> Option<std::path::PathBuf> {
     crate::service::workspace::get_global_workspace_service()
@@ -246,13 +250,6 @@ async fn load_remote_model_catalog(
         default_models: ai_config.default_models,
         session_model_id,
     })
-}
-
-/// Image sent from mobile as a base64 data-URL.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImageAttachment {
-    pub name: String,
-    pub data_url: String,
 }
 
 /// Commands that the mobile client can send to the desktop.
@@ -485,101 +482,6 @@ pub enum RemoteResponse {
     Error {
         message: String,
     },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionInfo {
-    pub session_id: String,
-    pub name: String,
-    pub agent_type: String,
-    pub created_at: String,
-    pub updated_at: String,
-    pub message_count: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace_path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace_name: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatImageAttachment {
-    pub name: String,
-    pub data_url: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatMessage {
-    pub id: String,
-    pub role: String,
-    pub content: String,
-    pub timestamp: String,
-    pub metadata: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<RemoteToolStatus>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub thinking: Option<String>,
-    /// Ordered items preserving the interleaved display order from the desktop.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub items: Option<Vec<ChatMessageItem>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub images: Option<Vec<ChatImageAttachment>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatMessageItem {
-    #[serde(rename = "type")]
-    pub item_type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool: Option<RemoteToolStatus>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub is_subagent: Option<bool>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecentWorkspaceEntry {
-    pub path: String,
-    pub name: String,
-    pub last_opened: String,
-    /// `"normal"` | `"assistant"` | `"remote"`
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub workspace_kind: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AssistantEntry {
-    pub path: String,
-    pub name: String,
-    pub assistant_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ActiveTurnSnapshot {
-    pub turn_id: String,
-    pub status: String,
-    pub text: String,
-    pub thinking: String,
-    pub tools: Vec<RemoteToolStatus>,
-    pub round_index: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub items: Option<Vec<ChatMessageItem>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RemoteToolStatus {
-    pub id: String,
-    pub name: String,
-    pub status: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub duration_ms: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_ms: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_preview: Option<String>,
-    /// Full tool input for interactive tools (e.g. AskUserQuestion).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_input: Option<serde_json::Value>,
 }
 
 pub type EncryptedPayload = (String, String);
@@ -2485,7 +2387,11 @@ impl RemoteServer {
     // ── Session commands ────────────────────────────────────────────
 
     async fn handle_session_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
-        use crate::agentic::{coordination::get_global_coordinator, core::SessionConfig};
+        use crate::agentic::coordination::get_global_coordinator;
+        use bitfun_runtime_ports::AgentSubmissionPort;
+        use bitfun_services_integrations::remote_connect::{
+            build_remote_session_create_request, RemoteConnectSubmissionSource,
+        };
 
         let coordinator = match get_global_coordinator() {
             Some(c) => c,
@@ -2640,26 +2546,18 @@ impl RemoteServer {
                     };
                 };
 
-                match coordinator
-                    .create_session_with_workspace(
-                        None,
-                        session_name.to_string(),
-                        agent.to_string(),
-                        SessionConfig {
-                            workspace_path: Some(binding_ws_str.clone()),
-                            ..Default::default()
-                        },
-                        binding_ws_str,
-                    )
-                    .await
-                {
-                    Ok(session) => {
-                        let session_id = session.session_id.clone();
-                        RemoteResponse::SessionCreated { session_id }
-                    }
-                    Err(e) => RemoteResponse::Error {
-                        message: e.to_string(),
+                let request = build_remote_session_create_request(
+                    session_name,
+                    agent,
+                    Some(binding_ws_str),
+                    RemoteConnectSubmissionSource::Relay,
+                );
+                let submission_port: &dyn AgentSubmissionPort = coordinator.as_ref();
+                match submission_port.create_session(request).await {
+                    Ok(session) => RemoteResponse::SessionCreated {
+                        session_id: session.session_id,
                     },
+                    Err(e) => RemoteResponse::Error { message: e.message },
                 }
             }
             RemoteCommand::GetModelCatalog { session_id } => {

@@ -219,6 +219,7 @@ const dependencyProfileRules = [
       'anyhow',
       'async-trait',
       'base64',
+      'bitfun-runtime-ports',
       'bitfun-services-core',
       'chrono',
       'futures',
@@ -711,6 +712,39 @@ const forbiddenContentRules = [
       {
         regex: /\bregistration_matches_path\b/,
         message: 'core remote SSH workspace runtime must not own path-to-registration matching; use the integrations registry',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_connect/remote_server.rs',
+    patterns: [
+      {
+        regex: /\bpub struct ImageAttachment\b/,
+        message: 'core remote-connect server must not redefine image attachment wire DTOs; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct ChatImageAttachment\b/,
+        message: 'core remote-connect server must not redefine chat image wire DTOs; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct ChatMessage\b/,
+        message: 'core remote-connect server must not redefine chat message wire DTOs; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct ChatMessageItem\b/,
+        message: 'core remote-connect server must not redefine chat message item DTOs; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct RemoteToolStatus\b/,
+        message: 'core remote-connect server must not redefine remote tool status DTOs; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct ActiveTurnSnapshot\b/,
+        message: 'core remote-connect server must not redefine active turn snapshot DTOs; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct SessionInfo\b/,
+        message: 'core remote-connect server must not redefine session info DTOs; use the integrations contract',
       },
     ],
   },
@@ -1286,6 +1320,30 @@ function runManifestParserSelfTest() {
   for (const dep of ['futures', 'reqwest', 'sse-stream']) {
     if (!servicesIntegrationsProfile?.forbiddenNonOptionalDeps.includes(dep)) {
       throw new Error(`services-integrations default profile must forbid non-optional ${dep}`);
+    }
+  }
+
+  const remoteConnectRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/remote_connect/remote_server.rs',
+  );
+  if (!remoteConnectRule) {
+    throw new Error('missing remote-connect remote_server boundary rule');
+  }
+  const remoteConnectContracts = [
+    'ImageAttachment',
+    'ChatImageAttachment',
+    'ChatMessage',
+    'ChatMessageItem',
+    'RemoteToolStatus',
+    'ActiveTurnSnapshot',
+    'SessionInfo',
+  ];
+  const remoteConnectRuleText = remoteConnectRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of remoteConnectContracts) {
+    if (!remoteConnectRuleText.includes(contract)) {
+      throw new Error(`remote-connect boundary rule must forbid contract: ${contract}`);
     }
   }
 

@@ -1687,7 +1687,7 @@ git diff -- package.json scripts/dev.cjs scripts/desktop-tauri-build.mjs scripts
 10. 进行中：PR 1 `services-integrations` runtime 收口，先处理 remote-SSH workspace registry / session mirror helper 和已迁移 file-watch 的 contract 复核；announcement 仅迁移无 config/content/remote fetch 依赖的 helper。
 11. 已完成：PR 2 MCP runtime 与 dynamic tools；已迁移 config service orchestration、server process / transport lifecycle、adapter、dynamic tool/resource/prompt provider，core 保留 ConfigService store adapter、OAuth data-dir 注入、BitFunError 映射、legacy facade 和 registry assembly。
 12. P2 后前置轨道：产品表面 contract-only 补强，可在 PR3 前或 PR3 第一组提交中处理；只允许 DTO/port、round-trip/no-op tests 和 boundary check，不实现 CLI/Desktop/Remote/ACP UI 或命令变更。
-13. 待执行：PR 3 remote-connect runtime。
+13. 已完成：PR 3 remote-connect runtime contract slice：产品表面 DTO 已以 contract-only 方式进入 `bitfun-core-types`；`bitfun-services-integrations` 新增 `remote-connect` feature，拥有 remote chat/image/tool/session wire DTO 与 relay/bot session/submission request builder；relay/bot 创建 session 已通过 `AgentSubmissionPort`。远程消息执行、image context、tracker event、cancel、terminal pre-warm 与 workspace/session restore 仍保留在 `bitfun-core` product runtime assembly，直到补齐 image/queue/event/cancellation port 后再迁移。
 14. 待执行：PR 4 agent tools + `tool-packs` owner 化。
 15. 待执行：PR 5 `product-domains` runtime + core facade finalization。
 16. 后续独立评估：`bitfun-core default = []` 或 per-product feature set。
