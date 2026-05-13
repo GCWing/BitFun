@@ -81,7 +81,7 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
                 </Button>
               ) : null}
               <Button variant="primary" size="medium" onClick={onInstall}>
-                {t('update.install')}
+                {t('update.backgroundInstall')}
               </Button>
             </>
           ) : (
@@ -90,7 +90,7 @@ export const UpdateAvailableDialog: React.FC<UpdateAvailableDialogProps> = ({
                 {t('update.cancel')}
               </Button>
               <Button variant="primary" size="medium" onClick={onInstall}>
-                {t('update.install')}
+                {t('update.backgroundInstall')}
               </Button>
             </>
           )}

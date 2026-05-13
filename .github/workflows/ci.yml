@@ -86,8 +86,8 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          shared-key: "ci-check-${{ runner.os }}-no-cargo-bin-v1"
-          cache-bin: "false"
+          shared-key: "ci-check-v2-${{ runner.os }}-no-cargo-bin-v1"
+          cache-bin: false
 
       - name: Check compilation
         run: cargo check --workspace --exclude bitfun-cli

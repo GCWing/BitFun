@@ -207,7 +207,8 @@ jobs:
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
         with:
-          shared-key: "package-${{ matrix.platform.name }}"
+          shared-key: "package-v2-${{ matrix.platform.name }}"
+          cache-bin: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

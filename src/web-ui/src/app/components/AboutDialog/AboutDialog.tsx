@@ -17,9 +17,8 @@ import { createLogger } from '@/shared/utils/logger';
 import { systemAPI } from '@/infrastructure/api';
 import type { CheckForUpdatesResponse } from '@/infrastructure/api/service-api/SystemAPI';
 import { isTauriRuntime } from '@/infrastructure/update/tauriEnv';
-import { installUpdateWithProgress } from '@/infrastructure/update/installUpdateWithProgress';
 import { UpdateAvailableDialog } from '@/infrastructure/update/UpdateAvailableDialog';
-import { UpdateInstallProgressModal } from '@/infrastructure/update/UpdateInstallProgressModal';
+import { useUpdateInstallStore } from '@/infrastructure/update/updateInstallStore';
 import { formatUpdateInstallError } from '@/infrastructure/update/updateErrorMessage';
 import './AboutDialog.scss';
 
@@ -43,16 +42,17 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   const [manualCheckErrorMessage, setManualCheckErrorMessage] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualData, setManualData] = useState<CheckForUpdatesResponse | null>(null);
-  const [progressOpen, setProgressOpen] = useState(false);
-  const [progress, setProgress] = useState<{ downloaded: number; total: number | null }>({
-    downloaded: 0,
-    total: null
-  });
-  const [installError, setInstallError] = useState<string | null>(null);
-  const [updateInstalled, setUpdateInstalled] = useState(false);
+  const updateStatus = useUpdateInstallStore(state => state.status);
+  const updateProgress = useUpdateInstallStore(state => state.progress);
+  const updateError = useUpdateInstallStore(state => state.error);
+  const startUpdateInstall = useUpdateInstallStore(state => state.startInstall);
 
   const aboutInfo = getAboutInfo();
   const { version, license } = aboutInfo;
+  const updateProgressPercent =
+    updateProgress.total != null && updateProgress.total > 0
+      ? Math.min(100, Math.round((updateProgress.downloaded / updateProgress.total) * 100))
+      : null;
 
   useEffect(() => {
     if (isOpen) {
@@ -91,42 +91,18 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
     setManualData(null);
   }, []);
 
-  const onManualInstall = useCallback(async () => {
+  const onManualInstall = useCallback(() => {
     setManualOpen(false);
     setManualData(null);
-    setInstallError(null);
-    setUpdateInstalled(false);
-    setProgress({ downloaded: 0, total: null });
-    setProgressOpen(true);
-    try {
-      await installUpdateWithProgress(next => {
-        setProgress(next);
-      });
-      setUpdateInstalled(true);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setInstallError(msg);
-    }
-  }, []);
-
-  const onCloseProgressError = useCallback(() => {
-    setProgressOpen(false);
-    setInstallError(null);
-    setUpdateInstalled(false);
-  }, []);
-
-  const onCloseInstalled = useCallback(() => {
-    setProgressOpen(false);
-    setUpdateInstalled(false);
-  }, []);
+    void startUpdateInstall();
+  }, [startUpdateInstall]);
 
   const onRestart = useCallback(async () => {
     try {
       await systemAPI.restartApp();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setInstallError(msg);
-      setUpdateInstalled(false);
+      useUpdateInstallStore.setState({ status: 'error', error: msg });
     }
   }, []);
 
@@ -168,45 +144,107 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
         <div className="bitfun-about-dialog__scrollable">
           {isTauriRuntime() ? (
             <div className="bitfun-about-dialog__update-card">
-              <div className="bitfun-about-dialog__update-card-head">
-                <div className="bitfun-about-dialog__update-card-icon" aria-hidden>
-                  <Download size={18} strokeWidth={2} />
-                </div>
-                <div className="bitfun-about-dialog__update-card-meta">
-                  <div className="bitfun-about-dialog__update-card-title">
-                    {t('about.updateSectionTitle')}
+              <div className="bitfun-about-dialog__update-card-top">
+                <div className="bitfun-about-dialog__update-card-main">
+                  <div className="bitfun-about-dialog__update-card-head">
+                    <div className="bitfun-about-dialog__update-card-icon" aria-hidden>
+                      <Download size={18} strokeWidth={2} />
+                    </div>
+                    <div className="bitfun-about-dialog__update-card-meta">
+                      <div className="bitfun-about-dialog__update-card-title">
+                        {t('about.updateSectionTitle')}
+                      </div>
+                      <p className="bitfun-about-dialog__update-card-hint">
+                        {t('about.updateSectionHint')}
+                      </p>
+                    </div>
                   </div>
-                  <p className="bitfun-about-dialog__update-card-hint">
-                    {t('about.updateSectionHint')}
+                  <div className="bitfun-about-dialog__update-card-feedback">
+                    {manualCheckStatus === 'latest' ? (
+                      <div
+                        className="bitfun-about-dialog__update-status bitfun-about-dialog__update-status--success"
+                        role="status"
+                      >
+                        <CheckCircle2 size={14} aria-hidden />
+                        <span>{t('update.noUpdate')}</span>
+                      </div>
+                    ) : null}
+                    {manualCheckStatus === 'error' && manualCheckErrorMessage ? (
+                      <Alert
+                        type="error"
+                        message={manualCheckErrorMessage}
+                        showIcon
+                        className="bitfun-about-dialog__update-alert"
+                      />
+                    ) : null}
+                  </div>
+                </div>
+                <div className="bitfun-about-dialog__update-card-actions">
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    isLoading={manualCheckBusy}
+                    disabled={updateStatus === 'downloading' || updateStatus === 'installed'}
+                    onClick={() => void handleCheckForUpdates()}
+                  >
+                    {!manualCheckBusy ? (
+                      <Check size={14} className="bitfun-about-dialog__update-btn-icon" aria-hidden />
+                    ) : null}
+                    {manualCheckBusy ? t('update.checking') : t('update.checkForUpdates')}
+                  </Button>
+                </div>
+              </div>
+              {updateStatus === 'downloading' ? (
+                <div className="bitfun-about-dialog__download-status" role="status">
+                  <div
+                    className="bitfun-about-dialog__download-bar"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={updateProgressPercent ?? undefined}
+                    aria-label={t('update.downloadingTitle')}
+                  >
+                    <div
+                      className={
+                        updateProgressPercent != null
+                          ? 'bitfun-about-dialog__download-fill'
+                          : 'bitfun-about-dialog__download-fill bitfun-about-dialog__download-fill--indeterminate'
+                      }
+                      style={
+                        updateProgressPercent != null
+                          ? { width: `${updateProgressPercent}%` }
+                          : undefined
+                      }
+                    />
+                  </div>
+                  <div className="bitfun-about-dialog__download-meta">
+                    <span>{t('update.backgroundDownloading')}</span>
+                    <span>
+                      {updateProgressPercent != null
+                        ? t('update.progressPercent', { percent: String(updateProgressPercent) })
+                        : t('update.progressUnknown')}
+                    </span>
+                  </div>
+                  <p className="bitfun-about-dialog__download-hint">
+                    {t('update.backgroundDownloadHint')}
                   </p>
                 </div>
-              </div>
-              <div className="bitfun-about-dialog__update-card-actions">
-                <Button
-                  variant="secondary"
-                  size="small"
-                  isLoading={manualCheckBusy}
-                  onClick={() => void handleCheckForUpdates()}
-                >
-                  {!manualCheckBusy ? (
-                    <Check size={14} className="bitfun-about-dialog__update-btn-icon" aria-hidden />
-                  ) : null}
-                  {manualCheckBusy ? t('update.checking') : t('update.checkForUpdates')}
-                </Button>
-              </div>
-              {manualCheckStatus === 'latest' ? (
-                <div
-                  className="bitfun-about-dialog__update-status bitfun-about-dialog__update-status--success"
-                  role="status"
-                >
-                  <CheckCircle2 size={14} aria-hidden />
-                  <span>{t('update.noUpdate')}</span>
+              ) : null}
+              {updateStatus === 'installed' ? (
+                <div className="bitfun-about-dialog__update-installed">
+                  <div className="bitfun-about-dialog__update-status bitfun-about-dialog__update-status--success">
+                    <CheckCircle2 size={14} aria-hidden />
+                    <span>{t('update.installedMessage')}</span>
+                  </div>
+                  <Button variant="primary" size="small" onClick={onRestart}>
+                    {t('update.restartNow')}
+                  </Button>
                 </div>
               ) : null}
-              {manualCheckStatus === 'error' && manualCheckErrorMessage ? (
+              {updateStatus === 'error' && updateError ? (
                 <Alert
                   type="error"
-                  message={manualCheckErrorMessage}
+                  message={formatUpdateInstallError(updateError, t)}
                   showIcon
                   className="bitfun-about-dialog__update-alert"
                 />
@@ -269,15 +307,6 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
         data={manualData}
         onLater={onManualLater}
         onInstall={onManualInstall}
-      />
-      <UpdateInstallProgressModal
-        isOpen={progressOpen}
-        error={installError}
-        installed={updateInstalled}
-        progress={progress}
-        onCloseError={onCloseProgressError}
-        onCloseInstalled={onCloseInstalled}
-        onRestart={onRestart}
       />
     </>
   );

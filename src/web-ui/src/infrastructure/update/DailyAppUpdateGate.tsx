@@ -9,9 +9,9 @@ import {
   recordSkipThisVersion,
   shouldShowDailyUpdatePrompt
 } from './appUpdateStorage';
-import { installUpdateWithProgress } from './installUpdateWithProgress';
 import { UpdateAvailableDialog } from './UpdateAvailableDialog';
 import { UpdateInstallProgressModal } from './UpdateInstallProgressModal';
+import { useUpdateInstallStore } from './updateInstallStore';
 
 const log = createLogger('DailyAppUpdate');
 
@@ -22,14 +22,13 @@ const log = createLogger('DailyAppUpdate');
 export function DailyAppUpdateGate(): ReactElement | null {
   const [dailyOpen, setDailyOpen] = useState(false);
   const [dailyData, setDailyData] = useState<CheckForUpdatesResponse | null>(null);
-  const [progressOpen, setProgressOpen] = useState(false);
-  const [progress, setProgress] = useState<{ downloaded: number; total: number | null }>({
-    downloaded: 0,
-    total: null
-  });
-  const [installError, setInstallError] = useState<string | null>(null);
-  const [updateInstalled, setUpdateInstalled] = useState(false);
   const dailyCheckTimerRef = useRef<number | null>(null);
+  const updateStatus = useUpdateInstallStore(state => state.status);
+  const updateProgress = useUpdateInstallStore(state => state.progress);
+  const updateError = useUpdateInstallStore(state => state.error);
+  const startUpdateInstall = useUpdateInstallStore(state => state.startInstall);
+  const clearUpdateError = useUpdateInstallStore(state => state.clearError);
+  const clearUpdateInstalled = useUpdateInstallStore(state => state.clearInstalled);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -104,46 +103,30 @@ export function DailyAppUpdateGate(): ReactElement | null {
     closeDaily();
   }, [closeDaily, dailyData]);
 
-  const onInstall = useCallback(async () => {
+  const onInstall = useCallback(() => {
     const v = dailyData?.latestVersion;
     if (v) {
       recordDailyPromptDismissed(v);
     }
     setDailyOpen(false);
     setDailyData(null);
-    setInstallError(null);
-    setUpdateInstalled(false);
-    setProgress({ downloaded: 0, total: null });
-    setProgressOpen(true);
-    try {
-      await installUpdateWithProgress(next => {
-        setProgress(next);
-      });
-      setUpdateInstalled(true);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setInstallError(msg);
-    }
-  }, [dailyData]);
+    void startUpdateInstall();
+  }, [dailyData, startUpdateInstall]);
 
   const onCloseProgressError = useCallback(() => {
-    setProgressOpen(false);
-    setInstallError(null);
-    setUpdateInstalled(false);
-  }, []);
+    clearUpdateError();
+  }, [clearUpdateError]);
 
   const onCloseInstalled = useCallback(() => {
-    setProgressOpen(false);
-    setUpdateInstalled(false);
-  }, []);
+    clearUpdateInstalled();
+  }, [clearUpdateInstalled]);
 
   const onRestart = useCallback(async () => {
     try {
       await systemAPI.restartApp();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setInstallError(msg);
-      setUpdateInstalled(false);
+      useUpdateInstallStore.setState({ status: 'error', error: msg });
     }
   }, []);
 
@@ -162,10 +145,10 @@ export function DailyAppUpdateGate(): ReactElement | null {
         onInstall={onInstall}
       />
       <UpdateInstallProgressModal
-        isOpen={progressOpen}
-        error={installError}
-        installed={updateInstalled}
-        progress={progress}
+        isOpen={updateStatus === 'error' || updateStatus === 'installed'}
+        error={updateError}
+        installed={updateStatus === 'installed'}
+        progress={updateProgress}
         onCloseError={onCloseProgressError}
         onCloseInstalled={onCloseInstalled}
         onRestart={onRestart}
