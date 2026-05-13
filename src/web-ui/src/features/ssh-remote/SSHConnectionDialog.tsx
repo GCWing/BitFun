@@ -135,8 +135,12 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     if (path) setFormData((prev) => ({ ...prev, keyPath: path }));
   }, [isConnecting, status, t]);
 
-  const generateConnectionId = (host: string, port: number, username: string) => {
-    return `ssh-${username}@${host}:${port}`;
+  // Port is intentionally excluded so that the ID stays stable when the user
+  // changes the SSH port.  Old-format IDs that include the port (e.g.
+  // "ssh-root@host:22") are migrated on the Rust side when saved connections
+  // are loaded from disk.
+  const generateConnectionId = (host: string, _port: number, username: string) => {
+    return `ssh-${username}@${host}`;
   };
 
   const buildAuthMethod = (): SSHAuthMethod => {

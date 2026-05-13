@@ -172,4 +172,72 @@ impl SSHPasswordVault {
         }
         Ok(())
     }
+
+    pub async fn migrate_entry(
+        &self,
+        old_connection_id: &str,
+        new_connection_id: &str,
+    ) -> Result<()> {
+        if old_connection_id == new_connection_id {
+            return Ok(());
+        }
+        let _g = self.lock.lock().await;
+        if !self.vault_path.exists() {
+            return Ok(());
+        }
+        let s = tokio::fs::read_to_string(&self.vault_path)
+            .await
+            .unwrap_or_default();
+        let mut file: VaultFile = serde_json::from_str(&s).unwrap_or_default();
+        let Some(entry) = file.entries.remove(old_connection_id) else {
+            return Ok(());
+        };
+        file.entries
+            .entry(new_connection_id.to_string())
+            .or_insert(entry);
+        tokio::fs::write(&self.vault_path, serde_json::to_string_pretty(&file)?).await?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ =
+                std::fs::set_permissions(&self.vault_path, std::fs::Permissions::from_mode(0o600));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SSHPasswordVault;
+
+    #[tokio::test]
+    async fn migrate_entry_moves_password_to_new_connection_id() {
+        let dir =
+            std::env::temp_dir().join(format!("bitfun-ssh-vault-test-{}", std::process::id()));
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+        let vault = SSHPasswordVault::new(dir.clone());
+
+        vault
+            .store("ssh-root@example.com:22", "secret")
+            .await
+            .unwrap();
+        vault
+            .migrate_entry("ssh-root@example.com:22", "ssh-root@example.com")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            vault.load("ssh-root@example.com").await.unwrap().as_deref(),
+            Some("secret")
+        );
+        assert!(
+            vault
+                .load("ssh-root@example.com:22")
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
 }

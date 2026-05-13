@@ -23,6 +23,80 @@ import {
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
 
+const normalizeOptional = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const hostFromSshConnectionId = (connectionId: string | undefined): string | undefined => {
+  const trimmed = connectionId?.trim();
+  if (!trimmed) return undefined;
+  const match = trimmed.match(/^ssh-[^@]+@(.+?)(?::\d+)?$/);
+  return match?.[1]?.trim().toLowerCase() || undefined;
+};
+
+const remotePathsMatch = (left: string | undefined, right: string | undefined): boolean => {
+  const leftNorm = normalizeOptional(left);
+  const rightNorm = normalizeOptional(right);
+  if (!leftNorm || !rightNorm) return false;
+  return normalizeRemoteWorkspacePath(leftNorm) === normalizeRemoteWorkspacePath(rightNorm);
+};
+
+const currentWorkspaceMatchesSessionScope = (
+  current: WorkspaceInfo | null | undefined,
+  storedConnectionId: string | undefined,
+  storedSshHost: string | undefined,
+  workspacePath: string
+): current is WorkspaceInfo => {
+  if (current?.workspaceKind !== WorkspaceKind.Remote || !current.connectionId) {
+    return false;
+  }
+  if (!remotePathsMatch(current.rootPath, workspacePath)) {
+    return false;
+  }
+
+  const currentHost = normalizeOptional(current.sshHost)?.toLowerCase()
+    || hostFromSshConnectionId(current.connectionId);
+  const storedHost = normalizeOptional(storedSshHost)?.toLowerCase()
+    || hostFromSshConnectionId(storedConnectionId);
+  if (currentHost && storedHost) {
+    return currentHost === storedHost;
+  }
+
+  const storedConnection = normalizeOptional(storedConnectionId);
+  return !storedConnection || storedConnection === current.connectionId;
+};
+
+/// Resolve the effective connection_id for a session, preferring the
+/// current workspace's connection when the stored ID may be stale
+/// (e.g. after the user changed the SSH port).
+const resolveEffectiveConnectionId = (
+  storedConnectionId: string | undefined,
+  storedSshHost: string | undefined,
+  workspacePath: string
+): string | undefined => {
+  const current = workspaceManager.getState().currentWorkspace;
+  if (currentWorkspaceMatchesSessionScope(current, storedConnectionId, storedSshHost, workspacePath)) {
+    return current.connectionId;
+  }
+  return storedConnectionId;
+};
+
+const resolveEffectiveSshHost = (
+  storedSshHost: string | undefined,
+  storedConnectionId: string | undefined,
+  workspacePath: string
+): string | undefined => {
+  const current = workspaceManager.getState().currentWorkspace;
+  if (
+    currentWorkspaceMatchesSessionScope(current, storedConnectionId, storedSshHost, workspacePath)
+    && current.sshHost?.trim()
+  ) {
+    return current.sshHost.trim() || undefined;
+  }
+  return storedSshHost;
+};
+
 async function hydrateHistoricalSession(
   context: FlowChatContext,
   sessionId: string,
@@ -42,12 +116,27 @@ async function hydrateHistoricalSession(
 
     const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
 
+    // Prefer the current workspace's connection info over the session's
+    // stored values.  When the user changes the SSH port the session's
+    // remoteConnectionId becomes stale; the active workspace always
+    // carries the up-to-date connection_id.
+    const effectiveConnectionId = resolveEffectiveConnectionId(
+      session.remoteConnectionId,
+      session.remoteSshHost,
+      workspacePath
+    );
+    const effectiveSshHost = resolveEffectiveSshHost(
+      session.remoteSshHost,
+      session.remoteConnectionId,
+      workspacePath
+    );
+
     await context.flowChatStore.loadSessionHistory(
       sessionId,
       workspacePath,
       undefined,
-      session.remoteConnectionId,
-      session.remoteSshHost
+      effectiveConnectionId,
+      effectiveSshHost
     );
   })();
 
@@ -492,6 +581,20 @@ export async function ensureBackendSession(
   const latestSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
   const workspacePath = requireSessionWorkspacePath(latestSession.workspacePath, sessionId);
 
+  // Resolve effective connection info: prefer the current workspace's
+  // connection_id over the session's stored value.  When the user changes
+  // the SSH port the session's remoteConnectionId becomes stale.
+  const effectiveConnectionId = resolveEffectiveConnectionId(
+    latestSession.remoteConnectionId,
+    latestSession.remoteSshHost,
+    workspacePath
+  );
+  const effectiveSshHost = resolveEffectiveSshHost(
+    latestSession.remoteSshHost,
+    latestSession.remoteConnectionId,
+    workspacePath
+  );
+
   const isHistoricalSession = latestSession.isHistorical === true;
   const isFirstTurn = latestSession.dialogTurns.length <= 1;
   const needsBackendSetup = isHistoricalSession || isFirstTurn;
@@ -515,8 +618,8 @@ export async function ensureBackendSession(
     await agentAPI.ensureCoordinatorSession({
       sessionId,
       workspacePath,
-      remoteConnectionId: latestSession.remoteConnectionId,
-      remoteSshHost: latestSession.remoteSshHost,
+      remoteConnectionId: effectiveConnectionId,
+      remoteSshHost: effectiveSshHost,
     });
     clearHistoricalFlag();
   } catch (e: any) {
@@ -537,14 +640,14 @@ export async function ensureBackendSession(
         `Session ${sessionId.slice(0, 8)}`,
       agentType: latestSession.mode || 'agentic',
       workspacePath,
-      remoteConnectionId: latestSession.remoteConnectionId,
-      remoteSshHost: latestSession.remoteSshHost,
+      remoteConnectionId: effectiveConnectionId,
+      remoteSshHost: effectiveSshHost,
       config: {
         modelName: latestSession.config.modelName || 'auto',
         enableTools: true,
         safeMode: true,
-        remoteConnectionId: latestSession.remoteConnectionId,
-        remoteSshHost: latestSession.remoteSshHost,
+        remoteConnectionId: effectiveConnectionId,
+        remoteSshHost: effectiveSshHost,
       }
     });
     clearHistoricalFlag();
@@ -586,4 +689,3 @@ export async function retryCreateBackendSession(
     }
   });
 }
-

@@ -315,6 +315,11 @@ impl ConversationCoordinator {
     /// If the global remote workspace is active and matches the session path,
     /// returns a `WorkspaceBinding` with remote metadata and correct local
     /// session storage path.
+    ///
+    /// When the session's `remote_connection_id` does not match any active
+    /// SSH connection (e.g. the user changed the port and the old ID is now
+    /// stale), this method attempts to remap to the current workspace
+    /// registration so that historical sessions continue to work.
     async fn build_workspace_binding(config: &SessionConfig) -> Option<WorkspaceBinding> {
         let workspace_path = config.workspace_path.as_ref()?;
         let path_buf = PathBuf::from(workspace_path);
@@ -328,20 +333,61 @@ impl ConversationCoordinator {
             .await?;
 
         if let Some(rid) = identity.remote_connection_id.as_deref() {
-            let connection_name =
+            // Try to look up the connection by the session's stored ID first.
+            let lookup =
                 crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
                     workspace_path,
                     Some(rid),
                 )
-                .await
+                .await;
+
+            // If the stored connection_id does not resolve to a registered
+            // workspace, attempt a path-only lookup.  This covers the case
+            // where the user changed the SSH port: the old connection_id is
+            // no longer registered, but the same remote path is now bound to
+            // a new connection with the updated port.
+            let (effective_rid, entry) = if lookup.is_some() {
+                (rid.to_string(), lookup)
+            } else {
+                let path_entry =
+                    crate::service::remote_ssh::workspace_state::lookup_remote_connection(
+                        workspace_path,
+                    )
+                    .await;
+                if let Some(ref pe) = path_entry {
+                    log::info!(
+                        "Session connection_id {} not registered for workspace {}; remapping to {}",
+                        rid,
+                        workspace_path,
+                        pe.connection_id
+                    );
+                    (pe.connection_id.clone(), path_entry)
+                } else {
+                    (rid.to_string(), lookup)
+                }
+            };
+
+            let connection_name = entry
                 .map(|e| e.connection_name)
-                .unwrap_or_else(|| rid.to_string());
+                .unwrap_or_else(|| effective_rid.clone());
+
+            // Re-resolve identity with the effective connection_id so the
+            // session storage path is correct.
+            let effective_identity =
+                crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
+                    workspace_path,
+                    Some(&effective_rid),
+                    config.remote_ssh_host.as_deref(),
+                )
+                .await
+                .unwrap_or(identity);
+
             let binding = WorkspaceBinding::new_remote(
                 None,
                 path_buf,
-                rid.to_string(),
+                effective_rid,
                 connection_name,
-                identity,
+                effective_identity,
             );
 
             return Some(binding);

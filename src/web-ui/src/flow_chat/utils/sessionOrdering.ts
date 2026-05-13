@@ -2,10 +2,10 @@ import type { Session } from '../types/flow-chat';
 import type { SessionMetadata } from '@/shared/types/session-history';
 import { isSamePath, normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 
-/** Extract `host` from our saved form `ssh-{user}@{host}:{port}` (used when metadata omits `remoteSshHost`). */
+/** Extract `host` from SSH connection IDs, with or without the legacy port suffix. */
 function hostFromSshConnectionId(connectionId: string): string | null {
   const t = connectionId.trim();
-  const m = t.match(/^ssh-[^@]+@(.+):(\d+)$/);
+  const m = t.match(/^ssh-[^@]+@(.+?)(?::\d+)?$/);
   return m ? m[1].trim().toLowerCase() : null;
 }
 

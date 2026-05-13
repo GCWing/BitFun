@@ -76,7 +76,7 @@ export function normalizeDefaultSessionTitleMode(mode?: string): DefaultSessionT
 }
 
 function remoteHostFromConnectionId(connectionId: string): string {
-  const match = connectionId.trim().match(/^ssh-[^@]+@(.+):(\d+)$/);
+  const match = connectionId.trim().match(/^ssh-[^@]+@(.+?)(?::\d+)?$/);
   return match ? match[1].trim().toLowerCase() : '';
 }
 

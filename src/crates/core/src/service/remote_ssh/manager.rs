@@ -13,8 +13,8 @@ use russh::client::{DisconnectReason, Handle, Handler, Msg};
 use russh::Sig;
 use russh_keys::key::PublicKey;
 use russh_keys::PublicKeyBase64;
-use russh_sftp::client::fs::ReadDir;
 use russh_sftp::client::SftpSession;
+use russh_sftp::client::fs::ReadDir;
 #[cfg(feature = "ssh_config")]
 use ssh_config::SSHConfig;
 use std::collections::HashMap;
@@ -771,7 +771,39 @@ impl SSHConnectionManager {
 
         let mut guard = self.saved_connections.write().await;
         *guard = saved;
-        drop(guard);
+
+        // Migrate old-format connection IDs that include the port
+        // (e.g. "ssh-root@host:22") to the new stable format ("ssh-root@host").
+        // This ensures historical sessions can still find the connection after
+        // the user changes the port.
+        let mut migrated_ids = Vec::new();
+        for conn in guard.iter_mut() {
+            if let Some(new_id) = Self::migrate_connection_id(&conn.id) {
+                let old_id = conn.id.clone();
+                log::info!("Migrating saved connection ID: {} -> {}", old_id, new_id);
+                conn.id = new_id.clone();
+                migrated_ids.push((old_id, new_id));
+            }
+        }
+        if !migrated_ids.is_empty() {
+            drop(guard);
+            for (old_id, new_id) in &migrated_ids {
+                if let Err(e) = self.password_vault.migrate_entry(old_id, new_id).await {
+                    log::warn!(
+                        "Failed to migrate SSH password vault entry from {} to {}: {}",
+                        old_id,
+                        new_id,
+                        e
+                    );
+                }
+            }
+            // Persist the migrated IDs to disk.
+            if let Err(e) = self.save_connections().await {
+                log::warn!("Failed to persist migrated connection IDs: {}", e);
+            }
+        } else {
+            drop(guard);
+        }
 
         let removed = self.prune_saved_connections_without_credentials().await?;
         if !removed.is_empty() {
@@ -784,6 +816,30 @@ impl SSHConnectionManager {
         let guard = self.saved_connections.read().await;
         log::info!("load_saved_connections: loaded {} connections", guard.len());
         Ok(())
+    }
+
+    /// If `id` follows the old format `ssh-{user}@{host}:{port}`, return the
+    /// new stable format `ssh-{user}@{host}`.  Otherwise return `None`.
+    fn migrate_connection_id(id: &str) -> Option<String> {
+        if !id.starts_with("ssh-") {
+            return None;
+        }
+        let rest = &id[4..]; // "{user}@{host}:{port}"
+        let at_pos = rest.find('@')?;
+        let colon_pos = rest.rfind(':')?;
+        if colon_pos <= at_pos {
+            return None;
+        }
+        // Verify the suffix after the last colon is a valid port number.
+        let port_str = &rest[colon_pos + 1..];
+        if port_str.parse::<u16>().is_ok() {
+            let stable = format!("ssh-{}", &rest[..colon_pos]);
+            // Only return if the ID actually changes (i.e. the port was present).
+            if stable != id {
+                return Some(stable);
+            }
+        }
+        None
     }
 
     /// Save connections to disk
@@ -906,12 +962,11 @@ impl SSHConnectionManager {
 
         let mut guard = self.saved_connections.write().await;
 
-        // Remove existing entry with same id OR same host+port+username (dedup)
+        // Remove existing entry with same id OR same host+username (dedup).
+        // Using host+username (without port) so that changing the port replaces
+        // the old entry instead of creating a duplicate.
         guard.retain(|c| {
-            c.id != config.id
-                && !(c.host == config.host
-                    && c.port == config.port
-                    && c.username == config.username)
+            c.id != config.id && !(c.host == config.host && c.username == config.username)
         });
 
         // Add new entry
@@ -1620,47 +1675,90 @@ impl SSHConnectionManager {
     /// server-side timeout), transparently reconnect using the saved config
     /// and (for password auth) the encrypted password vault.
     ///
+    /// Also detects config drift (e.g. the user changed the port after the
+    /// connection was established) and forces a reconnect with the updated
+    /// parameters so that historical sessions never use a stale port.
+    ///
     /// Uses a per-connection mutex to prevent reconnect stampedes when many
     /// concurrent SFTP/exec calls hit a dead session at the same time.
-    /// Idempotent: returns Ok(()) immediately when the session is already alive.
+    /// Idempotent: returns Ok(()) immediately when the session is already alive
+    /// **and** its config matches the latest saved profile.
     async fn ensure_alive_or_reconnect(&self, connection_id: &str) -> anyhow::Result<()> {
-        let missing_config = self
+        // Always read the latest saved config — this is the source of truth
+        // after the user edits a connection (e.g. changes the port).
+        let saved_config = self
             .load_connection_config_from_saved(connection_id)
             .await?;
 
-        let (alive_flag, reconnect_lock, mut config) = {
+        let (alive_flag, reconnect_lock, active_config) = {
             let guard = self.connections.read().await;
             if let Some(conn) = guard.get(connection_id) {
                 (
                     conn.alive.clone(),
                     conn.reconnect_lock.clone(),
-                    conn.config.clone(),
+                    Some(conn.config.clone()),
                 )
             } else {
-                let config = missing_config.ok_or_else(|| {
-                    anyhow!(
-                        "Connection {} not found and no saved SSH profile is available",
-                        connection_id
-                    )
-                })?;
                 (
                     Arc::new(AtomicBool::new(false)),
                     Arc::new(tokio::sync::Mutex::new(())),
-                    config,
+                    None,
                 )
             }
         };
 
+        // If the connection is alive, check for config drift before returning.
         if alive_flag.load(Ordering::SeqCst) {
-            return Ok(());
+            if let Some(ref saved) = saved_config {
+                if let Some(ref active) = active_config {
+                    if !saved.connection_params_equal(active) {
+                        log::warn!(
+                            "SSH config for {} has drifted (e.g. port {} -> {}), forcing reconnect",
+                            connection_id,
+                            active.port,
+                            saved.port
+                        );
+                        // Mark as dead so the reconnect path below is taken.
+                        alive_flag.store(false, Ordering::SeqCst);
+                    } else {
+                        return Ok(());
+                    }
+                } else {
+                    return Ok(());
+                }
+            } else {
+                return Ok(());
+            }
         }
 
         // Serialize concurrent reconnect attempts for the same connection.
         let _guard = reconnect_lock.lock().await;
         // Re-check under lock; another task may have already restored the session.
         if alive_flag.load(Ordering::SeqCst) {
-            return Ok(());
+            // Re-check config drift under lock as well.
+            if let Some(ref saved) = saved_config {
+                let guard = self.connections.read().await;
+                if let Some(conn) = guard.get(connection_id) {
+                    if saved.connection_params_equal(&conn.config) {
+                        return Ok(());
+                    }
+                }
+            } else {
+                return Ok(());
+            }
         }
+
+        // Prefer the latest saved config for reconnection; fall back to the
+        // active config only when no saved profile exists (should be rare).
+        let mut config = match saved_config {
+            Some(c) => c,
+            None => active_config.ok_or_else(|| {
+                anyhow!(
+                    "Connection {} not found and no saved SSH profile is available",
+                    connection_id
+                )
+            })?,
+        };
 
         let is_existing_connection = {
             let guard = self.connections.read().await;
@@ -1702,12 +1800,14 @@ impl SSHConnectionManager {
 
         let (handle, alive, server_info) = self.establish_session(&config, 30).await?;
 
-        // Replace the handle and clear the cached SFTP session so subsequent
-        // operations open a fresh channel on the new transport.
+        // Replace the handle, update the config to the latest saved version,
+        // and clear the cached SFTP session so subsequent operations open a
+        // fresh channel on the new transport.
         {
             let mut guard = self.connections.write().await;
             if let Some(conn) = guard.get_mut(connection_id) {
                 conn.handle = Arc::new(handle);
+                conn.config = config;
                 conn.alive = alive;
                 if let Some(si) = server_info.as_ref() {
                     conn.server_info = Some(si.clone());

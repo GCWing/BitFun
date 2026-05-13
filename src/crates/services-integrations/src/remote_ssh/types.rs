@@ -47,6 +47,19 @@ pub struct SSHConnectionConfig {
     pub default_workspace: Option<String>,
 }
 
+impl SSHConnectionConfig {
+    /// Compare the connection parameters that affect the underlying SSH session
+    /// (host, port, username, auth type). Used to detect config drift between
+    /// an active connection and the latest saved config so that a reconnect
+    /// can be triggered when the user changes the port or other params.
+    pub fn connection_params_equal(&self, other: &Self) -> bool {
+        self.host == other.host
+            && self.port == other.port
+            && self.username == other.username
+            && std::mem::discriminant(&self.auth) == std::mem::discriminant(&other.auth)
+    }
+}
+
 /// SSH authentication method
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
