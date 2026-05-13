@@ -20,6 +20,7 @@ use ssh_config::SSHConfig;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::Once;
 use tokio::net::TcpStream;
 use tokio::time::{Duration, Instant};
 
@@ -1338,6 +1339,18 @@ impl SSHConnectionManager {
         command: &str,
         options: SSHCommandOptions,
     ) -> std::result::Result<SSHCommandResult, anyhow::Error> {
+        let execution_started_at = Instant::now();
+        let command_preview = if command.len() > 160 {
+            format!("{}...", &command[..160])
+        } else {
+            command.to_string()
+        };
+        log::debug!(
+            "Remote exec started: timeout_ms={:?}, has_cancellation={}, command_preview={}",
+            options.timeout_ms,
+            options.cancellation_token.is_some(),
+            command_preview
+        );
         let mut session = handle.channel_open_session().await?;
         session.exec(true, command).await?;
 
@@ -1346,6 +1359,10 @@ impl SSHConnectionManager {
         let mut exit_status: Option<i32> = None;
         let mut interrupted = false;
         let mut timed_out = false;
+        let stdout_first_chunk_once = Once::new();
+        let stderr_first_chunk_once = Once::new();
+        let mut eof_logged = false;
+        let mut close_logged = false;
         let timeout_deadline = options
             .timeout_ms
             .map(|ms| Instant::now() + Duration::from_millis(ms));
@@ -1362,6 +1379,14 @@ impl SSHConnectionManager {
             {
                 interrupted = true;
                 interrupt_drain_deadline = Some(now + SSH_COMMAND_INTERRUPT_DRAIN_GRACE);
+                log::warn!(
+                    "Remote exec cancellation requested: timeout_ms={:?}, stdout_len={}, stderr_len={}, duration_ms={}, command_preview={}",
+                    options.timeout_ms,
+                    stdout.len(),
+                    stderr.len(),
+                    execution_started_at.elapsed().as_millis(),
+                    command_preview
+                );
                 if let Err(e) = Self::interrupt_exec_channel(&session, Sig::INT).await {
                     log::debug!("Failed to interrupt remote exec channel via SIGINT: {}", e);
                 }
@@ -1370,6 +1395,14 @@ impl SSHConnectionManager {
             if !timed_out && timeout_deadline.is_some_and(|deadline| now >= deadline) {
                 timed_out = true;
                 interrupt_drain_deadline = Some(now + SSH_COMMAND_INTERRUPT_DRAIN_GRACE);
+                log::warn!(
+                    "Remote exec timeout reached: timeout_ms={:?}, stdout_len={}, stderr_len={}, duration_ms={}, command_preview={}",
+                    options.timeout_ms,
+                    stdout.len(),
+                    stderr.len(),
+                    execution_started_at.elapsed().as_millis(),
+                    command_preview
+                );
                 if let Err(e) = Self::interrupt_exec_channel(&session, Sig::INT).await {
                     log::debug!("Failed to interrupt timed out remote exec channel: {}", e);
                 }
@@ -1398,29 +1431,92 @@ impl SSHConnectionManager {
 
             match next_msg {
                 Some(russh::ChannelMsg::Data { ref data }) => {
+                    stdout_first_chunk_once.call_once(|| {
+                        log::debug!(
+                            "Remote exec first stdout chunk received: timeout_ms={:?}, chunk_len={}, duration_ms={}, command_preview={}",
+                            options.timeout_ms,
+                            data.len(),
+                            execution_started_at.elapsed().as_millis(),
+                            command_preview
+                        );
+                    });
                     stdout.push_str(&String::from_utf8_lossy(data));
                 }
                 Some(russh::ChannelMsg::ExtendedData { ref data, .. }) => {
+                    stderr_first_chunk_once.call_once(|| {
+                        log::debug!(
+                            "Remote exec first stderr chunk received: timeout_ms={:?}, chunk_len={}, duration_ms={}, command_preview={}",
+                            options.timeout_ms,
+                            data.len(),
+                            execution_started_at.elapsed().as_millis(),
+                            command_preview
+                        );
+                    });
                     stderr.push_str(&String::from_utf8_lossy(data));
                 }
                 Some(russh::ChannelMsg::ExitStatus {
                     exit_status: status,
                 }) => {
                     exit_status = Some(status as i32);
+                    log::debug!(
+                        "Remote exec exit status received: exit_code={}, stdout_len={}, stderr_len={}, duration_ms={}, command_preview={}",
+                        status,
+                        stdout.len(),
+                        stderr.len(),
+                        execution_started_at.elapsed().as_millis(),
+                        command_preview
+                    );
                 }
                 Some(russh::ChannelMsg::ExitSignal { signal_name, .. }) => {
                     interrupted = interrupted || matches!(signal_name, Sig::INT | Sig::TERM);
+                    log::debug!(
+                        "Remote exec exit signal received: signal={:?}, stdout_len={}, stderr_len={}, duration_ms={}, command_preview={}",
+                        signal_name,
+                        stdout.len(),
+                        stderr.len(),
+                        execution_started_at.elapsed().as_millis(),
+                        command_preview
+                    );
                 }
-                Some(russh::ChannelMsg::Eof) => {}
-                Some(russh::ChannelMsg::Close) => {}
+                Some(russh::ChannelMsg::Eof) => {
+                    if !eof_logged {
+                        eof_logged = true;
+                        log::debug!(
+                            "Remote exec EOF received: stdout_len={}, stderr_len={}, duration_ms={}, command_preview={}",
+                            stdout.len(),
+                            stderr.len(),
+                            execution_started_at.elapsed().as_millis(),
+                            command_preview
+                        );
+                    }
+                }
+                Some(russh::ChannelMsg::Close) => {
+                    if !close_logged {
+                        close_logged = true;
+                        log::debug!(
+                            "Remote exec channel close received: stdout_len={}, stderr_len={}, duration_ms={}, command_preview={}",
+                            stdout.len(),
+                            stderr.len(),
+                            execution_started_at.elapsed().as_millis(),
+                            command_preview
+                        );
+                    }
+                }
                 None => {
+                    log::debug!(
+                        "Remote exec stream ended: stdout_len={}, stderr_len={}, duration_ms={}, command_preview={}",
+                        stdout.len(),
+                        stderr.len(),
+                        execution_started_at.elapsed().as_millis(),
+                        command_preview
+                    );
                     break;
                 }
                 Some(_) => {}
             }
         }
 
-        Ok(SSHCommandResult {
+        let result = SSHCommandResult {
             stdout,
             stderr,
             exit_code: exit_status.unwrap_or_else(|| {
@@ -1434,7 +1530,19 @@ impl SSHConnectionManager {
             }),
             interrupted,
             timed_out,
-        })
+        };
+        log::debug!(
+            "Remote exec completed: exit_code={}, interrupted={}, timed_out={}, stdout_len={}, stderr_len={}, duration_ms={}, command_preview={}",
+            result.exit_code,
+            result.interrupted,
+            result.timed_out,
+            result.stdout.len(),
+            result.stderr.len(),
+            execution_started_at.elapsed().as_millis(),
+            command_preview
+        );
+
+        Ok(result)
     }
 
     /// Disconnect from a server

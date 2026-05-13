@@ -2721,6 +2721,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let initial_deadline =
             timeout_seconds.map(|seconds| Instant::now() + Duration::from_secs(seconds));
         let (deadline_tx, mut deadline_rx) = watch::channel(initial_deadline);
+        let subagent_started_at = Instant::now();
+        let parent_session_id = subagent_parent_info
+            .as_ref()
+            .map(|info| info.session_id.as_str())
+            .unwrap_or("-");
+        let parent_dialog_turn_id = subagent_parent_info
+            .as_ref()
+            .map(|info| info.dialog_turn_id.as_str())
+            .unwrap_or("-");
+        let parent_tool_call_id = subagent_parent_info
+            .as_ref()
+            .map(|info| info.tool_call_id.as_str())
+            .unwrap_or("-");
 
         let context_profile_policy = self.context_profile_policy_for_subagent(
             &agent_type,
@@ -2909,6 +2922,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let execution_engine = self.execution_engine.clone();
         let tool_pipeline = self.tool_pipeline.clone();
         let agent_type_for_execution = agent_type.clone();
+        debug!(
+            "Subagent execution task starting: agent_type={}, session_id={}, dialog_turn_id={}, parent_session_id={}, parent_dialog_turn_id={}, parent_tool_call_id={}, timeout_seconds={:?}, wait_ms={}",
+            agent_type,
+            session_id,
+            dialog_turn_id,
+            parent_session_id,
+            parent_dialog_turn_id,
+            parent_tool_call_id,
+            timeout_seconds,
+            wait_ms
+        );
         let mut execution_task = tokio::spawn(async move {
             execution_engine
                 .execute_dialog_turn(
@@ -2973,6 +2997,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 }
             }
         };
+
+        let execution_outcome_label = match &execution_outcome {
+            SubagentExecutionOutcome::Completed(_) => "completed",
+            SubagentExecutionOutcome::Cancelled => "cancelled",
+            SubagentExecutionOutcome::TimedOut => "timed_out",
+        };
+        debug!(
+            "Subagent execution outcome resolved: agent_type={}, session_id={}, dialog_turn_id={}, parent_session_id={}, parent_dialog_turn_id={}, parent_tool_call_id={}, outcome={}, duration_ms={}",
+            agent_type,
+            session_id,
+            dialog_turn_id,
+            parent_session_id,
+            parent_dialog_turn_id,
+            parent_tool_call_id,
+            execution_outcome_label,
+            subagent_started_at.elapsed().as_millis()
+        );
 
         let result = match execution_outcome {
             SubagentExecutionOutcome::Completed(join_result) => match join_result {
@@ -3203,7 +3244,27 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         };
 
         // Clean up subagent session resources after successful execution
-        debug!("Starting subagent resource cleanup: session={}", session_id);
+        debug!(
+            "Subagent successful execution produced final text: agent_type={}, session_id={}, dialog_turn_id={}, parent_session_id={}, parent_dialog_turn_id={}, parent_tool_call_id={}, text_len={}, duration_ms={}",
+            agent_type,
+            session_id,
+            dialog_turn_id,
+            parent_session_id,
+            parent_dialog_turn_id,
+            parent_tool_call_id,
+            response_text.len(),
+            subagent_started_at.elapsed().as_millis()
+        );
+        let cleanup_started_at = Instant::now();
+        debug!(
+            "Subagent cleanup starting after successful execution: agent_type={}, session_id={}, dialog_turn_id={}, parent_session_id={}, parent_dialog_turn_id={}, parent_tool_call_id={}",
+            agent_type,
+            session_id,
+            dialog_turn_id,
+            parent_session_id,
+            parent_dialog_turn_id,
+            parent_tool_call_id
+        );
         if let Err(e) = self.cleanup_subagent_resources(&session_id).await {
             warn!(
                 "Failed to cleanup subagent resources: session={}, error={}",
@@ -3211,13 +3272,41 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             );
         } else {
             debug!(
-                "Subagent resource cleanup completed: session={}",
-                session_id
+                "Subagent cleanup completed after successful execution: agent_type={}, session_id={}, dialog_turn_id={}, parent_session_id={}, parent_dialog_turn_id={}, parent_tool_call_id={}, cleanup_duration_ms={}",
+                agent_type,
+                session_id,
+                dialog_turn_id,
+                parent_session_id,
+                parent_dialog_turn_id,
+                parent_tool_call_id,
+                cleanup_started_at.elapsed().as_millis()
             );
         }
+        debug!(
+            "Subagent timeout registry removal starting: agent_type={}, session_id={}, dialog_turn_id={}",
+            agent_type, session_id, dialog_turn_id
+        );
         let mut registry = self.subagent_timeout_registry.write().await;
         registry.remove(&session_id);
+        debug!(
+            "Subagent timeout registry removal completed: agent_type={}, session_id={}, dialog_turn_id={}, total_duration_ms={}",
+            agent_type,
+            session_id,
+            dialog_turn_id,
+            subagent_started_at.elapsed().as_millis()
+        );
 
+        debug!(
+            "Subagent result returning to caller: agent_type={}, session_id={}, dialog_turn_id={}, parent_session_id={}, parent_dialog_turn_id={}, parent_tool_call_id={}, status=completed, text_len={}, total_duration_ms={}",
+            agent_type,
+            session_id,
+            dialog_turn_id,
+            parent_session_id,
+            parent_dialog_turn_id,
+            parent_tool_call_id,
+            response_text.len(),
+            subagent_started_at.elapsed().as_millis()
+        );
         Ok(SubagentResult::completed(response_text))
     }
 
@@ -3442,10 +3531,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ///
     /// Release resources occupied by subagent session (sandbox, etc.) and delete session
     async fn cleanup_subagent_resources(&self, session_id: &str) -> BitFunResult<()> {
-        debug!(
-            "Starting subagent resource cleanup: session_id={}",
-            session_id
-        );
+        let cleanup_started_at = Instant::now();
+        debug!("Starting subagent resource cleanup: session_id={}", session_id);
 
         // Clean up snapshot system resources
         if let Some(workspace_path) = self
@@ -3453,6 +3540,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .get_session(session_id)
             .and_then(|session| session.config.workspace_path.map(std::path::PathBuf::from))
         {
+            debug!(
+                "Subagent cleanup stage starting: session_id={}, stage=snapshot_cleanup, workspace_path={}",
+                session_id,
+                workspace_path.display()
+            );
+            let stage_started_at = Instant::now();
             if let Ok(snapshot_manager) =
                 crate::service::snapshot::ensure_snapshot_manager_for_workspace(&workspace_path)
             {
@@ -3470,6 +3563,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     );
                 }
             }
+            debug!(
+                "Subagent cleanup stage completed: session_id={}, stage=snapshot_cleanup, duration_ms={}",
+                session_id,
+                stage_started_at.elapsed().as_millis()
+            );
         }
 
         // Delete the subagent session itself, including runtime context and persisted turn data.
@@ -3479,6 +3577,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .and_then(|session| session.config.workspace_path.map(std::path::PathBuf::from));
 
         if let Some(workspace_path) = workspace_path {
+            debug!(
+                "Subagent cleanup stage starting: session_id={}, stage=session_delete, workspace_path={}",
+                session_id,
+                workspace_path.display()
+            );
+            let stage_started_at = Instant::now();
             if let Err(e) = self
                 .session_manager
                 .delete_session(&workspace_path, session_id)
@@ -3491,6 +3595,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             } else {
                 debug!("Subagent session deleted: session={}", session_id);
             }
+            debug!(
+                "Subagent cleanup stage completed: session_id={}, stage=session_delete, duration_ms={}",
+                session_id,
+                stage_started_at.elapsed().as_millis()
+            );
         } else {
             warn!(
                 "Failed to delete subagent session because workspace_path is missing: session={}",
@@ -3499,8 +3608,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         debug!(
-            "Subagent resource cleanup completed: session_id={}",
-            session_id
+            "Subagent resource cleanup completed: session_id={}, duration_ms={}",
+            session_id,
+            cleanup_started_at.elapsed().as_millis()
         );
         Ok(())
     }

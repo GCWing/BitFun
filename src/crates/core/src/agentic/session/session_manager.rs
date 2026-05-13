@@ -24,12 +24,14 @@ use crate::service::session::{
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::sanitize_plain_model_output;
+use crate::util::timing::elapsed_ms_u64;
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use serde_json::json;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Instant;
 use std::time::{Duration, SystemTime};
 use tokio::time;
 
@@ -1529,7 +1531,20 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        let delete_started_at = Instant::now();
+        debug!(
+            "Session deletion started: session_id={}, workspace_path={}, persistence_enabled={}",
+            session_id,
+            workspace_path.display(),
+            self.config.enable_persistence
+        );
+
         // 1. Clean up snapshot system resources (including physical snapshot files)
+        let snapshot_stage_started_at = Instant::now();
+        debug!(
+            "Session deletion stage starting: session_id={}, stage=snapshot_cleanup",
+            session_id
+        );
         if let Ok(snapshot_manager) = ensure_snapshot_manager_for_workspace(workspace_path) {
             let snapshot_service = snapshot_manager.get_snapshot_service();
             let snapshot_service = snapshot_service.read().await;
@@ -1542,17 +1557,47 @@ impl SessionManager {
                 );
             }
         }
+        debug!(
+            "Session deletion stage completed: session_id={}, stage=snapshot_cleanup, duration_ms={}",
+            session_id,
+            elapsed_ms_u64(snapshot_stage_started_at)
+        );
 
+        let context_stage_started_at = Instant::now();
+        debug!(
+            "Session deletion stage starting: session_id={}, stage=context_store_delete",
+            session_id
+        );
         self.context_store.delete_session(session_id);
+        debug!(
+            "Session deletion stage completed: session_id={}, stage=context_store_delete, duration_ms={}",
+            session_id,
+            elapsed_ms_u64(context_stage_started_at)
+        );
 
         // 2. Delete persisted data
         if self.config.enable_persistence {
+            let persistence_stage_started_at = Instant::now();
+            debug!(
+                "Session deletion stage starting: session_id={}, stage=persistence_delete",
+                session_id
+            );
             self.persistence_manager
                 .delete_session(workspace_path, session_id)
                 .await?;
+            debug!(
+                "Session deletion stage completed: session_id={}, stage=persistence_delete, duration_ms={}",
+                session_id,
+                elapsed_ms_u64(persistence_stage_started_at)
+            );
         }
 
         if let Some(cron) = crate::service::cron::get_global_cron_service() {
+            let cron_stage_started_at = Instant::now();
+            debug!(
+                "Session deletion stage starting: session_id={}, stage=cron_cleanup",
+                session_id
+            );
             match cron.delete_jobs_for_session(session_id).await {
                 Ok(removed) if removed > 0 => {
                     info!(
@@ -1568,12 +1613,23 @@ impl SessionManager {
                     );
                 }
             }
+            debug!(
+                "Session deletion stage completed: session_id={}, stage=cron_cleanup, duration_ms={}",
+                session_id,
+                elapsed_ms_u64(cron_stage_started_at)
+            );
         }
 
         // 3. Clean up associated Terminal session
         use crate::service::terminal::TerminalApi;
         if let Ok(terminal_api) = TerminalApi::from_singleton() {
             let binding = terminal_api.session_manager().binding();
+            let terminal_stage_started_at = Instant::now();
+            debug!(
+                "Session deletion stage starting: session_id={}, stage=terminal_binding_cleanup, has_binding={}",
+                session_id,
+                binding.has(session_id)
+            );
             if binding.has(session_id) {
                 if let Err(e) = binding.remove(session_id).await {
                     warn!("Failed to cleanup associated Terminal session: {}", e);
@@ -1584,12 +1640,32 @@ impl SessionManager {
                     );
                 }
             }
+            debug!(
+                "Session deletion stage completed: session_id={}, stage=terminal_binding_cleanup, duration_ms={}",
+                session_id,
+                elapsed_ms_u64(terminal_stage_started_at)
+            );
         }
 
         // 4. Remove from memory
+        let memory_stage_started_at = Instant::now();
+        debug!(
+            "Session deletion stage starting: session_id={}, stage=in_memory_remove",
+            session_id
+        );
         self.sessions.remove(session_id);
+        debug!(
+            "Session deletion stage completed: session_id={}, stage=in_memory_remove, duration_ms={}",
+            session_id,
+            elapsed_ms_u64(memory_stage_started_at)
+        );
 
-        info!("Session deletion completed: session_id={}", session_id);
+        info!(
+            "Session deletion completed: session_id={}, workspace_path={}, duration_ms={}",
+            session_id,
+            workspace_path.display(),
+            elapsed_ms_u64(delete_started_at)
+        );
 
         Ok(())
     }

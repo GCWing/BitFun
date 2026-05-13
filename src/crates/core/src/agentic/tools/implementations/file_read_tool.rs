@@ -3,9 +3,12 @@ use crate::agentic::tools::framework::{
 };
 use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
 use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
+use log::{debug, warn};
 use serde_json::{json, Value};
 use std::path::Path;
+use std::time::Instant;
 use tool_runtime::fs::read_file::read_file;
 
 pub struct FileReadTool {
@@ -71,10 +74,40 @@ impl FileReadTool {
             hit_marker = HIT_TOTAL_CHAR_LIMIT_MARKER,
         );
 
+        let remote_read_started_at = Instant::now();
+        debug!(
+            "Remote file read started: path={}, start_line={}, limit={}, timeout_ms={:?}, session_id={:?}, dialog_turn_id={:?}",
+            resolved_path,
+            start_line,
+            limit,
+            Option::<u64>::None,
+            context.session_id,
+            context.dialog_turn_id
+        );
         let (stdout, stderr, status) = ws_shell
             .exec(&command, None)
             .await
-            .map_err(|e| BitFunError::tool(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| {
+                warn!(
+                    "Remote file read failed: path={}, start_line={}, limit={}, duration_ms={}, error={}",
+                    resolved_path,
+                    start_line,
+                    limit,
+                    elapsed_ms_u64(remote_read_started_at),
+                    e
+                );
+                BitFunError::tool(format!("Failed to read file: {}", e))
+            })?;
+        debug!(
+            "Remote file read command completed: path={}, start_line={}, limit={}, status={}, stdout_len={}, stderr_len={}, duration_ms={}",
+            resolved_path,
+            start_line,
+            limit,
+            status,
+            stdout.len(),
+            stderr.len(),
+            elapsed_ms_u64(remote_read_started_at)
+        );
 
         let mut total_lines = None;
         let mut hit_total_char_limit = false;
@@ -137,6 +170,16 @@ impl FileReadTool {
         } else {
             (start_line + lines_read).saturating_sub(1)
         };
+
+        debug!(
+            "Remote file read parsed successfully: path={}, start_line={}, end_line={}, total_lines={}, hit_total_char_limit={}, duration_ms={}",
+            resolved_path,
+            start_line,
+            end_line,
+            total_lines,
+            hit_total_char_limit,
+            elapsed_ms_u64(remote_read_started_at)
+        );
 
         Ok(tool_runtime::fs::read_file::ReadFileResult {
             start_line,

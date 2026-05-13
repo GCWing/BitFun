@@ -23,10 +23,12 @@ use crate::agentic::tools::framework::{
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::agentic::tools::InputValidator;
 use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
-use log::warn;
+use log::{debug, warn};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::time::Instant;
 pub struct TaskTool;
 
 const LARGE_TASK_PROMPT_SOFT_LINE_LIMIT: usize = 180;
@@ -1110,6 +1112,17 @@ impl Tool for TaskTool {
                 session_id: session_id.clone(),
                 dialog_turn_id: dialog_turn_id.clone(),
             };
+            let subagent_execution_started_at = Instant::now();
+            debug!(
+                "TaskTool awaiting subagent result: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, subagent_type={}, timeout_seconds={:?}, workspace_path={}, model_id={:?}",
+                session_id,
+                dialog_turn_id,
+                tool_call_id,
+                subagent_type,
+                timeout_seconds,
+                effective_workspace_path,
+                model_id
+            );
             let execution_result = coordinator
                 .execute_subagent(
                     subagent_type.clone(),
@@ -1125,6 +1138,17 @@ impl Tool for TaskTool {
 
             match execution_result {
                 Ok(result) => {
+                    debug!(
+                        "TaskTool subagent returned: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, subagent_type={}, status={:?}, text_len={}, duration_ms={}, ledger_event_id={:?}",
+                        session_id,
+                        dialog_turn_id,
+                        tool_call_id,
+                        subagent_type,
+                        result.status,
+                        result.text.len(),
+                        elapsed_ms_u64(subagent_execution_started_at),
+                        result.ledger_event_id()
+                    );
                     if let Some(reason) = provider_capacity_retry_reason {
                         Self::record_deep_review_provider_capacity_retry_success(
                             &dialog_turn_id,
@@ -1134,6 +1158,15 @@ impl Tool for TaskTool {
                     break result;
                 }
                 Err(error) => {
+                    warn!(
+                        "TaskTool subagent failed: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, subagent_type={}, duration_ms={}, error={}",
+                        session_id,
+                        dialog_turn_id,
+                        tool_call_id,
+                        subagent_type,
+                        elapsed_ms_u64(subagent_execution_started_at),
+                        error
+                    );
                     if matches!(
                         deep_review_subagent_role,
                         Some(DeepReviewSubagentRole::Reviewer)
