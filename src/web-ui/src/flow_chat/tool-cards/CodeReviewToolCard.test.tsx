@@ -107,8 +107,8 @@ function buildManifest(): ReviewTeamRunManifest {
       },
     },
     executionPolicy: {
-      reviewerTimeoutSeconds: 300,
-      judgeTimeoutSeconds: 240,
+      reviewerTimeoutSeconds: 1800,
+      judgeTimeoutSeconds: 1200,
       reviewerFileSplitThreshold: 20,
       maxSameRoleInstances: 3,
     },

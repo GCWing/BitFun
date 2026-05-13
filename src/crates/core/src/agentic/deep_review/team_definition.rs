@@ -212,7 +212,7 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             strategy_profile(
                 "quick",
                 "Quick",
-                "Fast screening for high-confidence issues in the requested diff or scope.",
+                "Quick keeps built-in target-matched reviewers, skips user-added specialists, and reports reduced coverage.",
                 "0.4-0.6x",
                 "0.5-0.7x",
                 "fast",
@@ -250,7 +250,7 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             strategy_profile(
                 "normal",
                 "Normal",
-                "Balanced review depth for day-to-day code review with practical evidence.",
+                "Normal stays practical for slower models, limits optional expansion, and uses summary-first on large changes.",
                 "1x",
                 "1x",
                 "fast",
@@ -288,7 +288,7 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             strategy_profile(
                 "deep",
                 "Deep",
-                "Thorough multi-pass review for risky, broad, or release-sensitive changes.",
+                "Thorough multi-pass review with the longest budget for risky or release-sensitive changes.",
                 "1.8-2.5x",
                 "1.5-2.5x",
                 "primary",
@@ -349,8 +349,8 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
         default_model: "fast".to_string(),
         default_strategy_level: "normal".to_string(),
         default_execution_policy: ReviewTeamExecutionPolicyDefinition {
-            reviewer_timeout_seconds: 300,
-            judge_timeout_seconds: 240,
+            reviewer_timeout_seconds: 3600,
+            judge_timeout_seconds: 2400,
             reviewer_file_split_threshold: DEFAULT_REVIEWER_FILE_SPLIT_THRESHOLD,
             max_same_role_instances: DEFAULT_MAX_SAME_ROLE_INSTANCES,
             max_retries_per_role: DEFAULT_MAX_RETRIES_PER_ROLE,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from '../types/flow-chat';
 import {
+  buildReviewerProgressSummary,
   buildErrorAttribution,
   buildRecoveryPlan,
   extractPartialReviewData,
@@ -52,6 +53,26 @@ function sessionWithTaskResult(result: unknown): Session {
 }
 
 describe('deepReviewExperience', () => {
+  it('counts cancelled reviewers as handled in running progress summary', () => {
+    const summary = buildReviewerProgressSummary([
+      { reviewer: 'ReviewPerformance', displayName: 'Performance', status: 'completed' },
+      { reviewer: 'ReviewSecurity', displayName: 'Security', status: 'completed' },
+      { reviewer: 'ReviewArchitecture', displayName: 'Architecture', status: 'cancelled' },
+      { reviewer: 'ReviewFrontend', displayName: 'Frontend', status: 'failed' },
+      { reviewer: 'ReviewBusinessLogic', displayName: 'Business Logic', status: 'unknown' },
+    ]);
+
+    expect(summary).toMatchObject({
+      completed: 2,
+      failed: 1,
+      skipped: 1,
+      running: 1,
+      handled: 4,
+      total: 5,
+      text: '4/5 handled',
+    });
+  });
+
   it('keeps skipped reviewers out of rerun work and shows them in the recovery plan', () => {
     const plan = buildRecoveryPlan({
       phase: 'review_interrupted',

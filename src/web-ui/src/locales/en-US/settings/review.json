@@ -16,23 +16,23 @@
     },
     "qualityGate": {
       "title": "Quality gate",
-      "description": "Timeouts, file splitting, strategy depth, and model choices shape how much work each reviewer can do before the result is summarized."
+      "description": "Strategy depth, model choices, and capacity controls shape how much work each reviewer can do before the result is summarized."
     }
   },
   "strategy": {
     "title": "Review strategy",
-    "description": "Choose the default depth for the whole code review team.",
+    "description": "Choose the default depth for the whole code review team. Each strategy carries built-in scope, runtime, and token behavior.",
     "quick": {
       "label": "Quick",
-      "summary": "Fast screening for high-confidence issues."
+      "summary": "Reduced-scope screening for high-confidence issues with reduced coverage."
     },
     "normal": {
       "label": "Normal",
-      "summary": "Balanced review depth for day-to-day code review."
+      "summary": "Bounded day-to-day review tuned for slower models."
     },
     "deep": {
       "label": "Deep",
-      "summary": "Thorough multi-pass review for risky changes."
+      "summary": "Longer thorough pass for risky changes and broader coverage."
     },
     "inherit": "Inherit team ({{level}})"
   },
@@ -61,7 +61,7 @@
     },
     "allowProviderCapacityQueue": {
       "label": "Wait for provider capacity",
-      "description": "Briefly queue transient provider capacity errors instead of skipping immediately."
+      "description": "Queue transient provider capacity errors instead of skipping immediately. You can cancel the queued review at any time."
     },
     "allowBoundedAutoRetry": {
       "label": "Allow bounded automatic retry",

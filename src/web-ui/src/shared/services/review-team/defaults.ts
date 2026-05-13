@@ -2,6 +2,7 @@ import type {
   ReviewStrategyLevel,
   ReviewTeamCoreRoleDefinition,
   ReviewTeamDefinition,
+  ReviewTeamExecutionPolicy,
   ReviewTokenBudgetMode,
 } from './types';
 import { REVIEW_STRATEGY_PROFILES } from './strategy';
@@ -9,23 +10,69 @@ import { REVIEW_STRATEGY_PROFILES } from './strategy';
 export const DEFAULT_REVIEW_TEAM_ID = 'default-review-team';
 export const DEFAULT_REVIEW_TEAM_CONFIG_PATH = 'ai.review_teams.default';
 export const DEFAULT_REVIEW_TEAM_RATE_LIMIT_STATUS_CONFIG_PATH =
-  'ai.review_teams.rate_limit_status';
+  'ai.review_team_rate_limit_status';
 export const DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH =
-  'ai.review_teams.project_strategy_overrides';
+  'ai.review_team_project_strategy_overrides';
 export const DEFAULT_REVIEW_TEAM_MODEL = 'fast';
 export const DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL = 'normal' as const;
 export const DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL = 'inherit' as const;
 export const DEFAULT_REVIEW_TEAM_EXECUTION_POLICY = {
-  reviewerTimeoutSeconds: 600,
-  judgeTimeoutSeconds: 600,
+  reviewerTimeoutSeconds: 3600,
+  judgeTimeoutSeconds: 2400,
   reviewerFileSplitThreshold: 20,
   maxSameRoleInstances: 3,
   maxRetriesPerRole: 1,
 } as const;
+export const REVIEW_STRATEGY_RUNTIME_BUDGETS: Record<
+  ReviewStrategyLevel,
+  {
+    tokenBudgetMode: ReviewTokenBudgetMode;
+    executionPolicy: Pick<
+      ReviewTeamExecutionPolicy,
+      | 'reviewerTimeoutSeconds'
+      | 'judgeTimeoutSeconds'
+      | 'reviewerFileSplitThreshold'
+      | 'maxSameRoleInstances'
+    >;
+    maxExtraReviewers: number;
+  }
+> = {
+  quick: {
+    tokenBudgetMode: 'economy',
+    executionPolicy: {
+      reviewerTimeoutSeconds: 1200,
+      judgeTimeoutSeconds: 900,
+      reviewerFileSplitThreshold: 0,
+      maxSameRoleInstances: 1,
+    },
+    maxExtraReviewers: 0,
+  },
+  normal: {
+    tokenBudgetMode: 'balanced',
+    executionPolicy: {
+      reviewerTimeoutSeconds: 1800,
+      judgeTimeoutSeconds: 1200,
+      reviewerFileSplitThreshold: 0,
+      maxSameRoleInstances: 1,
+    },
+    maxExtraReviewers: 1,
+  },
+  deep: {
+    tokenBudgetMode: 'thorough',
+    executionPolicy: {
+      reviewerTimeoutSeconds: DEFAULT_REVIEW_TEAM_EXECUTION_POLICY.reviewerTimeoutSeconds,
+      judgeTimeoutSeconds: DEFAULT_REVIEW_TEAM_EXECUTION_POLICY.judgeTimeoutSeconds,
+      reviewerFileSplitThreshold:
+        DEFAULT_REVIEW_TEAM_EXECUTION_POLICY.reviewerFileSplitThreshold,
+      maxSameRoleInstances: DEFAULT_REVIEW_TEAM_EXECUTION_POLICY.maxSameRoleInstances,
+    },
+    maxExtraReviewers: Number.MAX_SAFE_INTEGER,
+  },
+};
 export const DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY = {
   maxParallelInstances: 4,
   staggerSeconds: 0,
-  maxQueueWaitSeconds: 60,
+  maxQueueWaitSeconds: 1200,
   batchExtrasSeparately: true,
   allowProviderCapacityQueue: true,
   allowBoundedAutoRetry: false,
@@ -33,7 +80,7 @@ export const DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY = {
 } as const;
 export const MAX_PREDICTIVE_TIMEOUT_SECONDS = 3600;
 export const MAX_PARALLEL_REVIEWER_INSTANCES = 16;
-export const MAX_QUEUE_WAIT_SECONDS = 600;
+export const MAX_QUEUE_WAIT_SECONDS = 3600;
 export const MAX_AUTO_RETRY_ELAPSED_GUARD_SECONDS = 900;
 export const PREDICTIVE_TIMEOUT_PER_FILE_SECONDS = 15;
 export const PREDICTIVE_TIMEOUT_PER_100_LINES_SECONDS = 30;

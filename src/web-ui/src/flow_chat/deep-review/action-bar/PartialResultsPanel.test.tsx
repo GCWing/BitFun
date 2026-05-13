@@ -20,6 +20,7 @@ describe('PartialResultsPanel', () => {
     running: 1,
     skipped: 0,
     unknown: 1,
+    handled: 3,
     total: 4,
     text: '2/4 completed',
   };

@@ -481,8 +481,8 @@ impl Default for ReviewTeamConfig {
             extra_subagent_ids: Vec::new(),
             strategy_level: "normal".to_string(),
             member_strategy_overrides: HashMap::new(),
-            reviewer_timeout_seconds: 0,
-            judge_timeout_seconds: 0,
+            reviewer_timeout_seconds: 3600,
+            judge_timeout_seconds: 2400,
             auto_fix_enabled: false,
             reviewer_file_split_threshold: 20,
             max_same_role_instances: 3,
@@ -492,6 +492,10 @@ impl Default for ReviewTeamConfig {
 
 fn default_review_team_configs() -> HashMap<String, ReviewTeamConfig> {
     HashMap::from([("default".to_string(), ReviewTeamConfig::default())])
+}
+
+fn default_review_team_rate_limit_status() -> serde_json::Value {
+    serde_json::Value::Object(serde_json::Map::new())
 }
 
 /// AI configuration.
@@ -528,6 +532,14 @@ pub struct AIConfig {
     /// team_id -> ReviewTeamConfig
     #[serde(default = "default_review_team_configs")]
     pub review_teams: HashMap<String, ReviewTeamConfig>,
+
+    /// Runtime rate-limit snapshot for Review Team launches.
+    #[serde(default = "default_review_team_rate_limit_status")]
+    pub review_team_rate_limit_status: serde_json::Value,
+
+    /// Workspace path -> Review Team strategy override.
+    #[serde(default)]
+    pub review_team_project_strategy_overrides: HashMap<String, String>,
 
     /// Maximum number of subagents that may execute concurrently.
     #[serde(default = "default_subagent_max_concurrency")]
@@ -1517,6 +1529,8 @@ impl Default for AIConfig {
             mode_configs: std::collections::HashMap::new(),
             subagent_configs: std::collections::HashMap::new(),
             review_teams: default_review_team_configs(),
+            review_team_rate_limit_status: default_review_team_rate_limit_status(),
+            review_team_project_strategy_overrides: std::collections::HashMap::new(),
             subagent_max_concurrency: default_subagent_max_concurrency(),
             proxy: ProxyConfig::default(),
             stream_idle_timeout_secs: default_stream_idle_timeout(),
@@ -1950,11 +1964,16 @@ mod tests {
             .review_teams
             .get("default")
             .expect("default review team config should exist");
-        assert_eq!(review_team.reviewer_timeout_seconds, 0);
-        assert_eq!(review_team.judge_timeout_seconds, 0);
+        assert_eq!(review_team.reviewer_timeout_seconds, 3600);
+        assert_eq!(review_team.judge_timeout_seconds, 2400);
         assert!(!review_team.auto_fix_enabled);
         assert_eq!(review_team.strategy_level, "normal");
         assert!(review_team.member_strategy_overrides.is_empty());
+        assert_eq!(
+            config.review_team_rate_limit_status,
+            serde_json::json!({})
+        );
+        assert!(config.review_team_project_strategy_overrides.is_empty());
     }
 
     #[test]
@@ -2062,6 +2081,47 @@ mod tests {
         );
         assert_eq!(
             serialized["review_teams"]["default"]["member_strategy_overrides"]["ReviewSecurity"],
+            "quick"
+        );
+    }
+
+    #[test]
+    fn review_team_auxiliary_config_is_not_stored_inside_review_team_map() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "agent_models": {},
+            "review_teams": {
+                "default": {
+                    "strategy_level": "normal"
+                }
+            },
+            "review_team_rate_limit_status": {
+                "remaining": 2
+            },
+            "review_team_project_strategy_overrides": {
+                "d:/workspace/repo": "quick"
+            }
+        }))
+        .expect("review team auxiliary config should deserialize");
+
+        assert!(config.review_teams.contains_key("default"));
+        assert!(!config.review_teams.contains_key("rate_limit_status"));
+        assert_eq!(
+            config.review_team_rate_limit_status["remaining"],
+            serde_json::json!(2)
+        );
+        assert_eq!(
+            config
+                .review_team_project_strategy_overrides
+                .get("d:/workspace/repo"),
+            Some(&"quick".to_string())
+        );
+
+        let serialized = serde_json::to_value(&config)
+            .expect("review team auxiliary config should serialize");
+        assert!(serialized["review_teams"]["rate_limit_status"].is_null());
+        assert_eq!(
+            serialized["review_team_project_strategy_overrides"]["d:/workspace/repo"],
             "quick"
         );
     }

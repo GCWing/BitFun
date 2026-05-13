@@ -634,7 +634,7 @@
     "close": "關閉",
     "minimize": "收起",
     "restore": "打開 {{label}}",
-    "fixAndReviewRunning": "正在修復\u0026準備重審...",
+    "fixAndReviewRunning": "正在修復&準備重審...",
     "minimizedDeep": "深度審核",
     "minimizedStandard": "程式碼審核",
     "minimizedReviewRunningDeep": "深度審核進行中",
@@ -699,6 +699,8 @@
     "reviewErrorWithReason": "審核出錯：{{reason}}",
     "viewPartialResults": "查看部分結果",
     "hidePartialResults": "隱藏部分結果",
+    "progressHandled": "{{handled}}/{{total}} 已處理",
+    "progressResumePreserved": "{{preserved}}/{{total}} 已保留，繼續剩餘審核",
     "partialResultsDescription": "{{completed}}/{{total}} 個 reviewer 已完成",
     "partialIssues": "發現 {{count}} 個問題",
     "partialRemediationItems": "{{count}} 個修復項",
@@ -741,12 +743,12 @@
         "temporaryOverload": "模型服務暫時過載"
       },
       "reasonDetails": {
-        "providerRateLimit": "模型服務正在限速。BitFun 會短暫等待，並在容量恢復後繼續。",
+        "providerRateLimit": "模型服務正在限速。BitFun 會排隊等待，並在容量恢復後繼續。",
         "providerConcurrencyLimit": "模型服務拒絕了新的並發審核員。BitFun 會在容量恢復後重試。",
         "retryAfter": "模型服務要求稍後重試。這裡的等待不會消耗審核員執行時間。",
         "localConcurrencyCap": "目前 Review Team 審核員並行上限已滿。已有審核員完成後，該審核員會繼續啟動。",
         "launchBatchBlocked": "前一啟動批次仍在執行。等待可以保持計畫中的審核順序，避免後續批次提前執行。",
-        "temporaryOverload": "模型服務回報暫時過載。BitFun 會短暫等待，然後繼續或將該審核員標記為容量略過。"
+        "temporaryOverload": "模型服務回報暫時過載。BitFun 會排隊等待，然後繼續或將該審核員標記為容量略過。"
       },
       "sessionBusy": "目前會話較忙，可暫停 Deep Review 或稍後繼續。",
       "stopHint": "可使用停止按鈕中斷目前審核佇列。",
@@ -793,15 +795,15 @@
     "windowTitle": "深度審核",
     "eyebrow": "程式碼審核團隊",
     "title": "開始深度審核？",
-    "body": "深度審核會啟動多個審核員，通常比普通審核耗時更久，也會消耗更多 Token。",
-    "readonlyLabel": "首次只讀",
-    "readonly": "首次審核會先輸出問題和修復計劃，不會直接修改程式碼。",
+    "body": "深度審核會啟動多個審核員，預計會消耗更多 Token，耗時也更久。",
+    "readonlyLabel": "唯讀",
+    "readonly": "修復需確認。",
     "sessionConcurrencyTitle": "目前會話較忙",
     "sessionConcurrencyBody": "目標會話已有 {{count}} 個 subagent 任務在執行。可選擇更輕量策略、暫時取消，或在容量空閒後手動繼續。",
-    "costLabel": "Token 消耗更高",
-    "cost": "預期消耗：多個審核角色加質量門禁，運行時間和 Token 可能達到普通審核的數倍。",
-    "timeLabel": "耗時更久",
-    "time": "運行期間可以繼續工作；只有整個深度審核在後台完成時才會通知你。",
+    "costLabel": "Token",
+    "cost": "審核員 + 質檢。",
+    "timeLabel": "耗時",
+    "time": "背景執行。",
     "dontShowAgain": "下次不再提示",
     "cancel": "取消",
     "confirm": "開始深度審核",
@@ -816,13 +818,23 @@
     },
     "recommendationTitle": "風險推薦",
     "strategyOverrideTitle": "運行策略",
-    "strategyOverrideBody": "為本專案的本次啟動選擇審核策略。",
+    "strategyOverrideBody": "快速更窄，深度覆蓋更多。",
+    "selectedStrategy": "已選擇",
+    "teamDefaultStrategyBody": "本次啟動使用 {{strategy}}。",
+    "strategyTokenImpact": "Token：{{tokenImpact}}",
+    "strategyRuntimeImpact": "耗時：{{runtimeImpact}}",
     "teamDefaultStrategy": "團隊預設",
     "strategyLabels": {
       "quick": "快速",
       "normal": "標準",
       "deep": "深度"
     },
+    "strategySummaries": {
+      "quick": "快速會保留與目標匹配的內建審核員，跳過使用者額外加入的專家，並報告覆蓋收窄。",
+      "normal": "標準適合慢速模型下的日常審核；限制可選擴張，大範圍改動優先使用摘要式覆蓋。",
+      "deep": "面向範圍較大或風險較高的改動，允許更長耗時和拆分覆蓋。"
+    },
+    "selectedStrategyFootnote": "已選：Token {{tokenImpact}}，耗時 {{runtimeImpact}}。",
     "lineupTitle": "審核陣容",
     "summaryTitle": "啟動摘要",
     "targetFiles": "{{count}} 個檔案",
@@ -832,9 +844,9 @@
     "targetTagsWithMore": "{{tags}}，另有 {{count}} 個",
     "targetTagsWithMore_one": "{{tags}}，另有 {{count}} 個",
     "targetTagsWithMore_other": "{{tags}}，另有 {{count}} 個",
-    "optionalReviewers": "{{count}} 個可選審核者",
-    "optionalReviewers_one": "{{count}} 個可選審核者",
-    "optionalReviewers_other": "{{count}} 個可選審核者",
+    "optionalReviewers": "{{count}} 個額外專家",
+    "optionalReviewers_one": "{{count}} 個額外專家",
+    "optionalReviewers_other": "{{count}} 個額外專家",
     "summaryFirstReview": "先摘要再覆蓋",
     "targetTagLabels": {
       "frontendUi": "前端 UI",
@@ -875,6 +887,13 @@
       "disabled": "已停用",
       "unavailable": "不可用",
       "skipped": "已跳過"
+    },
+    "targetSource": {
+      "manualPrompt": "給定內容",
+      "workspaceDiff": "工作區改動",
+      "gitRef": "Git 引用",
+      "selectedContext": "已選上下文",
+      "reviewTarget": "審核目標"
     }
   },
   "flowChatHeader": {
@@ -1248,6 +1267,10 @@
       "statusLabel": "狀態",
       "promptLabel": "任務提示詞",
       "reviewerContextLabel": "審核員",
+      "stopSubagent": "中止此 subagent",
+      "stoppingSubagent": "正在中止 subagent...",
+      "stopSubagentFailed": "中止此 subagent 失敗。",
+      "stopSubagentHint": "只會取消目前審核員/subagent，父級深度審核可繼續執行並生成彙總。",
       "errorLabel": "錯誤信息",
       "resultLabel": "執行結果",
       "noData": "無法加載任務數據",
@@ -1568,7 +1591,7 @@
         "high": "高",
         "medium": "中",
         "low": "低",
-        "info": "資訊"
+        "info": "信息"
       },
       "reviewerStatuses": {
         "completed": "已完成",
@@ -1728,13 +1751,6 @@
         "request_changes": "需要修改",
         "block": "阻止合併"
       },
-      "severities": {
-        "critical": "嚴重",
-        "high": "高",
-        "medium": "中",
-        "low": "低",
-        "info": "信息"
-      },
       "certainties": {
         "confirmed": "已確認",
         "likely": "可能",
@@ -1788,7 +1804,7 @@
     "openOne": "打開一個",
     "toStart": "開始吧。",
     "workingIn": "我們正在",
-    "project": "項目裡工作。",
+    "project": "工作。",
     "workingInCowork": "在",
     "gitClean": "一切乾淨，可以放手大幹了 ✦",
     "gitUnstaged": "{{count}} 個文件",
@@ -1800,7 +1816,6 @@
     "currentlyHas": "目前有",
     "commaSeparator": "，",
     "period": "。",
-    "project": "工作。",
     "projectCowork": "項目裡工作。"
   },
   "modelSelector": {

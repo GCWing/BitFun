@@ -634,7 +634,7 @@
     "close": "关闭",
     "minimize": "收起",
     "restore": "打开 {{label}}",
-    "fixAndReviewRunning": "正在修复\u0026准备重审...",
+    "fixAndReviewRunning": "正在修复&准备重审...",
     "minimizedDeep": "深度审核",
     "minimizedStandard": "代码审核",
     "minimizedReviewRunningDeep": "深度审核进行中",
@@ -699,6 +699,8 @@
     "reviewErrorWithReason": "审核出错：{{reason}}",
     "viewPartialResults": "查看部分结果",
     "hidePartialResults": "隐藏部分结果",
+    "progressHandled": "{{handled}}/{{total}} 已处理",
+    "progressResumePreserved": "{{preserved}}/{{total}} 已保留，继续剩余审核",
     "partialResultsDescription": "{{completed}}/{{total}} 个 reviewer 已完成",
     "partialIssues": "发现 {{count}} 个问题",
     "partialRemediationItems": "{{count}} 个修复项",
@@ -741,12 +743,12 @@
         "temporaryOverload": "模型服务临时过载"
       },
       "reasonDetails": {
-        "providerRateLimit": "模型服务正在限速。BitFun 会短暂等待，并在容量恢复后继续。",
+        "providerRateLimit": "模型服务正在限速。BitFun 会排队等待，并在容量恢复后继续。",
         "providerConcurrencyLimit": "模型服务拒绝了新的并发审核员。BitFun 会在容量恢复后重试。",
         "retryAfter": "模型服务要求稍后重试。这里的等待不会消耗审核员运行时间。",
         "localConcurrencyCap": "当前 Review Team 审核员并行上限已满。已有审核员完成后，该审核员会继续启动。",
         "launchBatchBlocked": "前一启动批次仍在运行。等待可以保持计划中的审核顺序，避免后续批次提前执行。",
-        "temporaryOverload": "模型服务报告临时过载。BitFun 会短暂等待，然后继续或将该审核员标记为容量跳过。"
+        "temporaryOverload": "模型服务报告临时过载。BitFun 会排队等待，然后继续或将该审核员标记为容量跳过。"
       },
       "sessionBusy": "当前会话较忙，可暂停 Deep Review 或稍后继续。",
       "stopHint": "可使用停止按钮中断当前审核队列。",
@@ -793,15 +795,15 @@
     "windowTitle": "深度审核",
     "eyebrow": "代码审核团队",
     "title": "开始深度审核？",
-    "body": "深度审核会启动多个审核员，通常比普通审核耗时更久，也会消耗更多 Token。",
-    "readonlyLabel": "首次只读",
-    "readonly": "首次审核会先输出问题和修复计划，不会直接修改代码。",
+    "body": "深度审核会启动多个审核员，预计会消耗更多 Token，耗时也更久。",
+    "readonlyLabel": "只读",
+    "readonly": "修复需确认。",
     "sessionConcurrencyTitle": "当前会话较忙",
     "sessionConcurrencyBody": "目标会话已有 {{count}} 个 subagent 任务在运行。可选择更轻量策略、暂时取消，或在容量空闲后手动继续。",
-    "costLabel": "Token 消耗更高",
-    "cost": "预期消耗：多个审核角色加质量门禁，运行时间和 Token 可能达到普通审核的数倍。",
-    "timeLabel": "耗时更久",
-    "time": "运行期间可以继续工作；只有整个深度审核在后台完成时才会通知你。",
+    "costLabel": "Token",
+    "cost": "审核员 + 质检。",
+    "timeLabel": "耗时",
+    "time": "后台运行。",
     "dontShowAgain": "下次不再提示",
     "cancel": "取消",
     "confirm": "开始深度审核",
@@ -816,13 +818,23 @@
     },
     "recommendationTitle": "风险推荐",
     "strategyOverrideTitle": "运行策略",
-    "strategyOverrideBody": "为本项目的本次启动选择审核策略。",
+    "strategyOverrideBody": "快速更窄，深度覆盖更多。",
+    "selectedStrategy": "已选择",
+    "teamDefaultStrategyBody": "本次启动使用 {{strategy}}。",
+    "strategyTokenImpact": "Token：{{tokenImpact}}",
+    "strategyRuntimeImpact": "耗时：{{runtimeImpact}}",
     "teamDefaultStrategy": "团队默认",
     "strategyLabels": {
       "quick": "快速",
       "normal": "标准",
       "deep": "深度"
     },
+    "strategySummaries": {
+      "quick": "快速会保留与目标匹配的内置审核员，跳过用户额外添加的专家，并报告覆盖收窄。",
+      "normal": "标准适合慢速模型下的日常审核；限制可选扩张，大范围改动优先使用摘要式覆盖。",
+      "deep": "面向范围较大或风险较高的改动，允许更长耗时和拆分覆盖。"
+    },
+    "selectedStrategyFootnote": "已选：Token {{tokenImpact}}，耗时 {{runtimeImpact}}。",
     "lineupTitle": "审核阵容",
     "summaryTitle": "启动摘要",
     "targetFiles": "{{count}} 个文件",
@@ -832,9 +844,9 @@
     "targetTagsWithMore": "{{tags}}，另有 {{count}} 个",
     "targetTagsWithMore_one": "{{tags}}，另有 {{count}} 个",
     "targetTagsWithMore_other": "{{tags}}，另有 {{count}} 个",
-    "optionalReviewers": "{{count}} 个可选审核者",
-    "optionalReviewers_one": "{{count}} 个可选审核者",
-    "optionalReviewers_other": "{{count}} 个可选审核者",
+    "optionalReviewers": "{{count}} 个额外专家",
+    "optionalReviewers_one": "{{count}} 个额外专家",
+    "optionalReviewers_other": "{{count}} 个额外专家",
     "summaryFirstReview": "先摘要再覆盖",
     "targetTagLabels": {
       "frontendUi": "前端 UI",
@@ -875,6 +887,13 @@
       "disabled": "已停用",
       "unavailable": "不可用",
       "skipped": "已跳过"
+    },
+    "targetSource": {
+      "manualPrompt": "给定内容",
+      "workspaceDiff": "工作区改动",
+      "gitRef": "Git 引用",
+      "selectedContext": "已选上下文",
+      "reviewTarget": "审核目标"
     }
   },
   "flowChatHeader": {
@@ -1248,6 +1267,10 @@
       "statusLabel": "状态",
       "promptLabel": "任务提示词",
       "reviewerContextLabel": "审核员",
+      "stopSubagent": "中止此 subagent",
+      "stoppingSubagent": "正在中止 subagent...",
+      "stopSubagentFailed": "中止此 subagent 失败。",
+      "stopSubagentHint": "只会取消当前审核员/subagent，父级深度审核可继续运行并生成汇总。",
       "errorLabel": "错误信息",
       "resultLabel": "执行结果",
       "noData": "无法加载任务数据",
@@ -1728,13 +1751,6 @@
         "request_changes": "需要修改",
         "block": "阻止合并"
       },
-      "severities": {
-        "critical": "严重",
-        "high": "高",
-        "medium": "中",
-        "low": "低",
-        "info": "信息"
-      },
       "certainties": {
         "confirmed": "已确认",
         "likely": "可能",
@@ -1788,7 +1804,7 @@
     "openOne": "打开一个",
     "toStart": "开始吧。",
     "workingIn": "我们正在",
-    "project": "项目里工作。",
+    "project": "工作。",
     "workingInCowork": "在",
     "gitClean": "一切干净，可以放手大干了 ✦",
     "gitUnstaged": "{{count}} 个文件",
@@ -1800,7 +1816,6 @@
     "currentlyHas": "目前有",
     "commaSeparator": "，",
     "period": "。",
-    "project": "工作。",
     "projectCowork": "项目里工作。"
   },
   "modelSelector": {

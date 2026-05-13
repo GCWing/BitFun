@@ -24,14 +24,12 @@ import {
   REVIEW_STRATEGY_DEFINITIONS,
   REVIEW_STRATEGY_LEVELS,
   saveDefaultReviewTeamConcurrencyPolicy,
-  saveDefaultReviewTeamExecutionPolicy,
   saveDefaultReviewTeamMemberStrategyOverride,
   saveDefaultReviewTeamStrategyLevel,
   type ReviewMemberStrategyLevel,
   type ReviewStrategyLevel,
   type ReviewTeam,
   type ReviewTeamConcurrencyPolicy,
-  type ReviewTeamExecutionPolicy,
   type ReviewTeamMember,
 } from '@/shared/services/reviewTeamService';
 import './ReviewConfig.scss';
@@ -112,7 +110,6 @@ const ReviewConfig: React.FC = () => {
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [subagents, setSubagents] = useState<SubagentInfo[]>([]);
   const [candidateId, setCandidateId] = useState('');
-  const [savingPolicyKey, setSavingPolicyKey] = useState<keyof ReviewTeamExecutionPolicy | null>(null);
   const [savingConcurrencyKey, setSavingConcurrencyKey] = useState<keyof ReviewTeamConcurrencyPolicy | null>(null);
   const [savingMemberId, setSavingMemberId] = useState<string | null>(null);
   const [savingStrategyTarget, setSavingStrategyTarget] = useState<string | null>(null);
@@ -246,26 +243,6 @@ const ReviewConfig: React.FC = () => {
       notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
     } finally {
       setSavingStrategyTarget(null);
-    }
-  }, [loadData, notifyError, notifySuccess, t, team]);
-
-  const handleExecutionPolicyChange = useCallback(async (
-    key: keyof ReviewTeamExecutionPolicy,
-    value: ReviewTeamExecutionPolicy[keyof ReviewTeamExecutionPolicy],
-  ) => {
-    if (!team) return;
-
-    const nextPolicy = { ...team.executionPolicy, [key]: value };
-    setSavingPolicyKey(key);
-    setTeam({ ...team, executionPolicy: nextPolicy });
-    try {
-      await saveDefaultReviewTeamExecutionPolicy(nextPolicy);
-      notifySuccess(t('messages.saved'));
-    } catch (error) {
-      await loadData();
-      notifyError(error instanceof Error ? error.message : t('messages.saveFailed'));
-    } finally {
-      setSavingPolicyKey(null);
     }
   }, [loadData, notifyError, notifySuccess, t, team]);
 
@@ -421,58 +398,6 @@ const ReviewConfig: React.FC = () => {
           </div>
         </ConfigPageSection>
 
-        <ConfigPageSection title={t('execution.title')} description={t('execution.description')}>
-          <ConfigPageRow label={t('execution.reviewerTimeout')} description={t('execution.reviewerTimeoutDesc')} align="center" balanced>
-            <NumberInput
-              value={team.executionPolicy.reviewerTimeoutSeconds}
-              onChange={(value) => void handleExecutionPolicyChange('reviewerTimeoutSeconds', value)}
-              min={0}
-              max={3600}
-              step={30}
-              unit="s"
-              size="small"
-              disabled={savingPolicyKey === 'reviewerTimeoutSeconds'}
-            />
-          </ConfigPageRow>
-
-          <ConfigPageRow label={t('execution.judgeTimeout')} description={t('execution.judgeTimeoutDesc')} align="center" balanced>
-            <NumberInput
-              value={team.executionPolicy.judgeTimeoutSeconds}
-              onChange={(value) => void handleExecutionPolicyChange('judgeTimeoutSeconds', value)}
-              min={0}
-              max={3600}
-              step={30}
-              unit="s"
-              size="small"
-              disabled={savingPolicyKey === 'judgeTimeoutSeconds'}
-            />
-          </ConfigPageRow>
-
-          <ConfigPageRow label={t('execution.fileSplitThreshold')} description={t('execution.fileSplitThresholdDesc')} align="center" balanced>
-            <NumberInput
-              value={team.executionPolicy.reviewerFileSplitThreshold}
-              onChange={(value) => void handleExecutionPolicyChange('reviewerFileSplitThreshold', value)}
-              min={0}
-              max={9999}
-              step={5}
-              size="small"
-              disabled={savingPolicyKey === 'reviewerFileSplitThreshold'}
-            />
-          </ConfigPageRow>
-
-          <ConfigPageRow label={t('execution.maxSameRoleInstances')} description={t('execution.maxSameRoleInstancesDesc')} align="center" balanced>
-            <NumberInput
-              value={team.executionPolicy.maxSameRoleInstances}
-              onChange={(value) => void handleExecutionPolicyChange('maxSameRoleInstances', value)}
-              min={1}
-              max={8}
-              step={1}
-              size="small"
-              disabled={savingPolicyKey === 'maxSameRoleInstances'}
-            />
-          </ConfigPageRow>
-        </ConfigPageSection>
-
         <ConfigPageSection title={t('capacity.title')} description={t('capacity.description')}>
           <ConfigPageRow label={t('capacity.maxParallelReviewers.label')} description={t('capacity.maxParallelReviewers.description')} align="center" balanced>
             <NumberInput
@@ -491,8 +416,8 @@ const ReviewConfig: React.FC = () => {
               value={team.concurrencyPolicy.maxQueueWaitSeconds}
               onChange={(value) => void handleConcurrencyPolicyChange('maxQueueWaitSeconds', value)}
               min={0}
-              max={600}
-              step={15}
+              max={3600}
+              step={60}
               unit="s"
               size="small"
               disabled={savingConcurrencyKey === 'maxQueueWaitSeconds'}

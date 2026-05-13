@@ -16,23 +16,23 @@
     },
     "qualityGate": {
       "title": "品質檢查",
-      "description": "逾時、文件拆分、審核深度和模型選擇會共同決定每個審核員在彙總前能完成的工作量。"
+      "description": "審核深度、模型選擇和容量控制會共同決定每個審核員在彙總前能完成的工作量。"
     }
   },
   "strategy": {
     "title": "審核策略",
-    "description": "選擇整個程式碼審核團隊的預設審核深度。",
+    "description": "選擇整個程式碼審核團隊的預設審核深度。每種策略都帶有內建範圍、耗時和 Token 行為。",
     "quick": {
       "label": "快速",
-      "summary": "快速篩查高置信問題。"
+      "summary": "透過收窄範圍篩查高置信問題，並明確降低覆蓋範圍。"
     },
     "normal": {
       "label": "標準",
-      "summary": "適合日常程式碼審核的均衡深度。"
+      "summary": "適合慢速模型的日常審核，保持耗時有界。"
     },
     "deep": {
       "label": "深度",
-      "summary": "適合高風險變更的多輪深入審核。"
+      "summary": "適合高風險變更和更廣覆蓋的長耗時深入審核。"
     },
     "inherit": "繼承團隊（{{level}}）"
   },
@@ -61,7 +61,7 @@
     },
     "allowProviderCapacityQueue": {
       "label": "等待供應商容量",
-      "description": "遇到短暫的供應商容量問題時先短暫排隊，而不是立即略過。"
+      "description": "遇到供應商容量問題時先排隊等待，而不是立即略過；排隊中的審核可以隨時取消。"
     },
     "allowBoundedAutoRetry": {
       "label": "允許有界自動重試",

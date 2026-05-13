@@ -16,23 +16,23 @@
     },
     "qualityGate": {
       "title": "质量检查",
-      "description": "超时、文件拆分、审核深度和模型选择会共同决定每个审核员在汇总前能完成的工作量。"
+      "description": "审核深度、模型选择和容量控制会共同决定每个审核员在汇总前能完成的工作量。"
     }
   },
   "strategy": {
     "title": "审核策略",
-    "description": "选择整个代码审核团队的默认审核深度。",
+    "description": "选择整个代码审核团队的默认审核深度。每种策略都带有内置范围、耗时和 Token 行为。",
     "quick": {
       "label": "快速",
-      "summary": "快速筛查高置信问题。"
+      "summary": "通过收窄范围筛查高置信问题，并明确降低覆盖范围。"
     },
     "normal": {
       "label": "标准",
-      "summary": "适合日常代码审核的均衡深度。"
+      "summary": "适合慢速模型的日常审核，保持耗时有界。"
     },
     "deep": {
       "label": "深度",
-      "summary": "适合高风险变更的多轮深入审核。"
+      "summary": "适合高风险变更和更广覆盖的长耗时深入审核。"
     },
     "inherit": "继承团队（{{level}}）"
   },
@@ -61,7 +61,7 @@
     },
     "allowProviderCapacityQueue": {
       "label": "等待供应商容量",
-      "description": "遇到短暂的供应商容量问题时先短暂排队，而不是立即跳过。"
+      "description": "遇到供应商容量问题时先排队等待，而不是立即跳过；排队中的审核可以随时取消。"
     },
     "allowBoundedAutoRetry": {
       "label": "允许有界自动重试",

@@ -634,7 +634,7 @@
     "close": "Close",
     "minimize": "Minimize",
     "restore": "Open {{label}}",
-    "fixAndReviewRunning": "Fixing \u0026 preparing re-review...",
+    "fixAndReviewRunning": "Fixing & preparing re-review...",
     "minimizedDeep": "Deep Review",
     "minimizedStandard": "Code Review",
     "minimizedReviewRunningDeep": "Deep Review running",
@@ -699,6 +699,8 @@
     "reviewErrorWithReason": "Review error: {{reason}}",
     "viewPartialResults": "View partial results",
     "hidePartialResults": "Hide partial results",
+    "progressHandled": "{{handled}}/{{total}} handled",
+    "progressResumePreserved": "{{preserved}}/{{total}} preserved, continuing remaining review",
     "partialResultsDescription": "{{completed}}/{{total}} reviewers completed",
     "partialIssues": "{{count}} issues found",
     "partialRemediationItems": "{{count}} remediation items",
@@ -741,12 +743,12 @@
         "temporaryOverload": "temporary provider overload"
       },
       "reasonDetails": {
-        "providerRateLimit": "The model provider is rate-limiting requests. BitFun will wait briefly and continue when capacity returns.",
+        "providerRateLimit": "The model provider is rate-limiting requests. BitFun will wait and continue when capacity returns.",
         "providerConcurrencyLimit": "The model provider rejected another concurrent reviewer. BitFun will retry after capacity opens.",
         "retryAfter": "The model provider asked BitFun to retry later. Waiting here avoids spending reviewer runtime while the provider cools down.",
         "localConcurrencyCap": "The configured Review Team reviewer limit is full. This reviewer will start after an active reviewer finishes.",
         "launchBatchBlocked": "An earlier launch batch is still running. Waiting preserves the planned review order and prevents a later batch from overtaking it.",
-        "temporaryOverload": "The model provider reported temporary overload. BitFun will wait briefly and then continue or mark the reviewer as capacity skipped."
+        "temporaryOverload": "The model provider reported temporary overload. BitFun will wait, then continue or mark the reviewer as capacity skipped."
       },
       "sessionBusy": "Your active session is busy. Pause Deep Review or continue later.",
       "stopHint": "Use Stop to interrupt this review queue.",
@@ -793,15 +795,15 @@
     "windowTitle": "Deep Review",
     "eyebrow": "Code review team",
     "title": "Start Deep Review?",
-    "body": "Deep Review launches multiple reviewers and can take longer or use more tokens than a standard review.",
-    "readonlyLabel": "Read-only first pass",
-    "readonly": "The first pass reports findings and a remediation plan before any code changes.",
+    "body": "Deep Review launches multiple reviewers, so expect more tokens and longer runtime.",
+    "readonlyLabel": "Read-only",
+    "readonly": "Fixes need approval.",
     "sessionConcurrencyTitle": "Active session is busy",
     "sessionConcurrencyBody": "The target session already has {{count}} running subagent tasks. Choose a lighter strategy, cancel for now, or continue manually when capacity is free.",
-    "costLabel": "Higher token usage",
-    "cost": "Expected cost: multiple reviewers plus a quality gate, so runtime and token use may be several times higher than a standard review.",
-    "timeLabel": "Longer runtime",
-    "time": "You can keep working while it runs; we will only notify you when the whole Deep Review finishes in the background.",
+    "costLabel": "Token",
+    "cost": "Reviewers + quality gate.",
+    "timeLabel": "Time",
+    "time": "Runs in background.",
     "dontShowAgain": "Do not show this again",
     "cancel": "Cancel",
     "confirm": "Start Deep Review",
@@ -816,13 +818,23 @@
     },
     "recommendationTitle": "Risk recommendation",
     "strategyOverrideTitle": "Run strategy",
-    "strategyOverrideBody": "Choose a project-specific strategy for this launch.",
+    "strategyOverrideBody": "Quick is narrower; Deep covers more.",
+    "selectedStrategy": "Selected",
+    "teamDefaultStrategyBody": "Uses {{strategy}} for this launch.",
+    "strategyTokenImpact": "Token: {{tokenImpact}}",
+    "strategyRuntimeImpact": "Time: {{runtimeImpact}}",
     "teamDefaultStrategy": "Team default",
     "strategyLabels": {
       "quick": "Quick",
       "normal": "Normal",
       "deep": "Deep"
     },
+    "strategySummaries": {
+      "quick": "Quick keeps built-in target-matched reviewers, skips user-added specialists, and reports reduced coverage.",
+      "normal": "Normal stays practical for slower models, limits optional expansion, and uses summary-first on large changes.",
+      "deep": "Thorough multi-pass review for broad or risky changes; allows longer runtime and split coverage."
+    },
+    "selectedStrategyFootnote": "Selected: Token {{tokenImpact}}, time {{runtimeImpact}}.",
     "lineupTitle": "Review lineup",
     "summaryTitle": "Launch summary",
     "targetFiles": "{{count}} files",
@@ -832,9 +844,9 @@
     "targetTagsWithMore": "{{tags}} +{{count}} more",
     "targetTagsWithMore_one": "{{tags}} +{{count}} more",
     "targetTagsWithMore_other": "{{tags}} +{{count}} more",
-    "optionalReviewers": "{{count}} optional reviewers",
-    "optionalReviewers_one": "{{count}} optional reviewer",
-    "optionalReviewers_other": "{{count}} optional reviewers",
+    "optionalReviewers": "{{count}} extra specialists",
+    "optionalReviewers_one": "{{count}} extra specialist",
+    "optionalReviewers_other": "{{count}} extra specialists",
     "summaryFirstReview": "Summary-first coverage",
     "targetTagLabels": {
       "frontendUi": "Frontend UI",
@@ -875,6 +887,13 @@
       "disabled": "Disabled",
       "unavailable": "Unavailable",
       "skipped": "Skipped"
+    },
+    "targetSource": {
+      "manualPrompt": "Provided context",
+      "workspaceDiff": "Workspace changes",
+      "gitRef": "Git reference",
+      "selectedContext": "Selected context",
+      "reviewTarget": "Review target"
     }
   },
   "flowChatHeader": {
@@ -1248,6 +1267,10 @@
       "statusLabel": "Status",
       "promptLabel": "Task Prompt",
       "reviewerContextLabel": "Reviewer",
+      "stopSubagent": "Stop subagent",
+      "stoppingSubagent": "Stopping subagent...",
+      "stopSubagentFailed": "Failed to stop this subagent.",
+      "stopSubagentHint": "Cancels only this reviewer/subagent. The parent review can keep going and still produce a summary.",
       "errorLabel": "Error",
       "resultLabel": "Result",
       "noData": "Unable to load task data",
@@ -1564,11 +1587,11 @@
       "reviewerIssuesUnknown": "Issue count unavailable",
       "reviewerTeamSummary": "{{total}} reviewers · {{completed}} completed · {{degraded}} need attention",
       "severities": {
-        "critical": "critical",
-        "high": "high",
-        "medium": "medium",
-        "low": "low",
-        "info": "info"
+        "critical": "Critical",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low",
+        "info": "Info"
       },
       "reviewerStatuses": {
         "completed": "completed",
@@ -1727,13 +1750,6 @@
         "approve_with_suggestions": "Approve with Suggestions",
         "request_changes": "Request Changes",
         "block": "Block Merge"
-      },
-      "severities": {
-        "critical": "Critical",
-        "high": "High",
-        "medium": "Medium",
-        "low": "Low",
-        "info": "Info"
       },
       "certainties": {
         "confirmed": "Confirmed",

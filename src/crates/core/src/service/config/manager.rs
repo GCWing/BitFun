@@ -17,6 +17,14 @@ use tokio::fs;
 type ConfigMigrationFn = fn(Value) -> BitFunResult<Value>;
 type ConfigMigration = (&'static str, &'static str, ConfigMigrationFn);
 
+fn canonical_config_path(path: &str) -> &str {
+    match path {
+        "ai.review_teams.rate_limit_status" => "ai.review_team_rate_limit_status",
+        "ai.review_teams.project_strategy_overrides" => "ai.review_team_project_strategy_overrides",
+        _ => path,
+    }
+}
+
 /// Configuration manager.
 pub struct ConfigManager {
     config_dir: PathBuf,
@@ -280,6 +288,7 @@ impl ConfigManager {
     where
         T: serde::de::DeserializeOwned,
     {
+        let path = canonical_config_path(path);
         let value = self.get_value_by_path(path)?;
         serde_json::from_value(value).map_err(|e| {
             BitFunError::config(format!(
@@ -298,6 +307,7 @@ impl ConfigManager {
         let json_value = serde_json::to_value(value)
             .map_err(|e| BitFunError::config(format!("Failed to serialize config value: {}", e)))?;
 
+        let path = canonical_config_path(path);
         self.set_value_by_path(path, json_value)?;
         self.config.last_modified = chrono::Utc::now();
 
@@ -602,6 +612,27 @@ pub struct ConfigStatistics {
     pub config_directory: PathBuf,
     pub providers_count: usize,
     pub last_modified: chrono::DateTime<chrono::Utc>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::canonical_config_path;
+
+    #[test]
+    fn canonicalizes_legacy_review_team_auxiliary_paths() {
+        assert_eq!(
+            canonical_config_path("ai.review_teams.rate_limit_status"),
+            "ai.review_team_rate_limit_status"
+        );
+        assert_eq!(
+            canonical_config_path("ai.review_teams.project_strategy_overrides"),
+            "ai.review_team_project_strategy_overrides"
+        );
+        assert_eq!(
+            canonical_config_path("ai.review_teams.default"),
+            "ai.review_teams.default"
+        );
+    }
 }
 
 /// Deeply merges JSON values.

@@ -10,6 +10,7 @@ import {
   classifyReviewTargetFromFiles,
   createUnknownReviewTargetClassification,
   shouldRunReviewerForTarget,
+  type ReviewDomainTag,
   type ReviewTargetClassification,
 } from '../reviewTargetClassifier';
 import { evaluateReviewSubagentToolReadiness } from '../reviewSubagentCapabilities';
@@ -30,6 +31,7 @@ import {
   MAX_AUTO_RETRY_ELAPSED_GUARD_SECONDS,
   MAX_PARALLEL_REVIEWER_INSTANCES,
   MAX_QUEUE_WAIT_SECONDS,
+  REVIEW_STRATEGY_RUNTIME_BUDGETS,
   REVIEW_WORK_PACKET_ALLOWED_TOOLS,
 } from './defaults';
 import {
@@ -62,6 +64,7 @@ import {
   resolveMaxExtraReviewers,
 } from './workPackets';
 import { buildReviewTeamPromptBlockContent } from './promptBlock';
+import { isSecuritySensitiveReviewPath } from './pathMetadata';
 import type {
   ReviewMemberStrategyLevel,
   ReviewModelFallbackReason,
@@ -1221,6 +1224,74 @@ function shouldRunCoreReviewerForTarget(
   return shouldRunReviewerForTarget(member.subagentId, target);
 }
 
+const QUICK_SECURITY_TAGS = new Set<ReviewDomainTag>([
+  'api_layer',
+  'ai_adapter',
+  'config',
+  'desktop_contract',
+  'transport',
+  'web_server_contract',
+]);
+
+const QUICK_ARCHITECTURE_TAGS = new Set<ReviewDomainTag>([
+  'api_layer',
+  'desktop_contract',
+  'frontend_contract',
+  'transport',
+  'web_server_contract',
+]);
+
+function targetHasAnyTag(
+  target: ReviewTargetClassification,
+  tags: Set<ReviewDomainTag>,
+): boolean {
+  return target.tags.some((tag) => tags.has(tag));
+}
+
+function isReviewTargetOnlyLowSignalFiles(target: ReviewTargetClassification): boolean {
+  const includedFiles = target.files.filter((file) => !file.excluded);
+  return includedFiles.length > 0 &&
+    includedFiles.every((file) =>
+      file.tags.every((tag) => tag === 'docs' || tag === 'generated_or_lock')
+    );
+}
+
+function shouldRunCoreReviewerForStrategy(
+  member: ReviewTeamMember,
+  target: ReviewTargetClassification,
+  strategyLevel: ReviewStrategyLevel,
+): boolean {
+  if (!shouldRunCoreReviewerForTarget(member, target)) {
+    return false;
+  }
+  if (strategyLevel !== 'quick') {
+    return true;
+  }
+  if (target.resolution === 'unknown') {
+    return member.definitionKey === 'businessLogic' ||
+      member.definitionKey === 'security' ||
+      member.definitionKey === 'architecture' ||
+      member.definitionKey === 'frontend';
+  }
+
+  switch (member.definitionKey) {
+    case 'businessLogic':
+      return !isReviewTargetOnlyLowSignalFiles(target);
+    case 'security':
+      return targetHasAnyTag(target, QUICK_SECURITY_TAGS) ||
+        target.files.some((file) =>
+          !file.excluded && isSecuritySensitiveReviewPath(file.normalizedPath)
+        );
+    case 'architecture':
+      return targetHasAnyTag(target, QUICK_ARCHITECTURE_TAGS);
+    case 'frontend':
+      return shouldRunCoreReviewerForTarget(member, target);
+    case 'performance':
+    default:
+      return false;
+  }
+}
+
 export function buildEffectiveReviewTeamManifest(
   team: ReviewTeam,
   options: ReviewTeamManifestOptions = {},
@@ -1230,7 +1301,6 @@ export function buildEffectiveReviewTeamManifest(
     options.reviewTargetFilePaths,
     'unknown',
   );
-  const tokenBudgetMode = options.tokenBudgetMode ?? 'balanced';
   const changeStats = resolveChangeStats(target, options.changeStats);
   const baseConcurrencyPolicy = normalizeConcurrencyPolicy(team.concurrencyPolicy);
   const concurrencyPolicy = applyRateLimitToConcurrencyPolicy(
@@ -1241,6 +1311,8 @@ export function buildEffectiveReviewTeamManifest(
     options.rateLimitStatus,
   );
   const strategyLevel = options.strategyOverride ?? team.strategyLevel;
+  const strategyBudget = REVIEW_STRATEGY_RUNTIME_BUDGETS[strategyLevel];
+  const tokenBudgetMode = options.tokenBudgetMode ?? strategyBudget.tokenBudgetMode;
   const scopeProfile = buildDeepReviewScopeProfile(strategyLevel);
   const strategyRecommendation = recommendReviewStrategyForTarget(target, changeStats);
   const backendStrategyRecommendation = recommendBackendCompatibleStrategyForTarget(
@@ -1266,11 +1338,13 @@ export function buildEffectiveReviewTeamManifest(
   const notApplicableCoreMembers = availableCoreMembers.filter(
     (member) =>
       member.definitionKey !== 'judge' &&
-      !shouldRunCoreReviewerForTarget(member, target),
+      !shouldRunCoreReviewerForStrategy(member, target, strategyLevel),
   );
   const coreReviewerMembers = availableCoreMembers
     .filter((member) => member.definitionKey !== 'judge')
-    .filter((member) => shouldRunCoreReviewerForTarget(member, target));
+    .filter((member) =>
+      shouldRunCoreReviewerForStrategy(member, target, strategyLevel)
+    );
   const coreReviewers = coreReviewerMembers.map((member) => toManifestMember(member));
   const qualityGateReviewerMember = availableCoreMembers.find(
     (member) => member.definitionKey === 'judge',
@@ -1283,18 +1357,17 @@ export function buildEffectiveReviewTeamManifest(
   const maxExtraReviewers = resolveMaxExtraReviewers(
     tokenBudgetMode,
     eligibleExtraMembers.length,
+    strategyBudget.maxExtraReviewers,
   );
   const enabledExtraMembers = eligibleExtraMembers.slice(0, maxExtraReviewers);
   const budgetLimitedExtraMembers = eligibleExtraMembers.slice(maxExtraReviewers);
   const enabledExtraReviewers = enabledExtraMembers
     .map((member) => toManifestMember(member));
-  const reviewerCount = coreReviewers.length + enabledExtraReviewers.length;
   const executionPolicy = buildEffectiveExecutionPolicy({
     basePolicy: team.executionPolicy,
     strategyLevel,
     target,
     changeStats,
-    reviewerCount,
   });
   const workPackets = buildWorkPackets({
     reviewerMembers: [...coreReviewerMembers, ...enabledExtraMembers],

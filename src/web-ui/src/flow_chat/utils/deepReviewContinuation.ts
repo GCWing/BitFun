@@ -343,7 +343,11 @@ function getReviewerProgressFromTask(item: FlowToolItem): DeepReviewReviewerProg
   const resultStatus = String(item.toolResult?.result?.status ?? '').trim();
   const partialOutput = getPartialOutput(item);
   let status: DeepReviewReviewerStatus = 'unknown';
-  if (resultStatus === 'partial_timeout' || /partial[_ -]?timeout/i.test(error ?? '')) {
+  if (resultStatus === 'cancelled') {
+    status = 'cancelled';
+  } else if (resultStatus === 'capacity_skipped') {
+    status = 'skipped';
+  } else if (resultStatus === 'partial_timeout' || /partial[_ -]?timeout/i.test(error ?? '')) {
     status = 'partial_timeout';
   } else if (item.toolResult?.success === true || item.status === 'completed') {
     status = 'completed';

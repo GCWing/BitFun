@@ -21,11 +21,12 @@ import type {
 export function resolveMaxExtraReviewers(
   mode: ReviewTokenBudgetMode,
   eligibleExtraReviewerCount: number,
+  strategyMaxExtraReviewers = Number.MAX_SAFE_INTEGER,
 ): number {
   if (mode === 'economy') {
     return 0;
   }
-  return eligibleExtraReviewerCount;
+  return Math.min(eligibleExtraReviewerCount, strategyMaxExtraReviewers);
 }
 
 export function resolveChangeStats(

@@ -28,8 +28,9 @@ export interface ReviewerProgressSummary {
   running: number;
   skipped: number;
   unknown: number;
+  handled: number;
   total: number;
-  /** Localised short text, e.g. "3/5 completed" */
+  /** Fallback short text, e.g. "4/5 handled" */
   text: string;
 }
 
@@ -52,10 +53,15 @@ export function buildReviewerProgressSummary(
 ): ReviewerProgressSummary {
   const completed = progress.filter((p) => p.status === 'completed').length;
   const failed = progress.filter((p) => p.status === 'failed').length;
-  const timedOut = progress.filter((p) => p.status === 'timed_out').length;
+  const timedOut = progress.filter((p) => (
+    p.status === 'timed_out' || p.status === 'partial_timeout'
+  )).length;
   const running = progress.filter((p) => p.status === 'unknown').length;
-  const skipped = progress.filter((p) => p.status === 'cancelled').length;
+  const skipped = progress.filter((p) => (
+    p.status === 'cancelled' || p.status === 'skipped'
+  )).length;
   const unknown = progress.filter((p) => p.status === 'unknown').length;
+  const handled = completed + failed + timedOut + skipped;
   const total = progress.length;
 
   return {
@@ -65,8 +71,9 @@ export function buildReviewerProgressSummary(
     running,
     skipped,
     unknown,
+    handled,
     total,
-    text: `${completed}/${total} completed`,
+    text: `${handled}/${total} handled`,
   };
 }
 

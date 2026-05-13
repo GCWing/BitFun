@@ -26,7 +26,7 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     level: 'quick',
     label: 'Quick',
     summary:
-      'Fast screening for high-confidence issues in the requested diff or scope.',
+      'Quick keeps built-in target-matched reviewers, skips user-added specialists, and reports reduced coverage.',
     tokenImpact: '0.4-0.6x',
     runtimeImpact: '0.5-0.7x',
     defaultModelSlot: 'fast',
@@ -51,7 +51,7 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     level: 'normal',
     label: 'Normal',
     summary:
-      'Balanced review depth for day-to-day code review with practical evidence.',
+      'Normal stays practical for slower models, limits optional expansion, and uses summary-first on large changes.',
     tokenImpact: '1x',
     runtimeImpact: '1x',
     defaultModelSlot: 'fast',
@@ -76,7 +76,7 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     level: 'deep',
     label: 'Deep',
     summary:
-      'Thorough multi-pass review for risky, broad, or release-sensitive changes.',
+      'Thorough multi-pass review with the longest budget for risky or release-sensitive changes.',
     tokenImpact: '1.8-2.5x',
     runtimeImpact: '1.5-2.5x',
     defaultModelSlot: 'primary',

@@ -68,7 +68,11 @@ export class ConfigAPI {
       const shouldSkipRetry = options?.skipRetryOnNotFound ?? false;
       
       return await api.invoke('get_config', 
-        { request: path ? { path } : {} },
+        {
+          request: path
+            ? { path, skipRetryOnNotFound: shouldSkipRetry }
+            : { skipRetryOnNotFound: shouldSkipRetry },
+        },
         shouldSkipRetry ? { retries: 0 } : undefined
       );
     } catch (error) {

@@ -94,8 +94,8 @@ vi.mock('@/shared/services/reviewTeamService', () => ({
     maxConcurrentReviewers: 4,
   },
   DEFAULT_REVIEW_TEAM_EXECUTION_POLICY: {
-    reviewerTimeoutSeconds: 300,
-    judgeTimeoutSeconds: 240,
+    reviewerTimeoutSeconds: 1800,
+    judgeTimeoutSeconds: 1200,
     reviewerFileSplitThreshold: 20,
     maxSameRoleInstances: 3,
   },
@@ -157,8 +157,8 @@ describeWithJsdom('ReviewTeamPage', () => {
       strategyLevel: 'normal',
       memberStrategyOverrides: {},
       executionPolicy: {
-        reviewerTimeoutSeconds: 300,
-        judgeTimeoutSeconds: 240,
+        reviewerTimeoutSeconds: 1800,
+        judgeTimeoutSeconds: 1200,
         reviewerFileSplitThreshold: 20,
         maxSameRoleInstances: 3,
       },
@@ -211,7 +211,7 @@ describeWithJsdom('ReviewTeamPage', () => {
     expect(container.textContent).toContain('Current Policy');
     expect(container.textContent).toContain('Review settings');
     expect(container.textContent).toContain('Normal');
-    expect(container.textContent).toContain('300s');
+    expect(container.textContent).toContain('1800s');
     expect(container.textContent).toContain('20 files');
     expect(container.textContent).toContain('3 max');
   });
@@ -274,8 +274,8 @@ describeWithJsdom('ReviewTeamPage', () => {
       strategyLevel: 'normal',
       memberStrategyOverrides: {},
       executionPolicy: {
-        reviewerTimeoutSeconds: 300,
-        judgeTimeoutSeconds: 240,
+        reviewerTimeoutSeconds: 1800,
+        judgeTimeoutSeconds: 1200,
         reviewerFileSplitThreshold: 20,
         maxSameRoleInstances: 3,
       },

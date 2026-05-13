@@ -767,7 +767,7 @@ mod tests {
     }
 
     #[test]
-    fn run_manifest_execution_policy_overrides_static_timeouts() {
+    fn run_manifest_execution_policy_is_bounded_by_strategy_budget() {
         let policy = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
             "reviewer_timeout_seconds": 300,
             "judge_timeout_seconds": 240,
@@ -792,9 +792,9 @@ mod tests {
         let effective = policy.with_run_manifest_execution_policy(&manifest);
 
         assert_eq!(effective.reviewer_timeout_seconds, 675);
-        assert_eq!(effective.judge_timeout_seconds, 1350);
-        assert_eq!(effective.reviewer_file_split_threshold, 10);
-        assert_eq!(effective.max_same_role_instances, 4);
+        assert_eq!(effective.judge_timeout_seconds, 1200);
+        assert_eq!(effective.reviewer_file_split_threshold, 0);
+        assert_eq!(effective.max_same_role_instances, 1);
     }
 
     #[test]
@@ -1044,6 +1044,7 @@ mod tests {
         let policy = super::DeepReviewConcurrencyPolicy::default();
         assert_eq!(policy.max_parallel_instances, 4);
         assert_eq!(policy.stagger_seconds, 0);
+        assert_eq!(policy.max_queue_wait_seconds, 1200);
         assert!(policy.batch_extras_separately);
     }
 

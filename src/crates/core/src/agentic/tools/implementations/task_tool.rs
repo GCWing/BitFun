@@ -346,6 +346,33 @@ impl TaskTool {
         }
     }
 
+    fn deep_review_cancelled_reviewer_tool_result(
+        subagent_type: &str,
+        reason: &str,
+        duration_ms: u128,
+    ) -> ToolResult {
+        let duration = u64::try_from(duration_ms).unwrap_or(u64::MAX);
+        let reason = if reason.trim().is_empty() {
+            "Subagent task was cancelled"
+        } else {
+            reason.trim()
+        };
+        let result_for_assistant = format!(
+            "Subagent '{}' was cancelled by the user.\n<result status=\"cancelled\" reason=\"user_cancelled\">Treat this reviewer as cancelled coverage, continue remaining reviewers when useful, and do not relaunch it automatically.</result>",
+            subagent_type
+        );
+
+        ToolResult::Result {
+            data: json!({
+                "duration": duration,
+                "status": "cancelled",
+                "reason": reason,
+            }),
+            result_for_assistant: Some(result_for_assistant),
+            image_attachments: None,
+        }
+    }
+
     fn format_agent_descriptions(&self, agents: &[AgentInfo]) -> String {
         if agents.is_empty() {
             return String::new();
@@ -1170,6 +1197,25 @@ impl Tool for TaskTool {
                     if matches!(
                         deep_review_subagent_role,
                         Some(DeepReviewSubagentRole::Reviewer)
+                    ) && matches!(error, BitFunError::Cancelled(_))
+                        && !context
+                            .cancellation_token
+                            .as_ref()
+                            .is_some_and(|token| token.is_cancelled())
+                    {
+                        let reason = match &error {
+                            BitFunError::Cancelled(reason) => reason.as_str(),
+                            _ => "",
+                        };
+                        return Ok(vec![Self::deep_review_cancelled_reviewer_tool_result(
+                            &subagent_type,
+                            reason,
+                            start_time.elapsed().as_millis(),
+                        )]);
+                    }
+                    if matches!(
+                        deep_review_subagent_role,
+                        Some(DeepReviewSubagentRole::Reviewer)
                     ) {
                         if let Some(conc_policy) = deep_review_concurrency_policy.as_ref() {
                             let decision =
@@ -1464,7 +1510,7 @@ mod tests {
     use crate::agentic::deep_review_policy::{
         DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewSubagentRole,
     };
-    use crate::agentic::tools::framework::{Tool, ToolUseContext};
+    use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::BitFunError;
     use async_trait::async_trait;
@@ -1602,6 +1648,33 @@ mod tests {
             policy.effective_timeout_seconds(DeepReviewSubagentRole::Judge, Some(900)),
             Some(240)
         );
+    }
+
+    #[test]
+    fn deep_review_cancelled_reviewer_result_tells_parent_not_to_relaunch() {
+        let result = TaskTool::deep_review_cancelled_reviewer_tool_result(
+            "ReviewArchitecture",
+            "Subagent task has been cancelled",
+            42,
+        );
+
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            image_attachments,
+        } = result
+        else {
+            panic!("cancelled reviewer should return a structured tool result");
+        };
+
+        assert_eq!(data["status"], "cancelled");
+        assert_eq!(data["reason"], "Subagent task has been cancelled");
+        assert_eq!(data["duration"], 42);
+        assert!(image_attachments.is_none());
+
+        let assistant_message = result_for_assistant.expect("assistant message should be present");
+        assert!(assistant_message.contains("status=\"cancelled\""));
+        assert!(assistant_message.contains("do not relaunch it automatically"));
     }
 
     #[tokio::test]

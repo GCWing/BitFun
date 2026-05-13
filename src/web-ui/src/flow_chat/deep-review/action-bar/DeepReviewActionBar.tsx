@@ -265,6 +265,24 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     return buildReviewerProgressSummary(reviewerProgress);
   }, [reviewerProgress]);
 
+  const progressText = useMemo(() => {
+    if (!progressSummary) {
+      return null;
+    }
+    if (phase === 'resume_running') {
+      return t('deepReviewActionBar.progressResumePreserved', {
+        preserved: progressSummary.completed,
+        total: progressSummary.total,
+        defaultValue: `${progressSummary.completed}/${progressSummary.total} preserved, continuing remaining review`,
+      });
+    }
+    return t('deepReviewActionBar.progressHandled', {
+      handled: progressSummary.handled,
+      total: progressSummary.total,
+      defaultValue: progressSummary.text,
+    });
+  }, [phase, progressSummary, t]);
+
   const partialResults = useMemo(() => {
     if (!childSession || childSession.sessionKind !== 'deep_review') return null;
     return extractPartialReviewData(childSession);
@@ -755,7 +773,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       {(['review_running', 'fix_running', 'resume_running'].includes(phase)) && progressSummary && (
         <div className="deep-review-action-bar__progress">
           <span className="deep-review-action-bar__progress-text">
-            {progressSummary.text}
+            {progressText}
           </span>
           {elapsedMs > 0 && (
             <span className="deep-review-action-bar__elapsed">

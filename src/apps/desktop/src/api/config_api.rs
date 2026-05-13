@@ -1,14 +1,18 @@
 //! Configuration API
 
 use crate::api::app_state::AppState;
+use bitfun_core::util::errors::BitFunError;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::State;
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetConfigRequest {
     pub path: Option<String>,
+    #[serde(default)]
+    pub skip_retry_on_not_found: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -29,6 +33,15 @@ fn to_json_value<T: Serialize>(value: T, context: &str) -> Result<Value, String>
     serde_json::to_value(value).map_err(|e| format!("Failed to serialize {}: {}", context, e))
 }
 
+fn is_expected_config_path_not_found(error: &BitFunError, path: Option<&str>) -> bool {
+    match (error, path) {
+        (BitFunError::NotFound(message), Some(path)) => {
+            message == &format!("Config path '{}' not found", path)
+        }
+        _ => false,
+    }
+}
+
 #[tauri::command]
 pub async fn get_config(
     state: State<'_, AppState>,
@@ -42,9 +55,40 @@ pub async fn get_config(
     {
         Ok(config) => Ok(config),
         Err(e) => {
+            if request.skip_retry_on_not_found
+                && is_expected_config_path_not_found(&e, request.path.as_deref())
+            {
+                return Err(format!("Failed to get config: {}", e));
+            }
             error!("Failed to get config: path={:?}, error={}", request.path, e);
             Err(format!("Failed to get config: {}", e))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recognizes_expected_config_path_not_found_errors() {
+        let error = BitFunError::NotFound(
+            "Config path 'ai.review_team_rate_limit_status' not found".to_string(),
+        );
+
+        assert!(is_expected_config_path_not_found(
+            &error,
+            Some("ai.review_team_rate_limit_status"),
+        ));
+        assert!(!is_expected_config_path_not_found(
+            &error,
+            Some("ai.review_team_project_strategy_overrides"),
+        ));
+        assert!(!is_expected_config_path_not_found(&error, None));
+        assert!(!is_expected_config_path_not_found(
+            &BitFunError::config("Config path 'ai.review_team_rate_limit_status' not found"),
+            Some("ai.review_team_rate_limit_status"),
+        ));
     }
 }
 

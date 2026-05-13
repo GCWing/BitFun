@@ -13,9 +13,13 @@ use super::constants::{
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 
-const DEFAULT_REVIEWER_TIMEOUT_SECONDS: u64 = 600;
-const DEFAULT_JUDGE_TIMEOUT_SECONDS: u64 = 600;
+const DEFAULT_REVIEWER_TIMEOUT_SECONDS: u64 = 3600;
+const DEFAULT_JUDGE_TIMEOUT_SECONDS: u64 = 2400;
 const MAX_TIMEOUT_SECONDS: u64 = 3600;
+const QUICK_REVIEWER_TIMEOUT_SECONDS: u64 = 1200;
+const QUICK_JUDGE_TIMEOUT_SECONDS: u64 = 900;
+const NORMAL_REVIEWER_TIMEOUT_SECONDS: u64 = 1800;
+const NORMAL_JUDGE_TIMEOUT_SECONDS: u64 = 1200;
 const BASE_TIMEOUT_QUICK_SECONDS: u64 = 180;
 const BASE_TIMEOUT_NORMAL_SECONDS: u64 = 300;
 const BASE_TIMEOUT_DEEP_SECONDS: u64 = 600;
@@ -283,43 +287,57 @@ impl DeepReviewExecutionPolicy {
             policy.strategy_level = strategy_level;
         }
 
-        let Some(execution_policy) = manifest.get("executionPolicy").and_then(Value::as_object)
-        else {
-            return policy;
-        };
+        if let Some(execution_policy) = manifest.get("executionPolicy").and_then(Value::as_object) {
+            policy.reviewer_timeout_seconds = clamp_u64(
+                execution_policy.get("reviewerTimeoutSeconds"),
+                0,
+                MAX_TIMEOUT_SECONDS,
+                policy.reviewer_timeout_seconds,
+            );
+            policy.judge_timeout_seconds = clamp_u64(
+                execution_policy.get("judgeTimeoutSeconds"),
+                0,
+                MAX_TIMEOUT_SECONDS,
+                policy.judge_timeout_seconds,
+            );
+            policy.reviewer_file_split_threshold = clamp_usize(
+                execution_policy.get("reviewerFileSplitThreshold"),
+                0,
+                usize::MAX,
+                policy.reviewer_file_split_threshold,
+            );
+            policy.max_same_role_instances = clamp_usize(
+                execution_policy.get("maxSameRoleInstances"),
+                1,
+                MAX_SAME_ROLE_INSTANCES,
+                policy.max_same_role_instances,
+            );
+            policy.max_retries_per_role = clamp_usize(
+                execution_policy.get("maxRetriesPerRole"),
+                0,
+                MAX_RETRIES_PER_ROLE,
+                policy.max_retries_per_role,
+            );
+        }
 
-        policy.reviewer_timeout_seconds = clamp_u64(
-            execution_policy.get("reviewerTimeoutSeconds"),
-            0,
-            MAX_TIMEOUT_SECONDS,
-            policy.reviewer_timeout_seconds,
-        );
-        policy.judge_timeout_seconds = clamp_u64(
-            execution_policy.get("judgeTimeoutSeconds"),
-            0,
-            MAX_TIMEOUT_SECONDS,
-            policy.judge_timeout_seconds,
-        );
-        policy.reviewer_file_split_threshold = clamp_usize(
-            execution_policy.get("reviewerFileSplitThreshold"),
-            0,
-            usize::MAX,
-            policy.reviewer_file_split_threshold,
-        );
-        policy.max_same_role_instances = clamp_usize(
-            execution_policy.get("maxSameRoleInstances"),
-            1,
-            MAX_SAME_ROLE_INSTANCES,
-            policy.max_same_role_instances,
-        );
-        policy.max_retries_per_role = clamp_usize(
-            execution_policy.get("maxRetriesPerRole"),
-            0,
-            MAX_RETRIES_PER_ROLE,
-            policy.max_retries_per_role,
-        );
+        policy.apply_strategy_runtime_budget();
 
         policy
+    }
+
+    fn apply_strategy_runtime_budget(&mut self) {
+        let budget = strategy_runtime_budget(self.strategy_level);
+
+        self.reviewer_timeout_seconds =
+            strategy_bounded_timeout(self.reviewer_timeout_seconds, budget.reviewer_timeout_seconds);
+        self.judge_timeout_seconds =
+            strategy_bounded_timeout(self.judge_timeout_seconds, budget.judge_timeout_seconds);
+        self.reviewer_file_split_threshold = strategy_bounded_split_threshold(
+            self.reviewer_file_split_threshold,
+            budget.reviewer_file_split_threshold,
+        );
+        self.max_same_role_instances =
+            self.max_same_role_instances.min(budget.max_same_role_instances);
     }
 
     /// Returns true when the file count exceeds the split threshold and
@@ -379,6 +397,50 @@ impl DeepReviewExecutionPolicy {
             ),
         }
     }
+}
+
+struct StrategyRuntimeBudget {
+    reviewer_timeout_seconds: u64,
+    judge_timeout_seconds: u64,
+    reviewer_file_split_threshold: usize,
+    max_same_role_instances: usize,
+}
+
+fn strategy_runtime_budget(strategy: DeepReviewStrategyLevel) -> StrategyRuntimeBudget {
+    match strategy {
+        DeepReviewStrategyLevel::Quick => StrategyRuntimeBudget {
+            reviewer_timeout_seconds: QUICK_REVIEWER_TIMEOUT_SECONDS,
+            judge_timeout_seconds: QUICK_JUDGE_TIMEOUT_SECONDS,
+            reviewer_file_split_threshold: 0,
+            max_same_role_instances: 1,
+        },
+        DeepReviewStrategyLevel::Normal => StrategyRuntimeBudget {
+            reviewer_timeout_seconds: NORMAL_REVIEWER_TIMEOUT_SECONDS,
+            judge_timeout_seconds: NORMAL_JUDGE_TIMEOUT_SECONDS,
+            reviewer_file_split_threshold: 0,
+            max_same_role_instances: 1,
+        },
+        DeepReviewStrategyLevel::Deep => StrategyRuntimeBudget {
+            reviewer_timeout_seconds: DEFAULT_REVIEWER_TIMEOUT_SECONDS,
+            judge_timeout_seconds: DEFAULT_JUDGE_TIMEOUT_SECONDS,
+            reviewer_file_split_threshold: DEFAULT_REVIEWER_FILE_SPLIT_THRESHOLD,
+            max_same_role_instances: DEFAULT_MAX_SAME_ROLE_INSTANCES,
+        },
+    }
+}
+
+fn strategy_bounded_timeout(configured_timeout_seconds: u64, strategy_timeout_seconds: u64) -> u64 {
+    if configured_timeout_seconds == 0 {
+        return 0;
+    }
+    configured_timeout_seconds.min(strategy_timeout_seconds)
+}
+
+fn strategy_bounded_split_threshold(configured_threshold: usize, strategy_threshold: usize) -> usize {
+    if configured_threshold == 0 || strategy_threshold == 0 {
+        return 0;
+    }
+    configured_threshold.min(strategy_threshold)
 }
 
 fn normalize_extra_subagent_ids(raw: Option<&Value>) -> Vec<String> {
@@ -473,4 +535,62 @@ fn number_as_i64(value: &Value) -> Option<i64> {
             .as_u64()
             .map(|value| i64::try_from(value).unwrap_or(i64::MAX))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DeepReviewExecutionPolicy, DeepReviewStrategyLevel};
+    use serde_json::json;
+
+    #[test]
+    fn run_manifest_strategy_applies_builtin_quick_budget_without_execution_policy() {
+        let policy = DeepReviewExecutionPolicy::default();
+        let manifest = json!({
+            "reviewMode": "deep",
+            "strategyLevel": "quick"
+        });
+
+        let effective = policy.with_run_manifest_execution_policy(&manifest);
+
+        assert_eq!(effective.strategy_level, DeepReviewStrategyLevel::Quick);
+        assert_eq!(effective.reviewer_timeout_seconds, 1200);
+        assert_eq!(effective.judge_timeout_seconds, 900);
+        assert_eq!(effective.reviewer_file_split_threshold, 0);
+        assert_eq!(effective.max_same_role_instances, 1);
+    }
+
+    #[test]
+    fn run_manifest_strategy_applies_builtin_normal_budget_without_execution_policy() {
+        let policy = DeepReviewExecutionPolicy::default();
+        let manifest = json!({
+            "reviewMode": "deep",
+            "strategyLevel": "normal"
+        });
+
+        let effective = policy.with_run_manifest_execution_policy(&manifest);
+
+        assert_eq!(effective.strategy_level, DeepReviewStrategyLevel::Normal);
+        assert_eq!(effective.reviewer_timeout_seconds, 1800);
+        assert_eq!(effective.judge_timeout_seconds, 1200);
+        assert_eq!(effective.reviewer_file_split_threshold, 0);
+        assert_eq!(effective.max_same_role_instances, 1);
+    }
+
+    #[test]
+    fn run_manifest_strategy_preserves_deep_budget_and_respects_lower_threshold_override() {
+        let mut policy = DeepReviewExecutionPolicy::default();
+        policy.reviewer_file_split_threshold = 10;
+        let manifest = json!({
+            "reviewMode": "deep",
+            "strategyLevel": "deep"
+        });
+
+        let effective = policy.with_run_manifest_execution_policy(&manifest);
+
+        assert_eq!(effective.strategy_level, DeepReviewStrategyLevel::Deep);
+        assert_eq!(effective.reviewer_timeout_seconds, 3600);
+        assert_eq!(effective.judge_timeout_seconds, 2400);
+        assert_eq!(effective.reviewer_file_split_threshold, 10);
+        assert_eq!(effective.max_same_role_instances, 3);
+    }
 }

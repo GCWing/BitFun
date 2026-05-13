@@ -1,13 +1,10 @@
 import type { ReviewTargetClassification } from '../reviewTargetClassifier';
 import {
-  MAX_PREDICTIVE_TIMEOUT_SECONDS,
-  PREDICTIVE_TIMEOUT_BASE_SECONDS,
-  PREDICTIVE_TIMEOUT_PER_100_LINES_SECONDS,
-  PREDICTIVE_TIMEOUT_PER_FILE_SECONDS,
   PROMPT_BYTE_ESTIMATE_BASE_BYTES,
   PROMPT_BYTE_ESTIMATE_PER_CHANGED_LINE_BYTES,
   PROMPT_BYTE_ESTIMATE_PER_FILE_BYTES,
   PROMPT_BYTE_ESTIMATE_UNKNOWN_LINES_PER_FILE,
+  REVIEW_STRATEGY_RUNTIME_BUDGETS,
   TOKEN_BUDGET_PROMPT_BYTE_LIMIT_BY_MODE,
 } from './defaults';
 import type {
@@ -21,26 +18,24 @@ import type {
   ReviewTokenBudgetMode,
 } from './types';
 
-function predictTimeoutSeconds(params: {
-  role: 'reviewer' | 'judge';
-  strategyLevel: ReviewStrategyLevel;
-  changeStats: ReviewTeamChangeStats;
-  reviewerCount: number;
-}): number {
-  const totalLinesChanged = params.changeStats.totalLinesChanged ?? 0;
-  const base = PREDICTIVE_TIMEOUT_BASE_SECONDS[params.strategyLevel];
-  const raw =
-    base +
-    params.changeStats.fileCount * PREDICTIVE_TIMEOUT_PER_FILE_SECONDS +
-    Math.floor(totalLinesChanged / 100) *
-      PREDICTIVE_TIMEOUT_PER_100_LINES_SECONDS;
-  const reviewerCount = Math.max(1, params.reviewerCount);
-  const multiplier =
-    params.role === 'judge'
-      ? 1 + Math.floor((reviewerCount - 1) / 3)
-      : 1;
+function strategyBoundedTimeoutSeconds(
+  configuredTimeoutSeconds: number,
+  strategyTimeoutSeconds: number,
+): number {
+  if (configuredTimeoutSeconds === 0) {
+    return 0;
+  }
+  return Math.min(configuredTimeoutSeconds, strategyTimeoutSeconds);
+}
 
-  return Math.min(raw * multiplier, MAX_PREDICTIVE_TIMEOUT_SECONDS);
+function strategyBoundedSplitThreshold(
+  configuredThreshold: number,
+  strategyThreshold: number,
+): number {
+  if (configuredThreshold === 0 || strategyThreshold === 0) {
+    return 0;
+  }
+  return Math.min(configuredThreshold, strategyThreshold);
 }
 
 export function buildEffectiveExecutionPolicy(params: {
@@ -48,7 +43,6 @@ export function buildEffectiveExecutionPolicy(params: {
   strategyLevel: ReviewStrategyLevel;
   target: ReviewTargetClassification;
   changeStats: ReviewTeamChangeStats;
-  reviewerCount: number;
 }): ReviewTeamExecutionPolicy {
   if (
     params.target.resolution === 'unknown' &&
@@ -58,35 +52,26 @@ export function buildEffectiveExecutionPolicy(params: {
     return params.basePolicy;
   }
 
-  const reviewerTimeoutSeconds = predictTimeoutSeconds({
-    role: 'reviewer',
-    strategyLevel: params.strategyLevel,
-    changeStats: params.changeStats,
-    reviewerCount: params.reviewerCount,
-  });
-  const judgeTimeoutSeconds = predictTimeoutSeconds({
-    role: 'judge',
-    strategyLevel: params.strategyLevel,
-    changeStats: params.changeStats,
-    reviewerCount: params.reviewerCount,
-  });
+  const strategyBudget = REVIEW_STRATEGY_RUNTIME_BUDGETS[params.strategyLevel];
 
   return {
     ...params.basePolicy,
-    reviewerTimeoutSeconds:
-      params.basePolicy.reviewerTimeoutSeconds === 0
-        ? 0
-        : Math.max(
-          params.basePolicy.reviewerTimeoutSeconds,
-          reviewerTimeoutSeconds,
-        ),
-    judgeTimeoutSeconds:
-      params.basePolicy.judgeTimeoutSeconds === 0
-        ? 0
-        : Math.max(
-          params.basePolicy.judgeTimeoutSeconds,
-          judgeTimeoutSeconds,
-        ),
+    reviewerTimeoutSeconds: strategyBoundedTimeoutSeconds(
+      params.basePolicy.reviewerTimeoutSeconds,
+      strategyBudget.executionPolicy.reviewerTimeoutSeconds,
+    ),
+    judgeTimeoutSeconds: strategyBoundedTimeoutSeconds(
+      params.basePolicy.judgeTimeoutSeconds,
+      strategyBudget.executionPolicy.judgeTimeoutSeconds,
+    ),
+    reviewerFileSplitThreshold: strategyBoundedSplitThreshold(
+      params.basePolicy.reviewerFileSplitThreshold,
+      strategyBudget.executionPolicy.reviewerFileSplitThreshold,
+    ),
+    maxSameRoleInstances: Math.min(
+      params.basePolicy.maxSameRoleInstances,
+      strategyBudget.executionPolicy.maxSameRoleInstances,
+    ),
   };
 }
 

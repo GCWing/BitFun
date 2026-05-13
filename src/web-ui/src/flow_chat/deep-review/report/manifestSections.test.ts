@@ -55,8 +55,8 @@ function buildRunManifest(): ReviewTeamRunManifest {
       },
     },
     executionPolicy: {
-      reviewerTimeoutSeconds: 300,
-      judgeTimeoutSeconds: 240,
+      reviewerTimeoutSeconds: 1800,
+      judgeTimeoutSeconds: 1200,
       reviewerFileSplitThreshold: 20,
       maxSameRoleInstances: 3,
       maxRetriesPerRole: 1,
@@ -64,7 +64,7 @@ function buildRunManifest(): ReviewTeamRunManifest {
     concurrencyPolicy: {
       maxParallelInstances: 4,
       staggerSeconds: 0,
-      maxQueueWaitSeconds: 60,
+      maxQueueWaitSeconds: 1200,
       batchExtrasSeparately: true,
       allowProviderCapacityQueue: true,
       allowBoundedAutoRetry: false,

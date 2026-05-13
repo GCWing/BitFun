@@ -108,6 +108,25 @@ describe('reviewTeamService', () => {
     subagent('ReviewJudge', enabled),
   ];
 
+  it('uses slow-provider-friendly review team defaults', () => {
+    expect(DEFAULT_REVIEW_TEAM_EXECUTION_POLICY).toMatchObject({
+      reviewerTimeoutSeconds: 3600,
+      judgeTimeoutSeconds: 2400,
+      reviewerFileSplitThreshold: 20,
+      maxSameRoleInstances: 3,
+      maxRetriesPerRole: 1,
+    });
+    expect(DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY).toMatchObject({
+      maxParallelInstances: 4,
+      staggerSeconds: 0,
+      maxQueueWaitSeconds: 1200,
+      batchExtrasSeparately: true,
+      allowProviderCapacityQueue: true,
+      allowBoundedAutoRetry: false,
+      autoRetryElapsedGuardSeconds: 180,
+    });
+  });
+
   it('falls back to defaults when the persisted review team path is missing', async () => {
     vi.mocked(configAPI.getConfig).mockRejectedValueOnce(
       new Error("Config path 'ai.review_teams.default' not found"),
@@ -169,7 +188,7 @@ describe('reviewTeamService', () => {
       strategy_level: 'normal',
       member_strategy_overrides: {},
       max_parallel_reviewers: 99,
-      max_queue_wait_seconds: 999,
+      max_queue_wait_seconds: 9999,
       allow_provider_capacity_queue: false,
       allow_bounded_auto_retry: true,
       auto_retry_elapsed_guard_seconds: 1,
@@ -181,7 +200,7 @@ describe('reviewTeamService', () => {
     expect(team.concurrencyPolicy).toEqual({
       maxParallelInstances: 16,
       staggerSeconds: 0,
-      maxQueueWaitSeconds: 600,
+      maxQueueWaitSeconds: 3600,
       batchExtrasSeparately: true,
       allowProviderCapacityQueue: false,
       allowBoundedAutoRetry: true,
@@ -240,7 +259,7 @@ describe('reviewTeamService', () => {
       remaining: 3,
     });
     expect(configAPI.getConfig).toHaveBeenCalledWith(
-      'ai.review_teams.rate_limit_status',
+      'ai.review_team_rate_limit_status',
       { skipRetryOnNotFound: true },
     );
   });
@@ -267,7 +286,7 @@ describe('reviewTeamService', () => {
       loadReviewTeamProjectStrategyOverride('D:\\workspace\\repo'),
     ).resolves.toBe('deep');
     expect(configAPI.getConfig).toHaveBeenCalledWith(
-      'ai.review_teams.project_strategy_overrides',
+      'ai.review_team_project_strategy_overrides',
       { skipRetryOnNotFound: true },
     );
   });
@@ -286,7 +305,7 @@ describe('reviewTeamService', () => {
     await saveReviewTeamProjectStrategyOverride('D:\\workspace\\repo', 'deep');
     expect(configAPI.setConfig).toHaveBeenNthCalledWith(
       1,
-      'ai.review_teams.project_strategy_overrides',
+      'ai.review_team_project_strategy_overrides',
       {
         'd:/workspace/repo': 'deep',
         '/test-fixtures/project-a': 'normal',
@@ -296,7 +315,7 @@ describe('reviewTeamService', () => {
     await saveReviewTeamProjectStrategyOverride('D:\\workspace\\repo');
     expect(configAPI.setConfig).toHaveBeenNthCalledWith(
       2,
-      'ai.review_teams.project_strategy_overrides',
+      'ai.review_team_project_strategy_overrides',
       {
         '/test-fixtures/project-a': 'normal',
       },
@@ -1142,6 +1161,7 @@ describe('reviewTeamService', () => {
 
     const manifest = buildEffectiveReviewTeamManifest(team, {
       target,
+      strategyOverride: 'deep',
       concurrencyPolicy: {
         maxParallelInstances: 16,
       },
@@ -1183,7 +1203,7 @@ describe('reviewTeamService', () => {
     expect(manifest.tokenBudget).toMatchObject({
       estimatedReviewerCalls: 16,
       maxFilesPerReviewer: 10,
-      largeDiffSummaryFirst: true,
+      largeDiffSummaryFirst: false,
     });
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
@@ -1220,6 +1240,7 @@ describe('reviewTeamService', () => {
 
     const manifest = buildEffectiveReviewTeamManifest(team, {
       target,
+      strategyOverride: 'deep',
       concurrencyPolicy: {
         maxParallelInstances: 16,
       },
@@ -1281,7 +1302,7 @@ describe('reviewTeamService', () => {
     expect(manifest.concurrencyPolicy).toMatchObject({
       maxParallelInstances: 4,
       staggerSeconds: 0,
-      maxQueueWaitSeconds: 60,
+      maxQueueWaitSeconds: 1200,
       batchExtrasSeparately: true,
     });
     expect(logicPackets).toHaveLength(1);
@@ -1295,7 +1316,7 @@ describe('reviewTeamService', () => {
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).toContain('- max_parallel_instances: 4');
-    expect(promptBlock).toContain('- max_queue_wait_seconds: 60');
+    expect(promptBlock).toContain('- max_queue_wait_seconds: 1200');
     expect(promptBlock).toContain('Launch reviewer Tasks by launch_batch');
     expect(promptBlock).toContain('"launch_batch": 2');
   });
@@ -1487,6 +1508,162 @@ describe('reviewTeamService', () => {
     });
   });
 
+  it('keeps quick strategy bounded and reduced-scope for slow-model friendly launches', () => {
+    const team = resolveDefaultReviewTeam(
+      [
+        ...coreSubagents(),
+        subagent('ExtraEnabled', true, 'user', 'fast', true, true),
+      ],
+      storedConfigWithExtra(['ExtraEnabled']),
+    );
+    const target = classifyReviewTargetFromFiles(
+      [
+        'src/crates/core/src/service/auth/token_store.rs',
+        'src/crates/api-layer/src/review.rs',
+        'src/web-ui/src/components/ReviewPanel.tsx',
+      ],
+      'workspace_diff',
+    );
+
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      target,
+      strategyOverride: 'quick',
+      changeStats: {
+        fileCount: 3,
+        totalLinesChanged: 220,
+        lineCountSource: 'diff_stat',
+      },
+    });
+
+    expect(manifest.tokenBudget).toMatchObject({
+      mode: 'economy',
+      maxExtraReviewers: 0,
+      skippedReviewerIds: ['ExtraEnabled'],
+    });
+    expect(manifest.enabledExtraReviewers).toEqual([]);
+    expect(manifest.executionPolicy).toMatchObject({
+      reviewerTimeoutSeconds: 1200,
+      judgeTimeoutSeconds: 900,
+      reviewerFileSplitThreshold: 0,
+      maxSameRoleInstances: 1,
+    });
+    expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
+      'ReviewBusinessLogic',
+      'ReviewSecurity',
+      'ReviewArchitecture',
+      'ReviewFrontend',
+    ]);
+    expect(manifest.scopeProfile).toMatchObject({
+      reviewDepth: 'high_risk_only',
+      optionalReviewerPolicy: 'risk_matched_only',
+    });
+    expect(manifest.workPackets.every((packet) =>
+      packet.phase === 'judge' || packet.timeoutSeconds === 1200
+    )).toBe(true);
+
+    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
+    expect(promptBlock).toContain('- review_depth: high_risk_only');
+    expect(promptBlock).toContain('reduced_scope');
+  });
+
+  it('keeps normal strategy from expanding into long split-heavy launches on large targets', () => {
+    const team = resolveDefaultReviewTeam(
+      [
+        ...coreSubagents(),
+        subagent('ExtraOne', true, 'user', 'fast', true, true),
+        subagent('ExtraTwo', true, 'user', 'fast', true, true),
+      ],
+      storedConfigWithExtra(['ExtraOne', 'ExtraTwo']),
+    );
+    const files = Array.from(
+      { length: 48 },
+      (_, index) => `src/crates/core/src/agentic/large_change_${index}.rs`,
+    );
+    const target = classifyReviewTargetFromFiles(files, 'workspace_diff');
+
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      target,
+      strategyOverride: 'normal',
+      concurrencyPolicy: {
+        maxParallelInstances: 16,
+      },
+      changeStats: {
+        fileCount: files.length,
+        totalLinesChanged: 3200,
+        lineCountSource: 'diff_stat',
+      },
+    });
+
+    expect(manifest.tokenBudget).toMatchObject({
+      mode: 'balanced',
+      maxExtraReviewers: 1,
+      skippedReviewerIds: ['ExtraTwo'],
+      largeDiffSummaryFirst: true,
+    });
+    expect(manifest.enabledExtraReviewers.map((member) => member.subagentId)).toEqual([
+      'ExtraOne',
+    ]);
+    expect(manifest.executionPolicy).toMatchObject({
+      reviewerTimeoutSeconds: 1800,
+      judgeTimeoutSeconds: 1200,
+      reviewerFileSplitThreshold: 0,
+      maxSameRoleInstances: 1,
+    });
+    expect(
+      manifest.workPackets.filter(
+        (packet) =>
+          packet.phase === 'reviewer' &&
+          packet.subagentId === 'ReviewBusinessLogic',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('keeps deep strategy thorough with long budget and same-role splitting', () => {
+    const team = resolveDefaultReviewTeam(
+      coreSubagents(),
+      storedConfigWithExtra(),
+    );
+    const target = classifyReviewTargetFromFiles(
+      Array.from(
+        { length: 25 },
+        (_, index) => `src/web-ui/src/components/ReviewPanel${index}.tsx`,
+      ),
+      'workspace_diff',
+    );
+
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      target,
+      strategyOverride: 'deep',
+      tokenBudgetMode: undefined,
+      concurrencyPolicy: {
+        maxParallelInstances: 16,
+      },
+      changeStats: {
+        fileCount: 25,
+        totalLinesChanged: 800,
+        lineCountSource: 'diff_stat',
+      },
+    });
+
+    expect(manifest.tokenBudget).toMatchObject({
+      mode: 'thorough',
+      maxExtraReviewers: 0,
+    });
+    expect(manifest.executionPolicy).toMatchObject({
+      reviewerTimeoutSeconds: 3600,
+      judgeTimeoutSeconds: 2400,
+      reviewerFileSplitThreshold: 20,
+      maxSameRoleInstances: 3,
+    });
+    expect(
+      manifest.workPackets.filter(
+        (packet) =>
+          packet.phase === 'reviewer' &&
+          packet.subagentId === 'ReviewBusinessLogic',
+      ),
+    ).toHaveLength(2);
+  });
+
   it('enables summary-first from prompt-byte pressure without hiding assigned files', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
@@ -1555,6 +1732,7 @@ describe('reviewTeamService', () => {
 
     const manifest = buildEffectiveReviewTeamManifest(team, {
       target,
+      strategyOverride: 'deep',
       tokenBudgetMode: 'thorough',
       concurrencyPolicy: {
         maxParallelInstances: 8,
@@ -1588,7 +1766,7 @@ describe('reviewTeamService', () => {
     expect(promptBlock).toContain('- token_budget_decisions: none');
   });
 
-  it('predicts manifest timeouts from resolved target size', () => {
+  it('keeps normal manifest timeouts bounded for resolved target size', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1608,18 +1786,18 @@ describe('reviewTeamService', () => {
       lineCountSource: 'unknown',
     });
     expect(manifest.executionPolicy).toMatchObject({
-      reviewerTimeoutSeconds: 675,
-      judgeTimeoutSeconds: 1350,
+      reviewerTimeoutSeconds: 1800,
+      judgeTimeoutSeconds: 1200,
     });
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).toContain('- target_file_count: 25');
     expect(promptBlock).toContain('- target_line_count: unknown');
-    expect(promptBlock).toContain('- reviewer_timeout_seconds: 675');
-    expect(promptBlock).toContain('- judge_timeout_seconds: 1350');
+    expect(promptBlock).toContain('- reviewer_timeout_seconds: 1800');
+    expect(promptBlock).toContain('- judge_timeout_seconds: 1200');
   });
 
-  it('includes diff line stats in predictive manifest timeouts', () => {
+  it('keeps normal manifest timeouts bounded even with diff line stats', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1647,15 +1825,15 @@ describe('reviewTeamService', () => {
       lineCountSource: 'diff_stat',
     });
     expect(manifest.executionPolicy).toMatchObject({
-      reviewerTimeoutSeconds: 915,
-      judgeTimeoutSeconds: 1830,
+      reviewerTimeoutSeconds: 1800,
+      judgeTimeoutSeconds: 1200,
     });
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).toContain('- target_line_count: 800');
     expect(promptBlock).toContain('- target_line_count_source: diff_stat');
-    expect(promptBlock).toContain('- reviewer_timeout_seconds: 915');
-    expect(promptBlock).toContain('- judge_timeout_seconds: 1830');
+    expect(promptBlock).toContain('- reviewer_timeout_seconds: 1800');
+    expect(promptBlock).toContain('- judge_timeout_seconds: 1200');
   });
 
   it('adds an advisory risk-based strategy recommendation to the manifest and prompt', () => {
@@ -1765,8 +1943,14 @@ describe('reviewTeamService', () => {
         strategyLevel: 'deep',
       },
     });
-    expect(manifest.coreReviewers).toHaveLength(4);
-    expect(manifest.enabledExtraReviewers).toHaveLength(1);
+    expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
+      'ReviewBusinessLogic',
+    ]);
+    expect(manifest.enabledExtraReviewers).toEqual([]);
+    expect(manifest.tokenBudget).toMatchObject({
+      mode: 'economy',
+      skippedReviewerIds: ['ExtraEnabled'],
+    });
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).toContain('- final_strategy: quick');
@@ -1878,13 +2062,6 @@ describe('reviewTeamService', () => {
         strategyDirective: REVIEW_STRATEGY_DEFINITIONS.quick.roleDirectives.ReviewBusinessLogic,
       }),
       expect.objectContaining({
-        subagentId: 'ReviewPerformance',
-        strategyLevel: 'quick',
-        strategySource: 'team',
-        defaultModelSlot: 'fast',
-        strategyDirective: REVIEW_STRATEGY_DEFINITIONS.quick.roleDirectives.ReviewPerformance,
-      }),
-      expect.objectContaining({
         subagentId: 'ReviewSecurity',
         strategyLevel: 'deep',
         strategySource: 'member',
@@ -1907,13 +2084,17 @@ describe('reviewTeamService', () => {
         strategyDirective: REVIEW_STRATEGY_DEFINITIONS.quick.roleDirectives.ReviewFrontend,
       }),
     ]);
-    expect(manifest.enabledExtraReviewers[0]).toMatchObject({
-      subagentId: 'ExtraEnabled',
-      strategyLevel: 'normal',
-      strategySource: 'member',
-      defaultModelSlot: 'fast',
-      strategyDirective: REVIEW_STRATEGY_DEFINITIONS.normal.promptDirective,
-    });
+    expect(manifest.enabledExtraReviewers).toEqual([]);
+    expect(manifest.skippedReviewers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          subagentId: 'ExtraEnabled',
+          reason: 'budget_limited',
+          strategyLevel: 'normal',
+          strategySource: 'member',
+        }),
+      ]),
+    );
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).toContain('- team_strategy: quick');

@@ -7,6 +7,8 @@ const sendMessageMock = vi.hoisted(() => vi.fn());
 const eventBusEmitMock = vi.hoisted(() => vi.fn());
 const confirmWarningMock = vi.hoisted(() => vi.fn());
 const continueDeepReviewSessionMock = vi.hoisted(() => vi.fn());
+const aggregateReviewerProgressMock = vi.hoisted(() => vi.fn(() => []));
+const buildReviewerProgressSummaryMock = vi.hoisted(() => vi.fn(() => null));
 const buildErrorAttributionMock = vi.hoisted(() => vi.fn(() => null));
 const buildRecoveryPlanMock = vi.hoisted(() => vi.fn(() => ({
   willPreserve: ['ReviewSecurity'],
@@ -126,8 +128,8 @@ vi.mock('../../store/FlowChatStore', () => ({
 }));
 
 vi.mock('../../utils/deepReviewExperience', () => ({
-  aggregateReviewerProgress: () => [],
-  buildReviewerProgressSummary: () => null,
+  aggregateReviewerProgress: aggregateReviewerProgressMock,
+  buildReviewerProgressSummary: buildReviewerProgressSummaryMock,
   extractPartialReviewData: () => null,
   buildErrorAttribution: buildErrorAttributionMock,
   buildRecoveryPlan: buildRecoveryPlanMock,
@@ -189,6 +191,8 @@ describeWithJsdom('DeepReviewActionBar', () => {
     eventBusEmitMock.mockReturnValue(false);
     continueDeepReviewSessionMock.mockResolvedValue(undefined);
     buildErrorAttributionMock.mockReturnValue(null);
+    aggregateReviewerProgressMock.mockReturnValue([]);
+    buildReviewerProgressSummaryMock.mockReturnValue(null);
     flowChatSessionsMock.clear();
     useReviewActionBarStore.getState().reset();
   });
@@ -1025,6 +1029,29 @@ describeWithJsdom('DeepReviewActionBar', () => {
         reviewers: [],
       },
     });
+    flowChatSessionsMock.set('deep-review-session', {
+      sessionId: 'deep-review-session',
+      sessionKind: 'deep_review',
+      dialogTurns: [],
+    });
+    aggregateReviewerProgressMock.mockReturnValue([
+      { reviewer: 'ReviewSecurity', status: 'completed', displayName: 'Security' },
+      { reviewer: 'ReviewPerformance', status: 'completed', displayName: 'Performance' },
+      { reviewer: 'ReviewArchitecture', status: 'completed', displayName: 'Architecture' },
+      { reviewer: 'ReviewBusinessLogic', status: 'completed', displayName: 'Business Logic' },
+      { reviewer: 'ReviewFrontend', status: 'cancelled', displayName: 'Frontend' },
+    ]);
+    buildReviewerProgressSummaryMock.mockReturnValue({
+      completed: 4,
+      failed: 0,
+      timedOut: 0,
+      running: 0,
+      skipped: 1,
+      unknown: 0,
+      handled: 5,
+      total: 5,
+      text: '5/5 handled',
+    });
 
     await act(async () => {
       root.render(<DeepReviewActionBar />);
@@ -1045,6 +1072,8 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(state.minimized).toBe(true);
     expect(state.activeAction).toBe('resume');
     expect(container.textContent).toContain('Continuing review');
+    expect(container.textContent).toContain('4/5 preserved, continuing remaining review');
+    expect(container.textContent).not.toContain('4/5 finished');
     expect(container.textContent).not.toContain('Deep review interrupted');
     expect(Array.from(container.querySelectorAll('button'))
       .some((button) => button.textContent?.includes('Continue review'))).toBe(false);

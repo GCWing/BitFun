@@ -373,6 +373,63 @@ describe('deepReviewContinuation', () => {
     expect(prompt).not.toContain('max_retries_per_role');
   });
 
+  it('reads a successful cancelled Task result as cancelled reviewer progress', () => {
+    const session = createDeepReviewSession({
+      error: 'A reviewer was stopped by the user.',
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          sessionId: 'deep-review-session',
+          timestamp: 1,
+          status: 'error',
+          userMessage: {
+            id: 'user-1',
+            content: 'Original command:\n/DeepReview review current changes',
+            timestamp: 1,
+          },
+          startTime: 1,
+          modelRounds: [
+            {
+              id: 'round-1',
+              index: 0,
+              startTime: 1,
+              isStreaming: false,
+              isComplete: true,
+              status: 'completed',
+              items: [
+                {
+                  id: 'tool-architecture',
+                  type: 'tool',
+                  toolName: 'Task',
+                  toolCall: {
+                    id: 'call-architecture',
+                    input: { subagent_type: 'ReviewArchitecture' },
+                  },
+                  toolResult: {
+                    result: { status: 'cancelled', reason: 'Subagent task has been cancelled' },
+                    success: true,
+                  },
+                  startTime: 1,
+                  timestamp: 1,
+                  status: 'completed',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const interruption = deriveDeepReviewInterruption(session);
+
+    expect(interruption?.reviewers).toEqual([
+      expect.objectContaining({
+        reviewer: 'ReviewArchitecture',
+        status: 'cancelled',
+      }),
+    ]);
+  });
+
   it('includes retry budget constraints from the persisted run manifest', () => {
     const session = createDeepReviewSession({
       error: 'Timeout',

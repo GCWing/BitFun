@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { AlertTriangle, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Checkbox, Modal } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
@@ -20,26 +20,6 @@ import './DeepReviewConsentDialog.scss';
 const log = createLogger('DeepReviewConsentDialog');
 const SKIP_DEEP_REVIEW_CONFIRMATION_STORAGE_KEY = 'bitfun.deepReview.skipCostConfirmation';
 const MAX_VISIBLE_SKIPPED_REVIEWERS = 3;
-const MAX_VISIBLE_TARGET_TAGS = 3;
-
-const TARGET_TAG_LABELS: Record<string, { key: string; defaultValue: string }> = {
-  frontend_ui: { key: 'frontendUi', defaultValue: 'Frontend UI' },
-  frontend_style: { key: 'frontendStyle', defaultValue: 'Frontend styles' },
-  frontend_i18n: { key: 'frontendI18n', defaultValue: 'Frontend i18n' },
-  frontend_contract: { key: 'frontendContract', defaultValue: 'Frontend contract' },
-  desktop_contract: { key: 'desktopContract', defaultValue: 'Desktop contract' },
-  web_server_contract: { key: 'webServerContract', defaultValue: 'Web server contract' },
-  backend_core: { key: 'backendCore', defaultValue: 'Backend core' },
-  transport: { key: 'transport', defaultValue: 'Transport' },
-  api_layer: { key: 'apiLayer', defaultValue: 'API layer' },
-  ai_adapter: { key: 'aiAdapter', defaultValue: 'AI adapter' },
-  installer_ui: { key: 'installerUi', defaultValue: 'Installer UI' },
-  test: { key: 'test', defaultValue: 'Tests' },
-  docs: { key: 'docs', defaultValue: 'Docs' },
-  config: { key: 'config', defaultValue: 'Config' },
-  generated_or_lock: { key: 'generatedOrLock', defaultValue: 'Generated or lockfile' },
-  unknown: { key: 'unknown', defaultValue: 'Unknown area' },
-};
 
 interface PendingConsent {
   resolve: (confirmed: boolean) => void;
@@ -80,21 +60,50 @@ function getReviewTargetFileCount(preview: ReviewTeamRunManifest): number {
   }).length;
 }
 
-function getFallbackTargetTagLabel(tag: string): string {
-  return tag
-    .split('_')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
+function getReviewTargetSummary(preview: ReviewTeamRunManifest, t: ReturnType<typeof useTranslation>['t']): string {
+  const targetFileCount = getReviewTargetFileCount(preview);
+  if (targetFileCount > 0) {
+    return t('deepReviewConsent.targetFiles', {
+      count: targetFileCount,
+      defaultValue: targetFileCount === 1 ? '{{count}} file' : '{{count}} files',
+    });
+  }
+
+  switch (preview.target.source) {
+    case 'manual_prompt':
+      return t('deepReviewConsent.targetSource.manualPrompt', {
+        defaultValue: 'Provided context',
+      });
+    case 'workspace_diff':
+      return t('deepReviewConsent.targetSource.workspaceDiff', {
+        defaultValue: 'Workspace changes',
+      });
+    case 'slash_command_git_ref':
+      return t('deepReviewConsent.targetSource.gitRef', {
+        defaultValue: 'Git reference',
+      });
+    case 'slash_command_explicit_files':
+    case 'session_files':
+      return t('deepReviewConsent.targetSource.selectedContext', {
+        defaultValue: 'Selected context',
+      });
+    case 'unknown':
+    default:
+      return t('deepReviewConsent.targetSource.reviewTarget', {
+        defaultValue: 'Review target',
+      });
+  }
 }
 
-function getReviewDepthLabel(reviewDepth: string, t: ReturnType<typeof useTranslation>['t']): string {
-  return t(`deepReviewConsent.reviewDepthLabels.${reviewDepth}`, {
-    defaultValue: {
-      high_risk_only: 'High-risk-only',
-      risk_expanded: 'Risk-expanded',
-      full_depth: 'Full-depth',
-    }[reviewDepth] ?? reviewDepth,
+function getStrategyLabel(strategyLevel: ReviewStrategyLevel, t: ReturnType<typeof useTranslation>['t']): string {
+  return t(`deepReviewConsent.strategyLabels.${strategyLevel}`, {
+    defaultValue: getReviewStrategyProfile(strategyLevel).label,
+  });
+}
+
+function getStrategySummary(strategyLevel: ReviewStrategyLevel, t: ReturnType<typeof useTranslation>['t']): string {
+  return t(`deepReviewConsent.strategySummaries.${strategyLevel}`, {
+    defaultValue: getReviewStrategyProfile(strategyLevel).summary,
   });
 }
 
@@ -202,41 +211,9 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
     const skippedCount = skippedReviewers.length;
     const visibleSkippedReviewers = skippedReviewers.slice(0, MAX_VISIBLE_SKIPPED_REVIEWERS);
     const hiddenSkippedCount = Math.max(0, skippedCount - visibleSkippedReviewers.length);
-    const selectedStrategy = strategySelectionTouched
-      ? selectedStrategyOverride
-      : preview.strategyLevel;
-    const selectedStrategyLabel = selectedStrategy
-      ? t(`deepReviewConsent.strategyLabels.${selectedStrategy}`, {
-        defaultValue: getReviewStrategyProfile(selectedStrategy).label,
-      })
-      : t('deepReviewConsent.teamDefaultStrategy', {
-        defaultValue: 'Team default',
-      });
-    const targetFileCount = getReviewTargetFileCount(preview);
-    const visibleTargetTags = preview.target.tags.slice(0, MAX_VISIBLE_TARGET_TAGS);
-    const hiddenTargetTagCount = Math.max(0, preview.target.tags.length - visibleTargetTags.length);
-    const targetTagLabels = visibleTargetTags.map((tag) => {
-      const label = TARGET_TAG_LABELS[tag] ?? {
-        key: 'unknown',
-        defaultValue: getFallbackTargetTagLabel(tag),
-      };
-      return t(`deepReviewConsent.targetTagLabels.${label.key}`, {
-        defaultValue: label.defaultValue,
-      });
-    });
-    const targetTagSummary = targetTagLabels.length > 0
-      ? hiddenTargetTagCount > 0
-        ? t('deepReviewConsent.targetTagsWithMore', {
-          tags: targetTagLabels.join(', '),
-          count: hiddenTargetTagCount,
-          defaultValue: '{{tags}} +{{count}} more',
-        })
-        : targetTagLabels.join(', ')
-      : t('deepReviewConsent.targetTagLabels.unknown', {
-        defaultValue: 'Unknown area',
-      });
-    const optionalReviewerCount = preview.enabledExtraReviewers.length;
-
+    const effectiveStrategy = selectedStrategyOverride ?? preview.strategyLevel;
+    const selectedStrategyLabel = getStrategyLabel(effectiveStrategy, t);
+    const targetSummary = getReviewTargetSummary(preview, t);
     return (
       <div className="deep-review-consent__summary">
         <div className="deep-review-consent__summary-header">
@@ -246,60 +223,12 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
         </div>
 
         <div className="deep-review-consent__summary-stats">
-          <span>
-            {t('deepReviewConsent.targetFiles', {
-              count: targetFileCount,
-              defaultValue: targetFileCount === 1 ? '{{count}} file' : '{{count}} files',
-            })}
-          </span>
-          <span>
-            {t('deepReviewConsent.targetRiskTags', {
-              tags: targetTagSummary,
-              defaultValue: 'Risk areas: {{tags}}',
-            })}
-          </span>
-          <span>
-            {t('deepReviewConsent.estimatedCalls', {
-              count: preview.tokenBudget.estimatedReviewerCalls,
-              defaultValue: '{{count}} reviewer calls',
-            })}
-          </span>
+          <span>{targetSummary}</span>
           {skippedCount > 0 && (
             <span className="deep-review-consent__summary-stat--warning">
               {t('deepReviewConsent.skippedReviewers', {
                 count: skippedCount,
-              defaultValue: '{{count}} skipped',
-            })}
-          </span>
-          )}
-          {optionalReviewerCount > 0 && (
-            <span>
-              {t('deepReviewConsent.optionalReviewers', {
-                count: optionalReviewerCount,
-                defaultValue: optionalReviewerCount === 1
-                  ? '{{count}} optional reviewer'
-                  : '{{count}} optional reviewers',
-              })}
-            </span>
-          )}
-          {preview.tokenBudget.largeDiffSummaryFirst && (
-            <span>
-              {t('deepReviewConsent.summaryFirstReview', {
-                defaultValue: 'Summary-first coverage',
-              })}
-            </span>
-          )}
-          <span>
-            {t('deepReviewConsent.runStrategy', {
-              strategy: selectedStrategyLabel,
-              defaultValue: 'Run strategy: {{strategy}}',
-            })}
-          </span>
-          {preview.scopeProfile && (
-            <span>
-              {t('deepReviewConsent.reviewDepth', {
-                depth: getReviewDepthLabel(preview.scopeProfile.reviewDepth, t),
-                defaultValue: 'Review depth: {{depth}}',
+                defaultValue: '{{count}} skipped',
               })}
             </span>
           )}
@@ -307,10 +236,14 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
 
         {preview.workspacePath && (
           <div className="deep-review-consent__strategy-control">
-            <div className="deep-review-consent__reviewer-group-title">
-              {t('deepReviewConsent.strategyOverrideTitle', {
-                defaultValue: 'Run strategy',
-              })}
+            <div className="deep-review-consent__strategy-current">
+              <strong>
+                {t('deepReviewConsent.runStrategy', {
+                  strategy: selectedStrategyLabel,
+                  defaultValue: 'Run strategy: {{strategy}}',
+                })}
+              </strong>
+              <span>{getStrategySummary(effectiveStrategy, t)}</span>
             </div>
             <div
               className="deep-review-consent__strategy-options"
@@ -319,23 +252,9 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
                 defaultValue: 'Run strategy',
               })}
             >
-              <button
-                type="button"
-                className={[
-                  'deep-review-consent__strategy-option',
-                  strategySelectionTouched && selectedStrategyOverride === null
-                    ? 'deep-review-consent__strategy-option--active'
-                    : '',
-                ].filter(Boolean).join(' ')}
-                aria-pressed={strategySelectionTouched && selectedStrategyOverride === null}
-                onClick={() => selectStrategyOverride(null)}
-              >
-                {t('deepReviewConsent.teamDefaultStrategy', {
-                  defaultValue: 'Team default',
-                })}
-              </button>
               {REVIEW_STRATEGY_LEVELS.map((strategyLevel) => {
-                const isActive = selectedStrategy === strategyLevel;
+                const isActive = effectiveStrategy === strategyLevel;
+                const profile = getReviewStrategyProfile(strategyLevel);
                 return (
                   <button
                     key={strategyLevel}
@@ -347,9 +266,30 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
                     aria-pressed={isActive}
                     onClick={() => selectStrategyOverride(strategyLevel)}
                   >
-                    {t(`deepReviewConsent.strategyLabels.${strategyLevel}`, {
-                      defaultValue: getReviewStrategyProfile(strategyLevel).label,
-                    })}
+                    <span className="deep-review-consent__strategy-option-header">
+                      <span className="deep-review-consent__strategy-option-label">
+                        {getStrategyLabel(strategyLevel, t)}
+                      </span>
+                      {isActive && (
+                        <span className="deep-review-consent__strategy-option-badge">
+                          {t('deepReviewConsent.selectedStrategy', { defaultValue: 'Selected' })}
+                        </span>
+                      )}
+                    </span>
+                    <span className="deep-review-consent__strategy-option-meta">
+                      <span>
+                        {t('deepReviewConsent.strategyTokenImpact', {
+                          tokenImpact: profile.tokenImpact,
+                          defaultValue: 'Token: {{tokenImpact}}',
+                        })}
+                      </span>
+                      <span>
+                        {t('deepReviewConsent.strategyRuntimeImpact', {
+                          runtimeImpact: profile.runtimeImpact,
+                          defaultValue: 'Time: {{runtimeImpact}}',
+                        })}
+                      </span>
+                    </span>
                   </button>
                 );
               })}
@@ -389,7 +329,6 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
     getSkippedReasonLabel,
     selectStrategyOverride,
     selectedStrategyOverride,
-    strategySelectionTouched,
     t,
   ]);
 
@@ -418,28 +357,6 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
           >
             <X size={16} />
           </button>
-        </div>
-
-        <p className="deep-review-consent__lead">
-          {t('deepReviewConsent.body', {
-            defaultValue: 'Deep Review launches multiple reviewers and can take longer or use more tokens than a standard review.',
-          })}
-        </p>
-
-        <div className="deep-review-consent__safety-note">
-          <div className="deep-review-consent__fact-icon">
-            <ShieldCheck size={16} />
-          </div>
-          <div>
-            <span className="deep-review-consent__fact-title">
-              {t('deepReviewConsent.readonlyLabel', { defaultValue: 'Read-only first pass' })}
-            </span>
-            <p>
-              {t('deepReviewConsent.readonly', {
-                defaultValue: 'The first pass reports findings and a remediation plan before any code changes.',
-              })}
-            </p>
-          </div>
         </div>
 
         {pendingConsent.launchContext?.sessionConcurrencyGuard?.highActivity && (

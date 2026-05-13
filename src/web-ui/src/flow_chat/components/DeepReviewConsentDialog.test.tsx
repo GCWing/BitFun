@@ -138,8 +138,8 @@ function buildPreview(): ReviewTeamRunManifest {
       },
     },
     executionPolicy: {
-      reviewerTimeoutSeconds: 300,
-      judgeTimeoutSeconds: 240,
+      reviewerTimeoutSeconds: 1800,
+      judgeTimeoutSeconds: 1200,
       reviewerFileSplitThreshold: 20,
       maxSameRoleInstances: 3,
     },
@@ -287,18 +287,49 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
 
     expect(container.textContent).toContain('Launch summary');
     expect(container.textContent).toContain('1 file');
-    expect(container.textContent).toContain('Risk areas: Backend core');
-    expect(container.textContent).toContain('3 reviewer calls');
-    expect(container.textContent).toContain('1 optional reviewer');
     expect(container.textContent).toContain('2 skipped');
     expect(container.textContent).toContain('Run strategy: Normal');
-    expect(container.textContent).toContain('Review depth: Risk-expanded');
+    expect(container.textContent).not.toContain('Risk areas: Backend core');
+    expect(container.textContent).not.toContain('3 reviewer calls');
+    expect(container.textContent).not.toContain('1 extra specialist');
+    expect(container.textContent).not.toContain('Review depth: Risk-expanded');
     expect(container.textContent).toContain('Frontend reviewer');
     expect(container.textContent).toContain('Not applicable to this target');
     expect(container.textContent).toContain('Custom invalid reviewer');
     expect(container.textContent).toContain('Configuration issue');
     expect(container.textContent).not.toContain('Logic reviewer');
     expect(container.textContent).not.toContain('Custom security reviewer');
+  });
+
+  it('uses a generic target summary when the review is not file-based', async () => {
+    const result = vi.fn();
+    const preview: ReviewTeamRunManifest = {
+      ...buildPreview(),
+      target: {
+        source: 'manual_prompt',
+        resolution: 'unknown',
+        tags: ['unknown'],
+        files: [],
+        evidence: ['manual prompt'],
+        warnings: [{
+          code: 'target_unknown',
+          message: 'Manual prompt target',
+        }],
+      },
+      skippedReviewers: [],
+    };
+
+    await act(async () => {
+      root.render(<Harness preview={preview} onResult={result} />);
+    });
+    await act(async () => {
+      container.querySelector('button')?.dispatchEvent(new window.Event('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Provided context');
+    expect(container.textContent).not.toContain('0 files');
+    expect(container.textContent).not.toContain('Risk areas:');
+    expect(container.textContent).not.toContain('reviewer calls');
   });
 
   it('still opens when skip preference is set but reviewers are skipped', async () => {
@@ -355,7 +386,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     });
 
     const deepStrategyButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === 'Deep');
+      .find((button) => button.textContent?.includes('Deep'));
     expect(deepStrategyButton).not.toBeUndefined();
 
     await act(async () => {
@@ -372,5 +403,50 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
       'deep',
     );
     expect(result).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps the launch dialog sparse and makes the selected strategy prominent', async () => {
+    const result = vi.fn();
+
+    await act(async () => {
+      root.render(<Harness preview={buildPreview()} onResult={result} />);
+    });
+    await act(async () => {
+      container.querySelector('button')?.dispatchEvent(new window.Event('click', { bubbles: true }));
+    });
+
+    expect(container.querySelectorAll('.deep-review-consent__priority-grid')).toHaveLength(0);
+    expect(container.querySelectorAll('.deep-review-consent__priority-point')).toHaveLength(0);
+    expect(container.querySelectorAll('.deep-review-consent__strategy-heading')).toHaveLength(0);
+    expect(container.textContent).not.toContain('Quick is narrower');
+    expect(container.textContent).not.toContain('Risk areas: Backend core');
+    expect(container.textContent).not.toContain('3 reviewer calls');
+    expect(container.textContent).not.toContain('1 extra specialist');
+    expect(container.textContent).not.toContain('Expected cost:');
+    expect(container.querySelectorAll('.deep-review-consent__strategy-selected-summary')).toHaveLength(0);
+    expect(container.querySelectorAll('.deep-review-consent__strategy-current')).toHaveLength(1);
+    expect(container.querySelectorAll('.deep-review-consent__strategy-option')).toHaveLength(3);
+    expect(container.querySelectorAll('.deep-review-consent__strategy-option--active')).toHaveLength(1);
+    expect(container.textContent).not.toContain('Team default');
+    expect(container.textContent).toContain('Selected');
+    expect(container.textContent).toContain('Token: 1x');
+    expect(container.textContent).toContain('Time: 1x');
+    expect(container.textContent).toContain('Normal stays practical for slower models');
+    expect(container.querySelectorAll('.deep-review-consent__strategy-option-summary')).toHaveLength(0);
+
+    const quickStrategyButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Quick'));
+    expect(quickStrategyButton).not.toBeUndefined();
+
+    await act(async () => {
+      quickStrategyButton?.dispatchEvent(new window.Event('click', { bubbles: true }));
+    });
+
+    expect(quickStrategyButton?.getAttribute('aria-pressed')).toBe('true');
+    expect(quickStrategyButton?.className).toContain('deep-review-consent__strategy-option--active');
+    expect(container.textContent).toContain('Run strategy: Quick');
+    expect(container.textContent).toContain('Token: 0.4-0.6x');
+    expect(container.textContent).toContain('Time: 0.5-0.7x');
+    expect(container.textContent).toContain('Quick keeps built-in target-matched reviewers');
   });
 });
