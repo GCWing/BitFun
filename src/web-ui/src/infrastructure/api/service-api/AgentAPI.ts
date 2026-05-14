@@ -125,7 +125,6 @@ export interface ModeInfo {
   isReadonly: boolean;
   toolCount: number;
   defaultTools?: string[];
-  enabled: boolean;
 }
 
 
@@ -633,7 +632,6 @@ export class AgentAPI {
       description: `${agentType} agent`,
       isReadonly: false,
       toolCount: 0,
-      enabled: true,
       agent_type: agentType,
       when_to_use: `Use ${agentType} for related tasks`,
       tools: 'all',

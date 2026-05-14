@@ -8,6 +8,15 @@ import { api } from './ApiClient';
 
 export type SubagentSource = 'builtin' | 'project' | 'user';
 export type BuiltinSubagentExposure = 'public' | 'restricted' | 'hidden';
+export type SubagentOverrideState = 'enabled' | 'disabled';
+export type SubagentStateReason =
+  | 'builtin_default_visible'
+  | 'builtin_default_hidden'
+  | 'custom_default_enabled'
+  | 'enabled_by_project_override'
+  | 'disabled_by_project_override'
+  | 'enabled_by_user_override'
+  | 'disabled_by_user_override';
 
 export interface SubagentVisibilitySummary {
   exposure: BuiltinSubagentExposure;
@@ -17,6 +26,7 @@ export interface SubagentVisibilitySummary {
 }
 
 export interface SubagentInfo {
+  key: string;
   id: string;
   name: string;
   description: string;
@@ -24,7 +34,10 @@ export interface SubagentInfo {
   isReview: boolean;
   toolCount: number;
   defaultTools: string[];
-  enabled: boolean;
+  defaultEnabled: boolean;
+  effectiveEnabled: boolean;
+  overrideState?: SubagentOverrideState;
+  stateReason?: SubagentStateReason;
   subagentSource?: SubagentSource;
   path?: string;
    
@@ -38,6 +51,11 @@ export interface ListSubagentsOptions {
 }
 
 export interface ListVisibleSubagentsOptions {
+  workspacePath?: string;
+  parentAgentType: string;
+}
+
+export interface ListManageableSubagentsOptions {
   workspacePath?: string;
   parentAgentType: string;
 }
@@ -62,9 +80,15 @@ export interface CreateSubagentPayload {
 
 export interface UpdateSubagentConfigPayload {
   subagentId: string;
+  parentAgentType?: string;
   enabled?: boolean;
   model?: string;
   workspacePath?: string;
+}
+
+export interface UpdateSubagentConfigResponse {
+  availabilityUpdated: boolean;
+  modelUpdated: boolean;
 }
 
 /** Full definition for create/edit form (custom user/project sub-agents) */
@@ -113,6 +137,12 @@ export const SubagentAPI = {
     });
   },
 
+  async listManageableSubagents(options: ListManageableSubagentsOptions): Promise<SubagentInfo[]> {
+    return api.invoke<SubagentInfo[]>('list_manageable_subagents', {
+      request: options,
+    });
+  },
+
    
   async reloadSubagents(options: ReloadSubagentsOptions = {}): Promise<void> {
     return api.invoke('reload_subagents', {
@@ -133,8 +163,10 @@ export const SubagentAPI = {
   },
 
    
-  async updateSubagentConfig(payload: UpdateSubagentConfigPayload): Promise<void> {
-    return api.invoke('update_subagent_config', {
+  async updateSubagentConfig(
+    payload: UpdateSubagentConfigPayload,
+  ): Promise<UpdateSubagentConfigResponse> {
+    return api.invoke<UpdateSubagentConfigResponse>('update_subagent_config', {
       request: payload,
     });
   },

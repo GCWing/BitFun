@@ -5,9 +5,8 @@ use bitfun_core::agentic::agents::{
     AgentCategory, AgentInfo, CustomSubagent, CustomSubagentConfig, CustomSubagentDetail,
     CustomSubagentKind, SubAgentSource, SubagentListScope, SubagentQueryContext,
 };
-use bitfun_core::service::config::types::SubAgentConfig;
 use log::warn;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -23,6 +22,13 @@ pub struct ListSubagentsRequest {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListVisibleSubagentsRequest {
+    pub workspace_path: Option<String>,
+    pub parent_agent_type: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListManageableSubagentsRequest {
     pub workspace_path: Option<String>,
     pub parent_agent_type: String,
 }
@@ -73,6 +79,23 @@ pub async fn list_visible_subagents(
             workspace_root: workspace.as_deref(),
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
+        })
+        .await)
+}
+
+#[tauri::command]
+pub async fn list_manageable_subagents(
+    state: State<'_, AppState>,
+    request: ListManageableSubagentsRequest,
+) -> Result<Vec<AgentInfo>, String> {
+    let workspace = workspace_root_from_request(request.workspace_path.as_deref());
+    Ok(state
+        .agent_registry
+        .get_subagents_for_query(&SubagentQueryContext {
+            parent_agent_type: Some(request.parent_agent_type.as_str()),
+            workspace_root: workspace.as_deref(),
+            list_scope: SubagentListScope::RegistryManagement,
+            include_disabled: true,
         })
         .await)
 }
@@ -133,21 +156,6 @@ pub async fn delete_subagent(
     {
         warn!(
             "Failed to clean up ai.agent_models: subagent_id={}, error={}",
-            subagent_id, e
-        );
-    }
-
-    let mut subagent_configs: HashMap<String, SubAgentConfig> = config_service
-        .get_config(Some("ai.subagent_configs"))
-        .await
-        .unwrap_or_default();
-    subagent_configs.remove(&subagent_id);
-    if let Err(e) = config_service
-        .set_config("ai.subagent_configs", &subagent_configs)
-        .await
-    {
-        warn!(
-            "Failed to clean up ai.subagent_configs: subagent_id={}, error={}",
             subagent_id, e
         );
     }
@@ -350,11 +358,10 @@ pub async fn create_subagent(
     );
     subagent.review = review;
     subagent
-        .save_to_file(None, None)
+        .save_to_file(None)
         .map_err(|e| e.to_string())?;
 
     let custom_config = CustomSubagentConfig {
-        enabled: subagent.enabled,
         model: subagent.model.clone(),
     };
 
@@ -402,20 +409,48 @@ pub async fn list_agent_tool_names(state: State<'_, AppState>) -> Result<Vec<Str
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSubagentConfigRequest {
     pub subagent_id: String,
+    pub parent_agent_type: Option<String>,
     pub enabled: Option<bool>,
     pub model: Option<String>,
     pub workspace_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSubagentConfigResponse {
+    pub availability_updated: bool,
+    pub model_updated: bool,
 }
 
 #[tauri::command]
 pub async fn update_subagent_config(
     state: State<'_, AppState>,
     request: UpdateSubagentConfigRequest,
-) -> Result<(), String> {
+) -> Result<UpdateSubagentConfigResponse, String> {
     let subagent_id = &request.subagent_id;
     let workspace = workspace_root_from_request(request.workspace_path.as_deref());
     if let Some(workspace) = workspace.as_deref() {
         state.agent_registry.load_custom_subagents(workspace).await;
+    }
+
+    let mut availability_updated = false;
+    let mut model_updated = false;
+
+    if let Some(enabled) = request.enabled {
+        let parent_agent_type = request.parent_agent_type.as_deref().ok_or_else(|| {
+            "parentAgentType is required when updating subagent availability".to_string()
+        })?;
+        state
+            .agent_registry
+            .update_subagent_override(
+                parent_agent_type,
+                subagent_id,
+                enabled,
+                workspace.as_deref(),
+            )
+            .await
+            .map_err(|e| format!("Failed to update subagent availability: {}", e))?;
+        availability_updated = true;
     }
 
     if state
@@ -423,16 +458,21 @@ pub async fn update_subagent_config(
         .get_custom_subagent_config(subagent_id, workspace.as_deref())
         .is_some()
     {
-        state
-            .agent_registry
-            .update_and_save_custom_subagent_config(
-                subagent_id,
-                request.enabled,
-                request.model,
-                workspace.as_deref(),
-            )
-            .map_err(|e| format!("Failed to update configuration: {}", e))?;
-        Ok(())
+        if request.model.is_some() {
+            state
+                .agent_registry
+                .update_and_save_custom_subagent_config(
+                    subagent_id,
+                    request.model,
+                    workspace.as_deref(),
+                )
+                .map_err(|e| format!("Failed to update configuration: {}", e))?;
+            model_updated = true;
+        }
+        Ok(UpdateSubagentConfigResponse {
+            availability_updated,
+            model_updated,
+        })
     } else {
         if state
             .agent_registry
@@ -454,17 +494,6 @@ pub async fn update_subagent_config(
 
         let config_service = &state.config_service;
 
-        if let Some(enabled) = request.enabled {
-            let config = SubAgentConfig { enabled };
-            let path = format!("ai.subagent_configs.{}", subagent_id);
-            let config_value = serde_json::to_value(&config)
-                .map_err(|e| format!("Failed to serialize subagent config: {}", e))?;
-            config_service
-                .set_config(&path, config_value)
-                .await
-                .map_err(|e| format!("Failed to update enabled status: {}", e))?;
-        }
-
         if let Some(model) = request.model {
             let mut agent_models: HashMap<String, String> = config_service
                 .get_config(Some("ai.agent_models"))
@@ -475,15 +504,21 @@ pub async fn update_subagent_config(
                 .set_config("ai.agent_models", &agent_models)
                 .await
                 .map_err(|e| format!("Failed to update model configuration: {}", e))?;
+            model_updated = true;
         }
 
-        if let Err(e) = bitfun_core::service::config::reload_global_config().await {
-            warn!(
-                "Failed to reload global config after subagent config update: subagent_id={}, error={}",
-                subagent_id, e
-            );
+        if model_updated || availability_updated {
+            if let Err(e) = bitfun_core::service::config::reload_global_config().await {
+                warn!(
+                    "Failed to reload global config after subagent config update: subagent_id={}, error={}",
+                    subagent_id, e
+                );
+            }
         }
 
-        Ok(())
+        Ok(UpdateSubagentConfigResponse {
+            availability_updated,
+            model_updated,
+        })
     }
 }

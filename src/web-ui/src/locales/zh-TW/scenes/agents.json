@@ -46,7 +46,7 @@
   },
   "agentsZone": {
     "title": "Agent 總覽",
-    "subtitle": "查看所有 Agent / Sub-Agent，並直接管理獨立啟用、工具與 Skills。",
+    "subtitle": "查看所有 Agent / Sub-Agent，並直接管理工具與 Skills。",
     "empty": {
       "noAgents": "當前沒有可用的 Agent",
       "noMatch": "沒有匹配的 Agent"
@@ -65,7 +65,8 @@
     },
     "meta": {
       "tools": "{{count}} 個工具",
-      "skills": "{{count}} 個 Skills"
+      "skills": "{{count}} 個 Skills",
+      "subagents": "{{count}} 個 Sub-Agent"
     }
   },
   "capabilityCategories": {
@@ -80,6 +81,7 @@
     "filterUser": "用戶級",
     "filterProject": "項目級",
     "backToOverview": "返回總覽",
+    "capabilities": "能力配置",
     "tools": "工具",
     "toolsReset": "重置默認",
     "toolsCancel": "取消編輯",
@@ -89,13 +91,21 @@
     "toolsResetFailed": "重置工具失敗",
     "toolToggleFailed": "工具切換失敗",
     "skills": "Skills",
+    "subagents": "Sub-Agents",
     "skillsCancel": "取消編輯",
     "skillsSave": "保存",
     "skillsEdit": "管理 Skills",
+    "subagentsEdit": "管理 Sub-Agents",
+    "subagentsDone": "完成",
+    "noSubagents": "目前沒有可管理的 Sub-Agent",
     "enableGroup": "啟用分組",
     "disableGroup": "禁用分組",
     "clearGroup": "清空",
+    "reset": "重置",
+    "cancel": "取消",
+    "save": "保存",
     "skillToggleFailed": "Skill 切換失敗",
+    "subagentToggleFailed": "Sub-Agent 切換失敗",
     "skillShadowed": "該 Skill 被同名且優先級更高的 Skill 遮蔽，運行時不會生效",
     "noSkills": "未啟用任何 Skill",
     "skillGroups": {

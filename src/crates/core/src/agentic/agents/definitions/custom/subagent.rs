@@ -23,8 +23,6 @@ pub struct CustomSubagent {
     pub review: bool,
     pub path: String,
     pub kind: CustomSubagentKind,
-    /// Whether this subagent is enabled, default true
-    pub enabled: bool,
     /// Model ID to use, default "fast"
     pub model: String,
 }
@@ -89,7 +87,6 @@ impl CustomSubagent {
             review: false,
             path,
             kind,
-            enabled: true,
             model: "fast".to_string(),
         }
     }
@@ -122,11 +119,6 @@ impl CustomSubagent {
             .and_then(|v| v.as_bool())
             .unwrap_or(Self::DEFAULT_REVIEW);
 
-        let enabled = metadata
-            .get("enabled")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(Self::DEFAULT_ENABLED);
-
         let model = metadata
             .get("model")
             .and_then(|v| v.as_str())
@@ -142,7 +134,6 @@ impl CustomSubagent {
             review,
             path: path.to_string(),
             kind,
-            enabled,
             model,
         })
     }
@@ -150,7 +141,6 @@ impl CustomSubagent {
     const DEFAULT_TOOLS: &'static [&'static str] = &["LS", "Read", "Glob", "Grep"];
     const DEFAULT_READONLY: bool = true;
     const DEFAULT_REVIEW: bool = false;
-    const DEFAULT_ENABLED: bool = true;
     const DEFAULT_MODEL: &'static str = "fast";
 
     /// Check if tools match default values
@@ -167,12 +157,10 @@ impl CustomSubagent {
     /// Save current subagent as markdown file with YAML front matter
     ///
     /// # Parameters
-    /// - `enabled`: Override enabled value, None uses self.enabled
     /// - `model`: Override model value, None uses self.model
     ///
     /// Fields equal to default values are not saved
-    pub fn save_to_file(&self, enabled: Option<bool>, model: Option<&str>) -> BitFunResult<()> {
-        let enabled = enabled.unwrap_or(self.enabled);
+    pub fn save_to_file(&self, model: Option<&str>) -> BitFunResult<()> {
         let model = model.unwrap_or(&self.model);
 
         let mut metadata = serde_yaml::Mapping::new();
@@ -195,9 +183,6 @@ impl CustomSubagent {
         }
         if self.review != Self::DEFAULT_REVIEW {
             metadata.insert(Value::String("review".into()), Value::Bool(self.review));
-        }
-        if enabled != Self::DEFAULT_ENABLED {
-            metadata.insert(Value::String("enabled".into()), Value::Bool(enabled));
         }
         if model != Self::DEFAULT_MODEL {
             metadata.insert(
@@ -237,7 +222,7 @@ mod tests {
         subagent.review = true;
 
         subagent
-            .save_to_file(None, None)
+            .save_to_file(None)
             .expect("review subagent should save");
 
         let saved = fs::read_to_string(&path).expect("saved subagent should be readable");

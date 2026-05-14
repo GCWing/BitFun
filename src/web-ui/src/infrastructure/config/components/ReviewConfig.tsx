@@ -289,7 +289,6 @@ const ReviewConfig: React.FC = () => {
     try {
       await SubagentAPI.updateSubagentConfig({
         subagentId: member.subagentId,
-        enabled: true,
         model: modelId,
         workspacePath: workspacePath || undefined,
       });
@@ -309,6 +308,7 @@ const ReviewConfig: React.FC = () => {
       await addDefaultReviewTeamMember(candidateId);
       await SubagentAPI.updateSubagentConfig({
         subagentId: candidateId,
+        parentAgentType: 'DeepReview',
         enabled: true,
         workspacePath: workspacePath || undefined,
       });

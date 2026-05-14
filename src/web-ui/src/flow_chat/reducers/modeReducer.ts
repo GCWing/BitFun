@@ -9,7 +9,6 @@ export interface ModeInfo {
   isReadonly: boolean;
   toolCount: number;
   defaultTools?: string[];
-  enabled: boolean;
 }
 
 export interface ModeState {

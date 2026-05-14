@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
-import { SubagentAPI } from '@/infrastructure/api/service-api/SubagentAPI';
+import { SubagentAPI, type SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import type { ModeConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
 import { useNotification } from '@/shared/notification-system';
@@ -42,6 +42,7 @@ export function useAgentsList({
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
   const [modeSkills, setModeSkills] = useState<Record<string, ModeSkillInfo[]>>({});
   const [modeConfigs, setModeConfigs] = useState<Record<string, ModeConfigItem>>({});
+  const [modeManageableSubagents, setModeManageableSubagents] = useState<Record<string, SubagentInfo[]>>({});
   const [hiddenAgentIds, setHiddenAgentIds] = useState<ReadonlySet<string>>(
     () => new Set(STATIC_HIDDEN_AGENT_IDS),
   );
@@ -77,12 +78,24 @@ export function useAgentsList({
           }).catch(() => []),
         ] as const),
       );
+      const manageableSubagentEntries = await Promise.all(
+        modes.map(async (mode) => [
+          mode.id,
+          await SubagentAPI.listManageableSubagents({
+            parentAgentType: mode.id,
+            workspacePath: workspacePath || undefined,
+          }).catch(() => []),
+        ] as const),
+      );
       if (requestId !== loadRequestIdRef.current) {
         return;
       }
 
+      const manageableSubagentsByMode = Object.fromEntries(manageableSubagentEntries);
+
       const modeAgents: AgentWithCapabilities[] = modes.map((mode) =>
         enrichCapabilities({
+          key: `mode::${mode.id}`,
           id: mode.id,
           name: mode.name,
           description: mode.description,
@@ -90,7 +103,10 @@ export function useAgentsList({
           isReview: false,
           toolCount: mode.toolCount,
           defaultTools: mode.defaultTools ?? [],
-          enabled: mode.enabled,
+          defaultEnabled: true,
+          effectiveEnabled: true,
+          visibleSubagentCount: manageableSubagentsByMode[mode.id]
+            ?.filter((subagent) => subagent.effectiveEnabled).length ?? 0,
           capabilities: [],
           agentKind: 'mode',
         }),
@@ -108,6 +124,7 @@ export function useAgentsList({
       setAvailableTools(tools);
       setModeSkills(Object.fromEntries(skillEntries));
       setModeConfigs(configs as Record<string, ModeConfigItem>);
+      setModeManageableSubagents(manageableSubagentsByMode);
       setHiddenAgentIds(new Set([
         ...STATIC_HIDDEN_AGENT_IDS,
         ...(reviewTeamDefinition?.hiddenAgentIds ?? []),
@@ -134,7 +151,6 @@ export function useAgentsList({
       return {
         mode_id: agentId,
         enabled_tools: defaultTools,
-        enabled: true,
         default_tools: defaultTools,
       };
     }
@@ -148,6 +164,10 @@ export function useAgentsList({
   const getModeSkills = useCallback((agentId: string): ModeSkillInfo[] => {
     return modeSkills[agentId] ?? [];
   }, [modeSkills]);
+
+  const getModeManageableSubagents = useCallback((agentId: string): SubagentInfo[] => {
+    return modeManageableSubagents[agentId] ?? [];
+  }, [modeManageableSubagents]);
 
   const saveModeConfig = useCallback(async (agentId: string, updates: Partial<ModeConfigItem>) => {
     const config = getModeConfig(agentId);
@@ -222,6 +242,72 @@ export function useAgentsList({
     }
   }, [notification, t, workspacePath]);
 
+  const handleResetSkills = useCallback(async (agentId: string) => {
+    try {
+      await configAPI.resetModeSkillSelection({
+        modeId: agentId,
+        workspacePath: workspacePath || undefined,
+      });
+
+      const updatedSkills = await configAPI.getModeSkillConfigs({
+        modeId: agentId,
+        workspacePath: workspacePath || undefined,
+      });
+      setModeSkills((prev) => ({ ...prev, [agentId]: updatedSkills }));
+
+      try {
+        const { globalEventBus } = await import('@/infrastructure/event-bus');
+        globalEventBus.emit('mode:config:updated');
+      } catch {
+        // ignore
+      }
+    } catch {
+      notification.error(t('agentsOverview.skillToggleFailed'));
+    }
+  }, [notification, t, workspacePath]);
+
+  const handleSetSubagentEnabled = useCallback(async (
+    agentId: string,
+    subagentId: string,
+    enabled: boolean,
+  ) => {
+    try {
+      await SubagentAPI.updateSubagentConfig({
+        subagentId,
+        parentAgentType: agentId,
+        enabled,
+        workspacePath: workspacePath || undefined,
+      });
+
+      const updatedSubagents = await SubagentAPI.listManageableSubagents({
+        parentAgentType: agentId,
+        workspacePath: workspacePath || undefined,
+      }).catch(() => []);
+
+      setModeManageableSubagents((prev) => ({
+        ...prev,
+        [agentId]: updatedSubagents,
+      }));
+      setAllAgents((prev) => prev.map((agent) => (
+        agent.agentKind === 'mode' && agent.id === agentId
+          ? {
+              ...agent,
+              visibleSubagentCount: updatedSubagents.filter((subagent) => subagent.effectiveEnabled).length,
+            }
+          : agent
+      )));
+
+      try {
+        const { globalEventBus } = await import('@/infrastructure/event-bus');
+        globalEventBus.emit('mode:config:updated');
+      } catch {
+        // ignore
+      }
+    } catch {
+      notification.error(t('agentsOverview.subagentToggleFailed'));
+    }
+  }, [notification, t, workspacePath]);
+
   const filteredAgents = useMemo(() => allAgents.filter((agent) => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -263,6 +349,7 @@ export function useAgentsList({
     loading,
     availableTools,
     getModeSkills,
+    getModeManageableSubagents,
     counts,
     hiddenAgentIds,
     loadAgents,
@@ -270,6 +357,8 @@ export function useAgentsList({
     handleSetTools,
     handleResetTools,
     handleSetSkills,
+    handleResetSkills,
+    handleSetSubagentEnabled,
   };
 }
 

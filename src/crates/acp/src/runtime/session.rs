@@ -218,7 +218,6 @@ async fn build_session_modes(preferred_mode_id: Option<&str>) -> SessionModeStat
         .get_modes_info()
         .await
         .into_iter()
-        .filter(|info| info.enabled)
         .map(|info| SessionMode::new(info.id, info.name).description(info.description))
         .collect::<Vec<_>>();
 
@@ -246,7 +245,7 @@ async fn validate_mode_id(mode_id: &str) -> Result<()> {
         .get_modes_info()
         .await
         .into_iter()
-        .any(|info| info.enabled && info.id == mode_id);
+        .any(|info| info.id == mode_id);
 
     if mode_exists {
         Ok(())

@@ -535,10 +535,10 @@ pub struct AIConfig {
     #[serde(default, deserialize_with = "deserialize_mode_configs")]
     pub mode_configs: HashMap<String, ModeConfig>,
 
-    /// SubAgent configuration (enable/disable state).
-    /// subagent_id -> SubAgentConfig
+    /// Per-parent sparse subagent availability overrides.
+    /// parent_agent_id -> (subagent_key -> override_state)
     #[serde(default)]
-    pub subagent_configs: HashMap<String, SubAgentConfig>,
+    pub agent_subagent_overrides: AgentSubagentOverrideConfig,
 
     /// Review team configuration.
     /// team_id -> ReviewTeamConfig
@@ -680,10 +680,6 @@ pub struct ModeConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub removed_tools: Vec<String>,
 
-    /// Whether this mode is enabled.
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-
     /// User-level skills disabled for this mode.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disabled_user_skills: Vec<String>,
@@ -700,7 +696,6 @@ pub struct ModeConfigView {
     pub mode_id: String,
     pub enabled_tools: Vec<String>,
     pub default_tools: Vec<String>,
-    pub enabled: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disabled_user_skills: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -746,7 +741,6 @@ impl Default for ModeConfig {
             mode_id: String::new(),
             added_tools: Vec::new(),
             removed_tools: Vec::new(),
-            enabled: true,
             disabled_user_skills: Vec::new(),
             enabled_user_skills: Vec::new(),
         }
@@ -759,7 +753,6 @@ impl Default for ModeConfigView {
             mode_id: String::new(),
             enabled_tools: Vec::new(),
             default_tools: Vec::new(),
-            enabled: true,
             disabled_user_skills: Vec::new(),
             enabled_user_skills: Vec::new(),
         }
@@ -987,20 +980,15 @@ impl Default for LanguageDebugTemplate {
     }
 }
 
-/// SubAgent configuration (enabled/disabled per sub-agent).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct SubAgentConfig {
-    /// Whether this SubAgent is enabled.
-    #[serde(default = "default_true")]
-    pub enabled: bool,
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentSubagentOverrideState {
+    Enabled,
+    Disabled,
 }
 
-impl Default for SubAgentConfig {
-    fn default() -> Self {
-        Self { enabled: true }
-    }
-}
+pub type ParentSubagentOverrideConfig = HashMap<String, AgentSubagentOverrideState>;
+pub type AgentSubagentOverrideConfig = HashMap<String, ParentSubagentOverrideConfig>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, from = "AIModelConfigCompat")]
@@ -1539,7 +1527,7 @@ impl Default for AIConfig {
             func_agent_models: std::collections::HashMap::new(),
             default_models: DefaultModelsConfig::default(),
             mode_configs: std::collections::HashMap::new(),
-            subagent_configs: std::collections::HashMap::new(),
+            agent_subagent_overrides: std::collections::HashMap::new(),
             review_teams: default_review_team_configs(),
             review_team_rate_limit_status: default_review_team_rate_limit_status(),
             review_team_project_strategy_overrides: std::collections::HashMap::new(),
@@ -1996,7 +1984,7 @@ mod tests {
             "func_agent_models": {},
             "default_models": {},
             "mode_configs": {},
-            "subagent_configs": {},
+            "agent_subagent_overrides": {},
             "proxy": {
                 "enabled": false,
                 "url": ""
@@ -2027,7 +2015,7 @@ mod tests {
             "func_agent_models": {},
             "default_models": {},
             "mode_configs": {},
-            "subagent_configs": {},
+            "agent_subagent_overrides": {},
             "subagent_max_concurrency": 9,
             "proxy": {
                 "enabled": false,
@@ -2053,7 +2041,7 @@ mod tests {
                     "removed_tools": ["shell"]
                 }
             },
-            "subagent_configs": {},
+            "agent_subagent_overrides": {},
             "proxy": {
                 "enabled": false,
                 "url": ""
@@ -2080,7 +2068,7 @@ mod tests {
             "func_agent_models": {},
             "default_models": {},
             "mode_configs": {},
-            "subagent_configs": {},
+            "agent_subagent_overrides": {},
             "review_teams": {
                 "default": {
                     "extra_subagent_ids": ["ExtraReviewer"],

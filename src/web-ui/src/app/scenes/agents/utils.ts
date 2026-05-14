@@ -99,7 +99,7 @@ function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities
     if (id === 'deepresearch') return { ...agent, capabilities: [{ category: 'analysis', level: 5 }, { category: 'docs', level: 4 }] };
   }
 
-  if (id === 'explore') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }, { category: 'coding', level: 3 }] };
+  if (id === 'explore') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }] };
   if (id === 'file_finder') return { ...agent, capabilities: [{ category: 'analysis', level: 3 }, { category: 'coding', level: 2 }] };
 
   if (name.includes('code') || name.includes('debug') || name.includes('test')) {

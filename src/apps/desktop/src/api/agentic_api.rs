@@ -950,7 +950,6 @@ pub async fn get_available_modes(state: State<'_, AppState>) -> Result<Vec<ModeI
             is_readonly: info.is_readonly,
             tool_count: info.tool_count,
             default_tools: info.default_tools,
-            enabled: info.enabled,
         })
         .collect();
 
@@ -971,7 +970,6 @@ pub struct ModeInfoDTO {
     pub is_readonly: bool,
     pub tool_count: usize,
     pub default_tools: Vec<String>,
-    pub enabled: bool,
 }
 
 fn assistant_bootstrap_outcome_to_response(

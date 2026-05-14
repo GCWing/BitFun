@@ -863,7 +863,7 @@ function buildCoreMember(
       ? { modelFallbackReason: model.modelFallbackReason }
       : {}),
     ...strategy,
-    enabled: info?.enabled ?? true,
+    enabled: info?.effectiveEnabled ?? true,
     available: Boolean(info),
     locked: true,
     source: 'core',
@@ -910,7 +910,7 @@ function buildExtraMember(
       ? { modelFallbackReason: model.modelFallbackReason }
       : {}),
     ...strategy,
-    enabled: info.enabled,
+    enabled: info.effectiveEnabled,
     available: options.available ?? true,
     locked: false,
     source: 'extra',
@@ -1195,6 +1195,7 @@ export async function prepareDefaultReviewTeamForLaunch(
       coreMembersToEnable.map((member) =>
         SubagentAPI.updateSubagentConfig({
           subagentId: member.subagentId,
+          parentAgentType: 'DeepReview',
           enabled: true,
           workspacePath,
         }),

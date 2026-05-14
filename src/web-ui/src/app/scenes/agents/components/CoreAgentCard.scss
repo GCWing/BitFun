@@ -7,14 +7,6 @@
     var(--core-accent, var(--color-accent-500))
   );
 
-  &--disabled {
-    .core-agent-card__name,
-    .core-agent-card__desc,
-    .core-agent-card__footer {
-      opacity: 0.65;
-    }
-  }
-
   // ── Header ────────────────────────────────────────────────────────
 
   &__top {

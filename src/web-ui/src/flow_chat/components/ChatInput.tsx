@@ -343,7 +343,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const switchableModes = useMemo(
     () =>
       modeState.available.filter(mode =>
-        mode.enabled &&
         mode.id !== 'Cowork' &&
         (isAssistantWorkspace || mode.id !== 'Claw')
       ),

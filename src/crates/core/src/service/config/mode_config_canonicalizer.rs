@@ -102,9 +102,8 @@ pub fn resolve_effective_tools(
     effective
 }
 
-fn stored_mode_from_enabled_tools(
+fn stored_mode_from_tool_selection(
     mode_id: &str,
-    enabled: bool,
     enabled_tools: Vec<String>,
     disabled_user_skills: Vec<String>,
     enabled_user_skills: Vec<String>,
@@ -132,7 +131,6 @@ fn stored_mode_from_enabled_tools(
 
     stored_mode_from_overrides(
         mode_id,
-        enabled,
         added_tools,
         removed_tools,
         disabled_user_skills,
@@ -144,7 +142,6 @@ fn stored_mode_from_enabled_tools(
 
 fn stored_mode_from_overrides(
     mode_id: &str,
-    enabled: bool,
     added_tools: Vec<String>,
     removed_tools: Vec<String>,
     disabled_user_skills: Vec<String>,
@@ -164,8 +161,7 @@ fn stored_mode_from_overrides(
     let removed_set: HashSet<String> = removed_tools.iter().cloned().collect();
     added_tools.retain(|tool| !removed_set.contains(tool));
 
-    if enabled
-        && added_tools.is_empty()
+    if added_tools.is_empty()
         && removed_tools.is_empty()
         && disabled_user_skills.is_empty()
         && enabled_user_skills.is_empty()
@@ -177,7 +173,6 @@ fn stored_mode_from_overrides(
         mode_id: mode_id.to_string(),
         added_tools,
         removed_tools,
-        enabled,
         disabled_user_skills,
         enabled_user_skills,
     })
@@ -191,7 +186,6 @@ fn build_mode_view(
 ) -> ModeConfigView {
     let default_tools = normalize_tools(default_tools, valid_tools);
     let enabled_tools = resolve_effective_tools(&default_tools, mode_config, valid_tools);
-    let enabled = mode_config.map(|config| config.enabled).unwrap_or(true);
     let (disabled_user_skills, enabled_user_skills) = mode_config
         .map(|config| {
             normalize_skill_override_lists(
@@ -205,7 +199,6 @@ fn build_mode_view(
         mode_id: mode_id.to_string(),
         enabled_tools,
         default_tools,
-        enabled,
         disabled_user_skills,
         enabled_user_skills,
     }
@@ -236,7 +229,6 @@ fn canonicalize_mode_config(
 
     Ok(stored_mode_from_overrides(
         mode_id,
-        stored.enabled,
         stored.added_tools,
         stored.removed_tools,
         stored.disabled_user_skills,
@@ -307,10 +299,6 @@ pub async fn persist_mode_config_from_value(mode_id: &str, config: Value) -> Bit
     let valid_tools = get_valid_tool_names().await;
     let current = stored_configs.get(mode_id);
 
-    let enabled = config
-        .get("enabled")
-        .and_then(Value::as_bool)
-        .unwrap_or_else(|| current.map(|item| item.enabled).unwrap_or(true));
     let enabled_tools = if let Some(tools) = config.get("enabled_tools") {
         serde_json::from_value::<Vec<String>>(tools.clone()).map_err(|error| {
             BitFunError::config(format!(
@@ -365,9 +353,8 @@ pub async fn persist_mode_config_from_value(mode_id: &str, config: Value) -> Bit
             .unwrap_or_default()
     };
 
-    if let Some(canonical) = stored_mode_from_enabled_tools(
+    if let Some(canonical) = stored_mode_from_tool_selection(
         mode_id,
-        enabled,
         enabled_tools,
         disabled_user_skills,
         enabled_user_skills,
@@ -486,7 +473,6 @@ mod tests {
         let valid_tools = HashSet::new();
         let stored = stored_mode_from_overrides(
             "agentic",
-            true,
             Vec::new(),
             Vec::new(),
             Vec::new(),

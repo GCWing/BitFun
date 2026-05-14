@@ -1745,7 +1745,6 @@ mod tests {
             user_z,
             SubAgentSource::User,
             Some(CustomSubagentConfig {
-                enabled: true,
                 model: "fast".to_string(),
             }),
         );
@@ -1753,7 +1752,6 @@ mod tests {
             user_a,
             SubAgentSource::User,
             Some(CustomSubagentConfig {
-                enabled: true,
                 model: "fast".to_string(),
             }),
         );

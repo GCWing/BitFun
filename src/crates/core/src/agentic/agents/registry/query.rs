@@ -1,4 +1,8 @@
-use super::support::{get_mode_configs, get_subagent_configs, merge_dynamic_mcp_tools};
+use super::availability::resolve_availability;
+use super::support::{
+    get_mode_configs, get_subagent_overrides, load_project_subagent_overrides_local,
+    merge_dynamic_mcp_tools,
+};
 use super::AgentRegistry;
 use crate::agentic::agents::registry::types::{is_review_agent_entry, AgentEntry};
 use crate::agentic::agents::{
@@ -6,8 +10,7 @@ use crate::agentic::agents::{
 };
 use crate::agentic::tools::get_all_registered_tool_names;
 use crate::service::config::mode_config_canonicalizer::resolve_effective_tools;
-use crate::service::config::types::SubAgentConfig;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::Path;
 
 impl AgentRegistry {
@@ -97,26 +100,13 @@ impl AgentRegistry {
             .allowed_tools
     }
 
-    /// get all mode agent information (including enabled status, used for frontend mode selector etc.)
+    /// get all mode agent information, used for frontend mode selector etc.
     pub async fn get_modes_info(&self) -> Vec<AgentInfo> {
-        let mode_configs = get_mode_configs().await;
         let map = self.read_agents();
         let mut result: Vec<AgentInfo> = map
             .values()
             .filter(|e| e.category == AgentCategory::Mode)
-            .map(|e| {
-                let mut agent_info = AgentInfo::from_agent_entry(e);
-                let agent_type = &agent_info.id;
-                agent_info.enabled = if agent_type == "agentic" {
-                    true
-                } else {
-                    mode_configs
-                        .get(agent_type)
-                        .map(|config| config.enabled)
-                        .unwrap_or(true)
-                };
-                agent_info
-            })
+            .map(AgentInfo::from_agent_entry)
             .collect();
         drop(map);
         result.sort_by(|a, b| {
@@ -173,41 +163,38 @@ impl AgentRegistry {
         None
     }
 
-    fn entry_is_enabled(entry: &AgentEntry, subagent_configs: &HashMap<String, SubAgentConfig>) -> bool {
-        match &entry.custom_config {
-            Some(config) => config.enabled,
-            None => subagent_configs
-                .get(entry.agent.id())
-                .map(|config| config.enabled)
-                .unwrap_or(true),
-        }
-    }
-
     fn entry_is_visible_for_query(
         entry: &AgentEntry,
         query: &SubagentQueryContext<'_>,
-        subagent_configs: &HashMap<String, SubAgentConfig>,
+        project_overrides: Option<&crate::service::config::types::AgentSubagentOverrideConfig>,
+        user_overrides: &crate::service::config::types::AgentSubagentOverrideConfig,
     ) -> bool {
         if entry.category != AgentCategory::SubAgent {
             return false;
         }
 
-        if !query.include_disabled && !Self::entry_is_enabled(entry, subagent_configs) {
+        let availability = resolve_availability(
+            entry,
+            query.parent_agent_type,
+            project_overrides,
+            user_overrides,
+        );
+        if !query.include_disabled && !availability.effective_enabled {
             return false;
         }
 
         match query.list_scope {
             SubagentListScope::RegistryManagement => entry.visibility_policy.show_in_global_registry,
             SubagentListScope::TaskVisible => {
-                entry.visibility_policy
-                    .can_access_from_parent(query.parent_agent_type)
+                entry.visibility_policy.show_in_global_registry
+                    || entry
+                        .visibility_policy
+                        .can_access_from_parent(query.parent_agent_type)
             }
         }
     }
 
-    /// get all subagent information (including source and enabled status, used for TaskTool, frontend subagent list etc.)
-    /// - built-in subagent: read enabled status from global configuration ai.subagent_configs
-    /// - custom subagent: read enabled and model configuration from custom_config cache
+    /// get all subagent information (including source and availability status, used for TaskTool and frontend subagent list etc.)
     pub async fn get_subagents_info(&self, workspace_root: Option<&Path>) -> Vec<AgentInfo> {
         self.get_subagents_for_query(&SubagentQueryContext {
             parent_agent_type: None,
@@ -230,18 +217,37 @@ impl AgentRegistry {
             }
         }
 
-        let subagent_configs = get_subagent_configs().await;
+        let user_overrides = get_subagent_overrides().await;
+        let project_overrides = match query.workspace_root {
+            Some(workspace_root) => load_project_subagent_overrides_local(workspace_root)
+                .await
+                .ok(),
+            None => None,
+        };
         let map = self.read_agents();
         let mut result: Vec<AgentInfo> = map
             .values()
-            .filter(|entry| Self::entry_is_visible_for_query(entry, query, &subagent_configs))
+            .filter(|entry| {
+                Self::entry_is_visible_for_query(
+                    entry,
+                    query,
+                    project_overrides.as_ref(),
+                    &user_overrides,
+                )
+            })
             .map(|e| {
                 let mut agent_info = AgentInfo::from_agent_entry(e);
+                let availability = resolve_availability(
+                    e,
+                    query.parent_agent_type,
+                    project_overrides.as_ref(),
+                    &user_overrides,
+                );
                 agent_info.subagent_source = e.subagent_source;
-
-                // custom subagent is already obtained from custom_config in from_agent_entry
-                // built-in subagent needs to read enabled from global configuration
-                agent_info.enabled = Self::entry_is_enabled(e, &subagent_configs);
+                agent_info.default_enabled = availability.default_enabled;
+                agent_info.effective_enabled = availability.effective_enabled;
+                agent_info.override_state = availability.override_state;
+                agent_info.state_reason = availability.state_reason;
                 agent_info
             })
             .collect();
@@ -251,10 +257,26 @@ impl AgentRegistry {
                 result.extend(
                     project_entries
                         .values()
-                        .filter(|entry| Self::entry_is_visible_for_query(entry, query, &subagent_configs))
+                        .filter(|entry| {
+                            Self::entry_is_visible_for_query(
+                                entry,
+                                query,
+                                project_overrides.as_ref(),
+                                &user_overrides,
+                            )
+                        })
                         .map(|entry| {
                             let mut info = AgentInfo::from_agent_entry(entry);
-                            info.enabled = Self::entry_is_enabled(entry, &subagent_configs);
+                            let availability = resolve_availability(
+                                entry,
+                                query.parent_agent_type,
+                                project_overrides.as_ref(),
+                                &user_overrides,
+                            );
+                            info.default_enabled = availability.default_enabled;
+                            info.effective_enabled = availability.effective_enabled;
+                            info.override_state = availability.override_state;
+                            info.state_reason = availability.state_reason;
                             info
                         }),
                 );
@@ -275,7 +297,13 @@ impl AgentRegistry {
             list_scope: SubagentListScope::TaskVisible,
             include_disabled: false,
         };
-        let subagent_configs = get_subagent_configs().await;
+        let user_overrides = get_subagent_overrides().await;
+        let project_overrides = match query.workspace_root {
+            Some(workspace_root) => load_project_subagent_overrides_local(workspace_root)
+                .await
+                .ok(),
+            None => None,
+        };
 
         if let Some(workspace_root) = query.workspace_root {
             let is_project_cache_loaded = self.read_project_subagents().contains_key(workspace_root);
@@ -285,6 +313,13 @@ impl AgentRegistry {
         }
 
         self.find_agent_entry(subagent_id, workspace_root)
-            .is_some_and(|entry| Self::entry_is_visible_for_query(&entry, &query, &subagent_configs))
+            .is_some_and(|entry| {
+                Self::entry_is_visible_for_query(
+                    &entry,
+                    &query,
+                    project_overrides.as_ref(),
+                    &user_overrides,
+                )
+            })
     }
 }

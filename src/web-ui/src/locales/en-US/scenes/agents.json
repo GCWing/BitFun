@@ -51,7 +51,7 @@
   },
   "agentsZone": {
     "title": "Agents Overview",
-    "subtitle": "Browse all agents and sub-agents, then manage solo usage, tools, and skills directly.",
+    "subtitle": "Browse all agents and sub-agents, then manage tools and skills directly.",
     "empty": {
       "noAgents": "No agents are available right now",
       "noMatch": "No matching agents"
@@ -70,7 +70,8 @@
     },
     "meta": {
       "tools": "{{count}} tools",
-      "skills": "{{count}} skills"
+      "skills": "{{count}} skills",
+      "subagents": "{{count}} sub-agents"
     }
   },
   "capabilityCategories": {
@@ -85,6 +86,7 @@
     "filterUser": "User",
     "filterProject": "Project",
     "backToOverview": "Back to Overview",
+    "capabilities": "Capability configuration",
     "tools": "Tools",
     "toolsReset": "Reset default",
     "toolsCancel": "Cancel editing",
@@ -94,13 +96,21 @@
     "toolsResetFailed": "Failed to reset tools",
     "toolToggleFailed": "Failed to toggle tool",
     "skills": "Skills",
+    "subagents": "Sub-Agents",
     "skillsCancel": "Cancel editing",
     "skillsSave": "Save",
     "skillsEdit": "Manage skills",
+    "subagentsEdit": "Manage sub-agents",
+    "subagentsDone": "Done",
+    "noSubagents": "No manageable sub-agents available",
     "enableGroup": "Enable group",
     "disableGroup": "Disable group",
     "clearGroup": "Clear",
+    "reset": "Reset",
+    "cancel": "Cancel",
+    "save": "Save",
     "skillToggleFailed": "Failed to toggle skill",
+    "subagentToggleFailed": "Failed to toggle sub-agent",
     "skillShadowed": "shadowed by a higher-priority skill with the same name",
     "noSkills": "No skills enabled",
     "skillGroups": {

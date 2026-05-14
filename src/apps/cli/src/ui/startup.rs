@@ -1224,7 +1224,7 @@ impl StartupPage {
     fn apply_model_selection(&mut self, selected: &ModelItem) {
         let selected_id = selected.id.clone();
         let selected_display_name = format!("{} / {}", selected.model_name, selected.name);
-        let modes = self.get_enabled_mode_agents();
+        let modes = self.get_mode_agents();
 
         let success = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
@@ -1504,7 +1504,7 @@ impl StartupPage {
     fn show_agent_selector(&mut self) {
         self.push_current_popup_to_stack();
 
-        let modes = self.get_enabled_mode_agents();
+        let modes = self.get_mode_agents();
         if modes.is_empty() {
             self.status = Some("No mode agents available".to_string());
             return;
@@ -1655,16 +1655,16 @@ impl StartupPage {
         self.popup_stack.clear();
     }
 
-    fn get_enabled_mode_agents(&self) -> Vec<AgentInfo> {
+    fn get_mode_agents(&self) -> Vec<AgentInfo> {
         let registry = get_agent_registry();
         let modes = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(registry.get_modes_info())
         });
-        modes.into_iter().filter(|mode| mode.enabled).collect()
+        modes
     }
 
     fn cycle_agent(&mut self, offset: isize) {
-        let modes = self.get_enabled_mode_agents();
+        let modes = self.get_mode_agents();
         if modes.len() <= 1 {
             return;
         }

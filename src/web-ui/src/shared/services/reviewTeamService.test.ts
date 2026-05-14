@@ -87,6 +87,7 @@ describe('reviewTeamService', () => {
     isReview = id.startsWith('Review'),
     defaultTools = ['GetFileDiff', 'Read', 'Grep', 'Glob', 'LS'],
   ): SubagentInfo => ({
+    key: `test::${id}`,
     id,
     name: id,
     description: `${id} description`,
@@ -94,7 +95,8 @@ describe('reviewTeamService', () => {
     isReview,
     toolCount: defaultTools.length,
     defaultTools,
-    enabled,
+    defaultEnabled: enabled,
+    effectiveEnabled: enabled,
     subagentSource,
     model,
   });
@@ -336,31 +338,37 @@ describe('reviewTeamService', () => {
 
     expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledTimes(6);
     expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledWith({
+      parentAgentType: 'DeepReview',
       subagentId: 'ReviewBusinessLogic',
       enabled: true,
       workspacePath: WORKSPACE_PATH,
     });
     expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledWith({
+      parentAgentType: 'DeepReview',
       subagentId: 'ReviewPerformance',
       enabled: true,
       workspacePath: WORKSPACE_PATH,
     });
     expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledWith({
+      parentAgentType: 'DeepReview',
       subagentId: 'ReviewSecurity',
       enabled: true,
       workspacePath: WORKSPACE_PATH,
     });
     expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledWith({
+      parentAgentType: 'DeepReview',
       subagentId: 'ReviewArchitecture',
       enabled: true,
       workspacePath: WORKSPACE_PATH,
     });
     expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledWith({
+      parentAgentType: 'DeepReview',
       subagentId: 'ReviewFrontend',
       enabled: true,
       workspacePath: WORKSPACE_PATH,
     });
     expect(SubagentAPI.updateSubagentConfig).toHaveBeenCalledWith({
+      parentAgentType: 'DeepReview',
       subagentId: 'ReviewJudge',
       enabled: true,
       workspacePath: WORKSPACE_PATH,

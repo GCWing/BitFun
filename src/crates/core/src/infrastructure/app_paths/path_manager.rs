@@ -304,6 +304,12 @@ impl PathManager {
             .join("mode_skills.json")
     }
 
+    /// Get project subagent overrides file: {project}/.bitfun/config/agent_subagents.json
+    pub fn project_agent_subagents_file(&self, workspace_path: &Path) -> PathBuf {
+        self.project_internal_config_dir(workspace_path)
+            .join("agent_subagents.json")
+    }
+
     /// Get project agent directory: {project}/.bitfun/agents/
     pub fn project_agents_dir(&self, workspace_path: &Path) -> PathBuf {
         self.project_root(workspace_path).join("agents")

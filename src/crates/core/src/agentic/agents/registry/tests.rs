@@ -1,6 +1,7 @@
 use super::support::merge_dynamic_mcp_tools;
 use super::AgentRegistry;
 use crate::agentic::agents::registry::builtin::default_model_id_for_builtin_agent;
+use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
 use crate::agentic::agents::registry::types::{
     AgentCategory, AgentEntry, CustomSubagentConfig, SubAgentSource, SubagentListScope,
     SubagentQueryContext,
@@ -9,6 +10,7 @@ use crate::agentic::agents::registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy,
 };
 use crate::agentic::agents::Agent;
+use crate::service::config::types::AgentSubagentOverrideState;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -45,22 +47,21 @@ impl Agent for TestAgent {
     }
 }
 
-fn test_project_entry(id: &str, enabled: bool) -> AgentEntry {
+fn test_project_entry(id: &str, model: &str) -> AgentEntry {
     AgentEntry {
         category: AgentCategory::SubAgent,
         subagent_source: Some(SubAgentSource::Project),
         agent: Arc::new(TestAgent { id: id.to_string() }),
         visibility_policy: SubagentVisibilityPolicy::public(),
         custom_config: Some(CustomSubagentConfig {
-            enabled,
-            model: "fast".to_string(),
+            model: model.to_string(),
         }),
     }
 }
 
-fn insert_project_subagent(registry: &AgentRegistry, workspace: &Path, id: &str, enabled: bool) {
+fn insert_project_subagent(registry: &AgentRegistry, workspace: &Path, id: &str, model: &str) {
     let mut entries = HashMap::new();
-    entries.insert(id.to_string(), test_project_entry(id, enabled));
+    entries.insert(id.to_string(), test_project_entry(id, model));
     registry
         .write_project_subagents()
         .insert(workspace.to_path_buf(), entries);
@@ -248,22 +249,22 @@ fn project_subagent_config_lookup_is_workspace_scoped() {
     let registry = AgentRegistry::new();
     let workspace_a = PathBuf::from("D:/workspace/project-a");
     let workspace_b = PathBuf::from("D:/workspace/project-b");
-    insert_project_subagent(&registry, &workspace_a, "SharedReviewer", false);
-    insert_project_subagent(&registry, &workspace_b, "SharedReviewer", true);
+    insert_project_subagent(&registry, &workspace_a, "SharedReviewer", "fast");
+    insert_project_subagent(&registry, &workspace_b, "SharedReviewer", "primary");
 
     assert_eq!(
         registry
             .get_custom_subagent_config("SharedReviewer", Some(&workspace_a))
             .expect("workspace A config")
-            .enabled,
-        false
+            .model,
+        "fast"
     );
     assert_eq!(
         registry
             .get_custom_subagent_config("SharedReviewer", Some(&workspace_b))
             .expect("workspace B config")
-            .enabled,
-        true
+            .model,
+        "primary"
     );
     assert!(
         registry
@@ -297,8 +298,8 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
     );
 
     let mut project_entries = HashMap::new();
-    project_entries.insert("zProject".to_string(), test_project_entry("zProject", true));
-    project_entries.insert("AProject".to_string(), test_project_entry("AProject", true));
+    project_entries.insert("zProject".to_string(), test_project_entry("zProject", "fast"));
+    project_entries.insert("AProject".to_string(), test_project_entry("AProject", "fast"));
     registry
         .write_project_subagents()
         .insert(workspace.clone(), project_entries);
@@ -310,7 +311,6 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
         AgentCategory::SubAgent,
         Some(SubAgentSource::User),
         Some(CustomSubagentConfig {
-            enabled: true,
             model: "fast".to_string(),
         }),
     );
@@ -321,7 +321,6 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
         AgentCategory::SubAgent,
         Some(SubAgentSource::User),
         Some(CustomSubagentConfig {
-            enabled: true,
             model: "fast".to_string(),
         }),
     );
@@ -338,17 +337,8 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
     let ids: Vec<&str> = visible.iter().map(|agent| agent.id.as_str()).collect();
     let expected = vec![
         "ABuiltin",
-        "ComputerUse",
         "Explore",
         "FileFinder",
-        "ResearchSpecialist",
-        "ReviewArchitecture",
-        "ReviewBusinessLogic",
-        "ReviewFixer",
-        "ReviewFrontend",
-        "ReviewJudge",
-        "ReviewPerformance",
-        "ReviewSecurity",
         "zBuiltin",
         "AProject",
         "zProject",
@@ -357,4 +347,101 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
     ];
 
     assert_eq!(ids, expected);
+}
+
+#[tokio::test]
+async fn parent_subagent_overrides_follow_source_scopes() {
+    let registry = AgentRegistry::new();
+    let workspace = PathBuf::from("__test_workspace__/project-d");
+
+    registry.register_agent(
+        Arc::new(CustomSubagent::new(
+            "UserScout".to_string(),
+            "User scout".to_string(),
+            vec!["Read".to_string()],
+            "prompt".to_string(),
+            true,
+            "user-scout.md".to_string(),
+            CustomSubagentKind::User,
+        )),
+        AgentCategory::SubAgent,
+        Some(SubAgentSource::User),
+        Some(CustomSubagentConfig {
+            model: "fast".to_string(),
+        }),
+    );
+
+    let mut project_entries = HashMap::new();
+    project_entries.insert(
+        "ProjectScout".to_string(),
+        AgentEntry {
+            category: AgentCategory::SubAgent,
+            subagent_source: Some(SubAgentSource::Project),
+            agent: Arc::new(CustomSubagent::new(
+                "ProjectScout".to_string(),
+                "Project scout".to_string(),
+                vec!["Read".to_string()],
+                "prompt".to_string(),
+                true,
+                "project-scout.md".to_string(),
+                CustomSubagentKind::Project,
+            )),
+            visibility_policy: SubagentVisibilityPolicy::public(),
+            custom_config: Some(CustomSubagentConfig {
+                model: "fast".to_string(),
+            }),
+        },
+    );
+    registry
+        .write_project_subagents()
+        .insert(workspace.clone(), project_entries);
+
+    let builtin_query = SubagentQueryContext {
+        parent_agent_type: Some("agentic"),
+        workspace_root: Some(&workspace),
+        list_scope: SubagentListScope::RegistryManagement,
+        include_disabled: true,
+    };
+
+    let project_override_key = "project::bitfun::ProjectScout".to_string();
+    let user_override_key = "user::bitfun::UserScout".to_string();
+    let builtin_override_key = "builtin::builtin::Explore".to_string();
+
+    let mut project_parent_map = HashMap::new();
+    project_parent_map.insert(project_override_key.clone(), AgentSubagentOverrideState::Disabled);
+    project_parent_map.insert(user_override_key.clone(), AgentSubagentOverrideState::Disabled);
+    project_parent_map.insert(builtin_override_key.clone(), AgentSubagentOverrideState::Disabled);
+    let mut project_overrides = HashMap::new();
+    project_overrides.insert("agentic".to_string(), project_parent_map);
+
+    let mut user_parent_map = HashMap::new();
+    user_parent_map.insert(project_override_key.clone(), AgentSubagentOverrideState::Enabled);
+    user_parent_map.insert(user_override_key, AgentSubagentOverrideState::Disabled);
+    user_parent_map.insert(builtin_override_key, AgentSubagentOverrideState::Disabled);
+    let mut user_overrides = HashMap::new();
+    user_overrides.insert("agentic".to_string(), user_parent_map);
+
+    let visible = {
+        use crate::agentic::agents::registry::availability::resolve_availability;
+
+        let explore = registry
+            .find_agent_entry("Explore", Some(&workspace))
+            .expect("builtin entry");
+        let user = registry
+            .find_agent_entry("UserScout", Some(&workspace))
+            .expect("user entry");
+        let project = registry
+            .find_agent_entry("ProjectScout", Some(&workspace))
+            .expect("project entry");
+
+        (
+            resolve_availability(&explore, builtin_query.parent_agent_type, Some(&project_overrides), &user_overrides),
+            resolve_availability(&user, builtin_query.parent_agent_type, Some(&project_overrides), &user_overrides),
+            resolve_availability(&project, builtin_query.parent_agent_type, Some(&project_overrides), &user_overrides),
+        )
+    };
+
+    assert_eq!(visible.0.override_state, Some(AgentSubagentOverrideState::Disabled));
+    assert_eq!(visible.1.override_state, Some(AgentSubagentOverrideState::Disabled));
+    assert_eq!(visible.2.override_state, Some(AgentSubagentOverrideState::Disabled));
 }

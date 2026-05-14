@@ -8,6 +8,7 @@ use crate::agentic::agents::{Agent, AgentToolPolicyOverrides};
 use crate::agentic::agents::registry::visibility::{
     SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
+use crate::service::config::types::AgentSubagentOverrideState;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -44,11 +45,9 @@ impl SubAgentSource {
     }
 }
 
-/// mutable configuration for custom subagent (enabled, model will change, path/kind can be obtained by downcast)
+/// mutable configuration for custom subagent (model will change, path/kind can be obtained by downcast)
 #[derive(Clone, Debug)]
 pub struct CustomSubagentConfig {
-    /// whether enabled
-    pub enabled: bool,
     /// used model ID
     pub model: String,
 }
@@ -78,7 +77,7 @@ pub(crate) struct AgentEntry {
     pub(crate) subagent_source: Option<SubAgentSource>,
     pub(crate) agent: Arc<dyn Agent>,
     pub(crate) visibility_policy: SubagentVisibilityPolicy,
-    /// custom subagent configuration (enabled, model), only user/project subagent has value
+    /// custom subagent configuration (model), only user/project subagent has value
     pub(crate) custom_config: Option<CustomSubagentConfig>,
 }
 
@@ -86,6 +85,7 @@ pub(crate) struct AgentEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentInfo {
+    pub key: String,
     pub id: String,
     pub name: String,
     pub description: String,
@@ -93,8 +93,14 @@ pub struct AgentInfo {
     pub is_review: bool,
     pub tool_count: usize,
     pub default_tools: Vec<String>,
-    /// whether enabled (agentic always true, other from configuration)
-    pub enabled: bool,
+    #[serde(default)]
+    pub default_enabled: bool,
+    #[serde(default = "default_true")]
+    pub effective_enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub override_state: Option<AgentSubagentOverrideState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state_reason: Option<SubagentStateReason>,
     /// subagent source, only subagent has value, used for frontend display
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subagent_source: Option<SubAgentSource>,
@@ -106,16 +112,59 @@ pub struct AgentInfo {
     pub visibility: Option<SubagentVisibilitySummary>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SubagentStateReason {
+    BuiltinDefaultVisible,
+    BuiltinDefaultHidden,
+    CustomDefaultEnabled,
+    EnabledByProjectOverride,
+    DisabledByProjectOverride,
+    EnabledByUserOverride,
+    DisabledByUserOverride,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+pub fn subagent_key_for(
+    source: Option<SubAgentSource>,
+    agent: &dyn Agent,
+) -> Option<String> {
+    let source = source?;
+    let slot = match source {
+        SubAgentSource::Builtin => "builtin",
+        SubAgentSource::Project => {
+            let custom = agent.as_any().downcast_ref::<CustomSubagent>()?;
+            match custom.kind {
+                CustomSubagentKind::Project => "bitfun",
+                CustomSubagentKind::User => "bitfun",
+            }
+        }
+        SubAgentSource::User => {
+            let custom = agent.as_any().downcast_ref::<CustomSubagent>()?;
+            match custom.kind {
+                CustomSubagentKind::Project => "bitfun",
+                CustomSubagentKind::User => "bitfun",
+            }
+        }
+    };
+    let prefix = match source {
+        SubAgentSource::Builtin => "builtin",
+        SubAgentSource::Project => "project",
+        SubAgentSource::User => "user",
+    };
+    Some(format!("{prefix}::{slot}::{}", agent.id()))
+}
+
 impl AgentInfo {
     pub(crate) fn from_agent_entry(entry: &AgentEntry) -> Self {
         let agent = entry.agent.as_ref();
         let default_tools = agent.default_tools();
 
-        // get enabled and model from custom_config; path by downcast
-        let (enabled, model) = match &entry.custom_config {
-            Some(config) => (config.enabled, Some(config.model.clone())),
-            None => (true, None),
-        };
+        // get model from custom_config; path by downcast
+        let model = entry.custom_config.as_ref().map(|config| config.model.clone());
 
         // get path by downcast to CustomSubagent (only custom subagent has path)
         let path = agent
@@ -124,6 +173,7 @@ impl AgentInfo {
             .map(|c| c.path.clone());
 
         AgentInfo {
+            key: subagent_key_for(entry.subagent_source, agent).unwrap_or_else(|| agent.id().to_string()),
             id: agent.id().to_string(),
             name: agent.name().to_string(),
             description: agent.description().to_string(),
@@ -131,7 +181,10 @@ impl AgentInfo {
             is_review: is_review_agent_entry(entry),
             tool_count: default_tools.len(),
             default_tools,
-            enabled,
+            default_enabled: true,
+            effective_enabled: true,
+            override_state: None,
+            state_reason: None,
             subagent_source: entry.subagent_source,
             path,
             model,

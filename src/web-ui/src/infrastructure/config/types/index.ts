@@ -180,7 +180,7 @@ export interface AIConfig {
   agent_models: Record<string, string>;
   func_agent_models: Record<string, string>;
   mode_configs: Record<string, StoredModeConfigItem>;
-  subagent_configs: Record<string, SubAgentConfigItem>;
+  agent_subagent_overrides: AgentSubagentOverrideConfig;
   proxy: ProxyConfig;
   debug_mode_config: DebugModeConfig;
   request_timeout: number;
@@ -202,7 +202,6 @@ export interface StoredModeConfigItem {
   mode_id: string;
   added_tools: string[];
   removed_tools: string[];
-  enabled: boolean;
   disabled_user_skills?: string[];
   enabled_user_skills?: string[];
 }
@@ -210,15 +209,14 @@ export interface StoredModeConfigItem {
 export interface ModeConfigItem {
   mode_id: string;
   enabled_tools: string[];
-  enabled: boolean;
   default_tools: string[];
   disabled_user_skills?: string[];
   enabled_user_skills?: string[];
 }
 
-export interface SubAgentConfigItem {
-  enabled: boolean;
-}
+export type AgentSubagentOverrideState = 'enabled' | 'disabled';
+export type ParentSubagentOverrideConfig = Record<string, AgentSubagentOverrideState>;
+export type AgentSubagentOverrideConfig = Record<string, ParentSubagentOverrideConfig>;
 
 export type SkillLevel = 'user' | 'project';
 

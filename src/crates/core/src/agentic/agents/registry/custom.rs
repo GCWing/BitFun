@@ -1,13 +1,19 @@
 use super::types::AgentEntry;
 use super::custom_loader::CustomSubagentLoader;
+use super::availability::{prune_override_config, resolve_default_enabled, set_override_state};
+use super::support::{
+    get_subagent_overrides, load_project_subagent_overrides_local, save_project_subagent_overrides_local,
+};
 use super::{CustomSubagentDetail, AgentRegistry};
 use crate::agentic::agents::{
     Agent, AgentCategory, CustomSubagentConfig, SubAgentSource,
 };
 use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
+use crate::agentic::agents::registry::types::subagent_key_for;
 use crate::agentic::agents::registry::visibility::SubagentVisibilityPolicy;
 use crate::agentic::tools::{get_all_registered_tool_names, get_readonly_registered_tool_names};
 use crate::service::config::global::GlobalConfigManager;
+use crate::service::config::types::AgentSubagentOverrideState;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
 use std::collections::HashMap;
@@ -36,7 +42,6 @@ impl AgentRegistry {
             Self::validate_custom_subagent(&mut sub, &valid_tools, &readonly_tools, &valid_models);
             // create CustomSubagentConfig cache configuration information
             let custom_config = CustomSubagentConfig {
-                enabled: sub.enabled,
                 model: sub.model.clone(),
             };
             let entry = AgentEntry {
@@ -216,13 +221,12 @@ impl AgentRegistry {
     pub fn update_and_save_custom_subagent_config(
         &self,
         agent_id: &str,
-        enabled: Option<bool>,
         model: Option<String>,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<()> {
         let mut map = self.write_agents();
         if let Some(entry) = map.get_mut(agent_id) {
-            return Self::update_custom_entry_config(agent_id, entry, enabled, model);
+            return Self::update_custom_entry_config(agent_id, entry, model);
         }
         drop(map);
 
@@ -243,13 +247,12 @@ impl AgentRegistry {
             .get_mut(agent_id)
             .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
 
-        Self::update_custom_entry_config(agent_id, entry, enabled, model)
+        Self::update_custom_entry_config(agent_id, entry, model)
     }
 
     fn update_custom_entry_config(
         agent_id: &str,
         entry: &mut AgentEntry,
-        enabled: Option<bool>,
         model: Option<String>,
     ) -> BitFunResult<()> {
         if entry.category != AgentCategory::SubAgent {
@@ -263,8 +266,7 @@ impl AgentRegistry {
             BitFunError::agent(format!("Subagent '{}' is not a custom subagent", agent_id))
         })?;
 
-        // calculate new enabled and model values
-        let new_enabled = enabled.unwrap_or(config.enabled);
+        // calculate new model value
         let new_model = model.unwrap_or_else(|| config.model.clone());
 
         // get CustomSubagent reference by as_any() downcast
@@ -280,10 +282,9 @@ impl AgentRegistry {
             })?;
 
         // save file with data in memory (no need to re-read)
-        custom_subagent.save_to_file(Some(new_enabled), Some(&new_model))?;
+        custom_subagent.save_to_file(Some(&new_model))?;
 
         // update memory cache
-        config.enabled = new_enabled;
         config.model = new_model;
 
         Ok(())
@@ -330,10 +331,11 @@ impl AgentRegistry {
                     agent_id
                 ))
             })?;
-        let (enabled, model) = match &entry.custom_config {
-            Some(c) => (c.enabled, c.model.clone()),
-            None => (custom.enabled, custom.model.clone()),
+        let model = match &entry.custom_config {
+            Some(c) => c.model.clone(),
+            None => custom.model.clone(),
         };
+        let enabled = resolve_default_enabled(&entry, None);
         let level = match custom.kind {
             CustomSubagentKind::User => "user",
             CustomSubagentKind::Project => "project",
@@ -419,7 +421,6 @@ impl AgentRegistry {
             old.kind,
         );
         new_subagent.review = review;
-        new_subagent.enabled = old.enabled;
         new_subagent.model = old.model.clone();
 
         let valid_models = Self::get_valid_model_ids().await;
@@ -430,7 +431,7 @@ impl AgentRegistry {
             &valid_models,
         );
 
-        new_subagent.save_to_file(None, None)?;
+        new_subagent.save_to_file(None)?;
 
         self.replace_custom_subagent_entry(agent_id, workspace_root, new_subagent)
     }
@@ -459,7 +460,6 @@ impl AgentRegistry {
             }
             let subagent_source = old_entry.subagent_source;
             let cfg = CustomSubagentConfig {
-                enabled: new_subagent.enabled,
                 model: new_subagent.model.clone(),
             };
             map.insert(
@@ -499,7 +499,6 @@ impl AgentRegistry {
         }
         let subagent_source = old_entry.subagent_source;
         let cfg = CustomSubagentConfig {
-            enabled: new_subagent.enabled,
             model: new_subagent.model.clone(),
         };
         entries.insert(
@@ -565,5 +564,76 @@ impl AgentRegistry {
             "Subagent not found: {}",
             agent_id
         )))
+    }
+
+    pub async fn update_subagent_override(
+        &self,
+        parent_agent_type: &str,
+        agent_id: &str,
+        enabled: bool,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<()> {
+        let parent_agent_type = parent_agent_type.trim();
+        if parent_agent_type.is_empty() {
+            return Err(BitFunError::agent(
+                "parent_agent_type is required to update subagent availability".to_string(),
+            ));
+        }
+
+        let entry = self
+            .find_agent_entry(agent_id, workspace_root)
+            .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
+        if entry.category != AgentCategory::SubAgent {
+            return Err(BitFunError::agent(format!(
+                "Agent '{}' is not a subagent",
+                agent_id
+            )));
+        }
+
+        let subagent_key = subagent_key_for(entry.subagent_source, entry.agent.as_ref()).ok_or_else(
+            || BitFunError::agent(format!("Failed to resolve subagent key for '{}'", agent_id)),
+        )?;
+        let default_enabled = resolve_default_enabled(&entry, Some(parent_agent_type));
+        let state = if enabled {
+            AgentSubagentOverrideState::Enabled
+        } else {
+            AgentSubagentOverrideState::Disabled
+        };
+
+        match entry.subagent_source {
+            Some(SubAgentSource::Project) => {
+                let workspace_root = workspace_root.ok_or_else(|| {
+                    BitFunError::agent(format!(
+                        "workspace_path is required to update project subagent availability for '{}'",
+                        agent_id
+                    ))
+                })?;
+                let mut project_overrides = load_project_subagent_overrides_local(workspace_root).await?;
+                if enabled == default_enabled {
+                    prune_override_config(&mut project_overrides, parent_agent_type, &subagent_key);
+                } else {
+                    set_override_state(&mut project_overrides, parent_agent_type, &subagent_key, state);
+                }
+                save_project_subagent_overrides_local(workspace_root, &project_overrides).await?;
+                Ok(())
+            }
+            Some(SubAgentSource::Builtin) | Some(SubAgentSource::User) => {
+                let config_service = GlobalConfigManager::get_service().await?;
+                let mut user_overrides = get_subagent_overrides().await;
+                if enabled == default_enabled {
+                    prune_override_config(&mut user_overrides, parent_agent_type, &subagent_key);
+                } else {
+                    set_override_state(&mut user_overrides, parent_agent_type, &subagent_key, state);
+                }
+                config_service
+                    .set_config("ai.agent_subagent_overrides", &user_overrides)
+                    .await?;
+                Ok(())
+            }
+            None => Err(BitFunError::agent(format!(
+                "Agent '{}' has no subagent source",
+                agent_id
+            ))),
+        }
     }
 }

@@ -2,7 +2,7 @@ use super::types::AgentEntry;
 use super::visibility::SubagentVisibilityPolicy;
 use super::AgentRegistry;
 use crate::agentic::agents::{
-    Agent, AgentCategory, CustomSubagentConfig, SubAgentSource,
+    Agent, AgentCategory, SubAgentSource,
 };
 use crate::agentic::agents::registry::catalog::builtin_agent_specs;
 use log::error;
@@ -84,7 +84,7 @@ impl AgentRegistry {
         agent: Arc<dyn Agent>,
         category: AgentCategory,
         subagent_source: Option<SubAgentSource>,
-        custom_config: Option<CustomSubagentConfig>,
+        custom_config: Option<super::types::CustomSubagentConfig>,
     ) {
         let id = agent.id().to_string();
         let visibility_policy = SubagentVisibilityPolicy::public();

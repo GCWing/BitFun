@@ -225,27 +225,6 @@ export class ConfigAPI {
     }
   }
 
-  
-
-   
-  async getSubagentConfigs(): Promise<Record<string, { enabled: boolean }>> {
-    try {
-      return await api.invoke('get_subagent_configs');
-    } catch (error) {
-      throw createTauriCommandError('get_subagent_configs', error);
-    }
-  }
-
-   
-  async setSubagentConfig(subagentId: string, enabled: boolean): Promise<string> {
-    try {
-      return await api.invoke('set_subagent_config', { subagentId, enabled });
-    } catch (error) {
-      throw createTauriCommandError('set_subagent_config', error, { subagentId, enabled });
-    }
-  }
-
-   
   async deleteSubagent(subagentId: string): Promise<void> {
     try {
       await api.invoke('delete_subagent', {

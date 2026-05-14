@@ -39,7 +39,7 @@ pub use registry::catalog::{
 };
 pub use registry::types::{
     AgentCategory, AgentInfo, AgentToolPolicy, CustomSubagentConfig, SubAgentSource,
-    SubagentListScope, SubagentQueryContext,
+    SubagentListScope, SubagentQueryContext, SubagentStateReason,
 };
 pub use registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy, SubagentVisibilitySummary,

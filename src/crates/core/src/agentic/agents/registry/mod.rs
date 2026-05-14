@@ -1,4 +1,5 @@
 pub mod types;
+mod availability;
 mod builtin;
 pub mod catalog;
 mod custom;

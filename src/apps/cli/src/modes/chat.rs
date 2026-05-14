@@ -1869,10 +1869,10 @@ impl ChatMode {
         chat_view.set_status(Some(format!("Theme set to: {}", theme.id)));
     }
 
-    fn get_enabled_mode_agents(&self, rt_handle: &tokio::runtime::Handle) -> Vec<AgentInfo> {
+    fn get_mode_agents(&self, rt_handle: &tokio::runtime::Handle) -> Vec<AgentInfo> {
         let registry = get_agent_registry();
         let modes = tokio::task::block_in_place(|| rt_handle.block_on(registry.get_modes_info()));
-        modes.into_iter().filter(|mode| mode.enabled).collect()
+        modes
     }
 
     fn cycle_agent(
@@ -1900,7 +1900,7 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let modes = self.get_enabled_mode_agents(rt_handle);
+        let modes = self.get_mode_agents(rt_handle);
         if modes.len() <= 1 {
             return;
         }
@@ -2063,7 +2063,7 @@ impl ChatMode {
     ) {
         let selected_id = selected.id.clone();
         let selected_display_name = format!("{} / {}", selected.model_name, selected.name);
-        let modes = self.get_enabled_mode_agents(rt_handle);
+        let modes = self.get_mode_agents(rt_handle);
 
         let success = tokio::task::block_in_place(|| {
             rt_handle.block_on(async {
@@ -2119,7 +2119,7 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let modes = self.get_enabled_mode_agents(rt_handle);
+        let modes = self.get_mode_agents(rt_handle);
         if modes.is_empty() {
             chat_state.add_system_message("No mode agents available".to_string());
             return;
