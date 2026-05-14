@@ -207,6 +207,18 @@ impl ExecMode {
                 }
 
                 match event {
+                    AgenticEvent::ModelRoundStarted {
+                        model_id: Some(model_id),
+                        ..
+                    }
+                    | AgenticEvent::ModelRoundCompleted {
+                        model_id: Some(model_id),
+                        ..
+                    }
+                    | AgenticEvent::TokenUsageUpdated { model_id, .. } => {
+                        self.record_resolved_model_id(&session_id, model_id).await;
+                    }
+
                     AgenticEvent::TextChunk { text, .. } => {
                         self.emit(json!({
                             "type": "text",
@@ -366,6 +378,27 @@ impl ExecMode {
                     _ => {}
                 }
             }
+        }
+    }
+
+    async fn record_resolved_model_id(&self, session_id: &str, model_id: &str) {
+        let trimmed = model_id.trim();
+        if trimmed.is_empty() || matches!(trimmed, "auto" | "default" | "primary" | "fast") {
+            return;
+        }
+
+        if let Err(error) = self
+            .agent
+            .coordinator()
+            .update_session_model(session_id, trimmed)
+            .await
+        {
+            tracing::debug!(
+                "Failed to persist resolved CLI model id: session_id={}, model_id={}, error={}",
+                session_id,
+                trimmed,
+                error
+            );
         }
     }
 

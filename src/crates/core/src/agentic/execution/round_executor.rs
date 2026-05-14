@@ -472,6 +472,23 @@ impl RoundExecutor {
                 usage.total_token_count,
                 is_subagent
             );
+            info!(
+                "Model call token stats: session_id={}, turn_id={}, round_id={}, round_index={}, attempt={}, model_id={}, prompt_tokens={}, completion_tokens={}, total_tokens={}, cached_tokens={}, cached_tokens_available={}",
+                context.session_id,
+                context.dialog_turn_id,
+                round_id,
+                context.round_number,
+                attempt_index + 1,
+                context.model_name,
+                usage.prompt_token_count,
+                usage.candidates_token_count,
+                usage.total_token_count,
+                usage
+                    .cached_content_token_count
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| "missing".to_string()),
+                usage.cached_content_token_count.is_some()
+            );
 
             self.emit_event(
                 AgenticEvent::TokenUsageUpdated {
