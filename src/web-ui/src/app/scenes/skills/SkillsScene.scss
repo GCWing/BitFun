@@ -1064,6 +1064,12 @@
   &__detail-link {
     text-decoration: underline;
     text-underline-offset: 2px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
   }
 
   &__path-input {

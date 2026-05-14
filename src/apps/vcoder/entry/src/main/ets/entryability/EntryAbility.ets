@@ -207,7 +207,7 @@ export default class EntryAbility extends RustAbility {
       let shareData: systemShare.SharedData = new systemShare.SharedData({
         utd: uniformTypeDescriptor.UniformDataType.HYPERLINK,
         content,
-        title: "Bitfun",
+        title: "BitFun",
         description: "Phone",
       });
       sharableTable.share(shareData)

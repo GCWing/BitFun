@@ -15,6 +15,13 @@ import {workspaceAPI} from "@/infrastructure";
 
 const log = createLogger('SkillsConfig');
 
+function formatDisplayPath(path: string): string {
+  return path.replace(
+    '/data/storage/el2/base/files/bitfun',
+    '/storage/Users/currentUser/appdata/el2/base/com.huawei.BitFun/files/bitfun'
+  );
+}
+
 const SkillsConfig: React.FC = () => {
   const { t } = useTranslation('settings/skills');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -299,7 +306,7 @@ const SkillsConfig: React.FC = () => {
         <div className="bitfun-collection-details__field">{skill.description}</div>
         <div className="bitfun-collection-details__meta">
           <span className="bitfun-collection-details__label">{t('list.item.pathLabel')}</span>
-          <code className="bitfun-skills-config__path-value">{skill.path}</code>
+            <code className="bitfun-skills-config__path-value">{formatDisplayPath(skill.path)}</code>
         </div>
       </>
     );
