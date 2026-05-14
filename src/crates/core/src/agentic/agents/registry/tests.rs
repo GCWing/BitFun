@@ -184,7 +184,9 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
         })
         .await;
     assert!(agentic_visible.iter().any(|agent| agent.id == "Explore"));
-    assert!(!agentic_visible.iter().any(|agent| agent.id == "ReviewSecurity"));
+    assert!(!agentic_visible
+        .iter()
+        .any(|agent| agent.id == "ReviewSecurity"));
     assert!(!agentic_visible
         .iter()
         .any(|agent| agent.id == "ResearchSpecialist"));

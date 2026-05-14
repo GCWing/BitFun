@@ -62,7 +62,8 @@ impl AgentRegistry {
                 let allowed_tool_set: HashSet<&str> =
                     allowed_tools.iter().map(String::as_str).collect();
                 let mut exposure_overrides = entry.agent.tool_exposure_overrides().clone();
-                exposure_overrides.retain(|tool_name, _| allowed_tool_set.contains(tool_name.as_str()));
+                exposure_overrides
+                    .retain(|tool_name, _| allowed_tool_set.contains(tool_name.as_str()));
 
                 AgentToolPolicy {
                     allowed_tools,
@@ -74,7 +75,8 @@ impl AgentRegistry {
                 let allowed_tool_set: HashSet<&str> =
                     allowed_tools.iter().map(String::as_str).collect();
                 let mut exposure_overrides = entry.agent.tool_exposure_overrides().clone();
-                exposure_overrides.retain(|tool_name, _| allowed_tool_set.contains(tool_name.as_str()));
+                exposure_overrides
+                    .retain(|tool_name, _| allowed_tool_set.contains(tool_name.as_str()));
 
                 AgentToolPolicy {
                     allowed_tools,
@@ -173,7 +175,10 @@ impl AgentRegistry {
         None
     }
 
-    fn entry_is_enabled(entry: &AgentEntry, subagent_configs: &HashMap<String, SubAgentConfig>) -> bool {
+    fn entry_is_enabled(
+        entry: &AgentEntry,
+        subagent_configs: &HashMap<String, SubAgentConfig>,
+    ) -> bool {
         match &entry.custom_config {
             Some(config) => config.enabled,
             None => subagent_configs
@@ -197,11 +202,12 @@ impl AgentRegistry {
         }
 
         match query.list_scope {
-            SubagentListScope::RegistryManagement => entry.visibility_policy.show_in_global_registry,
-            SubagentListScope::TaskVisible => {
-                entry.visibility_policy
-                    .can_access_from_parent(query.parent_agent_type)
+            SubagentListScope::RegistryManagement => {
+                entry.visibility_policy.show_in_global_registry
             }
+            SubagentListScope::TaskVisible => entry
+                .visibility_policy
+                .can_access_from_parent(query.parent_agent_type),
         }
     }
 
@@ -251,7 +257,9 @@ impl AgentRegistry {
                 result.extend(
                     project_entries
                         .values()
-                        .filter(|entry| Self::entry_is_visible_for_query(entry, query, &subagent_configs))
+                        .filter(|entry| {
+                            Self::entry_is_visible_for_query(entry, query, &subagent_configs)
+                        })
                         .map(|entry| {
                             let mut info = AgentInfo::from_agent_entry(entry);
                             info.enabled = Self::entry_is_enabled(entry, &subagent_configs);
@@ -278,13 +286,16 @@ impl AgentRegistry {
         let subagent_configs = get_subagent_configs().await;
 
         if let Some(workspace_root) = query.workspace_root {
-            let is_project_cache_loaded = self.read_project_subagents().contains_key(workspace_root);
+            let is_project_cache_loaded =
+                self.read_project_subagents().contains_key(workspace_root);
             if !is_project_cache_loaded {
                 self.load_custom_subagents(workspace_root).await;
             }
         }
 
         self.find_agent_entry(subagent_id, workspace_root)
-            .is_some_and(|entry| Self::entry_is_visible_for_query(&entry, &query, &subagent_configs))
+            .is_some_and(|entry| {
+                Self::entry_is_visible_for_query(&entry, &query, &subagent_configs)
+            })
     }
 }

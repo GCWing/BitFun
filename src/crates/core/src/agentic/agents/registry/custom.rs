@@ -1,11 +1,9 @@
-use super::types::AgentEntry;
 use super::custom_loader::CustomSubagentLoader;
-use super::{CustomSubagentDetail, AgentRegistry};
-use crate::agentic::agents::{
-    Agent, AgentCategory, CustomSubagentConfig, SubAgentSource,
-};
+use super::types::AgentEntry;
+use super::{AgentRegistry, CustomSubagentDetail};
 use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
 use crate::agentic::agents::registry::visibility::SubagentVisibilityPolicy;
+use crate::agentic::agents::{Agent, AgentCategory, CustomSubagentConfig, SubAgentSource};
 use crate::agentic::tools::{get_all_registered_tool_names, get_readonly_registered_tool_names};
 use crate::service::config::global::GlobalConfigManager;
 use crate::util::errors::{BitFunError, BitFunResult};

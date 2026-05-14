@@ -20,7 +20,9 @@ pub use bitfun_agent_tools::input_validator;
 pub use framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 pub use image_context::{ImageContextData, ImageContextProvider, ImageContextProviderRef};
 pub use input_validator::InputValidator;
-pub use manifest_resolver::{resolve_tool_manifest, resolve_visible_tools, ResolvedToolManifest, ResolvedVisibleTools};
+pub use manifest_resolver::{
+    resolve_tool_manifest, resolve_visible_tools, ResolvedToolManifest, ResolvedVisibleTools,
+};
 pub use pipeline::*;
 pub use registry::{
     create_tool_registry, get_all_registered_tool_names, get_all_registered_tools, get_all_tools,

@@ -1,12 +1,12 @@
 use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
+use crate::agentic::agents::registry::visibility::{
+    SubagentVisibilityPolicy, SubagentVisibilitySummary,
+};
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides};
 use crate::agentic::deep_review_policy::{
     REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
     REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE,
     REVIEW_JUDGE_AGENT_TYPE,
-};
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides};
-use crate::agentic::agents::registry::visibility::{
-    SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
 use serde::{Deserialize, Serialize};
 use std::path::Path;

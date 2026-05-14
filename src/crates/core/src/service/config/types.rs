@@ -7,7 +7,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-fn deserialize_mode_configs<'de, D>(deserializer: D) -> Result<HashMap<String, ModeConfig>, D::Error>
+fn deserialize_mode_configs<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<String, ModeConfig>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -1981,10 +1983,7 @@ mod tests {
         assert!(!review_team.auto_fix_enabled);
         assert_eq!(review_team.strategy_level, "normal");
         assert!(review_team.member_strategy_overrides.is_empty());
-        assert_eq!(
-            config.review_team_rate_limit_status,
-            serde_json::json!({})
-        );
+        assert_eq!(config.review_team_rate_limit_status, serde_json::json!({}));
         assert!(config.review_team_project_strategy_overrides.is_empty());
     }
 
@@ -2162,8 +2161,8 @@ mod tests {
             Some(&"quick".to_string())
         );
 
-        let serialized = serde_json::to_value(&config)
-            .expect("review team auxiliary config should serialize");
+        let serialized =
+            serde_json::to_value(&config).expect("review team auxiliary config should serialize");
         assert!(serialized["review_teams"]["rate_limit_status"].is_null());
         assert_eq!(
             serialized["review_team_project_strategy_overrides"]["d:/workspace/repo"],

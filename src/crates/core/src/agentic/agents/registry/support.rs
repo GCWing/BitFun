@@ -33,7 +33,10 @@ pub(super) fn merge_dynamic_mcp_tools(
             continue;
         }
 
-        if configured_tools.iter().any(|existing| existing == tool_name) {
+        if configured_tools
+            .iter()
+            .any(|existing| existing == tool_name)
+        {
             continue;
         }
 

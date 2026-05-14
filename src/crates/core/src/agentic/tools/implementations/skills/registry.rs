@@ -182,7 +182,9 @@ fn sort_resolved_skill_candidates(mut resolved: Vec<SkillCandidate>) -> Vec<Skil
     resolved
 }
 
-fn sort_skill_candidates_for_resolution(mut candidates: Vec<SkillCandidate>) -> Vec<SkillCandidate> {
+fn sort_skill_candidates_for_resolution(
+    mut candidates: Vec<SkillCandidate>,
+) -> Vec<SkillCandidate> {
     candidates.sort_by(|a, b| {
         skill_candidate_precedence(a)
             .cmp(&skill_candidate_precedence(b))
@@ -206,7 +208,8 @@ fn resolve_visible_skills(candidates: Vec<SkillCandidate>) -> Vec<SkillInfo> {
     for candidate in sort_skill_candidates_for_resolution(candidates) {
         match by_name.get(&candidate.info.name) {
             Some(existing)
-                if skill_candidate_precedence(existing) <= skill_candidate_precedence(&candidate) => {}
+                if skill_candidate_precedence(existing)
+                    <= skill_candidate_precedence(&candidate) => {}
             _ => {
                 by_name.insert(candidate.info.name.clone(), candidate);
             }

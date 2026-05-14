@@ -111,14 +111,17 @@ pub async fn resolve_tool_manifest(
 ) -> ResolvedToolManifest {
     let visible_tools = resolve_visible_tools(allowed_tools, exposure_overrides, context).await;
 
-    let mut tool_definitions =
-        Vec::with_capacity(visible_tools.expanded_tools.len() + visible_tools.collapsed_tools.len());
+    let mut tool_definitions = Vec::with_capacity(
+        visible_tools.expanded_tools.len() + visible_tools.collapsed_tools.len(),
+    );
     for tool in &visible_tools.expanded_tools {
         let description = tool
             .description_with_context(Some(context))
             .await
             .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
-        let parameters = tool.input_schema_for_model_with_context(Some(context)).await;
+        let parameters = tool
+            .input_schema_for_model_with_context(Some(context))
+            .await;
 
         tool_definitions.push(ToolDefinition {
             name: tool.name().to_string(),

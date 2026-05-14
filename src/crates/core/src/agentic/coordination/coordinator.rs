@@ -3578,7 +3578,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     /// Release resources occupied by subagent session (sandbox, etc.) and delete session
     async fn cleanup_subagent_resources(&self, session_id: &str) -> BitFunResult<()> {
         let cleanup_started_at = Instant::now();
-        debug!("Starting subagent resource cleanup: session_id={}", session_id);
+        debug!(
+            "Starting subagent resource cleanup: session_id={}",
+            session_id
+        );
 
         // Clean up snapshot system resources
         if let Some(workspace_path) = self

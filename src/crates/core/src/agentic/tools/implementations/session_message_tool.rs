@@ -181,8 +181,7 @@ When overriding an existing session's agent_type, only switching between "agenti
     }
 
     fn short_description(&self) -> String {
-        "Send a message to another agent session and receive the result asynchronously."
-            .to_string()
+        "Send a message to another agent session and receive the result asynchronously.".to_string()
     }
 
     fn default_exposure(&self) -> ToolExposure {

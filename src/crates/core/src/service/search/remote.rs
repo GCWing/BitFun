@@ -8,12 +8,11 @@ use crate::service::remote_ssh::{
     normalize_remote_workspace_path, RemoteFileService, SSHConnectionManager,
 };
 use crate::service::search::flashgrep::{
-    drain_content_length_messages, ClientCapabilities, ClientInfo, ConsistencyMode, GlobOutcome,
-    GlobParams, GlobRequest, InitializeParams, OpenRepoParams, PathScope, ProtocolClient,
-    QuerySpec, RefreshPolicyConfig, RepoConfig, RepoRef, RepoStatus, Request, Response,
-    SearchBackend, SearchModeConfig, SearchOutcome, SearchParams, SearchRequest, SearchResults,
-    TaskRef, TaskStatus,
-    FLASHGREP_LOG_TARGET, log_flashgrep_stderr_line_with_context,
+    drain_content_length_messages, log_flashgrep_stderr_line_with_context, ClientCapabilities,
+    ClientInfo, ConsistencyMode, GlobOutcome, GlobParams, GlobRequest, InitializeParams,
+    OpenRepoParams, PathScope, ProtocolClient, QuerySpec, RefreshPolicyConfig, RepoConfig, RepoRef,
+    RepoStatus, Request, Response, SearchBackend, SearchModeConfig, SearchOutcome, SearchParams,
+    SearchRequest, SearchResults, TaskRef, TaskStatus, FLASHGREP_LOG_TARGET,
 };
 use crate::service::search::flashgrep::{error::AppError, FlashgrepRepoSession};
 use crate::service::search::{

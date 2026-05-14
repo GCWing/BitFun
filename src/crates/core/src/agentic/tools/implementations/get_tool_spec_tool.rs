@@ -4,8 +4,8 @@ use crate::agentic::agents::get_agent_registry;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::resolve_visible_tools;
 use crate::agentic::tools::registry::get_global_tool_registry;
+use crate::agentic::tools::resolve_visible_tools;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use log::debug;
@@ -136,7 +136,9 @@ Example:
             .description_with_context(Some(context))
             .await
             .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
-        let input_schema = tool.input_schema_for_model_with_context(Some(context)).await;
+        let input_schema = tool
+            .input_schema_for_model_with_context(Some(context))
+            .await;
 
         Ok(json!({
             "tool_name": tool_name,
@@ -358,10 +360,7 @@ mod tests {
             .await;
 
         assert!(description.contains(&format!("- {}: Concise catalog entry.", tool_name)));
-        assert!(!description.contains(&format!(
-            "- {}: Verbose description first line.",
-            tool_name
-        )));
+        assert!(!description.contains(&format!("- {}: Verbose description first line.", tool_name)));
     }
 
     #[tokio::test]
