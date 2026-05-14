@@ -43,44 +43,18 @@ describe('findReusableEmptySessionId', () => {
     resetStore();
   });
 
-  it('does not reuse an empty ACP session for a new code session', () => {
-    const workspace = createWorkspace();
-    const acpSession = createSession({
-      sessionId: 'acp-session',
-      config: { agentType: 'acp:codex' },
-      mode: 'acp:codex',
-      lastActiveAt: 10,
-    });
-
-    flowChatStore.setState(() => ({
-      sessions: new Map([[acpSession.sessionId, acpSession]]),
-      activeSessionId: acpSession.sessionId,
-    }));
-
-    expect(findReusableEmptySessionId(workspace, 'agentic')).toBeNull();
-  });
-
-  it('still reuses a matching empty code session when ACP sessions also exist', () => {
+  it('never reuses an existing session', () => {
     const workspace = createWorkspace();
     const codeSession = createSession({
       sessionId: 'code-session',
       lastActiveAt: 5,
     });
-    const acpSession = createSession({
-      sessionId: 'acp-session',
-      config: { agentType: 'acp:codex' },
-      mode: 'acp:codex',
-      lastActiveAt: 20,
-    });
 
     flowChatStore.setState(() => ({
-      sessions: new Map([
-        [codeSession.sessionId, codeSession],
-        [acpSession.sessionId, acpSession],
-      ]),
-      activeSessionId: acpSession.sessionId,
+      sessions: new Map([[codeSession.sessionId, codeSession]]),
+      activeSessionId: codeSession.sessionId,
     }));
 
-    expect(findReusableEmptySessionId(workspace, 'agentic')).toBe(codeSession.sessionId);
+    expect(findReusableEmptySessionId(workspace, 'agentic')).toBeNull();
   });
 });
