@@ -18,6 +18,7 @@ import {
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
 import {
+  DEFAULT_AGENT_COMPANION_PET,
   deleteAgentCompanionPetPackage,
   importAgentCompanionPetPackage,
   listAgentCompanionPets,
@@ -68,8 +69,6 @@ type BrowserControlBrowserOption = {
 };
 
 const DEFAULT_BROWSER_CONTROL_BROWSER = 'default';
-
-const DEFAULT_COMPANION_PET_VALUE = '__default_panda__';
 
 export type SessionSettingsPanelVariant = 'personalization' | 'permissions';
 
@@ -311,7 +310,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       const refreshed = await listAgentCompanionPets();
       setCompanionPets(refreshed);
       if (settings.agent_companion_pet?.packagePath === pet.packagePath) {
-        const next = { ...settings, agent_companion_pet: null };
+        const next = { ...settings, agent_companion_pet: DEFAULT_AGENT_COMPANION_PET };
         setSettings(next);
         await aiExperienceConfigService.saveSettings(next);
       }
@@ -324,21 +323,14 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     }
   };
 
-  const companionPetOptions: SelectOption[] = [
-    {
-      value: DEFAULT_COMPANION_PET_VALUE,
-      label: t('features.agentCompanion.defaultPet'),
-      group: t('features.agentCompanion.groupBuiltin'),
-    },
-    ...companionPets.map(pet => ({
-      value: pet.packagePath,
-      label: pet.displayName,
-      description: pet.description ?? undefined,
-      group: pet.source === 'preset'
-        ? t('features.agentCompanion.groupPreset')
-        : t('features.agentCompanion.groupImported'),
-    })),
-  ];
+  const companionPetOptions: SelectOption[] = companionPets.map(pet => ({
+    value: pet.packagePath,
+    label: pet.displayName,
+    description: pet.description ?? undefined,
+    group: pet.source === 'preset'
+      ? t('features.agentCompanion.groupPreset')
+      : t('features.agentCompanion.groupImported'),
+  }));
 
   const companionDisplayModeOptions: SelectOption[] = [
     {
@@ -356,18 +348,13 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const selectedCompanionPetPackage = settings?.agent_companion_pet
     ? companionPets.find(pet => pet.packagePath === settings.agent_companion_pet?.packagePath) ?? null
     : null;
-  const selectedCompanionPet = selectedCompanionPetPackage ?? settings?.agent_companion_pet ?? null;
-  const selectedCompanionPetValue = settings?.agent_companion_pet?.packagePath ?? DEFAULT_COMPANION_PET_VALUE;
+  const selectedCompanionPet = selectedCompanionPetPackage ?? settings?.agent_companion_pet ?? DEFAULT_AGENT_COMPANION_PET;
+  const selectedCompanionPetValue = selectedCompanionPet.packagePath;
   const selectedCompanionPetOption = companionPetOptions.find(option => option.value === selectedCompanionPetValue)
     ?? companionPetOptions[0];
 
   const handleCompanionPetChange = async (value: string | number | (string | number)[]) => {
     const selectedValue = String(Array.isArray(value) ? value[0] : value);
-    if (selectedValue === DEFAULT_COMPANION_PET_VALUE) {
-      await updateSetting('agent_companion_pet', null);
-      setCompanionPetListExpanded(false);
-      return;
-    }
     const pet = companionPets.find(item => item.packagePath === selectedValue);
     if (!pet) return;
     await updateSetting('agent_companion_pet', {
@@ -922,7 +909,11 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                                     style={{ '--bitfun-pet-preview-src': `url("${pet.previewSrc}")` } as React.CSSProperties}
                                   />
                                 ) : (
-                                  <ChatInputPixelPet mood="rest" className="bitfun-func-agent-config__pet-select-panda" />
+                                  <ChatInputPixelPet
+                                    mood="rest"
+                                    pet={DEFAULT_AGENT_COMPANION_PET}
+                                    className="bitfun-func-agent-config__pet-select-panda"
+                                  />
                                 )}
                               </span>
                               <span className="bitfun-func-agent-config__pet-select-text">

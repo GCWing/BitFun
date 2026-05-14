@@ -1,6 +1,7 @@
  
 
 import { configManager } from './ConfigManager';
+import { DEFAULT_AGENT_COMPANION_PET } from './AgentCompanionPetService';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('AIExperienceConfig');
@@ -62,9 +63,19 @@ const defaultSettings: AIExperienceSettings = {
   enable_visual_mode: false,
   enable_agent_companion: true,
   agent_companion_display_mode: 'desktop',
+  agent_companion_pet: DEFAULT_AGENT_COMPANION_PET,
   enable_workspace_search: false,
   quick_actions: DEFAULT_QUICK_ACTIONS,
 };
+
+function normalizeSettings(settings: AIExperienceSettings | null | undefined): AIExperienceSettings {
+  const merged = { ...defaultSettings, ...settings };
+  // Legacy configs used null to mean the built-in SVG panda. Panda is now the default preset.
+  if (!merged.agent_companion_pet) {
+    merged.agent_companion_pet = DEFAULT_AGENT_COMPANION_PET;
+  }
+  return merged;
+}
 
  
 export class AIExperienceConfigService {
@@ -96,7 +107,7 @@ export class AIExperienceConfigService {
   private async loadSettings(): Promise<void> {
     try {
       const settings = await configManager.getConfig<AIExperienceSettings>(CONFIG_PATH);
-      const merged = { ...defaultSettings, ...settings };
+      const merged = normalizeSettings(settings);
       // Seed quick_actions with defaults when the stored value is absent.
       if (!merged.quick_actions || merged.quick_actions.length === 0) {
         merged.quick_actions = DEFAULT_QUICK_ACTIONS;
@@ -121,7 +132,7 @@ export class AIExperienceConfigService {
   async getSettingsAsync(): Promise<AIExperienceSettings> {
     try {
       const settings = await configManager.getConfig<AIExperienceSettings>(CONFIG_PATH);
-      this.cachedSettings = { ...defaultSettings, ...settings };
+      this.cachedSettings = normalizeSettings(settings);
       return this.cachedSettings;
     } catch (error) {
       log.error('Failed to get config', error);
@@ -132,8 +143,9 @@ export class AIExperienceConfigService {
    
   async saveSettings(settings: AIExperienceSettings): Promise<void> {
     try {
-      await configManager.setConfig(CONFIG_PATH, settings);
-      this.cachedSettings = settings;
+      const normalized = normalizeSettings(settings);
+      await configManager.setConfig(CONFIG_PATH, normalized);
+      this.cachedSettings = normalized;
       this.notifyListeners();
     } catch (error) {
       log.error('Failed to save config', error);

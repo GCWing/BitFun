@@ -439,6 +439,12 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
     );
   }
 
+  if (pet) {
+    return (
+      <div className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()} aria-hidden />
+    );
+  }
+
   return (
     <div className={`bitfun-chat-input-pixel-pet${layoutMod} ${className}`.trim()} aria-hidden>
       <div className={stageClasses}>

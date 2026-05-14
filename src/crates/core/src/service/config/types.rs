@@ -167,7 +167,7 @@ pub struct AIExperienceConfig {
     /// Where to show the Agent companion: "input" or "desktop".
     pub agent_companion_display_mode: String,
     /// Optional Petdex-compatible companion package selected by the user.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "default_agent_companion_pet", skip_serializing_if = "Option::is_none")]
     pub agent_companion_pet: Option<AgentCompanionPetSelection>,
     /// Whether to enable flashgrep-backed accelerated workspace search.
     pub enable_workspace_search: bool,
@@ -188,6 +188,18 @@ pub struct AgentCompanionPetSelection {
     pub package_path: String,
     pub spritesheet_path: String,
     pub spritesheet_mime_type: String,
+}
+
+fn default_agent_companion_pet() -> Option<AgentCompanionPetSelection> {
+    Some(AgentCompanionPetSelection {
+        id: "panda-pix".to_string(),
+        display_name: "Panda".to_string(),
+        description: Some("Codux bundled pet atlas.".to_string()),
+        source: "preset".to_string(),
+        package_path: "/agent-companion-pets/panda-pix".to_string(),
+        spritesheet_path: "/agent-companion-pets/panda-pix/spritesheet.png".to_string(),
+        spritesheet_mime_type: "image/png".to_string(),
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1330,7 +1342,7 @@ impl Default for AIExperienceConfig {
             enable_visual_mode: false,
             enable_agent_companion: true,
             agent_companion_display_mode: "desktop".to_string(),
-            agent_companion_pet: None,
+            agent_companion_pet: default_agent_companion_pet(),
             enable_workspace_search: false,
             quick_actions: Vec::new(),
         }
@@ -1798,6 +1810,24 @@ mod tests {
         assert_eq!(
             serialized["project"]["mcp_servers"][0]["id"],
             "project-docs"
+        );
+    }
+
+    #[test]
+    fn defaults_agent_companion_pet_to_panda() {
+        let config: AIExperienceConfig =
+            serde_json::from_value(serde_json::json!({})).expect("empty config should default");
+
+        let pet = config
+            .agent_companion_pet
+            .as_ref()
+            .expect("default companion pet should be present");
+        assert_eq!(pet.id, "panda-pix");
+        assert_eq!(pet.display_name, "Panda");
+        assert_eq!(pet.package_path, "/agent-companion-pets/panda-pix");
+        assert_eq!(
+            pet.spritesheet_path,
+            "/agent-companion-pets/panda-pix/spritesheet.png"
         );
     }
 
