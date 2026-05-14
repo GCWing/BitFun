@@ -76,15 +76,33 @@ function sanitizeOverrides(raw: Record<string, unknown>): KeybindingOverrides {
 
 /**
  * Compute the O(1) map key for a shortcut config.
- * Format: "{scope}:{key_lower}:{ctrl}{shift}{alt}{meta}"
+ * Format: "{scope}:{key_lower}:{primary}{shift}{alt}{meta}"
  * Example: "app:]:1000"
  */
 function makeMapKey(scope: ShortcutScope, config: ShortcutConfig): string {
-  const c = config.ctrl ? '1' : '0';
+  const normalized = normalizeShortcutConfig(config);
+  const c = normalized.primary ? '1' : '0';
   const s = config.shift ? '1' : '0';
   const a = config.alt ? '1' : '0';
-  const m = config.meta ? '1' : '0';
+  const m = normalized.meta ? '1' : '0';
   return `${scope}:${config.key.toLowerCase()}:${c}${s}${a}${m}`;
+}
+
+function isMacPlatform(): boolean {
+  return typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
+}
+
+function normalizeShortcutConfig(config: ShortcutConfig): { primary: boolean; meta: boolean } {
+  if (isMacPlatform()) {
+    return {
+      primary: Boolean(config.ctrl || config.meta),
+      meta: false,
+    };
+  }
+  return {
+    primary: Boolean(config.ctrl),
+    meta: Boolean(config.meta),
+  };
 }
 
 /**
@@ -106,13 +124,12 @@ function eventKeyForLookup(event: KeyboardEvent): string {
  * Compute the map key directly from a KeyboardEvent for lookup.
  */
 function makeEventKey(scope: ShortcutScope, event: KeyboardEvent): string {
-  const isMac = navigator.platform.toUpperCase().includes('MAC');
-  const ctrl = isMac ? event.metaKey : event.ctrlKey;
+  const ctrl = isMacPlatform() ? event.metaKey : event.ctrlKey;
   const c = ctrl ? '1' : '0';
   const s = event.shiftKey ? '1' : '0';
   const a = event.altKey ? '1' : '0';
-  // meta is not used as standalone modifier in our system (folded into ctrl on Mac)
-  return `${scope}:${eventKeyForLookup(event)}:${c}${s}${a}0`;
+  const m = !isMacPlatform() && event.metaKey ? '1' : '0';
+  return `${scope}:${eventKeyForLookup(event)}:${c}${s}${a}${m}`;
 }
 
 export class ShortcutManager {
@@ -153,13 +170,14 @@ export class ShortcutManager {
   }
 
   private start(): void {
+    if (typeof window === 'undefined') return;
     if (this.keyDownHandler) return;
     this.keyDownHandler = this.handleKeyDown.bind(this);
     window.addEventListener('keydown', this.keyDownHandler, true);
   }
 
   public stop(): void {
-    if (this.keyDownHandler) {
+    if (this.keyDownHandler && typeof window !== 'undefined') {
       window.removeEventListener('keydown', this.keyDownHandler, true);
       this.keyDownHandler = null;
     }
@@ -439,13 +457,25 @@ export class ShortcutManager {
   }
 
   /**
-   * Check whether a given config conflicts with any registered shortcut in the same scope.
+   * Check whether a given config conflicts with registered shortcuts in the same scope
+   * or with app-scope shortcuts. App-scope shortcuts are active globally inside BitFun,
+   * so they can shadow or be shadowed by scoped shortcuts.
    * Used by the settings UI for real-time conflict detection.
    */
   public checkConflicts(config: ShortcutConfig, excludeId?: string, excludeIds?: string[]): ShortcutRegistration[] {
     const scope = config.scope ?? 'app';
-    const key = makeMapKey(scope, config);
-    const list = this.lookupMap.get(key) ?? [];
+    const scopesToCheck: ShortcutScope[] = scope === 'app'
+      ? ['app', 'chat', 'editor', 'canvas', 'filetree', 'git']
+      : [scope, 'app'];
+    const seen = new Set<string>();
+    const list: ShortcutRegistration[] = [];
+    for (const candidateScope of scopesToCheck) {
+      for (const reg of this.lookupMap.get(makeMapKey(candidateScope, config)) ?? []) {
+        if (seen.has(reg.id)) continue;
+        seen.add(reg.id);
+        list.push(reg);
+      }
+    }
     const exclude = new Set<string>([...(excludeIds ?? [])]);
     if (excludeId) exclude.add(excludeId);
     return exclude.size ? list.filter((r) => !exclude.has(r.id)) : [...list];
@@ -454,11 +484,13 @@ export class ShortcutManager {
   // ─── Utilities ─────────────────────────────────────────────────────────────
 
   public formatShortcut(config: ShortcutConfig): string {
-    const isMac = navigator.platform.toUpperCase().includes('MAC');
+    const isMac = isMacPlatform();
+    const normalized = normalizeShortcutConfig(config);
     const parts: string[] = [];
-    if (config.ctrl) parts.push(isMac ? '⌘' : 'Ctrl');
+    if (normalized.primary) parts.push(isMac ? '⌘' : 'Ctrl');
     if (config.shift) parts.push(isMac ? '⇧' : 'Shift');
     if (config.alt) parts.push(isMac ? '⌥' : 'Alt');
+    if (!isMac && normalized.meta) parts.push('Meta');
     const key = config.key === ' ' ? 'Space' : config.key.length === 1 ? config.key.toUpperCase() : config.key;
     parts.push(key);
     return parts.join(isMac ? '' : '+');
