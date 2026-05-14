@@ -131,6 +131,18 @@ and milestone verification gates.
   manifests, `ToolUseContext.unlocked_collapsed_tools`, and desktop/MCP/ACP
   tool catalog behavior.
 
+### Latest-main runtime anchors
+
+- Agent registry migration must preserve mode-scoped subagent availability,
+  hidden/custom/review grouping, and desktop subagent API semantics.
+- DeepResearch report finalization currently relies on the core citation
+  renumber hook; do not move it without preserving `report.md`,
+  `citations.md`, `display_map.json`, and rejected-citation handling.
+- Workspace/search refactors must preserve remote workspace startup guards,
+  remote flashgrep fallback, and search preview/context mapping.
+- ACP timeout handling and Web operation-diff fallback are product-surface
+  behavior; share facts through contracts, not UI/protocol implementation.
+
 ### DeepReview guardrails
 
 Deep Review / Code Review Team work spans the core runtime and web UI. Keep

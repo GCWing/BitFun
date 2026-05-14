@@ -830,6 +830,482 @@ const forbiddenContentRules = [
   },
 ];
 
+const forbiddenContentUnderRules = [
+  {
+    path: 'src/crates/product-domains/src',
+    reason:
+      'product-domains must not own IO/process/Git/AI/platform runtime behavior without an approved port/provider migration',
+    patterns: [
+      {
+        regex: /\bCommand::new\(/,
+        message: 'product-domains must not spawn processes; keep process execution in core/adapters',
+      },
+      {
+        regex: /\bprocess_manager::/,
+        message:
+          'product-domains must not use the core process manager; keep process execution in core/adapters',
+      },
+      {
+        regex: /\btokio::process::/,
+        message: 'product-domains must not own async process execution',
+      },
+      {
+        regex: /\btokio::fs::/,
+        message:
+          'product-domains must not own async storage IO; storage runtime remains in core/adapters',
+      },
+      {
+        regex: /\bGitService::/,
+        message: 'product-domains must not call concrete Git services; use reviewed ports/adapters',
+      },
+      {
+        regex: /\b(?:AIService|AiService)::/,
+        message: 'product-domains must not call concrete AI services; use reviewed ports/adapters',
+      },
+      {
+        regex: /\breqwest::/,
+        message: 'product-domains must not own network clients',
+      },
+      {
+        regex: /\bgit2::/,
+        message: 'product-domains must not own libgit2 runtime integration',
+      },
+      {
+        regex: /\brmcp::/,
+        message: 'product-domains must not own MCP runtime integration',
+      },
+      {
+        regex: /\btauri::/,
+        message: 'product-domains must not depend on Tauri platform APIs',
+      },
+      {
+        regex: /\bAppHandle\b/,
+        message: 'product-domains must not own desktop platform handles',
+      },
+      {
+        regex: /\bstd::net::/,
+        message: 'product-domains must not own network sockets',
+      },
+      {
+        regex: /\b(?:TcpStream|UdpSocket)\b/,
+        message: 'product-domains must not own network sockets',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-tools/src',
+    reason:
+      'agent-tools must not own product tool manifest/exposure or GetToolSpec runtime without an approved provider migration',
+    patterns: [
+      {
+        regex: /\bGetToolSpecTool\b/,
+        message: 'GetToolSpec implementation stays in core product tool runtime',
+      },
+      {
+        regex: /\bGET_TOOL_SPEC_TOOL_NAME\b/,
+        message: 'GetToolSpec manifest insertion stays in core product tool runtime',
+      },
+      {
+        regex: /\bmanifest_resolver\b/,
+        message: 'tool manifest resolution stays in core product tool runtime',
+      },
+      {
+        regex: /\bunlocked_collapsed_tools\b/,
+        message: 'collapsed-tool unlock state stays in core ToolUseContext/runtime',
+      },
+      {
+        regex: /\bToolExposure\b/,
+        message: 'expanded/collapsed exposure policy stays in core until provider migration',
+      },
+      {
+        regex: /\bToolUseContext\b/,
+        message: 'ToolUseContext stays in core until a portable context port is reviewed',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/tool-packs/src',
+    reason:
+      'tool-packs must not own product tool manifest/exposure or GetToolSpec runtime without an approved provider migration',
+    patterns: [
+      {
+        regex: /\bGetToolSpecTool\b/,
+        message: 'GetToolSpec implementation stays in core product tool runtime',
+      },
+      {
+        regex: /\bGET_TOOL_SPEC_TOOL_NAME\b/,
+        message: 'GetToolSpec manifest insertion stays in core product tool runtime',
+      },
+      {
+        regex: /\bmanifest_resolver\b/,
+        message: 'tool manifest resolution stays in core product tool runtime',
+      },
+      {
+        regex: /\bunlocked_collapsed_tools\b/,
+        message: 'collapsed-tool unlock state stays in core ToolUseContext/runtime',
+      },
+      {
+        regex: /\bToolExposure\b/,
+        message: 'expanded/collapsed exposure policy stays in core until provider migration',
+      },
+    ],
+  },
+];
+
+const requiredContentRules = [
+  {
+    path: 'src/crates/core/src/agentic/tools/registry.rs',
+    reason:
+      'core must continue owning product tool registry assembly until an approved product-provider migration exists',
+    patterns: [
+      {
+        regex: /\bfn register_all_tools\b/,
+        message: 'missing product tool registration owner',
+      },
+      {
+        regex: /\bGetToolSpecTool::new\(\)/,
+        message: 'missing GetToolSpec registration anchor',
+      },
+      {
+        regex: /\bget_collapsed_tool_names\b/,
+        message: 'missing collapsed-tool catalog owner',
+      },
+      {
+        regex: /\bToolExposure::Collapsed\b/,
+        message: 'missing collapsed exposure lookup',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/manifest_resolver.rs',
+    reason:
+      'core must continue owning prompt-visible tool manifest assembly until an approved provider migration exists',
+    patterns: [
+      {
+        regex: /\bpub async fn resolve_tool_manifest\b/,
+        message: 'missing tool manifest resolver owner',
+      },
+      {
+        regex: /\bGET_TOOL_SPEC_TOOL_NAME\b/,
+        message: 'missing GetToolSpec manifest insertion anchor',
+      },
+      {
+        regex: /\bToolExposure::Collapsed\b/,
+        message: 'missing collapsed exposure branch',
+      },
+      {
+        regex: /\bcollapsed_tool_names\b/,
+        message: 'missing collapsed-tool name tracking',
+      },
+      {
+        regex: /Call `GetToolSpec` first/,
+        message: 'missing collapsed-tool prompt stub',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/implementations/get_tool_spec_tool.rs',
+    reason:
+      'core must continue owning GetToolSpec runtime until an approved provider migration exists',
+    patterns: [
+      {
+        regex: /\bpub struct GetToolSpecTool\b/,
+        message: 'missing GetToolSpec owner type',
+      },
+      {
+        regex: /\bunlocked_collapsed_tools\b/,
+        message: 'missing collapsed-tool duplicate-load guard',
+      },
+      {
+        regex: /\balready_loaded\b/,
+        message: 'missing duplicate-load assistant result contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/framework.rs',
+    reason:
+      'core must continue owning ToolUseContext and exposure policy until a portable context port is reviewed',
+    patterns: [
+      {
+        regex: /\bpub enum ToolExposure\b/,
+        message: 'missing ToolExposure owner type',
+      },
+      {
+        regex: /\bpub struct ToolUseContext\b/,
+        message: 'missing ToolUseContext owner type',
+      },
+      {
+        regex: /\bunlocked_collapsed_tools\b/,
+        message: 'missing collapsed-tool unlock state',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+    reason:
+      'core must continue owning collapsed-tool execution gating until manifest/runtime migration is reviewed',
+    patterns: [
+      {
+        regex: /\bfn validate_collapsed_tool_usage\b/,
+        message: 'missing collapsed-tool execution gate',
+      },
+      {
+        regex: /\bunlocked_collapsed_tools\b/,
+        message: 'missing collapsed-tool unlock state propagation',
+      },
+      {
+        regex: /\bGetToolSpec\b/,
+        message: 'missing GetToolSpec gating contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/execution/execution_engine.rs',
+    reason:
+      'core execution must continue carrying collapsed-tool unlock state and DeepResearch post-turn hooks until approved runtime migrations exist',
+    patterns: [
+      {
+        regex: /\bfn collect_unlocked_collapsed_tools\b/,
+        message: 'missing GetToolSpec result unlock collector',
+      },
+      {
+        regex: /\bcollapsed_tool_names\b/,
+        message: 'missing manifest collapsed-tool handoff',
+      },
+      {
+        regex: /\bGetToolSpec\b/,
+        message: 'missing GetToolSpec execution contract',
+      },
+      {
+        regex: /\bcitation_renumber\b/,
+        message: 'missing DeepResearch citation renumber hook',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/registry/availability.rs',
+    reason:
+      'core agent registry must continue owning mode-scoped subagent availability until an approved agent-runtime migration exists',
+    patterns: [
+      {
+        regex: /\bpub fn resolve_availability\b/,
+        message: 'missing mode-scoped subagent availability resolver',
+      },
+      {
+        regex: /\bpub fn resolve_override_layers\b/,
+        message: 'missing project/user override layering contract',
+      },
+      {
+        regex: /\bAgentSubagentOverrideState\b/,
+        message: 'missing subagent override state contract',
+      },
+      {
+        regex: /\bSubagentStateReason\b/,
+        message: 'missing frontend-visible availability reason contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/registry/types.rs',
+    reason:
+      'core agent registry must continue exposing subagent query and availability DTOs until registry ownership migrates with API equivalence tests',
+    patterns: [
+      {
+        regex: /\bpub struct SubagentQueryContext\b/,
+        message: 'missing subagent query context',
+      },
+      {
+        regex: /\bpub enum SubagentListScope\b/,
+        message: 'missing subagent list scope contract',
+      },
+      {
+        regex: /\bdefault_enabled\b/,
+        message: 'missing default availability field',
+      },
+      {
+        regex: /\beffective_enabled\b/,
+        message: 'missing effective availability field',
+      },
+      {
+        regex: /\bpub enum SubagentStateReason\b/,
+        message: 'missing availability reason wire contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/citation_renumber.rs',
+    reason:
+      'core DeepResearch runtime must continue owning citation renumber post-processing until agent-runtime migration is reviewed',
+    patterns: [
+      {
+        regex: /\bpub async fn run_for_session_workspace\b/,
+        message: 'missing DeepResearch citation hook entry point',
+      },
+      {
+        regex: /\bpub async fn try_renumber_research_report\b/,
+        message: 'missing deterministic citation renumber implementation',
+      },
+      {
+        regex: /display_map\.json/,
+        message: 'missing citation display map sidecar contract',
+      },
+      {
+        regex: /\bREJECTED\b/,
+        message: 'missing rejected-citation filtering contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/workspace/service.rs',
+    reason:
+      'core workspace runtime must continue owning startup remote-workspace guards until workspace service migration is reviewed',
+    patterns: [
+      {
+        regex: /\bprepare_startup_restored_workspaces\b/,
+        message: 'missing restored-workspace startup guard',
+      },
+      {
+        regex: /\bWorkspaceKind::Remote\b/,
+        message: 'missing remote workspace branch',
+      },
+      {
+        regex: /\bensure_remote_workspace_runtime\b/,
+        message: 'missing remote workspace runtime ensure call',
+      },
+      {
+        regex: /\bsshHost\b/,
+        message: 'missing remote workspace host metadata contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/search/service.rs',
+    reason:
+      'core search runtime must continue owning local flashgrep fallback and preview mapping until search migration is reviewed',
+    patterns: [
+      {
+        regex: /\bwith_scan_fallback\b/,
+        message: 'missing flashgrep scan fallback request flag',
+      },
+      {
+        regex: /\bconvert_hits_to_file_search_results\b/,
+        message: 'missing hit-to-file-result conversion owner',
+      },
+      {
+        regex: /\bsplit_preview\b/,
+        message: 'missing preview split contract',
+      },
+      {
+        regex: /\bpreview_inside\b/,
+        message: 'missing preview-inside rendering contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/search/remote.rs',
+    reason:
+      'core remote search runtime must continue owning remote flashgrep fallback/session behavior until search migration is reviewed',
+    patterns: [
+      {
+        regex: /\bremote_workspace_search_service_for_path\b/,
+        message: 'missing remote workspace search resolver',
+      },
+      {
+        regex: /\blookup_remote_connection_with_hint\b/,
+        message: 'missing preferred remote connection lookup',
+      },
+      {
+        regex: /\ballow_scan_fallback\b/,
+        message: 'missing remote scan fallback contract',
+      },
+      {
+        regex: /\bfallback_query\b/,
+        message: 'missing FilesWithMatches fallback query',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/acp/src/client/manager.rs',
+    reason:
+      'ACP surface runtime must continue owning startup timeout diagnostics until ACP migration is reviewed',
+    patterns: [
+      {
+        regex: /\bCLIENT_STARTUP_TIMEOUT_SECS\b/,
+        message: 'missing ACP startup timeout duration contract',
+      },
+      {
+        regex: /\bstartup_timeout_error_message\b/,
+        message: 'missing ACP startup timeout diagnostic formatter',
+      },
+      {
+        regex: /\bformats_startup_timeout_error_message\b/,
+        message: 'missing ACP startup timeout regression',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.tsx',
+    reason:
+      'web-ui file operation surface must continue owning snapshot-to-local diff fallback until product surface migration is reviewed',
+    patterns: [
+      {
+        regex: /\bopenLocalDiff\b/,
+        message: 'missing local tool diff fallback',
+      },
+      {
+        regex: /snapshotAPI\.getOperationDiff/,
+        message: 'missing snapshot operation diff path',
+      },
+      {
+        regex: /Snapshot diff unavailable/,
+        message: 'missing snapshot-unavailable fallback diagnostic',
+      },
+      {
+        regex: /\blocalDiffContent\b/,
+        message: 'missing local diff content fallback state',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/storage.rs',
+    reason:
+      'core must continue owning MiniApp storage runtime adapter until storage IO migration is reviewed',
+    patterns: [
+      {
+        regex: /\bimpl MiniAppStoragePort for MiniAppStorage\b/,
+        message: 'missing MiniApp storage port adapter owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/js_worker_pool.rs',
+    reason:
+      'core must continue owning MiniApp worker runtime adapter until process/runtime migration is reviewed',
+    patterns: [
+      {
+        regex: /\bimpl MiniAppRuntimePort for JsWorkerPool\b/,
+        message: 'missing MiniApp runtime port adapter owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/function_agents/port_adapters.rs',
+    reason:
+      'core must continue owning function-agent Git runtime adapter until Git/AI service migration is reviewed',
+    patterns: [
+      {
+        regex: /\bpub struct CoreFunctionAgentGitAdapter\b/,
+        message: 'missing core function-agent Git adapter type',
+      },
+      {
+        regex: /\bimpl FunctionAgentGitPort for CoreFunctionAgentGitAdapter\b/,
+        message: 'missing function-agent Git port adapter owner',
+      },
+    ],
+  },
+];
+
 const failures = [];
 
 function toRepoPath(path) {
@@ -1128,6 +1604,27 @@ function runManifestParserSelfTest() {
   if (!productDomainProfile?.forbiddenNonOptionalDeps.includes('dirs')) {
     throw new Error('product-domains default profile must forbid non-optional dirs');
   }
+  const productDomainRuntimeRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === 'src/crates/product-domains/src',
+  );
+  if (!productDomainRuntimeRule) {
+    throw new Error('missing product-domains runtime-owner boundary rule');
+  }
+  const productDomainRuntimeContracts = [
+    'Command::new\\(',
+    'process_manager::',
+    'GitService::',
+    'reqwest::',
+    'tauri::',
+  ];
+  const productDomainRuntimeRuleText = productDomainRuntimeRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of productDomainRuntimeContracts) {
+    if (!productDomainRuntimeRuleText.includes(contract)) {
+      throw new Error(`product-domains runtime boundary rule must forbid: ${contract}`);
+    }
+  }
   const coreTypesProfile = dependencyProfileRules.find((rule) => rule.crateName === 'core-types');
   if (!coreTypesProfile?.forbiddenNonOptionalDeps.includes('bitfun-ai-adapters')) {
     throw new Error('core-types dependency profile must forbid ai-adapter dependencies');
@@ -1137,6 +1634,123 @@ function runManifestParserSelfTest() {
   );
   if (!runtimePortsProfile?.forbiddenNonOptionalDeps.includes('bitfun-services-core')) {
     throw new Error('runtime-ports dependency profile must forbid service implementations');
+  }
+  const agentToolsManifestRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === 'src/crates/agent-tools/src',
+  );
+  if (!agentToolsManifestRule) {
+    throw new Error('missing agent-tools manifest-owner boundary rule');
+  }
+  const toolManifestContracts = [
+    'GetToolSpecTool',
+    'GET_TOOL_SPEC_TOOL_NAME',
+    'manifest_resolver',
+    'unlocked_collapsed_tools',
+  ];
+  const agentToolsManifestRuleText = agentToolsManifestRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of toolManifestContracts) {
+    if (!agentToolsManifestRuleText.includes(contract)) {
+      throw new Error(`agent-tools manifest boundary rule must forbid: ${contract}`);
+    }
+  }
+  const toolPacksManifestRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === 'src/crates/tool-packs/src',
+  );
+  if (!toolPacksManifestRule) {
+    throw new Error('missing tool-packs manifest-owner boundary rule');
+  }
+  const toolPacksManifestRuleText = toolPacksManifestRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of toolManifestContracts) {
+    if (!toolPacksManifestRuleText.includes(contract)) {
+      throw new Error(`tool-packs manifest boundary rule must forbid: ${contract}`);
+    }
+  }
+
+  const requiredOwnerContracts = [
+    {
+      path: 'src/crates/core/src/agentic/tools/registry.rs',
+      contracts: ['register_all_tools', 'GetToolSpecTool', 'get_collapsed_tool_names'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/manifest_resolver.rs',
+      contracts: ['resolve_tool_manifest', 'GET_TOOL_SPEC_TOOL_NAME', 'ToolExposure'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/implementations/get_tool_spec_tool.rs',
+      contracts: ['GetToolSpecTool', 'unlocked_collapsed_tools', 'already_loaded'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/framework.rs',
+      contracts: ['ToolExposure', 'ToolUseContext', 'unlocked_collapsed_tools'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+      contracts: ['validate_collapsed_tool_usage', 'unlocked_collapsed_tools', 'GetToolSpec'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/execution/execution_engine.rs',
+      contracts: ['collect_unlocked_collapsed_tools', 'collapsed_tool_names', 'GetToolSpec', 'citation_renumber'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/agents/registry/availability.rs',
+      contracts: ['resolve_availability', 'resolve_override_layers', 'AgentSubagentOverrideState', 'SubagentStateReason'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/agents/registry/types.rs',
+      contracts: ['SubagentQueryContext', 'SubagentListScope', 'default_enabled', 'effective_enabled', 'SubagentStateReason'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/agents/citation_renumber.rs',
+      contracts: ['run_for_session_workspace', 'try_renumber_research_report', 'display_map', 'REJECTED'],
+    },
+    {
+      path: 'src/crates/core/src/service/workspace/service.rs',
+      contracts: ['prepare_startup_restored_workspaces', 'WorkspaceKind::Remote', 'ensure_remote_workspace_runtime', 'sshHost'],
+    },
+    {
+      path: 'src/crates/core/src/service/search/service.rs',
+      contracts: ['with_scan_fallback', 'convert_hits_to_file_search_results', 'split_preview', 'preview_inside'],
+    },
+    {
+      path: 'src/crates/core/src/service/search/remote.rs',
+      contracts: ['remote_workspace_search_service_for_path', 'lookup_remote_connection_with_hint', 'allow_scan_fallback', 'fallback_query'],
+    },
+    {
+      path: 'src/crates/acp/src/client/manager.rs',
+      contracts: ['CLIENT_STARTUP_TIMEOUT_SECS', 'startup_timeout_error_message', 'formats_startup_timeout_error_message'],
+    },
+    {
+      path: 'src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.tsx',
+      contracts: ['openLocalDiff', 'snapshotAPI\\.getOperationDiff', 'Snapshot diff unavailable', 'localDiffContent'],
+    },
+    {
+      path: 'src/crates/core/src/miniapp/storage.rs',
+      contracts: ['MiniAppStoragePort'],
+    },
+    {
+      path: 'src/crates/core/src/miniapp/js_worker_pool.rs',
+      contracts: ['MiniAppRuntimePort'],
+    },
+    {
+      path: 'src/crates/core/src/function_agents/port_adapters.rs',
+      contracts: ['CoreFunctionAgentGitAdapter', 'FunctionAgentGitPort'],
+    },
+  ];
+  for (const { path, contracts } of requiredOwnerContracts) {
+    const rule = requiredContentRules.find((rule) => rule.path === path);
+    if (!rule) {
+      throw new Error(`missing core owner anchor rule for ${path}`);
+    }
+    const ruleText = rule.patterns.map((pattern) => pattern.regex.source).join('\n');
+    for (const contract of contracts) {
+      if (!ruleText.includes(contract)) {
+        throw new Error(`core owner anchor rule for ${path} must require: ${contract}`);
+      }
+    }
   }
 
   const remoteWorkspaceRule = forbiddenContentRules.find(
@@ -1671,6 +2285,41 @@ function checkForbiddenContent(repoPath, patterns) {
   });
 }
 
+function checkRequiredContent(repoPath, patterns, reason) {
+  const path = join(ROOT, ...repoPath.split('/'));
+  const text = readText(path);
+  for (const pattern of patterns) {
+    if (!pattern.regex.test(text)) {
+      failures.push({
+        path,
+        line: 1,
+        message: `${reason}; ${pattern.message}`,
+      });
+    }
+  }
+}
+
+function checkForbiddenContentUnder(repoDir, patterns, reason) {
+  const dir = join(ROOT, ...repoDir.split('/'));
+  walkFiles(dir, (path) => {
+    if (!path.endsWith('.rs')) {
+      return;
+    }
+    const lines = readText(path).split(/\r?\n/);
+    lines.forEach((line, index) => {
+      for (const pattern of patterns) {
+        if (pattern.regex.test(line)) {
+          failures.push({
+            path,
+            line: index + 1,
+            message: `${reason}; ${pattern.message}`,
+          });
+        }
+      }
+    });
+  });
+}
+
 if (process.env.BITFUN_BOUNDARY_CHECK_SELF_TEST === '1') {
   runManifestParserSelfTest();
   console.log('Core boundary check self-test passed.');
@@ -1703,6 +2352,14 @@ for (const facade of facadeOnlyFiles) {
 
 for (const rule of forbiddenContentRules) {
   checkForbiddenContent(rule.path, rule.patterns);
+}
+
+for (const rule of forbiddenContentUnderRules) {
+  checkForbiddenContentUnder(rule.path, rule.patterns, rule.reason);
+}
+
+for (const rule of requiredContentRules) {
+  checkRequiredContent(rule.path, rule.patterns, rule.reason);
 }
 
 if (failures.length > 0) {

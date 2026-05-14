@@ -1049,6 +1049,8 @@ pub fn create_tool_registry() -> ToolRegistry {
 - 已迁移到 `bitfun-agent-tools`：`ToolResult`、`ValidationResult`、`InputValidator`、dynamic tool metadata、tool render options、runtime restriction DTO、path resolution DTO，以及不依赖 core service 的 `ToolRegistry<T>` / `ToolRegistryItem` generic registry container。dynamic tool provider / decorator contract 已通过 `agent-tools` 提供兼容 re-export，原 `runtime-ports` 路径保持可用；core 旧路径继续 re-export，并只保留 `BitFunError` 映射与路径 containment helper。
 - `bitfun-core::agentic::tools` 现在保留产品完整工具列表、snapshot decorator 组装、旧构造函数、`dyn Tool` 到 generic registry 的适配，以及最新主干新增的 tool exposure / manifest resolution / `GetToolSpec` 按需工具说明发现；dynamic metadata map、tool map、dynamic descriptor assembly 由 `bitfun-agent-tools` 拥有。
 - 已新增 `bitfun-tool-packs` feature scaffold，默认 feature 为空，`product-full` 只聚合 feature，不注册或迁移任何工具实现。
+- 已通过 boundary check 锁定 `agent-tools` / `tool-packs` 暂不拥有 product tool manifest、`ToolExposure`、`GetToolSpec` 或 collapsed-tool unlock state；这些仍由 core product tool runtime 负责。
+- boundary check 也已补充 core owner anchor：要求产品工具注册、expanded/collapsed manifest、`GetToolSpec` duplicate-load guard、`ToolUseContext.unlocked_collapsed_tools`、执行管线 gating 与 execution unlock collector 仍保留在 core。后续若迁移这些 owner，必须先更新 port/provider 设计、等价测试与该脚本，而不能只删除 core 侧实现。
 - `Tool` trait、`ToolUseContext` 和具体工具实现仍在 core；它们直接连接 workspace service、snapshot wrapper、computer-use host、cancellation token 与 Deep Review checkpoint hook，继续迁移前必须先确认可移植 tool context / provider port 方案，并补工具清单等价性测试。
 - 最新主干新增的 Deep Review shared-context / evidence-ledger checkpoint hook 仍保留在 core 的 `ToolUseContext` 中；在设计独立 tool context / event port 前，不应把 `ToolUseContext` 或 concrete tool implementation 继续外移。
 - 最新主干新增 on-demand tool spec discovery：`ToolExposure`、`GetToolSpec`、`manifest_resolver`、collapsed-tool catalog、context-aware `description_with_context` / `input_schema_for_model_with_context`，以及 `ToolUseContext.unlocked_collapsed_tools` 均会影响模型可见工具集合。该变化不推翻 PR4 的低风险结论，但把后续 tool/provider 迁移提升为高风险项，不能在 PR5 product-domain 收尾中顺带执行。
@@ -1105,7 +1107,7 @@ product-full = ["miniapp", "function-agents"]
 - [x] miniapp exporter DTO、runtime detection DTO、runtime search plan、worker install 命令选择与 package.json storage-shape helper 迁移到 `product-domains::miniapp`；core 保留实际 export / runtime detection / worker pool / storage IO 执行逻辑。
 - [ ] miniapp runtime、storage、manager、host dispatch、exporter、builtin 迁移到 `product-domains::miniapp`。
 - [ ] function agents 迁移到 `product-domains::function_agents`。
-- [x] 已为 miniapp runtime/storage 与 function-agent Git/AI 边界定义迁移前 provider / port contract；实际 core adapter 接入和执行逻辑迁移仍待后续等价测试后推进。
+- [x] 已为 miniapp runtime/storage 与 function-agent Git/AI 边界定义迁移前 provider / port contract，并补充 core-owned MiniApp storage/runtime 与 function-agent Git snapshot adapter 等价测试；实际 IO/进程/Git/AI 执行 owner 迁移仍待后续 port/provider 方案确认后推进。
 - [x] 已迁移模块的 core 旧路径 re-export。
 - [ ] function agents 依赖 agent runtime port，不直接依赖 service concrete manager。
 - [ ] server/desktop 调用路径保持不变。
@@ -1113,8 +1115,9 @@ product-full = ["miniapp", "function-agents"]
 **当前安全迁移状态（2026-05-14）：**
 
 - 已迁移到 `bitfun-product-domains::miniapp`：`types`、`bridge_builder`、`permission_policy`，core 旧路径继续 re-export。
-- 已迁移到 `bitfun-product-domains::miniapp`：纯 compiler、export DTO、runtime detection DTO、runtime search path plan、worker install result DTO、worker install 命令选择、package.json storage-shape helper，以及 runtime/storage port contract；core `miniapp::compiler::compile` 继续映射为原 `BitFunResult` API，runtime detection / exporter / worker pool / storage IO 执行逻辑仍留在 core，port 仍未接入 concrete adapter。
-- 已迁移到 `bitfun-product-domains::function_agents`：公共 `common` 类型、git/startchat function-agent 的纯 DTO 类型、git function-agent 的纯路径 / 变更分类 / commit summary / message assembly / prompt format / commit type parser helper、startchat prompt / action / git porcelain / diff combine / time-of-day helper、Git/AI port contract，以及只读本地文件的 project context analyzer；AI client、Git service、prompt template、AI request、JSON extraction 与分析运行逻辑仍留在 core，port 仍未接入 concrete adapter。
+- 已迁移到 `bitfun-product-domains::miniapp`：纯 compiler、export DTO、runtime detection DTO、runtime search path plan、worker install result DTO、worker install 命令选择、package.json storage-shape helper，以及 runtime/storage port contract；core `miniapp::compiler::compile` 继续映射为原 `BitFunResult` API，runtime detection / exporter / worker pool / storage IO 执行逻辑仍留在 core，目前仅通过 core-owned storage/runtime adapter 和等价测试保护现有路径。
+- 已迁移到 `bitfun-product-domains::function_agents`：公共 `common` 类型、git/startchat function-agent 的纯 DTO 类型、git function-agent 的纯路径 / 变更分类 / commit summary / message assembly / prompt format / commit type parser helper、startchat prompt / action / git porcelain / diff combine / time-of-day helper、Git/AI port contract，以及只读本地文件的 project context analyzer；core-owned Git snapshot adapter 已由等价测试覆盖，AI client、Git service、prompt template、AI request、JSON extraction 与分析运行逻辑仍留在 core。
+- boundary check 已补充 product-domain owner anchor：`MiniAppStoragePort` / `MiniAppRuntimePort` 的 core adapter、function-agent Git adapter 仍必须存在，防止把 port contract 误读成 storage IO、worker process 或 Git service runtime 已完成迁移。
 - miniapp runtime/storage/manager/host dispatch/exporter/builtin 与 function-agent 运行逻辑继续迁移前，需要先确认 agent/tool/provider port 和 Git/AI service 边界。
 
 **验证：**
@@ -1548,6 +1551,8 @@ cargo check --workspace
 - 已扩展 `scripts/check-core-boundaries.mjs`，增加 dependency profile / feature graph 静态保护：`core-types` default profile 禁止非 DTO 依赖，`runtime-ports` default profile 禁止 service implementation 依赖，`agent-tools` contract profile 禁止依赖 `bitfun-ai-adapters`，`product-domains` default profile 禁止无条件拉入 `dirs`，`services-integrations` default profile 禁止无条件拉入 feature-gated integration 依赖。
 - 已将 `ToolImageAttachment` 提升到 `bitfun-core-types`，并由 `bitfun-ai-adapters`、`bitfun-agent-tools` 和 `bitfun-core::util::types` 保留旧路径兼容；`bitfun-agent-tools` 不再依赖 `bitfun-ai-adapters`。
 - 已将 `product-domains` 的 `dirs` 依赖限制到 `miniapp` feature，默认 profile 保持轻量。
+- 已为 `product-domains` 增加 runtime-owner 静态保护，禁止在未确认 port/provider 迁移方案前引入进程启动、具体 Git/AI 服务、网络客户端或平台 API；也已锁定 `agent-tools` / `tool-packs` 暂不拥有 product tool manifest、`GetToolSpec` 或 collapsed-tool unlock state。
+- 已为 core 侧高风险 owner 增加 required-content anchor，覆盖 product tool registry / manifest / `GetToolSpec` / collapsed-tool unlock 流，以及 MiniApp storage/runtime adapter 与 function-agent Git adapter；该检查用于避免“轻量 crate 已抽出”被误解为 runtime owner 已迁移。
 - 已补充 `ToolResult` image attachment、dynamic provider metadata、dynamic descriptor wire shape、runtime restrictions、path resolution contract、generic tool registry descriptor/stale metadata 测试，以及 core 内置 tool registry 清单快照测试；后续迁移 `ToolUseContext`、product registry / manifest assembly 或 concrete tool implementation 前必须保持这些基线。
 - 已将 generic tool registry / dynamic provider descriptor assembly 迁入 `bitfun-agent-tools`；core tool runtime 保留产品完整工具列表、manifest/exposure、snapshot decorator 和 `dyn Tool` 适配，并通过 boundary check 禁止重新拥有 `IndexMap` 工具容器或 dynamic metadata map。
 - PR 1 已开始执行：remote-SSH workspace registry / ambiguous root resolution / legacy state snapshot 已迁入 `bitfun-services-integrations::remote_ssh::RemoteWorkspaceRegistry`，core 仅保留 local assistant path guard 与 SSH manager / file service / terminal manager 组装；announcement state persistence 已迁入 `bitfun-services-integrations::announcement::AnnouncementStateStore`，core 旧 `PathManager` 构造 API 继续委托并映射原错误类型。
@@ -1638,24 +1643,28 @@ P2 后产品表面契约轨道（contract-only）：
 - `default = []` 必须是单独 PR，且只在所有产品 crate 显式启用完整 runtime 后评估。
 - 不允许把 facade 变成新的业务实现聚合。
 
-**P3 进入条件与最新主干补充（2026-05-14）：**
+**P3 进入条件与最新主干补充（2026-05-15）：**
 
 - P3 只能在 P2 剩余迁移闭环后启动：重 service 迁移、`ToolUseContext` / tool exposure / manifest / `GetToolSpec` / concrete tool implementation 迁移、product registry / manifest / provider assembly、miniapp/function-agent 运行逻辑迁移都必须先完成或显式保留为 core-owned runtime；generic registry/provider container 已在 PR4 中完成低风险外移。
-- 最近 `origin/main` 的 Deep Review 变更增加了 context profile、evidence ledger、capacity/cost/queue 控制、`deep_review_run_manifest` / `deep_review_cache`、以及 review-team UI orchestration；最新主干还补充了 agent-stream tool-call dedupe、search remote/fallback、session rollback persistence 和 companion typewriter。P3 facade 收敛前必须确认这些行为要么仍由 core product runtime assembly 拥有，要么已有对应 owner crate + port/provider 合约和等价测试。
+- 最近 `origin/main` 的 Deep Review 变更增加了 context profile、evidence ledger、capacity/cost/queue 控制、`deep_review_run_manifest` / `deep_review_cache`、以及 review-team UI orchestration；最新主干还补充了 agent-stream tool-call dedupe、search remote/fallback、session rollback persistence、remote workspace compatibility guard、ACP startup timeout / operation diff fallback 和 companion typewriter。P3 facade 收敛前必须确认这些行为要么仍由 core product runtime assembly 或对应 product surface 拥有，要么已有对应 owner crate + port/provider 合约和等价测试。
 - 最新主干的 mode-scoped subagent visibility 将 `agentic::agents` 重组为 definitions / registry / visibility 边界，并扩展了 desktop subagent API 与 Review Team 可见性测试；后续若迁移 agent registry，不能只做路径 re-export，必须保留 mode 可见性过滤、hidden/custom/review 分组语义和前后端 API contract。
+- 最新主干的 DeepResearch citation renumber hook 是 deterministic post-turn runtime 行为，不是普通 prompt 文案；后续若迁移 agent runtime / report finalization，必须保留 `report.md`、`citations.md`、`display_map.json` 与 REJECTED citation 过滤语义。
 - 最新主干的 on-demand tool spec discovery 将 `ToolExposure`、`manifest_resolver`、`GetToolSpec`、collapsed-tool prompt stub 和 `ToolUseContext.unlocked_collapsed_tools` 接入 agent prompt / execution pipeline / desktop-MCP-ACP catalog。P3 facade 收敛前必须把这些显式保留在 core product tool runtime，或先完成等价快照与 port/provider 设计后再迁移。
+- 最新主干的 search result rendering / context handling 与 remote workspace compatibility guard 要求后续 `service::search`、`workspace` 或 remote runtime 迁移保留 startup restored workspace guard、remote runtime ensure、remote flashgrep FilesWithMatches fallback、preview split 和 local/remote fallback contract。
+- ACP startup timeout 和 Web file-operation diff fallback 属于 product surface 行为：可以在后续 contract 中记录 operation/diff facts，但不能把 ACP timeout policy 或 Web diff rendering 迁入 core contract crate。
 - 最新主干的 CLI 重构主要新增 TUI/theme/selector/dialog/chat-state 等 app-layer 代码，后续又收敛预置 theme 并补充 desktop companion pet resize / Windows UX；这些当前没有改变 `services-integrations` 的迁移归属。后续若调整 shared crate 边界，必须继续把 `bitfun-cli`、`ratatui`、`crossterm`、`arboard`、`syntect-tui` 等 CLI-only 依赖限制在 app adapter / presentation layer，desktop / web-ui presentation 修复也不应被误判为 core service 迁移前置条件。
 - P2 后产品表面策略要求“surface divergence, capability convergence”：CLI `/diff`、Desktop 快捷键/面板、Remote card、ACP method 可以映射到同一 capability contract，但不能为了复用把 surface command 或 UI rendering 下沉到 contract crate。
 - `ToolUseContext` 的 shared-context / evidence checkpoint hook、`TaskTool` / `CodeReviewTool` 的 Deep Review capacity flow、session manifest/cache persistence、rollback persisted-turn cleanup、search fallback chain 与 stream finish/tool-call contract 不能在 P3 中只通过 re-export 消失；如果外移，需要先补 boundary contract、旧路径兼容和对应 regression。
 - P3 的闭环检查应同时覆盖 Rust crate graph 与产品 runtime 行为：边界脚本只证明依赖方向，不能替代 Deep Review、MCP dynamic tools、tool manifest / `GetToolSpec`、remote connect、snapshot wrapping、miniapp/function-agent 的产品等价性验证。
 - 后续 P3 范围按“显式保留 core-owned runtime + 强制 owner crate 边界”闭环；如果要继续外移这些 runtime 路径，需要作为新的迁移批次先补 port 设计、等价测试和用户确认。
 
-**阶段复核与后续拆分（2026-05-13 PR4 完成后）：**
+**阶段复核与后续拆分（2026-05-15 PR1 latest-main guardrail 扩展后）：**
 
 - 当前分支保持单一主题：只包含 agent tools / tool registry 低风险 owner 化、boundary check 和阶段文档；不继续混入 remote-connect、miniapp 或 function-agent runtime 迁移。
-- 本次 rebase 到最新 `upstream/main` 后，PR #680 的三颗等价提交已进入主干；新增 CLI 收敛、版本 bump 和 desktop companion pet UX 修复没有改变本轮 `agent-tools` / registry container 迁移内容，但会把后续 CLI 产品检查、agent registry/provider 与 session/tool runtime 外移的等价性门槛抬高。
+- 本次 rebase 到最新 `upstream/main` 后，PR #719 remote workspace guard、#721 companion preset、#715/#722 ACP fallback/timeout、per-mode subagent availability、DeepResearch citation renumber hook 和 search fallback/context 修复均已进入主干；它们不改变本轮 guardrail PR 的代码行为，但会把后续 workspace/search、agent registry/runtime、ACP/Web surface 与 tool runtime 外移的等价性门槛抬高。
 - 质量边界：本阶段证明已拆 owner crate 不依赖回 `bitfun-core`，并证明已迁移的 tool contract、generic registry / dynamic provider container 旧路径或调用点仍通过当前 Rust workspace 检查；不声明 remote connect、`ToolUseContext`、concrete tool implementation、miniapp/function-agent runtime 的外移完成。
 - boundary check 已扩展到 `core-types`、`runtime-ports` 和 `agent-tools` 的轻量边界，并覆盖 Cargo inline 依赖和 dependency table 依赖声明，后续不能绕过脚本把重 runtime、concrete service、platform adapter 或 CLI/TUI presentation 依赖带入这些 contract crate。
+- boundary check 现在同时锁定 latest-main owner anchor：mode-scoped subagent availability、DeepResearch citation renumber hook、remote workspace startup guard、local/remote search fallback、ACP startup timeout 和 Web operation diff fallback。后续真正迁移这些 owner 时必须先补 port/provider 或 surface contract 设计，并同步更新脚本与等价测试。
 - boundary check 也已锁定 `bitfun-core::service::git`、`bitfun-core::service::remote_ssh::types`、remote-ssh workspace path/identity/unresolved-key helper、`bitfun-core::service::mcp::{tool_info,tool_name}`、`bitfun-core::service::mcp::protocol::{types,jsonrpc}`、`bitfun-core::service::mcp::config::{location,cursor_format,json_config,service_helpers}`、`bitfun-core::service::mcp::server::config`、`bitfun-core::service::mcp::auth` 和 `bitfun-core::service::announcement::types` 的旧路径 facade-only / 禁止回流状态，并禁止在 `MCPServerProcess` runtime 文件重新定义已外移的 server type/status contract、auth error classifier 和 legacy remote header fallback helper，也禁止在 remote transport 重新实现 Authorization 归一化、client capability 构造和 rmcp result mapping；本轮新增禁止 core registry 重新拥有 `IndexMap` 工具容器或 dynamic metadata map。
 - 后续迁移必须拆成可独立审核的提交：先补 port/provider 设计和等价测试；`remote-connect` 完整 runtime、`ToolUseContext` / concrete tool implementation、product-domain runtime 必须一次迁移一个 owner 主题。
 - concrete tool implementation 或 product registry / manifest assembly 外移必须先有工具清单和 manifest 等价测试，并保留 dynamic provider metadata；不能把注册名解析、snapshot wrapper 或 runtime restriction 行为改成隐式约定。
