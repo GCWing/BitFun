@@ -112,6 +112,7 @@
   },
   "window": {
     "maximizeFailed": "Failed to maximize window: {{error}}",
+    "fullscreenFailed": "Failed to toggle fullscreen: {{error}}",
     "closeFailed": "Failed to close window: {{error}}"
   },
   "editor": {

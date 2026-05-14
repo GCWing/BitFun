@@ -531,7 +531,11 @@
     "projectRequestMessage": "我想創建一個新項目：\n\n{{description}}\n\n請幫我設計項目結構並開始實現。",
     "projectRequestSent": "已將項目需求發送給小方，開始協作創建！",
     "projectRequestSendFailed": "發送項目描述失敗，請手動輸入",
-    "flowChatInitFailed": "初始化失敗，請刷新頁面重試"
+    "flowChatInitFailed": "初始化失敗，請刷新頁面重試",
+    "windowFullscreenEntered": "已進入視窗全螢幕",
+    "windowFullscreenExited": "已退出視窗全螢幕",
+    "windowFullscreenExitHint": "按 {{shortcut}} 退出。",
+    "windowFullscreenEnterHint": "按 {{shortcut}} 再次進入。"
   },
   "bottomBar": {
     "sessions": "Agent 工作臺",

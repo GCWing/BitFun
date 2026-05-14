@@ -13,6 +13,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { LoaderCircle } from 'lucide-react';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { useWindowControls } from '../hooks/useWindowControls';
+import { isWindowFullscreenShortcut } from '../hooks/windowFullscreenShortcut';
 import { useAssistantBootstrap } from '../hooks/useAssistantBootstrap';
 import { useApp } from '../hooks/useApp';
 import { useSceneStore } from '../stores/sceneStore';
@@ -54,6 +55,12 @@ interface AcpSessionCreationEventDetail {
   action?: 'create' | 'restore';
 }
 
+interface WindowModeHint {
+  id: number;
+  title: string;
+  detail: string;
+}
+
 const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const { t } = useI18n('components');
   const { t: tCommon } = useI18n('common');
@@ -74,11 +81,54 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
   const { isToolbarMode } = useToolbarModeContext();
   const { ensureForWorkspace: ensureAssistantBootstrapForWorkspace } = useAssistantBootstrap();
+  const isMacOS = useMemo(() => {
+    return isMacOSDesktopRuntime();
+  }, []);
 
-  const { handleMinimize, handleMaximize, handleClose, isMaximized, canUseNativeWindowControls } =
+  const {
+    handleMinimize,
+    handleMaximize,
+    handleToggleFullscreen,
+    handleClose,
+    isMaximized,
+    isFullscreen,
+    canUseNativeWindowControls,
+  } =
     useWindowControls({ isToolbarMode });
 
   const { state, switchLeftPanelTab, toggleLeftPanel, toggleRightPanel } = useApp();
+  const [windowModeHint, setWindowModeHint] = useState<WindowModeHint | null>(null);
+  const windowModeHintTimerRef = useRef<number | null>(null);
+
+  const showWindowFullscreenHint = useCallback((enteredFullscreen: boolean) => {
+    if (windowModeHintTimerRef.current) {
+      window.clearTimeout(windowModeHintTimerRef.current);
+    }
+
+    const shortcut = isMacOS ? 'Control+Command+F' : 'F11';
+    setWindowModeHint({
+      id: Date.now(),
+      title: t(enteredFullscreen
+        ? 'appLayout.windowFullscreenEntered'
+        : 'appLayout.windowFullscreenExited'),
+      detail: t(enteredFullscreen
+        ? 'appLayout.windowFullscreenExitHint'
+        : 'appLayout.windowFullscreenEnterHint', { shortcut }),
+    });
+
+    windowModeHintTimerRef.current = window.setTimeout(() => {
+      setWindowModeHint(null);
+      windowModeHintTimerRef.current = null;
+    }, 2200);
+  }, [isMacOS, t]);
+
+  useEffect(() => {
+    return () => {
+      if (windowModeHintTimerRef.current) {
+        window.clearTimeout(windowModeHintTimerRef.current);
+      }
+    };
+  }, []);
 
   // ── Load user keybinding overrides from config on startup ────────────────
   useEffect(() => {
@@ -102,6 +152,32 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!canUseNativeWindowControls || isToolbarMode) return;
+
+    const handleSystemFullscreenShortcut = (event: KeyboardEvent) => {
+      if (!isWindowFullscreenShortcut(event)) return;
+
+      // OS fullscreen is a platform window command, not the app's maximize
+      // shortcut and not an internal panel fullscreen action. Use a raw
+      // listener because ShortcutManager intentionally maps Ctrl to Cmd on
+      // macOS for "mod" shortcuts, while system fullscreen requires the exact
+      // Control+Command+F chord.
+      event.preventDefault();
+      event.stopPropagation();
+      void handleToggleFullscreen().then((enteredFullscreen) => {
+        if (typeof enteredFullscreen === 'boolean') {
+          showWindowFullscreenHint(enteredFullscreen);
+        }
+      });
+    };
+
+    window.addEventListener('keydown', handleSystemFullscreenShortcut, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', handleSystemFullscreenShortcut, { capture: true });
+    };
+  }, [canUseNativeWindowControls, handleToggleFullscreen, isToolbarMode, showWindowFullscreenHint]);
   const activeSceneId = useSceneStore(s => s.activeTabId);
   const isAgentScene = activeSceneId === 'session';
   const isWelcomeScene = activeSceneId === 'welcome';
@@ -174,10 +250,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   }, [handleNewProject, handleOpenProject]);
 
   // macOS native menubar events (previously in TitleBar)
-  const isMacOS = useMemo(() => {
-    return isMacOSDesktopRuntime();
-  }, []);
-
   useEffect(() => {
     if (!isMacOS) return;
     let unlistenFns: Array<() => void> = [];
@@ -554,6 +626,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     'bitfun-app-layout',
     isMacOS ? 'bitfun-app-layout--macos' : '',
     className,
+    isFullscreen ? 'bitfun-app-layout--window-fullscreen' : '',
     isTransitioning ? 'bitfun-app-layout--transitioning' : '',
   ].filter(Boolean).join(' ');
 
@@ -570,6 +643,18 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     <>
       <DailyAppUpdateGate />
       <div className={containerClassName} data-testid="app-layout">
+        {windowModeHint && (
+          <div
+            key={windowModeHint.id}
+            className="bitfun-window-mode-hint"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="bitfun-window-mode-hint__title">{windowModeHint.title}</span>
+            <span className="bitfun-window-mode-hint__detail">{windowModeHint.detail}</span>
+          </div>
+        )}
+
         {/* Main content — always render WorkspaceBody; WelcomeScene in viewport handles no-workspace state */}
         <main className="bitfun-app-main-workspace" data-testid="app-main-content">
           <WorkspaceBody

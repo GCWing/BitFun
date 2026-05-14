@@ -531,7 +531,11 @@
     "projectRequestMessage": "I want to create a new project:\n\n{{description}}\n\nPlease design the project structure and start implementing it.",
     "projectRequestSent": "Project requirements sent to Xiaofang. Collaboration started.",
     "projectRequestSendFailed": "Failed to send project description. Please enter it manually.",
-    "flowChatInitFailed": "Initialization failed. Please refresh the page."
+    "flowChatInitFailed": "Initialization failed. Please refresh the page.",
+    "windowFullscreenEntered": "Entered window fullscreen",
+    "windowFullscreenExited": "Exited window fullscreen",
+    "windowFullscreenExitHint": "Press {{shortcut}} to exit.",
+    "windowFullscreenEnterHint": "Press {{shortcut}} to enter again."
   },
   "bottomBar": {
     "sessions": "Workbench",

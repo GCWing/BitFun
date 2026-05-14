@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -7,15 +8,39 @@ import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { nowMs } from '@/shared/utils/timing';
 import { useI18n } from '@/infrastructure/i18n';
 import { isMacOSDesktopRuntime, supportsNativeWindowControls } from '@/infrastructure/runtime';
+import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import {
+  captureFocusedEditable,
+  restoreWindowKeyboardFocus,
+  type WindowKeyboardFocusTarget,
+} from './windowKeyboardFocus';
 
 const log = createLogger('useWindowControls');
 
 const formatErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+const createWindowKeyboardFocusTarget = (
+  appWindow: ReturnType<typeof getCurrentWindow> | null
+): WindowKeyboardFocusTarget => {
+  if (!appWindow) return null;
+
+  return {
+    setFocus: () => appWindow.setFocus(),
+    setWebviewFocus: () => getCurrentWebview().setFocus(),
+  };
+};
+
 /**
  * Window controls hook.
- * Manages minimize, maximize, close, and related actions.
+ * Manages minimize, maximize, OS fullscreen, close, and related actions.
+ *
+ * Important: OS fullscreen is not maximize. Fullscreen asks the operating
+ * system to put the entire Desktop window into fullscreen (`F11` on
+ * Windows/Linux, `Control+Command+F` on macOS). Maximize keeps the app as a
+ * normal window that fills the available work area. Keep their state and
+ * handlers separate so callers do not accidentally wire panel/fullscreen
+ * behavior to maximize/restore UI.
  */
 export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
   const { t } = useI18n('errors');
@@ -23,14 +48,52 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
   const canUseNativeWindowControls = supportsNativeWindowControls();
   const { hasWorkspace, closeWorkspace } = useWorkspaceContext();
   
-  // Maximized state
+  // Maximized state: ordinary OS window maximize/restore, not fullscreen.
   const [isMaximized, setIsMaximized] = useState(false);
+  // OS fullscreen state: entire Desktop window fullscreen, not panel fullscreen.
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Debounce guard to prevent rapid toggles
   const isMaximizeInProgress = useRef(false);
+  const isFullscreenInProgress = useRef(false);
   
   // Skip state updates during manual operations
   const shouldSkipStateUpdate = useRef(false);
+
+  const restoreMacOSOverlayTitlebar = useCallback(async (appWindow: any) => {
+    if (!isMacOSDesktopRuntime() || isToolbarMode) return;
+    try {
+      if (typeof appWindow.setTitleBarStyle === 'function') {
+        await appWindow.setTitleBarStyle('overlay');
+      }
+    } catch {
+      // Ignore failures during window animation/state changes.
+    }
+  }, [isToolbarMode]);
+
+  const updateWindowState = useCallback(async (appWindow: any, skipVisibilityCheck = false) => {
+    if (shouldSkipStateUpdate.current) {
+      return;
+    }
+
+    try {
+      if (!skipVisibilityCheck) {
+        const isVisible = await appWindow.isVisible();
+        if (!isVisible) {
+          return;
+        }
+      }
+
+      const [maximized, fullscreen] = await Promise.all([
+        appWindow.isMaximized(),
+        appWindow.isFullscreen(),
+      ]);
+      setIsMaximized(maximized);
+      setIsFullscreen(fullscreen);
+    } catch (_error) {
+      // Ignore errors to avoid noise when the window is minimized or transitioning.
+    }
+  }, []);
 
   // Listen for window state changes
   useEffect(() => {
@@ -41,51 +104,10 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
     // Debounce timer
     let resizeTimer: NodeJS.Timeout | null = null;
 
-    const isMacOSDesktop = isMacOSDesktopRuntime();
-
-    const restoreMacOSOverlayTitlebar = async (appWindow: any) => {
-      if (!isMacOSDesktop || isToolbarMode) return;
-      try {
-        if (typeof appWindow.setTitleBarStyle === 'function') {
-          await appWindow.setTitleBarStyle('overlay');
-        }
-      } catch {
-        // Ignore failures during window animation/state changes
-      }
-    };
-    
-    // Helper to update window state (minimize API calls)
-    const updateWindowState = async (appWindow: any, skipVisibilityCheck = false) => {
-      // Skip auto updates while maximizing to avoid duplicates
-      if (shouldSkipStateUpdate.current) {
-        return;
-      }
-      
-      try {
-        // Skip visibility check when not required
-        if (skipVisibilityCheck) {
-          const maximized = await appWindow.isMaximized();
-          setIsMaximized(maximized);
-          return;
-        }
-        
-        // Skip if window is not visible (minimized)
-        const isVisible = await appWindow.isVisible();
-        if (!isVisible) {
-          return;
-        }
-        
-        const maximized = await appWindow.isMaximized();
-        setIsMaximized(maximized);
-      } catch (_error) {
-        // Ignore errors to avoid noise when minimized
-      }
-    };
-    
     // Update state when window regains focus.
     // Note: Tauri may not expose onFocus; use page visibility as a fallback.
     const handleVisibilityChange = async () => {
-      // Skip visibility handling while maximizing
+      // Skip visibility handling while a window state transition is in flight.
       if (shouldSkipStateUpdate.current) {
         return;
       }
@@ -149,7 +171,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
         
         // Listen for resize (with debounce and visibility checks)
         unlistenResized = await appWindow.onResized(async () => {
-          // Skip resize handling while maximizing
+          // Skip resize handling while a window state transition is in flight.
           if (shouldSkipStateUpdate.current) {
             return;
           }
@@ -159,7 +181,7 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
             clearTimeout(resizeTimer);
           }
           
-          // Debounce: delay to avoid frequent calls (300ms covers maximize/restore)
+          // Debounce: delay to avoid frequent calls (300ms covers maximize/restore/fullscreen)
           resizeTimer = setTimeout(async () => {
             await updateWindowState(appWindow);
             await restoreMacOSOverlayTitlebar(appWindow);
@@ -185,19 +207,14 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
       // Remove page visibility listener
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [canUseNativeWindowControls, isToolbarMode]);
+  }, [canUseNativeWindowControls, isToolbarMode, restoreMacOSOverlayTitlebar, updateWindowState]);
 
   // Window control handlers
   const handleMinimize = useCallback(async () => {
     if (!canUseNativeWindowControls) return;
 
     // Save active element to restore focus after window restore
-    const activeElement = document.activeElement as HTMLElement;
-    const wasInputFocused = activeElement && (
-      activeElement.classList.contains('rich-text-input') ||
-      activeElement.closest('.rich-text-input') !== null ||
-      activeElement.isContentEditable
-    );
+    const focusSnapshot = captureFocusedEditable();
     
     try {
       const appWindow = getCurrentWindow();
@@ -206,28 +223,11 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
       // Ensure input is usable after restore
       // Listen for restore
       const handleWindowRestore = async () => {
-        setTimeout(() => {
-          // Ensure contentEditable is set correctly
-          const chatInputs = document.querySelectorAll('.rich-text-input[contenteditable]');
-          chatInputs.forEach((input) => {
-            const element = input as HTMLElement;
-            if (element.getAttribute('contenteditable') !== 'true') {
-              element.setAttribute('contenteditable', 'true');
-            }
-          });
-          
-          // Restore focus if input was focused
-          if (wasInputFocused && activeElement && activeElement.isConnected) {
-            try {
-              const rect = activeElement.getBoundingClientRect();
-              if (rect.width > 0 && rect.height > 0) {
-                activeElement.focus();
-              }
-            } catch (_error) {
-              // Ignore focus restore failures
-            }
-          }
-        }, 100);
+        restoreWindowKeyboardFocus(
+          createWindowKeyboardFocusTarget(getCurrentWindow()),
+          focusSnapshot,
+          100
+        );
         
         // Run once
         window.removeEventListener('focus', handleWindowRestore);
@@ -250,19 +250,15 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
     }
     
     // Save active element to restore focus after window change
-    const activeElement = document.activeElement as HTMLElement;
-    const wasInputFocused = activeElement && (
-      activeElement.classList.contains('rich-text-input') ||
-      activeElement.closest('.rich-text-input') !== null ||
-      activeElement.isContentEditable
-    );
+    const focusSnapshot = captureFocusedEditable();
+    let appWindow: ReturnType<typeof getCurrentWindow> | null = null;
     
     try {
       isMaximizeInProgress.current = true;
       // Skip auto updates to avoid duplicate state changes
       shouldSkipStateUpdate.current = true;
       
-      const appWindow = getCurrentWindow();
+      appWindow = getCurrentWindow();
       
       // Optimization: skip isVisible check; query maximized directly.
       // If minimized, user restores via taskbar instead of double-clicking header.
@@ -292,30 +288,11 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
       
       // Delay DOM work to avoid blocking UI rendering
       requestAnimationFrame(() => {
-        setTimeout(() => {
-          // Ensure contentEditable is set correctly
-          const chatInputs = document.querySelectorAll('.rich-text-input[contenteditable]');
-          chatInputs.forEach((input) => {
-            const element = input as HTMLElement;
-            // Ensure contentEditable is set correctly
-            if (element.getAttribute('contenteditable') !== 'true') {
-              element.setAttribute('contenteditable', 'true');
-            }
-          });
-          
-          // Restore focus if input was focused (best-effort)
-          if (wasInputFocused && activeElement && activeElement.isConnected) {
-            try {
-              // Restore only if element is still present and visible
-              const rect = activeElement.getBoundingClientRect();
-              if (rect.width > 0 && rect.height > 0) {
-                activeElement.focus();
-              }
-            } catch (_error) {
-              // Ignore focus restore failures
-            }
-          }
-        }, 50); // Reduced delay from 100ms to 50ms
+        restoreWindowKeyboardFocus(
+          createWindowKeyboardFocusTarget(appWindow),
+          focusSnapshot,
+          50
+        );
       });
     } catch (error) {
       log.error('Failed to toggle maximize window', error);
@@ -325,9 +302,61 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
       setTimeout(() => {
         isMaximizeInProgress.current = false;
         shouldSkipStateUpdate.current = false;
+        if (appWindow) {
+          void updateWindowState(appWindow, true);
+          void restoreMacOSOverlayTitlebar(appWindow);
+        }
       }, 200);
     }
-  }, [canUseNativeWindowControls, t]);
+  }, [canUseNativeWindowControls, restoreMacOSOverlayTitlebar, t, updateWindowState]);
+
+  const handleToggleFullscreen = useCallback(async () => {
+    if (!canUseNativeWindowControls) return;
+
+    if (isFullscreenInProgress.current) {
+      return;
+    }
+
+    const focusSnapshot = captureFocusedEditable();
+    let appWindow: ReturnType<typeof getCurrentWindow> | null = null;
+
+    try {
+      isFullscreenInProgress.current = true;
+      shouldSkipStateUpdate.current = true;
+
+      appWindow = getCurrentWindow();
+
+      // OS fullscreen is intentionally separate from maximize/restore.
+      // The desktop host owns the native maximize/fullscreen transition so the
+      // web UI does not expose visible intermediate OS window states.
+      const nextState = await systemAPI.toggleMainWindowFullscreen();
+
+      requestAnimationFrame(() => {
+        setIsFullscreen(nextState.isFullscreen);
+        setIsMaximized(nextState.isMaximized);
+        restoreWindowKeyboardFocus(
+          createWindowKeyboardFocusTarget(appWindow),
+          focusSnapshot,
+          80
+        );
+      });
+
+      return nextState.isFullscreen;
+    } catch (error) {
+      log.error('Failed to toggle fullscreen window', error);
+      notificationService.error(t('window.fullscreenFailed', { error: formatErrorMessage(error) }));
+      return undefined;
+    } finally {
+      setTimeout(() => {
+        isFullscreenInProgress.current = false;
+        shouldSkipStateUpdate.current = false;
+        if (appWindow) {
+          void updateWindowState(appWindow, true);
+          void restoreMacOSOverlayTitlebar(appWindow);
+        }
+      }, 300);
+    }
+  }, [canUseNativeWindowControls, restoreMacOSOverlayTitlebar, t, updateWindowState]);
 
   const handleClose = useCallback(async () => {
     if (!canUseNativeWindowControls) return;
@@ -359,9 +388,11 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
   return {
     handleMinimize,
     handleMaximize,
+    handleToggleFullscreen,
     handleClose,
     handleHomeClick,
     isMaximized,
+    isFullscreen,
     canUseNativeWindowControls
   };
 };

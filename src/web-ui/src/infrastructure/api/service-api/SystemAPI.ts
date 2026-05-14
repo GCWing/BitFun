@@ -18,6 +18,12 @@ export interface CheckForUpdatesResponse {
   releaseDate: string | null;
 }
 
+/** Matches `toggle_main_window_fullscreen` / desktop `ToggleMainWindowFullscreenResponse`. */
+export interface ToggleMainWindowFullscreenResponse {
+  isFullscreen: boolean;
+  isMaximized: boolean;
+}
+
 /** Close-button behavior values (matches `app.close_button_behavior` config key). */
 export type CloseBehavior = 'quit' | 'minimize_to_tray' | 'ask';
 
@@ -220,6 +226,21 @@ export class SystemAPI {
       await api.invoke('minimize_to_tray', { request: {} });
     } catch (error) {
       throw createTauriCommandError('minimize_to_tray', error);
+    }
+  }
+
+  /**
+   * Desktop only: toggle OS-window fullscreen for the main window.
+   *
+   * This is intentionally not maximize and not app panel fullscreen. The
+   * desktop host owns the native fullscreen/maximize transition so the web UI
+   * does not stitch together multiple window-state calls.
+   */
+  async toggleMainWindowFullscreen(): Promise<ToggleMainWindowFullscreenResponse> {
+    try {
+      return await api.invoke('toggle_main_window_fullscreen', { request: {} });
+    } catch (error) {
+      throw createTauriCommandError('toggle_main_window_fullscreen', error);
     }
   }
 }

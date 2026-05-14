@@ -112,6 +112,7 @@
   },
   "window": {
     "maximizeFailed": "最大化窗口失败：{{error}}",
+    "fullscreenFailed": "切换全屏失败：{{error}}",
     "closeFailed": "关闭窗口失败：{{error}}"
   },
   "editor": {

@@ -531,7 +531,11 @@
     "projectRequestMessage": "我想创建一个新项目：\n\n{{description}}\n\n请帮我设计项目结构并开始实现。",
     "projectRequestSent": "已将项目需求发送给小方，开始协作创建！",
     "projectRequestSendFailed": "发送项目描述失败，请手动输入",
-    "flowChatInitFailed": "初始化失败，请刷新页面重试"
+    "flowChatInitFailed": "初始化失败，请刷新页面重试",
+    "windowFullscreenEntered": "已进入窗口全屏",
+    "windowFullscreenExited": "已退出窗口全屏",
+    "windowFullscreenExitHint": "按 {{shortcut}} 退出。",
+    "windowFullscreenEnterHint": "按 {{shortcut}} 再次进入。"
   },
   "bottomBar": {
     "sessions": "Agent 工作台",
