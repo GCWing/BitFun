@@ -403,6 +403,28 @@ async fn initialize_core_services(
         .expect("Failed to initialize agentic system");
     tracing::info!("Agentic system initialized");
 
+    match bitfun_core::infrastructure::try_get_path_manager_arc() {
+        Ok(path_manager) => {
+            match bitfun_core::service::token_usage::TokenUsageService::new(path_manager).await {
+                Ok(token_usage_service) => {
+                    let subscriber = bitfun_core::service::token_usage::TokenUsageSubscriber::new(
+                        std::sync::Arc::new(token_usage_service),
+                    );
+                    agentic_system
+                        .coordinator
+                        .subscribe_internal("cli-token-usage".to_string(), subscriber);
+                    tracing::info!("CLI token usage subscriber initialized");
+                }
+                Err(error) => {
+                    tracing::warn!("Failed to initialize CLI token usage service: {}", error);
+                }
+            }
+        }
+        Err(error) => {
+            tracing::warn!("Failed to resolve path manager for token usage: {}", error);
+        }
+    }
+
     // Initialize MCP service in background (non-blocking)
     if let Some(ref cfg_svc) = config_service {
         match bitfun_core::service::mcp::MCPService::new(cfg_svc.clone()) {
@@ -789,4 +811,3 @@ fn main() {
         }
     }
 }
-
