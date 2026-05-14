@@ -729,6 +729,44 @@ export class FlowChatStore {
     return this.removeSessionsByIds(removedSessionIds);
   }
 
+  public async cancelRunningSessionsForWorkspace(
+    workspace: Pick<WorkspaceInfo, 'id' | 'rootPath' | 'connectionId' | 'sshHost'>
+  ): Promise<string[]> {
+    const runningSessionIds = Array.from(this.state.sessions.values())
+      .filter(session => sessionMatchesWorkspace(session, workspace))
+      .filter(session => {
+        const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
+        return Boolean(
+          lastTurn &&
+          !['completed', 'cancelled', 'error'].includes(lastTurn.status)
+        );
+      })
+      .map(session => session.sessionId);
+
+    if (runningSessionIds.length === 0) {
+      return [];
+    }
+
+    const { agentAPI } = await import('@/infrastructure/api');
+    await Promise.allSettled(
+      runningSessionIds.map(async sessionId => {
+        try {
+          await agentAPI.cancelSession(sessionId);
+        } catch (error) {
+          log.warn('Failed to cancel running session before closing workspace', {
+            sessionId,
+            workspaceId: workspace.id,
+            error,
+          });
+        } finally {
+          this.cancelSessionTask(sessionId);
+        }
+      })
+    );
+
+    return runningSessionIds;
+  }
+
   /** @deprecated Prefer `removeSessionsForWorkspace` with full `WorkspaceInfo`. */
   public removeSessionsByWorkspace(
     workspacePath: string,

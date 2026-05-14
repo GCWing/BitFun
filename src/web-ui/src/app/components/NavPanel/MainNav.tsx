@@ -695,8 +695,16 @@ const MainNav: React.FC<MainNavProps> = ({
           homePath={sshRemote.remoteFileBrowserInitialPath}
           onSelect={handleSelectRemoteWorkspace}
           onCancel={() => {
+            const hasActiveRemoteWorkspace =
+              Boolean(sshRemote.remoteWorkspace) ||
+              openedWorkspacesList.some(workspace =>
+                isRemoteWorkspace(workspace) &&
+                workspace.connectionId === sshRemote.connectionId
+              );
             sshRemote.setShowFileBrowser(false);
-            void sshRemote.disconnect();
+            if (!hasActiveRemoteWorkspace) {
+              void sshRemote.disconnect();
+            }
           }}
         />
       )}

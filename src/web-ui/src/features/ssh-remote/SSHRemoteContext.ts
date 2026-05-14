@@ -16,7 +16,11 @@ export interface SSHContextValue {
   showFileBrowser: boolean;
   error: string | null;
   remoteFileBrowserInitialPath: string;
-  connect: (connectionId: string, config: SSHConnectionConfig) => Promise<void>;
+  connect: (
+    connectionId: string,
+    config: SSHConnectionConfig,
+    options?: { browseAfterConnect?: boolean }
+  ) => Promise<void>;
   disconnect: () => Promise<void>;
   openWorkspace: (path: string) => Promise<void>;
   closeWorkspace: () => Promise<void>;

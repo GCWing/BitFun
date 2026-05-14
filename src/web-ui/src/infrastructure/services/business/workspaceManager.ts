@@ -462,7 +462,14 @@ class WorkspaceManager {
         return;
       }
 
+      await this.cancelRunningSessionsForWorkspace(workspace);
       await globalStateAPI.closeWorkspace(workspace.id);
+      await globalStateAPI.removeWorkspaceFromRecent(workspace.id).catch(error => {
+        log.warn('Failed to remove remote workspace from recent list', {
+          workspaceId: workspace.id,
+          error,
+        });
+      });
 
       const [currentWorkspace, recentWorkspaces, openedWorkspaces] = await Promise.all([
         globalStateAPI.getCurrentWorkspace(),
@@ -550,6 +557,11 @@ class WorkspaceManager {
 
       log.info('Closing workspace', { workspaceId });
 
+      const closingWorkspace = this.state.openedWorkspaces.get(workspaceId);
+      if (closingWorkspace) {
+        await this.cancelRunningSessionsForWorkspace(closingWorkspace);
+      }
+
       await globalStateAPI.closeWorkspace(workspaceId);
 
       const [currentWorkspace, recentWorkspaces, openedWorkspaces] = await Promise.all([
@@ -573,6 +585,24 @@ class WorkspaceManager {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
       throw error;
+    }
+  }
+
+  private async cancelRunningSessionsForWorkspace(workspace: WorkspaceInfo): Promise<void> {
+    try {
+      const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
+      const cancelledSessionIds = await flowChatStore.cancelRunningSessionsForWorkspace(workspace);
+      if (cancelledSessionIds.length > 0) {
+        log.info('Cancelled running sessions before closing workspace', {
+          workspaceId: workspace.id,
+          count: cancelledSessionIds.length,
+        });
+      }
+    } catch (error) {
+      log.warn('Failed to cancel running sessions before closing workspace', {
+        workspaceId: workspace.id,
+        error,
+      });
     }
   }
 
@@ -892,5 +922,3 @@ class WorkspaceManager {
 export const workspaceManager = WorkspaceManager.getInstance();
 
 export { WorkspaceManager };
-
-

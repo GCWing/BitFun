@@ -125,7 +125,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   // Remote connection status — optional: safe if not inside SSHRemoteProvider
   const sshContext = useContext(SSHContext);
   const remoteConnStatus = workspace.connectionId && sshContext
-    ? (sshContext.workspaceStatuses[workspace.connectionId] ?? 'connecting')
+    ? sshContext.workspaceStatuses[workspace.connectionId]
     : undefined;
 
   const searchIndexIndicator = useMemo(() => {
@@ -983,8 +983,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             {isRemoteWorkspace(workspace) && (
               <span className="bitfun-nav-panel__workspace-item-subtitle">
                 <span
-                  className={`bitfun-nav-panel__workspace-item-status-dot is-${remoteConnStatus ?? 'connecting'}`}
-                  aria-label={remoteConnStatus ?? 'connecting'}
+                  className={`bitfun-nav-panel__workspace-item-status-dot is-${remoteConnStatus ?? 'unknown'}`}
+                  aria-label={remoteConnStatus ?? 'unknown'}
                 />
                 <span>{workspace.connectionName}</span>
               </span>

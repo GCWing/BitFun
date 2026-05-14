@@ -490,9 +490,14 @@
       background: var(--color-success, #22c55e);
     }
 
+    &.is-unknown,
     &.is-error,
     &.is-disconnected {
       background: var(--color-error, #ef4444);
+    }
+
+    &.is-unknown {
+      background: var(--color-text-tertiary, #94a3b8);
     }
 
     &.is-connecting {

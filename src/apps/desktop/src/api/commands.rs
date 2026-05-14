@@ -1775,7 +1775,10 @@ pub async fn cleanup_invalid_workspaces(
     app: tauri::AppHandle,
 ) -> Result<usize, String> {
     match state.workspace_service.cleanup_invalid_workspaces().await {
-        Ok(removed_count) => {
+        Ok(local_removed_count) => {
+            let remote_removed_count = prune_unrecoverable_remote_workspaces(&state).await;
+            let removed_count = local_removed_count + remote_removed_count;
+
             if let Some(workspace_info) = state.workspace_service.get_current_workspace().await {
                 apply_active_workspace_context(&state, &app, &workspace_info).await;
             } else {
@@ -1804,6 +1807,80 @@ pub async fn cleanup_invalid_workspaces(
             Err(format!("Failed to cleanup invalid workspaces: {}", e))
         }
     }
+}
+
+async fn prune_unrecoverable_remote_workspaces(state: &State<'_, AppState>) -> usize {
+    let saved_connection_ids: std::collections::HashSet<String> = match state
+        .get_ssh_manager_async()
+        .await
+    {
+        Ok(manager) => manager
+            .get_saved_connections()
+            .await
+            .into_iter()
+            .map(|connection| connection.id)
+            .collect(),
+        Err(error) => {
+            warn!(
+                "Skipping remote workspace cleanup because SSH manager is unavailable: {}",
+                error
+            );
+            return 0;
+        }
+    };
+
+    let workspaces = state.workspace_service.list_workspace_infos().await;
+    let mut removed = 0usize;
+
+    for workspace in workspaces {
+        if workspace.workspace_kind != WorkspaceKind::Remote {
+            continue;
+        }
+
+        let connection_id = workspace
+            .metadata
+            .get("connectionId")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+
+        let should_remove = connection_id
+            .as_deref()
+            .map(|id| !saved_connection_ids.contains(id))
+            .unwrap_or(true);
+
+        if !should_remove {
+            continue;
+        }
+
+        if let Some(id) = connection_id.as_deref() {
+            state
+                .unregister_remote_workspace_entry(id, &workspace.root_path.to_string_lossy())
+                .await;
+        }
+
+        match state.workspace_service.remove_workspace(&workspace.id).await {
+            Ok(()) => {
+                removed += 1;
+                info!(
+                    "Removed unrecoverable remote workspace: workspace_id={}, connection_id={:?}, path={}",
+                    workspace.id,
+                    connection_id,
+                    workspace.root_path.display()
+                );
+            }
+            Err(error) => {
+                warn!(
+                    "Failed to remove unrecoverable remote workspace: workspace_id={}, error={}",
+                    workspace.id,
+                    error
+                );
+            }
+        }
+    }
+
+    removed
 }
 
 #[tauri::command]

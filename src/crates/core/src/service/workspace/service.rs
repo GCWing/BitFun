@@ -1234,11 +1234,13 @@ impl WorkspaceService {
             .map_err(|e| BitFunError::service(format!("Failed to load workspace data: {}", e)))?;
 
         let mut workspaces_to_restore = Vec::new();
+        let mut should_persist_cleaned_history = false;
 
         if let Some(data) = workspace_data {
             let mut manager = self.manager.write().await;
 
             let mut workspaces = data.workspaces;
+            let original_workspace_count = workspaces.len();
             // Filter out legacy remote workspaces that don't have the required metadata (sshHost and connectionId)
             workspaces.retain(|_id, ws| {
                 if ws.workspace_kind == WorkspaceKind::Remote {
@@ -1253,6 +1255,9 @@ impl WorkspaceService {
                 }
                 true
             });
+            if workspaces.len() != original_workspace_count {
+                should_persist_cleaned_history = true;
+            }
 
             *manager.get_workspaces_mut() = workspaces;
             // Also filter opened/recent lists to remove references to removed legacy workspaces
@@ -1262,6 +1267,9 @@ impl WorkspaceService {
                 .into_iter()
                 .filter(|id| manager.get_workspaces().contains_key(id))
                 .collect();
+            if filtered_opened_ids != data.opened_workspace_ids {
+                should_persist_cleaned_history = true;
+            }
             manager.set_opened_workspace_ids(filtered_opened_ids);
 
             let filtered_recent: Vec<String> = data
@@ -1270,6 +1278,9 @@ impl WorkspaceService {
                 .into_iter()
                 .filter(|id| manager.get_workspaces().contains_key(id))
                 .collect();
+            if filtered_recent != data.recent_workspaces {
+                should_persist_cleaned_history = true;
+            }
             manager.set_recent_workspaces(filtered_recent);
 
             let filtered_recent_assistant: Vec<String> = data
@@ -1278,9 +1289,15 @@ impl WorkspaceService {
                 .into_iter()
                 .filter(|id| manager.get_workspaces().contains_key(id))
                 .collect();
+            if filtered_recent_assistant != data.recent_assistant_workspaces {
+                should_persist_cleaned_history = true;
+            }
             manager.set_recent_assistant_workspaces(filtered_recent_assistant);
 
             let id_remap = manager.migrate_local_workspace_ids_to_stable_storage();
+            if !id_remap.is_empty() {
+                should_persist_cleaned_history = true;
+            }
 
             let raw_current = data
                 .current_workspace_id
@@ -1296,6 +1313,10 @@ impl WorkspaceService {
             }
 
             workspaces_to_restore = Self::collect_startup_restored_workspaces(&manager);
+        }
+
+        if should_persist_cleaned_history {
+            self.save_workspace_data().await?;
         }
 
         self.prepare_startup_restored_workspaces(workspaces_to_restore)
