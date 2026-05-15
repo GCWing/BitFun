@@ -3,7 +3,7 @@ use crate::agentic::coordination::{
     get_global_coordinator, get_global_scheduler, AgentSessionReplyRoute, DialogSubmissionPolicy,
     DialogTriggerSource,
 };
-use crate::agentic::core::PromptEnvelope;
+use crate::agentic::core::{PromptEnvelope, SessionConfig};
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -90,6 +90,52 @@ impl SessionMessageTool {
         Ok(resolved)
     }
 
+    fn validate_workspace_shape(
+        &self,
+        workspace: &str,
+        context: Option<&ToolUseContext>,
+    ) -> ValidationResult {
+        let workspace = workspace.trim();
+        if workspace.is_empty() {
+            return ValidationResult {
+                result: false,
+                message: Some("workspace is required and cannot be empty".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
+        match context {
+            Some(context) => {
+                let ws_ok = if context.is_remote() {
+                    posix_style_path_is_absolute(workspace)
+                } else {
+                    Path::new(workspace).is_absolute()
+                };
+                if !ws_ok {
+                    return ValidationResult {
+                        result: false,
+                        message: Some("workspace must be an absolute path".to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+            }
+            None => {
+                if !Path::new(workspace).is_absolute() && !posix_style_path_is_absolute(workspace) {
+                    return ValidationResult {
+                        result: false,
+                        message: Some("workspace must be an absolute path".to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+            }
+        }
+
+        ValidationResult::default()
+    }
+
     fn sender_session_id<'a>(&self, context: &'a ToolUseContext) -> BitFunResult<&'a str> {
         context.session_id.as_deref().ok_or_else(|| {
             BitFunError::tool("SessionMessage requires a source session".to_string())
@@ -103,6 +149,13 @@ impl SessionMessageTool {
             .ok_or_else(|| {
                 BitFunError::tool("SessionMessage requires a source workspace".to_string())
             })
+    }
+
+    fn creator_session_marker(&self, context: &ToolUseContext) -> BitFunResult<String> {
+        let creator_session_id = context.session_id.as_ref().ok_or_else(|| {
+            BitFunError::tool("SessionMessage requires a source session".to_string())
+        })?;
+        Ok(format!("session-{}", creator_session_id))
     }
 
     fn format_forwarded_message(&self, message: &str) -> String {
@@ -134,28 +187,13 @@ impl SessionMessageAgentType {
             Self::Cowork => "Cowork",
         }
     }
-
-    fn from_str(value: &str) -> Option<Self> {
-        if value.eq_ignore_ascii_case("agentic") {
-            Some(Self::Agentic)
-        } else if value.eq_ignore_ascii_case("plan") {
-            Some(Self::Plan)
-        } else if value.eq_ignore_ascii_case("cowork") {
-            Some(Self::Cowork)
-        } else {
-            None
-        }
-    }
-
-    fn is_coding_mode(&self) -> bool {
-        matches!(self, Self::Agentic | Self::Plan)
-    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct SessionMessageInput {
-    workspace: String,
-    session_id: String,
+    workspace: Option<String>,
+    session_id: Option<String>,
+    session_name: Option<String>,
     message: String,
     agent_type: Option<SessionMessageAgentType>,
 }
@@ -169,13 +207,16 @@ impl Tool for SessionMessageTool {
     async fn description(&self) -> BitFunResult<String> {
         Ok(
             r#"Asynchronously send a message to another agent session. When the target session finishes, its result is automatically sent back to you as a follow-up message.
-            
-You must provide the target workspace as an absolute path, and you can optionally set agent_type to choose how the target session handles the request:
+
+Usage:
+- Create a new session and send: omit "session_id", and provide "workspace", "session_name", "agent_type", and "message".
+- Reusing an existing session: provide "session_id" and "message". You may omit "workspace"; the tool will resolve it from the target session when possible.
+
+Allowed agent types when creating a session:
 - "agentic": Coding-focused agent for implementation, debugging, and code changes.
 - "Plan": Planning agent for clarifying requirements and producing an implementation plan before coding.
 - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
-
-When overriding an existing session's agent_type, only switching between "agentic" and "Plan" is allowed. It will not switch coding sessions to or from "Cowork"."#
+"#
                 .to_string(),
         )
     }
@@ -194,11 +235,15 @@ When overriding an existing session's agent_type, only switching between "agenti
             "properties": {
                 "workspace": {
                     "type": "string",
-                    "description": "Required absolute target workspace path."
+                    "description": "Required absolute target workspace path when creating a new session. Optional when session_id is provided."
                 },
                 "session_id": {
                     "type": "string",
-                    "description": "Target session ID."
+                    "description": "Optional target session ID. Omit it to create a new session and send the message there."
+                },
+                "session_name": {
+                    "type": "string",
+                    "description": "Required when session_id is omitted. Display name for the new session."
                 },
                 "message": {
                     "type": "string",
@@ -207,10 +252,10 @@ When overriding an existing session's agent_type, only switching between "agenti
                 "agent_type": {
                     "type": "string",
                     "enum": ["agentic", "Plan", "Cowork"],
-                    "description": "Optional target agent type. Defaults to the target session's current agent type."
+                    "description": "Required when session_id is omitted. Not allowed when sending to an existing session."
                 }
             },
-            "required": ["workspace", "session_id", "message"],
+            "required": ["message"],
             "additionalProperties": false
         })
     }
@@ -240,15 +285,6 @@ When overriding an existing session's agent_type, only switching between "agenti
             }
         };
 
-        if let Err(message) = Self::validate_session_id(&parsed.session_id) {
-            return ValidationResult {
-                result: false,
-                message: Some(message),
-                error_code: Some(400),
-                meta: None,
-            };
-        }
-
         if parsed.message.trim().is_empty() {
             return ValidationResult {
                 result: false,
@@ -258,42 +294,94 @@ When overriding an existing session's agent_type, only switching between "agenti
             };
         }
 
-        if parsed.workspace.trim().is_empty() {
-            return ValidationResult {
-                result: false,
-                message: Some("workspace is required and cannot be empty".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
+        match parsed.session_id.as_deref() {
+            Some(session_id) => {
+                if let Err(message) = Self::validate_session_id(session_id) {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(message),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+
+                if parsed.session_name.is_some() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(
+                            "session_name is only allowed when session_id is omitted".to_string(),
+                        ),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+
+                if parsed.agent_type.is_some() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(
+                            "agent_type override is not allowed when session_id is provided"
+                                .to_string(),
+                        ),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+
+                if let Some(workspace) = parsed.workspace.as_deref() {
+                    let workspace_validation = self.validate_workspace_shape(workspace, context);
+                    if !workspace_validation.result {
+                        return workspace_validation;
+                    }
+                }
+            }
+            None => {
+                if parsed
+                    .session_name
+                    .as_deref()
+                    .is_none_or(|value| value.trim().is_empty())
+                {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(
+                            "session_name is required when session_id is omitted".to_string(),
+                        ),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+
+                if parsed.agent_type.is_none() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(
+                            "agent_type is required when session_id is omitted".to_string(),
+                        ),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+
+                let Some(workspace) = parsed.workspace.as_deref() else {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(
+                            "workspace is required when session_id is omitted".to_string(),
+                        ),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                };
+                let workspace_validation = self.validate_workspace_shape(workspace, context);
+                if !workspace_validation.result {
+                    return workspace_validation;
+                }
+            }
         }
 
         let Some(context) = context else {
-            if !Path::new(parsed.workspace.trim()).is_absolute()
-                && !posix_style_path_is_absolute(parsed.workspace.trim())
-            {
-                return ValidationResult {
-                    result: false,
-                    message: Some("workspace must be an absolute path".to_string()),
-                    error_code: Some(400),
-                    meta: None,
-                };
-            }
             return ValidationResult::default();
         };
-
-        let ws_ok = if context.is_remote() {
-            posix_style_path_is_absolute(parsed.workspace.trim())
-        } else {
-            Path::new(parsed.workspace.trim()).is_absolute()
-        };
-        if !ws_ok {
-            return ValidationResult {
-                result: false,
-                message: Some("workspace must be an absolute path".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
-        }
 
         let Some(source_session_id) = context.session_id.as_deref() else {
             return ValidationResult {
@@ -306,15 +394,17 @@ When overriding an existing session's agent_type, only switching between "agenti
             };
         };
 
-        if source_session_id == parsed.session_id {
-            return ValidationResult {
-                result: false,
-                message: Some(
-                    "SessionMessage cannot send a message to the same session".to_string(),
-                ),
-                error_code: Some(400),
-                meta: None,
-            };
+        if let Some(target_session_id) = parsed.session_id.as_deref() {
+            if source_session_id == target_session_id {
+                return ValidationResult {
+                    result: false,
+                    message: Some(
+                        "SessionMessage cannot send a message to the same session".to_string(),
+                    ),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
         }
 
         ValidationResult::default()
@@ -324,13 +414,16 @@ When overriding an existing session's agent_type, only switching between "agenti
         let workspace = input
             .get("workspace")
             .and_then(|value| value.as_str())
-            .unwrap_or("unknown workspace");
-        let session_id = input
-            .get("session_id")
-            .and_then(|value| value.as_str())
-            .unwrap_or("unknown");
-
-        format!("Send message to session {} in {}", session_id, workspace)
+            .unwrap_or("resolved workspace");
+        if let Some(session_id) = input.get("session_id").and_then(|value| value.as_str()) {
+            format!("Send message to session {} in {}", session_id, workspace)
+        } else {
+            let session_name = input
+                .get("session_name")
+                .and_then(|value| value.as_str())
+                .unwrap_or("new session");
+            format!("Create session {} in {} and send message", session_name, workspace)
+        }
     }
 
     async fn call_impl(
@@ -340,17 +433,7 @@ When overriding an existing session's agent_type, only switching between "agenti
     ) -> BitFunResult<Vec<ToolResult>> {
         let params: SessionMessageInput = serde_json::from_value(input.clone())
             .map_err(|e| BitFunError::tool(format!("Invalid input: {}", e)))?;
-        let workspace = self.resolve_workspace(&params.workspace, context)?;
-        let workspace_path = Path::new(&workspace);
         let source_session_id = self.sender_session_id(context)?.to_string();
-        let target_session_id = params.session_id.clone();
-
-        if source_session_id == target_session_id {
-            return Err(BitFunError::tool(
-                "SessionMessage cannot send a message to the same session".to_string(),
-            ));
-        }
-
         let source_workspace = self.sender_workspace(context)?;
 
         let coordinator = get_global_coordinator()
@@ -358,47 +441,98 @@ When overriding an existing session's agent_type, only switching between "agenti
         let scheduler = get_global_scheduler()
             .ok_or_else(|| BitFunError::tool("scheduler not initialized".to_string()))?;
 
-        let existing_sessions = coordinator.list_sessions(workspace_path).await?;
-        let target_session = existing_sessions
-            .iter()
-            .find(|session| session.session_id == target_session_id.as_str())
-            .ok_or_else(|| {
-                BitFunError::NotFound(format!(
-                    "Session '{}' not found in workspace '{}'",
-                    target_session_id, workspace
-                ))
-            })?;
+        let (target_session_id, target_agent_type, created_session_id, workspace) =
+            if let Some(target_session_id) = params.session_id.clone() {
+                if source_session_id == target_session_id {
+                    return Err(BitFunError::tool(
+                        "SessionMessage cannot send a message to the same session".to_string(),
+                    ));
+                }
 
-        let persisted_agent_type = target_session.agent_type.trim();
-        let target_agent_type = if let Some(requested_agent_type) = params.agent_type.as_ref() {
-            let current_agent_type = if persisted_agent_type.is_empty() {
-                SessionMessageAgentType::Agentic
+                let workspace = if let Some(workspace) = params.workspace.as_deref() {
+                    self.resolve_workspace(workspace, context)?
+                } else {
+                    coordinator
+                        .resolve_session_workspace_path(&target_session_id)
+                        .await
+                        .map(|path| path.to_string_lossy().to_string())
+                        .ok_or_else(|| {
+                            BitFunError::NotFound(format!(
+                                "Workspace for session '{}' could not be resolved",
+                                target_session_id
+                            ))
+                        })?
+                };
+                let workspace_path = Path::new(&workspace);
+                let existing_sessions = coordinator.list_sessions(workspace_path).await?;
+                let target_session = existing_sessions
+                    .iter()
+                    .find(|session| session.session_id == target_session_id.as_str())
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!(
+                            "Session '{}' not found in workspace '{}'",
+                            target_session_id, workspace
+                        ))
+                    })?;
+
+                let persisted_agent_type = target_session.agent_type.trim();
+                let target_agent_type = if persisted_agent_type.is_empty() {
+                    "agentic".to_string()
+                } else {
+                    persisted_agent_type.to_string()
+                };
+
+                (target_session_id, target_agent_type, None, workspace)
             } else {
-                SessionMessageAgentType::from_str(persisted_agent_type).ok_or_else(|| {
-                    BitFunError::tool(format!(
-                        "SessionMessage agent_type override is only supported for sessions using 'agentic', 'Plan', or 'Cowork'. Current agent type is '{}'.",
-                        persisted_agent_type
-                    ))
-                })?
+                let workspace = self.resolve_workspace(
+                    params.workspace.as_deref().ok_or_else(|| {
+                        BitFunError::tool(
+                            "workspace is required when session_id is omitted".to_string(),
+                        )
+                    })?,
+                    context,
+                )?;
+                let session_name = params
+                    .session_name
+                    .clone()
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| {
+                        BitFunError::tool(
+                            "session_name is required when session_id is omitted".to_string(),
+                        )
+                    })?;
+                let agent_type = params
+                    .agent_type
+                    .as_ref()
+                    .ok_or_else(|| {
+                        BitFunError::tool(
+                            "agent_type is required when session_id is omitted".to_string(),
+                        )
+                    })?
+                    .as_str()
+                    .to_string();
+                let created_by = self.creator_session_marker(context)?;
+                let session = coordinator
+                    .create_session_with_workspace_and_creator(
+                        None,
+                        session_name,
+                        agent_type.clone(),
+                        SessionConfig {
+                            workspace_path: Some(workspace.clone()),
+                            ..Default::default()
+                        },
+                        workspace.clone(),
+                        Some(created_by),
+                    )
+                    .await?;
+
+                (
+                    session.session_id.clone(),
+                    session.agent_type.clone(),
+                    Some(session.session_id),
+                    workspace,
+                )
             };
-
-            if requested_agent_type.as_str() != current_agent_type.as_str()
-                && !(requested_agent_type.is_coding_mode() && current_agent_type.is_coding_mode())
-            {
-                return Err(BitFunError::tool(format!(
-                    "SessionMessage only allows agent_type override between 'agentic' and 'Plan'. Cannot switch session '{}' from '{}' to '{}'.",
-                    target_session_id,
-                    current_agent_type.as_str(),
-                    requested_agent_type.as_str()
-                )));
-            }
-
-            requested_agent_type.as_str().to_string()
-        } else if persisted_agent_type.is_empty() {
-            "agentic".to_string()
-        } else {
-            persisted_agent_type.to_string()
-        };
 
         let forwarded_message = self.format_forwarded_message(&params.message);
 
@@ -427,12 +561,191 @@ When overriding an existing session's agent_type, only switching between "agenti
                 "target_workspace": workspace.clone(),
                 "target_session_id": target_session_id.clone(),
                 "target_agent_type": target_agent_type.clone(),
+                "created_session_id": created_session_id.clone(),
             }),
-            result_for_assistant: Some(format!(
-                "Message accepted for session '{}' in workspace '{}' using agent type '{}'.",
-                target_session_id, workspace, target_agent_type
-            )),
+            result_for_assistant: Some(if let Some(created_session_id) = created_session_id {
+                format!(
+                    "Created session '{}' and accepted the message in workspace '{}' using agent type '{}'.",
+                    created_session_id, workspace, target_agent_type
+                )
+            } else {
+                format!(
+                    "Message accepted for session '{}' in workspace '{}' using agent type '{}'.",
+                    target_session_id, workspace, target_agent_type
+                )
+            }),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agentic::tools::framework::ToolUseContext;
+    use serde_json::json;
+    use std::collections::HashMap;
+    use std::fs;
+    use uuid::Uuid;
+
+    fn empty_context() -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: Default::default(),
+            workspace_services: None,
+        }
+    }
+
+    fn session_context(session_id: &str) -> ToolUseContext {
+        ToolUseContext {
+            session_id: Some(session_id.to_string()),
+            ..empty_context()
+        }
+    }
+
+    fn temp_workspace_path() -> String {
+        let path = std::env::temp_dir().join(format!(
+            "bitfun-session-message-tool-test-{}",
+            Uuid::new_v4()
+        ));
+        fs::create_dir_all(&path).expect("temp workspace should be created");
+        path.to_string_lossy().to_string()
+    }
+
+    #[tokio::test]
+    async fn validate_existing_session_rejects_agent_type_override() {
+        let tool = SessionMessageTool::new();
+        let workspace = temp_workspace_path();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "workspace": workspace,
+                    "session_id": "worker_1",
+                    "message": "hello",
+                    "agent_type": "Plan",
+                }),
+                Some(&session_context("source_1")),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(
+            validation.message.as_deref(),
+            Some("agent_type override is not allowed when session_id is provided")
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_new_session_requires_session_name() {
+        let tool = SessionMessageTool::new();
+        let workspace = temp_workspace_path();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "workspace": workspace,
+                    "message": "hello",
+                    "agent_type": "agentic",
+                }),
+                Some(&session_context("source_1")),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(
+            validation.message.as_deref(),
+            Some("session_name is required when session_id is omitted")
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_new_session_requires_agent_type() {
+        let tool = SessionMessageTool::new();
+        let workspace = temp_workspace_path();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "workspace": workspace,
+                    "message": "hello",
+                    "session_name": "Worker Session",
+                }),
+                Some(&session_context("source_1")),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(
+            validation.message.as_deref(),
+            Some("agent_type is required when session_id is omitted")
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_new_session_accepts_create_and_send_shape() {
+        let tool = SessionMessageTool::new();
+        let workspace = temp_workspace_path();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "workspace": workspace,
+                    "message": "hello",
+                    "session_name": "Worker Session",
+                    "agent_type": "agentic",
+                }),
+                Some(&session_context("source_1")),
+            )
+            .await;
+
+        assert!(validation.result, "{:?}", validation.message);
+    }
+
+    #[tokio::test]
+    async fn validate_existing_session_allows_missing_workspace() {
+        let tool = SessionMessageTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "session_id": "worker_1",
+                    "message": "hello",
+                }),
+                Some(&session_context("source_1")),
+            )
+            .await;
+
+        assert!(validation.result, "{:?}", validation.message);
+    }
+
+    #[tokio::test]
+    async fn validate_new_session_requires_workspace() {
+        let tool = SessionMessageTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "message": "hello",
+                    "session_name": "Worker Session",
+                    "agent_type": "agentic",
+                }),
+                Some(&session_context("source_1")),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(
+            validation.message.as_deref(),
+            Some("workspace is required when session_id is omitted")
+        );
     }
 }

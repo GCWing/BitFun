@@ -13,7 +13,9 @@ use crate::infrastructure::{try_get_path_manager_arc, PathManager};
 use crate::service::bootstrap::{
     ensure_workspace_gitignore_ignores_bitfun, initialize_workspace_persona_files,
 };
-use crate::service::remote_ssh::workspace_state::local_workspace_roots_equal;
+use crate::service::remote_ssh::workspace_state::{
+    local_workspace_roots_equal, normalize_remote_workspace_path, remote_workspace_stable_id,
+};
 use crate::service::workspace_runtime::{
     try_get_workspace_runtime_service_arc, WorkspaceRuntimeService,
 };
@@ -336,6 +338,40 @@ impl WorkspaceService {
 
         if let Ok(workspace) = result.as_ref() {
             self.maintain_workspace_sessions_best_effort(&workspace.root_path, "workspace_opened")
+                .await;
+        }
+
+        result
+    }
+
+    /// Registers or refreshes workspace activity without marking it as opened in the UI.
+    pub async fn track_workspace_activity(
+        &self,
+        path: PathBuf,
+        options: WorkspaceCreateOptions,
+    ) -> BitFunResult<WorkspaceInfo> {
+        let mut options = self.normalize_workspace_options_for_path(&path, options);
+        options.auto_set_current = false;
+        let result = {
+            let mut manager = self.manager.write().await;
+            manager
+                .track_workspace_with_options(path, Self::to_manager_open_options(&options))
+                .await
+        };
+
+        if let Ok(workspace) = result.as_ref() {
+            self.ensure_workspace_runtime_best_effort(workspace, "tracked")
+                .await;
+        }
+
+        if result.is_ok() {
+            if let Err(e) = self.save_workspace_data().await {
+                warn!("Failed to save workspace data after tracking activity: {}", e);
+            }
+        }
+
+        if let Ok(workspace) = result.as_ref() {
+            self.maintain_workspace_sessions_best_effort(&workspace.root_path, "workspace_tracked")
                 .await;
         }
 
@@ -1604,6 +1640,19 @@ impl WorkspaceService {
         mut options: WorkspaceCreateOptions,
     ) -> WorkspaceCreateOptions {
         if options.workspace_kind == WorkspaceKind::Remote {
+            if options.stable_workspace_id.is_none() {
+                if let Some(ssh_host) = options
+                    .remote_ssh_host
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    options.stable_workspace_id = Some(remote_workspace_stable_id(
+                        ssh_host,
+                        &normalize_remote_workspace_path(&path.to_string_lossy()),
+                    ));
+                }
+            }
             return options;
         }
 
@@ -2079,5 +2128,63 @@ mod tests {
                 .exists(),
             "legacy session directory should be removed after startup migration"
         );
+    }
+
+    #[tokio::test]
+    async fn track_workspace_activity_registers_without_opening_workspace() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let workspace_root = env.create_workspace_dir("tracked-workspace");
+
+        let tracked = service
+            .track_workspace_activity(workspace_root.clone(), WorkspaceCreateOptions::default())
+            .await
+            .expect("workspace tracking should succeed");
+
+        let tracked_by_path = service
+            .get_workspace_by_path(&workspace_root)
+            .await
+            .expect("tracked workspace should be queryable by path");
+        assert_eq!(tracked_by_path.id, tracked.id);
+
+        let recent = service.get_recent_workspaces().await;
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].id, tracked.id);
+
+        assert!(
+            service.get_opened_workspaces().await.is_empty(),
+            "tracked workspace activity should not add the workspace to the opened UI list"
+        );
+        assert!(
+            service.get_current_workspace().await.is_none(),
+            "tracked workspace activity should not change the current workspace"
+        );
+    }
+
+    #[tokio::test]
+    async fn track_workspace_activity_assigns_stable_remote_workspace_id() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let remote_workspace_root = PathBuf::from("/srv/bitfun/project");
+
+        let tracked = service
+            .track_workspace_activity(
+                remote_workspace_root.clone(),
+                WorkspaceCreateOptions {
+                    workspace_kind: WorkspaceKind::Remote,
+                    remote_connection_id: Some("conn-1".to_string()),
+                    remote_ssh_host: Some("example-host".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("remote workspace tracking should succeed");
+
+        assert_eq!(
+            tracked.id,
+            remote_workspace_stable_id("example-host", "/srv/bitfun/project")
+        );
+        assert_eq!(tracked.root_path, remote_workspace_root);
+        assert!(service.get_opened_workspaces().await.is_empty());
     }
 }

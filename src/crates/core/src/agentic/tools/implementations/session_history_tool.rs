@@ -1,4 +1,4 @@
-use super::util::normalize_path;
+use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
@@ -9,7 +9,6 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::path::Path;
 use std::sync::Arc;
 
 /// SessionHistory tool - export a grep-friendly transcript file for a session.
@@ -47,39 +46,6 @@ impl SessionHistoryTool {
         Ok(())
     }
 
-    fn resolve_workspace(&self, workspace: &str) -> BitFunResult<String> {
-        let workspace = workspace.trim();
-        if workspace.is_empty() {
-            return Err(BitFunError::tool(
-                "workspace is required and cannot be empty".to_string(),
-            ));
-        }
-
-        let path = Path::new(workspace);
-        if !path.is_absolute() {
-            return Err(BitFunError::tool(
-                "workspace must be an absolute path".to_string(),
-            ));
-        }
-
-        let resolved = normalize_path(workspace);
-        let path = Path::new(&resolved);
-        if !path.exists() {
-            return Err(BitFunError::tool(format!(
-                "Workspace does not exist: {}",
-                resolved
-            )));
-        }
-        if !path.is_dir() {
-            return Err(BitFunError::tool(format!(
-                "Workspace is not a directory: {}",
-                resolved
-            )));
-        }
-
-        Ok(resolved)
-    }
-
     fn resolve_session_id(&self, session_id: &str) -> BitFunResult<String> {
         let session_id = session_id.trim().to_string();
         Self::validate_session_id(&session_id).map_err(BitFunError::tool)?;
@@ -89,7 +55,6 @@ impl SessionHistoryTool {
 
 #[derive(Debug, Clone, Deserialize)]
 struct SessionHistoryInput {
-    workspace: String,
     session_id: String,
     #[serde(default)]
     tools: Option<bool>,
@@ -165,10 +130,6 @@ Examples:
         json!({
             "type": "object",
             "properties": {
-                "workspace": {
-                    "type": "string",
-                    "description": "Required absolute workspace path."
-                },
                 "session_id": {
                     "type": "string",
                     "description": "Required session ID to export."
@@ -193,7 +154,7 @@ Examples:
                     "description": "Optional list of turn selectors. Supports index and start:end forms such as \":1\", \"-20:\", \"10:30\", or \"15\"."
                 }
             },
-            "required": ["workspace", "session_id"],
+            "required": ["session_id"],
             "additionalProperties": false
         })
     }
@@ -222,24 +183,6 @@ Examples:
                 };
             }
         };
-
-        if parsed.workspace.trim().is_empty() {
-            return ValidationResult {
-                result: false,
-                message: Some("workspace is required and cannot be empty".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
-        }
-
-        if !Path::new(parsed.workspace.trim()).is_absolute() {
-            return ValidationResult {
-                result: false,
-                message: Some("workspace must be an absolute path".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
-        }
 
         if parsed.session_id.trim().is_empty() {
             return ValidationResult {
@@ -304,12 +247,23 @@ Examples:
         let params: SessionHistoryInput = serde_json::from_value(input.clone())
             .map_err(|e| BitFunError::tool(format!("Invalid input: {}", e)))?;
 
-        let workspace = self.resolve_workspace(&params.workspace)?;
         let session_id = self.resolve_session_id(&params.session_id)?;
+        let coordinator = get_global_coordinator()
+            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+        let workspace = coordinator
+            .resolve_session_workspace_path(&session_id)
+            .await
+            .map(|path| path.to_string_lossy().to_string())
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!(
+                    "Workspace for session '{}' could not be resolved",
+                    session_id
+                ))
+            })?;
         let manager = PersistenceManager::new(Arc::new(PathManager::new()?))?;
         let transcript = manager
             .export_session_transcript(
-                Path::new(&workspace),
+                std::path::Path::new(&workspace),
                 &session_id,
                 &SessionTranscriptExportOptions {
                     tools: params.tools.unwrap_or(false),
@@ -334,5 +288,27 @@ Examples:
             )),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn validate_allows_missing_workspace_when_session_id_present() {
+        let tool = SessionHistoryTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "session_id": "worker_1",
+                }),
+                None,
+            )
+            .await;
+
+        assert!(validation.result, "{:?}", validation.message);
     }
 }

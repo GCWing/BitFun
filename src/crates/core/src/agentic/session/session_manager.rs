@@ -22,6 +22,7 @@ use crate::service::session::{
     UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
+use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::sanitize_plain_model_output;
 use crate::util::timing::elapsed_ms_u64;
@@ -75,648 +76,16 @@ pub struct ResolvedSessionTitle {
     pub title: String,
     pub method: SessionTitleMethod,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{SessionManager, SessionManagerConfig};
-    use crate::agentic::core::{Message, ProcessingPhase, Session, SessionConfig, SessionState};
-    use crate::agentic::persistence::PersistenceManager;
-    use crate::agentic::session::SessionContextStore;
-    use crate::infrastructure::PathManager;
-    use crate::service::session::{
-        DialogTurnData, ModelRoundData, ToolCallData, ToolItemData, ToolResultData, UserMessageData,
-    };
-    use serde_json::json;
-    use std::path::{Path, PathBuf};
-    use std::sync::Arc;
-    use std::time::Duration;
-    use uuid::Uuid;
-
-    struct TestWorkspace {
-        path: PathBuf,
-    }
-
-    impl TestWorkspace {
-        fn new() -> Self {
-            let path = std::env::temp_dir()
-                .join(format!("bitfun-session-restore-test-{}", Uuid::new_v4()));
-            std::fs::create_dir_all(&path).expect("test workspace should be created");
-            Self { path }
-        }
-
-        fn path(&self) -> &Path {
-            &self.path
-        }
-    }
-
-    impl Drop for TestWorkspace {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.path);
-        }
-    }
-
-    fn test_manager(persistence_manager: Arc<PersistenceManager>) -> SessionManager {
-        SessionManager::new(
-            Arc::new(SessionContextStore::new()),
-            persistence_manager,
-            SessionManagerConfig {
-                max_active_sessions: 100,
-                session_idle_timeout: Duration::from_secs(3600),
-                auto_save_interval: Duration::from_secs(300),
-                enable_persistence: true,
-            },
-        )
-    }
-
-    fn in_memory_test_manager() -> SessionManager {
-        let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
-        );
-        SessionManager::new(
-            Arc::new(SessionContextStore::new()),
-            persistence_manager,
-            SessionManagerConfig {
-                max_active_sessions: 100,
-                session_idle_timeout: Duration::from_secs(3600),
-                auto_save_interval: Duration::from_secs(300),
-                enable_persistence: false,
-            },
-        )
-    }
-
-    #[tokio::test]
-    async fn reset_session_state_if_processing_ignores_a_newer_turn() {
-        let manager = in_memory_test_manager();
-        let session_id = Uuid::new_v4().to_string();
-        let mut session = Session::new_with_id(
-            session_id.clone(),
-            "Active session".to_string(),
-            "agent".to_string(),
-            SessionConfig::default(),
-        );
-        session.state = SessionState::Processing {
-            current_turn_id: "turn-2".to_string(),
-            phase: ProcessingPhase::Thinking,
-        };
-        manager.sessions.insert(session_id.clone(), session);
-
-        manager.reset_session_state_if_processing(&session_id, "turn-1");
-
-        let session = manager
-            .get_session(&session_id)
-            .expect("session should remain available");
-        assert!(matches!(
-            session.state,
-            SessionState::Processing {
-                ref current_turn_id,
-                ..
-            } if current_turn_id == "turn-2"
-        ));
-    }
-
-    #[tokio::test]
-    async fn reset_session_state_if_processing_resets_the_matching_turn() {
-        let manager = in_memory_test_manager();
-        let session_id = Uuid::new_v4().to_string();
-        let mut session = Session::new_with_id(
-            session_id.clone(),
-            "Active session".to_string(),
-            "agent".to_string(),
-            SessionConfig::default(),
-        );
-        session.state = SessionState::Processing {
-            current_turn_id: "turn-1".to_string(),
-            phase: ProcessingPhase::Thinking,
-        };
-        manager.sessions.insert(session_id.clone(), session);
-
-        manager.reset_session_state_if_processing(&session_id, "turn-1");
-
-        let session = manager
-            .get_session(&session_id)
-            .expect("session should remain available");
-        assert!(matches!(session.state, SessionState::Idle));
-    }
-
-    #[tokio::test]
-    async fn update_session_state_for_turn_if_processing_ignores_a_newer_turn() {
-        let manager = in_memory_test_manager();
-        let session_id = Uuid::new_v4().to_string();
-        let mut session = Session::new_with_id(
-            session_id.clone(),
-            "Active session".to_string(),
-            "agent".to_string(),
-            SessionConfig::default(),
-        );
-        session.state = SessionState::Processing {
-            current_turn_id: "turn-2".to_string(),
-            phase: ProcessingPhase::Thinking,
-        };
-        manager.sessions.insert(session_id.clone(), session);
-
-        let updated = manager
-            .update_session_state_for_turn_if_processing(&session_id, "turn-1", SessionState::Idle)
-            .await
-            .expect("conditional state update should not fail");
-
-        let session = manager
-            .get_session(&session_id)
-            .expect("session should remain available");
-        assert!(!updated);
-        assert!(matches!(
-            session.state,
-            SessionState::Processing {
-                ref current_turn_id,
-                ..
-            } if current_turn_id == "turn-2"
-        ));
-    }
-
-    #[tokio::test]
-    async fn update_session_state_for_turn_if_processing_updates_matching_turn() {
-        let manager = in_memory_test_manager();
-        let session_id = Uuid::new_v4().to_string();
-        let mut session = Session::new_with_id(
-            session_id.clone(),
-            "Active session".to_string(),
-            "agent".to_string(),
-            SessionConfig::default(),
-        );
-        session.state = SessionState::Processing {
-            current_turn_id: "turn-1".to_string(),
-            phase: ProcessingPhase::Thinking,
-        };
-        manager.sessions.insert(session_id.clone(), session);
-
-        let updated = manager
-            .update_session_state_for_turn_if_processing(&session_id, "turn-1", SessionState::Idle)
-            .await
-            .expect("conditional state update should not fail");
-
-        let session = manager
-            .get_session(&session_id)
-            .expect("session should remain available");
-        assert!(updated);
-        assert!(matches!(session.state, SessionState::Idle));
-    }
-
-    #[tokio::test]
-    async fn restore_session_resets_processing_state_without_marking_unread_completion() {
-        let workspace = TestWorkspace::new();
-        let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
-        );
-        let session_id = Uuid::new_v4().to_string();
-        let mut session = Session::new_with_id(
-            session_id.clone(),
-            "Legacy processing session".to_string(),
-            "agent".to_string(),
-            SessionConfig {
-                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
-                ..Default::default()
-            },
-        );
-        session.state = SessionState::Processing {
-            current_turn_id: "turn-1".to_string(),
-            phase: ProcessingPhase::Thinking,
-        };
-
-        persistence_manager
-            .save_session(workspace.path(), &session)
-            .await
-            .expect("session should save");
-        persistence_manager
-            .save_session_state(workspace.path(), &session_id, &session.state)
-            .await
-            .expect("processing state should save");
-
-        let manager = test_manager(persistence_manager.clone());
-        let restored = manager
-            .restore_session(workspace.path(), &session_id)
-            .await
-            .expect("session should restore");
-        let metadata = persistence_manager
-            .load_session_metadata(workspace.path(), &session_id)
-            .await
-            .expect("metadata should load")
-            .expect("metadata should exist");
-
-        assert!(matches!(restored.state, SessionState::Idle));
-        assert_eq!(metadata.unread_completion, None);
-    }
-
-    #[tokio::test]
-    async fn restore_session_view_loads_turns_without_restoring_runtime_context() {
-        let workspace = TestWorkspace::new();
-        let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
-        );
-        let manager = test_manager(persistence_manager.clone());
-        let session_id = Uuid::new_v4().to_string();
-        let mut session = Session::new_with_id(
-            session_id.clone(),
-            "Large history".to_string(),
-            "agent".to_string(),
-            SessionConfig {
-                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
-                ..Default::default()
-            },
-        );
-        session.dialog_turn_ids = vec!["turn-1".to_string()];
-
-        persistence_manager
-            .save_session(workspace.path(), &session)
-            .await
-            .expect("session should save");
-        let turn = DialogTurnData::new(
-            "turn-1".to_string(),
-            0,
-            session_id.clone(),
-            UserMessageData {
-                id: "turn-1-user".to_string(),
-                content: "hello".to_string(),
-                timestamp: 1,
-                metadata: None,
-            },
-        );
-        persistence_manager
-            .save_dialog_turn(workspace.path(), &turn)
-            .await
-            .expect("turn should save");
-        persistence_manager
-            .save_turn_context_snapshot(
-                workspace.path(),
-                &session_id,
-                0,
-                &[Message::user("snapshot prompt".to_string())],
-            )
-            .await
-            .expect("context snapshot should save");
-
-        let (view_session, turns) = manager
-            .restore_session_view(workspace.path(), &session_id)
-            .await
-            .expect("session view should restore");
-
-        assert_eq!(view_session.dialog_turn_ids, vec!["turn-1".to_string()]);
-        assert_eq!(turns.len(), 1);
-        assert!(manager.get_session(&session_id).is_none());
-        assert!(manager
-            .context_store
-            .get_context_messages(&session_id)
-            .is_empty());
-    }
-
-    #[tokio::test]
-    async fn restore_session_view_preserves_full_visible_tool_result_payload() {
-        let workspace = TestWorkspace::new();
-        let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
-        );
-        let manager = test_manager(persistence_manager.clone());
-        let session_id = Uuid::new_v4().to_string();
-        let mut session = Session::new_with_id(
-            session_id.clone(),
-            "History with tool output".to_string(),
-            "agent".to_string(),
-            SessionConfig {
-                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
-                ..Default::default()
-            },
-        );
-        session.dialog_turn_ids = vec!["turn-1".to_string()];
-
-        persistence_manager
-            .save_session(workspace.path(), &session)
-            .await
-            .expect("session should save");
-
-        let visible_output = "complete visible output ".repeat(128);
-        let assistant_output = "assistant visible summary ".repeat(16);
-        let mut turn = DialogTurnData::new(
-            "turn-1".to_string(),
-            0,
-            session_id.clone(),
-            UserMessageData {
-                id: "turn-1-user".to_string(),
-                content: "show full output".to_string(),
-                timestamp: 1,
-                metadata: None,
-            },
-        );
-        turn.model_rounds.push(ModelRoundData {
-            id: "round-1".to_string(),
-            turn_id: "turn-1".to_string(),
-            round_index: 0,
-            timestamp: 1,
-            text_items: vec![],
-            tool_items: vec![ToolItemData {
-                id: "tool-1".to_string(),
-                tool_name: "Bash".to_string(),
-                tool_call: ToolCallData {
-                    id: "call-1".to_string(),
-                    input: json!({ "command": "printf output" }),
-                },
-                tool_result: Some(ToolResultData {
-                    result: json!({
-                        "stdout": visible_output,
-                        "nested": {
-                            "stderr": "also visible",
-                        },
-                    }),
-                    success: true,
-                    result_for_assistant: Some(assistant_output.clone()),
-                    error: None,
-                    duration_ms: Some(1),
-                }),
-                ai_intent: None,
-                start_time: 1,
-                end_time: Some(2),
-                duration_ms: Some(1),
-                queue_wait_ms: None,
-                preflight_ms: None,
-                confirmation_wait_ms: None,
-                execution_ms: None,
-                order_index: None,
-                is_subagent_item: None,
-                parent_task_tool_id: None,
-                subagent_session_id: None,
-                subagent_model_id: None,
-                subagent_model_alias: None,
-                status: Some("completed".to_string()),
-                interruption_reason: None,
-            }],
-            thinking_items: vec![],
-            start_time: 1,
-            end_time: Some(2),
-            duration_ms: Some(1),
-            provider_id: None,
-            model_id: None,
-            model_alias: None,
-            first_chunk_ms: None,
-            first_visible_output_ms: None,
-            stream_duration_ms: None,
-            attempt_count: None,
-            failure_category: None,
-            token_details: None,
-            status: "completed".to_string(),
-        });
-        persistence_manager
-            .save_dialog_turn(workspace.path(), &turn)
-            .await
-            .expect("turn should save");
-
-        let (view_session, turns) = manager
-            .restore_session_view(workspace.path(), &session_id)
-            .await
-            .expect("session view should restore");
-
-        let restored_result = turns[0].model_rounds[0].tool_items[0]
-            .tool_result
-            .as_ref()
-            .expect("tool result should be preserved");
-        assert_eq!(view_session.dialog_turn_ids, vec!["turn-1".to_string()]);
-        assert_eq!(
-            restored_result.result["stdout"].as_str(),
-            Some(visible_output.as_str())
-        );
-        assert_eq!(
-            restored_result.result["nested"]["stderr"].as_str(),
-            Some("also visible")
-        );
-        assert_eq!(
-            restored_result.result_for_assistant.as_deref(),
-            Some(assistant_output.as_str())
-        );
-        assert!(manager.get_session(&session_id).is_none());
-    }
-
-    #[tokio::test]
-    async fn rollback_context_deletes_persisted_turns_from_target() {
-        let workspace = TestWorkspace::new();
-        let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
-        );
-        let manager = test_manager(persistence_manager.clone());
-        let session = manager
-            .create_session(
-                "Rollback session".to_string(),
-                "agent".to_string(),
-                SessionConfig {
-                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("session should create");
-
-        for index in 0..3 {
-            let turn = DialogTurnData::new(
-                format!("turn-{index}"),
-                index,
-                session.session_id.clone(),
-                UserMessageData {
-                    id: format!("turn-{index}-user"),
-                    content: format!("prompt {index}"),
-                    timestamp: index as u64,
-                    metadata: None,
-                },
-            );
-            persistence_manager
-                .save_dialog_turn(workspace.path(), &turn)
-                .await
-                .expect("turn should save");
-        }
-
-        {
-            let mut active = manager
-                .sessions
-                .get_mut(&session.session_id)
-                .expect("session should be active");
-            active.dialog_turn_ids = vec![
-                "turn-0".to_string(),
-                "turn-1".to_string(),
-                "turn-2".to_string(),
-            ];
-        }
-        persistence_manager
-            .save_turn_context_snapshot(
-                workspace.path(),
-                &session.session_id,
-                0,
-                &[crate::agentic::core::Message::user("prompt 0".to_string())],
-            )
-            .await
-            .expect("snapshot 0 should save");
-        persistence_manager
-            .save_turn_context_snapshot(
-                workspace.path(),
-                &session.session_id,
-                1,
-                &[
-                    crate::agentic::core::Message::user("prompt 0".to_string()),
-                    crate::agentic::core::Message::user("prompt 1".to_string()),
-                ],
-            )
-            .await
-            .expect("snapshot 1 should save");
-
-        manager
-            .rollback_context_to_turn_start(workspace.path(), &session.session_id, 1)
-            .await
-            .expect("rollback should succeed");
-
-        let turns = persistence_manager
-            .load_session_turns(workspace.path(), &session.session_id)
-            .await
-            .expect("turns should load");
-        assert_eq!(turns.len(), 1);
-        assert_eq!(turns[0].user_message.content, "prompt 0");
-        assert!(persistence_manager
-            .load_turn_context_snapshot(workspace.path(), &session.session_id, 1)
-            .await
-            .expect("snapshot load should succeed")
-            .is_none());
-
-        manager.sessions.remove(&session.session_id);
-        let restored = manager
-            .restore_session(workspace.path(), &session.session_id)
-            .await
-            .expect("session should restore");
-        assert_eq!(restored.dialog_turn_ids, vec!["turn-0".to_string()]);
-        assert_eq!(
-            manager
-                .context_store
-                .get_context_messages(&session.session_id)
-                .len(),
-            1
-        );
-
-        let metadata = persistence_manager
-            .load_session_metadata(workspace.path(), &session.session_id)
-            .await
-            .expect("metadata should load")
-            .expect("metadata should exist");
-        assert_eq!(metadata.turn_count, 1);
-    }
-
-    #[test]
-    fn build_messages_from_turns_skips_model_invisible_turns() {
-        use crate::service::session::{DialogTurnData, DialogTurnKind, UserMessageData};
-
-        let turns = vec![
-            DialogTurnData::new(
-                "turn-1".to_string(),
-                0,
-                "session-1".to_string(),
-                UserMessageData {
-                    id: "user-1".to_string(),
-                    content: "hello".to_string(),
-                    timestamp: 1,
-                    metadata: None,
-                },
-            ),
-            DialogTurnData::new_with_kind(
-                DialogTurnKind::ManualCompaction,
-                "turn-2".to_string(),
-                1,
-                "session-1".to_string(),
-                UserMessageData {
-                    id: "user-2".to_string(),
-                    content: "/compact".to_string(),
-                    timestamp: 2,
-                    metadata: None,
-                },
-            ),
-            DialogTurnData::new_with_kind(
-                DialogTurnKind::LocalCommand,
-                "turn-3".to_string(),
-                2,
-                "session-1".to_string(),
-                UserMessageData {
-                    id: "user-3".to_string(),
-                    content: "# Session Usage Report".to_string(),
-                    timestamp: 3,
-                    metadata: Some(serde_json::json!({
-                        "localCommandKind": "usage_report",
-                        "modelVisible": false
-                    })),
-                },
-            ),
-        ];
-
-        let messages = SessionManager::build_messages_from_turns(&turns);
-
-        assert_eq!(messages.len(), 1);
-        assert!(messages[0].is_actual_user_message());
-    }
-
-    #[test]
-    fn fallback_session_title_uses_sentence_break_when_available() {
-        let title = SessionManager::fallback_session_title(
-            "Fix the flaky integration test. Add logging for retries.",
-            20,
-        );
-
-        assert_eq!(title, "Fix the flaky...");
-    }
-
-    #[test]
-    fn fallback_session_title_appends_ellipsis_when_truncated_without_sentence_break() {
-        let title = SessionManager::fallback_session_title(
-            "Implement session title generation fallback",
-            12,
-        );
-
-        assert_eq!(title, "Implement...");
-    }
-
-    #[test]
-    fn fallback_session_title_uses_default_for_blank_input() {
-        let title = SessionManager::fallback_session_title("   ", 20);
-
-        assert_eq!(title, "New Session");
-    }
-
-    #[tokio::test]
-    async fn records_subagent_partial_timeout_in_evidence_ledger() {
-        let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
-        );
-        let manager = test_manager(persistence_manager);
-
-        let event = manager.record_subagent_partial_timeout(
-            "session-a",
-            "turn-a",
-            "ReviewSecurity",
-            "Found token logging before timeout.",
-            Some("timeout"),
-        );
-
-        assert!(!event.event_id.is_empty());
-        let events = manager.evidence_events_for_turn("session-a", "turn-a");
-        assert_eq!(events, vec![event.clone()]);
-        let summary = manager.evidence_summary_for_session("session-a", 10);
-        assert_eq!(summary.partial_subagent_results.len(), 1);
-        assert_eq!(summary.partial_subagent_results[0].event_id, event.event_id);
-    }
-}
-
 /// Session manager
 pub struct SessionManager {
     /// Active sessions in memory
     sessions: Arc<DashMap<String, Session>>,
 
-    /// Persistent index of session_id -> effective workspace path.
-    /// Populated on session create/restore; NOT cleared on memory eviction.
-    /// Allows commands that only receive a session_id (e.g. update_session_model_id)
-    /// to restore an evicted session without requiring the caller to supply a path.
+    /// Runtime cache of session_id -> effective workspace path.
+    /// Populated on session create/restore and used to restore evicted sessions
+    /// or resolve workspace-bound operations that only receive a session_id.
+    /// This cache is intentionally retained across memory eviction, but should
+    /// be cleared when a session is explicitly deleted.
     session_workspace_index: Arc<DashMap<String, PathBuf>>,
 
     /// Sub-components
@@ -894,6 +263,87 @@ impl SessionManager {
     async fn effective_session_workspace_path(&self, session_id: &str) -> Option<PathBuf> {
         let config = self.sessions.get(session_id)?.config.clone();
         Self::effective_workspace_path_from_config(&config).await
+    }
+
+    /// Resolve the logical workspace path bound to a session.
+    ///
+    /// This prefers the in-memory session config, then the persisted metadata
+    /// reachable via the session workspace index, and finally scans tracked
+    /// workspaces known to the global workspace service ordered by recent access.
+    pub async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<PathBuf> {
+        if let Some(workspace_path) = self
+            .get_session(session_id)
+            .and_then(|session| session.config.workspace_path)
+            .filter(|path| !path.is_empty())
+        {
+            return Some(PathBuf::from(workspace_path));
+        }
+
+        let indexed_workspace_path = self
+            .session_workspace_index
+            .get(session_id)
+            .map(|entry| entry.clone());
+        if let Some(workspace_path) = indexed_workspace_path {
+            match self
+                .persistence_manager
+                .load_session_metadata(&workspace_path, session_id)
+                .await
+            {
+                Ok(Some(metadata)) => {
+                    if let Some(bound_workspace) =
+                        metadata.workspace_path.filter(|path| !path.is_empty())
+                    {
+                        return Some(PathBuf::from(bound_workspace));
+                    }
+                    return Some(workspace_path);
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    debug!(
+                        "Failed to load indexed session metadata while resolving workspace: session_id={} workspace={} error={}",
+                        session_id,
+                        workspace_path.display(),
+                        err
+                    );
+                }
+            }
+        }
+
+        let workspace_service = get_global_workspace_service()?;
+        let mut workspaces = workspace_service.list_workspace_infos().await;
+        workspaces.sort_by(|left, right| right.last_accessed.cmp(&left.last_accessed));
+        let candidates: Vec<PathBuf> = workspaces
+            .into_iter()
+            .map(|workspace| workspace.root_path)
+            .collect();
+
+        for workspace_path in candidates {
+            match self
+                .persistence_manager
+                .load_session_metadata(&workspace_path, session_id)
+                .await
+            {
+                Ok(Some(metadata)) => {
+                    if let Some(bound_workspace) =
+                        metadata.workspace_path.filter(|path| !path.is_empty())
+                    {
+                        return Some(PathBuf::from(bound_workspace));
+                    }
+                    return Some(workspace_path);
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    debug!(
+                        "Failed to load session metadata while resolving workspace: session_id={} workspace={} error={}",
+                        session_id,
+                        workspace_path.display(),
+                        err
+                    );
+                }
+            }
+        }
+
+        None
     }
 
     fn build_messages_from_turns(turns: &[DialogTurnData]) -> Vec<Message> {
@@ -1874,6 +1324,7 @@ impl SessionManager {
             session_id,
             elapsed_ms_u64(memory_stage_started_at)
         );
+        self.session_workspace_index.remove(session_id);
 
         info!(
             "Session deletion completed: session_id={}, workspace_path={}, duration_ms={}",
@@ -3341,5 +2792,672 @@ impl SessionManager {
         });
 
         debug!("Cleanup task started");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SessionManager, SessionManagerConfig};
+    use crate::agentic::core::{Message, ProcessingPhase, Session, SessionConfig, SessionState};
+    use crate::agentic::persistence::PersistenceManager;
+    use crate::agentic::session::SessionContextStore;
+    use crate::infrastructure::PathManager;
+    use crate::service::session::{
+        DialogTurnData, ModelRoundData, ToolCallData, ToolItemData, ToolResultData, UserMessageData,
+    };
+    use serde_json::json;
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::time::Duration;
+    use uuid::Uuid;
+
+    struct TestWorkspace {
+        path: PathBuf,
+    }
+
+    impl TestWorkspace {
+        fn new() -> Self {
+            let path = std::env::temp_dir()
+                .join(format!("bitfun-session-restore-test-{}", Uuid::new_v4()));
+            std::fs::create_dir_all(&path).expect("test workspace should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn test_manager(persistence_manager: Arc<PersistenceManager>) -> SessionManager {
+        SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence_manager,
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: true,
+            },
+        )
+    }
+
+    fn in_memory_test_manager() -> SessionManager {
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence_manager,
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+            },
+        )
+    }
+
+    #[tokio::test]
+    async fn reset_session_state_if_processing_ignores_a_newer_turn() {
+        let manager = in_memory_test_manager();
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Active session".to_string(),
+            "agent".to_string(),
+            SessionConfig::default(),
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-2".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+        manager.sessions.insert(session_id.clone(), session);
+
+        manager.reset_session_state_if_processing(&session_id, "turn-1");
+
+        let session = manager
+            .get_session(&session_id)
+            .expect("session should remain available");
+        assert!(matches!(
+            session.state,
+            SessionState::Processing {
+                ref current_turn_id,
+                ..
+            } if current_turn_id == "turn-2"
+        ));
+    }
+
+    #[tokio::test]
+    async fn reset_session_state_if_processing_resets_the_matching_turn() {
+        let manager = in_memory_test_manager();
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Active session".to_string(),
+            "agent".to_string(),
+            SessionConfig::default(),
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+        manager.sessions.insert(session_id.clone(), session);
+
+        manager.reset_session_state_if_processing(&session_id, "turn-1");
+
+        let session = manager
+            .get_session(&session_id)
+            .expect("session should remain available");
+        assert!(matches!(session.state, SessionState::Idle));
+    }
+
+    #[tokio::test]
+    async fn update_session_state_for_turn_if_processing_ignores_a_newer_turn() {
+        let manager = in_memory_test_manager();
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Active session".to_string(),
+            "agent".to_string(),
+            SessionConfig::default(),
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-2".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+        manager.sessions.insert(session_id.clone(), session);
+
+        let updated = manager
+            .update_session_state_for_turn_if_processing(&session_id, "turn-1", SessionState::Idle)
+            .await
+            .expect("conditional state update should not fail");
+
+        let session = manager
+            .get_session(&session_id)
+            .expect("session should remain available");
+        assert!(!updated);
+        assert!(matches!(
+            session.state,
+            SessionState::Processing {
+                ref current_turn_id,
+                ..
+            } if current_turn_id == "turn-2"
+        ));
+    }
+
+    #[tokio::test]
+    async fn update_session_state_for_turn_if_processing_updates_matching_turn() {
+        let manager = in_memory_test_manager();
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Active session".to_string(),
+            "agent".to_string(),
+            SessionConfig::default(),
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+        manager.sessions.insert(session_id.clone(), session);
+
+        let updated = manager
+            .update_session_state_for_turn_if_processing(&session_id, "turn-1", SessionState::Idle)
+            .await
+            .expect("conditional state update should not fail");
+
+        let session = manager
+            .get_session(&session_id)
+            .expect("session should remain available");
+        assert!(updated);
+        assert!(matches!(session.state, SessionState::Idle));
+    }
+
+    #[tokio::test]
+    async fn restore_session_resets_processing_state_without_marking_unread_completion() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Legacy processing session".to_string(),
+            "agent".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        session.state = SessionState::Processing {
+            current_turn_id: "turn-1".to_string(),
+            phase: ProcessingPhase::Thinking,
+        };
+
+        persistence_manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+        persistence_manager
+            .save_session_state(workspace.path(), &session_id, &session.state)
+            .await
+            .expect("processing state should save");
+
+        let manager = test_manager(persistence_manager.clone());
+        let restored = manager
+            .restore_session(workspace.path(), &session_id)
+            .await
+            .expect("session should restore");
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+
+        assert!(matches!(restored.state, SessionState::Idle));
+        assert_eq!(metadata.unread_completion, None);
+    }
+
+    #[tokio::test]
+    async fn restore_session_view_loads_turns_without_restoring_runtime_context() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Large history".to_string(),
+            "agent".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        session.dialog_turn_ids = vec!["turn-1".to_string()];
+
+        persistence_manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+        let turn = DialogTurnData::new(
+            "turn-1".to_string(),
+            0,
+            session_id.clone(),
+            UserMessageData {
+                id: "turn-1-user".to_string(),
+                content: "hello".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+        );
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+        persistence_manager
+            .save_turn_context_snapshot(
+                workspace.path(),
+                &session_id,
+                0,
+                &[Message::user("snapshot prompt".to_string())],
+            )
+            .await
+            .expect("context snapshot should save");
+
+        let (view_session, turns) = manager
+            .restore_session_view(workspace.path(), &session_id)
+            .await
+            .expect("session view should restore");
+
+        assert_eq!(view_session.dialog_turn_ids, vec!["turn-1".to_string()]);
+        assert_eq!(turns.len(), 1);
+        assert!(manager.get_session(&session_id).is_none());
+        assert!(manager
+            .context_store
+            .get_context_messages(&session_id)
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn restore_session_view_preserves_full_visible_tool_result_payload() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "History with tool output".to_string(),
+            "agent".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        session.dialog_turn_ids = vec!["turn-1".to_string()];
+
+        persistence_manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+
+        let visible_output = "complete visible output ".repeat(128);
+        let assistant_output = "assistant visible summary ".repeat(16);
+        let mut turn = DialogTurnData::new(
+            "turn-1".to_string(),
+            0,
+            session_id.clone(),
+            UserMessageData {
+                id: "turn-1-user".to_string(),
+                content: "show full output".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+        );
+        turn.model_rounds.push(ModelRoundData {
+            id: "round-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_index: 0,
+            timestamp: 1,
+            text_items: vec![],
+            tool_items: vec![ToolItemData {
+                id: "tool-1".to_string(),
+                tool_name: "Bash".to_string(),
+                tool_call: ToolCallData {
+                    id: "call-1".to_string(),
+                    input: json!({ "command": "printf output" }),
+                },
+                tool_result: Some(ToolResultData {
+                    result: json!({
+                        "stdout": visible_output,
+                        "nested": {
+                            "stderr": "also visible",
+                        },
+                    }),
+                    success: true,
+                    result_for_assistant: Some(assistant_output.clone()),
+                    error: None,
+                    duration_ms: Some(1),
+                }),
+                ai_intent: None,
+                start_time: 1,
+                end_time: Some(2),
+                duration_ms: Some(1),
+                queue_wait_ms: None,
+                preflight_ms: None,
+                confirmation_wait_ms: None,
+                execution_ms: None,
+                order_index: None,
+                is_subagent_item: None,
+                parent_task_tool_id: None,
+                subagent_session_id: None,
+                subagent_model_id: None,
+                subagent_model_alias: None,
+                status: Some("completed".to_string()),
+                interruption_reason: None,
+            }],
+            thinking_items: vec![],
+            start_time: 1,
+            end_time: Some(2),
+            duration_ms: Some(1),
+            provider_id: None,
+            model_id: None,
+            model_alias: None,
+            first_chunk_ms: None,
+            first_visible_output_ms: None,
+            stream_duration_ms: None,
+            attempt_count: None,
+            failure_category: None,
+            token_details: None,
+            status: "completed".to_string(),
+        });
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+
+        let (view_session, turns) = manager
+            .restore_session_view(workspace.path(), &session_id)
+            .await
+            .expect("session view should restore");
+
+        let restored_result = turns[0].model_rounds[0].tool_items[0]
+            .tool_result
+            .as_ref()
+            .expect("tool result should be preserved");
+        assert_eq!(view_session.dialog_turn_ids, vec!["turn-1".to_string()]);
+        assert_eq!(
+            restored_result.result["stdout"].as_str(),
+            Some(visible_output.as_str())
+        );
+        assert_eq!(
+            restored_result.result["nested"]["stderr"].as_str(),
+            Some("also visible")
+        );
+        assert_eq!(
+            restored_result.result_for_assistant.as_deref(),
+            Some(assistant_output.as_str())
+        );
+        assert!(manager.get_session(&session_id).is_none());
+    }
+
+    #[tokio::test]
+    async fn rollback_context_deletes_persisted_turns_from_target() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Rollback session".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        for index in 0..3 {
+            let turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session.session_id.clone(),
+                UserMessageData {
+                    id: format!("turn-{index}-user"),
+                    content: format!("prompt {index}"),
+                    timestamp: index as u64,
+                    metadata: None,
+                },
+            );
+            persistence_manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+
+        {
+            let mut active = manager
+                .sessions
+                .get_mut(&session.session_id)
+                .expect("session should be active");
+            active.dialog_turn_ids = vec![
+                "turn-0".to_string(),
+                "turn-1".to_string(),
+                "turn-2".to_string(),
+            ];
+        }
+        persistence_manager
+            .save_turn_context_snapshot(
+                workspace.path(),
+                &session.session_id,
+                0,
+                &[crate::agentic::core::Message::user("prompt 0".to_string())],
+            )
+            .await
+            .expect("snapshot 0 should save");
+        persistence_manager
+            .save_turn_context_snapshot(
+                workspace.path(),
+                &session.session_id,
+                1,
+                &[
+                    crate::agentic::core::Message::user("prompt 0".to_string()),
+                    crate::agentic::core::Message::user("prompt 1".to_string()),
+                ],
+            )
+            .await
+            .expect("snapshot 1 should save");
+
+        manager
+            .rollback_context_to_turn_start(workspace.path(), &session.session_id, 1)
+            .await
+            .expect("rollback should succeed");
+
+        let turns = persistence_manager
+            .load_session_turns(workspace.path(), &session.session_id)
+            .await
+            .expect("turns should load");
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].user_message.content, "prompt 0");
+        assert!(persistence_manager
+            .load_turn_context_snapshot(workspace.path(), &session.session_id, 1)
+            .await
+            .expect("snapshot load should succeed")
+            .is_none());
+
+        manager.sessions.remove(&session.session_id);
+        let restored = manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("session should restore");
+        assert_eq!(restored.dialog_turn_ids, vec!["turn-0".to_string()]);
+        assert_eq!(
+            manager
+                .context_store
+                .get_context_messages(&session.session_id)
+                .len(),
+            1
+        );
+
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.turn_count, 1);
+    }
+
+    #[tokio::test]
+    async fn delete_session_removes_workspace_cache_entry() {
+        let workspace = TestWorkspace::new();
+        let manager = in_memory_test_manager();
+        let session = manager
+            .create_session(
+                "Cached session".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        assert_eq!(
+            manager
+                .session_workspace_index
+                .get(&session.session_id)
+                .map(|entry| entry.clone()),
+            Some(workspace.path().to_path_buf())
+        );
+
+        manager
+            .delete_session(workspace.path(), &session.session_id)
+            .await
+            .expect("session should delete");
+
+        assert!(manager
+            .session_workspace_index
+            .get(&session.session_id)
+            .is_none());
+    }
+
+    #[test]
+    fn build_messages_from_turns_skips_model_invisible_turns() {
+        use crate::service::session::{DialogTurnData, DialogTurnKind, UserMessageData};
+
+        let turns = vec![
+            DialogTurnData::new(
+                "turn-1".to_string(),
+                0,
+                "session-1".to_string(),
+                UserMessageData {
+                    id: "user-1".to_string(),
+                    content: "hello".to_string(),
+                    timestamp: 1,
+                    metadata: None,
+                },
+            ),
+            DialogTurnData::new_with_kind(
+                DialogTurnKind::ManualCompaction,
+                "turn-2".to_string(),
+                1,
+                "session-1".to_string(),
+                UserMessageData {
+                    id: "user-2".to_string(),
+                    content: "/compact".to_string(),
+                    timestamp: 2,
+                    metadata: None,
+                },
+            ),
+            DialogTurnData::new_with_kind(
+                DialogTurnKind::LocalCommand,
+                "turn-3".to_string(),
+                2,
+                "session-1".to_string(),
+                UserMessageData {
+                    id: "user-3".to_string(),
+                    content: "# Session Usage Report".to_string(),
+                    timestamp: 3,
+                    metadata: Some(serde_json::json!({
+                        "localCommandKind": "usage_report",
+                        "modelVisible": false
+                    })),
+                },
+            ),
+        ];
+
+        let messages = SessionManager::build_messages_from_turns(&turns);
+
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].is_actual_user_message());
+    }
+
+    #[test]
+    fn fallback_session_title_uses_sentence_break_when_available() {
+        let title = SessionManager::fallback_session_title(
+            "Fix the flaky integration test. Add logging for retries.",
+            20,
+        );
+
+        assert_eq!(title, "Fix the flaky...");
+    }
+
+    #[test]
+    fn fallback_session_title_appends_ellipsis_when_truncated_without_sentence_break() {
+        let title = SessionManager::fallback_session_title(
+            "Implement session title generation fallback",
+            12,
+        );
+
+        assert_eq!(title, "Implement...");
+    }
+
+    #[test]
+    fn fallback_session_title_uses_default_for_blank_input() {
+        let title = SessionManager::fallback_session_title("   ", 20);
+
+        assert_eq!(title, "New Session");
+    }
+
+    #[tokio::test]
+    async fn records_subagent_partial_timeout_in_evidence_ledger() {
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                .expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+
+        let event = manager.record_subagent_partial_timeout(
+            "session-a",
+            "turn-a",
+            "ReviewSecurity",
+            "Found token logging before timeout.",
+            Some("timeout"),
+        );
+
+        assert!(!event.event_id.is_empty());
+        let events = manager.evidence_events_for_turn("session-a", "turn-a");
+        assert_eq!(events, vec![event.clone()]);
+        let summary = manager.evidence_summary_for_session("session-a", 10);
+        assert_eq!(summary.partial_subagent_results.len(), 1);
+        assert_eq!(summary.partial_subagent_results[0].event_id, event.event_id);
     }
 }
