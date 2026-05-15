@@ -151,6 +151,10 @@ and milestone verification gates.
 - MiniApp storage shape belongs in `bitfun-product-domains`; core storage
   keeps filesystem IO, worker runtime, `PathManager`, and port adapters until a
   reviewed runtime migration exists.
+- Remote-connect port baselines live in `bitfun-runtime-ports` and
+  `bitfun-services-integrations`; `AgentSubmissionPort` still rejects generic
+  attachments until image/multimodal equivalence tests and a runtime migration
+  plan are reviewed.
 
 ### DeepReview guardrails
 

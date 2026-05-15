@@ -3970,6 +3970,97 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
 }
 
 #[async_trait::async_trait]
+impl bitfun_runtime_ports::AgentTurnCancellationPort for ConversationCoordinator {
+    async fn cancel_turn(
+        &self,
+        request: bitfun_runtime_ports::AgentTurnCancellationRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentTurnCancellationResult> {
+        let session_id = request.session_id;
+        if let Some(turn_id) = request.turn_id {
+            self.cancel_dialog_turn(&session_id, &turn_id)
+                .await
+                .map_err(|error| {
+                    bitfun_runtime_ports::PortError::new(
+                        bitfun_runtime_ports::PortErrorKind::Backend,
+                        error.to_string(),
+                    )
+                })?;
+
+            return Ok(bitfun_runtime_ports::AgentTurnCancellationResult {
+                session_id,
+                turn_id: Some(turn_id),
+                requested: true,
+            });
+        }
+
+        let wait_timeout = Duration::from_millis(request.wait_timeout_ms.unwrap_or(1500));
+        let cancelled_turn_id = self
+            .cancel_active_turn_for_session(&session_id, wait_timeout)
+            .await
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::Backend,
+                    error.to_string(),
+                )
+            })?;
+        let requested = cancelled_turn_id.is_some();
+
+        Ok(bitfun_runtime_ports::AgentTurnCancellationResult {
+            session_id,
+            turn_id: cancelled_turn_id,
+            requested,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_runtime_ports::RemoteControlStatePort for ConversationCoordinator {
+    async fn read_remote_control_state(
+        &self,
+        request: bitfun_runtime_ports::RemoteControlStateRequest,
+    ) -> bitfun_runtime_ports::PortResult<Option<bitfun_runtime_ports::RemoteControlStateSnapshot>>
+    {
+        let Some(session) = self.get_session_manager().get_session(&request.session_id) else {
+            return Ok(None);
+        };
+
+        let mut metadata = serde_json::Map::new();
+        let (state, active_turn_id) = match session.state {
+            SessionState::Idle => (bitfun_runtime_ports::RemoteControlSessionState::Idle, None),
+            SessionState::Processing {
+                current_turn_id,
+                phase,
+            } => {
+                metadata.insert(
+                    "phase".to_string(),
+                    serde_json::Value::String(format!("{:?}", phase)),
+                );
+                (
+                    bitfun_runtime_ports::RemoteControlSessionState::Processing,
+                    Some(current_turn_id),
+                )
+            }
+            SessionState::Error { error, recoverable } => {
+                metadata.insert("error".to_string(), serde_json::Value::String(error));
+                metadata.insert(
+                    "recoverable".to_string(),
+                    serde_json::Value::Bool(recoverable),
+                );
+                (bitfun_runtime_ports::RemoteControlSessionState::Error, None)
+            }
+        };
+
+        Ok(Some(bitfun_runtime_ports::RemoteControlStateSnapshot {
+            session_id: request.session_id,
+            state,
+            active_turn_id,
+            queue_depth: 0,
+            metadata,
+        }))
+    }
+}
+
+#[async_trait::async_trait]
 impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
     async fn read_session_transcript(
         &self,
@@ -4043,6 +4134,15 @@ mod tests {
     };
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use bitfun_runtime_ports::{AgentSubmissionRequest, AgentSubmissionSource};
+
+    #[test]
+    fn conversation_coordinator_exposes_remote_runtime_ports() {
+        fn assert_cancellation_port<T: bitfun_runtime_ports::AgentTurnCancellationPort>() {}
+        fn assert_state_port<T: bitfun_runtime_ports::RemoteControlStatePort>() {}
+
+        assert_cancellation_port::<ConversationCoordinator>();
+        assert_state_port::<ConversationCoordinator>();
+    }
 
     #[test]
     fn clamps_subagent_max_concurrency_into_safe_range() {

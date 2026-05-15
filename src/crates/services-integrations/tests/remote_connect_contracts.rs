@@ -2,6 +2,7 @@
 
 use bitfun_runtime_ports::AgentSubmissionSource;
 use bitfun_services_integrations::remote_connect::{
+    build_remote_image_attachment, build_remote_image_submission_request,
     build_remote_session_create_request, build_remote_submission_request, ChatImageAttachment,
     ChatMessage, ChatMessageItem, ImageAttachment, RemoteConnectSubmissionSource, RemoteToolStatus,
 };
@@ -33,6 +34,50 @@ fn remote_connect_submission_contract_preserves_bot_source() {
 
     assert_eq!(request.source, Some(AgentSubmissionSource::Bot));
     assert!(request.turn_id.is_none());
+}
+
+#[test]
+fn remote_connect_image_attachment_contract_preserves_portable_metadata() {
+    let image = ImageAttachment {
+        name: "clip.png".to_string(),
+        data_url: "data:image/png;base64,abc".to_string(),
+    };
+
+    let attachment = build_remote_image_attachment(1, &image);
+    let json = serde_json::to_value(attachment).expect("serialize image attachment");
+
+    assert_eq!(json["kind"], "remote_image");
+    assert_eq!(json["id"], "remote-image-2");
+    assert_eq!(json["metadata"]["name"], "clip.png");
+    assert_eq!(json["metadata"]["dataUrl"], "data:image/png;base64,abc");
+}
+
+#[test]
+fn remote_connect_image_submission_request_preserves_existing_source_and_turn_shape() {
+    let image = ImageAttachment {
+        name: "clip.png".to_string(),
+        data_url: "data:image/png;base64,abc".to_string(),
+    };
+
+    let request = build_remote_image_submission_request(
+        "session-3",
+        "hello with image",
+        Some("turn-3".to_string()),
+        RemoteConnectSubmissionSource::Relay,
+        &[image],
+    );
+
+    assert_eq!(request.session_id, "session-3");
+    assert_eq!(request.message, "hello with image");
+    assert_eq!(request.turn_id.as_deref(), Some("turn-3"));
+    assert_eq!(request.source, Some(AgentSubmissionSource::RemoteRelay));
+    assert_eq!(request.attachments.len(), 1);
+    assert_eq!(request.attachments[0].kind, "remote_image");
+    assert_eq!(request.attachments[0].id, "remote-image-1");
+    assert_eq!(
+        request.attachments[0].metadata["dataUrl"],
+        "data:image/png;base64,abc"
+    );
 }
 
 #[test]

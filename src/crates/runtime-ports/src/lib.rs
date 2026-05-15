@@ -98,6 +98,27 @@ pub struct AgentInputAttachment {
     pub metadata: serde_json::Map<String, serde_json::Value>,
 }
 
+impl AgentInputAttachment {
+    pub fn remote_image(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        data_url: impl Into<String>,
+    ) -> Self {
+        let mut metadata = serde_json::Map::new();
+        metadata.insert("name".to_string(), serde_json::Value::String(name.into()));
+        metadata.insert(
+            "dataUrl".to_string(),
+            serde_json::Value::String(data_url.into()),
+        );
+
+        Self {
+            kind: "remote_image".to_string(),
+            id: id.into(),
+            metadata,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSubmissionResult {
@@ -119,6 +140,102 @@ pub trait AgentSubmissionPort: Send + Sync {
     ) -> PortResult<AgentSubmissionResult>;
 
     async fn resolve_session_agent_type(&self, session_id: &str) -> PortResult<Option<String>>;
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnCancellationRequest {
+    pub session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<AgentSubmissionSource>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wait_timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnCancellationResult {
+    pub session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+    #[serde(default)]
+    pub requested: bool,
+}
+
+#[async_trait::async_trait]
+pub trait AgentTurnCancellationPort: Send + Sync {
+    async fn cancel_turn(
+        &self,
+        request: AgentTurnCancellationRequest,
+    ) -> PortResult<AgentTurnCancellationResult>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RemoteControlSessionState {
+    Idle,
+    Processing,
+    Error,
+    Missing,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteControlStateRequest {
+    pub session_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteControlStateSnapshot {
+    pub session_id: String,
+    pub state: RemoteControlSessionState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_turn_id: Option<String>,
+    #[serde(default)]
+    pub queue_depth: usize,
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
+#[async_trait::async_trait]
+pub trait RemoteControlStatePort: Send + Sync {
+    async fn read_remote_control_state(
+        &self,
+        request: RemoteControlStateRequest,
+    ) -> PortResult<Option<RemoteControlStateSnapshot>>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeEventType {
+    TurnStarted,
+    TurnCompleted,
+    TurnFailed,
+    TurnCancelled,
+    SessionStateChanged,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeEventEnvelope {
+    pub session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<AgentSubmissionSource>,
+    pub event_type: RuntimeEventType,
+    #[serde(default)]
+    pub payload: serde_json::Value,
+}
+
+#[async_trait::async_trait]
+pub trait RuntimeEventSink: Send + Sync {
+    async fn publish_runtime_event(&self, event: RuntimeEventEnvelope) -> PortResult<()>;
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -249,6 +366,75 @@ mod tests {
 
         assert_eq!(json["turnId"], "explicit_turn");
         assert_eq!(json["metadata"]["turnId"], "legacy_metadata_turn");
+    }
+
+    #[test]
+    fn remote_image_attachment_serializes_portable_metadata_contract() {
+        let attachment =
+            AgentInputAttachment::remote_image("image-1", "clip.png", "data:image/png;base64,abc");
+
+        let json = serde_json::to_value(attachment).expect("serialize attachment");
+
+        assert_eq!(json["kind"], "remote_image");
+        assert_eq!(json["id"], "image-1");
+        assert_eq!(json["metadata"]["name"], "clip.png");
+        assert_eq!(json["metadata"]["dataUrl"], "data:image/png;base64,abc");
+    }
+
+    #[test]
+    fn agent_turn_cancellation_request_serializes_current_contract() {
+        let request = AgentTurnCancellationRequest {
+            session_id: "session_1".to_string(),
+            turn_id: Some("turn_1".to_string()),
+            source: Some(AgentSubmissionSource::Bot),
+            reason: Some("user_cancelled".to_string()),
+            wait_timeout_ms: Some(1500),
+        };
+
+        let json = serde_json::to_value(request).expect("serialize cancel request");
+
+        assert_eq!(json["sessionId"], "session_1");
+        assert_eq!(json["turnId"], "turn_1");
+        assert_eq!(json["source"], "bot");
+        assert_eq!(json["reason"], "user_cancelled");
+        assert_eq!(json["waitTimeoutMs"], 1500);
+    }
+
+    #[test]
+    fn remote_control_state_snapshot_serializes_active_turn_contract() {
+        let snapshot = RemoteControlStateSnapshot {
+            session_id: "session_1".to_string(),
+            state: RemoteControlSessionState::Processing,
+            active_turn_id: Some("turn_1".to_string()),
+            queue_depth: 2,
+            metadata: serde_json::Map::new(),
+        };
+
+        let json = serde_json::to_value(snapshot).expect("serialize state snapshot");
+
+        assert_eq!(json["sessionId"], "session_1");
+        assert_eq!(json["state"], "processing");
+        assert_eq!(json["activeTurnId"], "turn_1");
+        assert_eq!(json["queueDepth"], 2);
+    }
+
+    #[test]
+    fn runtime_event_envelope_serializes_observational_surface_facts() {
+        let event = RuntimeEventEnvelope {
+            session_id: "session_1".to_string(),
+            turn_id: Some("turn_1".to_string()),
+            source: Some(AgentSubmissionSource::RemoteRelay),
+            event_type: RuntimeEventType::TurnCancelled,
+            payload: serde_json::json!({ "reason": "user_cancelled" }),
+        };
+
+        let json = serde_json::to_value(event).expect("serialize event");
+
+        assert_eq!(json["sessionId"], "session_1");
+        assert_eq!(json["turnId"], "turn_1");
+        assert_eq!(json["source"], "remote_relay");
+        assert_eq!(json["eventType"], "turn_cancelled");
+        assert_eq!(json["payload"]["reason"], "user_cancelled");
     }
 
     #[test]

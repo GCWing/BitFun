@@ -5,7 +5,7 @@
 //! `bitfun-core` until their ports are explicit.
 
 use bitfun_runtime_ports::{
-    AgentSessionCreateRequest, AgentSubmissionRequest, AgentSubmissionSource,
+    AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionRequest, AgentSubmissionSource,
 };
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +64,38 @@ pub fn build_remote_submission_request(
         turn_id,
         source: Some(source.agent_submission_source()),
         attachments: Vec::new(),
+        metadata: serde_json::Map::new(),
+    }
+}
+
+pub fn build_remote_image_attachment(
+    index: usize,
+    attachment: &ImageAttachment,
+) -> AgentInputAttachment {
+    AgentInputAttachment::remote_image(
+        format!("remote-image-{}", index + 1),
+        attachment.name.clone(),
+        attachment.data_url.clone(),
+    )
+}
+
+pub fn build_remote_image_submission_request(
+    session_id: impl Into<String>,
+    message: impl Into<String>,
+    turn_id: Option<String>,
+    source: RemoteConnectSubmissionSource,
+    images: &[ImageAttachment],
+) -> AgentSubmissionRequest {
+    AgentSubmissionRequest {
+        session_id: session_id.into(),
+        message: message.into(),
+        turn_id,
+        source: Some(source.agent_submission_source()),
+        attachments: images
+            .iter()
+            .enumerate()
+            .map(|(index, image)| build_remote_image_attachment(index, image))
+            .collect(),
         metadata: serde_json::Map::new(),
     }
 }

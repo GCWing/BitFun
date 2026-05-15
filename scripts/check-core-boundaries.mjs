@@ -967,6 +967,56 @@ const forbiddenContentUnderRules = [
 
 const requiredContentRules = [
   {
+    path: 'src/crates/runtime-ports/src/lib.rs',
+    reason:
+      'runtime-ports must keep remote runtime boundary contracts DTO/trait-only',
+    patterns: [
+      {
+        regex: /\bpub trait AgentTurnCancellationPort\b/,
+        message: 'missing turn cancellation port contract',
+      },
+      {
+        regex: /\bpub trait RemoteControlStatePort\b/,
+        message: 'missing remote control state port contract',
+      },
+      {
+        regex: /\bpub trait RuntimeEventSink\b/,
+        message: 'missing runtime event sink contract',
+      },
+      {
+        regex: /\bpub fn remote_image\b/,
+        message: 'missing remote image attachment helper contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
+    reason:
+      'core must keep current coordinator port adapters and attachment guard until remote runtime migration is reviewed',
+    patterns: [
+      {
+        regex: /impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator/,
+        message: 'missing agent submission port adapter',
+      },
+      {
+        regex: /impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator/,
+        message: 'missing session transcript reader adapter',
+      },
+      {
+        regex: /impl bitfun_runtime_ports::AgentTurnCancellationPort for ConversationCoordinator/,
+        message: 'missing turn cancellation port adapter',
+      },
+      {
+        regex: /impl bitfun_runtime_ports::RemoteControlStatePort for ConversationCoordinator/,
+        message: 'missing remote control state port adapter',
+      },
+      {
+        regex: /agent submission port does not yet accept generic attachments/,
+        message: 'missing generic attachment guard on agent submission port',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/tools/registry.rs',
     reason:
       'core must continue owning product tool registry assembly until an approved product-provider migration exists',
@@ -1738,6 +1788,25 @@ function runManifestParserSelfTest() {
   }
 
   const requiredContentContracts = [
+    {
+      path: 'src/crates/runtime-ports/src/lib.rs',
+      contracts: [
+        'AgentTurnCancellationPort',
+        'RemoteControlStatePort',
+        'RuntimeEventSink',
+        'remote_image',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
+      contracts: [
+        'AgentSubmissionPort',
+        'SessionTranscriptReader',
+        'AgentTurnCancellationPort',
+        'RemoteControlStatePort',
+        'generic attachments',
+      ],
+    },
     {
       path: 'src/crates/core/src/agentic/tools/registry.rs',
       contracts: ['register_all_tools', 'GetToolSpecTool', 'get_collapsed_tool_names'],
