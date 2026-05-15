@@ -33,10 +33,6 @@ import { ACPClientAPI, type AcpPermissionRequestEvent } from '@/infrastructure/a
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { FlowChatContext, DialogTurn, ModelRound, FlowToolItem } from './types';
 import {
-  buildSessionModelMigrationNotice,
-  shouldSuppressSessionModelMigrationNotice,
-} from '../../utils/sessionModelMigrationNotice';
-import {
   getAiErrorPresentation,
   normalizeAiErrorDetail,
   type AiErrorPresentation,
@@ -46,9 +42,6 @@ import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
 import { buildDeepReviewCapacityQueueStateFromEvent } from '../../utils/deepReviewQueueStateEvents';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
-// `restore_session` and assistant bootstrap can race on the same historical
-// session, so collapse identical auto-migration toasts into one short-lived UX notice.
-const recentSessionModelMigrationNoticeTimestamps = new Map<string, number>();
 import { 
   debouncedSaveDialogTurn, 
   immediateSaveDialogTurn, 
@@ -886,33 +879,11 @@ function handleSessionTitleGenerated(event: any): void {
 }
 
 function handleSessionModelAutoMigrated(event: SessionModelAutoMigratedEvent): void {
-  const { sessionId, newModelId, reason } = event;
+  const { sessionId, newModelId } = event;
   if (!sessionId || !newModelId) return;
 
   const store = FlowChatStore.getInstance();
   store.updateSessionModelName(sessionId, newModelId);
-
-  const notice = buildSessionModelMigrationNotice(event, (key, options) =>
-    i18nService.t(key, options)
-  );
-  if (
-    shouldSuppressSessionModelMigrationNotice(
-      recentSessionModelMigrationNoticeTimestamps,
-      notice.dedupeKey
-    )
-  ) {
-    return;
-  }
-
-  notificationService.warning(notice.message, {
-    title: notice.title,
-    duration: 6000,
-    metadata: {
-      sessionId,
-      reason,
-      newModelId,
-    },
-  });
 }
 
 /**

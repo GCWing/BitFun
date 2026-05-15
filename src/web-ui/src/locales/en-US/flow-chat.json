@@ -411,16 +411,7 @@
     "temperature": "Temperature",
     "maxTokens": "Max Tokens",
     "topP": "Top P",
-    "streaming": "Streaming",
-    "autoMigrated": {
-      "title": "Model switched automatically",
-      "description": "The model previously used by this chat is no longer available. BitFun switched this chat to automatic model selection.",
-      "reasons": {
-        "modelUnavailableOnRestore": "This happened while reopening a previous chat. You can keep going, or choose a model again later.",
-        "modelReconciled": "Your model settings changed recently, so BitFun moved this chat to an available model automatically.",
-        "fallback": "BitFun selected an available model for this chat automatically."
-      }
-    }
+    "streaming": "Streaming"
   },
   "toolbar": {
     "newSession": "New Session",

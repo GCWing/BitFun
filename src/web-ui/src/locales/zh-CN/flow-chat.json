@@ -411,16 +411,7 @@
     "temperature": "温度",
     "maxTokens": "最大令牌数",
     "topP": "Top P",
-    "streaming": "流式输出",
-    "autoMigrated": {
-      "title": "模型已自动切换",
-      "description": "当前会话之前使用的模型配置已不可用，系统已切换为自动选择模型。",
-      "reasons": {
-        "modelUnavailableOnRestore": "这是恢复历史会话时的自动处理，你可以继续使用，或稍后重新指定模型。",
-        "modelReconciled": "模型配置刚发生过调整，系统已为当前会话自动切换到可用模型。",
-        "fallback": "系统已为当前会话自动选择可用模型。"
-      }
-    }
+    "streaming": "流式输出"
   },
   "toolbar": {
     "newSession": "新建会话",

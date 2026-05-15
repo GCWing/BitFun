@@ -222,7 +222,7 @@ export class AgenticEventListener {
 
       if (callbacks.onSessionModelAutoMigrated) {
         const unlisten = agentAPI.onSessionModelAutoMigrated((event) => {
-          logger.warn('Session model auto-migrated', event);
+          logger.debug('Session model auto-migrated', event);
           callbacks.onSessionModelAutoMigrated?.(event);
         });
         this.unlistenFunctions.push(unlisten);
@@ -263,4 +263,3 @@ export class AgenticEventListener {
 }
 
 export const agenticEventListener = new AgenticEventListener();
-
