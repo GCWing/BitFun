@@ -11,6 +11,8 @@ interface MiniAppState {
   openedAppIds: string[];
   /** App IDs whose JS workers are currently running. */
   runningWorkerIds: string[];
+  /** App IDs with an active customization surface in the MiniApp tab. */
+  customizingAppIds: string[];
 
   setApps: (apps: MiniAppMeta[]) => void;
   setLoading: (loading: boolean) => void;
@@ -19,6 +21,8 @@ interface MiniAppState {
   setRunningWorkerIds: (ids: string[]) => void;
   markWorkerRunning: (id: string) => void;
   markWorkerStopped: (id: string) => void;
+  markCustomizationActive: (id: string) => void;
+  markCustomizationIdle: (id: string) => void;
 }
 
 export const useMiniAppStore = create<MiniAppState>((set) => ({
@@ -26,6 +30,7 @@ export const useMiniAppStore = create<MiniAppState>((set) => ({
   loading: false,
   openedAppIds: [],
   runningWorkerIds: [],
+  customizingAppIds: [],
 
   setApps: (apps) =>
     set((state) => {
@@ -34,6 +39,7 @@ export const useMiniAppStore = create<MiniAppState>((set) => ({
         apps,
         openedAppIds: state.openedAppIds.filter((id) => validIds.has(id)),
         runningWorkerIds: state.runningWorkerIds.filter((id) => validIds.has(id)),
+        customizingAppIds: state.customizingAppIds.filter((id) => validIds.has(id)),
       };
     }),
   setLoading: (loading) => set({ loading }),
@@ -54,5 +60,13 @@ export const useMiniAppStore = create<MiniAppState>((set) => ({
   markWorkerStopped: (id) =>
     set((state) => ({
       runningWorkerIds: state.runningWorkerIds.filter((value) => value !== id),
+    })),
+  markCustomizationActive: (id) =>
+    set((state) =>
+      state.customizingAppIds.includes(id) ? state : { customizingAppIds: [...state.customizingAppIds, id] }
+    ),
+  markCustomizationIdle: (id) =>
+    set((state) => ({
+      customizingAppIds: state.customizingAppIds.filter((value) => value !== id),
     })),
 }));

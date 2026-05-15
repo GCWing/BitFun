@@ -106,11 +106,19 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const childSession = childSessionId ? flowChatState.sessions.get(childSessionId) : undefined;
   const parentSession = parentSessionId ? flowChatState.sessions.get(parentSessionId) : undefined;
   const childRelationship = resolveSessionRelationship(childSession);
-  const childKind = childRelationship.kind === 'review' || childRelationship.kind === 'deep_review'
+  const childKind = childRelationship.kind === 'review' ||
+    childRelationship.kind === 'deep_review' ||
+    childRelationship.kind === 'miniapp'
     ? childRelationship.kind
     : 'btw';
   const childBadgeLabel = t(`childSession.kinds.${childKind}.short`, {
-    defaultValue: childKind === 'deep_review' ? 'Deep' : childKind === 'review' ? 'Review' : t('btw.shortLabel'),
+    defaultValue: childKind === 'deep_review'
+      ? 'Deep'
+      : childKind === 'review'
+        ? 'Review'
+        : childKind === 'miniapp'
+          ? 'MiniApp'
+          : t('btw.shortLabel'),
   });
   const childTitleFallback = t(`childSession.kinds.${childKind}.title`, {
     defaultValue: t('btw.threadLabel'),
@@ -118,6 +126,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const childOriginLabel = t(`childSession.kinds.${childKind}.origin`, {
     defaultValue: t('btw.origin'),
   });
+  const showOriginMeta = childKind !== 'miniapp';
   const virtualItems = useMemo(() => sessionToVirtualItems(childSession ?? null), [childSession]);
   const {
     exploreGroupStates,
@@ -795,11 +804,13 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
             <span className="btw-session-panel__title">{resolveSessionTitle(childSession, childTitleFallback)}</span>
           </div>
           <div className="btw-session-panel__header-right">
-            <div className="btw-session-panel__meta">
-              <span className="btw-session-panel__meta-label">{childOriginLabel}</span>
-              <Link2 size={11} />
-              <span className="btw-session-panel__meta-title">{resolveSessionTitle(parentSession, t('btw.parent'))}</span>
-            </div>
+            {showOriginMeta && (
+              <div className="btw-session-panel__meta">
+                <span className="btw-session-panel__meta-label">{childOriginLabel}</span>
+                <Link2 size={11} />
+                <span className="btw-session-panel__meta-title">{resolveSessionTitle(parentSession, t('btw.parent'))}</span>
+              </div>
+            )}
             {(childKind === 'review' || childKind === 'deep_review') && (
               <IconButton
                 className="btw-session-panel__stop-button"

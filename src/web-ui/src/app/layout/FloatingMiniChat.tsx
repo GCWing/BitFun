@@ -28,11 +28,15 @@ import { Tooltip, Input } from '@/component-library';
 import { useImeEnterGuard } from '../../flow_chat/hooks/useImeEnterGuard';
 import { i18nService } from '@/infrastructure/i18n';
 import { resolveSessionTitle } from '../../flow_chat/utils/sessionTitle';
+import { useSceneStore } from '@/app/stores/sceneStore';
+import { useMiniAppStore } from '@/app/scenes/miniapps/miniAppStore';
 import './FloatingMiniChat.scss';
 
 export const FloatingMiniChat: React.FC = () => {
   const { t } = useTranslation('flow-chat');
   const { toolbarState } = useToolbarModeContext();
+  const activeTabId = useSceneStore((state) => state.activeTabId);
+  const customizingAppIds = useMiniAppStore((state) => state.customizingAppIds);
 
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -80,6 +84,16 @@ export const FloatingMiniChat: React.FC = () => {
       lastTurn.status === 'image_analyzing';
     return { isStreaming };
   }, [flowChatState]);
+
+  const activeMiniAppId = useMemo(
+    () => (typeof activeTabId === 'string' && activeTabId.startsWith('miniapp:')
+      ? activeTabId.slice('miniapp:'.length)
+      : null),
+    [activeTabId]
+  );
+  const shouldAvoidMiniAppCustomizer = Boolean(
+    activeMiniAppId && customizingAppIds.includes(activeMiniAppId)
+  );
 
   const handleOpen = useCallback(() => {
     // Sync the active session into modernFlowChatStore so the panel shows
@@ -191,7 +205,11 @@ export const FloatingMiniChat: React.FC = () => {
     .join(' ');
 
   return (
-    <div className={`bitfun-fmc ${isOpen ? 'bitfun-fmc--open' : ''}`}>
+    <div className={[
+      'bitfun-fmc',
+      isOpen && 'bitfun-fmc--open',
+      shouldAvoidMiniAppCustomizer && 'bitfun-fmc--miniapp-customizing',
+    ].filter(Boolean).join(' ')}>
       {/* Fullscreen backdrop to catch outside clicks */}
       {isOpen && (
         <div

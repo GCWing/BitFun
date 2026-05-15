@@ -605,6 +605,11 @@
         "short": "深審",
         "title": "深度審核",
         "origin": "審核來源"
+      },
+      "miniapp": {
+        "short": "小應用",
+        "title": "小應用編輯",
+        "origin": "小應用"
       }
     }
   },

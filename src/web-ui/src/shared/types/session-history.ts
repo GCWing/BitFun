@@ -6,7 +6,7 @@
 
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
-export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review';
+export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review' | 'miniapp';
 export type PersistedSessionKind = 'standard' | 'subagent';
 export type SessionTitleSource = 'text' | 'i18n';
 

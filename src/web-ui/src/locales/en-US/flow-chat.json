@@ -605,6 +605,11 @@
         "short": "Deep",
         "title": "Deep review",
         "origin": "Review source"
+      },
+      "miniapp": {
+        "short": "MiniApp",
+        "title": "MiniApp editor",
+        "origin": "MiniApp"
       }
     }
   },

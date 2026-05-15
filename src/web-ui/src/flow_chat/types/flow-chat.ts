@@ -345,6 +345,9 @@ export interface Session {
    * shown in the main session navigation.
    */
   isTransient?: boolean;
+
+  /** Transient UI session backed by a real agent session. */
+  agentBackedTransient?: boolean;
 }
 
 export interface SessionConfig {
