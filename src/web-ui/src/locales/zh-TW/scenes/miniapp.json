@@ -34,5 +34,41 @@
     "loadFailed": "加載失敗：{{error}}",
     "retry": "重試",
     "reload": "重新加載"
+  },
+  "customize": {
+    "trigger": "自訂小應用",
+    "hotspotLabel": "自訂",
+    "title": "自訂小應用",
+    "close": "關閉並丟棄草稿",
+    "riskTitle": "先在草稿中修改",
+    "riskBody": "會先複製一份草稿，實際應用在點擊套用前不會變更。套用前會保存目前版本；新增權限需要另外確認。",
+    "requestLabel": "想修改什麼？",
+    "requestPlaceholder": "例如：把介面顏色調淺一點，或把戰績記錄到本機",
+    "start": "建立草稿並開始",
+    "retryAssistant": "重新傳送給助手",
+    "refreshPreview": "重新整理預覽",
+    "previewTitle": "草稿預覽",
+    "previewHint": "助手修改後重新整理查看",
+    "assistantOpened": "助手側邊會話已開啟",
+    "sessionName": "自訂小應用：{{name}}",
+    "workspaceRequired": "需要先開啟一個工作區，才能啟動自訂助手。",
+    "launchFailed": "草稿已建立，但助手啟動失敗：{{error}}",
+    "refreshFailed": "預覽重新整理失敗：{{error}}",
+    "permissionCheckFailed": "權限檢查失敗：{{error}}",
+    "applyFailed": "套用草稿失敗：{{error}}",
+    "discardFailed": "丟棄草稿失敗：{{error}}",
+    "discard": "丟棄草稿",
+    "apply": "套用草稿",
+    "applying": "正在套用草稿...",
+    "applySaved": "已套用。舊版本已保存，可透過小應用版本回復。",
+    "permissionDialog": {
+      "title": "新權限需要確認",
+      "body": "這個草稿新增或擴大了權限。套用到實際小應用前，請先確認這些變更。",
+      "added": "新增",
+      "expanded": "擴大",
+      "removed": "移除",
+      "cancel": "返回預覽",
+      "confirm": "套用並授予權限"
+    }
   }
 }

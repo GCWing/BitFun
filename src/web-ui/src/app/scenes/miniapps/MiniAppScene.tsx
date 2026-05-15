@@ -3,7 +3,7 @@
  * Mounts MiniAppRunner; close via SceneBar × (does not stop worker).
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import type { MiniApp } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -16,6 +16,9 @@ import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useMiniAppStore } from './miniAppStore';
 import { useI18n } from '@/infrastructure/i18n';
 import { pickLocalizedString } from './utils/pickLocalizedString';
+import MiniAppCustomizeEntry from './customization/MiniAppCustomizeEntry';
+import MiniAppCustomizePanel from './customization/MiniAppCustomizePanel';
+import { useMiniAppCustomizeHotspot } from './customization/useMiniAppCustomizeHotspot';
 import './MiniAppScene.scss';
 
 const log = createLogger('MiniAppScene');
@@ -38,6 +41,8 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [key, setKey] = useState(0);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [customizeNotice, setCustomizeNotice] = useState<string | null>(null);
 
   useEffect(() => {
     openApp(appId);
@@ -117,17 +122,33 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
     }
   };
 
+  const handleOpenCustomize = useCallback(() => {
+    setCustomizeNotice(null);
+    setCustomizeOpen(true);
+  }, []);
+
+  const { hotspotVisible, revealHotspot, hideHotspot } = useMiniAppCustomizeHotspot({
+    enabled: Boolean(app),
+    onOpen: handleOpenCustomize,
+  });
+
+  const appName = app ? pickLocalizedString(app, currentLanguage, 'name') : 'Mini App';
+
   return (
     <div className="miniapp-scene">
       <div className="miniapp-scene__header">
         <div className="miniapp-scene__header-center">
           {app ? (
-            <span className="miniapp-scene__title">{pickLocalizedString(app, currentLanguage, 'name')}</span>
+            <span className="miniapp-scene__title">{appName}</span>
           ) : (
             <span className="miniapp-scene__title miniapp-scene__title--loading">Mini App</span>
           )}
         </div>
         <div className="miniapp-scene__header-actions">
+          <MiniAppCustomizeEntry
+            disabled={!app || loading}
+            onOpen={handleOpenCustomize}
+          />
           <IconButton
             variant="ghost"
             size="small"
@@ -163,6 +184,36 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
           <React.Suspense fallback={null}>
             <MiniAppRunner key={`${app.id}-${key}`} app={app} />
           </React.Suspense>
+        )}
+        {customizeNotice && (
+          <div className="miniapp-scene__customize-notice" role="status">
+            <CheckCircle2 size={16} />
+            <span>{customizeNotice}</span>
+          </div>
+        )}
+        {app && hotspotVisible && (
+          <div
+            className="miniapp-scene__customize-hotspot"
+            onMouseEnter={revealHotspot}
+            onMouseLeave={hideHotspot}
+          >
+            <MiniAppCustomizeEntry hotspot onOpen={handleOpenCustomize} />
+          </div>
+        )}
+        {app && (
+          <MiniAppCustomizePanel
+            open={customizeOpen}
+            app={app}
+            appName={appName}
+            themeType={themeType ?? 'dark'}
+            workspacePath={workspacePath || undefined}
+            onClose={() => setCustomizeOpen(false)}
+            onApplied={(updatedApp) => {
+              setApp(updatedApp);
+              setKey((value) => value + 1);
+              setCustomizeNotice(t('customize.applySaved'));
+            }}
+          />
         )}
       </div>
     </div>

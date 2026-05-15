@@ -34,5 +34,41 @@
     "loadFailed": "加载失败：{{error}}",
     "retry": "重试",
     "reload": "重新加载"
+  },
+  "customize": {
+    "trigger": "定制小应用",
+    "hotspotLabel": "定制",
+    "title": "定制小应用",
+    "close": "关闭并丢弃草稿",
+    "riskTitle": "先在草稿中修改",
+    "riskBody": "会先复制一份草稿，实际应用在点击应用前不会变化。应用前会保存当前版本；新增权限需要单独确认。",
+    "requestLabel": "想修改什么？",
+    "requestPlaceholder": "例如：把界面颜色调浅一点，或把战绩记录到本地",
+    "start": "创建草稿并开始",
+    "retryAssistant": "重新发送给助手",
+    "refreshPreview": "刷新预览",
+    "previewTitle": "草稿预览",
+    "previewHint": "助手改完后刷新查看",
+    "assistantOpened": "助手侧边会话已打开",
+    "sessionName": "定制小应用：{{name}}",
+    "workspaceRequired": "需要先打开一个工作区，才能启动定制助手。",
+    "launchFailed": "草稿已创建，但助手启动失败：{{error}}",
+    "refreshFailed": "预览刷新失败：{{error}}",
+    "permissionCheckFailed": "权限检查失败：{{error}}",
+    "applyFailed": "应用草稿失败：{{error}}",
+    "discardFailed": "丢弃草稿失败：{{error}}",
+    "discard": "丢弃草稿",
+    "apply": "应用草稿",
+    "applying": "正在应用草稿...",
+    "applySaved": "已应用。旧版本已保存，可通过小应用版本回滚。",
+    "permissionDialog": {
+      "title": "新权限需要确认",
+      "body": "这个草稿新增或扩大了权限。应用到实际小应用前，请先确认这些变更。",
+      "added": "新增",
+      "expanded": "扩大",
+      "removed": "移除",
+      "cancel": "返回预览",
+      "confirm": "应用并授予权限"
+    }
   }
 }
