@@ -94,13 +94,34 @@ impl JsWorkerPool {
         policy_json: &str,
         node_perms: Option<&NodePermissions>,
     ) -> BitFunResult<Arc<Mutex<JsWorker>>> {
+        let app_dir = self.path_manager.miniapp_dir(app_id);
+        self.get_or_spawn_with_app_dir(
+            app_id,
+            app_id,
+            &app_dir,
+            worker_revision,
+            policy_json,
+            node_perms,
+        )
+        .await
+    }
+
+    pub async fn get_or_spawn_with_app_dir(
+        &self,
+        worker_key: &str,
+        app_id: &str,
+        app_dir: &std::path::Path,
+        worker_revision: &str,
+        policy_json: &str,
+        node_perms: Option<&NodePermissions>,
+    ) -> BitFunResult<Arc<Mutex<JsWorker>>> {
         let mut guard = self.workers.lock().await;
         self.evict_idle(&mut guard).await;
 
-        if let Some(entry) = guard.remove(app_id) {
+        if let Some(entry) = guard.remove(worker_key) {
             if entry.revision == worker_revision {
                 let worker = Arc::clone(&entry.worker);
-                guard.insert(app_id.to_string(), entry);
+                guard.insert(worker_key.to_string(), entry);
                 return Ok(worker);
             }
             let mut stale = entry.worker.lock().await;
@@ -111,11 +132,10 @@ impl JsWorkerPool {
             self.evict_lru(&mut guard).await;
         }
 
-        let app_dir = self.path_manager.miniapp_dir(app_id);
         if !app_dir.exists() {
             return Err(BitFunError::NotFound(format!(
-                "MiniApp dir not found: {}",
-                app_id
+                "MiniApp worker dir not found: {}",
+                app_dir.display()
             )));
         }
 
@@ -132,7 +152,7 @@ impl JsWorkerPool {
         let _timeout_ms = node_perms.and_then(|n| n.timeout_ms).unwrap_or(30_000);
         let worker = Arc::new(Mutex::new(worker));
         guard.insert(
-            app_id.to_string(),
+            worker_key.to_string(),
             WorkerEntry {
                 revision: worker_revision.to_string(),
                 worker: Arc::clone(&worker),
@@ -208,6 +228,35 @@ impl JsWorkerPool {
             .map_err(BitFunError::validation)
     }
 
+    pub async fn call_with_app_dir(
+        &self,
+        worker_key: &str,
+        app_id: &str,
+        app_dir: &std::path::Path,
+        worker_revision: &str,
+        policy_json: &str,
+        permissions: Option<&NodePermissions>,
+        method: &str,
+        params: Value,
+    ) -> BitFunResult<Value> {
+        let worker = self
+            .get_or_spawn_with_app_dir(
+                worker_key,
+                app_id,
+                app_dir,
+                worker_revision,
+                policy_json,
+                permissions,
+            )
+            .await?;
+        let timeout_ms = permissions.and_then(|n| n.timeout_ms).unwrap_or(30_000);
+        let guard = worker.lock().await;
+        guard
+            .call(method, params, timeout_ms)
+            .await
+            .map_err(BitFunError::validation)
+    }
+
     /// Stop and remove the Worker for the app.
     pub async fn stop(&self, app_id: &str) {
         let mut guard = self.workers.lock().await;
@@ -244,6 +293,10 @@ impl JsWorkerPool {
             .exists()
     }
 
+    pub fn has_installed_deps_in_dir(&self, app_dir: &std::path::Path) -> bool {
+        app_dir.join("node_modules").exists()
+    }
+
     /// Install npm dependencies for the app (bun install or npm/pnpm install).
     pub async fn install_deps(
         &self,
@@ -251,6 +304,14 @@ impl JsWorkerPool {
         _deps: &[NpmDep],
     ) -> BitFunResult<InstallResult> {
         let app_dir = self.path_manager.miniapp_dir(app_id);
+        self.install_deps_in_dir(&app_dir, _deps).await
+    }
+
+    pub async fn install_deps_in_dir(
+        &self,
+        app_dir: &std::path::Path,
+        _deps: &[NpmDep],
+    ) -> BitFunResult<InstallResult> {
         let package_json = app_dir.join("package.json");
         if !package_json.exists() {
             return Ok(InstallResult {
@@ -354,6 +415,46 @@ mod tests {
                     version: "^4.17.21".to_string(),
                 }],
             })
+            .await
+            .unwrap();
+        assert!(result.success);
+        assert!(result.stdout.is_empty());
+        assert!(result.stderr.is_empty());
+    }
+
+    #[tokio::test]
+    async fn install_deps_in_dir_noops_without_package_json() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-runtime-draft-port-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager =
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        let draft_dir = path_manager
+            .miniapps_dir()
+            .join(".drafts")
+            .join("demo_app")
+            .join("draft_1");
+        tokio::fs::create_dir_all(&draft_dir).await.unwrap();
+        let pool = JsWorkerPool {
+            workers: Arc::new(Mutex::new(HashMap::new())),
+            runtime: DetectedRuntime {
+                kind: RuntimeKind::Node,
+                path: PathBuf::from("node"),
+                version: "v20.0.0".to_string(),
+            },
+            worker_host_path: PathBuf::from("worker-host.js"),
+            path_manager,
+        };
+
+        let result = pool
+            .install_deps_in_dir(
+                &draft_dir,
+                &[NpmDep {
+                    name: "lodash".to_string(),
+                    version: "^4.17.21".to_string(),
+                }],
+            )
             .await
             .unwrap();
         assert!(result.success);

@@ -4,7 +4,8 @@ use crate::api::app_state::AppState;
 use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
 use bitfun_core::miniapp::{
     dispatch_host, is_host_primitive, InstallResult as CoreInstallResult, MiniApp,
-    MiniAppAiContext, MiniAppMeta, MiniAppPermissions, MiniAppSource,
+    MiniAppAiContext, MiniAppCustomizationMetadata, MiniAppDraft, MiniAppMeta,
+    MiniAppPermissionDiff, MiniAppPermissions, MiniAppSource,
 };
 use bitfun_core::service::config::types::GlobalConfig;
 use bitfun_core::util::types::Message;
@@ -164,6 +165,76 @@ pub struct MiniAppSyncFromFsRequest {
     pub workspace_path: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppDraftCreateRequest {
+    pub app_id: String,
+    pub theme: Option<String>,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppDraftRequest {
+    pub app_id: String,
+    pub draft_id: String,
+    pub theme: Option<String>,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppDraftPermissionsRequest {
+    pub app_id: String,
+    pub draft_id: String,
+    pub permissions: MiniAppPermissions,
+    pub theme: Option<String>,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppDraftWorkerCallRequest {
+    pub app_id: String,
+    pub draft_id: String,
+    pub method: String,
+    pub params: Value,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppDraftHostCallRequest {
+    pub app_id: String,
+    pub draft_id: String,
+    pub method: String,
+    #[serde(default)]
+    pub params: Value,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppDraftStorageRequest {
+    pub app_id: String,
+    pub draft_id: String,
+    pub key: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppDraftStorageSetRequest {
+    pub app_id: String,
+    pub draft_id: String,
+    pub key: String,
+    pub value: Value,
+}
+
 #[derive(Debug, Serialize)]
 pub struct RuntimeStatus {
     pub available: bool,
@@ -209,6 +280,10 @@ fn workspace_root_from_input(workspace_path: Option<&str>) -> Option<PathBuf> {
         .map(str::trim)
         .filter(|path| !path.is_empty())
         .map(PathBuf::from)
+}
+
+fn draft_worker_key(app_id: &str, draft_id: &str) -> String {
+    format!("{app_id}:draft:{draft_id}")
 }
 
 async fn maybe_stop_worker(state: &State<'_, AppState>, app: &MiniApp) {
@@ -697,6 +772,314 @@ pub async fn miniapp_sync_from_fs(
     maybe_stop_worker(&state, &app).await;
     emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "sync-from-fs")).await;
     Ok(app)
+}
+
+#[tauri::command]
+pub async fn miniapp_create_draft(
+    state: State<'_, AppState>,
+    request: MiniAppDraftCreateRequest,
+) -> Result<MiniAppDraft, String> {
+    let theme_type = request.theme.as_deref().unwrap_or("dark");
+    let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
+    let draft = state
+        .miniapp_manager
+        .create_draft(&request.app_id, theme_type, workspace_root.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+    emit_miniapp_event(
+        "miniapp-draft-created",
+        json!({
+            "id": request.app_id,
+            "draftId": draft.draft_id,
+            "sourceVersion": draft.source_version,
+            "reason": "draft-create",
+        }),
+    )
+    .await;
+    Ok(draft)
+}
+
+#[tauri::command]
+pub async fn miniapp_get_draft(
+    state: State<'_, AppState>,
+    request: MiniAppDraftRequest,
+) -> Result<MiniAppDraft, String> {
+    state
+        .miniapp_manager
+        .get_draft(&request.app_id, &request.draft_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn miniapp_sync_draft_from_fs(
+    state: State<'_, AppState>,
+    request: MiniAppDraftRequest,
+) -> Result<MiniAppDraft, String> {
+    let theme_type = request.theme.as_deref().unwrap_or("dark");
+    let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
+    state
+        .miniapp_manager
+        .sync_draft_from_fs(
+            &request.app_id,
+            &request.draft_id,
+            theme_type,
+            workspace_root.as_deref(),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn miniapp_set_draft_permissions(
+    state: State<'_, AppState>,
+    request: MiniAppDraftPermissionsRequest,
+) -> Result<MiniAppDraft, String> {
+    let theme_type = request.theme.as_deref().unwrap_or("dark");
+    let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
+    state
+        .miniapp_manager
+        .set_draft_permissions(
+            &request.app_id,
+            &request.draft_id,
+            request.permissions,
+            theme_type,
+            workspace_root.as_deref(),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn miniapp_permission_diff_for_draft(
+    state: State<'_, AppState>,
+    request: MiniAppDraftRequest,
+) -> Result<MiniAppPermissionDiff, String> {
+    state
+        .miniapp_manager
+        .permission_diff_for_draft(&request.app_id, &request.draft_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn miniapp_apply_draft(
+    state: State<'_, AppState>,
+    request: MiniAppDraftRequest,
+) -> Result<MiniApp, String> {
+    let theme_type = request.theme.as_deref().unwrap_or("dark");
+    let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
+    let app = state
+        .miniapp_manager
+        .apply_draft(
+            &request.app_id,
+            &request.draft_id,
+            theme_type,
+            workspace_root.as_deref(),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Some(ref pool) = state.js_worker_pool {
+        pool.stop(&request.app_id).await;
+        pool.stop(&draft_worker_key(&request.app_id, &request.draft_id))
+            .await;
+    }
+    emit_miniapp_event(
+        "miniapp-draft-applied",
+        miniapp_payload(&app, "draft-apply"),
+    )
+    .await;
+    emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "draft-apply")).await;
+    Ok(app)
+}
+
+#[tauri::command]
+pub async fn miniapp_discard_draft(
+    state: State<'_, AppState>,
+    request: MiniAppDraftRequest,
+) -> Result<(), String> {
+    if let Some(ref pool) = state.js_worker_pool {
+        pool.stop(&draft_worker_key(&request.app_id, &request.draft_id))
+            .await;
+    }
+    state
+        .miniapp_manager
+        .discard_draft(&request.app_id, &request.draft_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    emit_miniapp_event(
+        "miniapp-draft-discarded",
+        json!({ "id": request.app_id, "draftId": request.draft_id, "reason": "draft-discard" }),
+    )
+    .await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_miniapp_draft_storage(
+    state: State<'_, AppState>,
+    request: MiniAppDraftStorageRequest,
+) -> Result<Value, String> {
+    state
+        .miniapp_manager
+        .get_draft_storage(&request.app_id, &request.draft_id, &request.key)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_miniapp_draft_storage(
+    state: State<'_, AppState>,
+    request: MiniAppDraftStorageSetRequest,
+) -> Result<(), String> {
+    state
+        .miniapp_manager
+        .set_draft_storage(
+            &request.app_id,
+            &request.draft_id,
+            &request.key,
+            request.value,
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn miniapp_draft_worker_call(
+    state: State<'_, AppState>,
+    request: MiniAppDraftWorkerCallRequest,
+) -> Result<Value, String> {
+    let pool = state
+        .js_worker_pool
+        .as_ref()
+        .ok_or_else(|| "JS Worker pool not initialized".to_string())?;
+    let draft = state
+        .miniapp_manager
+        .get_draft(&request.app_id, &request.draft_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
+    let policy = state
+        .miniapp_manager
+        .resolve_policy_for_draft(
+            &request.app_id,
+            &request.draft_id,
+            &draft.app.permissions,
+            workspace_root.as_deref(),
+        )
+        .await;
+    let policy_json = serde_json::to_string(&policy).map_err(|e| e.to_string())?;
+    let worker_revision = state
+        .miniapp_manager
+        .build_worker_revision(&draft.app, &policy_json);
+    let worker_key = draft_worker_key(&request.app_id, &request.draft_id);
+    let draft_dir = state
+        .miniapp_manager
+        .draft_dir(&request.app_id, &request.draft_id);
+    let needs_install = !draft.app.source.npm_dependencies.is_empty()
+        && !pool.has_installed_deps_in_dir(&draft_dir);
+    if needs_install {
+        let install = pool
+            .install_deps_in_dir(&draft_dir, &draft.app.source.npm_dependencies)
+            .await
+            .map_err(|e| e.to_string())?;
+        if !install.success {
+            let details = if !install.stderr.trim().is_empty() {
+                install.stderr
+            } else {
+                install.stdout
+            };
+            return Err(format!(
+                "MiniApp draft dependencies install failed for {}/{}: {}",
+                request.app_id,
+                request.draft_id,
+                details.trim()
+            ));
+        }
+        pool.stop(&worker_key).await;
+    }
+    pool.call_with_app_dir(
+        &worker_key,
+        &request.app_id,
+        &draft_dir,
+        &worker_revision,
+        &policy_json,
+        draft.app.permissions.node.as_ref(),
+        &request.method,
+        request.params,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn miniapp_draft_host_call(
+    state: State<'_, AppState>,
+    request: MiniAppDraftHostCallRequest,
+) -> Result<Value, String> {
+    if !is_host_primitive(&request.method) {
+        return Err(format!(
+            "method '{}' is not a host primitive (only fs.*/shell.*/os.*/net.* are supported)",
+            request.method
+        ));
+    }
+    let draft = state
+        .miniapp_manager
+        .get_draft(&request.app_id, &request.draft_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
+    let app_data_dir = state
+        .miniapp_manager
+        .draft_dir(&request.app_id, &request.draft_id);
+    let granted = state
+        .miniapp_manager
+        .granted_paths_for_app(&request.app_id)
+        .await;
+    dispatch_host(
+        &draft.app.permissions,
+        &request.app_id,
+        &app_data_dir,
+        workspace_root.as_deref(),
+        &granted,
+        &request.method,
+        request.params,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn miniapp_draft_worker_stop(
+    state: State<'_, AppState>,
+    request: MiniAppDraftRequest,
+) -> Result<(), String> {
+    if let Some(ref pool) = state.js_worker_pool {
+        pool.stop(&draft_worker_key(&request.app_id, &request.draft_id))
+            .await;
+    }
+    emit_miniapp_event(
+        "miniapp-worker-stopped",
+        json!({
+            "id": request.app_id,
+            "draftId": request.draft_id,
+            "reason": "draft-manual-stop",
+        }),
+    )
+    .await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn miniapp_get_customization_metadata(
+    state: State<'_, AppState>,
+    app_id: String,
+) -> Result<Option<MiniAppCustomizationMetadata>, String> {
+    state
+        .miniapp_manager
+        .load_customization_metadata(&app_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // ============== AI commands ==============
