@@ -822,6 +822,26 @@ const forbiddenContentRules = [
         regex: /\bpub struct SessionInfo\b/,
         message: 'core remote-connect server must not redefine session info DTOs; use the integrations contract',
       },
+      {
+        regex: /\bstruct TrackerState\b/,
+        message: 'core remote-connect server must not own tracker state; use the integrations tracker',
+      },
+      {
+        regex: /\bpub enum TrackerEvent\b/,
+        message: 'core remote-connect server must not redefine tracker events; use the integrations tracker',
+      },
+      {
+        regex: /\bpub struct RemoteSessionStateTracker\b/,
+        message: 'core remote-connect server must not own tracker state; use the integrations tracker',
+      },
+      {
+        regex: /\bfn make_slim_params\b/,
+        message: 'core remote-connect server must not own remote tool preview slimming; use the integrations helper',
+      },
+      {
+        regex: /\bmatch mobile_type\b/,
+        message: 'core remote-connect server must not own remote agent type alias mapping; use the integrations helper',
+      },
     ],
   },
   {
@@ -1808,6 +1828,16 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/services-integrations/src/remote_connect.rs',
+      contracts: [
+        'RemoteSessionStateTracker',
+        'TrackerEvent',
+        'make_slim_tool_params',
+        'handle_agentic_event',
+        'resolve_remote_agent_type',
+      ],
+    },
+    {
       path: 'src/crates/core/src/agentic/tools/registry.rs',
       contracts: ['register_all_tools', 'GetToolSpecTool', 'get_collapsed_tool_names'],
     },
@@ -2227,6 +2257,11 @@ function runManifestParserSelfTest() {
     'RemoteToolStatus',
     'ActiveTurnSnapshot',
     'SessionInfo',
+    'TrackerState',
+    'TrackerEvent',
+    'RemoteSessionStateTracker',
+    'make_slim_params',
+    'match mobile_type',
   ];
   const remoteConnectRuleText = remoteConnectRule.patterns
     .map((pattern) => pattern.regex.source)

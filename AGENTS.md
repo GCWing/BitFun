@@ -152,9 +152,11 @@ and milestone verification gates.
   keeps filesystem IO, worker runtime, `PathManager`, and port adapters until a
   reviewed runtime migration exists.
 - Remote-connect port baselines live in `bitfun-runtime-ports` and
-  `bitfun-services-integrations`; `AgentSubmissionPort` still rejects generic
-  attachments until image/multimodal equivalence tests and a runtime migration
-  plan are reviewed.
+  `bitfun-services-integrations`; tracker state and tracker event reduction
+  belong in `bitfun-services-integrations`, while core still owns dispatcher
+  assembly, session restore, terminal pre-warm, and product execution routing.
+  `AgentSubmissionPort` still rejects generic attachments until
+  image/multimodal equivalence tests and a runtime migration plan are reviewed.
 
 ### DeepReview guardrails
 

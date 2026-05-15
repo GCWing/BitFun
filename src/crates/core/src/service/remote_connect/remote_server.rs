@@ -8,18 +8,18 @@
 //! for state changes using the `PollSession` command, receiving only
 //! incremental updates (new messages + current active turn snapshot).
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use dashmap::DashMap;
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::{Arc, OnceLock};
 
 use super::encryption;
 pub use bitfun_services_integrations::remote_connect::{
     ActiveTurnSnapshot, AssistantEntry, ChatImageAttachment, ChatMessage, ChatMessageItem,
-    ImageAttachment, RecentWorkspaceEntry, RemoteToolStatus, SessionInfo,
+    ImageAttachment, RecentWorkspaceEntry, RemoteSessionStateTracker, RemoteToolStatus,
+    SessionInfo, TrackerEvent,
 };
 
 fn current_workspace_path() -> Option<std::path::PathBuf> {
@@ -486,35 +486,12 @@ pub enum RemoteResponse {
 
 pub type EncryptedPayload = (String, String);
 
-/// Build a slim version of tool params for mobile preview.
-/// Strips large string values (file content, diffs, etc.) to keep payload small,
-/// while preserving all short fields so the frontend can parse and display them.
-fn make_slim_params(params: &serde_json::Value) -> Option<String> {
-    match params {
-        serde_json::Value::Object(obj) => {
-            let slim: serde_json::Map<String, serde_json::Value> = obj
-                .iter()
-                .filter_map(|(k, v)| match v {
-                    serde_json::Value::String(s) if s.len() > 200 => None,
-                    _ => Some((k.clone(), v.clone())),
-                })
-                .collect();
-            if slim.is_empty() {
-                return None;
-            }
-            serde_json::to_string(&serde_json::Value::Object(slim)).ok()
-        }
-        serde_json::Value::String(s) => Some(s.chars().take(200).collect()),
-        _ => None,
-    }
-}
-
 /// Compress a base64 data-URL image to a small thumbnail for mobile display.
 /// Falls back to the original if decoding/compression fails or the image is
 /// already within `max_bytes`.
 fn compress_data_url_for_mobile(data_url: &str, max_bytes: usize) -> String {
-    use base64::engine::general_purpose::STANDARD as BASE64;
     use base64::Engine;
+    use base64::engine::general_purpose::STANDARD as BASE64;
     use image::imageops::FilterType;
 
     const MAX_THUMBNAIL_DIM: u32 = 400;
@@ -699,7 +676,10 @@ fn turns_to_chat_messages(turns: &[crate::service::session::DialogTurnData]) -> 
                     status: status_str.to_string(),
                     duration_ms: t.duration_ms,
                     start_ms: Some(t.start_time),
-                    input_preview: make_slim_params(&t.tool_call.input),
+                    input_preview:
+                        bitfun_services_integrations::remote_connect::make_slim_tool_params(
+                            &t.tool_call.input,
+                        ),
                     tool_input: if t.tool_name == "AskUserQuestion"
                         || t.tool_name == "Task"
                         || t.tool_name == "TodoWrite"
@@ -806,13 +786,7 @@ fn strip_user_input_tags(content: &str) -> String {
 }
 
 fn resolve_agent_type(mobile_type: Option<&str>) -> &'static str {
-    match mobile_type {
-        Some("code") | Some("agentic") | Some("Agentic") => "agentic",
-        Some("cowork") | Some("Cowork") => "Cowork",
-        Some("plan") | Some("Plan") => "Plan",
-        Some("debug") | Some("Debug") => "debug",
-        _ => "agentic",
-    }
+    bitfun_services_integrations::remote_connect::resolve_remote_agent_type(mobile_type)
 }
 
 /// Convert legacy `ImageAttachment` to unified `ImageContextData`.
@@ -849,637 +823,7 @@ pub fn images_to_contexts(
         .collect()
 }
 
-// ── RemoteSessionStateTracker ──────────────────────────────────────
-
-/// Mutable state snapshot updated by the event subscriber.
-#[derive(Debug)]
-struct TrackerState {
-    session_state: String,
-    title: String,
-    turn_id: Option<String>,
-    turn_status: String,
-    accumulated_text: String,
-    accumulated_thinking: String,
-    active_tools: Vec<RemoteToolStatus>,
-    round_index: usize,
-    /// Ordered items preserving the interleaved arrival order for real-time display.
-    active_items: Vec<ChatMessageItem>,
-    /// Set on structural events (turn start/complete) that change persisted
-    /// messages.  Cleared after the poll handler loads persistence.  Allows
-    /// skipping the expensive disk read during streaming.
-    persistence_dirty: bool,
-}
-
-/// Lightweight event broadcast by the tracker for real-time consumers (e.g. bots).
-#[derive(Debug, Clone)]
-pub enum TrackerEvent {
-    TextChunk(String),
-    ThinkingChunk(String),
-    /// All thinking content for the current round has been emitted.
-    /// Carries the full accumulated thinking text so consumers can send
-    /// a single summary instead of per-chunk messages.
-    ThinkingEnd,
-    ToolStarted {
-        tool_id: String,
-        tool_name: String,
-        params: Option<serde_json::Value>,
-    },
-    ToolCompleted {
-        tool_id: String,
-        tool_name: String,
-        duration_ms: Option<u64>,
-        success: bool,
-    },
-    TurnCompleted {
-        turn_id: String,
-    },
-    TurnFailed {
-        turn_id: String,
-        error: String,
-    },
-    TurnCancelled {
-        turn_id: String,
-    },
-}
-
-/// Tracks the real-time state of a session for polling by the mobile client.
-/// Subscribes to `AgenticEvent` and updates an in-memory snapshot.
-/// Also broadcasts lightweight `TrackerEvent`s for real-time consumers.
-pub struct RemoteSessionStateTracker {
-    target_session_id: String,
-    version: AtomicU64,
-    state: RwLock<TrackerState>,
-    event_tx: tokio::sync::broadcast::Sender<TrackerEvent>,
-}
-
-impl RemoteSessionStateTracker {
-    pub fn new(session_id: String) -> Self {
-        let (event_tx, _) = tokio::sync::broadcast::channel(1024);
-        Self {
-            target_session_id: session_id,
-            version: AtomicU64::new(0),
-            state: RwLock::new(TrackerState {
-                session_state: "idle".to_string(),
-                title: String::new(),
-                turn_id: None,
-                turn_status: String::new(),
-                accumulated_text: String::new(),
-                accumulated_thinking: String::new(),
-                active_tools: Vec::new(),
-                round_index: 0,
-                active_items: Vec::new(),
-                persistence_dirty: true,
-            }),
-            event_tx,
-        }
-    }
-
-    /// Subscribe to real-time tracker events (for bot streaming).
-    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<TrackerEvent> {
-        self.event_tx.subscribe()
-    }
-
-    pub fn version(&self) -> u64 {
-        self.version.load(Ordering::Relaxed)
-    }
-
-    fn bump_version(&self) {
-        self.version.fetch_add(1, Ordering::Relaxed);
-    }
-
-    pub fn snapshot_active_turn(&self) -> Option<ActiveTurnSnapshot> {
-        let s = self.state.read().unwrap();
-        let has_items = !s.active_items.is_empty();
-        s.turn_id.as_ref().map(|tid| ActiveTurnSnapshot {
-            turn_id: tid.clone(),
-            status: s.turn_status.clone(),
-            // When items exist they already contain the text/thinking content.
-            // Skip the duplicate top-level fields to halve the payload.
-            text: if has_items {
-                String::new()
-            } else {
-                s.accumulated_text.clone()
-            },
-            thinking: if has_items {
-                String::new()
-            } else {
-                s.accumulated_thinking.clone()
-            },
-            tools: s.active_tools.clone(),
-            round_index: s.round_index,
-            items: if has_items {
-                Some(s.active_items.clone())
-            } else {
-                None
-            },
-        })
-    }
-
-    pub fn session_state(&self) -> String {
-        self.state.read().unwrap().session_state.clone()
-    }
-
-    pub fn title(&self) -> String {
-        self.state.read().unwrap().title.clone()
-    }
-
-    pub fn turn_status(&self) -> String {
-        self.state.read().unwrap().turn_status.clone()
-    }
-
-    /// Return the full accumulated response text for the current turn.
-    ///
-    /// Unlike the broadcast channel (which can lag and drop chunks), this
-    /// is maintained directly from the source `AgenticEvent` stream and is
-    /// therefore authoritative.
-    pub fn accumulated_text(&self) -> String {
-        self.state.read().unwrap().accumulated_text.clone()
-    }
-
-    /// Return the full accumulated thinking text for the current turn.
-    pub fn accumulated_thinking(&self) -> String {
-        self.state.read().unwrap().accumulated_thinking.clone()
-    }
-
-    /// Returns true if the turn has ended (completed/failed/cancelled) but
-    /// the tracker state hasn't been cleaned up yet (waiting for persistence).
-    pub fn is_turn_finished(&self) -> bool {
-        let s = self.state.read().unwrap();
-        s.turn_id.is_some()
-            && matches!(s.turn_status.as_str(), "completed" | "failed" | "cancelled")
-    }
-
-    /// Seed initial turn state when the tracker is created after the
-    /// `DialogTurnStarted` event already fired (e.g. desktop-triggered turns).
-    /// Subsequent streaming events will be captured normally by the subscriber.
-    pub fn initialize_active_turn(&self, turn_id: String) {
-        let mut s = self.state.write().unwrap();
-        if s.turn_id.is_none() {
-            s.turn_id = Some(turn_id);
-            s.turn_status = "active".to_string();
-            s.session_state = "running".to_string();
-        }
-        drop(s);
-        self.bump_version();
-    }
-
-    /// Clear tracker state after the persisted historical message is confirmed
-    /// available. Called by the poll handler to complete the atomic transition.
-    pub fn finalize_completed_turn(&self) {
-        let mut s = self.state.write().unwrap();
-        if matches!(s.turn_status.as_str(), "completed" | "failed" | "cancelled") {
-            s.turn_id = None;
-            s.accumulated_text.clear();
-            s.accumulated_thinking.clear();
-            s.active_tools.clear();
-            s.active_items.clear();
-        }
-    }
-
-    /// Whether the persisted message list may have changed since the last
-    /// poll.  Structural events (turn start / complete) set this flag;
-    /// streaming events (text / thinking chunks) do not.
-    pub fn is_persistence_dirty(&self) -> bool {
-        self.state.read().unwrap().persistence_dirty
-    }
-
-    pub fn mark_persistence_clean(&self) {
-        self.state.write().unwrap().persistence_dirty = false;
-    }
-
-    /// Find the last item of `target_type` with matching `subagent_marker` that
-    /// can be extended, skipping over the complementary text/thinking type.
-    /// Tool items act as boundaries — we never merge across tool items.
-    /// This mirrors the desktop's EventBatcher behaviour where text and thinking
-    /// accumulate independently within a single ModelRound.
-    fn find_mergeable_item(
-        items: &[ChatMessageItem],
-        target_type: &str,
-        subagent_marker: &Option<bool>,
-    ) -> Option<usize> {
-        for i in (0..items.len()).rev() {
-            let item = &items[i];
-            if item.item_type == "tool" {
-                return None;
-            }
-            if item.item_type == target_type && &item.is_subagent == subagent_marker {
-                return Some(i);
-            }
-        }
-        None
-    }
-
-    fn upsert_active_tool(
-        state: &mut TrackerState,
-        tool_id: &str,
-        tool_name: &str,
-        status: &str,
-        input_preview: Option<String>,
-        tool_input: Option<serde_json::Value>,
-        is_subagent: bool,
-    ) {
-        let resolved_id = if tool_id.is_empty() {
-            format!("{}-{}", tool_name, state.active_tools.len())
-        } else {
-            tool_id.to_string()
-        };
-        let allow_name_fallback = tool_id.is_empty() && !tool_name.is_empty();
-        let subagent_marker = if is_subagent { Some(true) } else { None };
-
-        if let Some(tool) = state
-            .active_tools
-            .iter_mut()
-            .rev()
-            .find(|t| t.id == resolved_id || (allow_name_fallback && t.name == tool_name))
-        {
-            tool.status = status.to_string();
-            if input_preview.is_some() {
-                tool.input_preview = input_preview.clone();
-            }
-            if tool_input.is_some() {
-                tool.tool_input = tool_input.clone();
-            }
-        } else {
-            let tool_status = RemoteToolStatus {
-                id: resolved_id.clone(),
-                name: tool_name.to_string(),
-                status: status.to_string(),
-                duration_ms: None,
-                start_ms: Some(
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis() as u64,
-                ),
-                input_preview,
-                tool_input,
-            };
-            state.active_tools.push(tool_status.clone());
-            state.active_items.push(ChatMessageItem {
-                item_type: "tool".to_string(),
-                content: None,
-                tool: Some(tool_status),
-                is_subagent: subagent_marker,
-            });
-            return;
-        }
-
-        if let Some(item) = state.active_items.iter_mut().rev().find(|i| {
-            i.item_type == "tool"
-                && i.tool.as_ref().is_some_and(|t| {
-                    t.id == resolved_id || (allow_name_fallback && t.name == tool_name)
-                })
-        }) {
-            if let Some(tool) = item.tool.as_mut() {
-                tool.status = status.to_string();
-                if input_preview.is_some() {
-                    tool.input_preview = input_preview;
-                }
-                if tool_input.is_some() {
-                    tool.tool_input = tool_input;
-                }
-            }
-        }
-    }
-
-    fn handle_event(&self, event: &crate::agentic::events::AgenticEvent) {
-        use bitfun_events::AgenticEvent as AE;
-
-        let is_direct = event.session_id() == Some(self.target_session_id.as_str());
-        let is_subagent = if !is_direct {
-            match event {
-                AE::TextChunk {
-                    subagent_parent_info,
-                    ..
-                }
-                | AE::ThinkingChunk {
-                    subagent_parent_info,
-                    ..
-                }
-                | AE::ToolEvent {
-                    subagent_parent_info,
-                    ..
-                } => subagent_parent_info
-                    .as_ref()
-                    .is_some_and(|p| p.session_id == self.target_session_id),
-                _ => false,
-            }
-        } else {
-            false
-        };
-
-        if !is_direct && !is_subagent {
-            return;
-        }
-
-        match event {
-            AE::TextChunk { text, .. } => {
-                let subagent_marker = if is_subagent { Some(true) } else { None };
-                let mut s = self.state.write().unwrap();
-                if !is_subagent {
-                    s.accumulated_text.push_str(text);
-                }
-                let extend_idx =
-                    Self::find_mergeable_item(&s.active_items, "text", &subagent_marker);
-                if let Some(idx) = extend_idx {
-                    let item = &mut s.active_items[idx];
-                    let c = item.content.get_or_insert_with(String::new);
-                    c.push_str(text);
-                } else {
-                    s.active_items.push(ChatMessageItem {
-                        item_type: "text".to_string(),
-                        content: Some(text.clone()),
-                        tool: None,
-                        is_subagent: subagent_marker,
-                    });
-                }
-                drop(s);
-                self.bump_version();
-                let _ = self.event_tx.send(TrackerEvent::TextChunk(text.clone()));
-            }
-            AE::ThinkingChunk {
-                content, is_end, ..
-            } => {
-                let clean = content.replace("</thinking>", "").replace("<thinking>", "");
-                let subagent_marker = if is_subagent { Some(true) } else { None };
-                let mut s = self.state.write().unwrap();
-                if !is_subagent {
-                    s.accumulated_thinking.push_str(&clean);
-                }
-                let extend_idx =
-                    Self::find_mergeable_item(&s.active_items, "thinking", &subagent_marker);
-                if let Some(idx) = extend_idx {
-                    let item = &mut s.active_items[idx];
-                    let c = item.content.get_or_insert_with(String::new);
-                    c.push_str(&clean);
-                } else {
-                    s.active_items.push(ChatMessageItem {
-                        item_type: "thinking".to_string(),
-                        content: Some(clean),
-                        tool: None,
-                        is_subagent: subagent_marker,
-                    });
-                }
-                drop(s);
-                self.bump_version();
-                if *is_end {
-                    let _ = self.event_tx.send(TrackerEvent::ThinkingEnd);
-                } else if !content.is_empty() {
-                    let _ = self
-                        .event_tx
-                        .send(TrackerEvent::ThinkingChunk(content.clone()));
-                }
-            }
-            AE::ToolEvent { tool_event, .. } => {
-                if let Ok(val) = serde_json::to_value(tool_event) {
-                    let event_type = val.get("event_type").and_then(|v| v.as_str()).unwrap_or("");
-                    let tool_id = val
-                        .get("tool_id")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let tool_name = val
-                        .get("tool_name")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-
-                    let mut s = self.state.write().unwrap();
-                    let allow_name_fallback = tool_id.is_empty() && !tool_name.is_empty();
-                    let mut pending_tool_event: Option<TrackerEvent> = None;
-                    match event_type {
-                        "EarlyDetected" => {
-                            Self::upsert_active_tool(
-                                &mut s,
-                                &tool_id,
-                                &tool_name,
-                                "preparing",
-                                None,
-                                None,
-                                is_subagent,
-                            );
-                        }
-                        "ConfirmationNeeded" => {
-                            let params = val.get("params").cloned();
-                            let input_preview = params.as_ref().and_then(make_slim_params);
-                            Self::upsert_active_tool(
-                                &mut s,
-                                &tool_id,
-                                &tool_name,
-                                "pending_confirmation",
-                                input_preview,
-                                params,
-                                is_subagent,
-                            );
-                        }
-                        "Started" => {
-                            let params = val.get("params").cloned();
-                            let input_preview = params.as_ref().and_then(make_slim_params);
-                            let tool_input = if tool_name == "AskUserQuestion"
-                                || tool_name == "Task"
-                                || tool_name == "TodoWrite"
-                            {
-                                params.clone()
-                            } else {
-                                None
-                            };
-                            Self::upsert_active_tool(
-                                &mut s,
-                                &tool_id,
-                                &tool_name,
-                                "running",
-                                input_preview,
-                                tool_input,
-                                is_subagent,
-                            );
-                            let _ = self.event_tx.send(TrackerEvent::ToolStarted {
-                                tool_id: tool_id.clone(),
-                                tool_name: tool_name.clone(),
-                                params,
-                            });
-                        }
-                        "Confirmed" => {
-                            Self::upsert_active_tool(
-                                &mut s,
-                                &tool_id,
-                                &tool_name,
-                                "confirmed",
-                                None,
-                                None,
-                                is_subagent,
-                            );
-                        }
-                        "Rejected" => {
-                            Self::upsert_active_tool(
-                                &mut s,
-                                &tool_id,
-                                &tool_name,
-                                "rejected",
-                                None,
-                                None,
-                                is_subagent,
-                            );
-                        }
-                        "Completed" | "Succeeded" => {
-                            let duration = val.get("duration_ms").and_then(|v| v.as_u64());
-                            if let Some(t) = s.active_tools.iter_mut().rev().find(|t| {
-                                (t.id == tool_id || (allow_name_fallback && t.name == tool_name))
-                                    && t.status == "running"
-                            }) {
-                                t.status = "completed".to_string();
-                                t.duration_ms = duration;
-                            }
-                            if let Some(item) = s.active_items.iter_mut().rev().find(|i| {
-                                i.item_type == "tool"
-                                    && i.tool.as_ref().is_some_and(|t| {
-                                        (t.id == tool_id
-                                            || (allow_name_fallback && t.name == tool_name))
-                                            && t.status == "running"
-                                    })
-                            }) {
-                                if let Some(t) = item.tool.as_mut() {
-                                    t.status = "completed".to_string();
-                                    t.duration_ms = duration;
-                                }
-                            }
-                            pending_tool_event = Some(TrackerEvent::ToolCompleted {
-                                tool_id: tool_id.clone(),
-                                tool_name: tool_name.clone(),
-                                duration_ms: duration,
-                                success: true,
-                            });
-                        }
-                        "Failed" => {
-                            if let Some(t) = s.active_tools.iter_mut().rev().find(|t| {
-                                (t.id == tool_id || (allow_name_fallback && t.name == tool_name))
-                                    && t.status == "running"
-                            }) {
-                                t.status = "failed".to_string();
-                            }
-                            if let Some(item) = s.active_items.iter_mut().rev().find(|i| {
-                                i.item_type == "tool"
-                                    && i.tool.as_ref().is_some_and(|t| {
-                                        (t.id == tool_id
-                                            || (allow_name_fallback && t.name == tool_name))
-                                            && t.status == "running"
-                                    })
-                            }) {
-                                if let Some(t) = item.tool.as_mut() {
-                                    t.status = "failed".to_string();
-                                }
-                            }
-                            pending_tool_event = Some(TrackerEvent::ToolCompleted {
-                                tool_id: tool_id.clone(),
-                                tool_name: tool_name.clone(),
-                                duration_ms: None,
-                                success: false,
-                            });
-                        }
-                        "Cancelled" => {
-                            if let Some(t) = s.active_tools.iter_mut().rev().find(|t| {
-                                (t.id == tool_id || (allow_name_fallback && t.name == tool_name))
-                                    && matches!(
-                                        t.status.as_str(),
-                                        "running" | "pending_confirmation" | "confirmed"
-                                    )
-                            }) {
-                                t.status = "cancelled".to_string();
-                            }
-                            if let Some(item) = s.active_items.iter_mut().rev().find(|i| {
-                                i.item_type == "tool"
-                                    && i.tool.as_ref().is_some_and(|t| {
-                                        (t.id == tool_id
-                                            || (allow_name_fallback && t.name == tool_name))
-                                            && matches!(
-                                                t.status.as_str(),
-                                                "running" | "pending_confirmation" | "confirmed"
-                                            )
-                                    })
-                            }) {
-                                if let Some(t) = item.tool.as_mut() {
-                                    t.status = "cancelled".to_string();
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                    drop(s);
-                    self.bump_version();
-                    if let Some(evt) = pending_tool_event {
-                        let _ = self.event_tx.send(evt);
-                    }
-                }
-            }
-            AE::DialogTurnStarted { turn_id, .. } if is_direct => {
-                let mut s = self.state.write().unwrap();
-                s.turn_id = Some(turn_id.clone());
-                s.turn_status = "active".to_string();
-                s.accumulated_text.clear();
-                s.accumulated_thinking.clear();
-                s.active_tools.clear();
-                s.active_items.clear();
-                s.round_index = 0;
-                s.session_state = "running".to_string();
-                s.persistence_dirty = true;
-                drop(s);
-                self.bump_version();
-            }
-            AE::DialogTurnCompleted { turn_id, .. } if is_direct => {
-                let mut s = self.state.write().unwrap();
-                s.turn_status = "completed".to_string();
-                s.session_state = "idle".to_string();
-                s.persistence_dirty = true;
-                drop(s);
-                self.bump_version();
-                let _ = self.event_tx.send(TrackerEvent::TurnCompleted {
-                    turn_id: turn_id.clone(),
-                });
-            }
-            AE::DialogTurnFailed { turn_id, error, .. } if is_direct => {
-                let mut s = self.state.write().unwrap();
-                s.turn_status = "failed".to_string();
-                s.session_state = "idle".to_string();
-                s.persistence_dirty = true;
-                drop(s);
-                self.bump_version();
-                let _ = self.event_tx.send(TrackerEvent::TurnFailed {
-                    turn_id: turn_id.clone(),
-                    error: error.clone(),
-                });
-            }
-            AE::DialogTurnCancelled { turn_id, .. } if is_direct => {
-                let mut s = self.state.write().unwrap();
-                s.turn_status = "cancelled".to_string();
-                s.session_state = "idle".to_string();
-                s.persistence_dirty = true;
-                drop(s);
-                self.bump_version();
-                let _ = self.event_tx.send(TrackerEvent::TurnCancelled {
-                    turn_id: turn_id.clone(),
-                });
-            }
-            AE::ModelRoundStarted { round_index, .. } if is_direct => {
-                let mut s = self.state.write().unwrap();
-                s.round_index = *round_index;
-                drop(s);
-                self.bump_version();
-            }
-            AE::SessionStateChanged { new_state, .. } if is_direct => {
-                let mut s = self.state.write().unwrap();
-                s.session_state = new_state.clone();
-                drop(s);
-                self.bump_version();
-            }
-            AE::SessionTitleGenerated { title, .. } if is_direct => {
-                let mut s = self.state.write().unwrap();
-                s.title = title.clone();
-                drop(s);
-                self.bump_version();
-            }
-            _ => {}
-        }
-    }
-}
+// ── RemoteSessionStateTracker subscriber adapter ─────────────────
 
 #[async_trait::async_trait]
 impl crate::agentic::events::EventSubscriber for Arc<RemoteSessionStateTracker> {
@@ -1487,7 +831,7 @@ impl crate::agentic::events::EventSubscriber for Arc<RemoteSessionStateTracker> 
         &self,
         event: &crate::agentic::events::AgenticEvent,
     ) -> crate::util::errors::BitFunResult<()> {
-        self.handle_event(event);
+        self.handle_agentic_event(event);
         Ok(())
     }
 }
@@ -1841,7 +1185,7 @@ impl RemoteServer {
     ) -> RemoteResponse {
         use crate::agentic::persistence::PersistenceManager;
         use crate::infrastructure::PathManager;
-        use crate::service::workspace::{get_global_workspace_service, WorkspaceKind};
+        use crate::service::workspace::{WorkspaceKind, get_global_workspace_service};
 
         let (
             ws_path,
@@ -2064,7 +1408,7 @@ impl RemoteServer {
     /// Relative paths are resolved against the session workspace when possible,
     /// otherwise the current workspace root. Rejects files larger than 30 MB.
     async fn handle_read_file(&self, raw_path: &str, session_id: Option<&str>) -> RemoteResponse {
-        use crate::service::remote_connect::bot::{read_workspace_file, WorkspaceFileContent};
+        use crate::service::remote_connect::bot::{WorkspaceFileContent, read_workspace_file};
 
         const MAX_SIZE: u64 = 30 * 1024 * 1024; // Unified 30 MB cap (Feishu API hard limit)
         let workspace_root = resolve_file_workspace_root(session_id).await;
@@ -2105,7 +1449,7 @@ impl RemoteServer {
             None => {
                 return RemoteResponse::Error {
                     message: format!("Remote file path could not be resolved: {raw_path}"),
-                }
+                };
             }
         };
         if !abs.exists() || !abs.is_file() {
@@ -2119,7 +1463,7 @@ impl RemoteServer {
             Err(e) => {
                 return RemoteResponse::Error {
                     message: format!("Cannot read file metadata: {e}"),
-                }
+                };
             }
         };
 
@@ -2134,7 +1478,7 @@ impl RemoteServer {
             Err(e) => {
                 return RemoteResponse::Error {
                     message: format!("Cannot read file: {e}"),
-                }
+                };
             }
         };
 
@@ -2174,7 +1518,7 @@ impl RemoteServer {
             None => {
                 return RemoteResponse::Error {
                     message: format!("Remote file path could not be resolved: {raw_path}"),
-                }
+                };
             }
         };
 
@@ -2194,7 +1538,7 @@ impl RemoteServer {
             Err(e) => {
                 return RemoteResponse::Error {
                     message: format!("Cannot read file metadata: {e}"),
-                }
+                };
             }
         };
 
@@ -2218,7 +1562,7 @@ impl RemoteServer {
 
         match cmd {
             RemoteCommand::GetWorkspaceInfo => {
-                use crate::service::workspace::{get_global_workspace_service, WorkspaceKind};
+                use crate::service::workspace::{WorkspaceKind, get_global_workspace_service};
 
                 if let Some(ws_service) = get_global_workspace_service() {
                     if let Some(ws) = ws_service.get_current_workspace().await {
@@ -2390,7 +1734,7 @@ impl RemoteServer {
         use crate::agentic::coordination::get_global_coordinator;
         use bitfun_runtime_ports::AgentSubmissionPort;
         use bitfun_services_integrations::remote_connect::{
-            build_remote_session_create_request, RemoteConnectSubmissionSource,
+            RemoteConnectSubmissionSource, build_remote_session_create_request,
         };
 
         let coordinator = match get_global_coordinator() {
@@ -2598,7 +1942,7 @@ impl RemoteServer {
                             Err(e) => {
                                 return RemoteResponse::Error {
                                     message: format!("Failed to load AI config: {e}"),
-                                }
+                                };
                             }
                         };
                         match ai_config.resolve_model_reference(requested_model_id) {
@@ -2608,7 +1952,7 @@ impl RemoteServer {
                                     message: format!(
                                         "Unknown model selection: {requested_model_id}"
                                     ),
-                                }
+                                };
                             }
                         }
                     };
@@ -2708,7 +2052,7 @@ impl RemoteServer {
 
     async fn handle_execution_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
         use crate::agentic::coordination::{
-            get_global_coordinator, DialogSubmissionPolicy, DialogTriggerSource,
+            DialogSubmissionPolicy, DialogTriggerSource, get_global_coordinator,
         };
 
         let dispatcher = get_or_init_global_dispatcher();

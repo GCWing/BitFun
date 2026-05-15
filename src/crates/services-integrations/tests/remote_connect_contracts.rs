@@ -1,10 +1,13 @@
 #![cfg(feature = "remote-connect")]
 
+use bitfun_events::{AgenticEvent, ToolEventData};
 use bitfun_runtime_ports::AgentSubmissionSource;
 use bitfun_services_integrations::remote_connect::{
+    ChatImageAttachment, ChatMessage, ChatMessageItem, ImageAttachment,
+    RemoteConnectSubmissionSource, RemoteSessionStateTracker, RemoteToolStatus, TrackerEvent,
     build_remote_image_attachment, build_remote_image_submission_request,
-    build_remote_session_create_request, build_remote_submission_request, ChatImageAttachment,
-    ChatMessage, ChatMessageItem, ImageAttachment, RemoteConnectSubmissionSource, RemoteToolStatus,
+    build_remote_session_create_request, build_remote_submission_request,
+    resolve_remote_agent_type,
 };
 
 #[test]
@@ -99,6 +102,21 @@ fn remote_connect_session_create_contract_preserves_workspace_binding() {
 }
 
 #[test]
+fn remote_connect_agent_type_mapping_preserves_current_mobile_aliases() {
+    assert_eq!(resolve_remote_agent_type(Some("code")), "agentic");
+    assert_eq!(resolve_remote_agent_type(Some("agentic")), "agentic");
+    assert_eq!(resolve_remote_agent_type(Some("Agentic")), "agentic");
+    assert_eq!(resolve_remote_agent_type(Some("cowork")), "Cowork");
+    assert_eq!(resolve_remote_agent_type(Some("Cowork")), "Cowork");
+    assert_eq!(resolve_remote_agent_type(Some("plan")), "Plan");
+    assert_eq!(resolve_remote_agent_type(Some("Plan")), "Plan");
+    assert_eq!(resolve_remote_agent_type(Some("debug")), "debug");
+    assert_eq!(resolve_remote_agent_type(Some("Debug")), "debug");
+    assert_eq!(resolve_remote_agent_type(Some("unknown")), "agentic");
+    assert_eq!(resolve_remote_agent_type(None), "agentic");
+}
+
+#[test]
 fn remote_connect_message_dtos_keep_current_wire_shape() {
     let image = ImageAttachment {
         name: "clip.png".to_string(),
@@ -138,4 +156,135 @@ fn remote_connect_message_dtos_keep_current_wire_shape() {
     assert_eq!(json["tools"][0]["start_ms"], 42);
     assert_eq!(json["items"][0]["type"], "tool");
     assert_eq!(json["images"][0]["data_url"], "data:image/png;base64,abc");
+}
+
+#[test]
+fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
+    let tracker = RemoteSessionStateTracker::new("session-1".to_string());
+
+    tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        turn_index: 0,
+        user_input: "hello".to_string(),
+        original_user_input: None,
+        user_message_metadata: None,
+        subagent_parent_info: None,
+    });
+    tracker.handle_agentic_event(&AgenticEvent::ModelRoundStarted {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        round_index: 3,
+        subagent_parent_info: None,
+        model_id: None,
+    });
+    tracker.handle_agentic_event(&AgenticEvent::ThinkingChunk {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        content: "<thinking>plan".to_string(),
+        is_end: false,
+        subagent_parent_info: None,
+    });
+    tracker.handle_agentic_event(&AgenticEvent::TextChunk {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        text: "answer".to_string(),
+        subagent_parent_info: None,
+    });
+
+    let snapshot = tracker
+        .snapshot_active_turn()
+        .expect("active turn snapshot");
+
+    assert_eq!(tracker.session_state(), "running");
+    assert_eq!(snapshot.turn_id, "turn-1");
+    assert_eq!(snapshot.status, "active");
+    assert_eq!(snapshot.round_index, 3);
+    assert_eq!(snapshot.text, "");
+    assert_eq!(snapshot.thinking, "");
+    let items = snapshot.items.expect("ordered streaming items");
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].item_type, "thinking");
+    assert_eq!(items[0].content.as_deref(), Some("plan"));
+    assert_eq!(items[1].item_type, "text");
+    assert_eq!(items[1].content.as_deref(), Some("answer"));
+}
+
+#[test]
+fn remote_connect_tracker_keeps_subagent_items_out_of_parent_accumulators() {
+    let tracker = RemoteSessionStateTracker::new("parent-session".to_string());
+    let subagent_parent_info = Some(bitfun_events::SubagentParentInfo {
+        tool_call_id: "task-1".to_string(),
+        session_id: "parent-session".to_string(),
+        dialog_turn_id: "parent-turn".to_string(),
+    });
+
+    tracker.initialize_active_turn("parent-turn".to_string());
+    tracker.handle_agentic_event(&AgenticEvent::TextChunk {
+        session_id: "child-session".to_string(),
+        turn_id: "child-turn".to_string(),
+        round_id: "round-1".to_string(),
+        text: "child text".to_string(),
+        subagent_parent_info,
+    });
+
+    assert_eq!(tracker.accumulated_text(), "");
+    let snapshot = tracker
+        .snapshot_active_turn()
+        .expect("active turn snapshot");
+    let items = snapshot.items.expect("subagent item");
+    assert_eq!(items[0].content.as_deref(), Some("child text"));
+    assert_eq!(items[0].is_subagent, Some(true));
+}
+
+#[tokio::test]
+async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
+    let tracker = RemoteSessionStateTracker::new("session-1".to_string());
+    let mut events = tracker.subscribe();
+
+    tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        turn_index: 0,
+        user_input: "hello".to_string(),
+        original_user_input: None,
+        user_message_metadata: None,
+        subagent_parent_info: None,
+    });
+    tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        tool_event: ToolEventData::Started {
+            tool_id: "tool-1".to_string(),
+            tool_name: "AskUserQuestion".to_string(),
+            params: serde_json::json!({ "questions": [] }),
+            timeout_seconds: None,
+        },
+        subagent_parent_info: None,
+    });
+    tracker.handle_agentic_event(&AgenticEvent::DialogTurnCancelled {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        subagent_parent_info: None,
+    });
+
+    match events.recv().await.expect("tool started event") {
+        TrackerEvent::ToolStarted {
+            tool_id,
+            tool_name,
+            params,
+        } => {
+            assert_eq!(tool_id, "tool-1");
+            assert_eq!(tool_name, "AskUserQuestion");
+            assert!(params.is_some());
+        }
+        other => panic!("unexpected event: {other:?}"),
+    }
+    match events.recv().await.expect("turn cancelled event") {
+        TrackerEvent::TurnCancelled { turn_id } => assert_eq!(turn_id, "turn-1"),
+        other => panic!("unexpected event: {other:?}"),
+    }
 }
