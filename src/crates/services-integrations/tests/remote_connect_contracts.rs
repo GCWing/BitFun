@@ -6,7 +6,7 @@ use bitfun_services_integrations::remote_connect::{
     ChatImageAttachment, ChatMessage, ChatMessageItem, ImageAttachment,
     RemoteConnectSubmissionSource, RemoteSessionStateTracker, RemoteToolStatus, TrackerEvent,
     build_remote_image_attachment, build_remote_image_submission_request,
-    build_remote_session_create_request, build_remote_submission_request,
+    build_remote_session_create_request, build_remote_submission_request, make_slim_tool_params,
     resolve_remote_agent_type,
 };
 
@@ -287,4 +287,102 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
         TrackerEvent::TurnCancelled { turn_id } => assert_eq!(turn_id, "turn-1"),
         other => panic!("unexpected event: {other:?}"),
     }
+}
+
+#[test]
+fn remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes() {
+    let tracker = RemoteSessionStateTracker::new("session-1".to_string());
+
+    tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        turn_index: 0,
+        user_input: "hello".to_string(),
+        original_user_input: None,
+        user_message_metadata: None,
+        subagent_parent_info: None,
+    });
+    tracker.handle_agentic_event(&AgenticEvent::TextChunk {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        text: "answer".to_string(),
+        subagent_parent_info: None,
+    });
+    tracker.mark_persistence_clean();
+
+    tracker.handle_agentic_event(&AgenticEvent::DialogTurnCompleted {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        total_rounds: 1,
+        total_tools: 0,
+        duration_ms: 42,
+        subagent_parent_info: None,
+        partial_recovery_reason: None,
+        success: Some(true),
+        finish_reason: Some("stop".to_string()),
+    });
+
+    assert_eq!(tracker.session_state(), "idle");
+    assert!(tracker.is_turn_finished());
+    assert!(tracker.is_persistence_dirty());
+    let snapshot = tracker
+        .snapshot_active_turn()
+        .expect("finished snapshot remains until persistence catches up");
+    assert_eq!(snapshot.status, "completed");
+    assert_eq!(snapshot.turn_id, "turn-1");
+
+    tracker.finalize_completed_turn();
+    assert!(tracker.snapshot_active_turn().is_none());
+    assert_eq!(tracker.accumulated_text(), "");
+}
+
+#[test]
+fn remote_connect_tracker_ignores_unrelated_direct_session_events() {
+    let tracker = RemoteSessionStateTracker::new("session-1".to_string());
+
+    tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+        session_id: "session-2".to_string(),
+        turn_id: "turn-2".to_string(),
+        turn_index: 0,
+        user_input: "hello".to_string(),
+        original_user_input: None,
+        user_message_metadata: None,
+        subagent_parent_info: None,
+    });
+    tracker.handle_agentic_event(&AgenticEvent::TextChunk {
+        session_id: "session-2".to_string(),
+        turn_id: "turn-2".to_string(),
+        round_id: "round-1".to_string(),
+        text: "other answer".to_string(),
+        subagent_parent_info: None,
+    });
+
+    assert_eq!(tracker.version(), 0);
+    assert_eq!(tracker.session_state(), "idle");
+    assert!(tracker.snapshot_active_turn().is_none());
+    assert_eq!(tracker.accumulated_text(), "");
+}
+
+#[test]
+fn remote_connect_tool_preview_slimming_keeps_short_fields_and_drops_large_strings() {
+    let preview = make_slim_tool_params(&serde_json::json!({
+        "path": "README.md",
+        "content": "x".repeat(201),
+        "line": 12
+    }))
+    .expect("object preview");
+    let preview_json: serde_json::Value =
+        serde_json::from_str(&preview).expect("preview remains json object");
+
+    assert_eq!(preview_json["path"], "README.md");
+    assert_eq!(preview_json["line"], 12);
+    assert!(preview_json.get("content").is_none());
+
+    let long_text = "a".repeat(260);
+    let text_preview =
+        make_slim_tool_params(&serde_json::Value::String(long_text)).expect("string preview");
+    assert_eq!(text_preview.len(), 200);
+
+    assert!(make_slim_tool_params(&serde_json::json!(42)).is_none());
 }

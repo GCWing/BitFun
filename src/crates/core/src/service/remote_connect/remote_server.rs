@@ -823,6 +823,48 @@ pub fn images_to_contexts(
         .collect()
 }
 
+fn resolve_remote_execution_image_contexts(
+    legacy_images: Option<&Vec<ImageAttachment>>,
+    image_contexts: Option<Vec<crate::agentic::image_analysis::ImageContextData>>,
+) -> Vec<crate::agentic::image_analysis::ImageContextData> {
+    image_contexts.unwrap_or_else(|| images_to_contexts(legacy_images))
+}
+
+fn remote_session_restore_target<'a>(
+    session_exists: bool,
+    binding_workspace: Option<&'a str>,
+) -> Option<&'a str> {
+    if session_exists {
+        None
+    } else {
+        binding_workspace
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RemoteCancelDecision {
+    CancelCurrent(String),
+    StaleRequestedTurn,
+    AlreadyFinished,
+    NoRunningTask,
+}
+
+fn resolve_remote_cancel_decision(
+    running_turn_id: Option<&str>,
+    requested_turn_id: Option<&str>,
+) -> RemoteCancelDecision {
+    match (running_turn_id, requested_turn_id) {
+        (Some(current_turn_id), Some(req_id)) if req_id != current_turn_id => {
+            RemoteCancelDecision::StaleRequestedTurn
+        }
+        (Some(current_turn_id), _) => {
+            RemoteCancelDecision::CancelCurrent(current_turn_id.to_string())
+        }
+        (None, Some(_)) => RemoteCancelDecision::AlreadyFinished,
+        (None, None) => RemoteCancelDecision::NoRunningTask,
+    }
+}
+
 // ── RemoteSessionStateTracker subscriber adapter ─────────────────
 
 #[async_trait::async_trait]
@@ -947,19 +989,15 @@ impl RemoteExecutionDispatcher {
             .await
             .map(|path| path.to_string_lossy().into_owned());
 
-        let _ = match session_mgr.get_session(session_id) {
-            Some(session) => Some(session),
-            None => {
-                if let Some(workspace_path) = binding_workspace.as_deref() {
-                    coordinator
-                        .restore_session(std::path::Path::new(workspace_path), session_id)
-                        .await
-                        .ok()
-                } else {
-                    None
-                }
-            }
-        };
+        if let Some(workspace_path) = remote_session_restore_target(
+            session_mgr.get_session(session_id).is_some(),
+            binding_workspace.as_deref(),
+        ) {
+            let _ = coordinator
+                .restore_session(std::path::Path::new(workspace_path), session_id)
+                .await
+                .ok();
+        }
 
         // Pre-warm the terminal so shell integration is ready before BashTool runs.
         // Bot/remote sessions have no Terminal panel to pre-create the session, so the
@@ -1066,16 +1104,18 @@ impl RemoteExecutionDispatcher {
             _ => None,
         };
 
-        match (running_turn_id, requested_turn_id) {
-            (Some(current_turn_id), Some(req_id)) if req_id != current_turn_id => {
+        match resolve_remote_cancel_decision(running_turn_id.as_deref(), requested_turn_id) {
+            RemoteCancelDecision::StaleRequestedTurn => {
                 Err("This task is no longer running.".to_string())
             }
-            (Some(current_turn_id), _) => coordinator
+            RemoteCancelDecision::CancelCurrent(current_turn_id) => coordinator
                 .cancel_dialog_turn(session_id, &current_turn_id)
                 .await
                 .map_err(|e| e.to_string()),
-            (None, Some(_)) => Err("This task is already finished.".to_string()),
-            (None, None) => Err(format!(
+            RemoteCancelDecision::AlreadyFinished => {
+                Err("This task is already finished.".to_string())
+            }
+            RemoteCancelDecision::NoRunningTask => Err(format!(
                 "No running task to cancel for session: {}",
                 session_id
             )),
@@ -2066,9 +2106,10 @@ impl RemoteServer {
                 image_contexts,
             } => {
                 // Unified: prefer image_contexts (new format), fall back to legacy images
-                let resolved_contexts = image_contexts
-                    .clone()
-                    .unwrap_or_else(|| images_to_contexts(images.as_ref()));
+                let resolved_contexts = resolve_remote_execution_image_contexts(
+                    images.as_ref(),
+                    image_contexts.clone(),
+                );
                 info!(
                     "Remote send_message: session={session_id}, agent_type={}, image_contexts={}",
                     requested_agent_type.as_deref().unwrap_or("agentic"),
@@ -2247,5 +2288,189 @@ mod tests {
         let value: Value = serde_json::from_str(&json).unwrap();
         assert_eq!(value["resp"], "pong");
         assert_eq!(value["_request_id"], "req_xyz");
+    }
+
+    #[test]
+    fn remote_execution_prefers_unified_image_contexts_over_legacy_images() {
+        let explicit_context = crate::agentic::image_analysis::ImageContextData {
+            id: "ctx-1".to_string(),
+            image_path: Some("D:/workspace/project/screenshot.png".to_string()),
+            data_url: None,
+            mime_type: "image/png".to_string(),
+            metadata: Some(serde_json::json!({ "source": "desktop" })),
+        };
+        let legacy_images = vec![ImageAttachment {
+            name: "legacy.png".to_string(),
+            data_url: "data:image/png;base64,legacy".to_string(),
+        }];
+
+        let resolved = resolve_remote_execution_image_contexts(
+            Some(&legacy_images),
+            Some(vec![explicit_context.clone()]),
+        );
+
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].id, explicit_context.id);
+        assert_eq!(resolved[0].image_path, explicit_context.image_path);
+        assert!(resolved[0].data_url.is_none());
+    }
+
+    #[test]
+    fn remote_execution_falls_back_to_legacy_images_as_image_contexts() {
+        let legacy_images = vec![ImageAttachment {
+            name: "clip.png".to_string(),
+            data_url: "data:image/png;base64,abc".to_string(),
+        }];
+
+        let resolved = resolve_remote_execution_image_contexts(Some(&legacy_images), None);
+
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved[0].id.starts_with("remote_img_"));
+        assert_eq!(
+            resolved[0].data_url.as_deref(),
+            Some("data:image/png;base64,abc")
+        );
+        assert_eq!(resolved[0].mime_type, "image/png");
+        assert_eq!(resolved[0].metadata.as_ref().unwrap()["name"], "clip.png");
+    }
+
+    #[test]
+    fn remote_cancel_decision_preserves_current_turn_boundaries() {
+        assert_eq!(
+            resolve_remote_cancel_decision(Some("turn-current"), Some("turn-current")),
+            RemoteCancelDecision::CancelCurrent("turn-current".to_string())
+        );
+        assert_eq!(
+            resolve_remote_cancel_decision(Some("turn-current"), None),
+            RemoteCancelDecision::CancelCurrent("turn-current".to_string())
+        );
+        assert_eq!(
+            resolve_remote_cancel_decision(Some("turn-current"), Some("turn-stale")),
+            RemoteCancelDecision::StaleRequestedTurn
+        );
+        assert_eq!(
+            resolve_remote_cancel_decision(None, Some("turn-finished")),
+            RemoteCancelDecision::AlreadyFinished
+        );
+        assert_eq!(
+            resolve_remote_cancel_decision(None, None),
+            RemoteCancelDecision::NoRunningTask
+        );
+    }
+
+    #[test]
+    fn remote_restore_target_only_restores_cold_sessions_with_workspace_binding() {
+        assert_eq!(
+            remote_session_restore_target(false, Some("D:/workspace/project")),
+            Some("D:/workspace/project")
+        );
+        assert_eq!(
+            remote_session_restore_target(true, Some("D:/workspace/project")),
+            None
+        );
+        assert_eq!(remote_session_restore_target(false, None), None);
+    }
+
+    #[test]
+    fn remote_command_snapshot_covers_execution_poll_and_cancel_surfaces() {
+        let command = RemoteCommand::SendMessage {
+            session_id: "session-1".to_string(),
+            content: "hello".to_string(),
+            agent_type: Some("code".to_string()),
+            images: Some(vec![ImageAttachment {
+                name: "clip.png".to_string(),
+                data_url: "data:image/png;base64,abc".to_string(),
+            }]),
+            image_contexts: None,
+        };
+        let json = serde_json::to_value(command).expect("serialize send command");
+        assert_eq!(json["cmd"], "send_message");
+        assert_eq!(json["session_id"], "session-1");
+        assert_eq!(json["agent_type"], "code");
+        assert_eq!(json["images"][0]["name"], "clip.png");
+        assert!(json["image_contexts"].is_null());
+        assert!(json.get("imageContexts").is_none());
+
+        let cancel = serde_json::to_value(RemoteCommand::CancelTask {
+            session_id: "session-1".to_string(),
+            turn_id: Some("turn-1".to_string()),
+        })
+        .expect("serialize cancel command");
+        assert_eq!(cancel["cmd"], "cancel_task");
+        assert_eq!(cancel["turn_id"], "turn-1");
+
+        let poll = serde_json::to_value(RemoteCommand::PollSession {
+            session_id: "session-1".to_string(),
+            since_version: 7,
+            known_msg_count: 3,
+            known_model_catalog_version: Some(11),
+        })
+        .expect("serialize poll command");
+        assert_eq!(poll["cmd"], "poll_session");
+        assert_eq!(poll["since_version"], 7);
+        assert_eq!(poll["known_msg_count"], 3);
+        assert_eq!(poll["known_model_catalog_version"], 11);
+    }
+
+    #[test]
+    fn remote_response_snapshot_preserves_active_turn_and_result_shapes() {
+        let active_turn = ActiveTurnSnapshot {
+            turn_id: "turn-1".to_string(),
+            status: "active".to_string(),
+            text: String::new(),
+            thinking: String::new(),
+            tools: vec![RemoteToolStatus {
+                id: "tool-1".to_string(),
+                name: "Read".to_string(),
+                status: "running".to_string(),
+                duration_ms: None,
+                start_ms: Some(42),
+                input_preview: Some("{\"path\":\"README.md\"}".to_string()),
+                tool_input: None,
+            }],
+            round_index: 2,
+            items: Some(vec![ChatMessageItem {
+                item_type: "tool".to_string(),
+                content: None,
+                tool: None,
+                is_subagent: None,
+            }]),
+        };
+
+        let poll = serde_json::to_value(RemoteResponse::SessionPoll {
+            version: 8,
+            changed: true,
+            session_state: Some("running".to_string()),
+            title: Some("session title".to_string()),
+            new_messages: None,
+            total_msg_count: None,
+            active_turn: Some(active_turn),
+            model_catalog: Box::new(None),
+        })
+        .expect("serialize poll response");
+
+        assert_eq!(poll["resp"], "session_poll");
+        assert_eq!(poll["version"], 8);
+        assert_eq!(poll["active_turn"]["turn_id"], "turn-1");
+        assert_eq!(
+            poll["active_turn"]["tools"][0]["input_preview"],
+            "{\"path\":\"README.md\"}"
+        );
+        assert!(poll.get("new_messages").is_none());
+
+        let sent = serde_json::to_value(RemoteResponse::MessageSent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+        })
+        .expect("serialize sent response");
+        assert_eq!(sent["resp"], "message_sent");
+        assert_eq!(sent["turn_id"], "turn-1");
+
+        let cancelled = serde_json::to_value(RemoteResponse::TaskCancelled {
+            session_id: "session-1".to_string(),
+        })
+        .expect("serialize cancelled response");
+        assert_eq!(cancelled["resp"], "task_cancelled");
+        assert_eq!(cancelled["session_id"], "session-1");
     }
 }

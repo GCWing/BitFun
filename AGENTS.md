@@ -155,6 +155,10 @@ and milestone verification gates.
   `bitfun-services-integrations`; tracker state and tracker event reduction
   belong in `bitfun-services-integrations`, while core still owns dispatcher
   assembly, session restore, terminal pre-warm, and product execution routing.
+  Remote runtime owner migration must preserve the existing migration snapshots
+  for command/response shape, restore, active-turn polling, cancel decisions,
+  image context fallback/preference, tracker fanout, and RemoteRelay/Bot queue
+  policy.
   `AgentSubmissionPort` still rejects generic attachments until
   image/multimodal equivalence tests and a runtime migration plan are reviewed.
 

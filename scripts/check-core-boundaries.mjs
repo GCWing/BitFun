@@ -1838,6 +1838,28 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/services-integrations/tests/remote_connect_contracts.rs',
+      contracts: [
+        'remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes',
+        'remote_connect_tracker_ignores_unrelated_direct_session_events',
+        'remote_connect_tool_preview_slimming_keeps_short_fields_and_drops_large_strings',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/service/remote_connect/remote_server.rs',
+      contracts: [
+        'remote_execution_prefers_unified_image_contexts_over_legacy_images',
+        'remote_cancel_decision_preserves_current_turn_boundaries',
+        'remote_restore_target_only_restores_cold_sessions_with_workspace_binding',
+        'remote_command_snapshot_covers_execution_poll_and_cancel_surfaces',
+        'remote_response_snapshot_preserves_active_turn_and_result_shapes',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+      contracts: ['remote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary'],
+    },
+    {
       path: 'src/crates/core/src/agentic/tools/registry.rs',
       contracts: ['register_all_tools', 'GetToolSpecTool', 'get_collapsed_tool_names'],
     },

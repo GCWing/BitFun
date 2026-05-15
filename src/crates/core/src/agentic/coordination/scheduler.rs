@@ -747,9 +747,7 @@ Status: {status}"
                     if let Err(e) = self.dispatch_next_if_idle(&session_id).await {
                         warn!(
                             "Failed to dispatch next queued message after {}: session_id={}, error={}",
-                            status,
-                            session_id,
-                            e
+                            status, session_id, e
                         );
                     }
                 }
@@ -816,5 +814,23 @@ mod tests {
         assert!(!DialogScheduler::should_skip_agent_session_reply(
             &completed, true
         ));
+    }
+
+    #[test]
+    fn remote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary() {
+        let remote = DialogSubmissionPolicy::for_source(DialogTriggerSource::RemoteRelay);
+        assert_eq!(remote.queue_priority, DialogQueuePriority::Normal);
+        assert!(remote.skip_tool_confirmation);
+        assert!(DialogScheduler::user_message_may_preempt(&remote));
+
+        let bot = DialogSubmissionPolicy::for_source(DialogTriggerSource::Bot);
+        assert_eq!(bot.queue_priority, DialogQueuePriority::Normal);
+        assert!(bot.skip_tool_confirmation);
+        assert!(DialogScheduler::user_message_may_preempt(&bot));
+
+        let agent_session = DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession);
+        assert_eq!(agent_session.queue_priority, DialogQueuePriority::Low);
+        assert!(agent_session.skip_tool_confirmation);
+        assert!(!DialogScheduler::user_message_may_preempt(&agent_session));
     }
 }
