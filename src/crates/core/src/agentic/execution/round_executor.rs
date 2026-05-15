@@ -4,15 +4,15 @@
 
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
+use crate::agentic::MessageContent;
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
+use crate::agentic::tools::ToolPathOperation;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
-use crate::agentic::tools::framework::ToolUseContext;
+use crate::agentic::tools::framework::{ToolPathResolution, ToolUseContext};
 use crate::agentic::tools::implementations::file_write_tool::FileWriteTool;
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
-use crate::agentic::tools::ToolPathOperation;
-use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
 use crate::service::config::GlobalConfigManager;
 use crate::util::elapsed_ms_u64;
@@ -880,7 +880,12 @@ impl RoundExecutor {
                 .to_string();
             let tool_id = tc.tool_id.clone();
 
-            if let Some(error) = Self::write_content_preflight_error(context, &file_path).await {
+            let target_has_prior_delete =
+                Self::write_target_has_prior_delete(context, &tool_calls, *idx, &file_path).await;
+            if let Some(error) =
+                Self::write_content_preflight_error(context, &file_path, target_has_prior_delete)
+                    .await
+            {
                 debug!(
                     "Skipping Write content generation after preflight failure: file_path={}, error={}",
                     file_path, error
@@ -1050,6 +1055,7 @@ impl RoundExecutor {
     async fn write_content_preflight_error(
         context: &RoundContext,
         file_path: &str,
+        target_has_prior_delete: bool,
     ) -> Option<String> {
         let tool_context = Self::build_write_preflight_context(context);
         let resolved = match tool_context.resolve_tool_path(file_path) {
@@ -1062,7 +1068,59 @@ impl RoundExecutor {
             return Some(error.to_string());
         }
 
+        if target_has_prior_delete {
+            return None;
+        }
+
         FileWriteTool::existing_file_error(&tool_context, &resolved).await
+    }
+
+    async fn write_target_has_prior_delete(
+        context: &RoundContext,
+        tool_calls: &[ToolCall],
+        write_idx: usize,
+        file_path: &str,
+    ) -> bool {
+        let tool_context = Self::build_write_preflight_context(context);
+        let write_resolved = match tool_context.resolve_tool_path(file_path) {
+            Ok(resolved) => resolved,
+            Err(_) => return false,
+        };
+
+        for prior_call in tool_calls.iter().take(write_idx) {
+            if prior_call.tool_name != "Delete" {
+                continue;
+            }
+
+            let Some(delete_path) = prior_call.arguments.get("path").and_then(|v| v.as_str())
+            else {
+                continue;
+            };
+
+            let delete_resolved = match tool_context.resolve_tool_path(delete_path) {
+                Ok(resolved) => resolved,
+                Err(_) => continue,
+            };
+
+            if tool_context
+                .enforce_path_operation(ToolPathOperation::Delete, &delete_resolved)
+                .is_err()
+            {
+                continue;
+            }
+
+            let recursive = prior_call
+                .arguments
+                .get("recursive")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
+            if delete_covers_write_target(&delete_resolved, &write_resolved, recursive) {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn build_write_preflight_context(context: &RoundContext) -> ToolUseContext {
@@ -1254,6 +1312,36 @@ fn token_details_from_usage(
     }
 
     (!details.is_empty()).then_some(serde_json::Value::Object(details))
+}
+
+fn delete_covers_write_target(
+    delete_target: &ToolPathResolution,
+    write_target: &ToolPathResolution,
+    recursive: bool,
+) -> bool {
+    if delete_target.backend != write_target.backend {
+        return false;
+    }
+
+    if delete_target.resolved_path == write_target.resolved_path {
+        return true;
+    }
+
+    if !recursive {
+        return false;
+    }
+
+    if delete_target.uses_remote_workspace_backend() {
+        let delete_prefix = delete_target.resolved_path.trim_end_matches('/');
+        let write_path = write_target.resolved_path.as_str();
+        return !delete_prefix.is_empty()
+            && write_path.len() > delete_prefix.len()
+            && write_path.starts_with(delete_prefix)
+            && write_path.as_bytes().get(delete_prefix.len()) == Some(&b'/');
+    }
+
+    std::path::Path::new(&write_target.resolved_path)
+        .starts_with(std::path::Path::new(&delete_target.resolved_path))
 }
 
 /// Extract content from `<bitfun_contents>...</bitfun_contents>` tags.
@@ -1468,9 +1556,15 @@ fn detect_placeholder_patterns(content: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_bitfun_contents, RoundExecutor, StreamProcessor};
+    use super::{RoundExecutor, StreamProcessor, extract_bitfun_contents};
+    use crate::agentic::WorkspaceBinding;
+    use crate::agentic::core::ToolCall;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
+    use crate::agentic::execution::types::RoundContext;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
     use dashmap::DashMap;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use tokio_util::sync::CancellationToken;
 
@@ -1481,6 +1575,40 @@ mod tests {
             tool_pipeline: None,
             event_queue,
             cancellation_tokens: Arc::new(DashMap::new()),
+        }
+    }
+
+    fn test_round_context(workspace_root: PathBuf) -> RoundContext {
+        RoundContext {
+            session_id: "session-1".to_string(),
+            subagent_parent_info: None,
+            dialog_turn_id: "turn-1".to_string(),
+            turn_index: 0,
+            round_number: 0,
+            workspace: Some(WorkspaceBinding::new(None, workspace_root)),
+            messages: Vec::new(),
+            available_tools: Vec::new(),
+            collapsed_tools: Vec::new(),
+            unlocked_collapsed_tools: Vec::new(),
+            model_name: "test-model".to_string(),
+            agent_type: "test-agent".to_string(),
+            context_vars: HashMap::new(),
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            steering_interrupt: None,
+            cancellation_token: CancellationToken::new(),
+            workspace_services: None,
+            recover_partial_on_cancel: false,
+        }
+    }
+
+    fn tool_call(tool_id: &str, tool_name: &str, arguments: serde_json::Value) -> ToolCall {
+        ToolCall {
+            tool_id: tool_id.to_string(),
+            tool_name: tool_name.to_string(),
+            arguments,
+            raw_arguments: None,
+            is_error: false,
+            recovered_from_truncation: false,
         }
     }
 
@@ -1502,6 +1630,60 @@ mod tests {
         executor.cleanup_dialog_turn("turn-1").await;
         assert!(!executor.has_active_dialog_turn("turn-1"));
         assert!(!executor.is_dialog_turn_cancelled("turn-1"));
+    }
+
+    #[tokio::test]
+    async fn write_preflight_rejects_existing_file_without_prior_delete() {
+        let root =
+            std::env::temp_dir().join(format!("bitfun-write-preflight-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+        std::fs::write(root.join("target.txt"), "old").expect("create target file");
+        let context = test_round_context(root.clone());
+
+        let error =
+            RoundExecutor::write_content_preflight_error(&context, "target.txt", false).await;
+
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert!(
+            error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("already exists")
+        );
+    }
+
+    #[tokio::test]
+    async fn write_preflight_allows_existing_file_when_prior_delete_targets_same_path() {
+        let root =
+            std::env::temp_dir().join(format!("bitfun-write-preflight-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+        std::fs::write(root.join("target.txt"), "old").expect("create target file");
+        let context = test_round_context(root.clone());
+        let tool_calls = vec![
+            tool_call(
+                "delete-1",
+                "Delete",
+                serde_json::json!({"path": "target.txt"}),
+            ),
+            tool_call(
+                "write-1",
+                "Write",
+                serde_json::json!({"file_path": "target.txt"}),
+            ),
+        ];
+
+        let has_prior_delete =
+            RoundExecutor::write_target_has_prior_delete(&context, &tool_calls, 1, "target.txt")
+                .await;
+        let error =
+            RoundExecutor::write_content_preflight_error(&context, "target.txt", has_prior_delete)
+                .await;
+
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert!(has_prior_delete);
+        assert_eq!(error, None);
     }
 
     #[test]
