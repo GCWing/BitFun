@@ -111,14 +111,17 @@ pub async fn resolve_tool_manifest(
 ) -> ResolvedToolManifest {
     let visible_tools = resolve_visible_tools(allowed_tools, exposure_overrides, context).await;
 
-    let mut tool_definitions =
-        Vec::with_capacity(visible_tools.expanded_tools.len() + visible_tools.collapsed_tools.len());
+    let mut tool_definitions = Vec::with_capacity(
+        visible_tools.expanded_tools.len() + visible_tools.collapsed_tools.len(),
+    );
     for tool in &visible_tools.expanded_tools {
         let description = tool
             .description_with_context(Some(context))
             .await
             .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
-        let parameters = tool.input_schema_for_model_with_context(Some(context)).await;
+        let parameters = tool
+            .input_schema_for_model_with_context(Some(context))
+            .await;
 
         tool_definitions.push(ToolDefinition {
             name: tool.name().to_string(),
@@ -255,6 +258,66 @@ mod tests {
         assert!(stub.description.contains("Call `GetToolSpec` first"));
         assert_eq!(stub.parameters["type"], json!("object"));
         assert_eq!(stub.parameters["additionalProperties"], json!(true));
+    }
+
+    #[tokio::test]
+    async fn manifest_snapshot_preserves_collapsed_tool_discovery_contract() {
+        let allowed_tools = vec![
+            "TodoWrite".to_string(),
+            "WebFetch".to_string(),
+            "Read".to_string(),
+            "WebSearch".to_string(),
+        ];
+
+        let manifest = resolve_tool_manifest(
+            &allowed_tools,
+            &AgentToolPolicyOverrides::default(),
+            &tool_context(),
+        )
+        .await;
+
+        assert_eq!(
+            manifest.allowed_tool_names,
+            vec![
+                "TodoWrite".to_string(),
+                "WebFetch".to_string(),
+                "Read".to_string(),
+                "WebSearch".to_string(),
+                GET_TOOL_SPEC_TOOL_NAME.to_string(),
+            ],
+            "GetToolSpec should be appended without reordering the allowed-list contract"
+        );
+        assert_eq!(
+            manifest.collapsed_tool_names,
+            vec!["WebSearch".to_string(), "WebFetch".to_string()],
+            "collapsed tools should follow registry snapshot order"
+        );
+        assert_eq!(
+            manifest
+                .tool_definitions
+                .iter()
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Read", "WebFetch", "WebSearch", "TodoWrite", "GetToolSpec"],
+            "prompt-visible manifest order must stay stable before owner migration"
+        );
+
+        let web_fetch = manifest
+            .tool_definitions
+            .iter()
+            .find(|tool| tool.name == "WebFetch")
+            .expect("collapsed WebFetch stub");
+        assert!(web_fetch
+            .description
+            .contains("Call `GetToolSpec` first with {\"tool_name\":\"WebFetch\"}"));
+        assert_eq!(
+            web_fetch.parameters,
+            json!({
+                "type": "object",
+                "properties": {},
+                "additionalProperties": true
+            })
+        );
     }
 
     #[tokio::test]

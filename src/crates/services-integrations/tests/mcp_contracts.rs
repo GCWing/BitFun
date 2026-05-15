@@ -97,6 +97,27 @@ impl MCPConfigStore for InMemoryMCPConfigStore {
     }
 }
 
+struct FailingMCPConfigStore;
+
+#[async_trait]
+impl MCPConfigStore for FailingMCPConfigStore {
+    async fn get_config_value(&self, key: &str) -> MCPRuntimeResult<Option<serde_json::Value>> {
+        Err(
+            bitfun_services_integrations::mcp::MCPRuntimeError::configuration(format!(
+                "backend unavailable for {key}"
+            )),
+        )
+    }
+
+    async fn set_config_value(&self, key: &str, _value: serde_json::Value) -> MCPRuntimeResult<()> {
+        Err(
+            bitfun_services_integrations::mcp::MCPRuntimeError::configuration(format!(
+                "backend unavailable for {key}"
+            )),
+        )
+    }
+}
+
 struct FakeMCPToolCatalogClient {
     tools: Vec<MCPTool>,
 }
@@ -775,6 +796,58 @@ async fn mcp_catalog_cache_preserves_resource_prompt_lifecycle_contract() {
     assert!(cache.get_prompts("server-b").await.is_empty());
 }
 
+#[tokio::test]
+async fn mcp_catalog_cache_replacement_invalidates_stale_entries() {
+    let cache = MCPCatalogCache::new();
+    let old_resource = make_resource("old", Some("stale"), "file:///old.md");
+    let new_resource = make_resource("new", Some("fresh"), "file:///new.md");
+    let old_prompt = MCPPrompt {
+        name: "old-prompt".to_string(),
+        title: None,
+        description: Some("stale".to_string()),
+        arguments: None,
+        icons: None,
+    };
+    let new_prompt = MCPPrompt {
+        name: "new-prompt".to_string(),
+        title: None,
+        description: Some("fresh".to_string()),
+        arguments: None,
+        icons: None,
+    };
+
+    cache
+        .replace_resources("server-a", vec![old_resource])
+        .await;
+    cache.replace_prompts("server-a", vec![old_prompt]).await;
+    cache
+        .replace_resources("server-a", vec![new_resource])
+        .await;
+    cache.replace_prompts("server-a", vec![new_prompt]).await;
+
+    let resources = cache.get_resources("server-a").await;
+    let prompts = cache.get_prompts("server-a").await;
+    assert_eq!(
+        resources
+            .iter()
+            .map(|item| item.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["new"]
+    );
+    assert_eq!(
+        prompts
+            .iter()
+            .map(|item| item.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["new-prompt"]
+    );
+
+    cache.replace_resources("server-a", Vec::new()).await;
+    cache.replace_prompts("server-a", Vec::new()).await;
+    assert!(cache.get_resources("server-a").await.is_empty());
+    assert!(cache.get_prompts("server-a").await.is_empty());
+}
+
 #[test]
 fn mcp_runtime_notification_and_backoff_helpers_preserve_manager_contract() {
     assert_eq!(
@@ -959,6 +1032,35 @@ async fn mcp_config_service_orchestration_preserves_load_save_delete_contract() 
 }
 
 #[tokio::test]
+async fn mcp_config_service_keeps_load_failures_as_empty_baseline() {
+    let service = MCPConfigService::new(Arc::new(FailingMCPConfigStore));
+
+    let configs = service
+        .load_all_configs()
+        .await
+        .expect("load failures are treated as empty config sources");
+    assert!(configs.is_empty());
+
+    let missing = service
+        .get_server_config("missing")
+        .await
+        .expect("get_server_config also sees empty config sources");
+    assert!(missing.is_none());
+
+    let save_error = service
+        .save_server_config(&make_mcp_config(
+            "remote-docs",
+            ConfigLocation::User,
+            MCPServerType::Remote,
+            None,
+            Some("https://example.com/mcp"),
+        ))
+        .await
+        .expect_err("writes must still surface config backend failures");
+    assert_eq!(save_error.kind(), MCPRuntimeErrorKind::Configuration);
+}
+
+#[tokio::test]
 async fn mcp_dynamic_tool_provider_preserves_manifest_contract() {
     let provider = MCPDynamicToolProvider::new("github", "GitHub");
     let definitions = provider
@@ -994,6 +1096,85 @@ async fn mcp_dynamic_tool_provider_preserves_manifest_contract() {
     assert_eq!(definitions[0].descriptor.provider_id, "github");
     assert_eq!(definitions[0].descriptor.tool_info.server_name, "GitHub");
     assert!(definitions[0].descriptor.read_only);
+}
+
+#[tokio::test]
+async fn mcp_dynamic_tool_provider_preserves_manifest_order_and_metadata_snapshot() {
+    let provider = MCPDynamicToolProvider::new("docs-prod", "Docs Production");
+    let definitions = provider
+        .load_tool_definitions(&FakeMCPToolCatalogClient {
+            tools: vec![
+                MCPTool {
+                    name: "lookup".to_string(),
+                    title: None,
+                    description: Some("Lookup docs".to_string()),
+                    input_schema: serde_json::json!({ "type": "object" }),
+                    output_schema: None,
+                    icons: None,
+                    annotations: Some(MCPToolAnnotations {
+                        title: Some("Lookup".to_string()),
+                        read_only_hint: Some(true),
+                        destructive_hint: None,
+                        idempotent_hint: Some(true),
+                        open_world_hint: Some(false),
+                    }),
+                    meta: None,
+                },
+                MCPTool {
+                    name: "write-note".to_string(),
+                    title: Some("Write Note".to_string()),
+                    description: None,
+                    input_schema: serde_json::json!({ "type": "object" }),
+                    output_schema: None,
+                    icons: None,
+                    annotations: Some(MCPToolAnnotations {
+                        title: None,
+                        read_only_hint: Some(false),
+                        destructive_hint: Some(true),
+                        idempotent_hint: Some(false),
+                        open_world_hint: None,
+                    }),
+                    meta: None,
+                },
+            ],
+        })
+        .await
+        .unwrap();
+
+    let snapshot = definitions
+        .iter()
+        .map(|definition| {
+            (
+                definition.descriptor.full_name.as_str(),
+                definition.descriptor.title.as_str(),
+                definition.descriptor.provider_id.as_str(),
+                definition.descriptor.provider_kind.as_str(),
+                definition.descriptor.tool_info.tool_name.as_str(),
+                definition.descriptor.read_only,
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        snapshot,
+        vec![
+            (
+                "mcp__docs-prod__lookup",
+                "Lookup",
+                "docs-prod",
+                "mcp",
+                "lookup",
+                true
+            ),
+            (
+                "mcp__docs-prod__write-note",
+                "Write Note",
+                "docs-prod",
+                "mcp",
+                "write-note",
+                false,
+            ),
+        ]
+    );
 }
 
 #[tokio::test]

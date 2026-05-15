@@ -1,20 +1,20 @@
 use crate::infrastructure::{FileSearchOutcome, FileSearchResult, SearchMatchType};
-use crate::service::config::{ConfigService, get_global_config_service, types::WorkspaceConfig};
+use crate::service::config::{get_global_config_service, types::WorkspaceConfig, ConfigService};
 use crate::service::remote_ssh::workspace_state::{
-    RemoteWorkspaceEntry, get_remote_workspace_manager, lookup_remote_connection,
-    lookup_remote_connection_with_hint,
+    get_remote_workspace_manager, lookup_remote_connection, lookup_remote_connection_with_hint,
+    RemoteWorkspaceEntry,
 };
 use crate::service::remote_ssh::{
-    RemoteFileService, SSHConnectionManager, normalize_remote_workspace_path,
+    normalize_remote_workspace_path, RemoteFileService, SSHConnectionManager,
 };
 use crate::service::search::flashgrep::{
-    ClientCapabilities, ClientInfo, ConsistencyMode, FLASHGREP_LOG_TARGET, GlobOutcome, GlobParams,
-    GlobRequest, InitializeParams, OpenRepoParams, PathScope, ProtocolClient, QuerySpec,
-    RefreshPolicyConfig, RepoConfig, RepoRef, RepoStatus, Request, Response, SearchBackend,
-    SearchModeConfig, SearchOutcome, SearchParams, SearchRequest, SearchResults, TaskRef,
-    TaskStatus, drain_content_length_messages, log_flashgrep_stderr_line_with_context,
+    drain_content_length_messages, log_flashgrep_stderr_line_with_context, ClientCapabilities,
+    ClientInfo, ConsistencyMode, GlobOutcome, GlobParams, GlobRequest, InitializeParams,
+    OpenRepoParams, PathScope, ProtocolClient, QuerySpec, RefreshPolicyConfig, RepoConfig, RepoRef,
+    RepoStatus, Request, Response, SearchBackend, SearchModeConfig, SearchOutcome, SearchParams,
+    SearchRequest, SearchResults, TaskRef, TaskStatus, FLASHGREP_LOG_TARGET,
 };
-use crate::service::search::flashgrep::{FlashgrepRepoSession, error::AppError};
+use crate::service::search::flashgrep::{error::AppError, FlashgrepRepoSession};
 use crate::service::search::{
     ContentSearchOutputMode, ContentSearchRequest, ContentSearchResult, GlobSearchRequest,
     GlobSearchResult, IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchFileCount,
@@ -26,12 +26,12 @@ use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    Arc, LazyLock,
     atomic::{AtomicU64, Ordering},
+    Arc, LazyLock,
 };
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::{Mutex, RwLock, mpsc};
+use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio::time::{sleep, timeout};
 
 const REMOTE_FLASHGREP_INSTALL_DIR: &str = ".bitfun/bin";
@@ -650,15 +650,11 @@ impl RemoteWorkspaceSearchService {
         // query as `FilesWithMatches`, which the daemon does populate with
         // the matching file paths, so the user at least sees the hit list
         // while the index is being built.
-        let primary_has_details = !raw_results.hits.is_empty()
-            || !raw_results.file_counts.is_empty()
-            || !raw_results.file_match_counts.is_empty()
-            || !raw_results.matched_paths.is_empty();
-        if matches!(backend, SearchBackend::ScanFallback)
-            && !primary_has_details
-            && raw_results.matched_lines > 0
-            && !matches!(primary_search_mode, SearchModeConfig::FilesWithMatches)
-        {
+        if should_retry_remote_scan_fallback_as_files_with_matches(
+            backend,
+            primary_search_mode,
+            &raw_results,
+        ) {
             log::info!(
                 "Remote workspace content search re-issuing as FilesWithMatches because daemon ScanFallback returned only summary statistics: pattern_chars={}, primary_search_mode={:?}, primary_matched_lines={}, primary_matched_occurrences={}",
                 request.pattern.chars().count(),
@@ -1422,6 +1418,21 @@ fn remote_stdio_search_mode(output_mode: ContentSearchOutputMode) -> SearchModeC
     }
 }
 
+fn should_retry_remote_scan_fallback_as_files_with_matches(
+    backend: SearchBackend,
+    primary_search_mode: SearchModeConfig,
+    search_results: &SearchResults,
+) -> bool {
+    let primary_has_details = !search_results.hits.is_empty()
+        || !search_results.file_counts.is_empty()
+        || !search_results.file_match_counts.is_empty()
+        || !search_results.matched_paths.is_empty();
+    matches!(backend, SearchBackend::ScanFallback)
+        && !primary_has_details
+        && search_results.matched_lines > 0
+        && !matches!(primary_search_mode, SearchModeConfig::FilesWithMatches)
+}
+
 fn convert_stdio_line_matches_to_file_search_results(
     search_results: &SearchResults,
 ) -> Vec<FileSearchResult> {
@@ -1602,9 +1613,12 @@ fn shell_escape(value: &str) -> String {
 mod tests {
     use super::{
         looks_like_linux_workspace_root, parse_remote_architecture_output, parse_remote_os_output,
-        remote_flashgrep_install_dir,
+        remote_flashgrep_install_dir, should_retry_remote_scan_fallback_as_files_with_matches,
     };
-    use crate::service::search::flashgrep::drain_content_length_messages;
+    use crate::service::search::flashgrep::{
+        drain_content_length_messages, FileCount, SearchBackend, SearchHit, SearchModeConfig,
+        SearchResults,
+    };
 
     #[test]
     fn parses_plain_uname_architecture_output() {
@@ -1694,5 +1708,94 @@ mod tests {
         assert_eq!(messages.len(), 1);
         let debug = format!("{:?}", messages[0]);
         assert!(debug.contains("InitializeResult"));
+    }
+
+    #[test]
+    fn retries_remote_scan_fallback_when_primary_results_are_summary_only() {
+        let summary_only = search_results_with_counts(7, 12);
+
+        assert!(should_retry_remote_scan_fallback_as_files_with_matches(
+            SearchBackend::ScanFallback,
+            SearchModeConfig::LineMatches,
+            &summary_only,
+        ));
+        assert!(should_retry_remote_scan_fallback_as_files_with_matches(
+            SearchBackend::ScanFallback,
+            SearchModeConfig::CountOnly,
+            &summary_only,
+        ));
+    }
+
+    #[test]
+    fn skips_remote_files_with_matches_retry_when_primary_results_have_details() {
+        let mut with_paths = search_results_with_counts(7, 12);
+        with_paths
+            .matched_paths
+            .push("/repo/src/lib.rs".to_string());
+        assert!(!should_retry_remote_scan_fallback_as_files_with_matches(
+            SearchBackend::ScanFallback,
+            SearchModeConfig::LineMatches,
+            &with_paths,
+        ));
+
+        let mut with_file_counts = search_results_with_counts(7, 12);
+        with_file_counts.file_counts.push(FileCount {
+            path: "/repo/src/lib.rs".to_string(),
+            matched_lines: 7,
+        });
+        assert!(!should_retry_remote_scan_fallback_as_files_with_matches(
+            SearchBackend::ScanFallback,
+            SearchModeConfig::LineMatches,
+            &with_file_counts,
+        ));
+
+        let mut with_hits = search_results_with_counts(7, 12);
+        with_hits.hits.push(SearchHit {
+            path: "/repo/src/lib.rs".to_string(),
+            matches: Vec::new(),
+            lines: Vec::new(),
+        });
+        assert!(!should_retry_remote_scan_fallback_as_files_with_matches(
+            SearchBackend::ScanFallback,
+            SearchModeConfig::LineMatches,
+            &with_hits,
+        ));
+    }
+
+    #[test]
+    fn skips_remote_files_with_matches_retry_outside_summary_only_scan_fallback() {
+        assert!(!should_retry_remote_scan_fallback_as_files_with_matches(
+            SearchBackend::IndexedClean,
+            SearchModeConfig::LineMatches,
+            &search_results_with_counts(7, 12),
+        ));
+        assert!(!should_retry_remote_scan_fallback_as_files_with_matches(
+            SearchBackend::ScanFallback,
+            SearchModeConfig::FilesWithMatches,
+            &search_results_with_counts(7, 12),
+        ));
+        assert!(!should_retry_remote_scan_fallback_as_files_with_matches(
+            SearchBackend::ScanFallback,
+            SearchModeConfig::LineMatches,
+            &search_results_with_counts(0, 0),
+        ));
+    }
+
+    fn search_results_with_counts(
+        matched_lines: usize,
+        matched_occurrences: usize,
+    ) -> SearchResults {
+        SearchResults {
+            candidate_docs: 0,
+            searches_with_match: 0,
+            bytes_searched: 0,
+            matched_lines,
+            matched_occurrences,
+            matched_paths: Vec::new(),
+            file_counts: Vec::new(),
+            file_match_counts: Vec::new(),
+            line_matches: Vec::new(),
+            hits: Vec::new(),
+        }
     }
 }

@@ -529,6 +529,38 @@ mod tests {
         assert!(port.list_app_ids().await.unwrap().is_empty());
     }
 
+    #[tokio::test]
+    async fn storage_adapter_uses_product_domain_layout_contract() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-layout-port-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager =
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        let storage = MiniAppStorage::new(path_manager.clone());
+        let app = sample_app("layout_app");
+        let layout = MiniAppStorageLayout::new(path_manager.miniapps_dir(), "layout_app");
+
+        storage.save(&app).await.unwrap();
+        storage
+            .save_app_storage("layout_app", "answer", serde_json::json!(42))
+            .await
+            .unwrap();
+        storage.save_version("layout_app", 7, &app).await.unwrap();
+
+        assert!(layout.app_dir().is_dir());
+        assert!(layout.meta_path().is_file());
+        assert!(layout.compiled_path().is_file());
+        assert!(layout.storage_path().is_file());
+        assert!(layout.package_json_path().is_file());
+        assert!(layout.source_file_path(INDEX_HTML).is_file());
+        assert!(layout.source_file_path(STYLE_CSS).is_file());
+        assert!(layout.source_file_path(UI_JS).is_file());
+        assert!(layout.source_file_path(WORKER_JS).is_file());
+        assert!(layout.source_file_path(ESM_DEPS_JSON).is_file());
+        assert!(layout.version_path(7).is_file());
+    }
+
     fn sample_app(id: &str) -> MiniApp {
         MiniApp {
             id: id.to_string(),
