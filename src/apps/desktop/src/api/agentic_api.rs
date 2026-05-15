@@ -27,6 +27,8 @@ pub struct CreateSessionRequest {
     pub agent_type: String,
     pub workspace_path: String,
     #[serde(default)]
+    pub session_kind: Option<SessionKind>,
+    #[serde(default)]
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
@@ -325,16 +327,30 @@ pub async fn create_session(
             ..Default::default()
         });
 
-    let session = coordinator
-        .create_session_with_workspace(
-            request.session_id,
-            request.session_name.clone(),
-            request.agent_type.clone(),
-            config,
-            request.workspace_path,
-        )
-        .await
-        .map_err(|e| format!("Failed to create session: {}", e))?;
+    let session_kind = request.session_kind.unwrap_or_default();
+    let session = if matches!(session_kind, SessionKind::Subagent) {
+        coordinator
+            .create_hidden_subagent_session_with_workspace(
+                request.session_id,
+                request.session_name.clone(),
+                request.agent_type.clone(),
+                config,
+                request.workspace_path,
+                None,
+            )
+            .await
+    } else {
+        coordinator
+            .create_session_with_workspace(
+                request.session_id,
+                request.session_name.clone(),
+                request.agent_type.clone(),
+                config,
+                request.workspace_path,
+            )
+            .await
+    }
+    .map_err(|e| format!("Failed to create session: {}", e))?;
 
     Ok(CreateSessionResponse {
         session_id: session.session_id,

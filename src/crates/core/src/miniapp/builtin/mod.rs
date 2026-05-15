@@ -98,6 +98,30 @@ async fn seed_one(manager: &Arc<MiniAppManager>, app: &BuiltinApp) -> BitFunResu
         }
     }
 
+    let now = Utc::now().timestamp_millis();
+    match manager.load_customization_metadata(app.id).await {
+        Ok(Some(metadata)) if metadata.local_override => {
+            manager
+                .mark_builtin_update_available(app.id, app.version, now)
+                .await?;
+            write_file(&marker_path, &app.version.to_string()).await?;
+            log::info!(
+                "preserved customized builtin miniapp '{}' and recorded bundled update v{}",
+                app.id,
+                app.version
+            );
+            return Ok(());
+        }
+        Ok(_) => {}
+        Err(e) => {
+            log::warn!(
+                "read customization metadata for builtin miniapp '{}' failed: {}",
+                app.id,
+                e
+            );
+        }
+    }
+
     let source_dir = app_dir.join("source");
     tokio::fs::create_dir_all(&source_dir)
         .await
@@ -107,7 +131,6 @@ async fn seed_one(manager: &Arc<MiniAppManager>, app: &BuiltinApp) -> BitFunResu
     let mut meta: MiniAppMeta = serde_json::from_str(app.meta_json)
         .map_err(|e| BitFunError::parse(format!("invalid bundled meta.json: {}", e)))?;
     meta.id = app.id.to_string();
-    let now = Utc::now().timestamp_millis();
 
     let meta_path = app_dir.join("meta.json");
     let preserved_created_at = match tokio::fs::read_to_string(&meta_path).await {
@@ -170,4 +193,75 @@ async fn write_file<P: AsRef<std::path::Path>>(path: P, content: &str) -> BitFun
     tokio::fs::write(path.as_ref(), content)
         .await
         .map_err(|e| BitFunError::io(format!("write {} failed: {}", path.as_ref().display(), e)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitfun_product_domains::miniapp::customization::{
+        MiniAppCustomizationMetadata, MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind,
+    };
+
+    fn test_manager() -> Arc<MiniAppManager> {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-builtin-customization-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager =
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        Arc::new(MiniAppManager::new(path_manager))
+    }
+
+    #[tokio::test]
+    async fn builtin_reseed_preserves_local_override_and_records_available_update() {
+        let manager = test_manager();
+        let builtin = &BUILTIN_APPS[0];
+        seed_builtin_miniapps(&manager).await.unwrap();
+
+        let custom_css = "body { background: #f7f7f7; }";
+        let app_dir = manager.path_manager().miniapp_dir(builtin.id);
+        tokio::fs::write(app_dir.join("source").join("style.css"), custom_css)
+            .await
+            .unwrap();
+        manager
+            .save_customization_metadata(
+                builtin.id,
+                &MiniAppCustomizationMetadata {
+                    origin: MiniAppCustomizationOrigin {
+                        kind: MiniAppCustomizationOriginKind::Builtin,
+                        builtin_id: Some(builtin.id.to_string()),
+                        builtin_version: Some(builtin.version),
+                    },
+                    local_override: true,
+                    last_applied_draft_id: Some("draft-1".to_string()),
+                    available_builtin_update: None,
+                    updated_at: Utc::now().timestamp_millis(),
+                },
+            )
+            .await
+            .unwrap();
+        tokio::fs::write(app_dir.join(BUILTIN_MARKER), "0")
+            .await
+            .unwrap();
+
+        seed_builtin_miniapps(&manager).await.unwrap();
+
+        let css = tokio::fs::read_to_string(app_dir.join("source").join("style.css"))
+            .await
+            .unwrap();
+        assert_eq!(css, custom_css);
+
+        let metadata = manager
+            .load_customization_metadata(builtin.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(metadata.local_override);
+        assert_eq!(
+            metadata
+                .available_builtin_update
+                .map(|update| update.builtin_version),
+            Some(builtin.version)
+        );
+    }
 }

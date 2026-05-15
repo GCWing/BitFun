@@ -153,6 +153,20 @@ impl AppState {
 
         let miniapp_manager = Arc::new(MiniAppManager::new(path_manager.clone()));
         initialize_global_miniapp_manager(miniapp_manager.clone());
+        match miniapp_manager.mark_stale_drafts_for_cleanup().await {
+            Ok(cleanup_targets) if !cleanup_targets.is_empty() => {
+                let cleanup_manager = miniapp_manager.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = cleanup_manager.cleanup_marked_drafts(cleanup_targets).await {
+                        log::warn!("Failed to clean marked miniapp drafts: {}", e);
+                    }
+                });
+            }
+            Ok(_) => {}
+            Err(e) => {
+                log::warn!("Failed to mark stale miniapp drafts for cleanup: {}", e);
+            }
+        }
         if let Err(e) = seed_builtin_miniapps(&miniapp_manager).await {
             log::warn!("Failed to seed built-in miniapps: {}", e);
         }

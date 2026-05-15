@@ -894,6 +894,28 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(session)
     }
 
+    /// Create a hidden, non-persisted session that is still addressable by the UI.
+    pub async fn create_hidden_subagent_session_with_workspace(
+        &self,
+        session_id: Option<String>,
+        session_name: String,
+        agent_type: String,
+        mut config: SessionConfig,
+        workspace_path: String,
+        created_by: Option<String>,
+    ) -> BitFunResult<Session> {
+        config.workspace_path = Some(workspace_path);
+        let agent_type = Self::normalize_agent_type(&agent_type);
+        self.create_hidden_subagent_session(
+            session_id,
+            session_name,
+            agent_type,
+            config,
+            created_by,
+        )
+        .await
+    }
+
     /// Ensure the completed/failed/cancelled turn is persisted to the workspace
     /// session storage. If the frontend already saved a richer version
     /// during streaming, we only update the final status; otherwise we create
@@ -3586,7 +3608,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     /// Release resources occupied by subagent session (sandbox, etc.) and delete session
     async fn cleanup_subagent_resources(&self, session_id: &str) -> BitFunResult<()> {
         let cleanup_started_at = Instant::now();
-        debug!("Starting subagent resource cleanup: session_id={}", session_id);
+        debug!(
+            "Starting subagent resource cleanup: session_id={}",
+            session_id
+        );
 
         // Clean up snapshot system resources
         if let Some(workspace_path) = self

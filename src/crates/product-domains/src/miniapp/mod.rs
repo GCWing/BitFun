@@ -2,6 +2,7 @@
 
 pub mod bridge_builder;
 pub mod compiler;
+pub mod customization;
 pub mod exporter;
 pub mod host_routing;
 pub mod lifecycle;

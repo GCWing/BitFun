@@ -2,17 +2,24 @@
 
 use crate::miniapp::types::{MiniApp, MiniAppMeta, MiniAppSource, NpmDep};
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_product_domains::miniapp::customization::MiniAppCustomizationMetadata;
 use bitfun_product_domains::miniapp::ports::{
     MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture, MiniAppStoragePort,
 };
 use bitfun_product_domains::miniapp::storage::{
-    build_package_json, parse_npm_dependencies, MiniAppStorageLayout, ESM_DEPS_JSON, INDEX_HTML,
-    PACKAGE_JSON, STYLE_CSS, UI_JS, WORKER_JS,
+    build_package_json, parse_npm_dependencies, MiniAppStorageLayout, COMPILED_HTML, ESM_DEPS_JSON,
+    INDEX_HTML, META_JSON, PACKAGE_JSON, SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, WORKER_JS,
 };
 use serde_json;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
+const DRAFTS_DIR: &str = ".drafts";
+const DRAFTS_CLEANUP_PREFIX: &str = ".drafts.cleanup-";
+const DRAFTS_CLEANUP_MARKER: &str = ".cleanup-pending";
+const DRAFT_JSON: &str = "draft.json";
+const CUSTOMIZATION_JSON: &str = ".customization.json";
 /// MiniApp storage service (file-based under path_manager.miniapps_dir).
 pub struct MiniAppStorage {
     path_manager: Arc<crate::infrastructure::PathManager>,
@@ -49,6 +56,49 @@ impl MiniAppStorage {
 
     fn version_path(&self, app_id: &str, version: u32) -> PathBuf {
         self.layout(app_id).version_path(version)
+    }
+
+    pub fn drafts_root(&self) -> PathBuf {
+        self.path_manager.miniapps_dir().join(DRAFTS_DIR)
+    }
+
+    pub fn app_drafts_dir(&self, app_id: &str) -> PathBuf {
+        self.drafts_root().join(app_id)
+    }
+
+    pub fn draft_dir(&self, app_id: &str, draft_id: &str) -> PathBuf {
+        self.app_drafts_dir(app_id).join(draft_id)
+    }
+
+    fn cleanup_drafts_root(&self) -> PathBuf {
+        self.path_manager.miniapps_dir().join(format!(
+            "{}{}",
+            DRAFTS_CLEANUP_PREFIX,
+            uuid::Uuid::new_v4()
+        ))
+    }
+
+    fn cleanup_marker_path(&self, drafts_root: &Path) -> PathBuf {
+        drafts_root.join(DRAFTS_CLEANUP_MARKER)
+    }
+
+    fn draft_not_found(app_id: &str, draft_id: &str) -> BitFunError {
+        BitFunError::NotFound(format!("MiniApp draft not found: {}/{}", app_id, draft_id))
+    }
+
+    fn ensure_active_drafts_root_readable(&self, app_id: &str, draft_id: &str) -> BitFunResult<()> {
+        if self.cleanup_marker_path(&self.drafts_root()).exists() {
+            return Err(Self::draft_not_found(app_id, draft_id));
+        }
+        Ok(())
+    }
+
+    fn draft_source_dir(&self, app_id: &str, draft_id: &str) -> PathBuf {
+        self.draft_dir(app_id, draft_id).join(SOURCE_DIR)
+    }
+
+    fn customization_path(&self, app_id: &str) -> PathBuf {
+        self.app_dir(app_id).join(CUSTOMIZATION_JSON)
     }
 
     /// Ensure app directory and source subdir exist.
@@ -149,7 +199,16 @@ impl MiniAppStorage {
     }
 
     async fn load_source(&self, app_id: &str) -> BitFunResult<MiniAppSource> {
-        let sd = self.source_dir(app_id);
+        self.load_source_from_dirs(self.source_dir(app_id), self.app_dir(app_id))
+            .await
+    }
+
+    async fn load_source_from_dirs(
+        &self,
+        source_dir: PathBuf,
+        package_dir: PathBuf,
+    ) -> BitFunResult<MiniAppSource> {
+        let sd = source_dir;
         let html = tokio::fs::read_to_string(sd.join(INDEX_HTML))
             .await
             .unwrap_or_default();
@@ -172,7 +231,9 @@ impl MiniAppStorage {
             Vec::new()
         };
 
-        let npm_dependencies = self.load_npm_dependencies(app_id).await?;
+        let npm_dependencies = self
+            .load_npm_dependencies_from_package(package_dir.join(PACKAGE_JSON))
+            .await?;
 
         Ok(MiniAppSource {
             html,
@@ -189,8 +250,7 @@ impl MiniAppStorage {
         self.load_source(app_id).await
     }
 
-    async fn load_npm_dependencies(&self, app_id: &str) -> BitFunResult<Vec<NpmDep>> {
-        let p = self.layout(app_id).package_json_path();
+    async fn load_npm_dependencies_from_package(&self, p: PathBuf) -> BitFunResult<Vec<NpmDep>> {
         if !p.exists() {
             return Ok(Vec::new());
         }
@@ -214,16 +274,38 @@ impl MiniAppStorage {
 
     /// Save full MiniApp (meta, source files, compiled.html).
     pub async fn save(&self, app: &MiniApp) -> BitFunResult<()> {
-        self.ensure_app_dir(&app.id).await?;
+        self.save_app_files(&self.app_dir(&app.id), &self.source_dir(&app.id), app)
+            .await
+    }
 
+    async fn save_app_files(
+        &self,
+        app_dir: &std::path::Path,
+        source_dir: &std::path::Path,
+        app: &MiniApp,
+    ) -> BitFunResult<()> {
+        tokio::fs::create_dir_all(app_dir).await.map_err(|e| {
+            BitFunError::io(format!(
+                "Failed to create miniapp dir {}: {}",
+                app_dir.display(),
+                e
+            ))
+        })?;
+        tokio::fs::create_dir_all(source_dir).await.map_err(|e| {
+            BitFunError::io(format!(
+                "Failed to create source dir {}: {}",
+                source_dir.display(),
+                e
+            ))
+        })?;
         let meta = MiniAppMeta::from(app);
-        let meta_path = self.meta_path(&app.id);
+        let meta_path = app_dir.join(META_JSON);
         let meta_json = serde_json::to_string_pretty(&meta).map_err(BitFunError::from)?;
         tokio::fs::write(&meta_path, meta_json)
             .await
             .map_err(|e| BitFunError::io(format!("Failed to write meta: {}", e)))?;
 
-        let sd = self.source_dir(&app.id);
+        let sd = source_dir;
         tokio::fs::write(sd.join(INDEX_HTML), &app.source.html)
             .await
             .map_err(|e| BitFunError::io(format!("Failed to write index.html: {}", e)))?;
@@ -245,24 +327,241 @@ impl MiniAppStorage {
                 BitFunError::io(format!("Failed to write esm_dependencies.json: {}", e))
             })?;
 
-        self.write_package_json(&app.id, &app.source.npm_dependencies)
+        self.write_package_json_to_dir(app_dir, &app.id, &app.source.npm_dependencies)
             .await?;
 
-        tokio::fs::write(self.compiled_path(&app.id), &app.compiled_html)
+        tokio::fs::write(app_dir.join(COMPILED_HTML), &app.compiled_html)
             .await
             .map_err(|e| BitFunError::io(format!("Failed to write compiled.html: {}", e)))?;
 
         Ok(())
     }
 
-    async fn write_package_json(&self, app_id: &str, deps: &[NpmDep]) -> BitFunResult<()> {
+    async fn write_package_json_to_dir(
+        &self,
+        app_dir: &std::path::Path,
+        app_id: &str,
+        deps: &[NpmDep],
+    ) -> BitFunResult<()> {
         let pkg = build_package_json(app_id, deps);
-        let p = self.app_dir(app_id).join(PACKAGE_JSON);
         let json = serde_json::to_string_pretty(&pkg).map_err(BitFunError::from)?;
-        tokio::fs::write(&p, json)
+        tokio::fs::write(app_dir.join(PACKAGE_JSON), json)
             .await
             .map_err(|e| BitFunError::io(format!("Failed to write package.json: {}", e)))?;
         Ok(())
+    }
+
+    pub async fn save_draft(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+        app: &MiniApp,
+        manifest: &serde_json::Value,
+    ) -> BitFunResult<()> {
+        self.ensure_active_drafts_root_writable().await?;
+        let draft_dir = self.draft_dir(app_id, draft_id);
+        let source_dir = self.draft_source_dir(app_id, draft_id);
+        self.save_app_files(&draft_dir, &source_dir, app).await?;
+        let manifest_json = serde_json::to_string_pretty(manifest).map_err(BitFunError::from)?;
+        tokio::fs::write(draft_dir.join(DRAFT_JSON), manifest_json)
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to write draft.json: {}", e)))?;
+        let storage_path = draft_dir.join(STORAGE_JSON);
+        if !storage_path.exists() {
+            tokio::fs::write(storage_path, "{}")
+                .await
+                .map_err(|e| BitFunError::io(format!("Failed to write draft storage: {}", e)))?;
+        }
+        Ok(())
+    }
+
+    pub async fn load_draft_app(&self, app_id: &str, draft_id: &str) -> BitFunResult<MiniApp> {
+        self.ensure_active_drafts_root_readable(app_id, draft_id)?;
+        let draft_dir = self.draft_dir(app_id, draft_id);
+        let meta_content = tokio::fs::read_to_string(draft_dir.join(META_JSON))
+            .await
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    Self::draft_not_found(app_id, draft_id)
+                } else {
+                    BitFunError::io(format!("Failed to read draft meta: {}", e))
+                }
+            })?;
+        let meta: MiniAppMeta = serde_json::from_str(&meta_content)
+            .map_err(|e| BitFunError::parse(format!("Invalid draft meta.json: {}", e)))?;
+        let source = self
+            .load_source_from_dirs(self.draft_source_dir(app_id, draft_id), draft_dir.clone())
+            .await?;
+        let compiled_html = tokio::fs::read_to_string(draft_dir.join(COMPILED_HTML))
+            .await
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    BitFunError::NotFound(format!(
+                        "MiniApp draft compiled HTML not found: {}/{}",
+                        app_id, draft_id
+                    ))
+                } else {
+                    BitFunError::io(format!("Failed to read draft compiled.html: {}", e))
+                }
+            })?;
+        Ok(MiniApp {
+            id: meta.id,
+            name: meta.name,
+            description: meta.description,
+            icon: meta.icon,
+            category: meta.category,
+            tags: meta.tags,
+            version: meta.version,
+            created_at: meta.created_at,
+            updated_at: meta.updated_at,
+            source,
+            compiled_html,
+            permissions: meta.permissions,
+            ai_context: meta.ai_context,
+            runtime: meta.runtime,
+            i18n: meta.i18n,
+        })
+    }
+
+    pub async fn load_draft_manifest(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+    ) -> BitFunResult<serde_json::Value> {
+        self.ensure_active_drafts_root_readable(app_id, draft_id)?;
+        let path = self.draft_dir(app_id, draft_id).join(DRAFT_JSON);
+        let content = tokio::fs::read_to_string(&path).await.map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                Self::draft_not_found(app_id, draft_id)
+            } else {
+                BitFunError::io(format!("Failed to read draft.json: {}", e))
+            }
+        })?;
+        serde_json::from_str(&content)
+            .map_err(|e| BitFunError::parse(format!("Invalid draft.json: {}", e)))
+    }
+
+    pub async fn delete_draft(&self, app_id: &str, draft_id: &str) -> BitFunResult<()> {
+        let dir = self.draft_dir(app_id, draft_id);
+        if dir.exists() {
+            tokio::fs::remove_dir_all(&dir)
+                .await
+                .map_err(|e| BitFunError::io(format!("Failed to delete miniapp draft: {}", e)))?;
+        }
+        Ok(())
+    }
+
+    pub async fn mark_stale_drafts_for_cleanup(&self) -> BitFunResult<Vec<PathBuf>> {
+        let mut targets = self.collect_marked_drafts_roots().await?;
+        if let Some(target) = self.isolate_active_drafts_root().await? {
+            targets.push(target);
+        }
+        targets.sort();
+        targets.dedup();
+        Ok(targets)
+    }
+
+    pub async fn cleanup_marked_drafts(&self, targets: Vec<PathBuf>) -> BitFunResult<()> {
+        for target in targets {
+            if !self.is_cleanup_safe_drafts_root(&target) {
+                continue;
+            }
+            if !self.cleanup_marker_path(&target).exists() {
+                continue;
+            }
+            if target.exists() {
+                tokio::fs::remove_dir_all(&target).await.map_err(|e| {
+                    BitFunError::io(format!(
+                        "Failed to clean marked miniapp drafts {}: {}",
+                        target.display(),
+                        e
+                    ))
+                })?;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        Ok(())
+    }
+
+    async fn ensure_active_drafts_root_writable(&self) -> BitFunResult<()> {
+        if self.cleanup_marker_path(&self.drafts_root()).exists() {
+            let _ = self.isolate_active_drafts_root().await?;
+        }
+        Ok(())
+    }
+
+    async fn collect_marked_drafts_roots(&self) -> BitFunResult<Vec<PathBuf>> {
+        let root = self.path_manager.miniapps_dir();
+        if !root.exists() {
+            return Ok(Vec::new());
+        }
+        let mut targets = Vec::new();
+        let mut read_dir = tokio::fs::read_dir(&root)
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to read miniapps dir: {}", e)))?;
+        while let Some(entry) = read_dir
+            .next_entry()
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to read miniapps entry: {}", e)))?
+        {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if name.starts_with(DRAFTS_CLEANUP_PREFIX)
+                && path.is_dir()
+                && self.cleanup_marker_path(&path).exists()
+            {
+                targets.push(path);
+            }
+        }
+        Ok(targets)
+    }
+
+    async fn isolate_active_drafts_root(&self) -> BitFunResult<Option<PathBuf>> {
+        let active = self.drafts_root();
+        if !active.exists() {
+            return Ok(None);
+        }
+        self.write_cleanup_marker(&active).await?;
+        let target = self.cleanup_drafts_root();
+        tokio::fs::rename(&active, &target).await.map_err(|e| {
+            BitFunError::io(format!(
+                "Failed to mark miniapp drafts for cleanup {} -> {}: {}",
+                active.display(),
+                target.display(),
+                e
+            ))
+        })?;
+        Ok(Some(target))
+    }
+
+    async fn write_cleanup_marker(&self, drafts_root: &Path) -> BitFunResult<()> {
+        tokio::fs::create_dir_all(drafts_root).await.map_err(|e| {
+            BitFunError::io(format!(
+                "Failed to create miniapp drafts dir {}: {}",
+                drafts_root.display(),
+                e
+            ))
+        })?;
+        tokio::fs::write(
+            self.cleanup_marker_path(drafts_root),
+            "pending miniapp draft cleanup\n",
+        )
+        .await
+        .map_err(|e| BitFunError::io(format!("Failed to mark miniapp drafts: {}", e)))?;
+        Ok(())
+    }
+
+    fn is_cleanup_safe_drafts_root(&self, path: &Path) -> bool {
+        let root = self.path_manager.miniapps_dir();
+        if !path.starts_with(&root) {
+            return false;
+        }
+        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+            return false;
+        };
+        name == DRAFTS_DIR || name.starts_with(DRAFTS_CLEANUP_PREFIX)
     }
 
     /// Save a version snapshot (for rollback).
@@ -296,6 +595,22 @@ impl MiniAppStorage {
         Ok(serde_json::from_str(&c).unwrap_or_else(|_| serde_json::json!({})))
     }
 
+    pub async fn load_draft_storage(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+    ) -> BitFunResult<serde_json::Value> {
+        self.ensure_active_drafts_root_readable(app_id, draft_id)?;
+        let p = self.draft_dir(app_id, draft_id).join(STORAGE_JSON);
+        if !p.exists() {
+            return Ok(serde_json::json!({}));
+        }
+        let c = tokio::fs::read_to_string(&p)
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to read draft storage: {}", e)))?;
+        Ok(serde_json::from_str(&c).unwrap_or_else(|_| serde_json::json!({})))
+    }
+
     /// Save app storage (merge with existing or replace).
     pub async fn save_app_storage(
         &self,
@@ -317,6 +632,61 @@ impl MiniAppStorage {
         Ok(())
     }
 
+    pub async fn save_draft_storage(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+        key: &str,
+        value: serde_json::Value,
+    ) -> BitFunResult<()> {
+        self.ensure_active_drafts_root_writable().await?;
+        let dir = self.draft_dir(app_id, draft_id);
+        tokio::fs::create_dir_all(&dir)
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to create draft dir: {}", e)))?;
+        let mut current = self.load_draft_storage(app_id, draft_id).await?;
+        let obj = current
+            .as_object_mut()
+            .ok_or_else(|| BitFunError::validation("Draft storage is not an object".to_string()))?;
+        obj.insert(key.to_string(), value);
+        let json = serde_json::to_string_pretty(&current).map_err(BitFunError::from)?;
+        tokio::fs::write(dir.join(STORAGE_JSON), json)
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to write draft storage: {}", e)))?;
+        Ok(())
+    }
+
+    pub async fn load_customization_metadata(
+        &self,
+        app_id: &str,
+    ) -> BitFunResult<Option<MiniAppCustomizationMetadata>> {
+        let path = self.customization_path(app_id);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let content = tokio::fs::read_to_string(&path).await.map_err(|e| {
+            BitFunError::io(format!("Failed to read customization metadata: {}", e))
+        })?;
+        serde_json::from_str(&content)
+            .map(Some)
+            .map_err(|e| BitFunError::parse(format!("Invalid customization metadata: {}", e)))
+    }
+
+    pub async fn save_customization_metadata(
+        &self,
+        app_id: &str,
+        metadata: &MiniAppCustomizationMetadata,
+    ) -> BitFunResult<()> {
+        self.ensure_app_dir(app_id).await?;
+        let json = serde_json::to_string_pretty(metadata).map_err(BitFunError::from)?;
+        tokio::fs::write(self.customization_path(app_id), json)
+            .await
+            .map_err(|e| {
+                BitFunError::io(format!("Failed to write customization metadata: {}", e))
+            })?;
+        Ok(())
+    }
+
     /// Delete MiniApp directory entirely.
     pub async fn delete(&self, app_id: &str) -> BitFunResult<()> {
         let dir = self.app_dir(app_id);
@@ -324,6 +694,12 @@ impl MiniAppStorage {
             tokio::fs::remove_dir_all(&dir)
                 .await
                 .map_err(|e| BitFunError::io(format!("Failed to delete miniapp dir: {}", e)))?;
+        }
+        let drafts_dir = self.app_drafts_dir(app_id);
+        if drafts_dir.exists() {
+            tokio::fs::remove_dir_all(&drafts_dir)
+                .await
+                .map_err(|e| BitFunError::io(format!("Failed to delete miniapp drafts: {}", e)))?;
         }
         Ok(())
     }
@@ -472,6 +848,9 @@ fn map_miniapp_port_error(error: BitFunError) -> MiniAppPortError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitfun_product_domains::miniapp::customization::{
+        MiniAppCustomizationMetadata, MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind,
+    };
     use std::sync::Arc;
 
     #[tokio::test]
@@ -559,6 +938,210 @@ mod tests {
         assert!(layout.source_file_path(WORKER_JS).is_file());
         assert!(layout.source_file_path(ESM_DEPS_JSON).is_file());
         assert!(layout.version_path(7).is_file());
+    }
+
+    #[tokio::test]
+    async fn draft_storage_is_hidden_and_isolated_from_active_storage() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-draft-storage-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager =
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        let storage = MiniAppStorage::new(path_manager);
+        let app = sample_app("demo_app");
+
+        storage.save(&app).await.unwrap();
+        storage
+            .save_app_storage("demo_app", "answer", serde_json::json!(42))
+            .await
+            .unwrap();
+        storage
+            .save_draft_storage("demo_app", "draft_one", "answer", serde_json::json!(7))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            storage
+                .load_app_storage("demo_app")
+                .await
+                .unwrap()
+                .get("answer"),
+            Some(&serde_json::json!(42))
+        );
+        assert_eq!(
+            storage
+                .load_draft_storage("demo_app", "draft_one")
+                .await
+                .unwrap()
+                .get("answer"),
+            Some(&serde_json::json!(7))
+        );
+        assert_eq!(storage.list_app_ids().await.unwrap(), vec!["demo_app"]);
+
+        let draft_dir = storage.app_drafts_dir("demo_app");
+        assert!(draft_dir.exists());
+        storage.delete("demo_app").await.unwrap();
+        assert!(!draft_dir.exists());
+    }
+
+    #[tokio::test]
+    async fn mark_stale_drafts_moves_sandboxes_off_the_active_read_path() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-stale-drafts-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager =
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        let storage = MiniAppStorage::new(path_manager);
+        let app = sample_app("demo_app");
+
+        storage.save(&app).await.unwrap();
+        storage
+            .save_draft_storage("demo_app", "stale_draft", "answer", serde_json::json!(7))
+            .await
+            .unwrap();
+
+        assert!(storage.drafts_root().exists());
+        let cleanup_targets = storage.mark_stale_drafts_for_cleanup().await.unwrap();
+
+        assert_eq!(cleanup_targets.len(), 1);
+        assert!(cleanup_targets[0].exists());
+        assert!(storage.cleanup_marker_path(&cleanup_targets[0]).exists());
+        assert!(!storage.drafts_root().exists());
+        assert!(storage.load("demo_app").await.is_ok());
+        assert_eq!(
+            storage
+                .load_draft_storage("demo_app", "stale_draft")
+                .await
+                .unwrap(),
+            serde_json::json!({})
+        );
+    }
+
+    #[tokio::test]
+    async fn draft_reads_skip_marked_active_root() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-marked-draft-read-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager =
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        let storage = MiniAppStorage::new(path_manager);
+
+        storage
+            .save_draft_storage("demo_app", "stale_draft", "answer", serde_json::json!(7))
+            .await
+            .unwrap();
+        storage
+            .write_cleanup_marker(&storage.drafts_root())
+            .await
+            .unwrap();
+
+        let error = storage
+            .load_draft_storage("demo_app", "stale_draft")
+            .await
+            .unwrap_err();
+        assert!(matches!(error, BitFunError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn cleanup_marked_drafts_removes_quarantined_sandboxes_later() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-clean-marked-drafts-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager =
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        let storage = MiniAppStorage::new(path_manager);
+
+        storage
+            .save_draft_storage("demo_app", "stale_draft", "answer", serde_json::json!(7))
+            .await
+            .unwrap();
+        let cleanup_targets = storage.mark_stale_drafts_for_cleanup().await.unwrap();
+        let cleanup_root = cleanup_targets[0].clone();
+
+        storage
+            .cleanup_marked_drafts(cleanup_targets)
+            .await
+            .unwrap();
+
+        assert!(!cleanup_root.exists());
+        assert!(!storage.drafts_root().exists());
+    }
+
+    #[tokio::test]
+    async fn saving_new_draft_isolates_marked_active_root_first() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-marked-draft-write-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager =
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        let storage = MiniAppStorage::new(path_manager);
+
+        storage
+            .save_draft_storage("demo_app", "stale_draft", "answer", serde_json::json!(7))
+            .await
+            .unwrap();
+        storage
+            .write_cleanup_marker(&storage.drafts_root())
+            .await
+            .unwrap();
+
+        storage
+            .save_draft_storage("demo_app", "fresh_draft", "answer", serde_json::json!(9))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            storage
+                .load_draft_storage("demo_app", "fresh_draft")
+                .await
+                .unwrap()
+                .get("answer"),
+            Some(&serde_json::json!(9))
+        );
+        assert!(!storage.cleanup_marker_path(&storage.drafts_root()).exists());
+    }
+
+    #[tokio::test]
+    async fn customization_metadata_roundtrips() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-customization-meta-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager =
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        let storage = MiniAppStorage::new(path_manager);
+        let app = sample_app("builtin-demo");
+        storage.save(&app).await.unwrap();
+
+        let metadata = MiniAppCustomizationMetadata {
+            origin: MiniAppCustomizationOrigin {
+                kind: MiniAppCustomizationOriginKind::Builtin,
+                builtin_id: Some("builtin-demo".to_string()),
+                builtin_version: Some(3),
+            },
+            local_override: true,
+            last_applied_draft_id: Some("draft_one".to_string()),
+            available_builtin_update: None,
+            updated_at: 123,
+        };
+
+        storage
+            .save_customization_metadata("builtin-demo", &metadata)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            storage
+                .load_customization_metadata("builtin-demo")
+                .await
+                .unwrap(),
+            Some(metadata)
+        );
     }
 
     fn sample_app(id: &str) -> MiniApp {
