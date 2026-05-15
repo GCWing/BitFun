@@ -8,24 +8,25 @@
 //! for state changes using the `PollSession` command, receiving only
 //! incremental updates (new messages + current active turn snapshot).
 
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use dashmap::DashMap;
 use log::{debug, error, info};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::{Arc, OnceLock};
 
 use super::encryption;
+use bitfun_services_integrations::remote_connect::{
+    build_remote_image_contexts, remote_file_display_name, remote_model_catalog_poll_delta,
+    remote_no_change_poll_response, remote_persisted_poll_response, remote_session_restore_target,
+    remote_snapshot_poll_response, resolve_remote_cancel_decision,
+    resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range, RemoteCancelDecision,
+    RemoteImageContext, REMOTE_FILE_MAX_READ_BYTES,
+};
 pub use bitfun_services_integrations::remote_connect::{
     ActiveTurnSnapshot, AssistantEntry, ChatImageAttachment, ChatMessage, ChatMessageItem,
-    ImageAttachment, RecentWorkspaceEntry, RemoteSessionStateTracker, RemoteToolStatus,
-    SessionInfo, TrackerEvent,
-};
-use bitfun_services_integrations::remote_connect::{
-    REMOTE_FILE_MAX_READ_BYTES, RemoteCancelDecision, RemoteImageContext,
-    build_remote_image_contexts, remote_file_display_name, remote_session_restore_target,
-    resolve_remote_cancel_decision, resolve_remote_execution_image_contexts,
-    resolve_remote_file_chunk_range,
+    ImageAttachment, RecentWorkspaceEntry, RemoteCommand, RemoteDefaultModelsConfig,
+    RemoteModelCatalog, RemoteModelConfig, RemoteResponse, RemoteSessionStateTracker,
+    RemoteToolStatus, SessionInfo, TrackerEvent,
 };
 
 fn current_workspace_path() -> Option<std::path::PathBuf> {
@@ -141,35 +142,6 @@ async fn resolve_session_model_id(session_id: &str) -> Option<String> {
         .and_then(|session| normalize(session.config.model_id.clone()))
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RemoteModelConfig {
-    pub id: String,
-    pub name: String,
-    pub provider: String,
-    pub base_url: String,
-    pub model_name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub context_window: Option<u32>,
-    pub enabled: bool,
-    pub capabilities: Vec<String>,
-    pub enable_thinking_process: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning_mode: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning_effort: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub thinking_budget_tokens: Option<u32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RemoteModelCatalog {
-    pub version: u64,
-    pub models: Vec<RemoteModelConfig>,
-    pub default_models: crate::service::config::types::DefaultModelsConfig,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_model_id: Option<String>,
-}
-
 async fn load_remote_model_catalog(
     session_id: Option<&str>,
 ) -> std::result::Result<RemoteModelCatalog, String> {
@@ -253,241 +225,16 @@ async fn load_remote_model_catalog(
     Ok(RemoteModelCatalog {
         version: global_config.last_modified.timestamp_millis().max(0) as u64,
         models,
-        default_models: ai_config.default_models,
+        default_models: RemoteDefaultModelsConfig {
+            primary: ai_config.default_models.primary,
+            fast: ai_config.default_models.fast,
+            search: ai_config.default_models.search,
+            image_understanding: ai_config.default_models.image_understanding,
+            image_generation: ai_config.default_models.image_generation,
+            speech_recognition: ai_config.default_models.speech_recognition,
+        },
         session_model_id,
     })
-}
-
-/// Commands that the mobile client can send to the desktop.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "cmd", rename_all = "snake_case")]
-pub enum RemoteCommand {
-    GetWorkspaceInfo,
-    ListRecentWorkspaces,
-    SetWorkspace {
-        path: String,
-    },
-    ListAssistants,
-    SetAssistant {
-        path: String,
-    },
-    ListSessions {
-        workspace_path: Option<String>,
-        limit: Option<usize>,
-        offset: Option<usize>,
-    },
-    CreateSession {
-        agent_type: Option<String>,
-        session_name: Option<String>,
-        workspace_path: Option<String>,
-    },
-    GetModelCatalog {
-        session_id: Option<String>,
-    },
-    SetSessionModel {
-        session_id: String,
-        model_id: String,
-    },
-    GetSessionMessages {
-        session_id: String,
-        limit: Option<usize>,
-        before_message_id: Option<String>,
-    },
-    SendMessage {
-        session_id: String,
-        content: String,
-        agent_type: Option<String>,
-        images: Option<Vec<ImageAttachment>>,
-        image_contexts: Option<Vec<crate::agentic::image_analysis::ImageContextData>>,
-    },
-    CancelTask {
-        session_id: String,
-        turn_id: Option<String>,
-    },
-    DeleteSession {
-        session_id: String,
-    },
-    ConfirmTool {
-        tool_id: String,
-        updated_input: Option<serde_json::Value>,
-    },
-    RejectTool {
-        tool_id: String,
-        reason: Option<String>,
-    },
-    CancelTool {
-        tool_id: String,
-        reason: Option<String>,
-    },
-    /// Submit answers for an AskUserQuestion tool.
-    AnswerQuestion {
-        tool_id: String,
-        answers: serde_json::Value,
-    },
-    /// Incremental poll — returns only what changed since `since_version`.
-    PollSession {
-        session_id: String,
-        since_version: u64,
-        known_msg_count: usize,
-        known_model_catalog_version: Option<u64>,
-    },
-    /// Read a workspace file and return its base64-encoded content.
-    ///
-    /// `path` may be an absolute path or a path relative to the active
-    /// workspace root. When `session_id` is present, relative paths are
-    /// resolved against that session's bound workspace first.
-    ReadFile {
-        path: String,
-        session_id: Option<String>,
-    },
-    /// Read a chunk of a workspace file.  `offset` is the byte offset into the
-    /// raw file and `limit` is the maximum number of raw bytes to return.
-    /// The response contains the base64-encoded chunk plus total file size so
-    /// the client knows when it has all the data.
-    ReadFileChunk {
-        path: String,
-        session_id: Option<String>,
-        offset: u64,
-        limit: u64,
-    },
-    /// Get metadata (name, size, mime_type) for a workspace file without
-    /// transferring its content.  Used by the mobile client to display file
-    /// cards before the user confirms the download.
-    GetFileInfo {
-        path: String,
-        session_id: Option<String>,
-    },
-    Ping,
-}
-
-/// Responses sent from desktop back to mobile.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "resp", rename_all = "snake_case")]
-pub enum RemoteResponse {
-    WorkspaceInfo {
-        has_workspace: bool,
-        path: Option<String>,
-        project_name: Option<String>,
-        git_branch: Option<String>,
-        /// `"normal"` | `"assistant"` | `"remote"` — mirrors [`crate::service::workspace::WorkspaceKind`].
-        #[serde(skip_serializing_if = "Option::is_none")]
-        workspace_kind: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        assistant_id: Option<String>,
-    },
-    RecentWorkspaces {
-        workspaces: Vec<RecentWorkspaceEntry>,
-    },
-    WorkspaceUpdated {
-        success: bool,
-        path: Option<String>,
-        project_name: Option<String>,
-        error: Option<String>,
-    },
-    AssistantList {
-        assistants: Vec<AssistantEntry>,
-    },
-    AssistantUpdated {
-        success: bool,
-        path: Option<String>,
-        name: Option<String>,
-        error: Option<String>,
-    },
-    SessionList {
-        sessions: Vec<SessionInfo>,
-        has_more: bool,
-    },
-    SessionCreated {
-        session_id: String,
-    },
-    ModelCatalog {
-        catalog: RemoteModelCatalog,
-    },
-    SessionModelUpdated {
-        session_id: String,
-        model_id: String,
-    },
-    Messages {
-        session_id: String,
-        messages: Vec<ChatMessage>,
-        has_more: bool,
-    },
-    MessageSent {
-        session_id: String,
-        turn_id: String,
-    },
-    TaskCancelled {
-        session_id: String,
-    },
-    SessionDeleted {
-        session_id: String,
-    },
-    /// Pushed to mobile immediately after pairing.
-    InitialSync {
-        has_workspace: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        path: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        project_name: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        git_branch: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        workspace_kind: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        assistant_id: Option<String>,
-        sessions: Vec<SessionInfo>,
-        has_more_sessions: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        authenticated_user_id: Option<String>,
-    },
-    /// Incremental poll response.
-    SessionPoll {
-        version: u64,
-        changed: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        session_state: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        title: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        new_messages: Option<Vec<ChatMessage>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        total_msg_count: Option<usize>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        active_turn: Option<ActiveTurnSnapshot>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        model_catalog: Box<Option<RemoteModelCatalog>>,
-    },
-    AnswerAccepted,
-    InteractionAccepted {
-        action: String,
-        target_id: String,
-    },
-    /// Response to `ReadFile`: the file contents encoded as a base64 data-URL.
-    FileContent {
-        name: String,
-        content_base64: String,
-        mime_type: String,
-        size: u64,
-    },
-    /// Response to `ReadFileChunk`.
-    FileChunk {
-        name: String,
-        chunk_base64: String,
-        offset: u64,
-        chunk_size: u64,
-        total_size: u64,
-        mime_type: String,
-    },
-    /// Response to `GetFileInfo`: metadata only, no file content.
-    FileInfo {
-        name: String,
-        size: u64,
-        mime_type: String,
-    },
-    Pong,
-    Error {
-        message: String,
-    },
 }
 
 pub type EncryptedPayload = (String, String);
@@ -496,8 +243,8 @@ pub type EncryptedPayload = (String, String);
 /// Falls back to the original if decoding/compression fails or the image is
 /// already within `max_bytes`.
 fn compress_data_url_for_mobile(data_url: &str, max_bytes: usize) -> String {
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine;
     use image::imageops::FilterType;
 
     const MAX_THUMBNAIL_DIM: u32 = 400;
@@ -1183,7 +930,7 @@ impl RemoteServer {
     ) -> RemoteResponse {
         use crate::agentic::persistence::PersistenceManager;
         use crate::infrastructure::PathManager;
-        use crate::service::workspace::{WorkspaceKind, get_global_workspace_service};
+        use crate::service::workspace::{get_global_workspace_service, WorkspaceKind};
 
         let (
             ws_path,
@@ -1291,25 +1038,11 @@ impl RemoteServer {
         let tracker = self.ensure_tracker(session_id);
         let current_version = tracker.version();
         let current_model_catalog = load_remote_model_catalog(Some(session_id)).await.ok();
-        let current_model_catalog_version = current_model_catalog
-            .as_ref()
-            .map(|catalog| catalog.version)
-            .unwrap_or(0);
-        let requested_model_catalog_version = known_model_catalog_version.unwrap_or(0);
-        let should_send_model_catalog =
-            requested_model_catalog_version != current_model_catalog_version;
+        let model_catalog_delta =
+            remote_model_catalog_poll_delta(current_model_catalog, *known_model_catalog_version);
 
-        if *since_version == current_version && *since_version > 0 && !should_send_model_catalog {
-            return RemoteResponse::SessionPoll {
-                version: current_version,
-                changed: false,
-                session_state: None,
-                title: None,
-                new_messages: None,
-                total_msg_count: None,
-                active_turn: None,
-                model_catalog: Box::new(None),
-            };
+        if *since_version == current_version && *since_version > 0 && !model_catalog_delta.changed {
+            return remote_no_change_poll_response(current_version);
         }
 
         // Fast path: during active streaming, only the real-time snapshot
@@ -1318,23 +1051,11 @@ impl RemoteServer {
         let needs_persistence = *since_version == 0 || tracker.is_persistence_dirty();
 
         if !needs_persistence {
-            let active_turn = tracker.snapshot_active_turn();
-            let sess_state = tracker.session_state();
-            let title = tracker.title();
-            return RemoteResponse::SessionPoll {
-                version: current_version,
-                changed: true,
-                session_state: Some(sess_state),
-                title: if title.is_empty() { None } else { Some(title) },
-                new_messages: None,
-                total_msg_count: None,
-                active_turn,
-                model_catalog: Box::new(if should_send_model_catalog {
-                    current_model_catalog
-                } else {
-                    None
-                }),
-            };
+            return remote_snapshot_poll_response(
+                &tracker,
+                current_version,
+                model_catalog_delta.catalog,
+            );
         }
 
         let Some(workspace_path) = resolve_session_workspace_path(session_id).await else {
@@ -1348,55 +1069,13 @@ impl RemoteServer {
         let skip = *known_msg_count;
         let new_messages: Vec<ChatMessage> = all_chat_msgs.into_iter().skip(skip).collect();
 
-        let turn_finished = tracker.is_turn_finished();
-        let has_assistant_msg = new_messages.iter().any(|m| m.role == "assistant");
-
-        let active_turn = if turn_finished && has_assistant_msg {
-            tracker.finalize_completed_turn();
-            None
-        } else if turn_finished {
-            let ts = tracker.turn_status();
-            if ts == "completed" {
-                tracker.snapshot_active_turn()
-            } else {
-                tracker.finalize_completed_turn();
-                tracker.mark_persistence_clean();
-                None
-            }
-        } else {
-            tracker.snapshot_active_turn()
-        };
-
-        let (send_msgs, send_total) = if turn_finished && !has_assistant_msg {
-            // Turn is finished but disk doesn't have the completed assistant
-            // message yet — the frontend's immediateSaveDialogTurn hasn't
-            // landed.  Don't send partial data; the snapshot overlay keeps the
-            // user informed.  Next poll will re-read from disk.
-            (None, None)
-        } else {
-            if !new_messages.is_empty() {
-                tracker.mark_persistence_clean();
-            }
-            (Some(new_messages), Some(total_msg_count))
-        };
-
-        let sess_state = tracker.session_state();
-        let title = tracker.title();
-
-        RemoteResponse::SessionPoll {
-            version: current_version,
-            changed: true,
-            session_state: Some(sess_state),
-            title: if title.is_empty() { None } else { Some(title) },
-            new_messages: send_msgs,
-            total_msg_count: send_total,
-            active_turn,
-            model_catalog: Box::new(if should_send_model_catalog {
-                current_model_catalog
-            } else {
-                None
-            }),
-        }
+        remote_persisted_poll_response(
+            &tracker,
+            current_version,
+            new_messages,
+            total_msg_count,
+            model_catalog_delta.catalog,
+        )
     }
 
     // ── ReadFile ────────────────────────────────────────────────────
@@ -1406,7 +1085,7 @@ impl RemoteServer {
     /// Relative paths are resolved against the session workspace when possible,
     /// otherwise the current workspace root. Rejects files larger than 30 MB.
     async fn handle_read_file(&self, raw_path: &str, session_id: Option<&str>) -> RemoteResponse {
-        use crate::service::remote_connect::bot::{WorkspaceFileContent, read_workspace_file};
+        use crate::service::remote_connect::bot::{read_workspace_file, WorkspaceFileContent};
 
         let workspace_root = resolve_file_workspace_root(session_id).await;
         match read_workspace_file(
@@ -1550,7 +1229,7 @@ impl RemoteServer {
 
         match cmd {
             RemoteCommand::GetWorkspaceInfo => {
-                use crate::service::workspace::{WorkspaceKind, get_global_workspace_service};
+                use crate::service::workspace::{get_global_workspace_service, WorkspaceKind};
 
                 if let Some(ws_service) = get_global_workspace_service() {
                     if let Some(ws) = ws_service.get_current_workspace().await {
@@ -1722,7 +1401,7 @@ impl RemoteServer {
         use crate::agentic::coordination::get_global_coordinator;
         use bitfun_runtime_ports::AgentSubmissionPort;
         use bitfun_services_integrations::remote_connect::{
-            RemoteConnectSubmissionSource, build_remote_session_create_request,
+            build_remote_session_create_request, RemoteConnectSubmissionSource,
         };
 
         let coordinator = match get_global_coordinator() {
@@ -2040,7 +1719,7 @@ impl RemoteServer {
 
     async fn handle_execution_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
         use crate::agentic::coordination::{
-            DialogSubmissionPolicy, DialogTriggerSource, get_global_coordinator,
+            get_global_coordinator, DialogSubmissionPolicy, DialogTriggerSource,
         };
 
         let dispatcher = get_or_init_global_dispatcher();
@@ -2054,9 +1733,15 @@ impl RemoteServer {
                 image_contexts,
             } => {
                 // Unified: prefer image_contexts (new format), fall back to legacy images
+                let explicit_contexts = image_contexts.clone().map(|contexts| {
+                    contexts
+                        .into_iter()
+                        .map(remote_image_context_to_core)
+                        .collect()
+                });
                 let resolved_contexts = resolve_remote_execution_image_contexts(
                     images.as_ref().map(Vec::as_slice),
-                    image_contexts.clone(),
+                    explicit_contexts,
                     build_core_image_contexts,
                 );
                 info!(

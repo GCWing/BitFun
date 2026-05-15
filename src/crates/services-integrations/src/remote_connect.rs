@@ -9,8 +9,8 @@ use bitfun_runtime_ports::{
     AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionRequest, AgentSubmissionSource,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::RwLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::RwLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -222,6 +222,51 @@ pub fn remote_file_display_name(name: Option<&str>) -> String {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct RemoteDefaultModelsConfig {
+    pub primary: Option<String>,
+    pub fast: Option<String>,
+    pub search: Option<String>,
+    pub image_understanding: Option<String>,
+    pub image_generation: Option<String>,
+    pub speech_recognition: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteModelConfig {
+    pub id: String,
+    pub name: String,
+    pub provider: String,
+    pub base_url: String,
+    pub model_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u32>,
+    pub enabled: bool,
+    pub capabilities: Vec<String>,
+    pub enable_thinking_process: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_budget_tokens: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteModelCatalog {
+    pub version: u64,
+    pub models: Vec<RemoteModelConfig>,
+    pub default_models: RemoteDefaultModelsConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_model_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteModelCatalogPollDelta {
+    pub changed: bool,
+    pub catalog: Option<RemoteModelCatalog>,
+}
+
 pub fn resolve_remote_agent_type(mobile_type: Option<&str>) -> &'static str {
     match mobile_type {
         Some("code") | Some("agentic") | Some("Agentic") => "agentic",
@@ -329,6 +374,218 @@ pub struct RemoteToolStatus {
     pub input_preview: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_input: Option<serde_json::Value>,
+}
+
+/// Commands that remote clients can send to the desktop runtime.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "cmd", rename_all = "snake_case")]
+pub enum RemoteCommand {
+    GetWorkspaceInfo,
+    ListRecentWorkspaces,
+    SetWorkspace {
+        path: String,
+    },
+    ListAssistants,
+    SetAssistant {
+        path: String,
+    },
+    ListSessions {
+        workspace_path: Option<String>,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    },
+    CreateSession {
+        agent_type: Option<String>,
+        session_name: Option<String>,
+        workspace_path: Option<String>,
+    },
+    GetModelCatalog {
+        session_id: Option<String>,
+    },
+    SetSessionModel {
+        session_id: String,
+        model_id: String,
+    },
+    GetSessionMessages {
+        session_id: String,
+        limit: Option<usize>,
+        before_message_id: Option<String>,
+    },
+    SendMessage {
+        session_id: String,
+        content: String,
+        agent_type: Option<String>,
+        images: Option<Vec<ImageAttachment>>,
+        image_contexts: Option<Vec<RemoteImageContext>>,
+    },
+    CancelTask {
+        session_id: String,
+        turn_id: Option<String>,
+    },
+    DeleteSession {
+        session_id: String,
+    },
+    ConfirmTool {
+        tool_id: String,
+        updated_input: Option<serde_json::Value>,
+    },
+    RejectTool {
+        tool_id: String,
+        reason: Option<String>,
+    },
+    CancelTool {
+        tool_id: String,
+        reason: Option<String>,
+    },
+    AnswerQuestion {
+        tool_id: String,
+        answers: serde_json::Value,
+    },
+    PollSession {
+        session_id: String,
+        since_version: u64,
+        known_msg_count: usize,
+        known_model_catalog_version: Option<u64>,
+    },
+    ReadFile {
+        path: String,
+        session_id: Option<String>,
+    },
+    ReadFileChunk {
+        path: String,
+        session_id: Option<String>,
+        offset: u64,
+        limit: u64,
+    },
+    GetFileInfo {
+        path: String,
+        session_id: Option<String>,
+    },
+    Ping,
+}
+
+/// Responses sent from desktop back to remote clients.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "resp", rename_all = "snake_case")]
+pub enum RemoteResponse {
+    WorkspaceInfo {
+        has_workspace: bool,
+        path: Option<String>,
+        project_name: Option<String>,
+        git_branch: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        workspace_kind: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        assistant_id: Option<String>,
+    },
+    RecentWorkspaces {
+        workspaces: Vec<RecentWorkspaceEntry>,
+    },
+    WorkspaceUpdated {
+        success: bool,
+        path: Option<String>,
+        project_name: Option<String>,
+        error: Option<String>,
+    },
+    AssistantList {
+        assistants: Vec<AssistantEntry>,
+    },
+    AssistantUpdated {
+        success: bool,
+        path: Option<String>,
+        name: Option<String>,
+        error: Option<String>,
+    },
+    SessionList {
+        sessions: Vec<SessionInfo>,
+        has_more: bool,
+    },
+    SessionCreated {
+        session_id: String,
+    },
+    ModelCatalog {
+        catalog: RemoteModelCatalog,
+    },
+    SessionModelUpdated {
+        session_id: String,
+        model_id: String,
+    },
+    Messages {
+        session_id: String,
+        messages: Vec<ChatMessage>,
+        has_more: bool,
+    },
+    MessageSent {
+        session_id: String,
+        turn_id: String,
+    },
+    TaskCancelled {
+        session_id: String,
+    },
+    SessionDeleted {
+        session_id: String,
+    },
+    InitialSync {
+        has_workspace: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        project_name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        git_branch: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        workspace_kind: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        assistant_id: Option<String>,
+        sessions: Vec<SessionInfo>,
+        has_more_sessions: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        authenticated_user_id: Option<String>,
+    },
+    SessionPoll {
+        version: u64,
+        changed: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        session_state: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        new_messages: Option<Vec<ChatMessage>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        total_msg_count: Option<usize>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        active_turn: Option<ActiveTurnSnapshot>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model_catalog: Box<Option<RemoteModelCatalog>>,
+    },
+    AnswerAccepted,
+    InteractionAccepted {
+        action: String,
+        target_id: String,
+    },
+    FileContent {
+        name: String,
+        content_base64: String,
+        mime_type: String,
+        size: u64,
+    },
+    FileChunk {
+        name: String,
+        chunk_base64: String,
+        offset: u64,
+        chunk_size: u64,
+        total_size: u64,
+        mime_type: String,
+    },
+    FileInfo {
+        name: String,
+        size: u64,
+        mime_type: String,
+    },
+    Pong,
+    Error {
+        message: String,
+    },
 }
 
 /// Build a slim version of tool params for remote preview payloads.
@@ -961,5 +1218,120 @@ impl RemoteSessionStateTracker {
             }
             _ => {}
         }
+    }
+}
+
+pub fn should_send_remote_model_catalog(
+    current_model_catalog: Option<&RemoteModelCatalog>,
+    known_model_catalog_version: Option<u64>,
+) -> bool {
+    let current_version = current_model_catalog
+        .map(|catalog| catalog.version)
+        .unwrap_or(0);
+    known_model_catalog_version.unwrap_or(0) != current_version
+}
+
+pub fn remote_model_catalog_poll_delta(
+    current_model_catalog: Option<RemoteModelCatalog>,
+    known_model_catalog_version: Option<u64>,
+) -> RemoteModelCatalogPollDelta {
+    let changed = should_send_remote_model_catalog(
+        current_model_catalog.as_ref(),
+        known_model_catalog_version,
+    );
+    let catalog = if changed { current_model_catalog } else { None };
+
+    RemoteModelCatalogPollDelta { changed, catalog }
+}
+
+pub fn remote_no_change_poll_response(version: u64) -> RemoteResponse {
+    RemoteResponse::SessionPoll {
+        version,
+        changed: false,
+        session_state: None,
+        title: None,
+        new_messages: None,
+        total_msg_count: None,
+        active_turn: None,
+        model_catalog: Box::new(None),
+    }
+}
+
+pub fn remote_snapshot_poll_response(
+    tracker: &RemoteSessionStateTracker,
+    version: u64,
+    model_catalog: Option<RemoteModelCatalog>,
+) -> RemoteResponse {
+    let active_turn = tracker.snapshot_active_turn();
+    let session_state = tracker.session_state();
+    let title = tracker.title();
+    RemoteResponse::SessionPoll {
+        version,
+        changed: true,
+        session_state: Some(session_state),
+        title: non_empty_title(title),
+        new_messages: None,
+        total_msg_count: None,
+        active_turn,
+        model_catalog: Box::new(model_catalog),
+    }
+}
+
+pub fn remote_persisted_poll_response(
+    tracker: &RemoteSessionStateTracker,
+    version: u64,
+    new_messages: Vec<ChatMessage>,
+    total_msg_count: usize,
+    model_catalog: Option<RemoteModelCatalog>,
+) -> RemoteResponse {
+    let turn_finished = tracker.is_turn_finished();
+    let has_assistant_msg = new_messages
+        .iter()
+        .any(|message| message.role == "assistant");
+
+    let active_turn = if turn_finished && has_assistant_msg {
+        tracker.finalize_completed_turn();
+        None
+    } else if turn_finished {
+        let status = tracker.turn_status();
+        if status == "completed" {
+            tracker.snapshot_active_turn()
+        } else {
+            tracker.finalize_completed_turn();
+            tracker.mark_persistence_clean();
+            None
+        }
+    } else {
+        tracker.snapshot_active_turn()
+    };
+
+    let (send_messages, send_total) = if turn_finished && !has_assistant_msg {
+        (None, None)
+    } else {
+        if !new_messages.is_empty() {
+            tracker.mark_persistence_clean();
+        }
+        (Some(new_messages), Some(total_msg_count))
+    };
+
+    let session_state = tracker.session_state();
+    let title = tracker.title();
+    RemoteResponse::SessionPoll {
+        version,
+        changed: true,
+        session_state: Some(session_state),
+        title: non_empty_title(title),
+        new_messages: send_messages,
+        total_msg_count: send_total,
+        active_turn,
+        model_catalog: Box::new(model_catalog),
+    }
+}
+
+fn non_empty_title(title: String) -> Option<String> {
+    if title.is_empty() {
+        None
+    } else {
+        Some(title)
     }
 }

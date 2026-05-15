@@ -3,14 +3,18 @@
 use bitfun_events::{AgenticEvent, ToolEventData};
 use bitfun_runtime_ports::AgentSubmissionSource;
 use bitfun_services_integrations::remote_connect::{
-    ChatImageAttachment, ChatMessage, ChatMessageItem, ImageAttachment,
-    REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES, RemoteCancelDecision,
-    RemoteConnectSubmissionSource, RemoteImageContext, RemoteSessionStateTracker, RemoteToolStatus,
-    TrackerEvent, build_remote_image_attachment, build_remote_image_contexts,
+    build_remote_image_attachment, build_remote_image_contexts,
     build_remote_image_submission_request, build_remote_session_create_request,
     build_remote_submission_request, make_slim_tool_params, remote_file_display_name,
-    remote_session_restore_target, resolve_remote_agent_type, resolve_remote_cancel_decision,
+    remote_model_catalog_poll_delta, remote_no_change_poll_response,
+    remote_persisted_poll_response, remote_session_restore_target, remote_snapshot_poll_response,
+    resolve_remote_agent_type, resolve_remote_cancel_decision,
     resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range,
+    should_send_remote_model_catalog, ActiveTurnSnapshot, ChatImageAttachment, ChatMessage,
+    ChatMessageItem, ImageAttachment, RemoteCancelDecision, RemoteCommand,
+    RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteImageContext,
+    RemoteModelCatalog, RemoteModelConfig, RemoteResponse, RemoteSessionStateTracker,
+    RemoteToolStatus, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
 };
 
 #[test]
@@ -276,6 +280,143 @@ fn remote_connect_message_dtos_keep_current_wire_shape() {
 }
 
 #[test]
+fn remote_connect_command_wire_shape_lives_in_owner_contract() {
+    let command = RemoteCommand::SendMessage {
+        session_id: "session-1".to_string(),
+        content: "hello".to_string(),
+        agent_type: Some("code".to_string()),
+        images: Some(vec![ImageAttachment {
+            name: "clip.png".to_string(),
+            data_url: "data:image/png;base64,abc".to_string(),
+        }]),
+        image_contexts: Some(vec![RemoteImageContext {
+            id: "ctx-1".to_string(),
+            image_path: Some("D:/workspace/project/screenshot.png".to_string()),
+            data_url: None,
+            mime_type: "image/png".to_string(),
+            metadata: Some(serde_json::json!({ "source": "remote" })),
+        }]),
+    };
+    let json = serde_json::to_value(command).expect("serialize send command");
+
+    assert_eq!(json["cmd"], "send_message");
+    assert_eq!(json["session_id"], "session-1");
+    assert_eq!(json["agent_type"], "code");
+    assert_eq!(json["images"][0]["name"], "clip.png");
+    assert_eq!(json["image_contexts"][0]["id"], "ctx-1");
+    assert_eq!(
+        json["image_contexts"][0]["image_path"],
+        "D:/workspace/project/screenshot.png"
+    );
+    assert!(json.get("imageContexts").is_none());
+
+    let cancel = serde_json::to_value(RemoteCommand::CancelTask {
+        session_id: "session-1".to_string(),
+        turn_id: Some("turn-1".to_string()),
+    })
+    .expect("serialize cancel command");
+    assert_eq!(cancel["cmd"], "cancel_task");
+    assert_eq!(cancel["turn_id"], "turn-1");
+
+    let poll = serde_json::to_value(RemoteCommand::PollSession {
+        session_id: "session-1".to_string(),
+        since_version: 7,
+        known_msg_count: 3,
+        known_model_catalog_version: Some(11),
+    })
+    .expect("serialize poll command");
+    assert_eq!(poll["cmd"], "poll_session");
+    assert_eq!(poll["since_version"], 7);
+    assert_eq!(poll["known_msg_count"], 3);
+    assert_eq!(poll["known_model_catalog_version"], 11);
+}
+
+#[test]
+fn remote_connect_response_wire_shape_lives_in_owner_contract() {
+    let active_turn = ActiveTurnSnapshot {
+        turn_id: "turn-1".to_string(),
+        status: "active".to_string(),
+        text: String::new(),
+        thinking: String::new(),
+        tools: vec![RemoteToolStatus {
+            id: "tool-1".to_string(),
+            name: "Read".to_string(),
+            status: "running".to_string(),
+            duration_ms: None,
+            start_ms: Some(42),
+            input_preview: Some("{\"path\":\"README.md\"}".to_string()),
+            tool_input: None,
+        }],
+        round_index: 2,
+        items: Some(vec![ChatMessageItem {
+            item_type: "tool".to_string(),
+            content: None,
+            tool: None,
+            is_subagent: None,
+        }]),
+    };
+
+    let poll = serde_json::to_value(RemoteResponse::SessionPoll {
+        version: 8,
+        changed: true,
+        session_state: Some("running".to_string()),
+        title: Some("session title".to_string()),
+        new_messages: None,
+        total_msg_count: None,
+        active_turn: Some(active_turn),
+        model_catalog: Box::new(Some(sample_remote_model_catalog(11))),
+    })
+    .expect("serialize poll response");
+
+    assert_eq!(poll["resp"], "session_poll");
+    assert_eq!(poll["version"], 8);
+    assert_eq!(poll["active_turn"]["turn_id"], "turn-1");
+    assert_eq!(
+        poll["active_turn"]["tools"][0]["input_preview"],
+        "{\"path\":\"README.md\"}"
+    );
+    assert_eq!(poll["model_catalog"]["version"], 11);
+    assert_eq!(
+        poll["model_catalog"]["default_models"]["primary"],
+        "model-1"
+    );
+    assert!(poll.get("new_messages").is_none());
+
+    let sent = serde_json::to_value(RemoteResponse::MessageSent {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+    })
+    .expect("serialize sent response");
+    assert_eq!(sent["resp"], "message_sent");
+    assert_eq!(sent["turn_id"], "turn-1");
+}
+
+fn sample_remote_model_catalog(version: u64) -> RemoteModelCatalog {
+    RemoteModelCatalog {
+        version,
+        models: vec![RemoteModelConfig {
+            id: "model-1".to_string(),
+            name: "Model One".to_string(),
+            provider: "openai".to_string(),
+            base_url: "https://api.example.com".to_string(),
+            model_name: "gpt-test".to_string(),
+            context_window: Some(128_000),
+            enabled: true,
+            capabilities: vec!["text_chat".to_string()],
+            enable_thinking_process: false,
+            reasoning_mode: Some("default".to_string()),
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+        }],
+        default_models: RemoteDefaultModelsConfig {
+            primary: Some("model-1".to_string()),
+            ..RemoteDefaultModelsConfig::default()
+        },
+        session_model_id: Some("model-1".to_string()),
+    }
+}
+
+#[test]
 fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
     let tracker = RemoteSessionStateTracker::new("session-1".to_string());
 
@@ -452,6 +593,137 @@ fn remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finaliz
     tracker.finalize_completed_turn();
     assert!(tracker.snapshot_active_turn().is_none());
     assert_eq!(tracker.accumulated_text(), "");
+}
+
+#[test]
+fn remote_connect_model_catalog_delta_preserves_poll_invalidation_policy() {
+    let unchanged =
+        remote_model_catalog_poll_delta(Some(sample_remote_model_catalog(11)), Some(11));
+    assert!(!unchanged.changed);
+    assert!(unchanged.catalog.is_none());
+
+    let changed = remote_model_catalog_poll_delta(Some(sample_remote_model_catalog(12)), Some(11));
+    assert!(changed.changed);
+    assert_eq!(changed.catalog.expect("changed catalog").version, 12);
+
+    let initial_catalog =
+        remote_model_catalog_poll_delta(Some(sample_remote_model_catalog(13)), None);
+    assert!(initial_catalog.changed);
+    assert_eq!(
+        initial_catalog.catalog.expect("initial catalog").version,
+        13
+    );
+
+    let unavailable_after_known_version = remote_model_catalog_poll_delta(None, Some(11));
+    assert!(unavailable_after_known_version.changed);
+    assert!(unavailable_after_known_version.catalog.is_none());
+
+    let unavailable_initial = remote_model_catalog_poll_delta(None, None);
+    assert!(!unavailable_initial.changed);
+    assert!(unavailable_initial.catalog.is_none());
+}
+
+#[test]
+fn remote_connect_poll_helpers_preserve_delta_and_completion_policy() {
+    let tracker = RemoteSessionStateTracker::new("session-1".to_string());
+
+    assert!(!should_send_remote_model_catalog(
+        Some(&sample_remote_model_catalog(11)),
+        Some(11)
+    ));
+    assert!(should_send_remote_model_catalog(
+        Some(&sample_remote_model_catalog(12)),
+        Some(11)
+    ));
+
+    let no_change =
+        serde_json::to_value(remote_no_change_poll_response(7)).expect("serialize no-change poll");
+    assert_eq!(no_change["resp"], "session_poll");
+    assert_eq!(no_change["changed"], false);
+    assert!(no_change.get("active_turn").is_none());
+
+    tracker.handle_agentic_event(&AgenticEvent::DialogTurnStarted {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        turn_index: 0,
+        user_input: "hello".to_string(),
+        original_user_input: None,
+        user_message_metadata: None,
+        subagent_parent_info: None,
+    });
+    tracker.handle_agentic_event(&AgenticEvent::TextChunk {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
+        text: "answer".to_string(),
+        subagent_parent_info: None,
+    });
+    tracker.mark_persistence_clean();
+
+    let snapshot = serde_json::to_value(remote_snapshot_poll_response(
+        &tracker,
+        tracker.version(),
+        Some(sample_remote_model_catalog(13)),
+    ))
+    .expect("serialize snapshot poll");
+    assert_eq!(snapshot["changed"], true);
+    assert_eq!(snapshot["active_turn"]["turn_id"], "turn-1");
+    assert!(snapshot.get("new_messages").is_none());
+    assert_eq!(snapshot["model_catalog"]["version"], 13);
+
+    tracker.handle_agentic_event(&AgenticEvent::DialogTurnCompleted {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        total_rounds: 1,
+        total_tools: 0,
+        duration_ms: 42,
+        subagent_parent_info: None,
+        partial_recovery_reason: None,
+        success: Some(true),
+        finish_reason: Some("stop".to_string()),
+    });
+
+    let waiting_for_persistence = serde_json::to_value(remote_persisted_poll_response(
+        &tracker,
+        tracker.version(),
+        Vec::new(),
+        0,
+        None,
+    ))
+    .expect("serialize completed poll without assistant message");
+    assert!(waiting_for_persistence.get("new_messages").is_none());
+    assert_eq!(
+        waiting_for_persistence["active_turn"]["status"],
+        "completed"
+    );
+    assert!(tracker.snapshot_active_turn().is_some());
+
+    let assistant_message = ChatMessage {
+        id: "msg-2".to_string(),
+        role: "assistant".to_string(),
+        content: "answer".to_string(),
+        timestamp: "2".to_string(),
+        metadata: None,
+        tools: None,
+        thinking: None,
+        items: None,
+        images: None,
+    };
+    let with_persisted_message = serde_json::to_value(remote_persisted_poll_response(
+        &tracker,
+        tracker.version(),
+        vec![assistant_message],
+        2,
+        None,
+    ))
+    .expect("serialize completed poll with assistant message");
+    assert_eq!(
+        with_persisted_message["new_messages"][0]["role"],
+        "assistant"
+    );
+    assert_eq!(with_persisted_message["total_msg_count"], 2);
+    assert!(with_persisted_message.get("active_turn").is_none());
+    assert!(tracker.snapshot_active_turn().is_none());
 }
 
 #[test]

@@ -153,7 +153,9 @@ and milestone verification gates.
   reviewed runtime migration exists.
 - Remote-connect port baselines live in `bitfun-runtime-ports` and
   `bitfun-services-integrations`; tracker state and tracker event reduction
-  belong in `bitfun-services-integrations`. Pure remote image-context
+  belong in `bitfun-services-integrations`. Remote command/response wire DTOs,
+  remote model catalog DTOs, poll-response assembly helpers, and model-catalog
+  poll delta policy also belong there. Pure remote image-context
   fallback/preference, restore-target, cancel-decision, and remote file-transfer
   size/chunk/name helpers also belong in `bitfun-services-integrations`, while
   core still owns the adapter back to `ImageContextData`, dispatcher assembly,

@@ -823,6 +823,30 @@ const forbiddenContentRules = [
         message: 'core remote-connect server must not redefine session info DTOs; use the integrations contract',
       },
       {
+        regex: /\bpub struct RemoteDefaultModelsConfig\b/,
+        message: 'core remote-connect server must not redefine remote model default DTOs; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct RemoteModelConfig\b/,
+        message: 'core remote-connect server must not redefine remote model DTOs; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct RemoteModelCatalog\b/,
+        message: 'core remote-connect server must not redefine remote model catalog DTOs; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct RemoteModelCatalogPollDelta\b/,
+        message: 'core remote-connect server must not redefine remote model catalog poll delta; use the integrations contract',
+      },
+      {
+        regex: /\bpub enum RemoteCommand\b/,
+        message: 'core remote-connect server must not redefine remote command wire DTOs; use the integrations contract',
+      },
+      {
+        regex: /\bpub enum RemoteResponse\b/,
+        message: 'core remote-connect server must not redefine remote response wire DTOs; use the integrations contract',
+      },
+      {
         regex: /\bstruct TrackerState\b/,
         message: 'core remote-connect server must not own tracker state; use the integrations tracker',
       },
@@ -869,6 +893,26 @@ const forbiddenContentRules = [
       {
         regex: /unwrap_or\("file"\)/,
         message: 'core remote-connect server must not own remote file display-name fallback; use the integrations helper',
+      },
+      {
+        regex: /\bfn should_send_remote_model_catalog\b/,
+        message: 'core remote-connect server must not own poll model-catalog policy; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_model_catalog_poll_delta\b/,
+        message: 'core remote-connect server must not own poll model-catalog delta policy; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_no_change_poll_response\b/,
+        message: 'core remote-connect server must not own no-change poll response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_snapshot_poll_response\b/,
+        message: 'core remote-connect server must not own streaming poll response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_persisted_poll_response\b/,
+        message: 'core remote-connect server must not own persisted poll response assembly; use the integrations helper',
       },
     ],
   },
@@ -1873,11 +1917,26 @@ function runManifestParserSelfTest() {
         'REMOTE_FILE_MAX_CHUNK_BYTES',
         'resolve_remote_file_chunk_range',
         'remote_file_display_name',
+        'RemoteDefaultModelsConfig',
+        'RemoteModelConfig',
+        'RemoteModelCatalog',
+        'RemoteModelCatalogPollDelta',
+        'RemoteCommand',
+        'RemoteResponse',
+        'should_send_remote_model_catalog',
+        'remote_model_catalog_poll_delta',
+        'remote_no_change_poll_response',
+        'remote_snapshot_poll_response',
+        'remote_persisted_poll_response',
       ],
     },
     {
       path: 'src/crates/services-integrations/tests/remote_connect_contracts.rs',
       contracts: [
+        'remote_connect_command_wire_shape_lives_in_owner_contract',
+        'remote_connect_response_wire_shape_lives_in_owner_contract',
+        'remote_connect_model_catalog_delta_preserves_poll_invalidation_policy',
+        'remote_connect_poll_helpers_preserve_delta_and_completion_policy',
         'remote_connect_image_context_policy_preserves_legacy_fallback_shape',
         'remote_connect_image_context_policy_prefers_explicit_contexts',
         'remote_connect_cancel_and_restore_policy_preserve_runtime_decisions',
@@ -2322,6 +2381,12 @@ function runManifestParserSelfTest() {
     'RemoteToolStatus',
     'ActiveTurnSnapshot',
     'SessionInfo',
+    'RemoteDefaultModelsConfig',
+    'RemoteModelConfig',
+    'RemoteModelCatalog',
+    'RemoteModelCatalogPollDelta',
+    'RemoteCommand',
+    'RemoteResponse',
     'TrackerState',
     'TrackerEvent',
     'RemoteSessionStateTracker',
@@ -2334,6 +2399,11 @@ function runManifestParserSelfTest() {
     'MAX_SIZE',
     'MAX_CHUNK',
     'unwrap_or\\("file"\\)',
+    'should_send_remote_model_catalog',
+    'remote_model_catalog_poll_delta',
+    'remote_no_change_poll_response',
+    'remote_snapshot_poll_response',
+    'remote_persisted_poll_response',
   ];
   const remoteConnectRuleText = remoteConnectRule.patterns
     .map((pattern) => pattern.regex.source)
