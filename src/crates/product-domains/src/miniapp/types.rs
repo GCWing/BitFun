@@ -50,6 +50,8 @@ pub struct MiniAppPermissions {
     pub node: Option<NodePermissions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ai: Option<AiPermissions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notifications: Option<NotificationPermissions>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -106,6 +108,13 @@ pub struct AiPermissions {
     /// Maximum number of AI requests per minute (per app).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rate_limit_per_minute: Option<u32>,
+}
+
+/// Host notification permissions for MiniApps.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotificationPermissions {
+    #[serde(default)]
+    pub system: bool,
 }
 
 /// Per-locale overrides for user-facing strings (gallery name / description / tags).

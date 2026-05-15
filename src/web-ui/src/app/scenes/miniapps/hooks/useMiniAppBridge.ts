@@ -14,6 +14,7 @@ import { buildMiniAppThemeVars } from '../utils/buildMiniAppThemeVars';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useI18n } from '@/infrastructure/i18n';
 import type { MiniAppRunScope } from '../customization/miniAppCustomizationTypes';
+import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 
 interface JSONRPC {
   jsonrpc?: string;
@@ -53,9 +54,11 @@ export function useMiniAppBridge(
   // but for `node.enabled = false` apps `storage.*` is served by the manager
   // (no worker), and any non-namespaced custom call will fail with a clear error.
   const nodeDisabledRef = useRef(app.permissions?.node?.enabled === false);
+  const systemNotificationsAllowedRef = useRef(app.permissions?.notifications?.system === true);
   useLayoutEffect(() => {
     nodeDisabledRef.current = app.permissions?.node?.enabled === false;
-  }, [app.id, app.permissions?.node?.enabled]);
+    systemNotificationsAllowedRef.current = app.permissions?.notifications?.system === true;
+  }, [app.id, app.permissions?.node?.enabled, app.permissions?.notifications?.system]);
 
   useLayoutEffect(() => {
     const handler = async (event: MessageEvent) => {
@@ -240,6 +243,37 @@ export function useMiniAppBridge(
         if (method === 'clipboard.readText') {
           const text = await navigator.clipboard.readText();
           reply(text);
+          return;
+        }
+
+        if (method === 'system.openExternal') {
+          const url = String(params.url ?? '');
+          let parsed: URL;
+          try {
+            parsed = new URL(url);
+          } catch {
+            replyError('Invalid URL.');
+            return;
+          }
+          if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+            replyError('Only http(s) URLs can be opened.');
+            return;
+          }
+          await systemAPI.openExternal(parsed.toString());
+          reply(null);
+          return;
+        }
+
+        if (method === 'notifications.system') {
+          if (!systemNotificationsAllowedRef.current) {
+            replyError(`MiniApp '${appId}' does not have notifications.system permission.`);
+            return;
+          }
+          await systemAPI.sendSystemNotification(
+            String(params.title ?? ''),
+            params.body == null ? undefined : String(params.body),
+          );
+          reply(null);
           return;
         }
 

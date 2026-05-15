@@ -166,6 +166,7 @@ Returns app_id and the app root directory. Use the root directory and file names
             }),
             node: None,
             ai: None,
+            ..Default::default()
         };
 
         let app = manager

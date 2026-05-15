@@ -34,6 +34,7 @@ export interface MiniAppPermissions {
     max_tokens_per_request?: number;
     rate_limit_per_minute?: number;
   };
+  notifications?: { system?: boolean };
 }
 
 // ─── AI Types ─────────────────────────────────────────────────────────────────

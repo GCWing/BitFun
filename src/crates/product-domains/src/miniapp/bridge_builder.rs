@@ -74,6 +74,9 @@ pub fn build_bridge_script(
     shell: {{ exec: (cmd, opts) => _call('shell.exec', Array.isArray(cmd) ? {{ args: cmd, ...(opts||{{}}) }} : {{ command: cmd, ...(opts||{{}}) }}) }},
     net:   {{ fetch: (url, opts) => _call('net.fetch', {{ url: typeof url === 'string' ? url : (url && url.url), ...(opts||{{}}) }}) }},
     os:    {{ info: () => _call('os.info', {{}}) }},
+    system: {{
+      openExternal: (url) => _rpc('system.openExternal', {{ url }}),
+    }},
     storage: {{
       get: (key) => _call('storage.get', {{ key }}),
       set: (key, value) => _call('storage.set', {{ key, value }}),
@@ -117,6 +120,11 @@ pub fn build_bridge_script(
     clipboard: {{
       writeText: (text) => _rpc('clipboard.writeText', {{ text }}),
       readText:  () => _rpc('clipboard.readText', {{}}),
+    }},
+
+    // Notifications namespace; requires manifest permissions.notifications.system = true.
+    notifications: {{
+      system: (title, body) => _rpc('notifications.system', {{ title, body }}),
     }},
 
     _lifecycleHandlers: {{ activate: [], deactivate: [], themeChange: [], localeChange: [] }},

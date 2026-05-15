@@ -15,110 +15,10 @@ import {
 } from './types';
 import { createLogger } from '@/shared/utils/logger';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
+import { sanitizeErrorForLog, sanitizeLogValue, sanitizeTextForLog } from '../logSanitizer';
 
 const log = createLogger('ApiClient');
-const SENSITIVE_KEY_PATTERNS = [
-  'api_key',
-  'apikey',
-  'token',
-  'secret',
-  'password',
-  'authorization'
-];
-const MAX_LOG_STRING_LENGTH = 500;
-const MAX_LOG_ARRAY_ITEMS = 10;
-const MAX_LOG_OBJECT_KEYS = 30;
-const MAX_LOG_DEPTH = 4;
-
-function isSensitiveKey(key: string): boolean {
-  const normalized = key.toLowerCase();
-  return SENSITIVE_KEY_PATTERNS.some(pattern => normalized.includes(pattern));
-}
-
-function maskSensitiveValue(value: unknown): string {
-  if (typeof value !== 'string') {
-    return '***';
-  }
-  if (value.length <= 8) {
-    return '***';
-  }
-  return `${value.slice(0, 4)}***${value.slice(-4)}`;
-}
-
-function sanitizeForLog(value: unknown, parentKey?: string, depth = 0): unknown {
-  if (value === null || value === undefined) {
-    return value;
-  }
-
-  if (parentKey && isSensitiveKey(parentKey)) {
-    return maskSensitiveValue(value);
-  }
-
-  if (depth >= MAX_LOG_DEPTH) {
-    if (Array.isArray(value)) {
-      return { type: 'array', length: value.length };
-    }
-    if (typeof value === 'object') {
-      return { type: 'object' };
-    }
-  }
-
-  if (Array.isArray(value)) {
-    const items = value
-      .slice(0, MAX_LOG_ARRAY_ITEMS)
-      .map(item => sanitizeForLog(item, parentKey, depth + 1));
-    if (value.length > MAX_LOG_ARRAY_ITEMS) {
-      return {
-        type: 'array',
-        length: value.length,
-        items,
-        omittedItems: value.length - MAX_LOG_ARRAY_ITEMS
-      };
-    }
-    return items;
-  }
-
-  if (typeof value !== 'object') {
-    if (typeof value === 'string' && value.length > MAX_LOG_STRING_LENGTH) {
-      return {
-        type: 'string',
-        length: value.length,
-        preview: value.slice(0, MAX_LOG_STRING_LENGTH)
-      };
-    }
-    return value;
-  }
-
-  const obj = value as Record<string, unknown>;
-  const sanitized: Record<string, unknown> = {};
-
-  const entries = Object.entries(obj);
-  for (const [key, rawVal] of entries.slice(0, MAX_LOG_OBJECT_KEYS)) {
-    if (isSensitiveKey(key)) {
-      sanitized[key] = maskSensitiveValue(rawVal);
-      continue;
-    }
-
-    // For HTTP header maps, mask sensitive header values by header name.
-    if ((key === 'headers' || key === 'custom_headers') && rawVal && typeof rawVal === 'object') {
-      const headerObj = rawVal as Record<string, unknown>;
-      const maskedHeaders: Record<string, unknown> = {};
-      for (const [hKey, hVal] of Object.entries(headerObj)) {
-        maskedHeaders[hKey] = isSensitiveKey(hKey) ? maskSensitiveValue(hVal) : hVal;
-      }
-      sanitized[key] = maskedHeaders;
-      continue;
-    }
-
-    sanitized[key] = sanitizeForLog(rawVal, key, depth + 1);
-  }
-
-  if (entries.length > MAX_LOG_OBJECT_KEYS) {
-    sanitized.__omittedKeys = entries.length - MAX_LOG_OBJECT_KEYS;
-  }
-
-  return sanitized;
-}
+const sanitizeForLog = sanitizeLogValue;
 
 export class ApiClient implements IApiClient {
   private config: ApiConfig;
@@ -302,7 +202,7 @@ export class ApiClient implements IApiClient {
           requestId: request.id,
           retryCount: request.retryCount,
           config: sanitizeForLog(request.config),
-          error
+          error: sanitizeErrorForLog(error)
         });
       }
 
@@ -333,14 +233,14 @@ export class ApiClient implements IApiClient {
       if (isExpectedError && this.config.enableLogging) {
         log.debug('Command returned expected result', {
           command: config.command,
-          message: errorMessage
+          message: sanitizeTextForLog(errorMessage)
         });
       } else {
         log.error('Command failed', {
           command: config.command,
           args: sanitizeForLog(config.args),
-          error: errorMessage,
-          rawError: error
+          error: sanitizeTextForLog(errorMessage),
+          rawError: sanitizeErrorForLog(error)
         });
       }
       

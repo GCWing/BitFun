@@ -3,6 +3,7 @@
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { ITransportAdapter } from './base';
 import { createLogger } from '@/shared/utils/logger';
+import { sanitizeErrorForLog } from '../logSanitizer';
 
 const log = createLogger('TauriAdapter');
 
@@ -68,7 +69,7 @@ export class TauriTransportAdapter implements ITransportAdapter {
 
       return result as T;
     } catch (error) {
-      log.error('Request failed', { action, error });
+      log.error('Request failed', { action, error: sanitizeErrorForLog(error) });
       throw error;
     }
   }
@@ -82,7 +83,7 @@ export class TauriTransportAdapter implements ITransportAdapter {
         try {
           callback(e.payload);
         } catch (error) {
-          log.error('Error in event listener callback', { event, error });
+      log.error('Error in event listener callback', { event, error: sanitizeErrorForLog(error) });
         }
       }
     }).then(fn => {
@@ -93,7 +94,7 @@ export class TauriTransportAdapter implements ITransportAdapter {
         this.unlistenFunctions.push(fn);
       }
     }).catch(error => {
-      log.error('Failed to listen event', { event, error });
+      log.error('Failed to listen event', { event, error: sanitizeErrorForLog(error) });
     });
 
     return () => {
@@ -113,7 +114,7 @@ export class TauriTransportAdapter implements ITransportAdapter {
       try {
         fn();
       } catch (error) {
-        log.error('Error while unlistening', error);
+        log.error('Error while unlistening', sanitizeErrorForLog(error));
       }
     });
     this.unlistenFunctions = [];

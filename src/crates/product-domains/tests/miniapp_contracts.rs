@@ -1,6 +1,6 @@
 #![cfg(feature = "miniapp")]
 
-use bitfun_product_domains::miniapp::bridge_builder::build_csp_content;
+use bitfun_product_domains::miniapp::bridge_builder::{build_bridge_script, build_csp_content};
 use bitfun_product_domains::miniapp::compiler::compile;
 use bitfun_product_domains::miniapp::exporter::{ExportCheckResult, ExportTarget};
 use bitfun_product_domains::miniapp::host_routing::{
@@ -25,7 +25,7 @@ use bitfun_product_domains::miniapp::storage::{
 };
 use bitfun_product_domains::miniapp::types::{
     FsPermissions, MiniApp, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource, NetPermissions,
-    NpmDep,
+    NotificationPermissions, NpmDep,
 };
 use bitfun_product_domains::miniapp::worker::{install_command_for_runtime, InstallResult};
 use std::path::{Path, PathBuf};
@@ -69,6 +69,31 @@ fn miniapp_csp_content_preserves_net_allow_contract() {
         csp,
         "default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; connect-src 'self' 'self' https://esm.sh api.example.com; img-src 'self' data: https:; font-src 'self' https:; object-src 'none'; base-uri 'self';"
     );
+}
+
+#[test]
+fn miniapp_permissions_support_host_notifications_without_domain_specific_fields() {
+    let permissions: MiniAppPermissions = serde_json::from_value(serde_json::json!({
+        "notifications": { "system": true },
+        "net": { "allow": ["*"] }
+    }))
+    .unwrap();
+
+    assert_eq!(
+        permissions.notifications,
+        Some(NotificationPermissions { system: true })
+    );
+    assert_eq!(permissions.net.unwrap().allow.unwrap(), vec!["*"]);
+}
+
+#[test]
+fn miniapp_bridge_exposes_host_notification_namespace() {
+    let bridge = build_bridge_script("app-1", "/tmp/app", "/tmp/workspace", "dark", "win32");
+
+    assert!(bridge.contains("notifications:"));
+    assert!(bridge.contains("notifications.system"));
+    assert!(bridge.contains("system:"));
+    assert!(bridge.contains("system.openExternal"));
 }
 
 #[test]

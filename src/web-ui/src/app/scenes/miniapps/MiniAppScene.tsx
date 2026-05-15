@@ -25,6 +25,12 @@ import './MiniAppScene.scss';
 const log = createLogger('MiniAppScene');
 
 const MiniAppRunner = React.lazy(() => import('./components/MiniAppRunner'));
+const MINIAPP_REFRESH_EVENTS = [
+  'miniapp-updated',
+  'miniapp-recompiled',
+  'miniapp-rolled-back',
+  'miniapp-worker-restarted',
+] as const;
 
 interface MiniAppSceneProps {
   appId: string;
@@ -96,31 +102,18 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   useEffect(() => {
     const tabId = `miniapp:${appId}` as SceneTabId;
     const shouldHandle = (payload?: { id?: string }) => payload?.id === appId;
+    const refresh = () => {
+      setKey((value) => value + 1);
+      void load(appId);
+    };
 
-    const unlistenUpdated = api.listen<{ id?: string }>('miniapp-updated', (payload) => {
-      if (shouldHandle(payload)) {
-        setKey((value) => value + 1);
-        void load(appId);
-      }
-    });
-    const unlistenRecompiled = api.listen<{ id?: string }>('miniapp-recompiled', (payload) => {
-      if (shouldHandle(payload)) {
-        setKey((value) => value + 1);
-        void load(appId);
-      }
-    });
-    const unlistenRolledBack = api.listen<{ id?: string }>('miniapp-rolled-back', (payload) => {
-      if (shouldHandle(payload)) {
-        setKey((value) => value + 1);
-        void load(appId);
-      }
-    });
-    const unlistenRestarted = api.listen<{ id?: string }>('miniapp-worker-restarted', (payload) => {
-      if (shouldHandle(payload)) {
-        setKey((value) => value + 1);
-        void load(appId);
-      }
-    });
+    const refreshUnlisteners = MINIAPP_REFRESH_EVENTS.map((eventName) =>
+      api.listen<{ id?: string }>(eventName, (payload) => {
+        if (shouldHandle(payload)) {
+          refresh();
+        }
+      }),
+    );
     const unlistenDeleted = api.listen<{ id?: string }>('miniapp-deleted', (payload) => {
       if (shouldHandle(payload)) {
         closeScene(tabId);
@@ -128,10 +121,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
     });
 
     return () => {
-      unlistenUpdated();
-      unlistenRecompiled();
-      unlistenRolledBack();
-      unlistenRestarted();
+      refreshUnlisteners.forEach((unlisten) => unlisten());
       unlistenDeleted();
     };
   }, [appId, closeScene, load]);
