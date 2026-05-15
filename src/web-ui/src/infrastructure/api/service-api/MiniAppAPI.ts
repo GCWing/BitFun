@@ -163,6 +163,39 @@ export interface RecompileResult {
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
+export interface MiniAppDraft {
+  appId: string;
+  draftId: string;
+  sourceVersion: number;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+  draftRoot: string;
+  app: MiniApp;
+}
+
+export interface MiniAppPermissionDiff {
+  high_risk: boolean;
+  added: string[];
+  expanded: string[];
+  removed: string[];
+}
+
+export interface MiniAppCustomizationMetadata {
+  origin: {
+    kind: 'builtin' | 'imported' | 'user_created';
+    builtin_id?: string;
+    builtin_version?: number;
+  };
+  local_override: boolean;
+  last_applied_draft_id?: string;
+  available_builtin_update?: {
+    builtin_version: number;
+    detected_at: number;
+  };
+  updated_at: number;
+}
+
 export class MiniAppAPI {
   async listMiniApps(): Promise<MiniAppMeta[]> {
     try {
@@ -319,6 +352,164 @@ export class MiniAppAPI {
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_sync_from_fs', error, { appId, workspacePath });
+    }
+  }
+
+  // ─── Draft commands ─────────────────────────────────────────────────────────
+
+  async createDraft(appId: string, theme?: string, workspacePath?: string): Promise<MiniAppDraft> {
+    try {
+      return await api.invoke('miniapp_create_draft', {
+        request: { appId, theme: theme ?? undefined, workspacePath }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_create_draft', error, { appId, workspacePath });
+    }
+  }
+
+  async getDraft(appId: string, draftId: string): Promise<MiniAppDraft> {
+    try {
+      return await api.invoke('miniapp_get_draft', {
+        request: { appId, draftId }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_get_draft', error, { appId, draftId });
+    }
+  }
+
+  async syncDraftFromFs(
+    appId: string,
+    draftId: string,
+    theme?: string,
+    workspacePath?: string,
+  ): Promise<MiniAppDraft> {
+    try {
+      return await api.invoke('miniapp_sync_draft_from_fs', {
+        request: { appId, draftId, theme: theme ?? undefined, workspacePath }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_sync_draft_from_fs', error, { appId, draftId, workspacePath });
+    }
+  }
+
+  async setDraftPermissions(
+    appId: string,
+    draftId: string,
+    permissions: MiniAppPermissions,
+    theme?: string,
+    workspacePath?: string,
+  ): Promise<MiniAppDraft> {
+    try {
+      return await api.invoke('miniapp_set_draft_permissions', {
+        request: { appId, draftId, permissions, theme: theme ?? undefined, workspacePath }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_set_draft_permissions', error, { appId, draftId, workspacePath });
+    }
+  }
+
+  async permissionDiffForDraft(appId: string, draftId: string): Promise<MiniAppPermissionDiff> {
+    try {
+      return await api.invoke('miniapp_permission_diff_for_draft', {
+        request: { appId, draftId }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_permission_diff_for_draft', error, { appId, draftId });
+    }
+  }
+
+  async applyDraft(
+    appId: string,
+    draftId: string,
+    theme?: string,
+    workspacePath?: string,
+  ): Promise<MiniApp> {
+    try {
+      return await api.invoke('miniapp_apply_draft', {
+        request: { appId, draftId, theme: theme ?? undefined, workspacePath }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_apply_draft', error, { appId, draftId, workspacePath });
+    }
+  }
+
+  async discardDraft(appId: string, draftId: string): Promise<void> {
+    try {
+      await api.invoke('miniapp_discard_draft', {
+        request: { appId, draftId }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_discard_draft', error, { appId, draftId });
+    }
+  }
+
+  async getDraftStorage(appId: string, draftId: string, key: string): Promise<unknown> {
+    try {
+      return await api.invoke('get_miniapp_draft_storage', {
+        request: { appId, draftId, key }
+      });
+    } catch (error) {
+      throw createTauriCommandError('get_miniapp_draft_storage', error, { appId, draftId, key });
+    }
+  }
+
+  async setDraftStorage(appId: string, draftId: string, key: string, value: unknown): Promise<void> {
+    try {
+      await api.invoke('set_miniapp_draft_storage', {
+        request: { appId, draftId, key, value }
+      });
+    } catch (error) {
+      throw createTauriCommandError('set_miniapp_draft_storage', error, { appId, draftId, key });
+    }
+  }
+
+  async draftWorkerCall(
+    appId: string,
+    draftId: string,
+    method: string,
+    params: Record<string, unknown>,
+    workspacePath?: string,
+  ): Promise<unknown> {
+    try {
+      return await api.invoke('miniapp_draft_worker_call', {
+        request: { appId, draftId, method, params, workspacePath }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_draft_worker_call', error, { appId, draftId, method, workspacePath });
+    }
+  }
+
+  async draftHostCall(
+    appId: string,
+    draftId: string,
+    method: string,
+    params: Record<string, unknown>,
+    workspacePath?: string,
+  ): Promise<unknown> {
+    try {
+      return await api.invoke('miniapp_draft_host_call', {
+        request: { appId, draftId, method, params, workspacePath }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_draft_host_call', error, { appId, draftId, method, workspacePath });
+    }
+  }
+
+  async draftWorkerStop(appId: string, draftId: string): Promise<void> {
+    try {
+      await api.invoke('miniapp_draft_worker_stop', {
+        request: { appId, draftId }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_draft_worker_stop', error, { appId, draftId });
+    }
+  }
+
+  async getCustomizationMetadata(appId: string): Promise<MiniAppCustomizationMetadata | null> {
+    try {
+      return await api.invoke('miniapp_get_customization_metadata', { appId });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_get_customization_metadata', error, { appId });
     }
   }
 
