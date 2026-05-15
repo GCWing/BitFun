@@ -65,6 +65,63 @@
     }
     
   }
+
+  &__plain {
+    margin: 0;
+    padding: 0;
+    color: var(--color-text-primary, #d4d4d4);
+    background: transparent;
+    border: 0;
+    overflow: visible;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace);
+    font-size: 12px;
+    line-height: 1.6;
+
+    code {
+      display: block;
+      background: transparent;
+      font-family: inherit;
+    }
+  }
+
+  &__plain-line {
+    display: flex;
+    min-width: 0;
+    margin-left: -3px;
+    padding-left: 3px;
+    border-left: 3px solid transparent;
+    cursor: text;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    &--highlighted {
+      background-color: rgba(99, 102, 241, 0.15);
+      border-left-color: var(--color-accent-500, #6366f1);
+
+      &:hover {
+        background-color: rgba(99, 102, 241, 0.2);
+      }
+    }
+  }
+
+  &__plain-line-number {
+    flex: 0 0 2.5em;
+    padding-right: 1em;
+    color: var(--color-text-muted, #666);
+    text-align: right;
+    user-select: none;
+    opacity: 0.6;
+  }
+
+  &__plain-line-content {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
   
   
   &--empty {
@@ -126,5 +183,13 @@
     pre code > span[style]:hover {
       background-color: rgba(0, 0, 0, 0.06) !important;
     }
+  }
+
+  .code-preview__plain-line-number {
+    color: var(--color-text-muted, #94a3b8);
+  }
+
+  .code-preview__plain-line:hover {
+    background-color: rgba(0, 0, 0, 0.06);
   }
 }

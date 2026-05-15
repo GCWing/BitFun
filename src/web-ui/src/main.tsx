@@ -12,7 +12,7 @@ import 'monaco-editor/min/vs/editor/editor.main.css';
 // Font: Noto Sans SC is loaded via a <link> tag in index.html.
 // File path: public/fonts/fonts.css, served as /fonts/fonts.css.
 
-import { initializeAllTools } from "./tools";
+import { initializeAllTools } from "./tools/initializeTools";
 import { initContextMenuSystem } from "./shared/context-menu-system";
 import { loader } from '@monaco-editor/react';
 import { getMonacoPath, getMonacoWorkerPath, logMonacoResourceCheck } from './tools/editor/utils/monacoPathHelper';

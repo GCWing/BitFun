@@ -1,35 +1,84 @@
- 
-
 import React from 'react';
-import * as LucideIcons from 'lucide-react';
+import {
+  Clipboard,
+  Code,
+  Copy,
+  Download,
+  Edit,
+  ExternalLink,
+  FileInput,
+  FileOutput,
+  FilePlus,
+  FileText,
+  FileType,
+  FolderOpen,
+  FolderPlus,
+  Highlighter,
+  Lightbulb,
+  List,
+  MessageSquare,
+  MessageSquarePlus,
+  Navigation,
+  PanelRightOpen,
+  Plus,
+  RefreshCw,
+  Scissors,
+  Search,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react';
 import { ContextMenu } from './ui/ContextMenu';
 import { useContextMenuStore } from '../store/ContextMenuStore';
 import { MenuItem as SystemMenuItem } from '../types/menu.types';
 import { ContextMenuItem as UIMenuItem } from './ui/types';
 
- 
+const CONTEXT_MENU_ICONS = {
+  Clipboard,
+  Code,
+  Copy,
+  Download,
+  Edit,
+  ExternalLink,
+  FileInput,
+  FileOutput,
+  FilePlus,
+  FileText,
+  FileType,
+  FolderOpen,
+  FolderPlus,
+  Highlighter,
+  Lightbulb,
+  List,
+  MessageSquare,
+  MessageSquarePlus,
+  Navigation,
+  PanelRightOpen,
+  Plus,
+  RefreshCw,
+  Scissors,
+  Search,
+  Trash2,
+} satisfies Record<string, LucideIcon>;
+
 function getIconComponent(icon: any): string | React.ReactNode | undefined {
   if (!icon) return undefined;
-  
-  
+
   if (React.isValidElement(icon)) {
     return icon;
   }
-  
-  
+
   if (typeof icon === 'string') {
-    const IconComponent = (LucideIcons as any)[icon];
+    const IconComponent = CONTEXT_MENU_ICONS[icon as keyof typeof CONTEXT_MENU_ICONS];
     if (IconComponent) {
       return React.createElement(IconComponent, { size: 16 });
     }
-    
+
     return icon;
   }
-  
+
   return undefined;
 }
 
- 
 function convertMenuItem(item: SystemMenuItem): UIMenuItem {
   return {
     id: item.id,
@@ -43,11 +92,9 @@ function convertMenuItem(item: SystemMenuItem): UIMenuItem {
   };
 }
 
- 
 export const ContextMenuRenderer: React.FC = () => {
   const { visible, position, items, context, hideMenu } = useContextMenuStore();
 
-  
   const uiItems = items.map(convertMenuItem);
 
   if (!visible) {

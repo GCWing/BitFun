@@ -10,12 +10,12 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { visit } from 'unist-util-visit';
 import { useI18n } from '@/infrastructure/i18n';
 import { MermaidBlock } from './MermaidBlock';
 import { ReproductionStepsBlock } from './ReproductionStepsBlock';
+import { AsyncPrismSyntaxHighlighter } from './AsyncPrismSyntaxHighlighter';
+import { buildMarkdownPrismStyle } from './markdownPrismTheme';
 import { Tooltip } from '../Tooltip';
 import { globalAPI, systemAPI, workspaceAPI } from '../../../infrastructure/api';
 import { getPrismLanguageFromAlias } from '@/infrastructure/language-detection';
@@ -590,7 +590,7 @@ export const Markdown = React.memo<MarkdownProps>(({
   const { t } = useI18n('components');
   const [currentWorkspacePath, setCurrentWorkspacePath] = useState('');
   
-  const syntaxTheme = isLight ? vs : vscDarkPlus;
+  const syntaxTheme = useMemo(() => buildMarkdownPrismStyle(isLight), [isLight]);
   
   const contentStr = typeof content === 'string' ? content : String(content || '');
 
@@ -855,7 +855,7 @@ export const Markdown = React.memo<MarkdownProps>(({
             <CopyButton code={code} />
           </div>
           <div className="code-block-body">
-          <SyntaxHighlighter
+          <AsyncPrismSyntaxHighlighter
             language={normalizedLang}
             style={syntaxTheme}
             showLineNumbers={true}
@@ -879,7 +879,7 @@ export const Markdown = React.memo<MarkdownProps>(({
             }}
           >
             {code}
-          </SyntaxHighlighter>
+          </AsyncPrismSyntaxHighlighter>
           </div>
         </div>
       );
