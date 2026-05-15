@@ -851,16 +851,43 @@ mod tests {
     use bitfun_product_domains::miniapp::customization::{
         MiniAppCustomizationMetadata, MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind,
     };
+    use std::fs;
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
+
+    struct TestTempDir {
+        path: PathBuf,
+    }
+
+    impl TestTempDir {
+        fn new(prefix: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "{}-{}",
+                prefix,
+                uuid::Uuid::new_v4()
+            ));
+            fs::create_dir_all(&path).expect("test root should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestTempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 
     #[tokio::test]
     async fn storage_port_adapter_preserves_existing_file_lifecycle() {
-        let root = std::env::temp_dir().join(format!(
-            "bitfun-miniapp-storage-port-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let root = TestTempDir::new("bitfun-miniapp-storage-port");
         let path_manager =
-            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(
+                root.path().to_path_buf(),
+            ));
         let storage = MiniAppStorage::new(path_manager);
         let port: &dyn MiniAppStoragePort = &storage;
         let app = sample_app("demo_app");

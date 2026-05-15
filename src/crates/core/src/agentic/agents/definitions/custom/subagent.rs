@@ -199,17 +199,35 @@ impl CustomSubagent {
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::PathBuf;
     use uuid::Uuid;
 
-    fn temp_subagent_path(name: &str) -> String {
-        let dir = std::env::temp_dir().join(format!("bitfun-subagent-test-{}", Uuid::new_v4()));
-        fs::create_dir_all(&dir).expect("temp subagent dir should be created");
-        dir.join(name).to_string_lossy().to_string()
+    struct TestTempDir {
+        path: PathBuf,
+    }
+
+    impl TestTempDir {
+        fn new(prefix: &str) -> Self {
+            let path = std::env::temp_dir().join(format!("{prefix}-{}", Uuid::new_v4()));
+            fs::create_dir_all(&path).expect("temp dir should be created");
+            Self { path }
+        }
+
+        fn join(&self, name: &str) -> String {
+            self.path.join(name).to_string_lossy().to_string()
+        }
+    }
+
+    impl Drop for TestTempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
     }
 
     #[test]
     fn review_metadata_round_trips_through_front_matter() {
-        let path = temp_subagent_path("review-agent.md");
+        let dir = TestTempDir::new("bitfun-subagent-test");
+        let path = dir.join("review-agent.md");
         let mut subagent = CustomSubagent::new(
             "ReviewExtra".to_string(),
             "Additional code reviewer".to_string(),

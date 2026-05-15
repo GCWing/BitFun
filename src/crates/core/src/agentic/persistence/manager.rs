@@ -2571,6 +2571,12 @@ mod tests {
         fn path(&self) -> &Path {
             &self.path
         }
+
+        fn path_manager(&self) -> Arc<PathManager> {
+            Arc::new(PathManager::with_user_root_for_tests(
+                self.path.join("user-root"),
+            ))
+        }
     }
 
     impl Drop for TestWorkspace {
@@ -2621,8 +2627,8 @@ mod tests {
     #[tokio::test]
     async fn export_session_transcript_handles_first_selected_turn_without_panicking() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
         let session_id = Uuid::new_v4().to_string();
 
         let metadata = SessionMetadata::new(
@@ -2948,8 +2954,8 @@ mod tests {
     #[tokio::test]
     async fn subagent_session_kind_is_hidden_from_visible_session_index() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
 
         let mut metadata = SessionMetadata::new(
             Uuid::new_v4().to_string(),
@@ -2981,8 +2987,8 @@ mod tests {
     #[tokio::test]
     async fn legacy_leaked_subagent_is_hidden_from_visible_session_index() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
 
         let mut metadata = SessionMetadata::new(
             Uuid::new_v4().to_string(),
@@ -3014,8 +3020,8 @@ mod tests {
     #[tokio::test]
     async fn listing_sessions_does_not_create_sessions_dir_for_uninitialized_runtime() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
 
         let visible = manager
             .list_session_metadata(workspace.path())
@@ -3037,8 +3043,8 @@ mod tests {
     #[tokio::test]
     async fn saving_session_metadata_ensures_runtime_layout_before_writing() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
 
         let metadata = SessionMetadata::new(
             Uuid::new_v4().to_string(),

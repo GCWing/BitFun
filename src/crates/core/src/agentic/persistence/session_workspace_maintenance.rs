@@ -137,6 +137,12 @@ mod tests {
         fn path(&self) -> &Path {
             &self.path
         }
+
+        fn path_manager(&self) -> Arc<PathManager> {
+            Arc::new(PathManager::with_user_root_for_tests(
+                self.path.join("user-root"),
+            ))
+        }
     }
 
     impl Drop for TestWorkspace {
@@ -149,8 +155,7 @@ mod tests {
     async fn workspace_maintenance_removes_hidden_sessions_once() {
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
         );
         let maintenance = SessionWorkspaceMaintenanceService::new(persistence_manager.clone());
 
@@ -219,7 +224,7 @@ mod tests {
     #[tokio::test]
     async fn legacy_hidden_sessions_are_migrated_then_cleaned_after_runtime_ensure() {
         let workspace = TestWorkspace::new();
-        let path_manager = Arc::new(PathManager::new().expect("path manager"));
+        let path_manager = workspace.path_manager();
         let runtime_service = WorkspaceRuntimeService::new(path_manager.clone());
         let persistence_manager =
             Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));

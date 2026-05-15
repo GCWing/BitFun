@@ -778,6 +778,7 @@ mod tests {
     use serde_json::json;
     use std::collections::HashMap;
     use std::fs;
+    use std::path::PathBuf;
     use uuid::Uuid;
 
     fn empty_context() -> ToolUseContext {
@@ -796,13 +797,26 @@ mod tests {
         }
     }
 
-    fn temp_workspace_path() -> String {
-        let path = std::env::temp_dir().join(format!(
-            "bitfun-session-control-tool-test-{}",
-            Uuid::new_v4()
-        ));
-        fs::create_dir_all(&path).expect("temp workspace should be created");
-        path.to_string_lossy().to_string()
+    struct TestTempDir {
+        path: PathBuf,
+    }
+
+    impl TestTempDir {
+        fn new(prefix: &str) -> Self {
+            let path = std::env::temp_dir().join(format!("{prefix}-{}", Uuid::new_v4()));
+            fs::create_dir_all(&path).expect("temp workspace should be created");
+            Self { path }
+        }
+
+        fn as_string(&self) -> String {
+            self.path.to_string_lossy().to_string()
+        }
+    }
+
+    impl Drop for TestTempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
     }
 
     #[tokio::test]
@@ -885,13 +899,13 @@ mod tests {
     #[tokio::test]
     async fn validate_list_rejects_session_id() {
         let tool = SessionControlTool::new();
-        let workspace = temp_workspace_path();
+        let workspace = TestTempDir::new("bitfun-session-control-tool-test");
 
         let validation = tool
             .validate_input(
                 &json!({
                     "action": "list",
-                    "workspace": workspace,
+                    "workspace": workspace.as_string(),
                     "session_id": "worker_1",
                 }),
                 Some(&empty_context()),

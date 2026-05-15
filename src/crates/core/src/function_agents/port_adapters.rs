@@ -169,22 +169,49 @@ fn git_last_commit_timestamp(repo_path: &Path) -> Option<i64> {
 mod tests {
     use bitfun_product_domains::function_agents::ports::FunctionAgentGitPort;
     use std::fs;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
 
     use super::CoreFunctionAgentGitAdapter;
 
+    struct TestTempDir {
+        path: PathBuf,
+    }
+
+    impl TestTempDir {
+        fn new(label: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "bitfun-function-agent-port-{}-{}",
+                label,
+                uuid::Uuid::new_v4()
+            ));
+            fs::create_dir_all(&path).unwrap();
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestTempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
     #[tokio::test]
     async fn git_adapter_builds_commit_snapshot_from_existing_core_git_services() {
-        let repo = temp_repo("commit-snapshot");
-        init_git_repo(&repo);
-        fs::write(repo.join("Cargo.toml"), "[package]\nname = \"demo\"\n").unwrap();
-        fs::create_dir_all(repo.join("src")).unwrap();
-        fs::write(repo.join("src/lib.rs"), "pub fn demo() {}\n").unwrap();
-        git(&repo, &["add", "Cargo.toml", "src/lib.rs"]);
+        let repo = TestTempDir::new("commit-snapshot");
+        init_git_repo(repo.path());
+        fs::write(repo.path().join("Cargo.toml"), "[package]\nname = \"demo\"\n").unwrap();
+        fs::create_dir_all(repo.path().join("src")).unwrap();
+        fs::write(repo.path().join("src/lib.rs"), "pub fn demo() {}\n").unwrap();
+        git(repo.path(), &["add", "Cargo.toml", "src/lib.rs"]);
 
         let adapter = CoreFunctionAgentGitAdapter::default();
         let snapshot = adapter
-            .git_commit_snapshot(repo.to_string_lossy().to_string())
+            .git_commit_snapshot(repo.path().to_string_lossy().to_string())
             .await
             .unwrap();
 
@@ -198,18 +225,18 @@ mod tests {
 
     #[tokio::test]
     async fn git_adapter_builds_startchat_snapshot_without_changing_git_semantics() {
-        let repo = temp_repo("startchat-snapshot");
-        init_git_repo(&repo);
-        fs::write(repo.join("tracked.txt"), "base\n").unwrap();
-        git(&repo, &["add", "tracked.txt"]);
-        git(&repo, &["commit", "-m", "initial"]);
-        fs::write(repo.join("tracked.txt"), "base\nchange\n").unwrap();
-        fs::write(repo.join("staged.txt"), "staged\n").unwrap();
-        git(&repo, &["add", "staged.txt"]);
+        let repo = TestTempDir::new("startchat-snapshot");
+        init_git_repo(repo.path());
+        fs::write(repo.path().join("tracked.txt"), "base\n").unwrap();
+        git(repo.path(), &["add", "tracked.txt"]);
+        git(repo.path(), &["commit", "-m", "initial"]);
+        fs::write(repo.path().join("tracked.txt"), "base\nchange\n").unwrap();
+        fs::write(repo.path().join("staged.txt"), "staged\n").unwrap();
+        git(repo.path(), &["add", "staged.txt"]);
 
         let adapter = CoreFunctionAgentGitAdapter::default();
         let snapshot = adapter
-            .startchat_git_snapshot(repo.to_string_lossy().to_string())
+            .startchat_git_snapshot(repo.path().to_string_lossy().to_string())
             .await
             .unwrap();
 
@@ -225,24 +252,14 @@ mod tests {
 
     #[tokio::test]
     async fn git_adapter_rejects_startchat_snapshot_when_git_command_fails() {
-        let repo = temp_repo("not-a-git-repo");
+        let repo = TestTempDir::new("not-a-git-repo");
 
         let adapter = CoreFunctionAgentGitAdapter::default();
         let result = adapter
-            .startchat_git_snapshot(repo.to_string_lossy().to_string())
+            .startchat_git_snapshot(repo.path().to_string_lossy().to_string())
             .await;
 
         assert!(result.is_err());
-    }
-
-    fn temp_repo(label: &str) -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "bitfun-function-agent-port-{}-{}",
-            label,
-            uuid::Uuid::new_v4()
-        ));
-        fs::create_dir_all(&path).unwrap();
-        path
     }
 
     fn init_git_repo(repo: &std::path::Path) {

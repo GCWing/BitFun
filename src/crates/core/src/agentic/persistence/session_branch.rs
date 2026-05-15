@@ -246,6 +246,12 @@ mod tests {
         fn path(&self) -> &Path {
             &self.path
         }
+
+        fn path_manager(&self) -> Arc<PathManager> {
+            Arc::new(PathManager::with_user_root_for_tests(
+                self.path.join("user-root"),
+            ))
+        }
     }
 
     impl Drop for TestWorkspace {
@@ -278,8 +284,8 @@ mod tests {
     #[tokio::test]
     async fn branch_session_copies_turns_snapshots_and_lineage_metadata() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
 
         let mut source_session = Session::new(
             "Source Title".to_string(),

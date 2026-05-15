@@ -2826,6 +2826,12 @@ mod tests {
         fn path(&self) -> &Path {
             &self.path
         }
+
+        fn path_manager(&self) -> Arc<PathManager> {
+            Arc::new(PathManager::with_user_root_for_tests(
+                self.path.join("user-root"),
+            ))
+        }
     }
 
     impl Drop for TestWorkspace {
@@ -2984,8 +2990,7 @@ mod tests {
     async fn restore_session_resets_processing_state_without_marking_unread_completion() {
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
         );
         let session_id = Uuid::new_v4().to_string();
         let mut session = Session::new_with_id(
@@ -3218,8 +3223,7 @@ mod tests {
     async fn rollback_context_deletes_persisted_turns_from_target() {
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
         );
         let manager = test_manager(persistence_manager.clone());
         let session = manager

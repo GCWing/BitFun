@@ -586,6 +586,7 @@ mod tests {
     use serde_json::json;
     use std::collections::HashMap;
     use std::fs;
+    use std::path::PathBuf;
     use uuid::Uuid;
 
     fn empty_context() -> ToolUseContext {
@@ -611,24 +612,37 @@ mod tests {
         }
     }
 
-    fn temp_workspace_path() -> String {
-        let path = std::env::temp_dir().join(format!(
-            "bitfun-session-message-tool-test-{}",
-            Uuid::new_v4()
-        ));
-        fs::create_dir_all(&path).expect("temp workspace should be created");
-        path.to_string_lossy().to_string()
+    struct TestTempDir {
+        path: PathBuf,
+    }
+
+    impl TestTempDir {
+        fn new(prefix: &str) -> Self {
+            let path = std::env::temp_dir().join(format!("{prefix}-{}", Uuid::new_v4()));
+            fs::create_dir_all(&path).expect("temp workspace should be created");
+            Self { path }
+        }
+
+        fn as_string(&self) -> String {
+            self.path.to_string_lossy().to_string()
+        }
+    }
+
+    impl Drop for TestTempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
     }
 
     #[tokio::test]
     async fn validate_existing_session_rejects_agent_type_override() {
         let tool = SessionMessageTool::new();
-        let workspace = temp_workspace_path();
+        let workspace = TestTempDir::new("bitfun-session-message-tool-test");
 
         let validation = tool
             .validate_input(
                 &json!({
-                    "workspace": workspace,
+                    "workspace": workspace.as_string(),
                     "session_id": "worker_1",
                     "message": "hello",
                     "agent_type": "Plan",
@@ -647,12 +661,12 @@ mod tests {
     #[tokio::test]
     async fn validate_new_session_requires_session_name() {
         let tool = SessionMessageTool::new();
-        let workspace = temp_workspace_path();
+        let workspace = TestTempDir::new("bitfun-session-message-tool-test");
 
         let validation = tool
             .validate_input(
                 &json!({
-                    "workspace": workspace,
+                    "workspace": workspace.as_string(),
                     "message": "hello",
                     "agent_type": "agentic",
                 }),
@@ -670,12 +684,12 @@ mod tests {
     #[tokio::test]
     async fn validate_new_session_requires_agent_type() {
         let tool = SessionMessageTool::new();
-        let workspace = temp_workspace_path();
+        let workspace = TestTempDir::new("bitfun-session-message-tool-test");
 
         let validation = tool
             .validate_input(
                 &json!({
-                    "workspace": workspace,
+                    "workspace": workspace.as_string(),
                     "message": "hello",
                     "session_name": "Worker Session",
                 }),
@@ -693,12 +707,12 @@ mod tests {
     #[tokio::test]
     async fn validate_new_session_accepts_create_and_send_shape() {
         let tool = SessionMessageTool::new();
-        let workspace = temp_workspace_path();
+        let workspace = TestTempDir::new("bitfun-session-message-tool-test");
 
         let validation = tool
             .validate_input(
                 &json!({
-                    "workspace": workspace,
+                    "workspace": workspace.as_string(),
                     "message": "hello",
                     "session_name": "Worker Session",
                     "agent_type": "agentic",
