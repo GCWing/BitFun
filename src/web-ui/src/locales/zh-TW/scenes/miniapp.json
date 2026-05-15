@@ -34,5 +34,43 @@
     "loadFailed": "加載失敗：{{error}}",
     "retry": "重試",
     "reload": "重新加載"
+  },
+  "customize": {
+    "trigger": "自訂小應用",
+    "title": "自訂小應用",
+    "close": "關閉自訂",
+    "riskTitle": "變更會先預覽，確認後才替換應用",
+    "riskBody": "點擊套用前，目前小應用不會變更。替換前會保存目前版本；新增權限需要另行確認。",
+    "requestLabel": "想修改什麼？",
+    "requestPlaceholder": "例如：把介面顏色調淡一點，或者把戰績記錄到本機",
+    "start": "開始修改",
+    "retryAssistant": "重新傳送給助手",
+    "refreshPreview": "重新整理預覽",
+    "openPreview": "開啟預覽",
+    "hidePreview": "關閉預覽",
+    "previewTitle": "預覽",
+    "previewHint": "助手改完後重新整理查看",
+    "assistantOpened": "臨時編輯助手正在此處執行",
+    "sessionName": "自訂小應用：{{name}}",
+    "workspaceRequired": "需要先開啟一個工作區，才能啟動自訂助手。",
+    "launchFailed": "預覽副本已準備好，但編輯助手啟動失敗：{{error}}",
+    "refreshFailed": "預覽重新整理失敗：{{error}}",
+    "permissionCheckFailed": "權限檢查失敗：{{error}}",
+    "applyFailed": "套用變更失敗：{{error}}",
+    "discardFailed": "取消變更失敗：{{error}}",
+    "discard": "取消變更",
+    "apply": "套用變更",
+    "applying": "正在套用變更...",
+    "applySaved": "已套用。舊版本已保存，可透過小應用版本回復。",
+    "permissionDialog": {
+      "title": "新權限需要確認",
+      "body": "這次變更新增或擴大了權限。套用到目前小應用前，請先確認這些變更。",
+      "added": "新增",
+      "expanded": "擴大",
+      "removed": "移除",
+      "cancel": "返回預覽",
+      "confirm": "套用並授予權限"
+    },
+    "chatLoading": "正在開啟編輯助手..."
   }
 }

@@ -725,6 +725,10 @@ $_section-header-height: 24px;
       border: 1px solid var(--border-subtle);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     }
+
+    &.has-customizing-apps {
+      color: var(--color-text-primary);
+    }
   }
 
   &__miniapp-entry-main {
@@ -739,6 +743,17 @@ $_section-header-height: 24px;
     min-width: 0;
     display: inline;
     position: relative;
+  }
+
+  &__miniapp-customize-dot {
+    position: absolute;
+    top: -3px;
+    right: -47px;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #60a5fa;
+    box-shadow: 0 0 0 2px var(--color-bg-primary), 0 0 8px rgba(96, 165, 250, 0.75);
   }
 
   &__miniapp-badge {
@@ -769,6 +784,7 @@ $_section-header-height: 24px;
   }
 
   &__miniapp-bubble {
+    position: relative;
     width: 26px;
     height: 26px;
     border-radius: 999px;
@@ -806,6 +822,28 @@ $_section-header-height: 24px;
       opacity: 1;
       box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22),
                   0 0 0 3px color-mix(in srgb, var(--color-primary) 28%, transparent);
+    }
+
+    &.is-customizing {
+      box-shadow: 0 0 0 2px color-mix(in srgb, #60a5fa 42%, transparent),
+                  0 8px 18px rgba(0, 0, 0, 0.2);
+    }
+
+    &.is-active.is-customizing {
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22),
+                  0 0 0 3px color-mix(in srgb, var(--color-primary) 28%, transparent),
+                  0 0 0 5px color-mix(in srgb, #60a5fa 28%, transparent);
+    }
+
+    &-customize-dot {
+      position: absolute;
+      right: 2px;
+      bottom: 2px;
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #60a5fa;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 0 7px rgba(96, 165, 250, 0.72);
     }
 
     &--more {

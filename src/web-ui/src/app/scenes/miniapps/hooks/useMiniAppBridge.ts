@@ -13,6 +13,7 @@ import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import { buildMiniAppThemeVars } from '../utils/buildMiniAppThemeVars';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useI18n } from '@/infrastructure/i18n';
+import type { MiniAppRunScope } from '../customization/miniAppCustomizationTypes';
 
 interface JSONRPC {
   jsonrpc?: string;
@@ -31,6 +32,7 @@ interface AiStreamPayload {
 export function useMiniAppBridge(
   iframeRef: RefObject<HTMLIFrameElement>,
   app: MiniApp,
+  runScope: MiniAppRunScope,
 ) {
   const { workspacePath } = useCurrentWorkspace();
   const { theme: currentTheme } = useTheme();
@@ -42,7 +44,8 @@ export function useMiniAppBridge(
   const localeRef = useRef(currentLanguage);
   localeRef.current = currentLanguage;
 
-  const appIdRef = useRef(app.id);
+  const runScopeRef = useRef<MiniAppRunScope>(runScope);
+  runScopeRef.current = runScope;
   // Whether this app opts out of the JS Worker. When true, framework primitive
   // calls (fs.*/shell.*/os.*/net.*) are routed to the host directly via
   // `miniapp_host_call`, so the app does not require Bun/Node at runtime.
@@ -51,7 +54,6 @@ export function useMiniAppBridge(
   // (no worker), and any non-namespaced custom call will fail with a clear error.
   const nodeDisabledRef = useRef(app.permissions?.node?.enabled === false);
   useLayoutEffect(() => {
-    appIdRef.current = app.id;
     nodeDisabledRef.current = app.permissions?.node?.enabled === false;
   }, [app.id, app.permissions?.node?.enabled]);
 
@@ -62,7 +64,8 @@ export function useMiniAppBridge(
       if (!msg?.method) return;
 
       const { id, method, params = {} } = msg;
-      const appId = appIdRef.current;
+      const scope = runScopeRef.current;
+      const appId = scope.appId;
       const reply = (result: unknown) =>
         iframeRef.current?.contentWindow?.postMessage({ jsonrpc: '2.0', id, result }, '*');
       const replyError = (message: string) =>
@@ -109,12 +112,20 @@ export function useMiniAppBridge(
           // (including overrides of fs/shell) continue to work.
           if (nodeDisabledRef.current) {
             if (isHostPrimitive) {
-              const result = await miniAppAPI.hostCall(
-                appId,
-                innerMethod,
-                innerParams,
-                workspacePathRef.current || undefined,
-              );
+              const result = scope.kind === 'draft'
+                ? await miniAppAPI.draftHostCall(
+                  appId,
+                  scope.draftId,
+                  innerMethod,
+                  innerParams,
+                  workspacePathRef.current || undefined,
+                )
+                : await miniAppAPI.hostCall(
+                  appId,
+                  innerMethod,
+                  innerParams,
+                  workspacePathRef.current || undefined,
+                );
               reply(result);
               return;
             }
@@ -122,16 +133,22 @@ export function useMiniAppBridge(
               const subName = innerMethod.split('.')[1];
               const key = String(innerParams.key ?? '');
               if (subName === 'get') {
-                const value = await api.invoke('get_miniapp_storage', { appId, key });
+                const value = scope.kind === 'draft'
+                  ? await miniAppAPI.getDraftStorage(appId, scope.draftId, key)
+                  : await api.invoke('get_miniapp_storage', { appId, key });
                 reply(value ?? null);
                 return;
               }
               if (subName === 'set') {
-                await api.invoke('set_miniapp_storage', {
-                  appId,
-                  key,
-                  value: innerParams.value ?? null,
-                });
+                if (scope.kind === 'draft') {
+                  await miniAppAPI.setDraftStorage(appId, scope.draftId, key, innerParams.value ?? null);
+                } else {
+                  await api.invoke('set_miniapp_storage', {
+                    appId,
+                    key,
+                    value: innerParams.value ?? null,
+                  });
+                }
                 reply(null);
                 return;
               }
@@ -147,12 +164,20 @@ export function useMiniAppBridge(
             return;
           }
 
-          const result = await miniAppAPI.workerCall(
-            appId,
-            innerMethod,
-            innerParams,
-            workspacePathRef.current || undefined,
-          );
+          const result = scope.kind === 'draft'
+            ? await miniAppAPI.draftWorkerCall(
+              appId,
+              scope.draftId,
+              innerMethod,
+              innerParams,
+              workspacePathRef.current || undefined,
+            )
+            : await miniAppAPI.workerCall(
+              appId,
+              innerMethod,
+              innerParams,
+              workspacePathRef.current || undefined,
+            );
           reply(result);
           return;
         }

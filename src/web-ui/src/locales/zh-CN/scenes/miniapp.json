@@ -34,5 +34,43 @@
     "loadFailed": "加载失败：{{error}}",
     "retry": "重试",
     "reload": "重新加载"
+  },
+  "customize": {
+    "trigger": "定制小应用",
+    "title": "定制小应用",
+    "close": "关闭定制",
+    "riskTitle": "变更会先预览，确认后才替换应用",
+    "riskBody": "点击应用前，当前小应用不会变化。替换前会保存当前版本；新增权限需要单独确认。",
+    "requestLabel": "想修改什么？",
+    "requestPlaceholder": "例如：把界面颜色调浅一点，或者把战绩记录到本地",
+    "start": "开始修改",
+    "retryAssistant": "重新发送给助手",
+    "refreshPreview": "刷新预览",
+    "openPreview": "打开预览",
+    "hidePreview": "关闭预览",
+    "previewTitle": "预览",
+    "previewHint": "助手改完后刷新查看",
+    "assistantOpened": "临时编辑助手正在此处运行",
+    "sessionName": "定制小应用：{{name}}",
+    "workspaceRequired": "需要先打开一个工作区，才能启动定制助手。",
+    "launchFailed": "预览副本已准备好，但编辑助手启动失败：{{error}}",
+    "refreshFailed": "预览刷新失败：{{error}}",
+    "permissionCheckFailed": "权限检查失败：{{error}}",
+    "applyFailed": "应用变更失败：{{error}}",
+    "discardFailed": "取消变更失败：{{error}}",
+    "discard": "取消变更",
+    "apply": "应用变更",
+    "applying": "正在应用变更...",
+    "applySaved": "已应用。旧版本已保存，可通过小应用版本回滚。",
+    "permissionDialog": {
+      "title": "新权限需要确认",
+      "body": "这次变更新增或扩大了权限。应用到当前小应用前，请先确认这些变更。",
+      "added": "新增",
+      "expanded": "扩大",
+      "removed": "移除",
+      "cancel": "返回预览",
+      "confirm": "应用并授予权限"
+    },
+    "chatLoading": "正在打开编辑助手..."
   }
 }

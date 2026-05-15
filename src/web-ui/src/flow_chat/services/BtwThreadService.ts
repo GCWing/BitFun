@@ -78,7 +78,7 @@ function requireSession(sessionId: string): Session {
 }
 
 export function isTransientBtwSession(session: Session | undefined): boolean {
-  return session?.isTransient === true && session.sessionKind === 'btw';
+  return session?.isTransient === true && session.sessionKind === 'btw' && session.agentBackedTransient !== true;
 }
 
 export async function createBtwChildSession(params: {
@@ -93,6 +93,7 @@ export async function createBtwChildSession(params: {
   enableContextCompression?: boolean;
   requestId?: string;
   addMarker?: boolean;
+  isTransient?: boolean;
   sessionKind?: Extract<SessionKind, 'btw' | 'review' | 'deep_review'>;
   deepReviewRunManifest?: ReviewTeamRunManifest;
 }): Promise<{
@@ -152,7 +153,8 @@ export async function createBtwChildSession(params: {
         parentTurnIndex,
       },
       deepReviewRunManifest: params.deepReviewRunManifest,
-      isTransient: false,
+      isTransient: params.isTransient ?? false,
+      agentBackedTransient: params.isTransient ?? false,
     },
     remoteConnectionId,
     remoteSshHost
@@ -180,21 +182,23 @@ export async function createBtwChildSession(params: {
     });
   }
 
-  const meta = await loadSessionMetadataWithRetry(
-    childSessionId,
-    workspacePath,
-    undefined,
-    remoteConnectionId
-  );
-  if (meta) {
-    const childSession = flowChatStore.getState().sessions.get(childSessionId);
+  if (!params.isTransient) {
+    const meta = await loadSessionMetadataWithRetry(
+      childSessionId,
+      workspacePath,
+      undefined,
+      remoteConnectionId
+    );
+    if (meta) {
+      const childSession = flowChatStore.getState().sessions.get(childSessionId);
 
-    if (childSession) {
-      await sessionAPI.saveSessionMetadata(
-        buildSessionMetadata(childSession, meta),
-        workspacePath,
-        remoteConnectionId
-      );
+      if (childSession) {
+        await sessionAPI.saveSessionMetadata(
+          buildSessionMetadata(childSession, meta),
+          workspacePath,
+          remoteConnectionId
+        );
+      }
     }
   }
 
@@ -232,6 +236,7 @@ export function createTransientBtwSession(params: {
         parentSessionId: params.parentSessionId,
       },
       isTransient: true,
+      agentBackedTransient: false,
     },
     parentSession.remoteConnectionId,
     parentSession.remoteSshHost

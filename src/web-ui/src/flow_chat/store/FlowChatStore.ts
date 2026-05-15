@@ -287,6 +287,7 @@ export class FlowChatStore {
       sessionKind?: SessionKind;
       btwOrigin?: Session['btwOrigin'];
       isTransient?: boolean;
+      agentBackedTransient?: boolean;
       deepReviewRunManifest?: Session['deepReviewRunManifest'];
     },
     remoteConnectionId?: string,
@@ -328,6 +329,7 @@ export class FlowChatStore {
         btwOrigin: relationship.btwOrigin,
         deepReviewRunManifest: meta?.deepReviewRunManifest,
         isTransient: meta?.isTransient ?? false,
+        agentBackedTransient: meta?.agentBackedTransient ?? false,
       };
 
       const newSessions = new Map(prev.sessions);
