@@ -77,7 +77,7 @@
     "items": {
       "sessions": "Sessions",
       "project": "Directory",
-      "persona": "Nursery",
+      "persona": "Assistant",
       "agents": "Agents",
       "skills": "Skills",
       "tools": "Tools",
@@ -87,7 +87,7 @@
       "insights": "Insights"
     },
     "tooltips": {
-      "persona": "Nursery — create and manage all assistant instances",
+      "persona": "Assistant — create and manage all assistant instances",
       "agents": "Which agents it can call",
       "skills": "What it knows — specialized knowledge files",
       "tools": "What it can use — built-in tools & MCP services",
@@ -161,7 +161,7 @@
       "newCodeSession": "New Code session",
       "newCoworkSession": "New Cowork session",
       "newCodeSessionShort": "Code Session",
-      "newCoworkSessionShort": "Office Session",
+      "newCoworkSessionShort": "Cowork Session",
       "newExternalAgentSessionShort": "{{agentName}} Session",
       "newClawSession": "New Claw session",
       "modeCode": "Code",
