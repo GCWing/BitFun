@@ -22,6 +22,7 @@ async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 bitfun-services-core = { path = "../services-core", optional = true }
 chrono = { workspace = true, optional = true }
+dunce = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
@@ -62,7 +63,7 @@ mcp = [
     "sse-stream",
 ]
 remote-connect = ["bitfun-runtime-ports"]
-remote-ssh = ["sha2", "tokio-util"]
+remote-ssh = ["dunce", "sha2", "tokio-util"]
 product-full = [
     "announcement",
     "file-watch",

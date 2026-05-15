@@ -222,6 +222,7 @@ const dependencyProfileRules = [
       'bitfun-runtime-ports',
       'bitfun-services-core',
       'chrono',
+      'dunce',
       'futures',
       'git2',
       'notify',
@@ -776,6 +777,18 @@ const forbiddenContentRules = [
         regex: /\bregistration_matches_path\b/,
         message: 'core remote SSH workspace runtime must not own path-to-registration matching; use the integrations registry',
       },
+      {
+        regex: /\bdunce::canonicalize\b/,
+        message: 'core remote SSH workspace runtime must not own local root canonicalization; use the integrations path helper',
+      },
+      {
+        regex: /\bfn path_buf_to_stable_local_root_string\b/,
+        message: 'core remote SSH workspace runtime must not own local root string normalization; use the integrations path helper',
+      },
+      {
+        regex: /join\("_unresolved"\)/,
+        message: 'core remote SSH workspace runtime must not own unresolved session path layout; use the integrations path helper',
+      },
     ],
   },
   {
@@ -1279,6 +1292,60 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/services-integrations/src/remote_ssh/paths.rs',
+    reason:
+      'services-integrations remote-ssh owns workspace path/session identity helpers that do not require concrete SSH runtime handles',
+    patterns: [
+      {
+        regex: /\bpub fn remote_workspace_runtime_root\b/,
+        message: 'missing remote workspace runtime root helper',
+      },
+      {
+        regex: /\bpub fn remote_workspace_session_mirror_dir\b/,
+        message: 'missing remote workspace session mirror helper',
+      },
+      {
+        regex: /\bpub fn canonicalize_local_workspace_root\b/,
+        message: 'missing local workspace canonicalization helper',
+      },
+      {
+        regex: /\bpub fn normalize_local_workspace_root_for_stable_id\b/,
+        message: 'missing local workspace stable-root helper',
+      },
+      {
+        regex: /\bpub fn local_workspace_roots_equal\b/,
+        message: 'missing local workspace equality helper',
+      },
+      {
+        regex: /\bpub fn unresolved_remote_session_storage_dir\b/,
+        message: 'missing unresolved remote session storage helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/miniapp/storage.rs',
+    reason:
+      'product-domains owns MiniApp storage shape contracts while core/adapters keep filesystem IO',
+    patterns: [
+      {
+        regex: /\bpub struct MiniAppStorageLayout\b/,
+        message: 'missing MiniApp storage layout contract',
+      },
+      {
+        regex: /\bpub const META_JSON\b/,
+        message: 'missing MiniApp metadata filename contract',
+      },
+      {
+        regex: /\bpub fn source_file_path\b/,
+        message: 'missing MiniApp source file layout helper',
+      },
+      {
+        regex: /\bpub fn versions_dir\b/,
+        message: 'missing MiniApp versions directory layout helper',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/miniapp/js_worker_pool.rs',
     reason:
       'core must continue owning MiniApp worker runtime adapter until process/runtime migration is reviewed',
@@ -1670,7 +1737,7 @@ function runManifestParserSelfTest() {
     }
   }
 
-  const requiredOwnerContracts = [
+  const requiredContentContracts = [
     {
       path: 'src/crates/core/src/agentic/tools/registry.rs',
       contracts: ['register_all_tools', 'GetToolSpecTool', 'get_collapsed_tool_names'],
@@ -1739,16 +1806,31 @@ function runManifestParserSelfTest() {
       path: 'src/crates/core/src/function_agents/port_adapters.rs',
       contracts: ['CoreFunctionAgentGitAdapter', 'FunctionAgentGitPort'],
     },
+    {
+      path: 'src/crates/services-integrations/src/remote_ssh/paths.rs',
+      contracts: [
+        'remote_workspace_runtime_root',
+        'remote_workspace_session_mirror_dir',
+        'canonicalize_local_workspace_root',
+        'normalize_local_workspace_root_for_stable_id',
+        'local_workspace_roots_equal',
+        'unresolved_remote_session_storage_dir',
+      ],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/storage.rs',
+      contracts: ['MiniAppStorageLayout', 'META_JSON', 'source_file_path', 'versions_dir'],
+    },
   ];
-  for (const { path, contracts } of requiredOwnerContracts) {
+  for (const { path, contracts } of requiredContentContracts) {
     const rule = requiredContentRules.find((rule) => rule.path === path);
     if (!rule) {
-      throw new Error(`missing core owner anchor rule for ${path}`);
+      throw new Error(`missing owner content anchor rule for ${path}`);
     }
     const ruleText = rule.patterns.map((pattern) => pattern.regex.source).join('\n');
     for (const contract of contracts) {
       if (!ruleText.includes(contract)) {
-        throw new Error(`core owner anchor rule for ${path} must require: ${contract}`);
+        throw new Error(`owner content anchor rule for ${path} must require: ${contract}`);
       }
     }
   }
@@ -1774,6 +1856,9 @@ function runManifestParserSelfTest() {
     'RemoteWorkspaceEntry',
     'RemoteWorkspaceState',
     'registration_matches_path',
+    'dunce::canonicalize',
+    'path_buf_to_stable_local_root_string',
+    'join\\("_unresolved"\\)',
   ];
   const ruleText = remoteWorkspaceRule.patterns.map((pattern) => pattern.regex.source).join('\n');
   for (const helper of remoteWorkspaceHelpers) {
@@ -2053,7 +2138,7 @@ function runManifestParserSelfTest() {
   const servicesIntegrationsProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
-  for (const dep of ['futures', 'reqwest', 'sse-stream']) {
+  for (const dep of ['dunce', 'futures', 'reqwest', 'sse-stream']) {
     if (!servicesIntegrationsProfile?.forbiddenNonOptionalDeps.includes(dep)) {
       throw new Error(`services-integrations default profile must forbid non-optional ${dep}`);
     }

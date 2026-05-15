@@ -143,6 +143,15 @@ and milestone verification gates.
 - ACP timeout handling and Web operation-diff fallback are product-surface
   behavior; share facts through contracts, not UI/protocol implementation.
 
+### Services/product owner closure
+
+- Remote-SSH path, session identity, mirror path, and unresolved-session layout
+  helpers belong in `bitfun-services-integrations`; core may inject
+  `PathManager` and hold SSH manager / remote FS / terminal assembly.
+- MiniApp storage shape belongs in `bitfun-product-domains`; core storage
+  keeps filesystem IO, worker runtime, `PathManager`, and port adapters until a
+  reviewed runtime migration exists.
+
 ### DeepReview guardrails
 
 Deep Review / Code Review Team work spans the core runtime and web UI. Keep

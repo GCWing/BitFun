@@ -1,7 +1,7 @@
 //! Remote SSH workspace path and identity helpers.
 
 use sha2::{Digest, Sha256};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// SSH host label for local disk workspaces (`Normal` / `Assistant`).
 pub const LOCAL_WORKSPACE_SSH_HOST: &str = "localhost";
@@ -85,6 +85,60 @@ pub fn remote_root_to_mirror_subpath(remote_root_norm: &str) -> PathBuf {
     pb
 }
 
+/// Local runtime root for a registered remote workspace.
+pub fn remote_workspace_runtime_root(
+    remote_mirror_root: impl AsRef<Path>,
+    ssh_host: &str,
+    remote_root_norm: &str,
+) -> PathBuf {
+    remote_mirror_root
+        .as_ref()
+        .join(sanitize_ssh_hostname_for_mirror(ssh_host))
+        .join(remote_root_to_mirror_subpath(remote_root_norm))
+}
+
+/// Local persisted-session mirror directory for a registered remote workspace.
+pub fn remote_workspace_session_mirror_dir(
+    remote_mirror_root: impl AsRef<Path>,
+    ssh_host: &str,
+    remote_root_norm: &str,
+) -> PathBuf {
+    remote_workspace_runtime_root(remote_mirror_root, ssh_host, remote_root_norm).join("sessions")
+}
+
+/// Canonical local root [`PathBuf`] plus stable slash-normalized string form.
+pub fn canonicalize_local_workspace_root(path: &Path) -> Result<(PathBuf, String), String> {
+    let canonical = dunce::canonicalize(path).map_err(|err| {
+        format!(
+            "Failed to canonicalize local workspace path '{}': {}",
+            path.display(),
+            err
+        )
+    })?;
+    let stable = path_buf_to_stable_local_root_string(&canonical);
+    Ok((canonical, stable))
+}
+
+/// Canonical absolute local path as a stable UTF-8 string.
+pub fn normalize_local_workspace_root_for_stable_id(path: &Path) -> Result<String, String> {
+    Ok(canonicalize_local_workspace_root(path)?.1)
+}
+
+fn path_buf_to_stable_local_root_string(canonical: &Path) -> String {
+    canonical.to_string_lossy().replace('\\', "/")
+}
+
+/// Whether two local paths refer to the same workspace root.
+pub fn local_workspace_roots_equal(a: &Path, b: &Path) -> bool {
+    match (
+        normalize_local_workspace_root_for_stable_id(a),
+        normalize_local_workspace_root_for_stable_id(b),
+    ) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => a == b,
+    }
+}
+
 /// Human-readable logical key: `{host}:{normalized_absolute_root}`.
 pub fn workspace_logical_key(ssh_host: &str, root_norm: &str) -> String {
     format!("{}:{}", ssh_host.trim(), root_norm)
@@ -132,4 +186,18 @@ pub fn unresolved_remote_session_storage_key(
     hasher.update(b"\0");
     hasher.update(workspace_path_norm.as_bytes());
     hex_encode(&hasher.finalize()[..12])
+}
+
+/// Dedicated session tree used while a remote host cannot yet be resolved.
+pub fn unresolved_remote_session_storage_dir(
+    remote_mirror_root: impl AsRef<Path>,
+    connection_id: &str,
+    workspace_path_norm: &str,
+) -> PathBuf {
+    let key = unresolved_remote_session_storage_key(connection_id, workspace_path_norm);
+    remote_mirror_root
+        .as_ref()
+        .join("_unresolved")
+        .join(key)
+        .join("sessions")
 }

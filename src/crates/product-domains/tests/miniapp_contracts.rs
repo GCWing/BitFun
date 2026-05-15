@@ -18,7 +18,11 @@ use bitfun_product_domains::miniapp::ports::{
 use bitfun_product_domains::miniapp::runtime::{
     candidate_dirs, version_manager_roots, RuntimeKind,
 };
-use bitfun_product_domains::miniapp::storage::{build_package_json, parse_npm_dependencies};
+use bitfun_product_domains::miniapp::storage::{
+    build_package_json, parse_npm_dependencies, MiniAppStorageLayout, COMPILED_HTML, ESM_DEPS_JSON,
+    INDEX_HTML, META_JSON, PACKAGE_JSON, SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, VERSIONS_DIR,
+    WORKER_JS,
+};
 use bitfun_product_domains::miniapp::types::{
     FsPermissions, MiniApp, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource, NetPermissions,
     NpmDep,
@@ -141,6 +145,36 @@ fn miniapp_export_and_runtime_dtos_remain_stable() {
     let json = serde_json::to_value(&install).unwrap();
     assert_eq!(json["success"], true);
     assert_eq!(json["stdout"], "ok");
+}
+
+#[test]
+fn miniapp_storage_layout_preserves_file_shape_contract() {
+    let root = PathBuf::from("/bitfun/miniapps");
+    let layout = MiniAppStorageLayout::new(&root, "app-1");
+
+    assert_eq!(META_JSON, "meta.json");
+    assert_eq!(SOURCE_DIR, "source");
+    assert_eq!(INDEX_HTML, "index.html");
+    assert_eq!(STYLE_CSS, "style.css");
+    assert_eq!(UI_JS, "ui.js");
+    assert_eq!(WORKER_JS, "worker.js");
+    assert_eq!(PACKAGE_JSON, "package.json");
+    assert_eq!(ESM_DEPS_JSON, "esm_dependencies.json");
+    assert_eq!(COMPILED_HTML, "compiled.html");
+    assert_eq!(STORAGE_JSON, "storage.json");
+    assert_eq!(VERSIONS_DIR, "versions");
+
+    assert_eq!(layout.app_dir(), root.join("app-1"));
+    assert_eq!(layout.meta_path(), root.join("app-1").join(META_JSON));
+    assert_eq!(
+        layout.source_file_path(INDEX_HTML),
+        root.join("app-1").join(SOURCE_DIR).join(INDEX_HTML)
+    );
+    assert_eq!(
+        layout.version_path(3),
+        root.join("app-1").join(VERSIONS_DIR).join("v3.json")
+    );
+    assert_eq!(layout.versions_dir(), root.join("app-1").join(VERSIONS_DIR));
 }
 
 #[test]

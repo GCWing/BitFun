@@ -5,22 +5,13 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_product_domains::miniapp::ports::{
     MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture, MiniAppStoragePort,
 };
-use bitfun_product_domains::miniapp::storage::{build_package_json, parse_npm_dependencies};
+use bitfun_product_domains::miniapp::storage::{
+    build_package_json, parse_npm_dependencies, MiniAppStorageLayout, ESM_DEPS_JSON, INDEX_HTML,
+    PACKAGE_JSON, STYLE_CSS, UI_JS, WORKER_JS,
+};
 use serde_json;
 use std::path::PathBuf;
 use std::sync::Arc;
-
-const META_JSON: &str = "meta.json";
-const SOURCE_DIR: &str = "source";
-const INDEX_HTML: &str = "index.html";
-const STYLE_CSS: &str = "style.css";
-const UI_JS: &str = "ui.js";
-const WORKER_JS: &str = "worker.js";
-const PACKAGE_JSON: &str = "package.json";
-const ESM_DEPS_JSON: &str = "esm_dependencies.json";
-const COMPILED_HTML: &str = "compiled.html";
-const STORAGE_JSON: &str = "storage.json";
-const VERSIONS_DIR: &str = "versions";
 
 /// MiniApp storage service (file-based under path_manager.miniapps_dir).
 pub struct MiniAppStorage {
@@ -32,30 +23,32 @@ impl MiniAppStorage {
         Self { path_manager }
     }
 
+    fn layout(&self, app_id: &str) -> MiniAppStorageLayout {
+        MiniAppStorageLayout::new(self.path_manager.miniapps_dir(), app_id)
+    }
+
     fn app_dir(&self, app_id: &str) -> PathBuf {
-        self.path_manager.miniapp_dir(app_id)
+        self.layout(app_id).app_dir()
     }
 
     fn meta_path(&self, app_id: &str) -> PathBuf {
-        self.app_dir(app_id).join(META_JSON)
+        self.layout(app_id).meta_path()
     }
 
     fn source_dir(&self, app_id: &str) -> PathBuf {
-        self.app_dir(app_id).join(SOURCE_DIR)
+        self.layout(app_id).source_dir()
     }
 
     fn compiled_path(&self, app_id: &str) -> PathBuf {
-        self.app_dir(app_id).join(COMPILED_HTML)
+        self.layout(app_id).compiled_path()
     }
 
     fn storage_path(&self, app_id: &str) -> PathBuf {
-        self.app_dir(app_id).join(STORAGE_JSON)
+        self.layout(app_id).storage_path()
     }
 
     fn version_path(&self, app_id: &str, version: u32) -> PathBuf {
-        self.app_dir(app_id)
-            .join(VERSIONS_DIR)
-            .join(format!("v{}.json", version))
+        self.layout(app_id).version_path(version)
     }
 
     /// Ensure app directory and source subdir exist.
@@ -197,7 +190,7 @@ impl MiniAppStorage {
     }
 
     async fn load_npm_dependencies(&self, app_id: &str) -> BitFunResult<Vec<NpmDep>> {
-        let p = self.app_dir(app_id).join(PACKAGE_JSON);
+        let p = self.layout(app_id).package_json_path();
         if !p.exists() {
             return Ok(Vec::new());
         }
@@ -279,7 +272,7 @@ impl MiniAppStorage {
         version: u32,
         app: &MiniApp,
     ) -> BitFunResult<()> {
-        let versions_dir = self.app_dir(app_id).join(VERSIONS_DIR);
+        let versions_dir = self.layout(app_id).versions_dir();
         tokio::fs::create_dir_all(&versions_dir)
             .await
             .map_err(|e| BitFunError::io(format!("Failed to create versions dir: {}", e)))?;
@@ -337,7 +330,7 @@ impl MiniAppStorage {
 
     /// List version numbers that have snapshots.
     pub async fn list_versions(&self, app_id: &str) -> BitFunResult<Vec<u32>> {
-        let vdir = self.app_dir(app_id).join(VERSIONS_DIR);
+        let vdir = self.layout(app_id).versions_dir();
         if !vdir.exists() {
             return Ok(Vec::new());
         }

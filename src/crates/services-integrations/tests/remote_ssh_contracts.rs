@@ -1,12 +1,15 @@
 #![cfg(feature = "remote-ssh")]
 
 use bitfun_services_integrations::remote_ssh::{
-    local_workspace_stable_storage_id, normalize_remote_workspace_path,
-    remote_root_to_mirror_subpath, remote_workspace_stable_id,
+    canonicalize_local_workspace_root, local_workspace_roots_equal,
+    local_workspace_stable_storage_id, normalize_local_workspace_root_for_stable_id,
+    normalize_remote_workspace_path, remote_root_to_mirror_subpath, remote_workspace_runtime_root,
+    remote_workspace_session_mirror_dir, remote_workspace_stable_id,
     sanitize_remote_mirror_path_component, sanitize_ssh_connection_id_for_local_dir,
-    sanitize_ssh_hostname_for_mirror, unresolved_remote_session_storage_key, workspace_logical_key,
-    RemoteWorkspace, RemoteWorkspaceRegistry, SSHAuthMethod, SSHConnectionConfig, SavedAuthType,
-    SavedConnection, LOCAL_WORKSPACE_SSH_HOST,
+    sanitize_ssh_hostname_for_mirror, unresolved_remote_session_storage_dir,
+    unresolved_remote_session_storage_key, workspace_logical_key, RemoteWorkspace,
+    RemoteWorkspaceRegistry, SSHAuthMethod, SSHConnectionConfig, SavedAuthType, SavedConnection,
+    LOCAL_WORKSPACE_SSH_HOST,
 };
 
 #[test]
@@ -114,6 +117,63 @@ fn remote_workspace_path_helpers_preserve_current_identity_contract() {
 
     let unresolved_key = unresolved_remote_session_storage_key(" conn-1 ", "/home/u/p");
     assert_eq!(unresolved_key, "d1c72f60fc1b7cb99599cf21");
+}
+
+#[test]
+fn remote_workspace_session_paths_use_supplied_mirror_root() {
+    let mirror_root = std::path::PathBuf::from("/bitfun/remote_ssh");
+
+    assert_eq!(
+        remote_workspace_runtime_root(&mirror_root, " Example.COM ", "/home/user/repo"),
+        mirror_root
+            .join("example.com")
+            .join("home")
+            .join("user")
+            .join("repo")
+    );
+    assert_eq!(
+        remote_workspace_session_mirror_dir(&mirror_root, " Example.COM ", "/"),
+        mirror_root
+            .join("example.com")
+            .join("_root")
+            .join("sessions")
+    );
+    assert_eq!(
+        unresolved_remote_session_storage_dir(&mirror_root, " conn-1 ", "/home/u/p"),
+        mirror_root
+            .join("_unresolved")
+            .join("d1c72f60fc1b7cb99599cf21")
+            .join("sessions")
+    );
+}
+
+#[test]
+fn local_workspace_identity_helpers_preserve_canonical_root_contract() {
+    let workspace_root = std::env::temp_dir().join(format!(
+        "bitfun-services-remote-ssh-contract-{}",
+        std::process::id()
+    ));
+    let nested = workspace_root.join("nested");
+    std::fs::create_dir_all(&nested).expect("workspace root should exist");
+
+    let (canonical_path, stable_root) =
+        canonicalize_local_workspace_root(&workspace_root).expect("canonical local root");
+    assert_eq!(
+        stable_root,
+        normalize_local_workspace_root_for_stable_id(&workspace_root)
+            .expect("normalized local root")
+    );
+    assert_eq!(
+        stable_root,
+        canonical_path.to_string_lossy().replace('\\', "/")
+    );
+    assert!(local_workspace_roots_equal(
+        &workspace_root,
+        &workspace_root
+    ));
+    assert!(!local_workspace_roots_equal(&workspace_root, &nested));
+
+    let _ = std::fs::remove_dir_all(workspace_root);
 }
 
 #[tokio::test]

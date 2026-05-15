@@ -1658,20 +1658,23 @@ P2 后产品表面契约轨道（contract-only）：
 - P3 的闭环检查应同时覆盖 Rust crate graph 与产品 runtime 行为：边界脚本只证明依赖方向，不能替代 Deep Review、MCP dynamic tools、tool manifest / `GetToolSpec`、remote connect、snapshot wrapping、miniapp/function-agent 的产品等价性验证。
 - 后续 P3 范围按“显式保留 core-owned runtime + 强制 owner crate 边界”闭环；如果要继续外移这些 runtime 路径，需要作为新的迁移批次先补 port 设计、等价测试和用户确认。
 
-**阶段复核与后续拆分（2026-05-15 PR1 latest-main guardrail 扩展后）：**
+**阶段复核与后续拆分（2026-05-15 PR2 owner closure 开发中）：**
 
-- 当前分支保持单一主题：只包含 agent tools / tool registry 低风险 owner 化、boundary check 和阶段文档；不继续混入 remote-connect、miniapp 或 function-agent runtime 迁移。
+- 当前分支保持单一主题：只闭合已具备 port/contract 保护的低风险 owner，包含 remote-SSH session identity / mirror path / unresolved-session layout 与 MiniApp storage file layout；不继续混入 remote-connect、MiniApp filesystem IO、worker runtime、function-agent Git/AI runtime、tool runtime 或产品表面行为迁移。
+- `core-decomposition-implementation-review.md` 的合理建议已纳入当前护栏：ownership target 必须区分 `done` / `partial` / `target` / `deferred`，`bitfun-core/product-full` 目前只是阶段性 capability guardrail，不是最终 feature matrix；boundary script 是必要下限，不能替代行为级回归。
 - 本次 rebase 到最新 `upstream/main` 后，PR #719 remote workspace guard、#721 companion preset、#715/#722 ACP fallback/timeout、per-mode subagent availability、DeepResearch citation renumber hook 和 search fallback/context 修复均已进入主干；它们不改变本轮 guardrail PR 的代码行为，但会把后续 workspace/search、agent registry/runtime、ACP/Web surface 与 tool runtime 外移的等价性门槛抬高。
-- 质量边界：本阶段证明已拆 owner crate 不依赖回 `bitfun-core`，并证明已迁移的 tool contract、generic registry / dynamic provider container 旧路径或调用点仍通过当前 Rust workspace 检查；不声明 remote connect、`ToolUseContext`、concrete tool implementation、miniapp/function-agent runtime 的外移完成。
+- 质量边界：本阶段证明已拆 owner crate 不依赖回 `bitfun-core`，并证明 remote-SSH path/session identity 与 MiniApp storage layout 的旧路径或调用点仍通过当前 Rust workspace 检查；不声明 remote connect、`ToolUseContext`、concrete tool implementation、MiniApp IO / worker runtime 或 function-agent runtime 的外移完成。
 - boundary check 已扩展到 `core-types`、`runtime-ports` 和 `agent-tools` 的轻量边界，并覆盖 Cargo inline 依赖和 dependency table 依赖声明，后续不能绕过脚本把重 runtime、concrete service、platform adapter 或 CLI/TUI presentation 依赖带入这些 contract crate。
 - boundary check 现在同时锁定 latest-main owner anchor：mode-scoped subagent availability、DeepResearch citation renumber hook、remote workspace startup guard、local/remote search fallback、ACP startup timeout 和 Web operation diff fallback。后续真正迁移这些 owner 时必须先补 port/provider 或 surface contract 设计，并同步更新脚本与等价测试。
-- boundary check 也已锁定 `bitfun-core::service::git`、`bitfun-core::service::remote_ssh::types`、remote-ssh workspace path/identity/unresolved-key helper、`bitfun-core::service::mcp::{tool_info,tool_name}`、`bitfun-core::service::mcp::protocol::{types,jsonrpc}`、`bitfun-core::service::mcp::config::{location,cursor_format,json_config,service_helpers}`、`bitfun-core::service::mcp::server::config`、`bitfun-core::service::mcp::auth` 和 `bitfun-core::service::announcement::types` 的旧路径 facade-only / 禁止回流状态，并禁止在 `MCPServerProcess` runtime 文件重新定义已外移的 server type/status contract、auth error classifier 和 legacy remote header fallback helper，也禁止在 remote transport 重新实现 Authorization 归一化、client capability 构造和 rmcp result mapping；本轮新增禁止 core registry 重新拥有 `IndexMap` 工具容器或 dynamic metadata map。
+- boundary check 也已锁定 `bitfun-core::service::git`、`bitfun-core::service::remote_ssh::types`、remote-SSH workspace path/identity/unresolved-key helper、MiniApp storage layout、`bitfun-core::service::mcp::{tool_info,tool_name}`、`bitfun-core::service::mcp::protocol::{types,jsonrpc}`、`bitfun-core::service::mcp::config::{location,cursor_format,json_config,service_helpers}`、`bitfun-core::service::mcp::server::config`、`bitfun-core::service::mcp::auth` 和 `bitfun-core::service::announcement::types` 的旧路径 facade-only / 禁止回流状态，并禁止在 `MCPServerProcess` runtime 文件重新定义已外移的 server type/status contract、auth error classifier 和 legacy remote header fallback helper，也禁止在 remote transport 重新实现 Authorization 归一化、client capability 构造和 rmcp result mapping；本轮新增禁止 core registry 重新拥有 `IndexMap` 工具容器或 dynamic metadata map。
 - 后续迁移必须拆成可独立审核的提交：先补 port/provider 设计和等价测试；`remote-connect` 完整 runtime、`ToolUseContext` / concrete tool implementation、product-domain runtime 必须一次迁移一个 owner 主题。
 - concrete tool implementation 或 product registry / manifest assembly 外移必须先有工具清单和 manifest 等价测试，并保留 dynamic provider metadata；不能把注册名解析、snapshot wrapper 或 runtime restriction 行为改成隐式约定。
 - 已新增并扩展内置工具清单基线测试，后续迁移 `ToolUseContext`、concrete tool implementation、tool manifest/exposure 或 product registry / manifest assembly 必须先保持该清单、注册顺序、runtime collection 顺序、expanded/collapsed exposure、`GetToolSpec` unlock state、dynamic provider metadata 顺序和修改类工具 snapshot wrapper 等价，再评估 owner crate 边界。
 - miniapp 与 function-agent runtime 外移必须先明确 Git/AI service、PathManager、process execution 和 permission policy 边界；如果需要行为合约变化，必须作为后续单独 PR 并先确认。
 - 产品表面 contract 补强必须保持 observational：只记录 surface/thread/environment/permission/artifact facts，不改变 CLI、Desktop、Remote、ACP 的现有交互和运行时语义。
-- `bitfun-core default = []` 和依赖版本收敛仍是后续独立评估项，不与 runtime 外移或构建脚本调整混在同一批提交。
+- 当前 PR2 后的下一步不应直接进入 default feature 缩减或高风险 runtime 外移。应先补关键语义回归 baseline：MCP config failure / catalog invalidation / list-changed / dynamic manifest、tool manifest / `GetToolSpec` snapshot、product-domains pure helper 与 core adapter 等价、remote workspace search fallback focused test。
+- 再之后才进入 owner-by-owner baseline：每个 runtime owner 迁移前先列出当前行为、输入输出、feature graph 和验证命令；迁移后先证明行为等价，再考虑删除 legacy path。
+- `bitfun-core default = []`、per-product feature set、依赖版本收敛和构建收益优化仍是后续独立评估项，不与 runtime 外移或构建脚本调整混在同一批提交。
 
 **验收门：**
 
@@ -1713,13 +1716,15 @@ git diff -- package.json scripts/dev.cjs scripts/desktop-tauri-build.mjs scripts
 7. 已完成：抽取 `bitfun-services-core`。
 8. 已完成：抽取 `bitfun-services-integrations` 的低风险 feature group 和纯 helper，闭环 `git`、remote-SSH contract/helper、MCP 纯 protocol/config/auth helper；MCP runtime / dynamic provider 已在 PR2 补齐，未把 remote-connect 或 product tool manifest/exposure owner 化顺带迁入。
 9. 已完成：前移低风险保护项：dependency profile / feature graph 基线、轻量 contract crate 依赖瘦身、feature group 说明、boundary check 扩展、迁移前快照测试。
-10. 进行中：PR 1 `services-integrations` runtime 收口，先处理 remote-SSH workspace registry / session mirror helper 和已迁移 file-watch 的 contract 复核；announcement 仅迁移无 config/content/remote fetch 依赖的 helper。
-11. 已完成：PR 2 MCP runtime 与 dynamic tools；已迁移 config service orchestration、server process / transport lifecycle、adapter、dynamic tool/resource/prompt provider，core 保留 ConfigService store adapter、OAuth data-dir 注入、BitFunError 映射、legacy facade 和 product registry / manifest assembly。
-12. P2 后前置轨道：产品表面 contract-only 补强，可在 PR3 前或 PR3 第一组提交中处理；只允许 DTO/port、round-trip/no-op tests 和 boundary check，不实现 CLI/Desktop/Remote/ACP UI 或命令变更。
-13. 已完成：PR 3 remote-connect runtime contract slice：产品表面 DTO 已以 contract-only 方式进入 `bitfun-core-types`；`bitfun-services-integrations` 新增 `remote-connect` feature，拥有 remote chat/image/tool/session wire DTO 与 relay/bot session/submission request builder；relay/bot 创建 session 已通过 `AgentSubmissionPort`。远程消息执行、image context、tracker event、cancel、terminal pre-warm 与 workspace/session restore 仍保留在 `bitfun-core` product runtime assembly，直到补齐 image/queue/event/cancellation port 后再迁移。
-14. 已完成：PR 4 agent tools + `tool-packs` owner 化低风险闭环；tool contract / DTO、runtime restriction、path resolution、generic registry / dynamic provider container 已归属 `bitfun-agent-tools`，core 保留产品工具列表、snapshot decorator、`ToolUseContext` 和 concrete tool implementation，后续外移需单独 port/provider 设计。
-15. 进行中：PR 5 `product-domains` runtime + core facade finalization。已迁移 MiniApp 纯 compiler、export/runtime/worker DTO、storage-shape helper、lifecycle / revision helper、host routing string helper、runtime/storage port contract，以及 git/startchat function-agent 纯 utils / project context analyzer / Git/AI port contract；core 已补 Git snapshot、MiniApp storage/runtime adapter 等价测试。剩余 PathManager、process execution、Git/AI service、prompt template、host dispatch 执行与 worker/storage IO owner 迁移继续按高风险项单独审视。
-16. 后续独立评估：`bitfun-core default = []` 或 per-product feature set。
+10. 已提交：PR 1 `services-integrations` runtime 收口，处理 remote-SSH workspace registry / session mirror helper 和已迁移 file-watch 的 contract 复核；announcement 仅迁移无 config/content/remote fetch 依赖的 helper。
+11. 进行中：新 PR 2 `Services/Product Runtime Owner Closure`，收口 remote-SSH session identity / mirror path / unresolved-session layout 与 MiniApp storage file layout owner；core 保留 `PathManager` 注入、SSH manager、remote FS / terminal、MiniApp filesystem IO 和 worker runtime。
+12. 历史已完成：MCP runtime 与 dynamic tools；已迁移 config service orchestration、server process / transport lifecycle、adapter、dynamic tool/resource/prompt provider，core 保留 ConfigService store adapter、OAuth data-dir 注入、BitFunError 映射、legacy facade 和 product registry / manifest assembly。
+13. P2 后前置轨道：产品表面 contract-only 补强，可在后续 PR 第一组提交中处理；只允许 DTO/port、round-trip/no-op tests 和 boundary check，不实现 CLI/Desktop/Remote/ACP UI 或命令变更。
+14. 已完成：remote-connect runtime contract slice：产品表面 DTO 已以 contract-only 方式进入 `bitfun-core-types`；`bitfun-services-integrations` 新增 `remote-connect` feature，拥有 remote chat/image/tool/session wire DTO 与 relay/bot session/submission request builder；relay/bot 创建 session 已通过 `AgentSubmissionPort`。远程消息执行、image context、tracker event、cancel、terminal pre-warm 与 workspace/session restore 仍保留在 `bitfun-core` product runtime assembly，直到补齐 image/queue/event/cancellation port 后再迁移。
+15. 已完成：agent tools + `tool-packs` owner 化低风险闭环；tool contract / DTO、runtime restriction、path resolution、generic registry / dynamic provider container 已归属 `bitfun-agent-tools`，core 保留产品工具列表、snapshot decorator、`ToolUseContext` 和 concrete tool implementation，后续外移需单独 port/provider 设计。
+16. 下一步：关键语义回归 baseline，不移动 runtime owner。优先补 MCP config failure / catalog invalidation / list-changed / dynamic manifest、tool manifest / `GetToolSpec`、product-domains adapter equivalence、remote workspace search fallback 的 focused tests 或 snapshots。
+17. 后续高风险单独审视：`product-domains` runtime + core facade finalization 的剩余 PathManager、process execution、Git/AI service、prompt template、host dispatch 执行与 worker/storage IO owner 迁移；不得与当前 PR2 混合。
+18. 后续独立评估：`bitfun-core default = []`、per-product feature set、依赖版本收敛或构建收益优化；任何收益声明都需要记录 `cargo check -p bitfun-core`、workspace check 和目标 crate check 的前后数据。
 
 冗余清理 PR 不进入上述主线序号。只有在满足 `0A.6` 的绝对等价要求时，才可以插入到相邻里程碑之间，并且不得与主线拆分 PR 混合。
 

@@ -14,7 +14,6 @@ pub use bitfun_services_integrations::remote_ssh::{
     sanitize_ssh_hostname_for_mirror, unresolved_remote_session_storage_key, workspace_logical_key,
     RemoteWorkspaceEntry, RemoteWorkspaceRegistry, RemoteWorkspaceState, LOCAL_WORKSPACE_SSH_HOST,
 };
-use dunce::canonicalize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -122,47 +121,35 @@ pub async fn resolve_workspace_session_identity(
 }
 /// Local directory where persisted sessions for this remote workspace root are stored.
 pub fn remote_workspace_runtime_root(ssh_host: &str, remote_root_norm: &str) -> PathBuf {
-    PathManager::remote_ssh_mirror_root()
-        .join(sanitize_ssh_hostname_for_mirror(ssh_host))
-        .join(remote_root_to_mirror_subpath(remote_root_norm))
+    bitfun_services_integrations::remote_ssh::remote_workspace_runtime_root(
+        PathManager::remote_ssh_mirror_root(),
+        ssh_host,
+        remote_root_norm,
+    )
 }
 
 /// Local directory where persisted sessions for this remote workspace root are stored.
 pub fn remote_workspace_session_mirror_dir(ssh_host: &str, remote_root_norm: &str) -> PathBuf {
-    remote_workspace_runtime_root(ssh_host, remote_root_norm).join("sessions")
+    bitfun_services_integrations::remote_ssh::remote_workspace_session_mirror_dir(
+        PathManager::remote_ssh_mirror_root(),
+        ssh_host,
+        remote_root_norm,
+    )
 }
 
 /// Canonical local root [`PathBuf`] plus normalized string form (single `canonicalize` call).
 pub fn canonicalize_local_workspace_root(path: &Path) -> Result<(PathBuf, String), String> {
-    let pb = canonicalize(path).map_err(|e| {
-        format!(
-            "Failed to canonicalize local workspace path '{}': {}",
-            path.display(),
-            e
-        )
-    })?;
-    let s = path_buf_to_stable_local_root_string(&pb);
-    Ok((pb, s))
+    bitfun_services_integrations::remote_ssh::canonicalize_local_workspace_root(path)
 }
 
 /// Canonical absolute local path as a stable UTF-8 string (forward slashes, dunce-simplified).
 pub fn normalize_local_workspace_root_for_stable_id(path: &Path) -> Result<String, String> {
-    Ok(canonicalize_local_workspace_root(path)?.1)
-}
-
-fn path_buf_to_stable_local_root_string(canonical: &Path) -> String {
-    canonical.to_string_lossy().replace('\\', "/")
+    bitfun_services_integrations::remote_ssh::normalize_local_workspace_root_for_stable_id(path)
 }
 
 /// Whether two local paths refer to the same workspace root (canonical comparison when possible).
 pub fn local_workspace_roots_equal(a: &Path, b: &Path) -> bool {
-    match (
-        normalize_local_workspace_root_for_stable_id(a),
-        normalize_local_workspace_root_for_stable_id(b),
-    ) {
-        (Ok(x), Ok(y)) => x == y,
-        _ => a == b,
-    }
+    bitfun_services_integrations::remote_ssh::local_workspace_roots_equal(a, b)
 }
 
 /// When a remote scope has `connection_id` but no resolvable SSH host, we must not read/write the
@@ -173,11 +160,11 @@ pub fn unresolved_remote_session_storage_dir(
     connection_id: &str,
     workspace_path_norm: &str,
 ) -> PathBuf {
-    let key = unresolved_remote_session_storage_key(connection_id, workspace_path_norm);
-    PathManager::remote_ssh_mirror_root()
-        .join("_unresolved")
-        .join(key)
-        .join("sessions")
+    bitfun_services_integrations::remote_ssh::unresolved_remote_session_storage_dir(
+        PathManager::remote_ssh_mirror_root(),
+        connection_id,
+        workspace_path_norm,
+    )
 }
 
 /// Global remote workspace state manager.
