@@ -1,5 +1,6 @@
  
 
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('TextSelection');
@@ -38,6 +39,35 @@ export const getSelectedText = (): TextSelection | null => {
     element,
     range
   };
+};
+
+export const shouldIgnoreCardToggleClick = (
+  event: ReactMouseEvent<Element>,
+  root: HTMLElement | null = typeof HTMLElement !== 'undefined' && event.currentTarget instanceof HTMLElement
+    ? event.currentTarget
+    : null,
+): boolean => {
+  if (event.defaultPrevented || event.button !== 0) {
+    return true;
+  }
+
+  const target = typeof Element !== 'undefined' && event.target instanceof Element ? event.target : null;
+  if (target?.closest('button,a,input,textarea,select,[contenteditable="true"],[data-flow-card-ignore-toggle]')) {
+    return true;
+  }
+
+  const selection = window.getSelection?.();
+  if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+    return false;
+  }
+
+  if (!root) {
+    return true;
+  }
+
+  const anchorInside = selection.anchorNode ? root.contains(selection.anchorNode) : false;
+  const focusInside = selection.focusNode ? root.contains(selection.focusNode) : false;
+  return anchorInside || focusInside;
 };
 
  

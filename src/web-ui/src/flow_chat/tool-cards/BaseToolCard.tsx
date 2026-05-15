@@ -3,6 +3,7 @@
  * Provides unified card styles and interaction logic
  */
 import React, { ReactNode } from 'react';
+import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
 import {
   ToolCardHeaderLayoutContext,
@@ -71,6 +72,14 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   headerExpandAffordance: headerExpandAffordanceProp,
   headerAffordanceKind: headerAffordanceKindProp = 'expand',
 }) => {
+  const handleCardClick = (event: React.MouseEvent) => {
+    if (!onClick || shouldIgnoreCardToggleClick(event)) {
+      return;
+    }
+
+    onClick(event);
+  };
+
   const hasExpandedContent = isExpanded && expandedContent && !isFailed;
   const showConfirmationHighlight = requiresConfirmation && 
     status !== 'completed' && 
@@ -97,7 +106,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
     >
       <div 
         className={`base-tool-card status-${status} ${isExpanded ? 'expanded' : ''} ${resolvedHeaderExpandAffordance ? 'base-tool-card--header-expandable' : ''}`.trim()}
-        onClick={onClick}
+        onClick={handleCardClick}
       >
         <ToolCardHeaderLayoutContext.Provider value={headerLayoutValue}>
           <div className="base-tool-card-header">

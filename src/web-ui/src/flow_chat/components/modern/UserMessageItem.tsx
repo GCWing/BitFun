@@ -13,6 +13,7 @@ import { flowChatStore } from '../../store/FlowChatStore';
 import { snapshotAPI } from '@/infrastructure/api';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
+import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { ReproductionStepsBlock, Tooltip, confirmDanger } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
@@ -173,7 +174,11 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     }, [canRollback, sessionId, t, turnIndex, messageContent]);
     
     // Toggle expanded state.
-    const handleToggleExpand = useCallback(() => {
+    const handleToggleExpand = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+      if (shouldIgnoreCardToggleClick(event, contentRef.current)) {
+        return;
+      }
+
       // Only allow expand/collapse when there is overflow.
       if (!hasOverflow && !expanded) {
         return;

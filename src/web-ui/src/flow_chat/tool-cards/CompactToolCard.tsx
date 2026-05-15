@@ -9,6 +9,7 @@
  */
 
 import React, { ReactNode } from 'react';
+import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { BaseToolCard, type BaseToolCardProps } from './BaseToolCard';
 import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
 import { ToolCardIconSlot } from './ToolCardIconSlot';
@@ -42,10 +43,12 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
   header,
   expandedContent,
 }) => {
-  const handleWrapperClick = (e: React.MouseEvent) => {
-    if (onClick) {
-      onClick(e);
+  const handleWrapperClick = (event: React.MouseEvent) => {
+    if (!onClick || shouldIgnoreCardToggleClick(event)) {
+      return;
     }
+
+    onClick(event);
   };
 
   const loadingShimmer =
