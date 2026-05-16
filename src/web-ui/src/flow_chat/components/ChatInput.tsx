@@ -2022,6 +2022,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
+    const nativeEvt = e.nativeEvent as KeyboardEvent;
+    // IME-owned keys must stay with the input method. In particular, Escape
+    // closes the Chinese/Japanese/Korean candidate window and must not cancel
+    // the running BitFun session.
+    const isComposing =
+      isImeComposingRef.current
+      || nativeEvt.isComposing
+      || nativeEvt.keyCode === 229;
+
+    if (e.key === 'Escape' && isComposing) {
+      return;
+    }
+
     if (slashCommandState.isActive) {
       if (!(slashCommandState.kind === 'modes' && !canSwitchModes)) {
         const items =
@@ -2195,18 +2208,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
     
-    const nativeEvt = e.nativeEvent as KeyboardEvent;
-    // IME-safe Enter detection (see useImeEnterGuard for the rationale):
-    //  - our own composition flag covers browsers where `isComposing` is flaky
-    //  - `keyCode === 229` is the W3C "composition keyCode" still emitted by
-    //    every evergreen browser while the IME owns the key, even after
-    //    `isComposing` has flipped back to false. Replaces the previous
-    //    120ms time-window guard which would swallow legitimate fast Enters.
-    const isComposing =
-      isImeComposingRef.current
-      || nativeEvt.isComposing
-      || nativeEvt.keyCode === 229;
-
     if (e.key === 'Enter' && !e.shiftKey) {
       if (isComposing) {
         return;
@@ -2367,6 +2368,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         target.tagName === 'TEXTAREA' ||
         target.isContentEditable ||
         target.closest('[contenteditable="true"]') !== null;
+
+      const isImeOwnedKey = e.key === 'Escape' && (e.isComposing || e.keyCode === 229);
+      if (isImeOwnedKey) return;
 
       if (e.key === 'Escape' && derivedState?.canCancel) {
         if (isEditable) return;

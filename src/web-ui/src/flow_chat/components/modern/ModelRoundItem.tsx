@@ -20,7 +20,7 @@ import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { ExportImageButton } from './ExportImageButton';
 import { ForkSessionButton } from './ForkSessionButton';
-import { buildModelRoundItemGroups } from './modelRoundItemGrouping';
+import { buildModelRoundItemGroups, COMPLETED_TOOL_TRANSIENT_MS } from './modelRoundItemGrouping';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { SmoothHeightCollapse } from './SmoothHeightCollapse';
@@ -130,6 +130,32 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       [round.items]
     );
     
+    const latestCompletedToolEndTime = useMemo(() => {
+      return sortedItems.reduce((latest, item) => {
+        if (item.type !== 'tool' || item.status !== 'completed') return latest;
+        const endTime = (item as FlowToolItem).endTime;
+        return typeof endTime === 'number' ? Math.max(latest, endTime) : latest;
+      }, 0);
+    }, [sortedItems]);
+    const [transientNowMs, setTransientNowMs] = useState(() => Date.now());
+
+    useEffect(() => {
+      if (latestCompletedToolEndTime <= 0) return;
+
+      const remainingMs = latestCompletedToolEndTime + COMPLETED_TOOL_TRANSIENT_MS - Date.now();
+      if (remainingMs <= 0) {
+        setTransientNowMs(Date.now());
+        return;
+      }
+
+      setTransientNowMs(Date.now());
+      const timeoutId = window.setTimeout(() => {
+        setTransientNowMs(Date.now());
+      }, remainingMs);
+
+      return () => window.clearTimeout(timeoutId);
+    }, [latestCompletedToolEndTime]);
+
     // Group items in two passes:
     // 1) group subagent items
     // 2) group normal items into explore/critical via anchor tool
@@ -139,8 +165,9 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         isStreaming: round.isStreaming,
         disableExploreGrouping: round.renderHints?.disableExploreGrouping === true,
         isCollapsibleTool,
+        nowMs: transientNowMs,
       });
-    }, [round.isStreaming, round.renderHints?.disableExploreGrouping, sortedItems]);
+    }, [round.isStreaming, round.renderHints?.disableExploreGrouping, sortedItems, transientNowMs]);
 
     const extractDialogTurnContent = useCallback(() => {
       const flowChatStore = FlowChatStore.getInstance();
@@ -667,11 +694,19 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, turnId, isLas
         <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} isLastItem={isLastItem} />
       );
     
-    case 'tool':
+    case 'tool': {
+      const toolItem = item as FlowToolItem;
+      const isCompletedTool = toolItem.status === 'completed';
+      const toolClassName = [
+        'flowchat-flow-item',
+        'flowchat-flow-item--tool-transition',
+        isCompletedTool ? 'flowchat-flow-item--tool-completed' : 'flowchat-flow-item--tool-active',
+      ].join(' ');
+
       return wrapContent(
-        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+        <div className={toolClassName} data-flow-item-id={item.id} data-flow-item-type="tool">
           <FlowToolCard
-            toolItem={item as FlowToolItem}
+            toolItem={toolItem}
             onConfirm={async (toolId: string, updatedInput?: any, permissionOptionId?: string, approve?: boolean) => {
               if (onToolConfirm) {
                 await onToolConfirm(toolId, updatedInput, permissionOptionId, approve);
@@ -698,6 +733,7 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, turnId, isLas
           />
         </div>
       );
+    }
 
     default:
       return null;

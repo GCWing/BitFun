@@ -1,5 +1,7 @@
 import type { FlowItem, FlowToolItem } from '../../types/flow-chat';
 
+export const COMPLETED_TOOL_TRANSIENT_MS = 1000;
+
 export type ModelRoundItemGroup =
   | { type: 'explore'; items: FlowItem[]; isLast: boolean }
   | { type: 'critical'; item: FlowItem }
@@ -10,6 +12,7 @@ interface BuildModelRoundItemGroupsInput {
   isStreaming: boolean;
   disableExploreGrouping: boolean;
   isCollapsibleTool: (toolName: string) => boolean;
+  nowMs?: number;
 }
 
 function hasActiveStreamingNarrative(items: FlowItem[]): boolean {
@@ -21,11 +24,23 @@ function hasActiveStreamingNarrative(items: FlowItem[]): boolean {
   });
 }
 
+function isActiveToolItem(item: FlowItem): boolean {
+  if (item.type !== 'tool') return false;
+  return item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'error';
+}
+
+function isRecentlyCompletedToolItem(item: FlowItem, nowMs: number): boolean {
+  if (item.type !== 'tool' || item.status !== 'completed') return false;
+  const endTime = (item as FlowToolItem).endTime;
+  return typeof endTime === 'number' && nowMs - endTime < COMPLETED_TOOL_TRANSIENT_MS;
+}
+
 export function buildModelRoundItemGroups({
   items,
   isStreaming,
   disableExploreGrouping,
   isCollapsibleTool,
+  nowMs = Date.now(),
 }: BuildModelRoundItemGroupsInput): ModelRoundItemGroup[] {
   const deferExploreGrouping = disableExploreGrouping || (isStreaming && hasActiveStreamingNarrative(items));
   const intermediateGroups: Array<
@@ -110,7 +125,7 @@ export function buildModelRoundItemGroups({
       const isExploreTool = isCollapsibleTool(toolName);
 
       if (isExploreTool) {
-        if (deferExploreGrouping) {
+        if (deferExploreGrouping || isActiveToolItem(item) || isRecentlyCompletedToolItem(item, nowMs)) {
           flushExploreBuffer(false);
           flushPendingAsCritical();
           finalGroups.push({ type: 'critical', item });

@@ -24,6 +24,7 @@ function dispatchScopedKey(scope: string, init: KeyboardEventInit): void {
     metaKey: init.metaKey,
     shiftKey: init.shiftKey,
     altKey: init.altKey,
+    keyCode: init.keyCode,
     bubbles: true,
     cancelable: true,
   }));
@@ -95,5 +96,18 @@ describe('ShortcutManager platform primary modifier', () => {
 
     expect(shortcutManager.checkConflicts({ key: 'f', ctrl: true, scope: 'editor' }))
       .toEqual([expect.objectContaining({ id: 'app.find' })]);
+  });
+
+  it('does not run Escape shortcuts while IME owns the key', () => {
+    const callback = vi.fn();
+    shortcutManager.register(
+      'chat.stopGeneration',
+      { key: 'Escape', scope: 'chat', allowInInput: true },
+      callback
+    );
+
+    dispatchScopedKey('chat', { key: 'Escape', keyCode: 229 } as KeyboardEventInit);
+
+    expect(callback).not.toHaveBeenCalled();
   });
 });

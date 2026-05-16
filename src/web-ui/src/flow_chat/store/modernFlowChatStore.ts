@@ -9,6 +9,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { immer } from 'zustand/middleware/immer';
 import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowUserSteeringItem } from '../types/flow-chat';
 import { isCollapsibleTool, READ_TOOL_NAMES, SEARCH_TOOL_NAMES, COMMAND_TOOL_NAMES } from '../tool-cards';
+import { COMPLETED_TOOL_TRANSIENT_MS } from '../components/modern/modelRoundItemGrouping';
 import { flowChatStore } from './FlowChatStore';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -102,7 +103,22 @@ function hasActiveStreamingNarrative(round: ModelRound): boolean {
   });
 }
 
-function isExploreOnlyRound(round: ModelRound): boolean {
+function hasActiveTool(round: ModelRound): boolean {
+  return round.items.some(item => {
+    if (item.type !== 'tool') return false;
+    return item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'error';
+  });
+}
+
+function hasRecentlyCompletedTool(round: ModelRound, nowMs: number): boolean {
+  return round.items.some(item => {
+    if (item.type !== 'tool' || item.status !== 'completed') return false;
+    const endTime = (item as FlowToolItem).endTime;
+    return typeof endTime === 'number' && nowMs - endTime < COMPLETED_TOOL_TRANSIENT_MS;
+  });
+}
+
+function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
   if (!round.items || round.items.length === 0) return false;
 
   if (round.renderHints?.disableExploreGrouping === true) {
@@ -110,6 +126,10 @@ function isExploreOnlyRound(round: ModelRound): boolean {
   }
 
   if (round.isStreaming && hasActiveStreamingNarrative(round)) {
+    return false;
+  }
+
+  if (hasActiveTool(round) || hasRecentlyCompletedTool(round, nowMs)) {
     return false;
   }
   
@@ -194,6 +214,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
   cachedDialogTurnsRef = session.dialogTurns;
 
   const items: VirtualItem[] = [];
+  const nowMs = Date.now();
 
   session.dialogTurns.forEach(turn => {
     if (turn.userMessage) {
@@ -254,7 +275,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       let currentGroup: TempExploreGroup | null = null;
 
       rounds.forEach((round, index) => {
-        const exploreOnly = isExploreOnlyRound(round);
+        const exploreOnly = isExploreOnlyRound(round, nowMs);
         if (exploreOnly) {
           const stats = computeRoundStats(round);
           if (currentGroup) {
@@ -315,9 +336,11 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
             group.endIndex < rounds.length - 1 ||
             (isTurnComplete && !isGroupStreaming);
 
+          const groupId = group.rounds[0]?.id ?? `explore-group-${turn.id}-${group.startIndex}`;
+
           if (wasCutByCritical) {
             log.debug('explore-group marked wasCutByCritical', {
-              groupId: group.rounds.map(r => r.id).join('-'),
+              groupId,
               endIndex: group.endIndex,
               totalRounds: rounds.length,
               isTurnComplete,
@@ -329,7 +352,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
             type: 'explore-group',
             turnId: turn.id,
             data: {
-              groupId: group.rounds.map(r => r.id).join('-'),
+              groupId,
               rounds: group.rounds,
               allItems: group.allItems,
               stats: {

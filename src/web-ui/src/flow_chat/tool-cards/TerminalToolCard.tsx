@@ -104,6 +104,7 @@ function renderTerminalExpandedContent(params: {
           <TerminalOutputRenderer
             content={liveOutput}
             className="terminal-xterm-output"
+            minHeight={maxHeight}
             maxHeight={maxHeight}
           />
         </div>

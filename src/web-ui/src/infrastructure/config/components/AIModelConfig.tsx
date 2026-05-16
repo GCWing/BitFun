@@ -199,6 +199,30 @@ function parseOptionalPositiveIntegerInput(value: string): number | null | undef
   return parsed;
 }
 
+const DEEPSEEK_REASONING_EFFORT_MODE_PREFIX = 'deepseek-effort:';
+
+function getDeepSeekReasoningModeSelectValue(draft: SelectedModelDraft): string {
+  if (draft.reasoningMode === 'enabled' && draft.reasoningEffort) {
+    return `${DEEPSEEK_REASONING_EFFORT_MODE_PREFIX}${draft.reasoningEffort}`;
+  }
+
+  return draft.reasoningMode;
+}
+
+function getUpdatesFromDeepSeekReasoningModeSelectValue(value: string): Partial<SelectedModelDraft> {
+  if (value.startsWith(DEEPSEEK_REASONING_EFFORT_MODE_PREFIX)) {
+    return {
+      reasoningMode: 'enabled',
+      reasoningEffort: value.slice(DEEPSEEK_REASONING_EFFORT_MODE_PREFIX.length),
+    };
+  }
+
+  return {
+    reasoningMode: value as ReasoningMode,
+    reasoningEffort: undefined,
+  };
+}
+
 /** Last line of defense: same logical model name once per save; prefer draft tied to an existing config id. */
 function dedupeSelectedModelDraftsByModelName(drafts: SelectedModelDraft[]): SelectedModelDraft[] {
   const out: SelectedModelDraft[] = [];
@@ -346,7 +370,7 @@ const AIModelConfig: React.FC = () => {
     []
   );
 
-  const deepSeekReasoningEffortOptions = useMemo(
+  const deepSeekReasoningEffortOptions = useMemo<SelectOption[]>(
     () => [
       { label: 'High', value: 'high' },
       { label: 'Max', value: 'max' },
@@ -361,7 +385,16 @@ const AIModelConfig: React.FC = () => {
       { label: t('thinking.optionDisabled'), value: 'disabled' },
     ];
 
-    if (
+    if (supportsDeepSeekReasoningEffort({ name: editingConfig?.name, base_url: editingConfig?.base_url, model_name: modelName })) {
+      options.splice(
+        1,
+        1,
+        ...deepSeekReasoningEffortOptions.map(option => ({
+          label: `${t('thinking.optionEnabled')} · ${option.label}`,
+          value: `${DEEPSEEK_REASONING_EFFORT_MODE_PREFIX}${option.value}`,
+        }))
+      );
+    } else if (
       supportsAnthropicReasoning(provider)
       && (supportsAnthropicAdaptive(modelName) || currentMode === 'adaptive')
     ) {
@@ -369,7 +402,7 @@ const AIModelConfig: React.FC = () => {
     }
 
     return options;
-  }, [t]);
+  }, [deepSeekReasoningEffortOptions, editingConfig?.base_url, editingConfig?.name, t]);
 
   const categoryOptions = useMemo<SelectOption[]>(
     () => [
@@ -1556,11 +1589,12 @@ const AIModelConfig: React.FC = () => {
             };
             const reasoningEffortOptions = getDraftReasoningEffortOptions(reasoningCapabilityConfig);
             const showReasoningModeControl = !supportsResponsesReasoning(editingConfig.provider);
+            const supportsDeepSeekEffort = supportsDeepSeekReasoningEffort(reasoningCapabilityConfig);
             const showReasoningEffortControl = reasoningEffortOptions.length > 0
+              && !supportsDeepSeekEffort
               && (
                 supportsResponsesReasoning(editingConfig.provider)
                 || (supportsAnthropicReasoning(editingConfig.provider) && draft.reasoningMode === 'adaptive')
-                || (supportsDeepSeekReasoningEffort(reasoningCapabilityConfig) && draft.reasoningMode !== 'disabled')
               );
             const showThinkingBudgetControl = supportsAnthropicReasoning(editingConfig.provider)
               && draft.reasoningMode === 'enabled'
@@ -1680,8 +1714,13 @@ const AIModelConfig: React.FC = () => {
                       <div className="bitfun-ai-model-config__selected-model-field">
                         <span>{t('thinking.mode')}</span>
                         <Select
-                          value={draft.reasoningMode}
-                          onChange={(value) => updateModelDraft(draft.modelName, { reasoningMode: value as ReasoningMode })}
+                          value={supportsDeepSeekEffort ? getDeepSeekReasoningModeSelectValue(draft) : draft.reasoningMode}
+                          onChange={(value) => updateModelDraft(
+                            draft.modelName,
+                            supportsDeepSeekEffort
+                              ? getUpdatesFromDeepSeekReasoningModeSelectValue(value as string)
+                              : { reasoningMode: value as ReasoningMode }
+                          )}
                           options={reasoningModeOptions}
                           size="small"
                         />

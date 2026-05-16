@@ -250,6 +250,7 @@ export class ShortcutManager {
 
   private handleKeyDown(event: KeyboardEvent): void {
     if (!this.isEnabled) return;
+    if (this.isImeOwnedKey(event)) return;
 
     const inInput = this.isInputContext(event);
     const activeScope = this.detectScope(event.target);
@@ -337,6 +338,11 @@ export class ShortcutManager {
       return scope;
     }
     return 'app';
+  }
+
+  private isImeOwnedKey(event: KeyboardEvent): boolean {
+    return (event.key === 'Escape' || event.key === 'Enter')
+      && (event.isComposing || event.keyCode === 229);
   }
 
   /**
