@@ -1,6 +1,10 @@
 use crate::util::string::normalize_string;
 use std::fs;
 
+const MAX_MATCH_CONTEXTS: usize = 5;
+const CONTEXT_LINES_BEFORE: usize = 2;
+const CONTEXT_LINES_AFTER: usize = 2;
+
 /// Edit result, contains line number range information
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditResult {
@@ -30,6 +34,40 @@ fn count_newlines(s: &str) -> usize {
     s.matches('\n').count()
 }
 
+fn match_contexts(content: &str, old_string: &str, matches: &[(usize, &str)]) -> String {
+    let lines: Vec<&str> = content.split('\n').collect();
+    let old_line_count = count_newlines(old_string) + 1;
+    let mut contexts = Vec::new();
+
+    for (idx, (byte_pos, _)) in matches.iter().take(MAX_MATCH_CONTEXTS).enumerate() {
+        let start_line = count_lines_before(content, *byte_pos);
+        let old_end_line = start_line + old_line_count.saturating_sub(1);
+        let context_start_line = start_line.saturating_sub(CONTEXT_LINES_BEFORE).max(1);
+        let context_end_line = (old_end_line + CONTEXT_LINES_AFTER).min(lines.len().max(1));
+        let snippet = lines[(context_start_line - 1)..context_end_line].join("\n");
+
+        contexts.push(format!(
+            "[match {} starts at line {}]\n{}",
+            idx + 1,
+            start_line,
+            snippet
+        ));
+    }
+
+    let omitted = matches.len().saturating_sub(MAX_MATCH_CONTEXTS);
+    let omitted_note = if omitted > 0 {
+        format!("\n... {omitted} more matches omitted.")
+    } else {
+        String::new()
+    };
+
+    format!(
+        "Matched contexts (copy exact text from a snippet and add stable surrounding lines to make `old_string` unique):\n{}{}",
+        contexts.join("\n---\n"),
+        omitted_note
+    )
+}
+
 pub fn apply_edit_to_content(
     content: &str,
     old_string: &str,
@@ -40,6 +78,11 @@ pub fn apply_edit_to_content(
     let normalized_old = normalize_string(old_string);
     let normalized_new = normalize_string(new_string);
     let normalized_content = normalize_string(content);
+
+    if normalized_old.is_empty() {
+        return Err("old_string cannot be empty.".to_string());
+    }
+
     let matches: Vec<_> = normalized_content.match_indices(&normalized_old).collect();
 
     if matches.is_empty() {
@@ -48,8 +91,9 @@ pub fn apply_edit_to_content(
 
     if matches.len() > 1 && !replace_all {
         return Err(format!(
-            "`old_string` appears {} times in file, either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.",
-            matches.len()
+            "`old_string` appears {} times in file, either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.\n{}",
+            matches.len(),
+            match_contexts(&normalized_content, &normalized_old, &matches)
         ));
     }
 
@@ -140,6 +184,31 @@ mod tests {
         assert_eq!(result.match_count, 2);
         assert_eq!(result.new_content, "ONE\r\ntwo\r\nONE\r\n");
         assert_eq!(result.edit_result.start_line, 1);
+    }
+
+    #[test]
+    fn apply_edit_to_content_rejects_empty_old_string() {
+        let error = apply_edit_to_content("alpha\n", "", "beta", false)
+            .expect_err("empty old_string should fail");
+
+        assert_eq!(error, "old_string cannot be empty.");
+    }
+
+    #[test]
+    fn apply_edit_to_content_multiple_match_error_includes_contexts() {
+        let error = apply_edit_to_content(
+            "first block\n  same();\nend first\n\nsecond block\n  same();\nend second\n",
+            "  same();",
+            "  changed();",
+            false,
+        )
+        .expect_err("ambiguous edit should fail");
+
+        assert!(error.contains("`old_string` appears 2 times in file"));
+        assert!(error.contains("[match 1 starts at line 2]"));
+        assert!(error.contains("first block"));
+        assert!(error.contains("[match 2 starts at line 6]"));
+        assert!(error.contains("second block"));
     }
 
     #[test]
