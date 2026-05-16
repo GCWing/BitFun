@@ -9,7 +9,7 @@ pub struct FileEditTool;
 
 const LARGE_EDIT_SOFT_LINE_LIMIT: usize = 200;
 const LARGE_EDIT_SOFT_BYTE_LIMIT: usize = 20 * 1024;
-const EDIT_RETRY_GUIDANCE: &str = "Do not retry by guessing. Read the current file contents around the intended change, copy the exact current text after any line-number prefix, and then retry with a uniquely matching old_string. If the text appears more than once, include more surrounding context or set replace_all only when every occurrence should change.";
+const EDIT_RETRY_GUIDANCE: &str = "Common causes: stale Read output after another edit, copied line-number prefixes, changed whitespace, or an old_string that is too broad. Recovery: read the current target area again, copy the exact current text after any line-number prefix, and retry with a uniquely matching old_string. If several edits target the same file, apply them sequentially from fresh content or replace one stable enclosing block. If the text appears more than once, include more surrounding context or set replace_all only when every occurrence should change.";
 
 impl Default for FileEditTool {
     fn default() -> Self {
@@ -45,17 +45,17 @@ impl Tool for FileEditTool {
         Ok(r#"Performs exact string replacements in files.
 
 Usage:
-- You must use your `Read` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file.
+- Use the Read tool before editing so `old_string` is based on current file content.
+- Treat Read output as stale after any successful edit to the same file. For multiple edits in one file, either apply them sequentially from fresh content or replace a stable enclosing block once.
 - The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
-- Build `old_string` only from the current file contents you have just read. Do not reconstruct it from memory, from a previous failed attempt, or from an intended final version of the code.
-- When editing text from Read tool output, preserve the exact indentation (tabs/spaces) as it appears AFTER the line number prefix. The line number prefix format is: spaces + line number + tab. Everything after that tab is the actual file content to match. Never include any part of the line number prefix in the old_string or new_string.
-- ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
-- Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.
-- The edit will FAIL if `old_string` is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.
-- If the edit fails because `old_string` was not found, the file probably changed or the snippet did not match exactly. Read the target area again before retrying; do not make small guessed tweaks to the same old_string.
-- If the edit fails because `old_string` appears multiple times, do not retry the same short string. Add nearby stable context from the same function/block until it is unique, or use `replace_all` only when every occurrence should be changed.
-- Keep edits focused. The 200-line / 20KB guideline is a soft reliability threshold, not a hard cap. If a large change is required, split it into several focused Edit calls by section, function, or component instead of truncating or doing one huge replacement.
-- Use `replace_all` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance."#
+- Build `old_string` from current file contents rather than from memory, an intended final version, or a guessed retry.
+- When editing text from Read output, copy only the text after the line-number prefix and preserve indentation exactly.
+- Prefer editing existing files in the codebase; create new files only when the task genuinely calls for a new artifact.
+- Avoid adding emojis to files unless the user asks.
+- The edit requires `old_string` to be unique unless `replace_all` is true. Add surrounding context from the same stable block when a snippet may appear more than once, or use `replace_all` when every occurrence should change.
+- If an edit fails because `old_string` was not found or matched multiple places, read the current target area again before retrying. Do not retry by slightly modifying the failed `old_string` from memory.
+- Keep edits focused. Large replacements are allowed when necessary, but staged section/function/component edits are usually more reliable than one huge replacement.
+- Use `replace_all` for intentional file-wide replacements, such as renaming a variable."#
         .to_string())
     }
 
@@ -74,11 +74,11 @@ Usage:
                 "old_string": {
                     "type": "string",
                     "default": "",
-                    "description": "The exact current text to replace. It must match the file contents exactly, including whitespace and indentation, and must be unique unless replace_all is true. Copy it from a fresh Read result, excluding the line-number prefix. Include nearby stable context when a short snippet may appear multiple times."
+                    "description": "The exact current text to replace. It must match the current file contents exactly, including whitespace and indentation, and must be unique unless replace_all is true. Copy it from a fresh Read result, excluding the line-number prefix. If this file was edited earlier in the turn, read the target area again before building old_string. Include stable surrounding context when a short snippet may appear multiple times."
                 },
                 "new_string": {
                     "type": "string",
-                    "description": "The replacement text. It must be different from old_string. Keep edits targeted. The 200-line / 20KB guideline is a soft reliability threshold; for larger changes, split the work into several focused Edit calls by section, function, or component."
+                    "description": "The replacement text. It must be different from old_string. Keep edits targeted. Large replacements are allowed when necessary; focused edits by section, function, or component are usually more reliable."
                 },
                 "replace_all": {
                     "type": "boolean",
@@ -176,7 +176,7 @@ Usage:
             return ValidationResult {
                 result: true,
                 message: Some(format!(
-                    "Large Edit payload: largest side is {} lines, {} bytes. This is allowed when necessary, but prefer a staged approach: split the change into several focused Edit calls by section, function, or component instead of one huge replacement.",
+                    "Large Edit payload: largest side is {} lines, {} bytes. This is allowed when necessary, but a staged approach is usually more reliable: edit one stable section, function, or component at a time, and refresh file context before additional edits to the same file.",
                     largest_lines, largest_bytes
                 )),
                 error_code: None,
@@ -299,8 +299,9 @@ mod tests {
         );
 
         assert!(message.contains("Edit failed for src/lib.rs"));
-        assert!(message.contains("Do not retry by guessing"));
-        assert!(message.contains("Read the current file contents"));
+        assert!(message.contains("Common causes"));
+        assert!(message.contains("stale Read output"));
+        assert!(message.contains("read the current target area again"));
     }
 
     #[test]

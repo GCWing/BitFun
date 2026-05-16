@@ -854,7 +854,10 @@ impl Tool for GrepTool {
         Ok(r#"A powerful search tool built on ripgrep
 
 Usage:
-- ALWAYS use Grep for search tasks. NEVER invoke `grep` or `rg` as a Bash command. The Grep tool has been optimized for correct permissions and access.
+- Use Grep by default for codebase content search because it preserves workspace-aware permissions and consistent output. Shell out to `grep` or `rg` only when this tool cannot meet the requirement, and prefer explaining why when doing so.
+- For simple literal names or symbols, start with the literal text before trying broad regexes.
+- Narrow searches with `path`, `glob`, or `type` when you know the likely area or language, and use `head_limit` to keep exploratory searches readable.
+- A common workflow is `output_mode: "files_with_matches"` to locate candidate files, followed by `output_mode: "content"` with `-n` and small context when exact lines are needed.
 - Supports full regex syntax (e.g., "log.*Error", "function\s+\w+")
 - Filter files with glob parameter (e.g., "*.js", "**/*.tsx") or type parameter (e.g., "js", "py", "rust")
 - The path parameter may be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool
