@@ -4,8 +4,20 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle,
+  ClipboardList,
+  Code,
+  FileText,
+  Lightbulb,
+  MessageSquarePlus,
+  Search,
+  TestTube,
+  Wrench,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import { recommendationRegistry } from './RecommendationRegistry';
 import { RecommendationAction, RecommendationContext } from './types';
 import { Tooltip } from '@/component-library';
@@ -13,6 +25,19 @@ import { createLogger } from '@/shared/utils/logger';
 import './SmartRecommendations.scss';
 
 const log = createLogger('SmartRecommendations');
+
+const RECOMMENDATION_ICONS = {
+  AlertCircle,
+  CheckCircle,
+  ClipboardList,
+  Code,
+  FileText,
+  Lightbulb,
+  MessageSquarePlus,
+  Search,
+  TestTube,
+  Wrench,
+} satisfies Record<string, LucideIcon>;
 
 export interface SmartRecommendationsProps {
   /** Recommendation context */
@@ -109,8 +134,8 @@ export const SmartRecommendations: React.FC<SmartRecommendationsProps> = ({
 
       <div className="bitfun-smart-recommendations__actions">
         {actions.map(action => {
-          const IconComponent = action.icon 
-            ? (LucideIcons as any)[action.icon] 
+          const IconComponent = action.icon
+            ? RECOMMENDATION_ICONS[action.icon as keyof typeof RECOMMENDATION_ICONS]
             : null;
           
           const isLoading = actionLoading[action.id] || action.loading;
