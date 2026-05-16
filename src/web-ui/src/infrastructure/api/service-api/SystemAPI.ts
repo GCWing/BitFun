@@ -9,6 +9,24 @@ import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('SystemAPI');
 
+/** Matches `check_for_updates` / `CheckForUpdatesResponse` from desktop `system_api.rs` (camelCase). */
+export interface CheckForUpdatesResponse {
+  updateAvailable: boolean;
+  currentVersion: string;
+  latestVersion: string | null;
+  releaseNotes: string | null;
+  releaseDate: string | null;
+}
+
+/** Matches `toggle_main_window_fullscreen` / desktop `ToggleMainWindowFullscreenResponse`. */
+export interface ToggleMainWindowFullscreenResponse {
+  isFullscreen: boolean;
+  isMaximized: boolean;
+}
+
+/** Close-button behavior values (matches `app.close_button_behavior` config key). */
+export type CloseBehavior = 'quit' | 'minimize_to_tray' | 'ask';
+
 export class SystemAPI {
    
   async getSystemInfo(): Promise<any> {
@@ -33,13 +51,35 @@ export class SystemAPI {
   }
 
    
-  async checkForUpdates(): Promise<any> {
+  async checkForUpdates(): Promise<CheckForUpdatesResponse> {
     try {
       return await api.invoke('check_for_updates', { 
         request: {} 
       });
     } catch (error) {
       throw createTauriCommandError('check_for_updates', error);
+    }
+  }
+
+  /** Desktop only: download and install update after user confirms (calls updater again). */
+  async installUpdate(): Promise<void> {
+    try {
+      await api.invoke('install_update', {
+        request: {}
+      });
+    } catch (error) {
+      throw createTauriCommandError('install_update', error);
+    }
+  }
+
+  /** Desktop only: restart the app after an update has been installed. */
+  async restartApp(): Promise<void> {
+    try {
+      await api.invoke('restart_app', {
+        request: {}
+      });
+    } catch (error) {
+      throw createTauriCommandError('restart_app', error);
     }
   }
 
@@ -173,6 +213,41 @@ export class SystemAPI {
     } catch (error) {
       log.error('Failed to set launch-at-login', { enabled, error });
       throw createTauriCommandError('autostart_set', error, { enabled });
+    }
+  }
+
+  // ─── Window / Tray behavior ────────────────────────────────────────────────
+
+  /** Desktop only: immediately quit the application. */
+  async quitApp(): Promise<void> {
+    try {
+      await api.invoke('quit_app', { request: {} });
+    } catch (error) {
+      throw createTauriCommandError('quit_app', error);
+    }
+  }
+
+  /** Desktop only: hide the main window to the system tray. */
+  async minimizeToTray(): Promise<void> {
+    try {
+      await api.invoke('minimize_to_tray', { request: {} });
+    } catch (error) {
+      throw createTauriCommandError('minimize_to_tray', error);
+    }
+  }
+
+  /**
+   * Desktop only: toggle OS-window fullscreen for the main window.
+   *
+   * This is intentionally not maximize and not app panel fullscreen. The
+   * desktop host owns the native fullscreen/maximize transition so the web UI
+   * does not stitch together multiple window-state calls.
+   */
+  async toggleMainWindowFullscreen(): Promise<ToggleMainWindowFullscreenResponse> {
+    try {
+      return await api.invoke('toggle_main_window_fullscreen', { request: {} });
+    } catch (error) {
+      throw createTauriCommandError('toggle_main_window_fullscreen', error);
     }
   }
 }

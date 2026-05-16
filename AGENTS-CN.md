@@ -17,6 +17,9 @@ BitFun 是一个由 Rust workspace 与共享 React 前端组成的项目。
 | 模块 | 路径 | Agent 文档 |
 |---|---|---|
 | Core（产品逻辑） | `src/crates/core` | [AGENTS.md](src/crates/core/AGENTS.md) |
+| 已拆出的 core 支撑 crate | `src/crates/{core-types,agent-stream,runtime-ports,terminal,tool-runtime}` | （使用 core 指南） |
+| Core owner crate | `src/crates/{services-core,services-integrations,agent-tools,tool-packs}` | （使用 core 指南 + 拆解护栏） |
+| 产品领域 crate | `src/crates/product-domains` | [AGENTS.md](src/crates/product-domains/AGENTS.md) |
 | Transport 适配层 | `src/crates/transport` | （使用 core 指南） |
 | API layer | `src/crates/api-layer` | （使用 core 指南） |
 | AI adapters | `src/crates/ai-adapters` | [AGENTS.md](src/crates/ai-adapters/AGENTS.md) |
@@ -94,7 +97,37 @@ await api.invoke('your_command', { request: { ... } });
 - 桌面端专属集成应放在 `src/apps/desktop`，再通过 transport / API layer 回流到共享逻辑。
 - 在共享 core 中避免使用 `tauri::AppHandle` 等宿主 API；优先使用 `bitfun_events::EventEmitter` 等共享抽象。
 
+### 远程兼容
+
+- 新增功能时，从一开始就要考虑远程工作区和远程控制同步适配。只支持本地的行为很容易让远程场景功能缺失。
+- 如果某个功能无法合理支持远程工作区，必须做能力屏蔽，或展示明确的不支持提示，不能让它以通用错误的形式失败。
+
+### Agent loop 行为
+
+- 不要把硬编码限制或模式判断作为处理 agent loop 循环问题的第一反应，例如仅按字符串或次数阻止重复工具调用。
+- 过多硬编码会把 agent loop 变成脆弱的 workflow。应先定位根因：工具行为、模型交互、会话上下文封装、prompt/tool schema 设计，或状态同步问题。
+
 ## 架构
+
+### Core 拆解护栏
+
+任何 `bitfun-core` 拆解、feature 边界、依赖边界或 Rust 构建提速重构，
+都必须先阅读
+[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)。
+该文档定义产品行为不变量、crate 归属目标、禁止依赖方向、feature 安全规则和里程碑验证门禁。
+
+### Tool 归属护栏
+
+- `src/crates/agent-tools` 拥有轻量 tool contract，以及 generic registry / dynamic-provider container。
+- `src/crates/core/src/agentic/tools` 当前负责产品工具组装、`dyn Tool` 适配、snapshot decoration、tool exposure / manifest resolution，以及按需工具说明发现（`GetToolSpec`）。
+- `ToolUseContext` 与具体工具实现继续留在 core，直到有已评审的 port/provider 设计和等价测试。
+- Tool 迁移必须保持 expanded/collapsed exposure、prompt 可见 manifest、`ToolUseContext.unlocked_collapsed_tools`，以及 desktop/MCP/ACP tool catalog 行为等价。
+
+### DeepReview 护栏
+
+Deep Review / 代码审核团队横跨 core runtime 与 Web UI。target resolution 与
+manifest construction 保持在前端；policy validation、queue/retry state 和
+report enrichment 保持在 shared core。
 
 ### 后端链路
 
@@ -133,7 +166,7 @@ SessionManager → Session → DialogTurn → ModelRound
 | `core`、`transport`、`api-layer` 或共享服务中的 Rust 逻辑 | `cargo check --workspace && cargo test --workspace` |
 | 桌面端集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
 | 被桌面端 smoke/functional 流覆盖的行为 | `cargo build -p bitfun-desktop` 后运行最接近的 E2E spec，或 `pnpm run e2e:test:l0` |
-| `src/crates/ai-adapters` | 运行上面相关 Rust 检查，**并且**运行 `src/crates/core/tests` 中的 stream integration tests |
+| `src/crates/ai-adapters` | 运行上面相关 Rust 检查，**并且**运行 `cargo test -p bitfun-agent-stream` 验证 stream contract |
 | 安装器应用 | `pnpm run installer:build` |
 
 ## 先看哪里
@@ -142,6 +175,7 @@ SessionManager → Session → DialogTurn → ModelRound
 |---|---|
 | Agent mode | `src/crates/core/src/agentic/agents/`、`src/crates/core/src/agentic/agents/prompts/`、`src/web-ui/src/locales/*/scenes/agents.json` |
 | Deep Review / 代码审核团队 | `src/crates/core/src/agentic/deep_review_policy.rs`、`src/crates/core/src/agentic/agents/deep_review_agent.rs`、`src/crates/core/src/agentic/tools/implementations/{task_tool.rs,code_review_tool.rs}`、`src/web-ui/src/shared/services/reviewTeamService.ts`、`src/web-ui/src/flow_chat/services/DeepReviewService.ts`、`src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx` |
+| 会话用量报告（`/usage`） | `src/crates/core/src/service/session_usage/`、`src/web-ui/src/flow_chat/components/usage/`、`src/web-ui/src/locales/*/flow-chat.json` |
 | Tool | `src/crates/core/src/agentic/tools/implementations/`、`src/crates/core/src/agentic/tools/registry.rs` |
 | MCP / LSP / remote | `src/crates/core/src/service/mcp/`、`src/crates/core/src/service/lsp/`、`src/crates/core/src/service/remote_connect/`、`src/crates/core/src/service/remote_ssh/` |
 | 桌面端 API | `src/apps/desktop/src/api/`、`src/crates/api-layer/src/`、`src/crates/transport/src/adapters/tauri.rs` |

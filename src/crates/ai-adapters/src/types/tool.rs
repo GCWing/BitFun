@@ -1,11 +1,26 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCall {
     pub id: String,
     pub name: String,
-    pub arguments: HashMap<String, serde_json::Value>,
+    pub arguments: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_arguments: Option<String>,
+}
+
+impl ToolCall {
+    pub fn serialized_arguments(&self) -> String {
+        self.raw_arguments
+            .as_deref()
+            .filter(|raw| serde_json::from_str::<Value>(raw).is_ok())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| {
+                serde_json::to_string(&self.arguments).unwrap_or_else(|_| "{}".to_string())
+            })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

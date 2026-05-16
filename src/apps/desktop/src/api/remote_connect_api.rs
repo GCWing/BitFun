@@ -8,7 +8,6 @@ use bitfun_core::service::remote_connect::{
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::RwLock;
 
@@ -238,7 +237,7 @@ pub struct LanNetworkInfo {
 fn detect_default_gateway_ip() -> Option<String> {
     #[cfg(target_os = "macos")]
     {
-        let output = Command::new("route")
+        let output = bitfun_core::util::process_manager::create_command("route")
             .args(["-n", "get", "default"])
             .output()
             .ok()?;
@@ -254,7 +253,7 @@ fn detect_default_gateway_ip() -> Option<String> {
 
     #[cfg(target_os = "linux")]
     {
-        let output = Command::new("ip")
+        let output = bitfun_core::util::process_manager::create_command("ip")
             .args(["route", "show", "default"])
             .output()
             .ok()?;
@@ -270,7 +269,10 @@ fn detect_default_gateway_ip() -> Option<String> {
 
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("route").args(["print", "-4"]).output().ok()?;
+        let output = bitfun_core::util::process_manager::create_command("route")
+            .args(["print", "-4"])
+            .output()
+            .ok()?;
         if !output.status.success() {
             return None;
         }

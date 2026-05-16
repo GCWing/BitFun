@@ -38,16 +38,29 @@ interface ServerState {
   documentCount: number;
 }
 
+type OpenDocumentSkippedReason = 'server-not-running';
+
+export interface OpenDocumentResult {
+  language: string;
+  opened: boolean;
+  skippedReason?: OpenDocumentSkippedReason;
+  serverStatus?: ServerState['status'];
+}
+
+interface CachedServerStatus {
+  status: ServerState['status'];
+  updatedAt: number;
+}
+
 export class WorkspaceLspManager {
   private static instances = new Map<string, WorkspaceLspManager>();
   
   private workspacePath: string;
   private eventUnlisten?: UnlistenFn;
   private isInitialized = false;
-  
-
-  private startingLanguages = new Set<string>();
-  private languageReadyPromises = new Map<string, Promise<void>>();
+  private serverStatusByLanguage = new Map<string, CachedServerStatus>();
+  private skippedOpenNoticeLanguages = new Set<string>();
+  private readonly SERVER_STATUS_CACHE_TTL_MS = 30000;
   
 
   private diagnosticsCallbacks = new Map<string, Array<(diagnostics: any[]) => void>>();
@@ -155,7 +168,81 @@ export class WorkspaceLspManager {
     return uri.toLowerCase();
   }
 
-  
+
+  private normalizeLanguage(language: string): string {
+    return language.trim().toLowerCase();
+  }
+
+
+  private isServerStatus(status?: string): status is ServerState['status'] {
+    return status === 'stopped'
+      || status === 'starting'
+      || status === 'running'
+      || status === 'failed'
+      || status === 'restarting';
+  }
+
+
+  private rememberServerStatus(language: string, status: ServerState['status']): void {
+    const key = this.normalizeLanguage(language);
+    this.serverStatusByLanguage.set(key, {
+      status,
+      updatedAt: Date.now()
+    });
+
+    if (status === 'running') {
+      this.skippedOpenNoticeLanguages.delete(key);
+    }
+  }
+
+
+  private getFreshCachedServerStatus(language: string): ServerState['status'] | undefined {
+    const cached = this.serverStatusByLanguage.get(this.normalizeLanguage(language));
+    if (!cached) {
+      return undefined;
+    }
+
+    if (Date.now() - cached.updatedAt > this.SERVER_STATUS_CACHE_TTL_MS) {
+      return undefined;
+    }
+
+    return cached.status;
+  }
+
+
+  private async getDocumentOpenAvailability(language: string): Promise<{
+    canOpen: boolean;
+    status?: ServerState['status'];
+    skippedReason?: OpenDocumentSkippedReason;
+  }> {
+    const cachedStatus = this.getFreshCachedServerStatus(language);
+    if (cachedStatus) {
+      return cachedStatus === 'running'
+        ? { canOpen: true, status: cachedStatus }
+        : {
+            canOpen: false,
+            status: cachedStatus,
+            skippedReason: 'server-not-running'
+          };
+    }
+
+    const state = await this.getServerState(language);
+    if (!state) {
+      return { canOpen: true };
+    }
+
+    this.rememberServerStatus(language, state.status);
+
+    return state.status === 'running'
+      ? { canOpen: true, status: state.status }
+      : {
+          canOpen: false,
+          status: state.status,
+          skippedReason: 'server-not-running'
+        };
+  }
+
+
   private onDiagnosticsReceived(data: LspEvent['data']) {
     const { uri, diagnostics } = data;
     
@@ -186,6 +273,9 @@ export class WorkspaceLspManager {
     
     if (!language) return;
 
+    if (this.isServerStatus(status)) {
+      this.rememberServerStatus(language, status);
+    }
 
     switch (status) {
       case 'starting':
@@ -282,21 +372,10 @@ export class WorkspaceLspManager {
       progressNotif.complete();
       this.indexingProgressNotifications.delete(language);
     }
-    
-
-    this.startingLanguages.delete(language);
   }
   
   
-  async openDocument(uri: string, language: string, content: string): Promise<string> {
-
-    if (this.startingLanguages.has(language)) {
-      const readyPromise = this.languageReadyPromises.get(language);
-      if (readyPromise) {
-        await readyPromise;
-      }
-    }
-    
+  async openDocument(uri: string, language: string, content: string): Promise<OpenDocumentResult> {
     if (!this.isInitialized) {
       try {
         await this.initialize();
@@ -305,21 +384,28 @@ export class WorkspaceLspManager {
         throw initError;
       }
     }
-    
 
-    if (!this.startingLanguages.has(language)) {
-      this.startingLanguages.add(language);
-      
+    // didOpen is only meaningful when a language server is actually running.
+    // Checking the state here prevents layout/remount churn (for example window
+    // fullscreen transitions) from generating batches of backend no-op logs.
+    const availability = await this.getDocumentOpenAvailability(language);
+    if (!availability.canOpen) {
+      const key = this.normalizeLanguage(language);
+      if (!this.skippedOpenNoticeLanguages.has(key)) {
+        log.debug('Skipped LSP didOpen because language server is not running', {
+          workspacePath: this.workspacePath,
+          language,
+          status: availability.status
+        });
+        this.skippedOpenNoticeLanguages.add(key);
+      }
 
-      const readyPromise = new Promise<void>((resolve) => {
-
-        setTimeout(() => {
-          this.startingLanguages.delete(language);
-          this.languageReadyPromises.delete(language);
-          resolve();
-        }, 5000);
-      });
-      this.languageReadyPromises.set(language, readyPromise);
+      return {
+        language,
+        opened: false,
+        skippedReason: availability.skippedReason,
+        serverStatus: availability.status
+      };
     }
     
     try {
@@ -341,7 +427,7 @@ export class WorkspaceLspManager {
       
 
 
-      return language;
+      return { language, opened: true };
     } catch (error) {
       log.error('Failed to open document', { workspacePath: this.workspacePath, uri, language, error });
       throw error;

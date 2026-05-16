@@ -13,9 +13,7 @@ use bitfun_core::miniapp::{
 use bitfun_core::service::remote_ssh::{
     init_remote_workspace_manager, RemoteFileService, RemoteTerminalManager, SSHConnectionManager,
 };
-use bitfun_core::service::{
-    ai_rules, announcement, config, filesystem, mcp, search, token_usage, workspace,
-};
+use bitfun_core::service::{announcement, config, filesystem, mcp, search, token_usage, workspace};
 use bitfun_core::util::errors::*;
 
 use serde::{Deserialize, Serialize};
@@ -74,7 +72,6 @@ pub struct AppState {
     pub config_service: Arc<config::ConfigService>,
     pub filesystem_service: Arc<filesystem::FileSystemService>,
     pub workspace_search_service: Arc<search::WorkspaceSearchService>,
-    pub ai_rules_service: Arc<ai_rules::AIRulesService>,
     pub agent_registry: Arc<agents::AgentRegistry>,
     pub mcp_service: Option<Arc<mcp::MCPService>>,
     pub acp_client_service: Option<Arc<bitfun_acp::AcpClientService>>,
@@ -124,15 +121,6 @@ impl AppState {
         let workspace_search_service = Arc::new(search::WorkspaceSearchService::new());
         search::set_global_workspace_search_service(workspace_search_service.clone());
 
-        ai_rules::initialize_global_ai_rules_service()
-            .await
-            .map_err(|e| {
-                BitFunError::service(format!("Failed to initialize AI rules service: {}", e))
-            })?;
-        let ai_rules_service = ai_rules::get_global_ai_rules_service()
-            .await
-            .map_err(|e| BitFunError::service(format!("Failed to get AI rules service: {}", e)))?;
-
         let agent_registry = agents::get_agent_registry();
 
         let mcp_service = match mcp::MCPService::new(config_service.clone()) {
@@ -168,6 +156,20 @@ impl AppState {
 
         let miniapp_manager = Arc::new(MiniAppManager::new(path_manager.clone()));
         initialize_global_miniapp_manager(miniapp_manager.clone());
+        match miniapp_manager.mark_stale_drafts_for_cleanup().await {
+            Ok(cleanup_targets) if !cleanup_targets.is_empty() => {
+                let cleanup_manager = miniapp_manager.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = cleanup_manager.cleanup_marked_drafts(cleanup_targets).await {
+                        log::warn!("Failed to clean marked miniapp drafts: {}", e);
+                    }
+                });
+            }
+            Ok(_) => {}
+            Err(e) => {
+                log::warn!("Failed to mark stale miniapp drafts for cleanup: {}", e);
+            }
+        }
         if let Err(e) = seed_builtin_miniapps(&miniapp_manager).await {
             log::warn!("Failed to seed built-in miniapps: {}", e);
         }
@@ -203,12 +205,6 @@ impl AppState {
         let initial_workspace_path = initial_workspace
             .as_ref()
             .map(|workspace| workspace.root_path.clone());
-
-        if let Some(workspace_path) = initial_workspace_path.clone() {
-            if let Err(e) = ai_rules_service.set_workspace(workspace_path).await {
-                log::warn!("Failed to restore AI rules workspace on startup: {}", e);
-            }
-        }
 
         // Initialize SSH Remote services synchronously so they're ready before app starts
         let ssh_data_dir = dirs::data_local_dir()
@@ -299,7 +295,6 @@ impl AppState {
             config_service,
             filesystem_service,
             workspace_search_service,
-            ai_rules_service,
             agent_registry,
             mcp_service,
             acp_client_service,

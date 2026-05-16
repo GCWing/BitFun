@@ -1,18 +1,23 @@
-use crate::agent::{core_adapter::CoreAgentAdapter, Agent, AgentEvent, AgenticSystem};
-use crate::config::CliConfig;
 /// Exec mode implementation
 ///
-/// Single command execution mode
+/// Single command execution mode (non-interactive).
+/// Consumes core events directly from EventQueue.
+
 use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+
+use bitfun_events::AgenticEvent;
+
+use crate::config::CliConfig;
+use crate::agent::{Agent, core_adapter::CoreAgentAdapter, agentic_system::AgenticSystem};
 
 pub struct ExecMode {
     #[allow(dead_code)]
     config: CliConfig,
     message: String,
-    agent: Arc<dyn Agent>,
+    agent_type: String,
+    agent: Arc<CoreAgentAdapter>,
     workspace_path: Option<PathBuf>,
     /// None: no patch output, Some("-"): output to stdout, Some(path): save to file
     output_patch: Option<String>,
@@ -27,17 +32,16 @@ impl ExecMode {
         workspace_path: Option<PathBuf>,
         output_patch: Option<String>,
     ) -> Self {
-        // Use the real CoreAgentAdapter
         let agent = Arc::new(CoreAgentAdapter::new(
-            agent_type,
             agentic_system.coordinator.clone(),
             agentic_system.event_queue.clone(),
             workspace_path.clone(),
-        )) as Arc<dyn Agent>;
+        ));
 
         Self {
             config,
             message,
+            agent_type,
             agent,
             workspace_path,
             output_patch,
@@ -70,89 +74,151 @@ impl ExecMode {
     pub async fn run(&mut self) -> Result<()> {
         tracing::info!(
             "Executing command, Agent: {}, Message: {}",
-            self.agent.name(),
+            self.agent_type,
             self.message
         );
 
         println!("Executing: {}", self.message);
         println!();
 
-        let (event_tx, mut event_rx) = mpsc::unbounded_channel();
-        let agent = self.agent.clone();
-        let message = self.message.clone();
+        // Ensure session and send message
+        let session_id = self.agent.ensure_session(&self.agent_type).await?;
+        let event_queue = self.agent.event_queue().clone();
 
-        let handle = tokio::spawn(async move { agent.process_message(message, event_tx).await });
+        println!("Thinking...");
 
-        while let Some(event) = event_rx.recv().await {
-            match event {
-                AgentEvent::Thinking => {
-                    println!("Thinking...");
-                }
-                AgentEvent::TextChunk(chunk) => {
-                    print!("{}", chunk);
-                    use std::io::Write;
-                    std::io::stdout().flush().ok();
-                }
-                AgentEvent::ToolCallStart {
-                    tool_name,
-                    parameters: _,
-                } => {
-                    println!("\nTool call: {}", tool_name);
-                }
-                AgentEvent::ToolCallProgress {
-                    tool_name: _,
-                    message,
-                } => {
-                    println!("   In progress: {}", message);
-                }
-                AgentEvent::ToolCallComplete {
-                    tool_name,
-                    result,
-                    success,
-                } => {
-                    if success {
-                        println!("   [+] {}: {}", tool_name, result);
-                    } else {
-                        println!("   [x] {}: {}", tool_name, result);
+        let _turn_id = self.agent.send_message(self.message.clone(), &self.agent_type).await?;
+
+        // Consume events from EventQueue until turn completes
+        let mut total_tool_calls = 0usize;
+
+        loop {
+            // Wait for events (efficient, uses Notify internally)
+            event_queue.wait_for_events().await;
+            let events = event_queue.dequeue_batch(20).await;
+
+            for envelope in events {
+                let event = &envelope.event;
+
+                // Only process events for our session
+                if event.session_id() != Some(&session_id) {
+                    // Check if this is a subagent event whose parent is in our session
+                    if let AgenticEvent::ToolEvent { tool_event, subagent_parent_info, .. } = event {
+                        if subagent_parent_info
+                            .as_ref()
+                            .map(|info| info.session_id.as_str())
+                            == Some(session_id.as_str())
+                        {
+                            use bitfun_events::ToolEventData;
+                            match tool_event {
+                                ToolEventData::Started { tool_name, .. } => {
+                                    println!("   [subagent] {}", tool_name);
+                                }
+                                ToolEventData::Completed {
+                                    tool_name,
+                                    result_for_assistant,
+                                    result,
+                                    ..
+                                } => {
+                                    let summary = result_for_assistant
+                                        .clone()
+                                        .unwrap_or_else(|| result.to_string());
+                                    println!("   [subagent] {} ✓ {}", tool_name, summary);
+                                }
+                                ToolEventData::Failed { tool_name, error, .. } => {
+                                    println!("   [subagent] {} ✗ {}", tool_name, error);
+                                }
+                                _ => {}
+                            }
+                        }
                     }
+                    continue;
                 }
-                AgentEvent::Done => {
-                    println!("\n");
-                    break;
-                }
-                AgentEvent::Error(err) => {
-                    eprintln!("\nError: {}", err);
-                    break;
+
+                match event {
+                    AgenticEvent::TextChunk { text, .. } => {
+                        print!("{}", text);
+                        use std::io::Write;
+                        std::io::stdout().flush().ok();
+                    }
+
+                    AgenticEvent::ThinkingChunk { content, .. } => {
+                        // Show thinking in exec mode as dimmed text
+                        print!("\x1b[2m{}\x1b[0m", content);
+                        use std::io::Write;
+                        std::io::stdout().flush().ok();
+                    }
+
+                    AgenticEvent::ToolEvent { tool_event, .. } => {
+                        use bitfun_events::ToolEventData;
+                        match tool_event {
+                            ToolEventData::Started { tool_name, .. } => {
+                                println!("\nTool call: {}", tool_name);
+                                total_tool_calls += 1;
+                            }
+                            ToolEventData::Progress { message, .. } => {
+                                println!("   In progress: {}", message);
+                            }
+                            ToolEventData::Completed {
+                                tool_name,
+                                result_for_assistant,
+                                result,
+                                duration_ms,
+                                ..
+                            } => {
+                                let summary = result_for_assistant
+                                    .clone()
+                                    .unwrap_or_else(|| result.to_string());
+                                println!("   [+] {} ({}ms): {}", tool_name, duration_ms, summary);
+                            }
+                            ToolEventData::Failed {
+                                tool_name, error, ..
+                            } => {
+                                println!("   [x] {}: {}", tool_name, error);
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    AgenticEvent::DialogTurnCompleted { .. } => {
+                        println!("\n");
+                        println!("Execution complete");
+                        if total_tool_calls > 0 {
+                            println!(
+                                "\nTool call statistics: {} tools invoked",
+                                total_tool_calls
+                            );
+                        }
+                        // Break out of the event loop
+                        self.output_patch_if_needed();
+                        return Ok(());
+                    }
+
+                    AgenticEvent::DialogTurnFailed { error, .. } => {
+                        eprintln!("\nExecution failed: {}", error);
+                        self.output_patch_if_needed();
+                        return Err(anyhow::anyhow!("Execution failed: {}", error));
+                    }
+
+                    AgenticEvent::DialogTurnCancelled { .. } => {
+                        println!("\nExecution cancelled");
+                        self.output_patch_if_needed();
+                        return Ok(());
+                    }
+
+                    AgenticEvent::SystemError { error, .. } => {
+                        eprintln!("\nSystem error: {}", error);
+                        self.output_patch_if_needed();
+                        return Err(anyhow::anyhow!("System error: {}", error));
+                    }
+
+                    _ => {}
                 }
             }
         }
+    }
 
-        let result = handle.await;
-
-        match result {
-            Ok(Ok(response)) => {
-                if response.success {
-                    println!("Execution complete");
-                    if !response.tool_calls.is_empty() {
-                        println!(
-                            "\nTool call statistics: {} tools invoked",
-                            response.tool_calls.len()
-                        );
-                    }
-                } else {
-                    println!("Execution failed");
-                }
-            }
-            Ok(Err(e)) => {
-                eprintln!("Execution failed: {}", e);
-                return Err(e);
-            }
-            Err(e) => {
-                eprintln!("Task failed: {}", e);
-                return Err(e.into());
-            }
-        }
-
+    fn output_patch_if_needed(&self) {
         if let Some(ref output_target) = self.output_patch {
             println!("\n--- Generating Patch ---");
             if let Some(patch) = self.get_git_diff() {
@@ -180,7 +246,5 @@ impl ExecMode {
                 println!("(Unable to generate patch)");
             }
         }
-
-        Ok(())
     }
 }

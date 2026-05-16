@@ -1,73 +1,19 @@
+//! Dialog turn helpers and statistics types.
+//!
+//! Historical note: this module used to define `DialogTurn` and
+//! `DialogTurnState` structs that were never persisted nor read back —
+//! the actual on-disk shape lives in `service::session::DialogTurnData`,
+//! and turn lifecycle state is tracked through `SessionState::Processing`
+//! and `TurnStatus`. The orphan structs were removed; only `TurnStats`
+//! and a small id-helper survive because they are still referenced by
+//! `SessionManager::complete_dialog_turn` and friends.
+
 use serde::{Deserialize, Serialize};
-use std::time::SystemTime;
 use uuid::Uuid;
 
-// ============ Dialog Turn DialogTurn ============
-
-/// Dialog turn: from user input to final AI response
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DialogTurn {
-    pub turn_id: String,
-    pub session_id: String,
-    pub turn_index: usize,
-
-    /// User input
-    pub user_input: String,
-
-    /// Model round ID list
-    pub model_round_ids: Vec<String>,
-
-    /// State
-    pub state: DialogTurnState,
-
-    /// Statistics
-    pub stats: TurnStats,
-
-    /// Lifecycle
-    pub started_at: SystemTime,
-    pub completed_at: Option<SystemTime>,
-}
-
-impl DialogTurn {
-    /// Create a new dialog turn
-    /// turn_id: Optional frontend-specified ID, if None then backend generates it
-    pub fn new(
-        session_id: String,
-        turn_index: usize,
-        user_input: String,
-        turn_id: Option<String>,
-    ) -> Self {
-        Self {
-            turn_id: turn_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
-            session_id,
-            turn_index,
-            user_input,
-            model_round_ids: vec![],
-            state: DialogTurnState::Active {
-                current_round_index: 0,
-                pending_tool_count: 0,
-            },
-            stats: TurnStats::default(),
-            started_at: SystemTime::now(),
-            completed_at: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum DialogTurnState {
-    Active {
-        current_round_index: usize,
-        pending_tool_count: usize,
-    },
-    Completed {
-        final_response: String,
-        total_rounds: usize,
-    },
-    Cancelled,
-    Failed {
-        error: String,
-    },
+/// Generate a fresh turn id when callers do not supply one.
+pub fn new_turn_id(provided: Option<String>) -> String {
+    provided.unwrap_or_else(|| Uuid::new_v4().to_string())
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

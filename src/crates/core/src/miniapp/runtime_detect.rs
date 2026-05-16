@@ -14,18 +14,8 @@
 
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RuntimeKind {
-    Bun,
-    Node,
-}
-
-#[derive(Debug, Clone)]
-pub struct DetectedRuntime {
-    pub kind: RuntimeKind,
-    pub path: PathBuf,
-    pub version: String,
-}
+use bitfun_product_domains::miniapp::runtime::{candidate_dirs, version_manager_roots};
+pub use bitfun_product_domains::miniapp::runtime::{DetectedRuntime, RuntimeKind};
 
 /// Detect available JS runtime: Bun first, then Node.js. Returns None if neither is available.
 pub fn detect_runtime() -> Option<DetectedRuntime> {
@@ -54,14 +44,15 @@ fn find_executable(name: &str) -> Option<PathBuf> {
     if let Ok(p) = which::which(name) {
         return Some(p);
     }
-    for candidate in candidate_dirs() {
+    let home = home_dir();
+    for candidate in candidate_dirs(home.as_deref()) {
         let exe = candidate.join(name);
         if is_executable(&exe) {
             return Some(exe);
         }
     }
     // nvm / fnm / volta layouts: <root>/<version>/bin/<name>
-    for root in version_manager_roots() {
+    for root in version_manager_roots(home.as_deref()) {
         if let Ok(read) = std::fs::read_dir(&root) {
             for entry in read.flatten() {
                 let exe = entry.path().join("bin").join(name);
@@ -72,38 +63,6 @@ fn find_executable(name: &str) -> Option<PathBuf> {
         }
     }
     None
-}
-
-fn candidate_dirs() -> Vec<PathBuf> {
-    let mut v: Vec<PathBuf> = vec![
-        PathBuf::from("/opt/homebrew/bin"),
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/usr/bin"),
-        PathBuf::from("/bin"),
-    ];
-    if let Some(home) = home_dir() {
-        v.push(home.join(".bun").join("bin"));
-        v.push(home.join(".volta").join("bin"));
-        v.push(home.join(".local").join("bin"));
-        v.push(home.join(".cargo").join("bin"));
-        v.push(home.join(".asdf").join("shims"));
-    }
-    v
-}
-
-fn version_manager_roots() -> Vec<PathBuf> {
-    let mut v = Vec::new();
-    if let Some(home) = home_dir() {
-        v.push(home.join(".nvm").join("versions").join("node"));
-        v.push(home.join(".fnm").join("node-versions"));
-        v.push(
-            home.join("Library")
-                .join("Application Support")
-                .join("fnm")
-                .join("node-versions"),
-        );
-    }
-    v
 }
 
 fn home_dir() -> Option<PathBuf> {

@@ -15,12 +15,12 @@ import {
 import { flowChatStore } from '../store/FlowChatStore';
 import { flowChatManager } from '../services/FlowChatManager';
 import type { UnlistenFn } from '@tauri-apps/api/event';
-import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { i18nService } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { WorkspaceKind } from '@/shared/types';
 import { generateTempTitle } from '../utils/titleUtils';
 import { createLogger } from '@/shared/utils/logger';
+import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
 import {
   createI18nSessionTitleDescriptor,
   getNextDefaultSessionTitleCount,
@@ -28,40 +28,6 @@ import {
 } from '../utils/sessionTitle';
 
 const log = createLogger('useFlowChat');
-
-/**
- * Resolve the model context window size.
- */
-async function getModelContextWindow(modelName?: string): Promise<number> {
-  try {
-    const models = await configManager.getConfig<any[]>('ai.models') || [];
-    
-    // Prefer the specified model if provided.
-    if (modelName) {
-      const model = models.find(m => m.name === modelName || m.id === modelName);
-      if (model?.context_window) {
-        return model.context_window;
-      }
-    }
-    
-    // Fallback to the primary default model.
-    const defaultModels = await configManager.getConfig<any>('ai.default_models');
-    const primaryModelId = defaultModels?.primary;
-
-    if (primaryModelId) {
-      const primaryModel = models.find(m => m.id === primaryModelId);
-      if (primaryModel?.context_window) {
-        return primaryModel.context_window;
-      }
-    }
-    
-    // Final fallback.
-    return 128128;
-  } catch (error) {
-    log.error('Failed to get model context window size', { error });
-    return 128128;
-  }
-}
 
 export const useFlowChat = () => {
   const { workspacePath, workspace } = useCurrentWorkspace();
@@ -102,13 +68,12 @@ export const useFlowChat = () => {
         throw new Error('Workspace path is required to create a session');
       }
       
-      const maxContextTokens = await getModelContextWindow(config?.modelName);
-      
       const isRemote = workspace?.workspaceKind === WorkspaceKind.Remote;
       const remoteConnectionId = isRemote ? workspace?.connectionId : undefined;
       const remoteSshHost = isRemote ? workspace?.sshHost : undefined;
 
       const agentTypeForSession = (config?.agentType || 'agentic').trim() || 'agentic';
+      const maxContextTokens = await getModelMaxTokens(config?.modelName, agentTypeForSession);
       const sessionTitleMode =
         workspace?.workspaceKind === WorkspaceKind.Assistant
           ? 'claw'

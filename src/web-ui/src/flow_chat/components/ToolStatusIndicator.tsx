@@ -3,7 +3,8 @@
  */
 
 import React from 'react';
-import { Loader2, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, AlertCircle, type LucideIcon } from 'lucide-react';
+import { ToolProcessingDots } from '@/component-library';
 import type { ToolExecutionStatus } from '../../shared/types/tool-events';
 
 interface ToolStatusIndicatorProps {
@@ -13,13 +14,24 @@ interface ToolStatusIndicatorProps {
   showLabel?: boolean;
 }
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<
+  ToolExecutionStatus,
+  {
+    icon: LucideIcon | null;
+    color: string;
+    bgColor: string;
+    label: string;
+    animate: boolean;
+    useDots?: boolean;
+  }
+> = {
   pending: {
-    icon: Clock,
+    icon: null,
     color: 'text-gray-500',
     bgColor: 'bg-gray-100',
     label: 'Waiting',
-    animate: false
+    animate: false,
+    useDots: true,
   },
   receiving: {
     icon: Loader2,
@@ -29,11 +41,12 @@ const STATUS_CONFIG = {
     animate: true
   },
   starting: {
-    icon: Clock,
-    color: 'text-blue-500', 
+    icon: null,
+    color: 'text-blue-500',
     bgColor: 'bg-blue-100',
     label: 'Starting',
-    animate: true
+    animate: false,
+    useDots: true,
   },
   running: {
     icon: Loader2,
@@ -72,7 +85,6 @@ export const ToolStatusIndicator: React.FC<ToolStatusIndicatorProps> = ({
   showLabel = true
 }) => {
   const config = STATUS_CONFIG[status];
-  const Icon = config.icon;
 
   const formatDuration = (ms: number) => {
     if (ms < 1000) return `${ms}ms`;
@@ -83,9 +95,13 @@ export const ToolStatusIndicator: React.FC<ToolStatusIndicatorProps> = ({
   return (
     <div className={`inline-flex items-center gap-2 ${className}`}>
       <div className={`flex items-center justify-center w-5 h-5 rounded-full ${config.bgColor}`}>
-        <Icon 
-          className={`w-3 h-3 ${config.color} ${config.animate ? 'animate-spin' : ''}`}
-        />
+        {config.useDots ? (
+          <ToolProcessingDots size={12} className={config.color} />
+        ) : config.icon ? (
+          <config.icon
+            className={`w-3 h-3 ${config.color} ${config.animate ? 'animate-spin' : ''}`}
+          />
+        ) : null}
       </div>
       
       {showLabel && (

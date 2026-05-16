@@ -28,7 +28,6 @@ export function ProgressPage({
     extract: t('progress.extract'),
     registry: t('progress.registry'),
     shortcuts: t('progress.shortcuts'),
-    context_menu: t('progress.contextMenu'),
     path: t('progress.path'),
     config: t('progress.config'),
     complete: t('progress.complete'),

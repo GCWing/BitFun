@@ -6,7 +6,7 @@
 //! ControlHub.
 
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -256,6 +256,14 @@ Use this tool when you recognize a common task pattern — it saves planning tim
 {}"#,
             list
         ))
+    }
+
+    fn short_description(&self) -> String {
+        "Get predefined step-by-step operation guides for common tasks.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

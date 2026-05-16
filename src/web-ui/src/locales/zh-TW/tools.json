@@ -72,6 +72,8 @@
       "source": "源碼",
       "markdown": "Markdown",
       "preview": "預覽",
+      "copyMarkdown": "複製 Markdown",
+      "copiedMarkdown": "已複製 Markdown",
       "viewModeLabel": "Markdown 與預覽模式",
       "notice": {
         "sourcePreviewFallback": "該文檔包含無法在可視化模式中安全編輯的 HTML 片段。請在源碼模式中編輯，或切換到預覽查看效果。"

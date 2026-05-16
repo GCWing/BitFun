@@ -9,7 +9,9 @@ use anyhow::{Result, anyhow};
 use bitfun_core::agentic::agents::SubAgentSource;
 use bitfun_core::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSource};
 use bitfun_core::agentic::core::SessionConfig;
-use bitfun_core::service::config::types::SubAgentConfig;
+use bitfun_core::agentic::deep_review_policy::{
+    DeepReviewQueueControlAction, apply_deep_review_queue_control,
+};
 use bitfun_core::service::i18n::{LocaleId, LocaleMetadata, sync_global_i18n_service_locale};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -196,6 +198,10 @@ pub async fn dispatch(
         "update_subagent_config" => {
             let request = extract_request(&params)?;
             let subagent_id = get_string(request, "subagentId")?;
+            let parent_agent_type = request
+                .get("parentAgentType")
+                .and_then(|v| v.as_str())
+                .map(|value| value.to_string());
             let enabled = request.get("enabled").and_then(|v| v.as_bool());
             let model = request
                 .get("model")
@@ -213,15 +219,32 @@ pub async fn dispatch(
                 .get_custom_subagent_config(&subagent_id, workspace.as_deref())
                 .is_some()
             {
-                state
-                    .agent_registry
-                    .update_and_save_custom_subagent_config(
-                        &subagent_id,
-                        enabled,
-                        model,
-                        workspace.as_deref(),
-                    )
-                    .map_err(|e| anyhow!("Failed to update configuration: {}", e))?;
+                if let Some(enabled) = enabled {
+                    let parent_agent_type = parent_agent_type.as_deref().ok_or_else(|| {
+                        anyhow!("parentAgentType is required when updating subagent availability")
+                    })?;
+                    state
+                        .agent_registry
+                        .update_subagent_override(
+                            parent_agent_type,
+                            &subagent_id,
+                            enabled,
+                            workspace.as_deref(),
+                        )
+                        .await
+                        .map_err(|e| anyhow!("Failed to update subagent availability: {}", e))?;
+                }
+
+                if model.is_some() {
+                    state
+                        .agent_registry
+                        .update_and_save_custom_subagent_config(
+                            &subagent_id,
+                            model,
+                            workspace.as_deref(),
+                        )
+                        .map_err(|e| anyhow!("Failed to update configuration: {}", e))?;
+                }
                 Ok(serde_json::Value::Null)
             } else {
                 if state
@@ -243,14 +266,19 @@ pub async fn dispatch(
                 }
 
                 if let Some(enabled) = enabled {
-                    let config = SubAgentConfig { enabled };
-                    let path = format!("ai.subagent_configs.{}", subagent_id);
-                    let config_value = serde_json::to_value(&config)?;
+                    let parent_agent_type = parent_agent_type.as_deref().ok_or_else(|| {
+                        anyhow!("parentAgentType is required when updating subagent availability")
+                    })?;
                     state
-                        .config_service
-                        .set_config(&path, config_value)
+                        .agent_registry
+                        .update_subagent_override(
+                            parent_agent_type,
+                            &subagent_id,
+                            enabled,
+                            workspace.as_deref(),
+                        )
                         .await
-                        .map_err(|e| anyhow!("Failed to update enabled status: {}", e))?;
+                        .map_err(|e| anyhow!("Failed to update subagent availability: {}", e))?;
                 }
 
                 if let Some(model) = model {
@@ -378,6 +406,36 @@ pub async fn dispatch(
                 .cancel_dialog_turn(&session_id, &dialog_turn_id)
                 .await
                 .map_err(|e| anyhow!("{}", e))?;
+            Ok(serde_json::json!({ "success": true }))
+        }
+        "control_deep_review_queue" => {
+            let request = extract_request(&params)?;
+            let session_id = get_string(&request, "sessionId")?;
+            let dialog_turn_id = get_string(&request, "dialogTurnId")?;
+            let tool_id = get_string(&request, "toolId")?;
+            let action_raw = get_string(&request, "action")?;
+            let action = match action_raw.as_str() {
+                "pause" => DeepReviewQueueControlAction::Pause,
+                "continue" => DeepReviewQueueControlAction::Continue,
+                "cancel" => DeepReviewQueueControlAction::Cancel,
+                "skip_optional" => DeepReviewQueueControlAction::SkipOptional,
+                other => {
+                    return Err(anyhow!(
+                        "Invalid DeepReview queue control action: {}",
+                        other
+                    ));
+                }
+            };
+            if session_id.trim().is_empty() {
+                return Err(anyhow!("Missing sessionId"));
+            }
+            if dialog_turn_id.trim().is_empty() {
+                return Err(anyhow!("Missing dialogTurnId"));
+            }
+            if tool_id.trim().is_empty() {
+                return Err(anyhow!("Missing toolId"));
+            }
+            apply_deep_review_queue_control(&dialog_turn_id, &tool_id, action);
             Ok(serde_json::json!({ "success": true }))
         }
         "cancel_session" => {

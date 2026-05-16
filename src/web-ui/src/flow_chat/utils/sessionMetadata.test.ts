@@ -357,6 +357,50 @@ describe('sessionMetadata', () => {
     });
   });
 
+  it('keeps MiniApp sessions independent from assistant parent sessions', () => {
+    const relationship = normalizeSessionRelationship({
+      sessionKind: 'miniapp',
+      parentSessionId: 'assistant-session-1',
+    });
+
+    expect(relationship).toEqual({
+      sessionKind: 'miniapp',
+      parentSessionId: undefined,
+      btwOrigin: undefined,
+    });
+
+    expect(resolveSessionRelationship(relationship)).toMatchObject({
+      kind: 'miniapp',
+      isBtw: false,
+      isReview: false,
+      isDeepReview: false,
+      parentSessionId: undefined,
+      displayAsChild: false,
+      canOpenInAuxPane: false,
+    });
+  });
+
+  it('persists the Deep Review run manifest from the runtime session', () => {
+    const runManifest = {
+      reviewMode: 'deep',
+      skippedReviewers: [
+        {
+          subagentId: 'ReviewFrontend',
+          displayName: 'Frontend Reviewer',
+          reason: 'not_applicable',
+        },
+      ],
+    };
+    const session = createSession({
+      sessionKind: 'deep_review',
+      deepReviewRunManifest: runManifest,
+    } as Partial<Session>);
+
+    const metadata = buildSessionMetadata(session);
+
+    expect(metadata.deepReviewRunManifest).toBe(runManifest);
+  });
+
   describe('unread completion persistence', () => {
     it('persists unreadCompletion from session to metadata', () => {
       const session = createSession({

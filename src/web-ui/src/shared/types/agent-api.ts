@@ -43,6 +43,19 @@ export interface ToolInfo {
   is_readonly: boolean;
   is_concurrency_safe: boolean;
   needs_permissions: boolean;
+  dynamic_info?: DynamicToolInfo;
+}
+
+export interface DynamicToolInfo {
+  providerId: string;
+  providerKind?: string;
+  mcp?: DynamicMcpToolInfo;
+}
+
+export interface DynamicMcpToolInfo {
+  serverId: string;
+  serverName: string;
+  toolName: string;
 }
 
 export interface ToolExecutionRequest {

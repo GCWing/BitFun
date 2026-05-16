@@ -39,6 +39,225 @@
   "runtimeStatus": {
     "waitingForModelResponse": "Waiting for model response..."
   },
+  "usage": {
+    "title": "Session Usage",
+    "unavailable": "Unavailable",
+    "redacted": "Redacted",
+    "percent": "{{value}}%",
+    "duration": {
+      "ms": "{{value}}ms",
+      "seconds": "{{value}}s",
+      "minutes": "{{value}}m",
+      "minutesSeconds": "{{minutes}}m {{seconds}}s",
+      "hours": "{{value}}h",
+      "hoursMinutes": "{{hours}}h {{minutes}}m"
+    },
+    "actions": {
+      "copyMarkdown": "Copy Markdown",
+      "copied": "Copied",
+      "copySessionId": "Copy session ID",
+      "copyWorkspacePath": "Copy project path",
+      "openDetails": "Open details",
+      "openFileDiff": "Open diff",
+      "openSectionDetails": "Open {{section}} details",
+      "jumpToTurn": "Jump to this turn",
+      "viewDetails": "Details",
+      "viewAllSection": "View all {{count}}",
+      "showAllRows": "Show all {{count}}",
+      "showFewerRows": "Show fewer"
+    },
+    "export": {
+      "redactPaths": "Redact paths",
+      "redactPathsHelp": "Replace workspace and file paths when copying Markdown.",
+      "redactedPath": "[redacted path]"
+    },
+    "coverage": {
+      "complete": "Complete data",
+      "partial": "Partial data",
+      "minimal": "Minimal data",
+      "partialNotice": "Some metrics were not reported by this session or provider. Hover underlined values for the specific reason."
+    },
+    "toolCategories": {
+      "git": "Git",
+      "shell": "Shell",
+      "file": "File",
+      "other": "Other"
+    },
+    "fileScopes": {
+      "snapshot_summary": "Snapshot summary",
+      "tool_inputs_only": "Tool inputs only",
+      "unavailable": "Not tracked"
+    },
+    "accounting": {
+      "approximate": "Approximate",
+      "exact": "Exact",
+      "unavailable": "Not reported"
+    },
+    "status": {
+      "timingNotRecorded": "Timing not recorded",
+      "cacheNotReported": "Cache not reported",
+      "noFileChanges": "No file changes",
+      "notRecorded": "Not recorded",
+      "modelNotRecorded": "Model not recorded",
+      "legacyModel": "Legacy model not tracked",
+      "inferredModel": "{{model}} (inferred)",
+      "p95SampleInsufficient": "Not enough samples"
+    },
+    "cacheCoverage": {
+      "available": "Reported",
+      "partial": "Partially reported",
+      "unavailable": "Not reported"
+    },
+    "card": {
+      "heading": "Session statistics",
+      "turns": "{{count}} turns",
+      "calls": "{{count}} calls",
+      "operations": "{{count}} ops",
+      "tokens": "{{value}} tokens"
+    },
+    "loading": {
+      "markdown": "Generating usage report...",
+      "title": "Generating usage report",
+      "description": "Reading local session records and preparing a privacy-safe summary.",
+      "steps": {
+        "collecting": "Reading session records",
+        "tokens": "Summarizing token and tool activity",
+        "safety": "Checking privacy-safe display fields"
+      }
+    },
+    "metrics": {
+      "wall": "Session span",
+      "active": "Recorded turn time",
+      "modelTime": "Model round time",
+      "toolTime": "Tool call time",
+      "tokens": "Tokens",
+      "cached": "Cached",
+      "files": "Files",
+      "errors": "Errors",
+      "errorRate": "Error rate"
+    },
+    "sections": {
+      "models": "Models",
+      "tools": "Tools",
+      "files": "Files",
+      "slowest": "Slowest spans"
+    },
+    "empty": {
+      "models": "No model metrics",
+      "modelsDescription": "Model rows appear after calls report token usage.",
+      "tools": "No tool metrics",
+      "toolsDescription": "Tool rows appear after the session runs tools.",
+      "files": "No file changes",
+      "filesDescription": "No file-edit records were found for this session.",
+      "errors": "No error examples",
+      "errorsDescription": "No sampled tool or model errors were recorded.",
+      "slowest": "No slow spans",
+      "slowestDescription": "No timed turn, model-call, or tool spans were recorded."
+    },
+    "help": {
+      "wall": "Span from the first recorded turn start to the last recorded turn end. Idle gaps can be included.",
+      "active": "Union of recorded turn spans that produced reportable activity. It can include orchestration or waiting inside a turn.",
+      "timeShare": "Share of recorded turn time. Model and tool spans may overlap, so this is only an approximate indicator.",
+      "modelRoundTime": "Recorded model-round duration from persisted runtime metadata or start/end timestamps, not pure provider streaming or throughput time. The percentage uses recorded turn time and is approximate.",
+      "toolTime": "Recorded tool-call duration. The percentage uses recorded turn time and is approximate.",
+      "cachedTokens": "The provider did not report cache-read token metadata for this session. Total token counts are still shown when available.",
+      "cachedTokensPartial": "Only some calls reported cache-read token metadata, so the cached-token total covers those calls only.",
+      "toolDuration": "Total recorded time for this tool name in the report scope. It may include queueing, preflight checks, confirmation wait, and execution.",
+      "toolP95": "95th percentile of recorded total call durations for this tool. It is shown only after at least two timed calls.",
+      "toolExecution": "Time spent inside the tool execution phase after queueing, preflight checks, and confirmation wait. Older sessions may not have this field.",
+      "legacyModel": "Older sessions did not store per-round model names, so this report cannot identify the exact model.",
+      "inferredModel": "Inferred from the session model setting because older turns did not store per-round model names.",
+      "filesUnavailable": "No file snapshot or file-edit tool record was found for this session.",
+      "filesNoRecordedChanges": "BitFun did not detect file changes in this session. This is expected when the agent did not edit files.",
+      "filesRemoteUnavailable": "No remote snapshot summary was found for this session. File rows can still appear from recognized file-edit tool records.",
+      "filesNotTracked": "No local snapshot or identifiable file-edit tool record was found for this session.",
+      "fileTurnIndexes": "Turn indexes are not recorded when file activity comes from a summary instead of per-turn operation records.",
+      "fileOperationIds": "Operation IDs are not recorded when the report cannot link this row back to individual tool operations.",
+      "fileDiffUnavailable": "Diff links require a snapshot-backed file row and a visible file path.",
+      "errors": "Counts model turns that ended in error plus tool calls whose result was unsuccessful. It does not include raw provider responses, tool inputs, or command output.",
+      "toolErrors": "Tool errors count tool calls whose persisted result is marked unsuccessful.",
+      "modelErrors": "Model errors count dialog turns that ended in the error state.",
+      "errorExamples": "Examples are grouped by safe labels only; raw provider responses, tool inputs, and command output stay out of the report.",
+      "errorExampleRow": "Safe grouped label for a model/runtime error or failing tool type.",
+      "errorExampleCount": "Number of matching errors in this report scope.",
+      "slowestSpans": "Slow spans are derived from recorded turn, model-call, and tool timestamps. They help identify time sinks, not exact provider latency.",
+      "slowestModelCall": "Model call in this turn. Model: {{model}}."
+    },
+    "meta": {
+      "generatedAt": "Generated",
+      "sessionId": "Session ID",
+      "workspacePath": "Project path"
+    },
+    "runtime": {
+      "open": "Generate session usage",
+      "button": "Usage",
+      "tooltip": "Generate a usage report in this chat"
+    },
+    "panel": {
+      "tabsLabel": "Usage report sections",
+      "metadataLabel": "Usage report metadata",
+      "accounting": "Accounting",
+      "turnScope": "Scope",
+      "cacheCoverage": "Cache reporting",
+      "compressions": "Compressions",
+      "fileScope": "File scope",
+      "toolErrors": "Tool errors",
+      "modelErrors": "Model errors",
+      "errorScope": "Error scope"
+    },
+    "privacy": {
+      "title": "Privacy-safe report",
+      "summary": "Prompts, tool inputs, command outputs, and file contents are not included."
+    },
+    "tabs": {
+      "overview": "Overview",
+      "models": "Models",
+      "tools": "Tools",
+      "files": "Files",
+      "errors": "Errors",
+      "slowest": "Slowest"
+    },
+    "table": {
+      "model": "Model",
+      "tool": "Tool",
+      "category": "Category",
+      "calls": "Calls",
+      "success": "Success",
+      "errors": "Errors",
+      "input": "Input",
+      "output": "Output",
+      "cached": "Cached",
+      "duration": "Recorded time",
+      "p95": "P95",
+      "execution": "Execution",
+      "toolDuration": "Total time",
+      "toolP95Duration": "P95 total",
+      "toolExecutionDuration": "Execution time",
+      "file": "File",
+      "operations": "Ops",
+      "added": "Added",
+      "deleted": "Deleted",
+      "turns": "Turns",
+      "operationIds": "Operation IDs",
+      "actions": "Actions",
+      "label": "Label",
+      "count": "Count",
+      "kind": "Kind",
+      "rowLimitSummary": "Showing {{visible}} of {{total}} rows",
+      "showAllRows": "Show all {{count}} rows",
+      "showFewerRows": "Show first {{count}} rows"
+    },
+    "slowestKinds": {
+      "model": "Model call",
+      "modelCall": "Model call",
+      "tool": "Tool",
+      "turn": "Turn"
+    },
+    "slowestLabels": {
+      "modelCall": "Turn {{turn}} model call",
+      "modelCallUnknown": "Model call"
+    }
+  },
   "agentCompanion": {
     "activity": {
       "starting": "Starting",
@@ -161,6 +380,9 @@
     "openWorkspaceFolderFailed": "Failed to open workspace folder: {{error}}",
     "spaceToActivate": "Press <space>Space</space> to type"
   },
+  "workspaceStrip": {
+    "branchTooltipUnavailable": "Not a git repository or no current branch"
+  },
   "context": {
     "title": "Context",
     "add": "Add Context",
@@ -189,16 +411,7 @@
     "temperature": "Temperature",
     "maxTokens": "Max Tokens",
     "topP": "Top P",
-    "streaming": "Streaming",
-    "autoMigrated": {
-      "title": "Model switched automatically",
-      "description": "The model previously used by this chat is no longer available. BitFun switched this chat to automatic model selection.",
-      "reasons": {
-        "modelUnavailableOnRestore": "This happened while reopening a previous chat. You can keep going, or choose a model again later.",
-        "modelReconciled": "Your model settings changed recently, so BitFun moved this chat to an available model automatically.",
-        "fallback": "BitFun selected an available model for this chat automatically."
-      }
-    }
+    "streaming": "Streaming"
   },
   "toolbar": {
     "newSession": "New Session",
@@ -249,6 +462,12 @@
     "compactBusy": "Wait until the session is idle before using /compact.",
     "compactUsage": "Use /compact without extra arguments.",
     "compactFailed": "Session compaction failed",
+    "usageAction": "Session usage",
+    "usageNoSession": "No active session for /usage",
+    "usageCommandUsage": "Use /usage without extra arguments.",
+    "usageBusy": "Wait until the session is idle before using /usage.",
+    "usageNoWorkspace": "A workspace is required to build a usage report.",
+    "usageFailed": "Usage report failed",
     "initAction": "Generate AGENTS.md",
     "initNoSession": "No active session for /init",
     "initBusy": "Wait until the session is idle before using /init.",
@@ -386,16 +605,24 @@
         "short": "Deep",
         "title": "Deep review",
         "origin": "Review source"
+      },
+      "miniapp": {
+        "short": "MiniApp",
+        "title": "MiniApp editor",
+        "origin": "MiniApp"
       }
     }
   },
   "deepReviewActionBar": {
+    "reviewRunningDeep": "Deep review in progress...",
+    "reviewRunningStandard": "Review in progress...",
     "reviewCompleted": "Deep review completed",
     "fixRunning": "Fixing in progress...",
     "fixCompleted": "Fix completed",
     "fixFailed": "Fix failed",
     "fixTimeout": "Fix timed out",
     "fixInterrupted": "Fix was interrupted. {{count}} items remain.",
+    "reviewWaitingCapacity": "Review queue waiting",
     "continueFix": "Continue fixing {{count}} items",
     "skipRemaining": "Skip remaining",
     "reviewError": "Review error",
@@ -403,9 +630,11 @@
     "close": "Close",
     "minimize": "Minimize",
     "restore": "Open {{label}}",
-    "fixAndReviewRunning": "Fixing \u0026 preparing re-review...",
+    "fixAndReviewRunning": "Fixing & preparing re-review...",
     "minimizedDeep": "Deep Review",
     "minimizedStandard": "Code Review",
+    "minimizedReviewRunningDeep": "Deep Review running",
+    "minimizedReviewRunningStandard": "Code Review running",
     "minimizedFix": "Fixing",
     "minimizedFixReview": "Fixing and re-reviewing",
     "minimizedFixCompleted": "Fix completed",
@@ -415,8 +644,26 @@
     "showCustomInput": "Add instructions",
     "hideCustomInput": "Hide instructions",
     "customInstructionsPlaceholder": "Describe additional requirements or context for the fix...",
+    "remediationStatus": {
+      "fixing": "Fixing",
+      "fixed": "Fixed"
+    },
+    "decisionGate": {
+      "title": "Confirm decision items before fixing",
+      "description": "Choose how each selected decision should be handled before BitFun starts editing.",
+      "supplementLabel": "Additional requirements",
+      "supplementPlaceholder": "Optional: add constraints, scope limits, or implementation preferences before starting.",
+      "missingSelection": "Choose an option for each selected decision item before starting.",
+      "noOptionsHint": "This item has no structured options. Confirm only if you want the selected plan to be executed as written.",
+      "confirmFix": "Confirm and start",
+      "confirmFixAndReview": "Confirm and re-review",
+      "cancel": "Back to selection"
+    },
     "fillBackInput": "Fill to input",
     "fillBackInputHint": "Copy selected fix plan to the input box for manual editing",
+    "retryIncompleteSlices": "Retry incomplete slices ({{count}})",
+    "retryIncompleteRequestDisplay": "Retry {{count}} incomplete Deep Review slice(s)",
+    "retryIncompleteFailed": "Unable to retry incomplete Deep Review slices.",
     "fixCompletedMessage": "All fixes applied successfully.",
     "replaceInputConfirmTitle": "Replace current input?",
     "replaceInputConfirmMessage": "The chat input already has text. Filling this plan will replace the current draft.",
@@ -433,6 +680,7 @@
     "resumeRequestDisplay": "Continue interrupted Deep Review",
     "resumeFailedMessage": "Unable to continue Deep Review. Check the model settings or try again later.",
     "openModelSettings": "Open model settings",
+    "switchModel": "Switch model",
     "copyDiagnostics": "Copy diagnostics",
     "diagnosticsCopied": "Diagnostics copied",
     "diagnosticsCopyFailed": "Failed to copy diagnostics",
@@ -445,21 +693,74 @@
     "resumeBlockedWithReason": "Cannot continue: {{reason}}",
     "resumeFailedWithReason": "Continue failed: {{reason}}",
     "reviewErrorWithReason": "Review error: {{reason}}",
-    "retryResume": "Retry",
-    "retryWithDifferentModel": "Try different model",
     "viewPartialResults": "View partial results",
     "hidePartialResults": "Hide partial results",
+    "progressHandled": "{{handled}}/{{total}} handled",
+    "progressResumePreserved": "{{preserved}}/{{total}} preserved, continuing remaining review",
     "partialResultsDescription": "{{completed}}/{{total}} reviewers completed",
     "partialIssues": "{{count}} issues found",
     "partialRemediationItems": "{{count}} remediation items",
+    "partialReviewerSummaries": "{{count}} reviewer summaries",
     "contextOverflowTitle": "Context limit reached. Choose how to proceed:",
     "longRunningHint": "Review is still running. This may take a few more minutes.",
     "elapsedTime": "Running for {{time}}",
-    "showRecoveryPlan": "Show recovery plan",
-    "hideRecoveryPlan": "Hide recovery plan",
     "recoveryPreserve": "{{count}} completed reviewers will be preserved",
     "recoveryRerun": "{{count}} reviewers will be rerun",
     "recoverySkip": "{{count}} reviewers will be skipped",
+    "manualCancel": {
+      "title": "Review stopped",
+      "description": "You stopped this Deep Review. Completed reviewer output is preserved, and you can continue the remaining work when ready."
+    },
+    "resultRecovery": {
+      "title": "Deep review needs a report",
+      "missingSubmitCodeReview": "The review finished, but BitFun did not receive a structured result to confirm. Continue preserves completed reviewer work and asks the agent to submit the missing report.",
+      "invalidSubmitCodeReview": "The review returned a result BitFun could not read. Continue preserves completed reviewer work and asks the agent to repair the report.",
+      "wrongReviewMode": "The review returned a standard Code Review result. Continue preserves completed reviewer work and asks the agent to submit the Deep Review report."
+    },
+    "capacityQueue": {
+      "title": "Reviewers waiting for capacity",
+      "pausedTitle": "Queue paused",
+      "activeReviewerTitle": "Waiting for running reviewers",
+      "providerTitle": "Waiting for model capacity",
+      "detail": "Queue wait does not count against reviewer runtime.",
+      "activeReviewerDetail": "Queued reviewers start when a running reviewer frees capacity. Queue wait does not count against reviewer runtime.",
+      "longLaunchBatchWaitDetail": "This reviewer has waited longer than the configured queue window because an earlier reviewer batch is still running. You can keep waiting, pause the queue, cancel queued reviewers, or open Review settings.",
+      "providerDetail": "BitFun is waiting for temporary model capacity. This wait does not count against reviewer runtime.",
+      "reason": "Reason: {{reason}}",
+      "elapsed": "Waited {{elapsed}}",
+      "elapsedWithMax": "Waited {{elapsed}} of {{max}}",
+      "activeReviewerCount": "Running reviewers: {{count}}",
+      "reasons": {
+        "providerRateLimit": "provider rate limit",
+        "providerConcurrencyLimit": "provider concurrency limit",
+        "retryAfter": "provider retry-after",
+        "localConcurrencyCap": "local reviewer capacity",
+        "launchBatchBlocked": "previous launch batch still running",
+        "temporaryOverload": "temporary provider overload"
+      },
+      "reasonDetails": {
+        "providerRateLimit": "The model provider is rate-limiting requests. BitFun will wait and continue when capacity returns.",
+        "providerConcurrencyLimit": "The model provider rejected another concurrent reviewer. BitFun will retry after capacity opens.",
+        "retryAfter": "The model provider asked BitFun to retry later. Waiting here avoids spending reviewer runtime while the provider cools down.",
+        "localConcurrencyCap": "The configured Review Team reviewer limit is full. This reviewer will start after an active reviewer finishes.",
+        "launchBatchBlocked": "An earlier launch batch is still running. Waiting preserves the planned review order and prevents a later batch from overtaking it.",
+        "temporaryOverload": "The model provider reported temporary overload. BitFun will wait, then continue or mark the reviewer as capacity skipped."
+      },
+      "sessionBusy": "Your active session is busy. Pause Deep Review or continue later.",
+      "stopHint": "Use Stop to interrupt this review queue.",
+      "waitingReviewersTitle": "Waiting reviewers",
+      "reviewerStatusQueued": "Waiting",
+      "reviewerStatusPaused": "Paused",
+      "optionalReviewer": "Optional",
+      "pauseQueue": "Pause queue",
+      "continueQueue": "Continue queue",
+      "cancelQueued": "Cancel queued reviewers",
+      "skipOptionalQueued": "Skip optional extras",
+      "openReviewSettings": "Open Review settings",
+      "controlFailed": "Queue control is unavailable because this reviewer is missing session, turn, or tool identifiers. Use Stop to interrupt the review, or wait for the queue state to refresh.",
+      "controlFailedWithReason": "Queue control failed: {{reason}}. Try again, or use Stop to interrupt the review if the queue is stuck.",
+      "controlPartiallyFailedWithReason": "Queue control partly applied; {{failed}} of {{total}} reviewers failed: {{reason}}. Wait for the queue state to refresh, then retry or use Stop if it is stuck."
+    },
     "degradation": {
       "reduceReviewers": "Run with core reviewers only",
       "reduceReviewersDesc": "Skip extra reviewers and keep only core reviewers",
@@ -490,17 +791,106 @@
     "windowTitle": "Deep Review",
     "eyebrow": "Code review team",
     "title": "Start Deep Review?",
-    "body": "Deep Review launches a parallel code review team. It can take longer and consume noticeably more tokens than a standard review.",
-    "readonlyLabel": "Read-only first pass",
-    "readonly": "The first pass is read-only. It will produce findings and a remediation plan before any code changes.",
-    "costLabel": "Higher token usage",
-    "cost": "Expected cost: multiple reviewers plus a quality gate, so runtime and token use may be several times higher than a standard review.",
-    "timeLabel": "Longer runtime",
-    "time": "You can keep working while it runs; we will only notify you when the whole Deep Review finishes in the background.",
+    "body": "Deep Review launches multiple reviewers, so expect more tokens and longer runtime.",
+    "readonlyLabel": "Read-only",
+    "readonly": "Fixes need approval.",
+    "sessionConcurrencyTitle": "Active session is busy",
+    "sessionConcurrencyBody": "The target session already has {{count}} running subagent tasks. Choose a lighter strategy, cancel for now, or continue manually when capacity is free.",
+    "costLabel": "Token",
+    "cost": "Reviewers + quality gate.",
+    "timeLabel": "Time",
+    "time": "Runs in background.",
     "dontShowAgain": "Do not show this again",
     "cancel": "Cancel",
     "confirm": "Start Deep Review",
-    "estimatedTokens": "Estimated: {{min}} - {{max}} tokens"
+    "estimatedTokens": "Estimated: {{min}} - {{max}} tokens",
+    "runStrategy": "Run strategy: {{strategy}}",
+    "recommendedStrategy": "Recommended strategy: {{strategy}}",
+    "reviewDepth": "Review depth: {{depth}}",
+    "reviewDepthLabels": {
+      "high_risk_only": "High-risk-only",
+      "risk_expanded": "Risk-expanded",
+      "full_depth": "Full-depth"
+    },
+    "recommendationTitle": "Risk recommendation",
+    "strategyOverrideTitle": "Run strategy",
+    "strategyOverrideBody": "Quick is narrower; Deep covers more.",
+    "selectedStrategy": "Selected",
+    "teamDefaultStrategyBody": "Uses {{strategy}} for this launch.",
+    "strategyTokenImpact": "Token: {{tokenImpact}}",
+    "strategyRuntimeImpact": "Time: {{runtimeImpact}}",
+    "teamDefaultStrategy": "Team default",
+    "strategyLabels": {
+      "quick": "Quick",
+      "normal": "Normal",
+      "deep": "Deep"
+    },
+    "strategySummaries": {
+      "quick": "Quick keeps built-in target-matched reviewers, skips user-added specialists, and reports reduced coverage.",
+      "normal": "Normal stays practical for slower models, limits optional expansion, and uses summary-first on large changes.",
+      "deep": "Thorough multi-pass review for broad or risky changes; allows longer runtime and split coverage."
+    },
+    "selectedStrategyFootnote": "Selected: Token {{tokenImpact}}, time {{runtimeImpact}}.",
+    "lineupTitle": "Review lineup",
+    "summaryTitle": "Launch summary",
+    "targetFiles": "{{count}} files",
+    "targetFiles_one": "{{count}} file",
+    "targetFiles_other": "{{count}} files",
+    "targetRiskTags": "Risk areas: {{tags}}",
+    "targetTagsWithMore": "{{tags}} +{{count}} more",
+    "targetTagsWithMore_one": "{{tags}} +{{count}} more",
+    "targetTagsWithMore_other": "{{tags}} +{{count}} more",
+    "optionalReviewers": "{{count}} extra specialists",
+    "optionalReviewers_one": "{{count}} extra specialist",
+    "optionalReviewers_other": "{{count}} extra specialists",
+    "summaryFirstReview": "Summary-first coverage",
+    "targetTagLabels": {
+      "frontendUi": "Frontend UI",
+      "frontendStyle": "Frontend styles",
+      "frontendI18n": "Frontend i18n",
+      "frontendContract": "Frontend contract",
+      "desktopContract": "Desktop contract",
+      "webServerContract": "Web server contract",
+      "backendCore": "Backend core",
+      "transport": "Transport",
+      "apiLayer": "API layer",
+      "aiAdapter": "AI adapter",
+      "installerUi": "Installer UI",
+      "test": "Tests",
+      "docs": "Docs",
+      "config": "Config",
+      "generatedOrLock": "Generated or lockfile",
+      "unknown": "Unknown area"
+    },
+    "estimatedCalls": "{{count}} reviewer calls",
+    "estimatedCalls_one": "{{count}} reviewer call",
+    "estimatedCalls_other": "{{count}} reviewer calls",
+    "activeReviewers": "{{count}} active",
+    "activeReviewers_one": "{{count}} active",
+    "activeReviewers_other": "{{count}} active",
+    "skippedReviewers": "{{count}} skipped",
+    "skippedReviewers_one": "{{count}} skipped",
+    "skippedReviewers_other": "{{count}} skipped",
+    "skippedMore": "+{{count}} more",
+    "skippedMore_one": "+{{count}} more",
+    "skippedMore_other": "+{{count}} more",
+    "activeGroupTitle": "Will run",
+    "skippedGroupTitle": "Skipped reviewers",
+    "skippedReasons": {
+      "notApplicable": "Not applicable to this target",
+      "budgetLimited": "Limited by token budget",
+      "invalidTooling": "Configuration issue",
+      "disabled": "Disabled",
+      "unavailable": "Unavailable",
+      "skipped": "Skipped"
+    },
+    "targetSource": {
+      "manualPrompt": "Provided context",
+      "workspaceDiff": "Workspace changes",
+      "gitRef": "Git reference",
+      "selectedContext": "Selected context",
+      "reviewTarget": "Review target"
+    }
   },
   "flowChatHeader": {
     "turnList": "Turn list",
@@ -525,10 +915,17 @@
   },
   "sessionFilesBadge": {
     "files": "files",
+    "filesSummaryCount": "{{count}} files",
+    "expandChangeListCue": "Expand list",
+    "expandChangeListAriaCue": "Expand to show files",
+    "collapseFileDiffList": "Collapse file change list",
     "reviewLabel": "Review",
     "reviewAll": "Review All",
     "reviewMenuLabel": "Review",
     "reviewMenuHint": "Choose review depth",
+    "actionsMenuHint": "Quick actions",
+    "actionsButton": "Actions",
+    "actionsButtonRunning": "Busy…",
     "reviewModeStandard": "Standard review",
     "reviewModeDeep": "Deep review",
     "reviewRunningStandard": "Review in progress",
@@ -844,6 +1241,9 @@
     },
     "taskTool": {
       "headerLine": "{{agentType}} agent: {{description}}",
+      "headerLineWithModel": "{{agentType}} agent ({{modelName}}): {{description}}",
+      "headerLinePrefix": "{{agentType}} agent",
+      "headerLineSuffix": ": {{description}}",
       "defaultAgentKind": "Sub-agent",
       "waitingConfirm": "Waiting for confirmation",
       "executing": "Executing...",
@@ -863,6 +1263,10 @@
       "statusLabel": "Status",
       "promptLabel": "Task Prompt",
       "reviewerContextLabel": "Reviewer",
+      "stopSubagent": "Stop subagent",
+      "stoppingSubagent": "Stopping subagent...",
+      "stopSubagentFailed": "Failed to stop this subagent.",
+      "stopSubagentHint": "Cancels only this reviewer/subagent. The parent review can keep going and still produce a summary.",
       "errorLabel": "Error",
       "resultLabel": "Result",
       "noData": "Unable to load task data",
@@ -881,13 +1285,12 @@
       "disableLabel": "Ignore limit",
       "enableTooltip": "Re-enable timeout",
       "enableLabel": "Restore limit",
-      "restoreShort": "Restore ({{seconds}}s left)"
-    },
-    "diagram": {
-      "interactive": "Interactive diagram:",
-      "preparing": "Preparing",
-      "creating": "Creating",
-      "mermaidInteractive": "Mermaid Interactive Chart"
+      "restoreShort": "Restore ({{seconds}}s left)",
+      "durationTooltip": "Duration {{duration}}",
+      "completedDurationTooltip": "Completed in {{duration}}",
+      "failedDurationTooltip": "Failed after {{duration}}",
+      "failedDurationTooltipWithReason": "Failed after {{duration}}: {{reason}}",
+      "cancelledDurationTooltip": "Cancelled after {{duration}}"
     },
     "template": {
       "get": "Get Template:",
@@ -922,6 +1325,13 @@
       "failedLabel": "MCP failed",
       "executionFailed": "MCP execution failed"
     },
+    "acpPermission": {
+      "allowOnce": "Allow once",
+      "allowAlways": "Always allow",
+      "reject": "Reject once",
+      "rejectAlways": "Always reject",
+      "selectOption": "Select option"
+    },
     "default": {
       "waitingConfirm": "Waiting for confirmation",
       "executing": "Executing...",
@@ -942,6 +1352,7 @@
       "parsingParams": "Parsing parameters...",
       "noFileSpecified": "No file specified",
       "readFile": "Read file",
+      "permissionRequest": "Requesting read permission:",
       "readingFile": "Reading",
       "preparingRead": "Preparing to read"
     },
@@ -1172,11 +1583,11 @@
       "reviewerIssuesUnknown": "Issue count unavailable",
       "reviewerTeamSummary": "{{total}} reviewers · {{completed}} completed · {{degraded}} need attention",
       "severities": {
-        "critical": "critical",
-        "high": "high",
-        "medium": "medium",
-        "low": "low",
-        "info": "info"
+        "critical": "Critical",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low",
+        "info": "Info"
       },
       "reviewerStatuses": {
         "completed": "completed",
@@ -1189,8 +1600,65 @@
         "partial": "partial",
         "unknown": "unknown"
       },
+      "runManifest": {
+        "recommendedStrategy": "Recommended strategy",
+        "riskRecommendationTitle": "Risk recommendation",
+        "reviewDepth": "Review depth",
+        "reviewDepthLabels": {
+          "high_risk_only": "High-risk-only",
+          "risk_expanded": "Risk-expanded",
+          "full_depth": "Full-depth"
+        }
+      },
       "sectionItemCount": "{{count}} items",
       "remediationPlan": "Remediation Plan",
+      "reliabilityStatus": {
+        "title": "Review status",
+        "context_pressure": {
+          "label": "Context pressure rising",
+          "detail": "{{count}} reviewer calls planned for a large or constrained target."
+        },
+        "compression_preserved": {
+          "label": "Compression preserved key facts",
+          "detail": "Coverage notes include preserved context from compression."
+        },
+        "cache_hit": {
+          "label": "Incremental cache reused reviewer output",
+          "detail": "{{count}} reviewer packet reused matching cached output."
+        },
+        "cache_miss": {
+          "label": "Incremental cache missed or refreshed",
+          "detail": "{{count}} reviewer packet ran fresh or refreshed stale cache."
+        },
+        "concurrency_limited": {
+          "label": "Reviewer launch was concurrency-limited",
+          "detail": "{{count}} reviewer launch hit a concurrency cap."
+        },
+        "partial_reviewer": {
+          "label": "Reviewer returned partial result",
+          "detail": "{{count}} reviewer result is partial; confidence is reduced."
+        },
+        "reduced_scope": {
+          "label": "Reduced-depth coverage",
+          "detail": "This review used a reduced-depth scope profile."
+        },
+        "retry_guidance": {
+          "label": "Retry guidance emitted",
+          "detail": "{{count}} retry guidance item was emitted for partial review coverage."
+        },
+        "skipped_reviewers": {
+          "label": "Skipped reviewers",
+          "detail": "{{count}} reviewer was skipped by applicability, configuration, or budget."
+        },
+        "token_budget_limited": {
+          "label": "Token budget limited reviewer coverage",
+          "detail": "{{count}} reviewer was skipped by token budget mode."
+        },
+        "user_decision": {
+          "label": "User decision needed",
+          "detail": "{{count}} review item needs your decision before fixing."
+        }
+      },
       "sections": {
         "summary": "Executive Summary",
         "issues": "Issues",
@@ -1219,8 +1687,11 @@
         "noIssues": "No validated issues.",
         "status": "Status",
         "findings": "Findings",
+        "packet": "Packet",
+        "partialOutput": "Partial output",
         "validation": "Validation",
         "source": "Source",
+        "reliabilitySignals": "Review Reliability",
         "noItems": "None."
       },
       "export": {
@@ -1255,7 +1726,7 @@
         "noSelectionHint": "Select at least one remediation item to start fixing.",
         "ungrouped": "Other",
         "startFix": "Start fixing",
-        "fixAndReview": "Fix \\u0026 re-review",
+        "fixAndReview": "Fix & re-review",
         "cancel": "Cancel",
         "fixUnavailable": "Unable to start remediation because the review session is unavailable.",
         "fixRequestDisplay": "Start fixing Deep Review findings",
@@ -1275,13 +1746,6 @@
         "approve_with_suggestions": "Approve with Suggestions",
         "request_changes": "Request Changes",
         "block": "Block Merge"
-      },
-      "severities": {
-        "critical": "Critical",
-        "high": "High",
-        "medium": "Medium",
-        "low": "Low",
-        "info": "Info"
       },
       "certainties": {
         "confirmed": "Confirmed",
@@ -1462,5 +1926,33 @@
   "subagent": {
     "showingLines": "Showing {{shown}} of {{total}} lines",
     "showAll": "Show all"
+  },
+  "pendingQueue": {
+    "title": "Queued ({{count}})",
+    "hint": "Will auto-send in order when the current turn finishes",
+    "editorHint": "⌘/Ctrl+Enter to save · Esc to cancel",
+    "emptyPlaceholder": "(empty message)",
+    "statusSending": "Steering…",
+    "statusFailed": "Send failed — edit / send now / delete to clear",
+    "actions": {
+      "edit": "Edit",
+      "sendNow": "Send now (steer)",
+      "delete": "Delete",
+      "saveEdit": "Save (⌘/Ctrl+Enter)",
+      "cancelEdit": "Cancel (Esc)"
+    },
+    "tooltip": {
+      "sendNow": "Inject this message into the running turn as a steering prompt"
+    },
+    "errors": {
+      "emptyContent": "Message content cannot be empty",
+      "sendNowFailed": "Send now failed; please try again"
+    }
+  },
+  "steering": {
+    "title": "Steer",
+    "injectedAt": "Injected before round {{round}}",
+    "statusPending": "Waiting to trigger",
+    "statusInjected": "Triggered"
   }
 }

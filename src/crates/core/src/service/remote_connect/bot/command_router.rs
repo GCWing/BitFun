@@ -1379,8 +1379,11 @@ async fn guarded_new(
 
 async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleResult {
     use crate::agentic::coordination::get_global_coordinator;
-    use crate::agentic::core::SessionConfig;
     use crate::service::workspace::get_global_workspace_service;
+    use bitfun_runtime_ports::AgentSubmissionPort;
+    use bitfun_services_integrations::remote_connect::{
+        build_remote_session_create_request, RemoteConnectSubmissionSource,
+    };
 
     let language = current_bot_language().await;
     let s = strings_for(language);
@@ -1477,19 +1480,14 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
         return result_from_menu(state, view);
     };
 
-    match coordinator
-        .create_session_with_workspace(
-            None,
-            session_name.to_string(),
-            agent_type.to_string(),
-            SessionConfig {
-                workspace_path: Some(workspace_path.clone()),
-                ..Default::default()
-            },
-            workspace_path.clone(),
-        )
-        .await
-    {
+    let request = build_remote_session_create_request(
+        session_name,
+        agent_type,
+        Some(workspace_path.clone()),
+        RemoteConnectSubmissionSource::Bot,
+    );
+    let submission_port: &dyn AgentSubmissionPort = coordinator.as_ref();
+    match submission_port.create_session(request).await {
         Ok(session) => {
             state.current_session_id = Some(session.session_id.clone());
             let body = format!(
@@ -1505,7 +1503,7 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
         }
         Err(e) => result_from_menu(
             state,
-            MenuView::plain(format!("{}{e}", s.session_create_failed_prefix)),
+            MenuView::plain(format!("{}{}", s.session_create_failed_prefix, e.message)),
         ),
     }
 }
@@ -1979,12 +1977,15 @@ async fn submit_question_answers(
 /// to the safe default ("agentic"), so chat keeps working.
 async fn resolve_session_agent_type(session_id: &str) -> Option<String> {
     use crate::agentic::coordination::get_global_coordinator;
+    use bitfun_runtime_ports::AgentSubmissionPort;
 
     let coordinator = get_global_coordinator()?;
-    coordinator
-        .get_session_manager()
-        .get_session(session_id)
-        .map(|s| s.agent_type.clone())
+    let submission_port: &dyn AgentSubmissionPort = coordinator.as_ref();
+    submission_port
+        .resolve_session_agent_type(session_id)
+        .await
+        .ok()
+        .flatten()
 }
 
 async fn handle_chat(

@@ -82,6 +82,10 @@ Additional guidelines:
         .to_string())
     }
 
+    fn short_description(&self) -> String {
+        "Create and store a concise implementation plan.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

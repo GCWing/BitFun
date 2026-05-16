@@ -13,13 +13,12 @@ import {
   Play,
   Square,
   CheckCircle,
-  Clock,
   AlertTriangle,
   MinusCircle,
   KeyRound,
   Trash2,
 } from 'lucide-react';
-import { Button, Textarea, IconButton, Modal } from '@/component-library';
+import { Button, Textarea, IconButton, Modal, ToolProcessingDots } from '@/component-library';
 import {
   ConfigPageHeader,
   ConfigPageLayout,
@@ -783,7 +782,7 @@ const McpToolsConfig: React.FC = () => {
   const getStatusIcon = (status: string): React.ReactNode => {
     const s = status.toLowerCase();
     if (s.includes('healthy') || s.includes('connected')) return <CheckCircle size={10} />;
-    if (s.includes('starting') || s.includes('reconnecting')) return <Clock size={10} />;
+    if (s.includes('starting') || s.includes('reconnecting')) return <ToolProcessingDots size={10} />;
     if (s.includes('failed') || s.includes('stopped') || s.includes('auth'))
       return <AlertTriangle size={10} />;
     return <MinusCircle size={10} />;

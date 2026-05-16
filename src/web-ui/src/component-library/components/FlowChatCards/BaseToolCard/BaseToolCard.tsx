@@ -4,8 +4,9 @@
  */
 
 import React from 'react';
-import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
+import { ToolProcessingDots } from '../ToolProcessingDots';
 import './BaseToolCard.scss';
 
 export interface BaseToolCardProps {
@@ -63,7 +64,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
       case 'error':
         return <XCircle className="base-tool-card__status-error" size={12} />;
       default:
-        return <Clock className="base-tool-card__status-pending" size={12} />;
+        return <ToolProcessingDots className="base-tool-card__status-pending" size={12} />;
     }
   };
 

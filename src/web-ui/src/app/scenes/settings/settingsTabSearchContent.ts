@@ -17,12 +17,21 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
   basics: [
     { ns: 'settings/basics', key: 'title' },
     { ns: 'settings/basics', key: 'subtitle' },
-    { ns: 'settings/basics', key: 'appearance.title' },
-    { ns: 'settings/basics', key: 'appearance.hint' },
     { ns: 'settings/basics', key: 'logging.sections.logging' },
     { ns: 'settings/basics', key: 'logging.sections.loggingHint' },
     { ns: 'settings/basics', key: 'terminal.sections.terminal' },
     { ns: 'settings/basics', key: 'terminal.sections.terminalHint' },
+    { ns: 'settings/basics', key: 'notifications.title' },
+    { ns: 'settings/basics', key: 'notifications.hint' },
+  ],
+
+  appearance: [
+    { ns: 'settings/appearance', key: 'title' },
+    { ns: 'settings/appearance', key: 'subtitle' },
+    { ns: 'settings/basics', key: 'appearance.title' },
+    { ns: 'settings/basics', key: 'appearance.hint' },
+    { ns: 'settings/basics', key: 'appearance.fontSize.title' },
+    { ns: 'settings/basics', key: 'appearance.fontSize.hint' },
   ],
 
   models: [
@@ -36,11 +45,19 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/ai-model', key: 'proxy.enableHint' },
   ],
 
-  'session-config': [
-    { ns: 'settings/session-config', key: 'title' },
-    { ns: 'settings/session-config', key: 'subtitle' },
+  'session-personalization': [
+    { ns: 'settings/session-config', key: 'personalizationPage.title' },
+    { ns: 'settings/session-config', key: 'personalizationPage.subtitle' },
     { ns: 'settings/session-config', key: 'features.sessionTitle.title' },
     { ns: 'settings/session-config', key: 'features.sessionTitle.subtitle' },
+    { ns: 'settings/session-config', key: 'features.agentCompanion.title' },
+    { ns: 'settings/session-config', key: 'features.agentCompanion.subtitle' },
+    { ns: 'settings/session-config', key: 'models.empty' },
+  ],
+
+  'session-permissions': [
+    { ns: 'settings/session-config', key: 'permissionsPage.title' },
+    { ns: 'settings/session-config', key: 'permissionsPage.subtitle' },
     { ns: 'settings/session-config', key: 'features.workspaceSearch.title' },
     { ns: 'settings/session-config', key: 'features.workspaceSearch.subtitle' },
     { ns: 'settings/session-config', key: 'features.workspaceSearch.enable' },
@@ -50,6 +67,8 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/session-config', key: 'computerUse.sectionDescription' },
     { ns: 'settings/session-config', key: 'computerUse.enable' },
     { ns: 'settings/session-config', key: 'computerUse.enableDesc' },
+    { ns: 'settings/session-config', key: 'browserControl.sectionTitle' },
+    { ns: 'settings/session-config', key: 'browserControl.sectionDescription' },
     { ns: 'settings/agentic-tools', key: 'config.autoExecute' },
     { ns: 'settings/agentic-tools', key: 'config.autoExecuteDesc' },
     { ns: 'settings/agentic-tools', key: 'config.confirmTimeout' },
@@ -75,18 +94,6 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/review', key: 'execution.title' },
     { ns: 'settings/review', key: 'members.title' },
     { ns: 'settings/review', key: 'extra.title' },
-  ],
-
-  'ai-context': [
-    { ns: 'settings/ai-context', key: 'title' },
-    { ns: 'settings/ai-context', key: 'subtitle' },
-    { ns: 'settings/ai-context', key: 'scope.user' },
-    { ns: 'settings/ai-context', key: 'scope.project' },
-    { ns: 'settings/ai-context', key: 'memoryProjectPlaceholder' },
-    { ns: 'settings/ai-rules', key: 'title' },
-    { ns: 'settings/ai-rules', key: 'subtitle' },
-    { ns: 'settings/ai-memory', key: 'section.memoryList.title' },
-    { ns: 'settings/ai-memory', key: 'section.memoryList.description' },
   ],
 
   'mcp-tools': [
@@ -132,6 +139,13 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings', key: 'keyboard.shortcuts.scene.focusMergedHint' },
     { ns: 'settings', key: 'keyboard.shortcuts.tab.switchMerged' },
     { ns: 'settings', key: 'keyboard.shortcuts.tab.switchMergedHint' },
+  ],
+
+  'quick-actions': [
+    { ns: 'settings/quick-actions', key: 'page.title' },
+    { ns: 'settings/quick-actions', key: 'page.subtitle' },
+    { ns: 'settings/quick-actions', key: 'sections.builtin.title' },
+    { ns: 'settings/quick-actions', key: 'sections.custom.title' },
   ],
 
   // lsp: [ ... ], // nav entry temporarily hidden; omit from search index

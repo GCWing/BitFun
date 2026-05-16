@@ -1,81 +1,12 @@
 use crate::util::errors::{BitFunError, BitFunResult};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+pub use bitfun_agent_tools::{
+    ToolPathOperation, ToolPathPolicy, ToolRestrictionError, ToolRuntimeRestrictions,
+};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum ToolPathOperation {
-    Write,
-    Edit,
-    Delete,
-}
-
-impl ToolPathOperation {
-    pub fn verb(self) -> &'static str {
-        match self {
-            Self::Write => "write",
-            Self::Edit => "edit",
-            Self::Delete => "delete",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ToolPathPolicy {
-    #[serde(default)]
-    pub write_roots: Vec<String>,
-    #[serde(default)]
-    pub edit_roots: Vec<String>,
-    #[serde(default)]
-    pub delete_roots: Vec<String>,
-}
-
-impl ToolPathPolicy {
-    pub fn roots_for(&self, operation: ToolPathOperation) -> &[String] {
-        match operation {
-            ToolPathOperation::Write => &self.write_roots,
-            ToolPathOperation::Edit => &self.edit_roots,
-            ToolPathOperation::Delete => &self.delete_roots,
-        }
-    }
-
-    pub fn is_restricted(&self, operation: ToolPathOperation) -> bool {
-        !self.roots_for(operation).is_empty()
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ToolRuntimeRestrictions {
-    #[serde(default)]
-    pub allowed_tool_names: BTreeSet<String>,
-    #[serde(default)]
-    pub denied_tool_names: BTreeSet<String>,
-    #[serde(default)]
-    pub path_policy: ToolPathPolicy,
-}
-
-impl ToolRuntimeRestrictions {
-    pub fn is_tool_allowed(&self, tool_name: &str) -> bool {
-        (self.allowed_tool_names.is_empty() || self.allowed_tool_names.contains(tool_name))
-            && !self.denied_tool_names.contains(tool_name)
-    }
-
-    pub fn ensure_tool_allowed(&self, tool_name: &str) -> BitFunResult<()> {
-        if self.denied_tool_names.contains(tool_name) {
-            return Err(BitFunError::validation(format!(
-                "Tool '{}' is denied by runtime restrictions",
-                tool_name
-            )));
-        }
-
-        if !self.allowed_tool_names.is_empty() && !self.allowed_tool_names.contains(tool_name) {
-            return Err(BitFunError::validation(format!(
-                "Tool '{}' is not allowed by runtime restrictions",
-                tool_name
-            )));
-        }
-
-        Ok(())
+impl From<ToolRestrictionError> for BitFunError {
+    fn from(error: ToolRestrictionError) -> Self {
+        BitFunError::validation(error.to_string())
     }
 }
 

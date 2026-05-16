@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useCallback, useMemo, useLayoutEffect, useRef } from 'react';
-import { Loader2, AlertCircle, Send, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowUp, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
@@ -463,7 +463,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                   <span>{t('toolCards.askUser.submitting')}</span>
                 ) : (
                   <>
-                    <Send size={14} />
+                    <ArrowUp size={14} />
                     <span>{t('toolCards.askUser.submit')}</span>
                   </>
                 )}

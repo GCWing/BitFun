@@ -1,5 +1,8 @@
 use super::AnthropicMessageConverter;
-use crate::client::quirks::should_append_tool_stream;
+use crate::client::quirks::{
+    is_deepseek_reasoning_effort_model, is_deepseek_url, normalize_deepseek_reasoning_effort,
+    should_append_tool_stream,
+};
 use crate::client::sse::execute_sse_request;
 use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
@@ -54,13 +57,26 @@ fn default_anthropic_budget_tokens(max_tokens: Option<u32>) -> Option<u32> {
 fn apply_reasoning_fields(
     request_body: &mut serde_json::Value,
     mode: ReasoningMode,
+    url: &str,
     model_name: &str,
     max_tokens: Option<u32>,
     reasoning_effort: Option<&str>,
     thinking_budget_tokens: Option<u32>,
 ) {
+    let is_deepseek_reasoning_target =
+        is_deepseek_url(url) || is_deepseek_reasoning_effort_model(model_name);
+
     match mode {
-        ReasoningMode::Default => {}
+        ReasoningMode::Default => {
+            if is_deepseek_reasoning_target {
+                if let Some(effort) = reasoning_effort.and_then(normalize_deepseek_reasoning_effort)
+                {
+                    request_body["output_config"] = serde_json::json!({
+                        "effort": effort
+                    });
+                }
+            }
+        }
         ReasoningMode::Disabled => {
             request_body["thinking"] = serde_json::json!({ "type": "disabled" });
         }
@@ -74,6 +90,14 @@ fn apply_reasoning_fields(
                 }
             }
             request_body["thinking"] = thinking;
+            if is_deepseek_reasoning_target {
+                if let Some(effort) = reasoning_effort.and_then(normalize_deepseek_reasoning_effort)
+                {
+                    request_body["output_config"] = serde_json::json!({
+                        "effort": effort
+                    });
+                }
+            }
         }
         ReasoningMode::Adaptive => {
             if anthropic_supports_adaptive_reasoning(model_name) {
@@ -92,6 +116,7 @@ fn apply_reasoning_fields(
                 apply_reasoning_fields(
                     request_body,
                     ReasoningMode::Enabled,
+                    url,
                     model_name,
                     max_tokens,
                     None,
@@ -138,6 +163,7 @@ pub(crate) fn build_request_body(
     apply_reasoning_fields(
         &mut request_body,
         client.config.reasoning_mode,
+        url,
         &model_name,
         Some(max_tokens),
         client.config.reasoning_effort.as_deref(),

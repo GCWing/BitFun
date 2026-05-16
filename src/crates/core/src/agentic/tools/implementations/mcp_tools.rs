@@ -1,7 +1,7 @@
 //! Built-in MCP resource/prompt tools.
 
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::service::mcp::adapter::PromptAdapter;
 use crate::service::mcp::get_global_mcp_service;
@@ -59,6 +59,19 @@ async fn list_prompts_for_server(
         prompts = manager.get_cached_prompts(server_id).await;
     }
     Ok(prompts)
+}
+
+async fn ensure_mcp_server_available_for_context(
+    manager: &Arc<MCPServerManager>,
+    server_id: &str,
+    _context: &ToolUseContext,
+) -> BitFunResult<()> {
+    manager
+        .get_connection(server_id)
+        .await
+        .ok_or_else(|| tool_error(format!("MCP server not connected: {}", server_id)))?;
+
+    Ok(())
 }
 
 fn validate_required_string(input: &Value, field_name: &str) -> ValidationResult {
@@ -222,6 +235,14 @@ impl Tool for ListMCPResourcesTool {
         Ok("Lists MCP resources exposed by a connected MCP server. Use this before ReadMCPResource when you need to inspect available MCP-hosted files, docs, or structured context.".to_string())
     }
 
+    fn short_description(&self) -> String {
+        "List MCP resources exposed by a connected MCP server.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",
@@ -276,7 +297,7 @@ impl Tool for ListMCPResourcesTool {
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         let server_id = input
             .get("server_id")
@@ -288,6 +309,7 @@ impl Tool for ListMCPResourcesTool {
             .unwrap_or(false);
 
         let manager = get_mcp_server_manager().await?;
+        ensure_mcp_server_available_for_context(&manager, server_id, context).await?;
         let resources = list_resources_for_server(&manager, server_id, refresh).await?;
         let count = resources.len();
         let rendered = render_resource_catalog(&resources);
@@ -329,6 +351,14 @@ impl Tool for ReadMCPResourceTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok("Reads a specific MCP resource by URI from a connected MCP server. Use ListMCPResources first if you do not already know the resource URI.".to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "Read a specific MCP resource by URI from a connected MCP server.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {
@@ -388,7 +418,7 @@ impl Tool for ReadMCPResourceTool {
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         let server_id = input
             .get("server_id")
@@ -400,6 +430,7 @@ impl Tool for ReadMCPResourceTool {
             .ok_or_else(|| tool_error("uri is required"))?;
 
         let manager = get_mcp_server_manager().await?;
+        ensure_mcp_server_available_for_context(&manager, server_id, context).await?;
         let connection = manager
             .get_connection(server_id)
             .await
@@ -442,6 +473,14 @@ impl Tool for ListMCPPromptsTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok("Lists MCP prompts exposed by a connected MCP server. Use this before GetMCPPrompt when you need reusable server-provided prompt templates.".to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "List MCP prompts exposed by a connected MCP server.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {
@@ -498,7 +537,7 @@ impl Tool for ListMCPPromptsTool {
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         let server_id = input
             .get("server_id")
@@ -510,6 +549,7 @@ impl Tool for ListMCPPromptsTool {
             .unwrap_or(false);
 
         let manager = get_mcp_server_manager().await?;
+        ensure_mcp_server_available_for_context(&manager, server_id, context).await?;
         let prompts = list_prompts_for_server(&manager, server_id, refresh).await?;
         let count = prompts.len();
         let rendered = render_prompt_catalog(&prompts);
@@ -551,6 +591,15 @@ impl Tool for GetMCPPromptTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok("Fetches a named MCP prompt template from a connected MCP server and renders it into plain text for the model. Pass prompt arguments when the server requires them.".to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "Fetch and render a named MCP prompt template from a connected MCP server."
+            .to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {
@@ -650,7 +699,7 @@ impl Tool for GetMCPPromptTool {
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         let server_id = input
             .get("server_id")
@@ -675,6 +724,7 @@ impl Tool for GetMCPPromptTool {
         });
 
         let manager = get_mcp_server_manager().await?;
+        ensure_mcp_server_available_for_context(&manager, server_id, context).await?;
         let connection = manager
             .get_connection(server_id)
             .await

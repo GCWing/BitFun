@@ -22,6 +22,7 @@
 
     /* Path mapping */
     "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
     "paths": {
       "@/*": ["src/*"],
       "@/shared/*": ["src/shared/*"],
@@ -48,7 +49,6 @@
     "src/shared/context-menu-system/examples/**",
     "src/infrastructure/services/api/index.ts",
     "src/infrastructure/services/infra/index.ts",
-    "src/tools/mermaid-editor/examples/**",
     "src/flow_chat/components/ImageAnalysisCard.tsx"
   ],
   "references": [{ "path": "./tsconfig.node.json" }]

@@ -25,6 +25,8 @@ const log = createLogger('AppManager');
 export class AppManager implements IAppManager {
   private state: AppState;
   private listeners = new Set<(event: AppEvent) => void>();
+  /** Coalesce rapid layout/state updates into one event per animation frame (reduces main-thread churn). */
+  private pendingStateNotifyRaf: number | null = null;
 
   constructor() {
     // Clear legacy panel state data (run once)
@@ -345,7 +347,17 @@ export class AppManager implements IAppManager {
   }
 
   private notifyStateChange(): void {
-    globalEventBus.emit('app:state:changed', this.state);
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+      globalEventBus.emit('app:state:changed', this.state);
+      return;
+    }
+    if (this.pendingStateNotifyRaf != null) {
+      return;
+    }
+    this.pendingStateNotifyRaf = window.requestAnimationFrame(() => {
+      this.pendingStateNotifyRaf = null;
+      globalEventBus.emit('app:state:changed', this.state);
+    });
   }
 
   // Clear legacy panel state data

@@ -93,6 +93,7 @@ impl From<MessageDelta> for UnifiedResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct ContentBlockStart {
+    pub index: Option<usize>,
     pub content_block: ContentBlock,
 }
 
@@ -118,7 +119,7 @@ impl From<ContentBlockStart> for UnifiedResponse {
         match value.content_block {
             ContentBlock::ToolUse { id, name } => {
                 let tool_call = UnifiedToolCall {
-                    tool_call_index: None,
+                    tool_call_index: value.index,
                     id: Some(id),
                     name: Some(name),
                     arguments: None,
@@ -141,6 +142,7 @@ impl From<ContentBlockStart> for UnifiedResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct ContentBlockDelta {
+    index: Option<usize>,
     delta: Delta,
 }
 
@@ -172,7 +174,7 @@ impl TryFrom<ContentBlockDelta> for UnifiedResponse {
             }
             Delta::InputJson { partial_json } => {
                 let tool_call = UnifiedToolCall {
-                    tool_call_index: None,
+                    tool_call_index: value.index,
                     id: None,
                     name: None,
                     arguments: Some(partial_json),

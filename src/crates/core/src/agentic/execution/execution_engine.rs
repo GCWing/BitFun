@@ -3,10 +3,11 @@
 //! Executes complete dialog turns, managing loops of multiple model rounds
 
 use super::round_executor::RoundExecutor;
-use super::types::{ExecutionContext, ExecutionResult, RoundContext};
+use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
     get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
 };
+use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
     render_system_reminder, Message, MessageContent, MessageHelper, MessageRole,
     MessageSemanticKind, RequestReasoningTokenPolicy, Session,
@@ -18,9 +19,7 @@ use crate::agentic::image_analysis::{
     ImageLimits,
 };
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
-use crate::agentic::tools::{
-    get_all_registered_tools, SubagentParentInfo, ToolRuntimeRestrictions,
-};
+use crate::agentic::tools::{resolve_tool_manifest, ResolvedToolManifest, SubagentParentInfo, ToolRuntimeRestrictions};
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -34,7 +33,7 @@ use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -42,8 +41,8 @@ use tokio_util::sync::CancellationToken;
 /// Execution engine configuration
 #[derive(Debug, Clone)]
 pub struct ExecutionEngineConfig {
-    pub max_rounds: usize, // Maximum number of rounds to prevent infinite loops
-    /// Max consecutive rounds with identical tool call signatures before loop detection triggers
+    pub max_rounds: usize,
+    /// Max consecutive rounds with identical tool-call signatures before loop detection triggers.
     pub max_consecutive_same_tool: usize,
 }
 
@@ -69,6 +68,157 @@ pub struct ContextCompactionOutcome {
     pub applied: bool,
 }
 
+#[derive(Debug, Clone)]
+struct ContextHealthSnapshot {
+    token_usage_ratio: f32,
+    full_compression_count: usize,
+    compression_failure_count: u32,
+    repeated_tool_signature_count: usize,
+    consecutive_failed_commands: usize,
+}
+
+impl ContextHealthSnapshot {
+    fn from_runtime_observations(
+        token_usage_ratio: f32,
+        full_compression_count: usize,
+        compression_failure_count: u32,
+        recent_tool_signatures: &[String],
+        messages: &[Message],
+    ) -> Self {
+        Self {
+            token_usage_ratio,
+            full_compression_count,
+            compression_failure_count,
+            repeated_tool_signature_count: Self::repeated_tool_signature_count(
+                recent_tool_signatures,
+            ),
+            consecutive_failed_commands: Self::consecutive_failed_commands(messages),
+        }
+    }
+
+    fn token_usage_ratio(current_tokens: usize, context_window: usize) -> f32 {
+        if context_window == 0 {
+            return 0.0;
+        }
+        current_tokens as f32 / context_window as f32
+    }
+
+    fn log(&self, session_id: &str, turn_id: &str, round_index: usize, stage: &str) {
+        debug!(
+            "Context health snapshot: session_id={}, turn_id={}, round_index={}, stage={}, token_usage={:.3}, full_compression_count={}, compression_failure_count={}, repeated_tool_signature_count={}, consecutive_failed_commands={}",
+            session_id,
+            turn_id,
+            round_index,
+            stage,
+            self.token_usage_ratio,
+            self.full_compression_count,
+            self.compression_failure_count,
+            self.repeated_tool_signature_count,
+            self.consecutive_failed_commands
+        );
+    }
+
+    fn log_policy_thresholds(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        round_index: usize,
+        policy: &ContextProfilePolicy,
+    ) {
+        if policy.has_repeated_tool_loop(self.repeated_tool_signature_count) {
+            debug!(
+                "Context profile repeated-tool threshold reached: session_id={}, turn_id={}, round_index={}, profile={:?}, repeated_tool_signature_count={}, threshold={}",
+                session_id,
+                turn_id,
+                round_index,
+                policy.profile,
+                self.repeated_tool_signature_count,
+                policy.repeated_tool_signature_threshold
+            );
+        }
+
+        if policy.has_consecutive_command_failure_loop(self.consecutive_failed_commands) {
+            warn!(
+                "Context profile command-failure threshold reached: session_id={}, turn_id={}, round_index={}, profile={:?}, consecutive_failed_commands={}, threshold={}",
+                session_id,
+                turn_id,
+                round_index,
+                policy.profile,
+                self.consecutive_failed_commands,
+                policy.consecutive_failed_command_threshold
+            );
+        }
+    }
+
+    fn repeated_tool_signature_count(recent_tool_signatures: &[String]) -> usize {
+        let Some(last_signature) = recent_tool_signatures.last() else {
+            return 0;
+        };
+
+        let repeated_count = recent_tool_signatures
+            .iter()
+            .rev()
+            .take_while(|signature| *signature == last_signature)
+            .count();
+
+        if repeated_count >= 2 {
+            repeated_count
+        } else {
+            0
+        }
+    }
+
+    fn consecutive_failed_commands(messages: &[Message]) -> usize {
+        let mut failures = 0;
+        for message in messages.iter().rev() {
+            let Some(failed) = Self::command_result_failed(message) else {
+                continue;
+            };
+
+            if failed {
+                failures += 1;
+            } else {
+                break;
+            }
+        }
+        failures
+    }
+
+    fn command_result_failed(message: &Message) -> Option<bool> {
+        let MessageContent::ToolResult {
+            tool_name,
+            result,
+            is_error,
+            ..
+        } = &message.content
+        else {
+            return None;
+        };
+
+        if !matches!(tool_name.as_str(), "Bash" | "Git") {
+            return None;
+        }
+
+        Some(Self::tool_result_failed(result, *is_error))
+    }
+
+    fn tool_result_failed(result: &serde_json::Value, is_error: bool) -> bool {
+        is_error
+            || Self::bool_field(result, "timed_out") == Some(true)
+            || Self::bool_field(result, "interrupted") == Some(true)
+            || Self::bool_field(result, "success") == Some(false)
+            || Self::numeric_field(result, "exit_code").is_some_and(|code| code != 0)
+    }
+
+    fn bool_field(value: &serde_json::Value, key: &str) -> Option<bool> {
+        value.get(key).and_then(|field| field.as_bool())
+    }
+
+    fn numeric_field(value: &serde_json::Value, key: &str) -> Option<i64> {
+        value.get(key).and_then(|field| field.as_i64())
+    }
+}
+
 /// Execution engine
 pub struct ExecutionEngine {
     round_executor: Arc<RoundExecutor>,
@@ -80,6 +230,7 @@ pub struct ExecutionEngine {
 
 impl ExecutionEngine {
     const FINALIZE_AFTER_TOOL_USE_REMINDER: &'static str = "Tool execution for this turn has already completed, but the turn is ending at this round boundary. Do not call any more tools. Provide the final response to the user based on the tool results already available.";
+    const FORCE_TEXT_ONLY_REMINDER: &'static str = "STOP. Tool calls are disabled for this final turn. Respond ONLY with a plain-text answer summarizing what you have done and the result for the user. Do not output tool call syntax of any kind.";
 
     pub fn new(
         round_executor: Arc<RoundExecutor>,
@@ -120,6 +271,38 @@ impl ExecutionEngine {
             args_str.len(),
             args_hash
         )
+    }
+
+    /// Detect periodic tool-signature loops in the trailing window.
+    ///
+    /// Returns `true` when the last `2 * threshold` rounds contain at most
+    /// `threshold` distinct signatures AND every signature in that window
+    /// appeared at least twice. Such windows have no new exploration and
+    /// represent the model toggling between a small fixed set of calls
+    /// (e.g. `A-B-A-B-A-B`, `A-B-C-A-B-C`).
+    ///
+    /// The window length is `2 * threshold` (rather than `threshold`) so the
+    /// strict consecutive check (`windows(2).all(eq)`) keeps owning the
+    /// `A-A-A` case at threshold rounds, and this detector only fires once
+    /// the alternating pattern has had room to repeat.
+    fn is_periodic_tool_signature_loop(recent_signatures: &[String], threshold: usize) -> bool {
+        let threshold = threshold.max(1);
+        let window_size = threshold.saturating_mul(2);
+        if window_size == 0 || recent_signatures.len() < window_size {
+            return false;
+        }
+
+        let tail = &recent_signatures[recent_signatures.len() - window_size..];
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        for sig in tail {
+            *counts.entry(sig.as_str()).or_insert(0) += 1;
+        }
+
+        if counts.len() > threshold {
+            return false;
+        }
+
+        counts.values().all(|&count| count >= 2)
     }
 
     fn assistant_has_tool_calls(message: &Message) -> bool {
@@ -311,10 +494,46 @@ impl ExecutionEngine {
         turn_index == 0 && original_user_input.chars().count() <= 10
     }
 
+    fn collect_unlocked_collapsed_tools(
+        messages: &[Message],
+        collapsed_tools: &[String],
+    ) -> Vec<String> {
+        let collapsed_set: HashSet<&str> = collapsed_tools.iter().map(String::as_str).collect();
+        let mut unlocked = BTreeSet::new();
+
+        for message in messages {
+            let MessageContent::ToolResult {
+                tool_name,
+                result,
+                is_error,
+                ..
+            } = &message.content
+            else {
+                continue;
+            };
+
+            if *is_error || tool_name != "GetToolSpec" {
+                continue;
+            }
+
+            let Some(tool_name) = result.get("tool_name").and_then(|v| v.as_str())
+            else {
+                continue;
+            };
+
+            if collapsed_set.contains(tool_name) {
+                unlocked.insert(tool_name.to_string());
+            }
+        }
+
+        unlocked.into_iter().collect()
+    }
+
     async fn build_prompt_context(
         context: &ExecutionContext,
         model_name: &str,
         supports_image_understanding: bool,
+        has_additional_tools: bool,
     ) -> Option<PromptBuilderContext> {
         let workspace_path = context
             .workspace
@@ -326,7 +545,8 @@ impl ExecutionEngine {
             Some(context.session_id.clone()),
             Some(model_name.to_string()),
         )
-        .with_supports_image_understanding(supports_image_understanding);
+        .with_supports_image_understanding(supports_image_understanding)
+        .with_additional_tools_hint(has_additional_tools);
 
         let Some(workspace) = context.workspace.as_ref() else {
             return Some(base);
@@ -473,8 +693,11 @@ impl ExecutionEngine {
         }
     }
 
-    /// Indices of the last `max_rounds` messages that bear images (`max_rounds` = 2 → keep images only there).
-    fn image_bearing_indices_to_keep(messages: &[Message], max_rounds: usize) -> HashSet<usize> {
+    /// Indices of the last image-bearing messages that should keep image payloads.
+    fn image_bearing_indices_to_keep(
+        messages: &[Message],
+        max_image_messages: usize,
+    ) -> HashSet<usize> {
         let with_images: Vec<usize> = messages
             .iter()
             .enumerate()
@@ -482,10 +705,77 @@ impl ExecutionEngine {
             .map(|(i, _)| i)
             .collect();
         let n = with_images.len();
-        if n <= max_rounds {
+        if n <= max_image_messages {
             return with_images.into_iter().collect();
         }
-        with_images[n - max_rounds..].iter().copied().collect()
+        with_images[n - max_image_messages..]
+            .iter()
+            .copied()
+            .collect()
+    }
+
+    /// Synthesize one extra finalize round with tools disabled, returning the
+    /// resulting assistant message + metadata. Used by both the
+    /// "summarize tool results" and "force text after thinking-only" paths.
+    #[allow(clippy::too_many_arguments)]
+    async fn run_finalize_round(
+        &self,
+        ai_client: Arc<crate::infrastructure::ai::AIClient>,
+        context: &ExecutionContext,
+        agent_type: String,
+        round_number: usize,
+        execution_context_vars: &HashMap<String, String>,
+        primary_supports_image_understanding: bool,
+        request_context_reminder: Option<&str>,
+        messages: &[Message],
+        reminder_text: &str,
+        context_window: usize,
+    ) -> BitFunResult<RoundResult> {
+        let mut final_ai_messages = Self::build_ai_messages_for_send(
+            messages,
+            &ai_client.config.format,
+            context
+                .workspace
+                .as_ref()
+                .map(|workspace| workspace.root_path()),
+            &context.dialog_turn_id,
+            primary_supports_image_understanding,
+            request_context_reminder,
+        )
+        .await?;
+        final_ai_messages.push(AIMessage::user(reminder_text.to_string()));
+
+        let round_context = RoundContext {
+            session_id: context.session_id.clone(),
+            subagent_parent_info: context.subagent_parent_info.clone(),
+            dialog_turn_id: context.dialog_turn_id.clone(),
+            turn_index: context.turn_index,
+            round_number,
+            workspace: context.workspace.clone(),
+            messages: messages.to_vec(),
+            available_tools: Vec::new(),
+            collapsed_tools: Vec::new(),
+            unlocked_collapsed_tools: Vec::new(),
+            model_name: ai_client.config.model.clone(),
+            agent_type,
+            context_vars: execution_context_vars.clone(),
+            runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
+            steering_interrupt: None,
+            cancellation_token: CancellationToken::new(),
+            workspace_services: context.workspace_services.clone(),
+            recover_partial_on_cancel: context.recover_partial_on_cancel,
+        };
+
+        // Tools are disabled here (None) — model must respond in plain text.
+        self.round_executor
+            .execute_round(
+                ai_client,
+                round_context,
+                final_ai_messages,
+                None,
+                Some(context_window),
+            )
+            .await
     }
 
     async fn build_ai_messages_for_send(
@@ -704,6 +994,7 @@ impl ExecutionEngine {
         context_window: usize,
         tool_definitions: &Option<Vec<ToolDefinition>>,
         system_prompt_message: Message,
+        compression_contract_limit: usize,
         tail_policy: CompressionTailPolicy,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
         let event_subagent_parent_info = subagent_parent_info.map(|info| info.clone().into());
@@ -745,14 +1036,18 @@ impl ExecutionEngine {
         .await;
 
         // Execute compression
+        let compression_contract = self
+            .session_manager
+            .compression_contract_for_session(session_id, compression_contract_limit);
         match self
             .context_compressor
-            .compress_turns(
+            .compress_turns_with_contract(
                 session_id,
                 context_window,
                 turn_index_to_keep,
                 turns,
                 tail_policy,
+                compression_contract,
             )
             .await
         {
@@ -917,9 +1212,30 @@ impl ExecutionEngine {
             });
         }
 
+        let is_review_subagent = get_agent_registry()
+            .get_subagent_is_review(&session.agent_type)
+            .unwrap_or(false);
+        let model_id = session.config.model_id.as_deref().unwrap_or_default();
+        let context_profile_policy = ContextProfilePolicy::for_agent_context_and_model(
+            &session.agent_type,
+            is_review_subagent,
+            model_id,
+            model_id,
+        );
+        let compression_contract = self.session_manager.compression_contract_for_session(
+            session_id,
+            context_profile_policy.compression_contract_limit,
+        );
         match self
             .context_compressor
-            .compress_turns(session_id, context_window, turns.len(), turns, tail_policy)
+            .compress_turns_with_contract(
+                session_id,
+                context_window,
+                turns.len(),
+                turns,
+                tail_policy,
+                compression_contract,
+            )
             .await
         {
             Ok(compression_result) => {
@@ -1177,7 +1493,79 @@ impl ExecutionEngine {
             );
         }
 
-        // 3. Get System Prompt from current Agent
+        let model_capability_profile = ModelCapabilityProfile::from_resolved_model(
+            &resolved_primary_model_id,
+            &ai_client.config.model,
+        );
+        let is_review_subagent = agent_registry
+            .get_subagent_is_review(&agent_type)
+            .unwrap_or(false);
+        let context_profile_policy = ContextProfilePolicy::for_agent_context(
+            &agent_type,
+            is_review_subagent,
+            model_capability_profile,
+        );
+        debug!(
+            "Context profile policy selected: session_id={}, agent_type={}, profile={:?}, model_capability={:?}, compression_contract_limit={}, subagent_concurrency_cap={}, repeated_tool_signature_threshold={}, consecutive_failed_command_threshold={}",
+            context.session_id,
+            agent_type,
+            context_profile_policy.profile,
+            model_capability_profile,
+            context_profile_policy.compression_contract_limit,
+            context_profile_policy.subagent_concurrency_cap,
+            context_profile_policy.repeated_tool_signature_threshold,
+            context_profile_policy.consecutive_failed_command_threshold
+        );
+
+        // 3. Get available tools list (read tool configuration for current mode from global config)
+        let tool_policy = agent_registry
+            .get_agent_tool_policy(
+                &agent_type,
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+            )
+            .await;
+        let allowed_tools = tool_policy.allowed_tools.clone();
+        let enable_tools = context
+            .context
+            .get("enable_tools")
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(true);
+        let tool_manifest = if enable_tools {
+            debug!(
+                "Agent tools: agent={}, tool_count={}",
+                agent_type,
+                allowed_tools.len()
+            );
+            Some(
+                self.get_available_tools_and_definitions(
+                    &allowed_tools,
+                    &tool_policy.exposure_overrides,
+                    context.workspace.as_ref(),
+                    context.workspace_services.as_ref(),
+                    &agent_type,
+                    primary_supports_image_understanding,
+                    &context.context,
+                )
+                .await,
+            )
+        } else {
+            None
+        };
+        let collapsed_tools = tool_manifest
+            .as_ref()
+            .map(|manifest| manifest.collapsed_tool_names.clone())
+            .unwrap_or_default();
+        let has_additional_tools = !collapsed_tools.is_empty();
+        let (available_tools, tool_definitions) = if let Some(manifest) = tool_manifest {
+            (manifest.allowed_tool_names, Some(manifest.tool_definitions))
+        } else {
+            (vec![], None)
+        };
+
+        // 4. Get System Prompt from current Agent
         debug!(
             "Building system prompt from agent: {}, model={}",
             current_agent.name(),
@@ -1187,6 +1575,7 @@ impl ExecutionEngine {
             &context,
             &ai_client.config.model,
             primary_supports_image_understanding,
+            has_additional_tools,
         )
         .await;
         let request_context_reminder = if let Some(prompt_context) = prompt_context.as_ref() {
@@ -1217,7 +1606,6 @@ impl ExecutionEngine {
         let mut completed_rounds = 0usize;
         let mut total_tools = 0;
         let mut last_partial_recovery_reason: Option<String> = None;
-        let mut last_assistant_message = Message::assistant("".to_string());
         let mut finalization_reason: Option<&'static str> = None;
         let mut consecutive_compression_failures: u32 = 0;
         const MAX_CONSECUTIVE_COMPRESSION_FAILURES: u32 = 3;
@@ -1225,9 +1613,17 @@ impl ExecutionEngine {
         // P0: Loop detection: track recent tool call signatures
         let mut recent_tool_signatures: Vec<String> = Vec::new();
         let mut loop_detected = false;
+        let mut loop_recovery_attempts: usize = 0;
+        const MAX_LOOP_RECOVERY_ATTEMPTS: usize = 3;
+        let mut full_compression_count = 0usize;
+        let mut compression_failure_count = 0u32;
 
         // Save the last token usage statistics
         let mut last_usage: Option<crate::util::types::ai::GeminiUsage> = None;
+
+        // Track thinking-only rescue reminders for observability. This counter
+        // is not a stop condition.
+        let mut thinking_only_rescue_attempts: usize = 0;
 
         // Add detailed logging showing the execution context messages.
         debug!(
@@ -1248,42 +1644,8 @@ impl ExecutionEngine {
                 .collect::<Vec<_>>()
         );
 
-        // 4. Get available tools list (read tool configuration for current mode from global config)
-        let allowed_tools = agent_registry
-            .get_agent_tools(
-                &agent_type,
-                context
-                    .workspace
-                    .as_ref()
-                    .map(|workspace| workspace.root_path()),
-            )
-            .await;
-        let enable_tools = context
-            .context
-            .get("enable_tools")
-            .and_then(|v| v.parse::<bool>().ok())
-            .unwrap_or(true);
-        let (available_tools, tool_definitions) = if enable_tools {
-            debug!(
-                "Agent tools: agent={}, tool_count={}",
-                agent_type,
-                allowed_tools.len()
-            );
-            self.get_available_tools_and_definitions(
-                &allowed_tools,
-                context.workspace.as_ref(),
-                &agent_type,
-                primary_supports_image_understanding,
-            )
-            .await
-        } else {
-            (vec![], None)
-        };
-
         let enable_context_compression = session.config.enable_context_compression;
         let compression_threshold = session.config.compression_threshold;
-        let microcompact_config =
-            crate::agentic::session::compression::microcompact::MicrocompactConfig::default();
 
         let mut execution_context_vars = context.context.clone();
         execution_context_vars.insert(
@@ -1325,7 +1687,6 @@ impl ExecutionEngine {
 
         // Loop to execute model rounds
         loop {
-            // Check round limit
             if completed_rounds >= self.config.max_rounds {
                 warn!(
                     "Reached max rounds limit: {}, stopping execution",
@@ -1336,7 +1697,20 @@ impl ExecutionEngine {
             }
 
             // Check and compress before sending AI request
-            let mut current_tokens =
+            //
+            // NOTE: There used to be a "microcompact" pre-pass here that
+            // silently rewrote older tool-result contents into a placeholder.
+            // It has been removed: it mutated already-sent message prefixes —
+            // killing provider KV-cache hits on every round — and stripped the
+            // model of memory of what it had already done, which directly
+            // drove repetitive tool-call loops in long exploratory subagents
+            // (see deep-review subagent loop incident, 2026-05-12).
+            //
+            // The remaining context-pressure layers are:
+            //   - L1: AI-summary based full compression (preserves semantics).
+            //   - L2: Emergency truncation (only if tokens still exceed the
+            //         provider context window after L1).
+            let current_tokens =
                 Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
             debug!(
                 "Round {} token usage before send: {} / {} tokens ({:.1}%)",
@@ -1345,33 +1719,6 @@ impl ExecutionEngine {
                 context_window,
                 (current_tokens as f32 / context_window as f32) * 100.0
             );
-
-            // L0: Microcompact — clear old compactable tool results before
-            // considering full compression.  This is a cheap, local-only
-            // operation that can free significant tokens.
-            let token_usage_ratio = current_tokens as f32 / context_window as f32;
-            if enable_context_compression && token_usage_ratio >= microcompact_config.trigger_ratio
-            {
-                if let Some(mc_result) =
-                    crate::agentic::session::compression::microcompact::microcompact_messages(
-                        &mut messages,
-                        &microcompact_config,
-                    )
-                {
-                    current_tokens = Self::estimate_request_tokens_internal(
-                        &mut messages,
-                        tool_definitions.as_deref(),
-                    );
-                    debug!(
-                        "Round {} after microcompact: cleared={}, kept={}, tokens now {} ({:.1}%)",
-                        round_index,
-                        mc_result.tools_cleared,
-                        mc_result.tools_kept,
-                        current_tokens,
-                        (current_tokens as f32 / context_window as f32) * 100.0
-                    );
-                }
-            }
 
             let token_usage_ratio = current_tokens as f32 / context_window as f32;
             let should_compress =
@@ -1412,6 +1759,7 @@ impl ExecutionEngine {
                         context_window,
                         &tool_definitions,
                         system_prompt_message.clone(),
+                        context_profile_policy.compression_contract_limit,
                         CompressionTailPolicy::PreserveLiveFrontier,
                     )
                     .await
@@ -1427,6 +1775,7 @@ impl ExecutionEngine {
                         );
 
                         messages = compressed_messages;
+                        full_compression_count += 1;
                         consecutive_compression_failures = 0;
                     }
                     Ok(None) => {
@@ -1435,6 +1784,7 @@ impl ExecutionEngine {
                     }
                     Err(e) => {
                         consecutive_compression_failures += 1;
+                        compression_failure_count += 1;
                         error!(
                             "Round {} compression failed ({}/{}): {}, continuing with uncompressed context",
                             round_index,
@@ -1468,11 +1818,29 @@ impl ExecutionEngine {
                 );
             }
 
+            let before_send_tokens =
+                Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
+            ContextHealthSnapshot::from_runtime_observations(
+                ContextHealthSnapshot::token_usage_ratio(before_send_tokens, context_window),
+                full_compression_count,
+                compression_failure_count,
+                &recent_tool_signatures,
+                &messages,
+            )
+            .log(
+                &context.session_id,
+                &context.dialog_turn_id,
+                round_index,
+                "before_send",
+            );
+
             // Create round context
             let mut round_context_vars = execution_context_vars.clone();
             if context.skip_tool_confirmation {
                 round_context_vars.insert("skip_tool_confirmation".to_string(), "true".to_string());
             }
+            let unlocked_collapsed_tools =
+                Self::collect_unlocked_collapsed_tools(&messages, &collapsed_tools);
             let round_context = RoundContext {
                 session_id: context.session_id.clone(),
                 subagent_parent_info: context.subagent_parent_info.clone(),
@@ -1482,12 +1850,22 @@ impl ExecutionEngine {
                 workspace: context.workspace.clone(),
                 messages: messages.clone(),
                 available_tools: available_tools.clone(),
+                collapsed_tools: collapsed_tools.clone(),
+                unlocked_collapsed_tools,
                 model_name: ai_client.config.model.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
+                steering_interrupt: context.round_steering.as_ref().map(|source| {
+                    crate::agentic::round_preempt::DialogRoundSteeringInterrupt::new(
+                        context.session_id.clone(),
+                        context.dialog_turn_id.clone(),
+                        Arc::clone(source),
+                    )
+                }),
                 cancellation_token: CancellationToken::new(),
                 workspace_services: context.workspace_services.clone(),
+                recover_partial_on_cancel: context.recover_partial_on_cancel,
             };
 
             // Execute single model round
@@ -1528,7 +1906,6 @@ impl ExecutionEngine {
                 round_result.tool_calls.len()
             );
             completed_rounds += 1;
-            last_assistant_message = round_result.assistant_message.clone();
 
             // Save the last token usage statistics (update each time, keep the last one)
             if let Some(ref usage) = round_result.usage {
@@ -1592,13 +1969,119 @@ impl ExecutionEngine {
                 recent_tool_signatures.clear();
             }
 
-            let max_consec = self.config.max_consecutive_same_tool;
+            let after_round_tokens =
+                Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
+            let after_round_health = ContextHealthSnapshot::from_runtime_observations(
+                ContextHealthSnapshot::token_usage_ratio(after_round_tokens, context_window),
+                full_compression_count,
+                compression_failure_count,
+                &recent_tool_signatures,
+                &messages,
+            );
+            after_round_health.log(
+                &context.session_id,
+                &context.dialog_turn_id,
+                round_index,
+                "after_round",
+            );
+            after_round_health.log_policy_thresholds(
+                &context.session_id,
+                &context.dialog_turn_id,
+                round_index,
+                &context_profile_policy,
+            );
+
+            let max_consec = context_profile_policy
+                .effective_loop_threshold(self.config.max_consecutive_same_tool);
             if recent_tool_signatures.len() >= max_consec {
                 let tail = &recent_tool_signatures[recent_tool_signatures.len() - max_consec..];
                 if tail.windows(2).all(|w| w[0] == w[1]) {
+                    if loop_recovery_attempts < MAX_LOOP_RECOVERY_ATTEMPTS {
+                        loop_recovery_attempts += 1;
+                        warn!(
+                            "Loop detected: {} consecutive rounds with identical tool signatures, injecting recovery prompt #{}",
+                            max_consec, loop_recovery_attempts
+                        );
+                        let reminder = format!(
+                            "<system_reminder>Loop detected: you have repeated the same tool call with identical arguments {} times in a row. \
+                            This means the approach is not making progress. You MUST now change your strategy: \
+                            (1) if the tool keeps failing, try a completely different approach or tool; \
+                            (2) if you are stuck, step back and reason about the root cause before acting; \
+                            (3) if the task is genuinely impossible with the available tools, provide a clear explanation to the user. \
+                            Do NOT repeat the same tool call again.</system_reminder>",
+                            max_consec
+                        );
+                        let user_msg = Message::user(reminder);
+                        messages.push(user_msg.clone());
+                        if let Err(e) = self
+                            .session_manager
+                            .add_message(&context.session_id, user_msg)
+                            .await
+                        {
+                            warn!("Failed to persist loop recovery reminder: {}", e);
+                        }
+                        // Clear the recent signatures so the detector resets after recovery.
+                        recent_tool_signatures.clear();
+                        // Do NOT break — continue the loop so the model gets a chance to recover.
+                    } else {
+                        warn!(
+                            "Loop detected: {} consecutive rounds with identical tool signatures, max recovery attempts ({}) exhausted, stopping",
+                            max_consec, MAX_LOOP_RECOVERY_ATTEMPTS
+                        );
+                        loop_detected = true;
+                        finalization_reason = Some("loop_detected");
+                        break;
+                    }
+                }
+            }
+
+            // Periodic-pattern loop detection.
+            //
+            // The strict consecutive check above only fires on `A-A-A` patterns.
+            // Real-world subagent loops often alternate between a small set of
+            // signatures (e.g. `A-B-A-B-A-B` when the model toggles a single
+            // argument such as the regex pattern, while every other call is
+            // identical). Such rounds never collapse to a single signature, so
+            // the model can stay stuck for hundreds of rounds without tripping
+            // the strict check.
+            //
+            // The periodic detector inspects the last `2 * max_consec` rounds:
+            // if at most `max_consec` distinct signatures appear AND every one
+            // of those signatures appears at least twice, the window contains
+            // no genuine new exploration and we treat it as a loop.
+            if Self::is_periodic_tool_signature_loop(&recent_tool_signatures, max_consec) {
+                let window_size = max_consec.max(1).saturating_mul(2);
+                if loop_recovery_attempts < MAX_LOOP_RECOVERY_ATTEMPTS {
+                    loop_recovery_attempts += 1;
                     warn!(
-                        "Loop detected: {} consecutive rounds with identical tool signatures, stopping",
-                        max_consec
+                        "Loop detected: last {} rounds form a periodic tool-call pattern (<= {} distinct signatures, each repeated), injecting recovery prompt #{}",
+                        window_size, max_consec, loop_recovery_attempts
+                    );
+                    let reminder = format!(
+                        "<system_reminder>Loop detected: your last {} tool calls form a repeating pattern with no new progress. \
+                        You are cycling between the same actions without advancing the task. You MUST now change your strategy: \
+                        (1) try a completely different approach or tool; \
+                        (2) step back and reason about the root cause before acting; \
+                        (3) if the task is genuinely impossible with the available tools, provide a clear explanation to the user. \
+                        Do NOT repeat the same pattern of tool calls.</system_reminder>",
+                        window_size
+                    );
+                    let user_msg = Message::user(reminder);
+                    messages.push(user_msg.clone());
+                    if let Err(e) = self
+                        .session_manager
+                        .add_message(&context.session_id, user_msg)
+                        .await
+                    {
+                        warn!("Failed to persist periodic loop recovery reminder: {}", e);
+                    }
+                    // Clear the recent signatures so the detector resets after recovery.
+                    recent_tool_signatures.clear();
+                    // Do NOT break — continue the loop so the model gets a chance to recover.
+                } else {
+                    warn!(
+                        "Loop detected: last {} rounds form a periodic tool-call pattern, max recovery attempts ({}) exhausted, stopping",
+                        window_size, MAX_LOOP_RECOVERY_ATTEMPTS
                     );
                     loop_detected = true;
                     finalization_reason = Some("loop_detected");
@@ -1606,13 +2089,108 @@ impl ExecutionEngine {
                 }
             }
 
-            // If no more rounds, dialog turn ends
-            if !round_result.has_more_rounds {
-                debug!(
-                    "Model round {} ended, reason: {:?}",
-                    round_index, round_result.finish_reason
-                );
-                break;
+            // User-steering messages submitted while this turn is running: drain and inject
+            // them as user messages into the working history before starting the next round
+            // (Codex-style mid-turn injection). This does NOT end the current turn, in
+            // contrast with the `round_preempt` path below which finalizes the turn so a
+            // queued *new turn* can take over. If the model wanted to finish but the user
+            // steered, we keep the turn running so the steering message gets a response.
+            let mut steering_injected = false;
+            if let Some(steer) = context.round_steering.as_ref() {
+                let pending = steer.take_pending(&context.session_id, &context.dialog_turn_id);
+                if !pending.is_empty() {
+                    info!(
+                        "Injecting {} user steering message(s) at round boundary: session_id={}, dialog_turn_id={}, round_index={}",
+                        pending.len(),
+                        context.session_id,
+                        context.dialog_turn_id,
+                        round_index
+                    );
+                    for steering_msg in pending {
+                        // Wrap the steering content in a system_reminder envelope so the
+                        // model treats it as an out-of-band course correction layered on
+                        // top of the running task, not as a brand-new top-level instruction
+                        // that supersedes everything before it. Matches Codex CLI semantics.
+                        let wrapped = format!(
+                            "<system_reminder>\nThe user sent a new message while this turn was running. You have just finished the previous atomic action; handle this new user message now as the current direction, while preserving the existing conversation and task context. Do not ignore it or wait for a separate future turn.\n\nNew user message:\n{}\n</system_reminder>",
+                            steering_msg.content
+                        );
+                        let user_msg = Message::user(wrapped);
+                        messages.push(user_msg.clone());
+                        if let Err(e) = self
+                            .session_manager
+                            .add_message(&context.session_id, user_msg)
+                            .await
+                        {
+                            warn!("Failed to persist user steering message in memory: {}", e);
+                        }
+
+                        self.emit_event(
+                            AgenticEvent::UserSteeringInjected {
+                                session_id: context.session_id.clone(),
+                                turn_id: context.dialog_turn_id.clone(),
+                                round_index,
+                                steering_id: steering_msg.id,
+                                content: steering_msg.content,
+                                display_content: steering_msg.display_content,
+                                subagent_parent_info: event_subagent_parent_info.clone(),
+                            },
+                            EventPriority::Normal,
+                        )
+                        .await;
+                        steering_injected = true;
+                    }
+                }
+            }
+
+            // P0-1: Decide whether to end the turn here.
+            //
+            // If the user just injected a steering message we always continue so the
+            // model can respond to it.
+            //
+            // Otherwise, if the round produced any tool_call, we already continue via
+            // `has_more_rounds = true`. The interesting case is `has_more_rounds == false`:
+            //
+            // - Model emitted user-visible text  -> final answer, end the turn.
+            // - Model emitted thinking only      -> stalled mid-reasoning. Inject a
+            //   system_reminder asking it to either act (call a tool) or finish
+            //   (write the answer), and continue.
+            // - Model emitted nothing at all     -> partial recovery / truncation.
+            //   Retrying without new context will not help, so end the turn.
+            if steering_injected {
+                // fall through to next round so the model can respond to the steering
+            } else if !round_result.has_more_rounds {
+                if round_result.had_assistant_text {
+                    debug!(
+                        "Model round {} ended with final answer, reason: {:?}",
+                        round_index, round_result.finish_reason
+                    );
+                    break;
+                } else if round_result.had_thinking_content {
+                    thinking_only_rescue_attempts += 1;
+                    let reminder = "<system_reminder>The previous round produced internal reasoning only — no tool call and no user-visible response. You MUST now either: (1) call the single tool that best advances the user's task, or (2) write your final answer to the user. Do not produce another round of reasoning without taking action.</system_reminder>".to_string();
+                    let user_msg = Message::user(reminder.clone());
+                    messages.push(user_msg.clone());
+                    if let Err(e) = self
+                        .session_manager
+                        .add_message(&context.session_id, user_msg)
+                        .await
+                    {
+                        warn!("Failed to persist thinking-only rescue reminder: {}", e);
+                    }
+                    warn!(
+                        "Thinking-only round detected; injecting rescue reminder #{}: turn={}, round={}",
+                        thinking_only_rescue_attempts, context.dialog_turn_id, round_index
+                    );
+                    // Continue into the next round so the model gets a chance to act.
+                } else {
+                    warn!(
+                        "Empty round (no text/thinking/tool_call); ending turn: turn={}, round={}",
+                        context.dialog_turn_id, round_index
+                    );
+                    finalization_reason = Some("empty_round");
+                    break;
+                }
             }
 
             // Queued user message while this turn was running: stop after a full model round.
@@ -1632,10 +2210,13 @@ impl ExecutionEngine {
                 }
             }
 
-            // Check if cancelled after each round
-            let dialog_turn_cancelled =
-                !self.round_executor.has_active_dialog_turn(&dialog_turn_id);
-            if dialog_turn_cancelled {
+            // Check if cancellation was requested after each round. Tokens stay
+            // registered until final cleanup so early cancellation can be
+            // observed by the first round.
+            if self
+                .round_executor
+                .is_dialog_turn_cancelled(&dialog_turn_id)
+            {
                 debug!(
                     "Dialog turn cancelled, stopping execution: dialog_turn_id={}",
                     dialog_turn_id
@@ -1666,79 +2247,109 @@ impl ExecutionEngine {
             );
         }
 
+        // P1-6: Track the actual termination reason for downstream reporting.
+        // Defaults to "complete" (model produced a final answer naturally) and
+        // is overridden by finalize / fallback paths below.
+        let mut effective_finish_reason: &'static str = match finalization_reason {
+            Some(r) => r,
+            None => "complete",
+        };
+        let mut finalize_fallback_text_used = false;
+
         if let Some(reason) = finalization_reason {
-            if Self::assistant_has_tool_calls(&last_assistant_message)
-                && Self::has_tool_result_after_last_assistant(&messages)
-            {
+            // If the turn yielded after tool use, ask the model to summarize
+            // tool results before the next queued user message takes over.
+            let needs_finalize_after_tool_use = reason == "queued_user_message"
+                && messages
+                    .iter()
+                    .rev()
+                    .find(|message| message.role == MessageRole::Assistant)
+                    .is_some_and(Self::assistant_has_tool_calls)
+                && Self::has_tool_result_after_last_assistant(&messages);
+
+            if needs_finalize_after_tool_use {
                 info!(
-                    "Finalizing dialog turn after assistant tool use: session_id={}, turn_id={}, reason={}",
+                    "Finalizing dialog turn: session_id={}, turn_id={}, reason={}",
                     context.session_id, context.dialog_turn_id, reason
                 );
 
-                let mut final_ai_messages = Self::build_ai_messages_for_send(
-                    &messages,
-                    &ai_client.config.format,
-                    context
-                        .workspace
-                        .as_ref()
-                        .map(|workspace| workspace.root_path()),
-                    &context.dialog_turn_id,
-                    primary_supports_image_understanding,
-                    request_context_reminder.as_deref(),
-                )
-                .await?;
-                final_ai_messages.push(AIMessage::user(
-                    Self::FINALIZE_AFTER_TOOL_USE_REMINDER.to_string(),
-                ));
-
-                let round_context = RoundContext {
-                    session_id: context.session_id.clone(),
-                    subagent_parent_info: context.subagent_parent_info.clone(),
-                    dialog_turn_id: context.dialog_turn_id.clone(),
-                    turn_index: context.turn_index,
-                    round_number: completed_rounds,
-                    workspace: context.workspace.clone(),
-                    messages: messages.clone(),
-                    available_tools: Vec::new(),
-                    model_name: ai_client.config.model.clone(),
-                    agent_type: agent_type.clone(),
-                    context_vars: execution_context_vars.clone(),
-                    runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
-                    cancellation_token: CancellationToken::new(),
-                    workspace_services: context.workspace_services.clone(),
-                };
-
                 let final_round_result = self
-                    .round_executor
-                    .execute_round(
+                    .run_finalize_round(
                         ai_client.clone(),
-                        round_context,
-                        final_ai_messages,
-                        None,
-                        Some(context_window),
+                        &context,
+                        agent_type.clone(),
+                        completed_rounds,
+                        &execution_context_vars,
+                        primary_supports_image_understanding,
+                        request_context_reminder.as_deref(),
+                        &messages,
+                        Self::FINALIZE_AFTER_TOOL_USE_REMINDER,
+                        context_window,
                     )
                     .await?;
 
-                if Self::assistant_has_tool_calls(&final_round_result.assistant_message) {
+                let mut accepted =
+                    !Self::assistant_has_tool_calls(&final_round_result.assistant_message);
+                let mut chosen_assistant_message: Option<Message> = None;
+                let mut chosen_usage: Option<crate::util::types::ai::GeminiUsage> =
+                    final_round_result.usage.clone();
+
+                if accepted {
+                    chosen_assistant_message = Some(final_round_result.assistant_message.clone());
+                } else {
+                    // P1-10: First finalize round still returned tool calls
+                    // (rare; tools were not provided, but model hallucinated).
+                    // One last attempt with a stricter text-only reminder.
                     warn!(
-                        "Finalization round still returned tool calls; keeping prior messages: session_id={}, turn_id={}",
+                        "Finalize round still returned tool calls; retrying with text-only reminder: session_id={}, turn_id={}",
                         context.session_id, context.dialog_turn_id
                     );
-                } else {
-                    completed_rounds += 1;
-                    if let Some(ref usage) = final_round_result.usage {
-                        last_usage = Some(usage.clone());
+                    let retry_result = self
+                        .run_finalize_round(
+                            ai_client.clone(),
+                            &context,
+                            agent_type.clone(),
+                            completed_rounds,
+                            &execution_context_vars,
+                            primary_supports_image_understanding,
+                            request_context_reminder.as_deref(),
+                            &messages,
+                            Self::FORCE_TEXT_ONLY_REMINDER,
+                            context_window,
+                        )
+                        .await?;
+                    finalize_fallback_text_used = true;
+                    if Self::assistant_has_tool_calls(&retry_result.assistant_message) {
+                        warn!(
+                            "Text-only retry also returned tool calls; keeping prior messages: session_id={}, turn_id={}",
+                            context.session_id, context.dialog_turn_id
+                        );
+                    } else {
+                        accepted = true;
+                        chosen_usage = retry_result.usage.clone();
+                        chosen_assistant_message = Some(retry_result.assistant_message);
                     }
-                    last_assistant_message = final_round_result.assistant_message.clone();
-                    messages.push(final_round_result.assistant_message.clone());
+                }
 
+                if let Some(msg) = chosen_assistant_message {
+                    completed_rounds += 1;
+                    if let Some(usage) = chosen_usage {
+                        last_usage = Some(usage);
+                    }
+                    messages.push(msg.clone());
                     if let Err(e) = self
                         .session_manager
-                        .add_message(&context.session_id, final_round_result.assistant_message)
+                        .add_message(&context.session_id, msg)
                         .await
                     {
                         warn!("Failed to update final assistant message in memory: {}", e);
                     }
+                }
+
+                if !accepted {
+                    effective_finish_reason = "finalize_failed";
+                } else if finalize_fallback_text_used {
+                    effective_finish_reason = "finalize_text_only_forced";
                 }
             }
         }
@@ -1746,20 +2357,31 @@ impl ExecutionEngine {
         let duration_ms = elapsed_ms_u64(start_time);
 
         info!(
-            "Dialog turn loop completed: turn={}, rounds={}, total_tools={}",
-            context.dialog_turn_id, completed_rounds, total_tools
+            "Dialog turn loop completed: turn={}, rounds={}, total_tools={}, reason={}",
+            context.dialog_turn_id, completed_rounds, total_tools, effective_finish_reason
         );
 
-        // Determine finish reason
-        let finish_reason = if loop_detected {
-            FinishReason::LoopDetected
-        } else if completed_rounds >= self.config.max_rounds {
-            FinishReason::MaxRounds
-        } else {
-            FinishReason::Complete
-        };
+        let finish_reason = FinishReason::Complete;
+        // success reflects whether we ended with a usable final answer.
+        let success = !loop_detected
+            && !matches!(
+                effective_finish_reason,
+                "finalize_failed" | "empty_round" | "max_rounds"
+            );
 
-        let success = !loop_detected && completed_rounds < self.config.max_rounds;
+        // Post-processing hook: when a DeepResearch dialog turn finishes
+        // successfully, renumber `cit_XXX` references in the final report
+        // into consecutive `[N]` display IDs. Two gates apply (agent type +
+        // dialog success) so other agents and failed turns are unaffected.
+        if success && agent_type == "DeepResearch" {
+            if let Some(workspace) = context.workspace.as_ref() {
+                crate::agentic::agents::citation_renumber::run_for_session_workspace(
+                    workspace.root_path(),
+                    &context.session_id,
+                )
+                .await;
+            }
+        }
 
         // Emit dialog turn completed event
         debug!("Preparing to send DialogTurnCompleted event");
@@ -1776,7 +2398,7 @@ impl ExecutionEngine {
                     subagent_parent_info: event_subagent_parent_info,
                     partial_recovery_reason: last_partial_recovery_reason,
                     success: Some(success),
-                    finish_reason: Some(finish_reason.to_string()),
+                    finish_reason: Some(effective_finish_reason.to_string()),
                 },
                 None,
             )
@@ -1813,15 +2435,13 @@ impl ExecutionEngine {
             );
         }
 
-        if loop_detected {
-            warn!(
-                "Dialog turn stopped due to loop detection: turn={}, rounds={}",
-                context.dialog_turn_id, completed_rounds
-            );
-        }
-
         Ok(ExecutionResult {
-            final_message: last_assistant_message,
+            final_message: messages
+                .iter()
+                .rev()
+                .find(|message| message.role == MessageRole::Assistant)
+                .cloned()
+                .unwrap_or_else(|| Message::assistant(String::new())),
             total_rounds: completed_rounds,
             success,
             new_messages,
@@ -1868,86 +2488,36 @@ impl ExecutionEngine {
     /// Get available tool names and definitions: 1. Tool itself is enabled 2. Explicitly allowed in mode config
     async fn get_available_tools_and_definitions(
         &self,
-        mode_allowed_tools: &[String],
+        allowed_tools: &[String],
+        exposure_overrides: &crate::agentic::agents::AgentToolPolicyOverrides,
         workspace: Option<&crate::agentic::WorkspaceBinding>,
+        workspace_services: Option<&crate::agentic::workspace::WorkspaceServices>,
         agent_type: &str,
         primary_supports_image_understanding: bool,
-    ) -> (Vec<String>, Option<Vec<ToolDefinition>>) {
-        // Use get_all_registered_tools to get all tools including MCP tools
-        let all_tools = get_all_registered_tools().await;
-
-        // Filter tools: 1) Check if enabled 2) Check if mode allows
-        let mut tool_definitions = Vec::new();
+        context_vars: &HashMap<String, String>,
+    ) -> ResolvedToolManifest {
         let mut tool_opts_custom = HashMap::new();
         tool_opts_custom.insert(
             "primary_model_supports_image_understanding".to_string(),
             serde_json::Value::Bool(primary_supports_image_understanding),
         );
+        for (key, value) in context_vars {
+            tool_opts_custom.insert(key.clone(), serde_json::Value::String(value.clone()));
+        }
         let description_context = crate::agentic::tools::framework::ToolUseContext {
             tool_call_id: None,
             agent_type: Some(agent_type.to_string()),
             session_id: None,
             dialog_turn_id: None,
             workspace: workspace.cloned(),
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: tool_opts_custom,
             computer_use_host: None,
             cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            workspace_services: workspace_services.cloned(),
         };
-        for tool in &all_tools {
-            if !tool.is_enabled().await {
-                continue;
-            }
-
-            let tool_name = tool.name().to_string();
-                let description = tool
-                    .description_with_context(Some(&description_context))
-                    .await
-                    .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
-
-                let parameters = tool
-                    .input_schema_for_model_with_context(Some(&description_context))
-                    .await;
-
-                tool_definitions.push(ToolDefinition {
-                    name: tool.name().to_string(),
-                    description,
-                    parameters,
-                });
-
-        }
-
-        // Order tools for the model API: terminal → file-ish tools → **`ControlHub`**
-        // (unified desktop / browser / app / terminal / system control) last so the
-        // list matches “think with files first, act on UI last”.
-        let tool_ordering: HashMap<String, usize> = [
-            ("Task", 1),
-            ("Bash", 2),
-            ("TerminalControl", 3),
-            ("Glob", 4),
-            ("Grep", 5),
-            ("Read", 6),
-            ("Edit", 7),
-            ("Write", 8),
-            ("Delete", 9),
-            ("WebFetch", 10),
-            ("WebSearch", 11),
-            ("TodoWrite", 12),
-            ("Skill", 13),
-            ("Log", 14),
-            ("MermaidInteractive", 15),
-            ("ControlHub", 16),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v))
-        .collect();
-        tool_definitions.sort_by_key(|tool| tool_ordering.get(&tool.name).unwrap_or(&100));
-
-        let enabled_tool_names: Vec<String> =
-            tool_definitions.iter().map(|d| d.name.clone()).collect();
-
-        (enabled_tool_names, Some(tool_definitions))
+        resolve_tool_manifest(allowed_tools, exposure_overrides, &description_context).await
     }
 
     /// Emit event
@@ -1958,7 +2528,7 @@ impl ExecutionEngine {
 
 #[cfg(test)]
 mod tests {
-    use super::ExecutionEngine;
+    use super::{ContextHealthSnapshot, ExecutionEngine};
     use crate::agentic::core::{Message, ToolCall, ToolResult};
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
@@ -2044,6 +2614,138 @@ mod tests {
     }
 
     #[test]
+    fn periodic_loop_detector_ignores_short_windows() {
+        let signatures: Vec<String> = vec!["A".to_string(), "B".to_string(), "A".to_string()];
+        assert!(!ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_catches_consecutive_identical_window() {
+        let signatures: Vec<String> = std::iter::repeat_n("A".to_string(), 6).collect();
+        assert!(ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_catches_alternating_pattern() {
+        // A-B-A-B-A-B is a stable period-2 loop with 3 distinct rounds per
+        // signature. The strict consecutive check cannot see this because no
+        // two adjacent rounds share the same signature.
+        let signatures: Vec<String> = ["A", "B", "A", "B", "A", "B"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert!(ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_catches_three_signature_cycle() {
+        // A-B-C-A-B-C: window size 6, three distinct signatures, each twice.
+        let signatures: Vec<String> = ["A", "B", "C", "A", "B", "C"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert!(ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_skips_genuine_progress() {
+        // Six distinct signatures means each tool call is a new exploration
+        // step - not a loop, even if the same tool name keeps appearing.
+        let signatures: Vec<String> = ["A", "B", "C", "D", "E", "F"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert!(!ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_skips_when_a_signature_appears_only_once() {
+        // A-B-A-B-A-C: trailing window has 3 distinct signatures, but C
+        // appeared exactly once - the model is still introducing new work.
+        let signatures: Vec<String> = ["A", "B", "A", "B", "A", "C"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert!(!ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_only_inspects_trailing_window() {
+        // The first 4 rounds were genuine exploration, but the last 6 are a
+        // stable A-B alternation. We should still flag the loop.
+        let signatures: Vec<String> = ["X1", "X2", "X3", "X4", "A", "B", "A", "B", "A", "B"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert!(ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            3
+        ));
+    }
+
+    #[test]
+    fn periodic_loop_detector_treats_threshold_zero_like_one() {
+        let signatures: Vec<String> = ["A", "A"].iter().map(|s| (*s).to_string()).collect();
+        // A two-round window of identical signatures with threshold 0 should
+        // still register as a loop (threshold is clamped to 1, window = 2).
+        assert!(ExecutionEngine::is_periodic_tool_signature_loop(
+            &signatures,
+            0
+        ));
+    }
+
+    #[test]
+    fn context_health_snapshot_scores_repeated_tool_signatures() {
+        let signatures = vec![
+            r#"Bash:{"command":"cargo test"}"#.to_string(),
+            r#"Bash:{"command":"cargo test"}"#.to_string(),
+            r#"Bash:{"command":"cargo test"}"#.to_string(),
+        ];
+
+        let snapshot =
+            ContextHealthSnapshot::from_runtime_observations(0.82, 1, 0, &signatures, &[]);
+
+        assert!((snapshot.token_usage_ratio - 0.82).abs() < f32::EPSILON);
+        assert_eq!(snapshot.full_compression_count, 1);
+        assert_eq!(snapshot.compression_failure_count, 0);
+        assert_eq!(snapshot.repeated_tool_signature_count, 3);
+        assert_eq!(snapshot.consecutive_failed_commands, 0);
+    }
+
+    #[test]
+    fn context_health_snapshot_counts_consecutive_failed_commands() {
+        let messages = vec![
+            command_result("Bash", true, Some(0)),
+            command_result("Bash", false, Some(1)),
+            command_result("Git", false, Some(128)),
+        ];
+
+        let snapshot = ContextHealthSnapshot::from_runtime_observations(0.44, 0, 2, &[], &messages);
+
+        assert_eq!(snapshot.repeated_tool_signature_count, 0);
+        assert_eq!(snapshot.consecutive_failed_commands, 2);
+        assert_eq!(snapshot.compression_failure_count, 2);
+    }
+
+    #[test]
     fn assistant_has_tool_calls_detects_mixed_tool_message() {
         let message = Message::assistant_with_tools(
             String::new(),
@@ -2051,7 +2753,9 @@ mod tests {
                 tool_id: "tool-1".to_string(),
                 tool_name: "Read".to_string(),
                 arguments: json!({ "path": "README.md" }),
+                raw_arguments: None,
                 is_error: false,
+                recovered_from_truncation: false,
             }],
         );
 
@@ -2062,6 +2766,54 @@ mod tests {
     }
 
     #[test]
+    fn collects_unlocked_collapsed_tools_from_visible_get_tool_spec_results() {
+        let visible_get_tool_spec_result = Message::tool_result(ToolResult {
+            tool_id: "tool-1".to_string(),
+            tool_name: "GetToolSpec".to_string(),
+            result: json!({
+                "tool_name": "WebFetch",
+            }),
+            result_for_assistant: None,
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        });
+        let hidden_get_tool_spec_result = Message::tool_result(ToolResult {
+            tool_id: "tool-2".to_string(),
+            tool_name: "GetToolSpec".to_string(),
+            result: json!({
+                "tool_name": "Read",
+            }),
+            result_for_assistant: None,
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        });
+        let failed_get_tool_spec_result = Message::tool_result(ToolResult {
+            tool_id: "tool-3".to_string(),
+            tool_name: "GetToolSpec".to_string(),
+            result: json!({
+                "tool_name": "GetFileDiff",
+            }),
+            result_for_assistant: None,
+            is_error: true,
+            duration_ms: Some(1),
+            image_attachments: None,
+        });
+
+        let unlocked = ExecutionEngine::collect_unlocked_collapsed_tools(
+            &[
+                visible_get_tool_spec_result,
+                hidden_get_tool_spec_result,
+                failed_get_tool_spec_result,
+            ],
+            &["WebFetch".to_string(), "GetFileDiff".to_string()],
+        );
+
+        assert_eq!(unlocked, vec!["WebFetch".to_string()]);
+    }
+
+    #[test]
     fn detects_tool_result_after_last_assistant() {
         let assistant = Message::assistant_with_tools(
             String::new(),
@@ -2069,7 +2821,9 @@ mod tests {
                 tool_id: "tool-1".to_string(),
                 tool_name: "Read".to_string(),
                 arguments: json!({ "path": "README.md" }),
+                raw_arguments: None,
                 is_error: false,
+                recovered_from_truncation: false,
             }],
         );
         let tool_result = Message::tool_result(ToolResult {
@@ -2091,5 +2845,21 @@ mod tests {
             Message::user("read it".to_string()),
             assistant,
         ]));
+    }
+
+    fn command_result(tool_name: &str, success: bool, exit_code: Option<i32>) -> Message {
+        Message::tool_result(ToolResult {
+            tool_id: format!("{}-tool", tool_name),
+            tool_name: tool_name.to_string(),
+            result: json!({
+                "success": success,
+                "exit_code": exit_code,
+                "command": format!("{} command", tool_name),
+            }),
+            result_for_assistant: None,
+            is_error: !success,
+            duration_ms: Some(1),
+            image_attachments: None,
+        })
     }
 }

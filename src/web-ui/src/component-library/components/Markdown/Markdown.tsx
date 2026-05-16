@@ -10,12 +10,12 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { visit } from 'unist-util-visit';
 import { useI18n } from '@/infrastructure/i18n';
 import { MermaidBlock } from './MermaidBlock';
 import { ReproductionStepsBlock } from './ReproductionStepsBlock';
+import { AsyncPrismSyntaxHighlighter } from './AsyncPrismSyntaxHighlighter';
+import { buildMarkdownPrismStyle } from './markdownPrismTheme';
 import { Tooltip } from '../Tooltip';
 import { globalAPI, systemAPI, workspaceAPI } from '../../../infrastructure/api';
 import { getPrismLanguageFromAlias } from '@/infrastructure/language-detection';
@@ -29,6 +29,26 @@ import './Markdown.scss';
 
 const log = createLogger('Markdown');
 const COMPUTER_LINK_PREFIX = 'computer://';
+
+// Module-level cache so that all simultaneously-mounting Markdown instances
+// (e.g. dozens of history blocks after a workspace switch) share a single
+// IPC round-trip for the workspace path. The in-flight deduplication in
+// GlobalAPI already coalesces concurrent calls into one; this cache avoids
+// even triggering a new IPC call while the result is still fresh.
+let _cachedWorkspacePathResult: string | undefined;
+let _cachedWorkspacePathAt = 0;
+const WORKSPACE_PATH_CACHE_MS = 5000;
+
+async function getWorkspacePathCached(): Promise<string | undefined> {
+  const now = Date.now();
+  if (_cachedWorkspacePathResult !== undefined && now - _cachedWorkspacePathAt < WORKSPACE_PATH_CACHE_MS) {
+    return _cachedWorkspacePathResult;
+  }
+  const result = await globalAPI.getCurrentWorkspacePath();
+  _cachedWorkspacePathResult = result;
+  _cachedWorkspacePathAt = Date.now();
+  return result;
+}
 
 /** Catches render errors from react-markdown/remark-gfm (e.g. RegExp in transformGfmAutolinkLiterals) and shows plain text fallback. */
 class MarkdownErrorBoundary extends Component<
@@ -570,14 +590,14 @@ export const Markdown = React.memo<MarkdownProps>(({
   const { t } = useI18n('components');
   const [currentWorkspacePath, setCurrentWorkspacePath] = useState('');
   
-  const syntaxTheme = isLight ? vs : vscDarkPlus;
+  const syntaxTheme = useMemo(() => buildMarkdownPrismStyle(isLight), [isLight]);
   
   const contentStr = typeof content === 'string' ? content : String(content || '');
 
   useEffect(() => {
     let cancelled = false;
 
-    void globalAPI.getCurrentWorkspacePath()
+    void getWorkspacePathCached()
       .then((workspacePath) => {
         if (!cancelled && workspacePath) {
           setCurrentWorkspacePath(workspacePath);
@@ -835,7 +855,7 @@ export const Markdown = React.memo<MarkdownProps>(({
             <CopyButton code={code} />
           </div>
           <div className="code-block-body">
-          <SyntaxHighlighter
+          <AsyncPrismSyntaxHighlighter
             language={normalizedLang}
             style={syntaxTheme}
             showLineNumbers={true}
@@ -859,7 +879,7 @@ export const Markdown = React.memo<MarkdownProps>(({
             }}
           >
             {code}
-          </SyntaxHighlighter>
+          </AsyncPrismSyntaxHighlighter>
           </div>
         </div>
       );
@@ -1110,7 +1130,7 @@ export const Markdown = React.memo<MarkdownProps>(({
     currentWorkspacePath
   ]);
   
-  const wrapperClassName = `markdown-renderer ${className} ${isStreaming && contentStr ? 'markdown-renderer--streaming' : ''}`.trim();
+  const wrapperClassName = `markdown-renderer ${className}`.trim();
 
   return (
     <div className={wrapperClassName}>

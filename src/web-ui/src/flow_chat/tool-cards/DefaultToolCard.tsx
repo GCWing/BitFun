@@ -4,11 +4,14 @@
  */
 
 import React, { useMemo, useState, useCallback } from 'react';
-import { Loader2, XCircle, Clock, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
+import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
+import { AcpPermissionActions } from './AcpPermissionActions';
 import './DefaultToolCard.scss';
 
 const MAX_PREVIEW_CHARS = 4000;
@@ -134,21 +137,6 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
     });
   }, [applyExpandedState, canExpand, isExpanded, onExpand]);
 
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'running':
-      case 'streaming':
-        return <Loader2 className="animate-spin" size={16} />;
-      case 'completed':
-        return <Check size={16} className="icon-check-done" />;
-      case 'cancelled':
-      case 'error':
-        return <XCircle size={16} />;
-      default:
-        return <Clock size={16} />;
-    }
-  };
-
   const getStatusText = () => {
     if (requiresConfirmation && !userConfirmed) {
       return t('toolCards.default.waitingConfirm');
@@ -228,12 +216,11 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
         onClick={handleToggleExpand}
         className={`default-tool-card ${showConfirmationHighlight ? 'requires-confirmation' : ''}`}
         clickable={canExpand}
-        header={
+          header={
           <CompactToolCardHeader
-            icon={getStatusIcon()}
+            icon={<ToolCardStatusSlot status={status} toolIcon={config.icon ?? undefined} />}
             action={config.displayName}
             content={getSummaryText()}
-            extra={config.icon ? <span className="default-tool-card__icon-badge">{config.icon}</span> : undefined}
             rightStatusIcon={canExpand ? (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : undefined}
           />
         }
@@ -255,22 +242,35 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
 
           {showConfirmationActions && (
             <div className="default-tool-card__actions">
-              <button
-                type="button"
-                className="default-tool-card__button default-tool-card__button--confirm"
-                onClick={handleConfirm}
-                disabled={status === 'streaming'}
-              >
-                {t('toolCards.mcp.confirmExecute')}
-              </button>
-              <button
-                type="button"
-                className="default-tool-card__button default-tool-card__button--reject"
-                onClick={handleReject}
-                disabled={status === 'streaming'}
-              >
-                {t('toolCards.mcp.cancel')}
-              </button>
+              {hasAcpPermissionOptions(toolItem) ? (
+                <AcpPermissionActions
+                  toolItem={toolItem}
+                  input={toolCall?.input}
+                  presentation="text"
+                  disabled={status === 'streaming'}
+                  onConfirm={onConfirm}
+                  onReject={onReject}
+                />
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="default-tool-card__button default-tool-card__button--confirm"
+                    onClick={handleConfirm}
+                    disabled={status === 'streaming'}
+                  >
+                    {t('toolCards.mcp.confirmExecute')}
+                  </button>
+                  <button
+                    type="button"
+                    className="default-tool-card__button default-tool-card__button--reject"
+                    onClick={handleReject}
+                    disabled={status === 'streaming'}
+                  >
+                    {t('toolCards.mcp.cancel')}
+                  </button>
+                </>
+              )}
             </div>
           )}
 
@@ -290,5 +290,3 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
     </div>
   );
 };
-
-

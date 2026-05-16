@@ -7,7 +7,7 @@
 
 .bitfun-chat-input-drop-zone {
   position: absolute;
-  bottom: 16px;
+  bottom: 4px;
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
@@ -17,6 +17,11 @@
   flex-direction: column;
   padding: 0 $size-gap-2;
   pointer-events: auto !important;
+
+  /* Reserve the band between the input card bottom edge and workspace strip (larger = more gap above strip text). */
+  &:has(.bitfun-chat-input-workspace-strip) {
+    padding-bottom: 32px;
+  }
   
   &.bitfun-context-drop-zone--can-accept {
     .bitfun-chat-input__box {
@@ -402,6 +407,11 @@
   }
 
   gap: $size-gap-3;
+
+  /* Queue sits directly above the input card; keep this pair tighter than other stacked blocks. */
+  > .bitfun-pending-queue-panel + .bitfun-chat-input__container {
+    margin-top: -6px;
+  }
 
   &__recommendations {
     margin-bottom: 8px;
@@ -1447,7 +1457,14 @@
     gap: $size-gap-1;
     animation: bitfun-stacked-reveal 0.28s cubic-bezier(0.4, 0, 0.2, 1) 0.17s both;
   }
-  
+
+  &__model-usage-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
   &__actions-right {
     display: flex;
     align-items: center;
@@ -1463,67 +1480,81 @@
     flex-shrink: 0;
   }
   
+  /* Send: same chrome language as stop — luminous disk + dark icon on dark UI,
+     charcoal disk + light icon on light UI. */
   &__send-button {
     position: relative;
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    border: 1px solid var(--color-accent-300);
-    background: var(--color-accent-200);
-    color: var(--color-accent-300);
+    border: none;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(17, 17, 22, 0.55);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      transform 0.18s ease,
+      filter 0.18s ease,
+      box-shadow 0.18s ease,
+      border-color 0.18s ease,
+      background 0.18s ease,
+      color 0.18s ease;
     flex-shrink: 0;
     
     &:not(:disabled) {
-      background: linear-gradient(135deg, 
-        rgba(80, 130, 255, 0.85), 
-        rgba(120, 100, 255, 0.9));
-      border: 1px solid rgba(140, 160, 255, 0.6);
-      color: white;
-      box-shadow: 
-        0 2px 8px rgba(100, 140, 255, 0.4),
-        0 0 12px rgba(120, 100, 255, 0.25);
+      background: rgba(239, 241, 248, 0.96);
+      border: 1px solid transparent;
+      color: #111116;
+      box-shadow: none;
     }
-    
-    .bitfun-chat-input__box:focus-within &:not(:disabled) {
-      background: linear-gradient(135deg, 
-        rgba(80, 140, 255, 0.95), 
-        rgba(130, 110, 255, 1));
-      border: 1px solid rgba(150, 170, 255, 0.7);
-      color: white;
-      transform: scale(1.1);
-      box-shadow: 
-        0 4px 16px rgba(100, 140, 255, 0.5),
-        0 0 20px rgba(140, 100, 255, 0.35);
-    }
-    
+
     &:hover:not(:disabled) {
-      background: linear-gradient(135deg, 
-        rgba(90, 150, 255, 1), 
-        rgba(140, 120, 255, 1));
-      border-color: rgba(160, 180, 255, 0.8);
-      color: white;
-      transform: scale(1.12);
-      box-shadow: 
-        0 6px 20px rgba(100, 140, 255, 0.55),
-        0 0 24px rgba(140, 100, 255, 0.4);
+      transform: scale(1.07);
+      filter: none;
+      background: linear-gradient(
+        165deg,
+        rgba(255, 255, 255, 1) 0%,
+        rgba(236, 239, 248, 0.99) 100%
+      );
+      border-color: rgba(255, 255, 255, 0.52);
+      color: #050508;
+      box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.32),
+        0 8px 18px rgba(0, 0, 0, 0.32);
+    }
+
+    .bitfun-chat-input__box:focus-within &:not(:disabled) {
+      filter: none;
+      transform: scale(1.05);
+      background: linear-gradient(
+        165deg,
+        rgba(252, 253, 255, 0.99) 0%,
+        rgba(232, 235, 244, 0.97) 100%
+      );
+      border-color: rgba(255, 255, 255, 0.4);
+      box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.36),
+        0 3px 12px rgba(0, 0, 0, 0.28);
     }
     
     &:active:not(:disabled) {
-      transform: scale(0.95);
+      transform: scale(0.96);
+      filter: none;
+      box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.4),
+        0 1px 3px rgba(0, 0, 0, 0.2);
     }
     
     &:disabled {
-      background: var(--color-accent-100);
-      border-color: var(--color-accent-200);
-      color: var(--color-accent-400);
-      opacity: 0.35;
       cursor: default;
+      background: rgba(246, 247, 250, 0.18);
+      border: none;
+      color: rgba(17, 17, 22, 0.38);
+      opacity: 1;
       box-shadow: none;
+      filter: saturate(0.65);
     }
     
     &--breathing {
@@ -1553,6 +1584,25 @@
         border: none !important;
         box-shadow: none !important;
       }
+
+      &:hover .bitfun-chat-input__breathing-circle {
+        transform: scale(1.07);
+        filter: none;
+        background: linear-gradient(
+          165deg,
+          rgba(255, 255, 255, 1) 0%,
+          rgba(236, 239, 248, 0.99) 100%
+        );
+        border-color: rgba(255, 255, 255, 0.52);
+        box-shadow:
+          0 0 0 1px rgba(0, 0, 0, 0.32),
+          0 8px 18px rgba(0, 0, 0, 0.32);
+
+        &::after {
+          background: #0c0d12;
+          box-shadow: none;
+        }
+      }
     }
   }
   
@@ -1565,12 +1615,138 @@
     animation: spin 0.8s linear infinite;
   }
   
+  /* Stop: theme-inverted pause glyph — luminous disk + deep square on dark UI;
+     charcoal disk + soft square on light UI (matches contrast on each chrome). */
   &__breathing-circle {
+    position: relative;
+    box-sizing: border-box;
+    flex-shrink: 0;
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: rgba(234, 179, 8, 0.6); // yellow-500 with opacity
-    animation: breathing-pulse 2.5s ease-in-out infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      transform 0.18s ease,
+      filter 0.18s ease,
+      box-shadow 0.18s ease,
+      background 0.18s ease,
+      border-color 0.18s ease;
+    background: rgba(239, 241, 248, 0.96);
+    border: 1px solid transparent;
+    box-shadow: none;
+
+    &::after {
+      content: '';
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      background: #111116;
+      box-shadow: none;
+      transition:
+        background 0.18s ease,
+        box-shadow 0.18s ease;
+    }
+  }
+
+  :root[data-theme="light"] &,
+  :root[data-theme-type="light"] &,
+  .light & {
+    .bitfun-chat-input__send-button:not(.bitfun-chat-input__send-button--breathing) {
+      &:not(:disabled) {
+        background: linear-gradient(
+          165deg,
+          #15151c 0%,
+          #0a0a0f 100%
+        );
+        border: 1px solid transparent;
+        color: #e8eaf1;
+        box-shadow: none;
+      }
+
+      &:hover:not(:disabled) {
+        filter: none;
+        transform: scale(1.07);
+        background: linear-gradient(
+          165deg,
+          #292934 0%,
+          #16161f 100%
+        );
+        border-color: rgba(0, 0, 0, 0.58);
+        color: #fafbff;
+        box-shadow:
+          0 0 0 1px rgba(0, 0, 0, 0.16),
+          0 8px 20px rgba(0, 0, 0, 0.22);
+      }
+
+      .bitfun-chat-input__box:focus-within &:not(:disabled) {
+        filter: none;
+        transform: scale(1.05);
+        background: linear-gradient(
+          165deg,
+          #1e1e28 0%,
+          #121219 100%
+        );
+        border-color: rgba(0, 0, 0, 0.52);
+        color: #f0f2f8;
+        box-shadow:
+          0 0 0 1px rgba(0, 0, 0, 0.13),
+          0 4px 14px rgba(0, 0, 0, 0.2);
+      }
+
+      &:disabled {
+        background: rgba(10, 10, 14, 0.12);
+        border: none;
+        color: rgba(24, 24, 34, 0.28);
+        box-shadow: none;
+        filter: none;
+      }
+    }
+
+    .bitfun-chat-input__breathing-circle {
+      background: linear-gradient(
+        165deg,
+        #15151c 0%,
+        #0a0a0f 100%
+      );
+      border: 1px solid transparent;
+      box-shadow: none;
+
+      &::after {
+        background: linear-gradient(
+          165deg,
+          #ededf2 0%,
+          #c8cad4 100%
+        );
+        box-shadow: none;
+        transition:
+          background 0.18s ease,
+          box-shadow 0.18s ease;
+      }
+    }
+
+    .bitfun-chat-input__send-button--breathing:hover .bitfun-chat-input__breathing-circle {
+      transform: scale(1.07);
+      background: linear-gradient(
+        165deg,
+        #24242f 0%,
+        #14141e 100%
+      );
+      border-color: rgba(0, 0, 0, 0.55);
+      box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.15),
+        0 8px 20px rgba(0, 0, 0, 0.2);
+
+      &::after {
+        background: linear-gradient(
+          165deg,
+          #f4f5fa 0%,
+          #d8dae4 100%
+        );
+        box-shadow: none;
+      }
+    }
   }
 
   &__queued-badge {
@@ -1597,21 +1773,6 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes breathing-pulse {
-  0% {
-    transform: scale(0.9);
-    opacity: 0.7;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(0.9);
-    opacity: 0.7;
   }
 }
 

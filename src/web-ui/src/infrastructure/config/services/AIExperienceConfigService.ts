@@ -1,9 +1,18 @@
  
 
 import { configManager } from './ConfigManager';
+import { DEFAULT_AGENT_COMPANION_PET } from './AgentCompanionPetService';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('AIExperienceConfig');
+
+/** A quick action item shown in the post-coding actions menu. */
+export interface QuickAction {
+  id: string;
+  label: string;
+  prompt: string;
+  enabled: boolean;
+}
 
 export interface AIExperienceSettings {
   enable_session_title_generation: boolean;
@@ -16,6 +25,8 @@ export interface AIExperienceSettings {
   agent_companion_pet?: AgentCompanionPetSelection | null;
   /** Flashgrep-backed accelerated workspace search for local workspaces. */
   enable_workspace_search: boolean;
+  /** User-defined quick actions shown in the post-coding actions menu. */
+  quick_actions?: QuickAction[];
 }
 
 export type AgentCompanionDisplayMode = 'input' | 'desktop';
@@ -32,13 +43,39 @@ export interface AgentCompanionPetSelection {
 
 const CONFIG_PATH = 'app.ai_experience';
 
+export const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
+  {
+    id: 'commit',
+    label: 'Commit',
+    prompt: 'Commit all current code changes',
+    enabled: true,
+  },
+  {
+    id: 'create_pr',
+    label: 'Create PR',
+    prompt: 'Create a Pull Request for the current branch',
+    enabled: true,
+  },
+];
+
 const defaultSettings: AIExperienceSettings = {
   enable_session_title_generation: true,
   enable_visual_mode: false,
   enable_agent_companion: true,
   agent_companion_display_mode: 'desktop',
+  agent_companion_pet: DEFAULT_AGENT_COMPANION_PET,
   enable_workspace_search: false,
+  quick_actions: DEFAULT_QUICK_ACTIONS,
 };
+
+function normalizeSettings(settings: AIExperienceSettings | null | undefined): AIExperienceSettings {
+  const merged = { ...defaultSettings, ...settings };
+  // Legacy configs used null to mean the built-in SVG panda. Panda is now the default preset.
+  if (!merged.agent_companion_pet) {
+    merged.agent_companion_pet = DEFAULT_AGENT_COMPANION_PET;
+  }
+  return merged;
+}
 
  
 export class AIExperienceConfigService {
@@ -70,10 +107,15 @@ export class AIExperienceConfigService {
   private async loadSettings(): Promise<void> {
     try {
       const settings = await configManager.getConfig<AIExperienceSettings>(CONFIG_PATH);
-      this.cachedSettings = { ...defaultSettings, ...settings };
+      const merged = normalizeSettings(settings);
+      // Seed quick_actions with defaults when the stored value is absent.
+      if (!merged.quick_actions || merged.quick_actions.length === 0) {
+        merged.quick_actions = DEFAULT_QUICK_ACTIONS;
+      }
+      this.cachedSettings = merged;
     } catch (error) {
       log.warn('Failed to load config, using defaults', error);
-      this.cachedSettings = defaultSettings;
+      this.cachedSettings = { ...defaultSettings };
     }
   }
 
@@ -90,7 +132,7 @@ export class AIExperienceConfigService {
   async getSettingsAsync(): Promise<AIExperienceSettings> {
     try {
       const settings = await configManager.getConfig<AIExperienceSettings>(CONFIG_PATH);
-      this.cachedSettings = { ...defaultSettings, ...settings };
+      this.cachedSettings = normalizeSettings(settings);
       return this.cachedSettings;
     } catch (error) {
       log.error('Failed to get config', error);
@@ -101,8 +143,9 @@ export class AIExperienceConfigService {
    
   async saveSettings(settings: AIExperienceSettings): Promise<void> {
     try {
-      await configManager.setConfig(CONFIG_PATH, settings);
-      this.cachedSettings = settings;
+      const normalized = normalizeSettings(settings);
+      await configManager.setConfig(CONFIG_PATH, normalized);
+      this.cachedSettings = normalized;
       this.notifyListeners();
     } catch (error) {
       log.error('Failed to save config', error);

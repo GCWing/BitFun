@@ -190,7 +190,7 @@
   },
   "reasoningEffort": {
     "label": "推理深度",
-    "hint": "控制 provider 支持的推理強度，適用於 Responses API 與支持自適應推理的 Claude 模型",
+    "hint": "控制 provider 支持的推理強度，適用於 DeepSeek、Responses API 與支持自適應推理的 Claude 模型",
     "placeholder": "使用 API 默認值"
   },
   "details": {

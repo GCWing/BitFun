@@ -1,10 +1,10 @@
 import React from 'react';
 import './DotMatrixLoader.scss';
 
-export type DotMatrixLoaderSize = 'small' | 'medium';
+export type DotMatrixLoaderSize = 'small' | 'medium' | 'large';
 
 export interface DotMatrixLoaderProps {
-  /** small: 4px cells; medium: 6px cells (matches flow chat processing row). */
+  /** small: 4px cells; medium: 6px cells (flow chat processing); large: heavier cells for full-page loaders. */
   size?: DotMatrixLoaderSize;
   className?: string;
   /** Decorative; keeps screen readers from counting 9 spans. @default true */
@@ -14,6 +14,7 @@ export interface DotMatrixLoaderProps {
 const sizeClass: Record<DotMatrixLoaderSize, string> = {
   small: 'dot-matrix-loader--small',
   medium: 'dot-matrix-loader--medium',
+  large: 'dot-matrix-loader--large',
 };
 
 export const DotMatrixLoader: React.FC<DotMatrixLoaderProps> = ({

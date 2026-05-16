@@ -1,0 +1,170 @@
+/**
+ * Narrow meta row in the gap under the floating chat input.
+ * Collapsed: same width as the centered capsule (min(380px, 80%)), text left within that band.
+ * Active: full input column width, left-aligned.
+ */
+
+@use '../../component-library/styles/tokens' as *;
+
+.bitfun-chat-input-workspace-strip {
+  position: absolute;
+  bottom: 0;
+  z-index: 4;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+
+  &--split {
+    justify-content: space-between;
+  }
+
+  &--usage-only {
+    justify-content: flex-end;
+  }
+  /* Room for descenders (g, y, p) */
+  /* Collapsed capsule uses 18px horizontal padding on `.bitfun-chat-input__box`; match so strip text lines up with pill content */
+  padding: 3px 18px 4px;
+  font-family: var(--font-sans, var(--font-family-sans, inherit));
+  font-size: var(--flowchat-font-size-xxs);
+  line-height: 1.45;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--color-text-primary);
+  user-select: text;
+  pointer-events: auto;
+
+  /* Default (collapsed / idle capsule): same width as `.bitfun-chat-input--collapsed`, centered */
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(380px, 80%);
+  max-width: calc(100% - #{$size-gap-2 * 2});
+
+  /* Expanded: indent past the rounded card edge — align with `.bitfun-chat-input__box` inner padding (8px) on top of drop-zone horizontal padding */
+  .bitfun-chat-input-drop-zone:has(.bitfun-chat-input--active) & {
+    left: 0;
+    right: 0;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    padding: 3px calc(#{$size-gap-2} + 8px) 4px;
+  }
+
+  &__main {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+
+  &--split &__main {
+    flex: 1 1 auto;
+    max-width: calc(100% - 24px);
+  }
+
+  &__usage {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  /* Keep the usage action compact, but large enough to read beside the strip text. */
+  &__usage-btn.icon-btn {
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    border-radius: 4px;
+    opacity: 0.86;
+    color: color-mix(in srgb, var(--color-accent-500) 62%, var(--color-text-secondary));
+
+    &:hover:not(:disabled) {
+      transform: none;
+      background: color-mix(in srgb, var(--color-accent-500) 10%, var(--element-bg-medium));
+      color: color-mix(in srgb, var(--color-accent-500) 86%, var(--color-text-primary));
+      opacity: 1;
+    }
+
+    &:active:not(:disabled) {
+      transform: none;
+    }
+
+    svg {
+      flex-shrink: 0;
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  &__chip {
+    display: inline-flex;
+    min-width: 0;
+    box-sizing: border-box;
+    border-radius: $size-radius-sm;
+    padding: 2px 6px;
+    margin: 0 -2px;
+    transition: background-color $motion-fast $easing-standard;
+    cursor: default;
+
+    &:hover {
+      background: var(--element-bg-medium);
+    }
+
+    &--workspace {
+      align-items: baseline;
+      flex: 0 1 auto;
+      max-width: 65%;
+    }
+
+    &--branch {
+      align-items: center;
+      flex: 0 1 auto;
+      max-width: 35%;
+      gap: 3px;
+    }
+  }
+
+  &__workspace {
+    min-width: 0;
+    white-space: nowrap;
+    font-family: inherit;
+    font-weight: inherit;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-bottom: 1px;
+    max-width: 100%;
+    color: var(--color-text-primary);
+  }
+
+  &__branch-icon {
+    flex-shrink: 0;
+    width: 11px;
+    height: 11px;
+    color: var(--color-text-muted);
+    opacity: 0.9;
+  }
+
+  &__branch {
+    min-width: 0;
+    white-space: nowrap;
+    font-family: inherit;
+    font-weight: inherit;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-bottom: 1px;
+    color: var(--color-text-primary);
+  }
+
+  &__sep {
+    flex: none;
+    padding: 0 3px;
+    color: var(--color-text-muted);
+    font-weight: 400;
+  }
+}

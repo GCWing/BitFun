@@ -129,18 +129,15 @@ impl AnthropicMessageConverter {
     fn convert_assistant_message(msg: Message) -> Option<Value> {
         let mut content = Vec::new();
 
-        if let Some(thinking) = msg.reasoning_content.as_ref() {
-            if !thinking.is_empty() {
-                let mut thinking_block = json!({
-                    "type": "thinking",
-                    "thinking": thinking
-                });
+        if msg.reasoning_content.is_some() || msg.thinking_signature.is_some() {
+            let mut thinking_block = json!({
+                "type": "thinking",
+                "thinking": msg.reasoning_content.as_deref().unwrap_or("")
+            });
 
-                thinking_block["signature"] =
-                    json!(msg.thinking_signature.as_deref().unwrap_or(""));
+            thinking_block["signature"] = json!(msg.thinking_signature.as_deref().unwrap_or(""));
 
-                content.push(thinking_block);
-            }
+            content.push(thinking_block);
         }
 
         if let Some(text) = msg.content {
@@ -228,5 +225,36 @@ impl AnthropicMessageConverter {
                 })
                 .collect()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AnthropicMessageConverter;
+    use crate::types::Message;
+    use serde_json::json;
+
+    #[test]
+    fn preserves_empty_thinking_block_when_signature_exists() {
+        let msg = Message {
+            role: "assistant".to_string(),
+            content: Some("Answer".to_string()),
+            reasoning_content: Some(String::new()),
+            thinking_signature: Some("sig_1".to_string()),
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            is_error: None,
+            tool_image_attachments: None,
+        };
+
+        let (_, messages) = AnthropicMessageConverter::convert_messages(vec![msg]);
+        let content = messages[0]["content"]
+            .as_array()
+            .expect("assistant content");
+
+        assert_eq!(content[0]["type"], json!("thinking"));
+        assert_eq!(content[0]["thinking"], json!(""));
+        assert_eq!(content[0]["signature"], json!("sig_1"));
     }
 }

@@ -4,11 +4,11 @@
 
 mod service;
 mod subscriber;
-mod types;
 
-pub use service::TokenUsageService;
-pub use subscriber::TokenUsageSubscriber;
-pub use types::{
+pub use bitfun_services_core::token_usage::types;
+pub use bitfun_services_core::token_usage::{
     ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery, TokenUsageRecord,
     TokenUsageSummary,
 };
+pub use service::TokenUsageService;
+pub use subscriber::TokenUsageSubscriber;

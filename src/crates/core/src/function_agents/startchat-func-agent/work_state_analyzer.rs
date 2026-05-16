@@ -93,7 +93,7 @@ impl WorkStateAnalyzer {
             .output()
             .map_err(|e| AgentError::git_error(format!("Failed to get git diff: {}", e)))?;
 
-        let mut diff = String::from_utf8_lossy(&unstaged_output.stdout).to_string();
+        let unstaged_diff = String::from_utf8_lossy(&unstaged_output.stdout);
 
         let staged_output = crate::util::process_manager::create_command("git")
             .arg("diff")
@@ -103,11 +103,7 @@ impl WorkStateAnalyzer {
             .map_err(|e| AgentError::git_error(format!("Failed to get staged diff: {}", e)))?;
 
         let staged_diff = String::from_utf8_lossy(&staged_output.stdout);
-
-        if !staged_diff.is_empty() {
-            diff.push_str("\n\n=== Staged Changes ===\n\n");
-            diff.push_str(&staged_diff);
-        }
+        let diff = super::utils::combine_git_diffs(&unstaged_diff, &staged_diff);
 
         debug!("Git diff retrieved: length={} chars", diff.len());
 
@@ -143,48 +139,8 @@ impl WorkStateAnalyzer {
 
         let status_str = String::from_utf8_lossy(&status_output.stdout);
 
-        let mut unstaged_files = 0;
-        let mut staged_files = 0;
-        let mut modified_files = Vec::new();
-
-        for line in status_str.lines() {
-            if line.is_empty() {
-                continue;
-            }
-
-            let status_code = &line[0..2];
-            let file_path = if line.len() > 3 {
-                line[3..].trim().to_string()
-            } else {
-                continue;
-            };
-
-            let (change_type, is_staged) = match status_code {
-                "A " => (FileChangeType::Added, true),
-                " M" => (FileChangeType::Modified, false),
-                "M " => (FileChangeType::Modified, true),
-                "MM" => (FileChangeType::Modified, true),
-                " D" => (FileChangeType::Deleted, false),
-                "D " => (FileChangeType::Deleted, true),
-                "??" => (FileChangeType::Untracked, false),
-                "R " => (FileChangeType::Renamed, true),
-                _ => (FileChangeType::Modified, false),
-            };
-
-            if is_staged {
-                staged_files += 1;
-            } else {
-                unstaged_files += 1;
-            }
-
-            if modified_files.len() < 10 {
-                modified_files.push(FileModification {
-                    path: file_path.clone(),
-                    change_type,
-                    module: Self::extract_module(&file_path),
-                });
-            }
-        }
+        let (unstaged_files, staged_files, modified_files) =
+            super::utils::parse_git_status_porcelain(&status_str);
 
         let unpushed_commits = Self::get_unpushed_commits(repo_path)?;
         let ahead_behind = Self::get_ahead_behind(repo_path).ok();
@@ -254,24 +210,8 @@ impl WorkStateAnalyzer {
         }
     }
 
-    fn extract_module(file_path: &str) -> Option<String> {
-        let path = Path::new(file_path);
-
-        if let Some(component) = path.components().next() {
-            return Some(component.as_os_str().to_string_lossy().to_string());
-        }
-
-        None
-    }
-
     async fn get_time_info(repo_path: &Path) -> TimeInfo {
-        let hour = Local::now().hour();
-        let time_of_day = match hour {
-            5..=11 => TimeOfDay::Morning,
-            12..=17 => TimeOfDay::Afternoon,
-            18..=22 => TimeOfDay::Evening,
-            _ => TimeOfDay::Night,
-        };
+        let time_of_day = super::utils::time_of_day_for_hour(Local::now().hour());
 
         let output = crate::util::process_manager::create_command("git")
             .arg("log")

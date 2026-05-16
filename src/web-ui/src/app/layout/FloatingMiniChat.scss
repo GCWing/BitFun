@@ -24,9 +24,16 @@ $panel-height: 620px;
   right: $button-offset;
   z-index: $z-overlay + 1;
   pointer-events: none;
+  transition:
+    right $motion-base $easing-decelerate,
+    bottom $motion-base $easing-decelerate;
 
   & > * {
     pointer-events: auto;
+  }
+
+  &--miniapp-customizing {
+    right: calc(clamp(380px, 38vw, 560px) + #{$button-offset + 16px});
   }
 }
 
@@ -437,5 +444,12 @@ $panel-height: 620px;
     &:active {
       transform: scale(0.93);
     }
+  }
+}
+
+@media (max-width: 900px) {
+  .bitfun-fmc--miniapp-customizing {
+    right: $button-offset;
+    bottom: calc(#{$button-offset} + 64px);
   }
 }

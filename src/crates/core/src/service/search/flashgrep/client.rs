@@ -1,42 +1,42 @@
 use std::{
-    collections::HashMap,
     ffi::OsString,
     process::Stdio,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex as StdMutex, MutexGuard as StdMutexGuard,
     },
     time::{Duration, Instant},
 };
 
-use serde::Serialize;
+use crate::util::process_manager;
+use async_trait::async_trait;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, BufWriter},
-    process::{Child, ChildStderr, ChildStdin, ChildStdout, Command},
-    sync::{oneshot, Mutex},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
+    process::{Child, ChildStderr, ChildStdin, ChildStdout},
+    sync::{mpsc, Mutex},
     time::{sleep, timeout},
 };
 
 use super::{
     error::{AppError, Result},
+    log_flashgrep_stderr_line, FLASHGREP_LOG_TARGET,
     protocol::{
-        ClientCapabilities, ClientInfo, GlobParams, InitializeParams, RepoRef, Request,
-        RequestEnvelope, Response, ResponseEnvelope, SearchParams, ServerMessage, TaskRef,
+        ClientCapabilities, ClientInfo, GlobParams, InitializeParams, RepoRef, Request, Response,
+        SearchParams, TaskRef,
     },
+    repo_session::FlashgrepRepoSession,
+    rpc_client::{read_content_length_message, ProtocolClient},
     types::{
         GlobOutcome, GlobRequest, OpenRepoParams, RepoStatus, SearchOutcome, SearchRequest,
         TaskStatus,
     },
 };
 
-const JSONRPC_VERSION: &str = "2.0";
 const CLIENT_NAME: &str = "bitfun-workspace-search";
 const REPO_CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
 const SHUTDOWN_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
-
-type PendingResponseSender = oneshot::Sender<Result<ResponseEnvelope>>;
-type PendingResponses = HashMap<u64, PendingResponseSender>;
+const DROP_CLEANUP_TIMEOUT: Duration = Duration::from_millis(150);
 
 #[derive(Debug, Clone)]
 pub(crate) struct ManagedClient {
@@ -61,18 +61,23 @@ struct ManagedClientState {
 
 #[derive(Debug)]
 struct AsyncDaemonClient {
-    child: Mutex<Option<Child>>,
-    writer: Mutex<BufWriter<ChildStdin>>,
-    shared: Arc<DaemonShared>,
-    next_id: AtomicU64,
-    reader_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
-    stderr_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    child: StdMutex<Option<Child>>,
+    protocol: ProtocolClient,
+    writer_task: StdMutex<Option<tokio::task::JoinHandle<()>>>,
+    reader_task: StdMutex<Option<tokio::task::JoinHandle<()>>>,
+    stderr_task: StdMutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
-#[derive(Debug, Default)]
-struct DaemonShared {
-    pending: Mutex<PendingResponses>,
-    closed: AtomicBool,
+fn lock_std_mutex<T>(mutex: &StdMutex<T>) -> StdMutexGuard<'_, T> {
+    match mutex.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn take_std_option<T>(mutex: &StdMutex<Option<T>>) -> Option<T> {
+    let mut guard = lock_std_mutex(mutex);
+    guard.take()
 }
 
 impl Default for ManagedClient {
@@ -165,6 +170,7 @@ impl ManagedClient {
                 self.clear_daemon_if_current(&daemon).await;
                 if let Err(shutdown_error) = daemon.shutdown().await {
                     log::debug!(
+                        target: FLASHGREP_LOG_TARGET,
                         "Flashgrep stdio daemon shutdown after transport error failed: {}",
                         shutdown_error
                     );
@@ -389,13 +395,44 @@ impl RepoSession {
     }
 }
 
+#[async_trait]
+impl FlashgrepRepoSession for RepoSession {
+    async fn status(&self) -> Result<RepoStatus> {
+        RepoSession::status(self).await
+    }
+
+    async fn task_status(&self, task_id: String) -> Result<TaskStatus> {
+        RepoSession::task_status(self, task_id).await
+    }
+
+    async fn build_index(&self) -> Result<TaskStatus> {
+        RepoSession::index_build(self).await
+    }
+
+    async fn rebuild_index(&self) -> Result<TaskStatus> {
+        RepoSession::index_rebuild(self).await
+    }
+
+    async fn search(&self, request: SearchRequest) -> Result<SearchOutcome> {
+        RepoSession::search(self, request).await
+    }
+
+    async fn glob(&self, request: GlobRequest) -> Result<GlobOutcome> {
+        RepoSession::glob(self, request).await
+    }
+
+    async fn close(&self) -> Result<()> {
+        RepoSession::close(self).await
+    }
+}
+
 impl AsyncDaemonClient {
     async fn spawn(daemon_program: Option<OsString>) -> Result<Self> {
         let program = daemon_program
             .or_else(|| std::env::var_os("FLASHGREP_DAEMON_BIN"))
             .unwrap_or_else(|| OsString::from("flashgrep"));
 
-        let mut command = Command::new(program);
+        let mut command = process_manager::create_tokio_command(program);
         command
             .arg("serve")
             .arg("--stdio")
@@ -403,6 +440,7 @@ impl AsyncDaemonClient {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        process_manager::configure_process_group(&mut command);
 
         let mut child = command.spawn()?;
         let stdin = child.stdin.take().ok_or_else(|| {
@@ -413,27 +451,44 @@ impl AsyncDaemonClient {
         })?;
         let stderr = child.stderr.take();
 
+        let (protocol, write_rx) = ProtocolClient::channel("flashgrep stdio backend");
+
         let client = Self {
-            child: Mutex::new(Some(child)),
-            writer: Mutex::new(BufWriter::new(stdin)),
-            shared: Arc::new(DaemonShared::default()),
-            next_id: AtomicU64::new(1),
-            reader_task: Mutex::new(None),
-            stderr_task: Mutex::new(None),
+            child: StdMutex::new(Some(child)),
+            protocol,
+            writer_task: StdMutex::new(None),
+            reader_task: StdMutex::new(None),
+            stderr_task: StdMutex::new(None),
         };
 
+        client.spawn_writer_task(stdin, write_rx).await;
         client.spawn_reader_task(stdout).await;
         client.spawn_stderr_task(stderr).await;
-        client.initialize().await?;
+        if let Err(error) = client.initialize().await {
+            client.mark_closed();
+            client
+                .reject_pending("flashgrep stdio backend failed during startup")
+                .await;
+            if let Err(terminate_error) = client.wait_for_child_exit().await {
+                log::debug!(
+                    target: FLASHGREP_LOG_TARGET,
+                    "Flashgrep stdio daemon cleanup after failed startup errored: {}",
+                    terminate_error
+                );
+            }
+            client.stop_background_tasks().await;
+            return Err(error);
+        }
         Ok(client)
     }
 
     fn is_closed(&self) -> bool {
-        self.shared.closed.load(Ordering::Relaxed)
+        self.protocol.is_closed()
     }
 
     async fn initialize(&self) -> Result<()> {
         match self
+            .protocol
             .send_request_with_timeout(
                 Request::Initialize {
                     params: InitializeParams {
@@ -448,7 +503,9 @@ impl AsyncDaemonClient {
             )
             .await?
         {
-            Response::InitializeResult { .. } => self.send_notification(Request::Initialized).await,
+            Response::InitializeResult { .. } => {
+                self.protocol.send_notification(Request::Initialized).await
+            }
             other => unexpected_response("initialize", other),
         }
     }
@@ -458,62 +515,9 @@ impl AsyncDaemonClient {
         request: Request,
         request_timeout: Option<Duration>,
     ) -> Result<Response> {
-        if self.is_closed() {
-            return Err(AppError::Protocol(
-                "flashgrep stdio backend is not running".into(),
-            ));
-        }
-
-        let request_name = request_name(&request);
-        let request_id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        let envelope = RequestEnvelope {
-            jsonrpc: JSONRPC_VERSION.to_string(),
-            id: Some(request_id),
-            request,
-        };
-        let (sender, receiver) = oneshot::channel();
-        self.shared.pending.lock().await.insert(request_id, sender);
-
-        if let Err(error) = self.write_envelope(&envelope).await {
-            self.shared.pending.lock().await.remove(&request_id);
-            return Err(error);
-        }
-
-        let response = match request_timeout {
-            Some(duration) => match timeout(duration, receiver).await {
-                Ok(result) => result.map_err(|_| {
-                    AppError::Protocol(
-                        "flashgrep stdio backend closed without sending a response".into(),
-                    )
-                })??,
-                Err(_) => {
-                    self.shared.pending.lock().await.remove(&request_id);
-                    return Err(AppError::Protocol(format!(
-                        "flashgrep stdio backend request timed out: {request_name}"
-                    )));
-                }
-            },
-            None => receiver.await.map_err(|_| {
-                AppError::Protocol(
-                    "flashgrep stdio backend closed without sending a response".into(),
-                )
-            })??,
-        };
-        decode_response(request_id, response)
-    }
-
-    async fn send_notification(&self, request: Request) -> Result<()> {
-        let envelope = RequestEnvelope {
-            jsonrpc: JSONRPC_VERSION.to_string(),
-            id: None,
-            request,
-        };
-        self.write_envelope(&envelope).await
-    }
-
-    async fn write_envelope(&self, envelope: &RequestEnvelope) -> Result<()> {
-        let mut writer = self.writer.lock().await;
-        write_content_length_message(&mut writer, envelope).await
+        self.protocol
+            .send_request_with_timeout(request, request_timeout)
+            .await
     }
 
     async fn shutdown(&self) -> Result<()> {
@@ -537,11 +541,11 @@ impl AsyncDaemonClient {
     }
 
     fn mark_closed(&self) {
-        self.shared.closed.store(true, Ordering::Relaxed);
+        self.protocol.mark_closed();
     }
 
     async fn wait_for_child_exit(&self) -> Result<()> {
-        let mut child = self.child.lock().await.take();
+        let mut child = take_std_option(&self.child);
         let Some(child) = child.as_mut() else {
             return Ok(());
         };
@@ -552,49 +556,86 @@ impl AsyncDaemonClient {
                 Ok(())
             }
             Err(_) => {
-                child.kill().await?;
-                child.wait().await?;
-                Ok(())
+                process_manager::terminate_child_process_tree(child, Duration::from_millis(750))
+                    .await
+                    .map_err(AppError::Io)
             }
         }
     }
 
     async fn stop_background_tasks(&self) {
-        if let Some(handle) = self.reader_task.lock().await.take() {
+        let writer_handle = take_std_option(&self.writer_task);
+        if let Some(handle) = writer_handle {
             handle.abort();
             let _ = handle.await;
         }
-        if let Some(handle) = self.stderr_task.lock().await.take() {
+        let reader_handle = take_std_option(&self.reader_task);
+        if let Some(handle) = reader_handle {
+            handle.abort();
+            let _ = handle.await;
+        }
+        let stderr_handle = take_std_option(&self.stderr_task);
+        if let Some(handle) = stderr_handle {
             handle.abort();
             let _ = handle.await;
         }
     }
 
-    async fn spawn_reader_task(&self, stdout: ChildStdout) {
-        let shared = self.shared.clone();
+    async fn spawn_writer_task(&self, stdin: ChildStdin, mut write_rx: mpsc::Receiver<Vec<u8>>) {
+        let protocol = self.protocol.clone();
         let handle = tokio::spawn(async move {
-            let mut reader = BufReader::new(stdout);
-            let result = reader_loop(&mut reader, &shared).await;
-            shared.closed.store(true, Ordering::Relaxed);
-            match result {
-                Ok(()) => {
-                    reject_pending_requests(
-                        &shared.pending,
-                        "flashgrep stdio backend closed its stdout pipe",
-                    )
-                    .await;
+            let mut writer = BufWriter::new(stdin);
+            while let Some(outbound) = write_rx.recv().await {
+                if let Err(error) = writer.write_all(&outbound).await {
+                    log::debug!(
+                        target: FLASHGREP_LOG_TARGET,
+                        "flashgrep stdio daemon stdin write failed: {}",
+                        error
+                    );
+                    protocol
+                        .close_with_message("flashgrep stdio backend stdin write failed")
+                        .await;
+                    return;
                 }
-                Err(error) => {
-                    reject_pending_requests(
-                        &shared.pending,
-                        format!("flashgrep stdio backend reader failed: {error}"),
-                    )
-                    .await;
+                if let Err(error) = writer.flush().await {
+                    log::debug!(
+                        target: FLASHGREP_LOG_TARGET,
+                        "flashgrep stdio daemon stdin flush failed: {}",
+                        error
+                    );
+                    protocol
+                        .close_with_message("flashgrep stdio backend stdin flush failed")
+                        .await;
+                    return;
                 }
             }
         });
 
-        *self.reader_task.lock().await = Some(handle);
+        *lock_std_mutex(&self.writer_task) = Some(handle);
+    }
+
+    async fn spawn_reader_task(&self, stdout: ChildStdout) {
+        let protocol = self.protocol.clone();
+        let handle = tokio::spawn(async move {
+            let mut reader = BufReader::new(stdout);
+            let result = reader_loop(&mut reader, &protocol).await;
+            match result {
+                Ok(()) => {
+                    protocol
+                        .close_with_message("flashgrep stdio backend closed its stdout pipe")
+                        .await;
+                }
+                Err(error) => {
+                    protocol
+                        .close_with_message(format!(
+                            "flashgrep stdio backend reader failed: {error}"
+                        ))
+                        .await;
+                }
+            }
+        });
+
+        *lock_std_mutex(&self.reader_task) = Some(handle);
     }
 
     async fn spawn_stderr_task(&self, stderr: Option<ChildStderr>) {
@@ -609,143 +650,58 @@ impl AsyncDaemonClient {
                 line.clear();
                 match reader.read_line(&mut line).await {
                     Ok(0) => break,
-                    Ok(_) => log::debug!("flashgrep stdio daemon stderr: {}", line.trim_end()),
+                    Ok(_) => log_flashgrep_stderr_line(&line),
                     Err(error) => {
-                        log::debug!("flashgrep stdio daemon stderr read failed: {}", error);
+                        log::debug!(
+                            target: FLASHGREP_LOG_TARGET,
+                            "flashgrep stdio daemon stderr read failed: {}",
+                            error
+                        );
                         break;
                     }
                 }
             }
         });
 
-        *self.stderr_task.lock().await = Some(handle);
+        *lock_std_mutex(&self.stderr_task) = Some(handle);
     }
 
     async fn reject_pending(&self, message: impl Into<String>) {
-        reject_pending_requests(&self.shared.pending, message.into()).await;
+        self.protocol.reject_pending(message.into()).await;
+    }
+
+    fn take_child_for_drop(&self) -> Option<Child> {
+        take_std_option(&self.child)
+    }
+
+    fn abort_background_tasks_for_drop(&self) {
+        if let Some(handle) = take_std_option(&self.writer_task) {
+            handle.abort();
+        }
+        if let Some(handle) = take_std_option(&self.reader_task) {
+            handle.abort();
+        }
+        if let Some(handle) = take_std_option(&self.stderr_task) {
+            handle.abort();
+        }
     }
 }
 
-async fn reader_loop(
-    reader: &mut BufReader<ChildStdout>,
-    shared: &Arc<DaemonShared>,
-) -> Result<()> {
+impl Drop for AsyncDaemonClient {
+    fn drop(&mut self) {
+        self.mark_closed();
+        self.abort_background_tasks_for_drop();
+        if let Some(child) = self.take_child_for_drop() {
+            process_manager::spawn_child_process_tree_cleanup(child, DROP_CLEANUP_TIMEOUT);
+        }
+    }
+}
+
+async fn reader_loop(reader: &mut BufReader<ChildStdout>, protocol: &ProtocolClient) -> Result<()> {
     while let Some(message) = read_content_length_message(reader).await? {
-        match message {
-            ServerMessage::Response(response) => {
-                let Some(request_id) = response.id else {
-                    continue;
-                };
-                if let Some(sender) = shared.pending.lock().await.remove(&request_id) {
-                    let _ = sender.send(Ok(response));
-                }
-            }
-            ServerMessage::Notification(_) => {}
-        }
+        protocol.handle_server_message(message).await;
     }
     Ok(())
-}
-
-async fn reject_pending_requests(pending: &Mutex<PendingResponses>, message: impl Into<String>) {
-    let message = message.into();
-    let mut pending = pending.lock().await;
-    if pending.is_empty() {
-        return;
-    }
-
-    for (_, sender) in pending.drain() {
-        let _ = sender.send(Err(AppError::Protocol(message.clone())));
-    }
-}
-
-async fn read_content_length_message(
-    reader: &mut BufReader<ChildStdout>,
-) -> Result<Option<ServerMessage>> {
-    let mut content_length = None;
-
-    loop {
-        let mut line = String::new();
-        let read = reader.read_line(&mut line).await?;
-        if read == 0 {
-            return Ok(None);
-        }
-        if line == "\r\n" || line == "\n" {
-            break;
-        }
-
-        let trimmed = line.trim_end_matches(['\r', '\n']);
-        let Some((name, value)) = trimmed.split_once(':') else {
-            continue;
-        };
-        if name.trim().eq_ignore_ascii_case("Content-Length") {
-            let length = value.trim().parse::<usize>().map_err(|error| {
-                AppError::Protocol(format!("invalid Content-Length header: {error}"))
-            })?;
-            content_length = Some(length);
-        }
-    }
-
-    let content_length =
-        content_length.ok_or_else(|| AppError::Protocol("missing Content-Length header".into()))?;
-    let mut body = vec![0u8; content_length];
-    reader.read_exact(&mut body).await?;
-    serde_json::from_slice(&body)
-        .map_err(|error| AppError::Protocol(format!("failed to decode daemon message: {error}")))
-}
-
-async fn write_content_length_message(
-    writer: &mut BufWriter<ChildStdin>,
-    message: &impl Serialize,
-) -> Result<()> {
-    let body = serde_json::to_vec(message)
-        .map_err(|error| AppError::Protocol(format!("failed to encode request: {error}")))?;
-    writer
-        .write_all(format!("Content-Length: {}\r\n\r\n", body.len()).as_bytes())
-        .await?;
-    writer.write_all(&body).await?;
-    writer.flush().await?;
-    Ok(())
-}
-
-fn request_name(request: &Request) -> &'static str {
-    match request {
-        Request::Initialize { .. } => "initialize",
-        Request::Initialized => "initialized",
-        Request::Ping => "ping",
-        Request::BaseSnapshotBuild { .. } => "base_snapshot/build",
-        Request::BaseSnapshotRebuild { .. } => "base_snapshot/rebuild",
-        Request::TaskStatus { .. } => "task/status",
-        Request::OpenRepo { .. } => "open_repo",
-        Request::GetRepoStatus { .. } => "get_repo_status",
-        Request::Search { .. } => "search",
-        Request::Glob { .. } => "glob",
-        Request::CloseRepo { .. } => "close_repo",
-        Request::Shutdown => "shutdown",
-    }
-}
-
-fn decode_response(request_id: u64, response: ResponseEnvelope) -> Result<Response> {
-    if response.id != Some(request_id) {
-        return Err(AppError::Protocol(format!(
-            "daemon response id mismatch: expected {request_id:?}, got {:?}",
-            response.id
-        )));
-    }
-
-    if response.jsonrpc != JSONRPC_VERSION {
-        return Err(AppError::Protocol(format!(
-            "unsupported daemon jsonrpc version: {}",
-            response.jsonrpc
-        )));
-    }
-
-    if let Some(error) = response.error {
-        return Err(AppError::Protocol(error.message));
-    }
-
-    response
-        .result
-        .ok_or_else(|| AppError::Protocol("daemon response missing result".into()))
 }
 
 fn should_restart_daemon(error: &AppError, daemon: &AsyncDaemonClient) -> bool {

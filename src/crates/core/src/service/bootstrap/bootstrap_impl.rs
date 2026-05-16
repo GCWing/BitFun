@@ -35,7 +35,87 @@ async fn ensure_markdown_placeholder(path: &Path, content: &str) -> BitFunResult
     Ok(true)
 }
 
+fn gitignore_already_ignores_bitfun(content: &str) -> bool {
+    content.lines().any(|line| {
+        let entry = line.trim();
+        !entry.starts_with('#')
+            && matches!(entry, ".bitfun" | ".bitfun/" | "/.bitfun" | "/.bitfun/")
+    })
+}
+
+pub(crate) async fn ensure_workspace_gitignore_ignores_bitfun(
+    workspace_root: &Path,
+) -> BitFunResult<bool> {
+    let gitignore_path = workspace_root.join(".gitignore");
+    let bitfun_entry = ".bitfun/";
+
+    let content = match fs::read_to_string(&gitignore_path).await {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            debug!(
+                "Skipped workspace .gitignore update because file is missing: path={}",
+                gitignore_path.display()
+            );
+            return Ok(false);
+        }
+        Err(error) => {
+            return Err(BitFunError::service(format!(
+                "Failed to read {}: {}",
+                gitignore_path.display(),
+                error
+            )));
+        }
+    };
+
+    if gitignore_already_ignores_bitfun(&content) {
+        return Ok(false);
+    }
+
+    let line_ending = if content.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let mut updated = content;
+    if !updated.is_empty() && !updated.ends_with('\n') && !updated.ends_with('\r') {
+        updated.push_str(line_ending);
+    }
+    updated.push_str(bitfun_entry);
+    updated.push_str(line_ending);
+
+    fs::write(&gitignore_path, updated).await.map_err(|e| {
+        BitFunError::service(format!(
+            "Failed to update {} for .bitfun: {}",
+            gitignore_path.display(),
+            e
+        ))
+    })?;
+
+    debug!(
+        "Added workspace .gitignore entry for .bitfun: path={}",
+        gitignore_path.display()
+    );
+
+    Ok(true)
+}
+
+async fn ensure_workspace_gitignore_ignores_bitfun_best_effort(workspace_root: &Path) -> bool {
+    match ensure_workspace_gitignore_ignores_bitfun(workspace_root).await {
+        Ok(updated) => updated,
+        Err(e) => {
+            warn!(
+                "Failed to ensure workspace .gitignore ignores .bitfun: workspace={}, error={}",
+                workspace_root.display(),
+                e
+            );
+            false
+        }
+    }
+}
+
 pub(crate) async fn initialize_workspace_persona_files(workspace_root: &Path) -> BitFunResult<()> {
+    let gitignore_updated =
+        ensure_workspace_gitignore_ignores_bitfun_best_effort(workspace_root).await;
     let bootstrap_path = workspace_root.join(BOOTSTRAP_FILE_NAME);
     let soul_path = workspace_root.join(SOUL_FILE_NAME);
     let user_path = workspace_root.join(USER_FILE_NAME);
@@ -48,8 +128,9 @@ pub(crate) async fn initialize_workspace_persona_files(workspace_root: &Path) ->
     let created_identity = ensure_markdown_placeholder(&identity_path, IDENTITY_TEMPLATE).await?;
 
     debug!(
-        "Initialized workspace persona files: path={}, created_bootstrap={}, created_soul={}, created_user={}, created_identity={}",
+        "Initialized workspace persona files: path={}, gitignore_updated={}, created_bootstrap={}, created_soul={}, created_user={}, created_identity={}",
         workspace_root.display(),
+        gitignore_updated,
         created_bootstrap,
         created_soul,
         created_user,
@@ -66,6 +147,8 @@ pub(crate) fn is_workspace_bootstrap_pending(workspace_root: &Path) -> bool {
 pub(crate) async fn ensure_workspace_persona_files_for_prompt(
     workspace_root: &Path,
 ) -> BitFunResult<()> {
+    let gitignore_updated =
+        ensure_workspace_gitignore_ignores_bitfun_best_effort(workspace_root).await;
     let bootstrap_path = workspace_root.join(BOOTSTRAP_FILE_NAME);
     let soul_path = workspace_root.join(SOUL_FILE_NAME);
     let user_path = workspace_root.join(USER_FILE_NAME);
@@ -105,8 +188,9 @@ pub(crate) async fn ensure_workspace_persona_files_for_prompt(
     };
 
     debug!(
-        "Ensured workspace persona files for prompt: path={}, bootstrap_exists={}, user_exists={}, identity_exists={}, created_bootstrap={}, created_soul={}, created_user={}, created_identity={}",
+        "Ensured workspace persona files for prompt: path={}, gitignore_updated={}, bootstrap_exists={}, user_exists={}, identity_exists={}, created_bootstrap={}, created_soul={}, created_user={}, created_identity={}",
         workspace_root.display(),
+        gitignore_updated,
         bootstrap_exists,
         user_exists,
         identity_exists,
@@ -237,12 +321,20 @@ fn persona_file_description(file_name: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_workspace_persona_files_for_prompt, initialize_workspace_persona_files,
-        normalize_line_endings, BOOTSTRAP_FILE_NAME, IDENTITY_FILE_NAME, SOUL_FILE_NAME,
-        USER_FILE_NAME,
+        ensure_workspace_gitignore_ignores_bitfun, ensure_workspace_persona_files_for_prompt,
+        initialize_workspace_persona_files, normalize_line_endings, BOOTSTRAP_FILE_NAME,
+        IDENTITY_FILE_NAME, SOUL_FILE_NAME, USER_FILE_NAME,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
     use tokio::fs;
+
+    fn unique_workspace(prefix: &str) -> std::path::PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time before unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("{}-{}-{}", prefix, std::process::id(), unique))
+    }
 
     #[test]
     fn normalize_line_endings_converts_crlf_and_cr_to_lf() {
@@ -253,16 +345,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn ensure_workspace_gitignore_ignores_bitfun_skips_when_gitignore_missing() {
+        let workspace_root = unique_workspace("bitfun-gitignore-missing");
+        fs::create_dir_all(&workspace_root)
+            .await
+            .expect("Failed to create temp workspace");
+
+        let updated = ensure_workspace_gitignore_ignores_bitfun(&workspace_root)
+            .await
+            .expect("Failed to ensure .gitignore");
+
+        assert!(!updated);
+        assert!(
+            !workspace_root.join(".gitignore").exists(),
+            ".gitignore should not be created when the workspace does not already have one"
+        );
+
+        fs::remove_dir_all(&workspace_root)
+            .await
+            .expect("Failed to remove temp workspace");
+    }
+
+    #[tokio::test]
+    async fn ensure_workspace_gitignore_ignores_bitfun_appends_without_clobbering() {
+        let workspace_root = unique_workspace("bitfun-gitignore-append");
+        fs::create_dir_all(&workspace_root)
+            .await
+            .expect("Failed to create temp workspace");
+        fs::write(workspace_root.join(".gitignore"), "target/\n.env")
+            .await
+            .expect("Failed to seed .gitignore");
+
+        ensure_workspace_gitignore_ignores_bitfun(&workspace_root)
+            .await
+            .expect("Failed to ensure .gitignore");
+
+        let content = fs::read_to_string(workspace_root.join(".gitignore"))
+            .await
+            .expect("Failed to read .gitignore");
+        assert_eq!(content, "target/\n.env\n.bitfun/\n");
+
+        fs::remove_dir_all(&workspace_root)
+            .await
+            .expect("Failed to remove temp workspace");
+    }
+
+    #[tokio::test]
+    async fn ensure_workspace_gitignore_ignores_bitfun_is_idempotent() {
+        let workspace_root = unique_workspace("bitfun-gitignore-idempotent");
+        fs::create_dir_all(&workspace_root)
+            .await
+            .expect("Failed to create temp workspace");
+        fs::write(workspace_root.join(".gitignore"), "target/\n.bitfun/\n")
+            .await
+            .expect("Failed to seed .gitignore");
+
+        ensure_workspace_gitignore_ignores_bitfun(&workspace_root)
+            .await
+            .expect("Failed to ensure .gitignore");
+
+        let content = fs::read_to_string(workspace_root.join(".gitignore"))
+            .await
+            .expect("Failed to read .gitignore");
+        assert_eq!(content, "target/\n.bitfun/\n");
+
+        fs::remove_dir_all(&workspace_root)
+            .await
+            .expect("Failed to remove temp workspace");
+    }
+
+    #[tokio::test]
     async fn initialize_workspace_persona_files_creates_all_four_files() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time before unix epoch")
-            .as_nanos();
-        let workspace_root = std::env::temp_dir().join(format!(
-            "bitfun-bootstrap-init-{}-{}",
-            std::process::id(),
-            unique
-        ));
+        let workspace_root = unique_workspace("bitfun-bootstrap-init");
 
         fs::create_dir_all(&workspace_root)
             .await
@@ -292,15 +446,7 @@ mod tests {
 
     #[tokio::test]
     async fn ensure_workspace_persona_files_for_prompt_preserves_completed_bootstrap() {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time before unix epoch")
-            .as_nanos();
-        let workspace_root = std::env::temp_dir().join(format!(
-            "bitfun-bootstrap-preserve-{}-{}",
-            std::process::id(),
-            unique
-        ));
+        let workspace_root = unique_workspace("bitfun-bootstrap-preserve");
 
         fs::create_dir_all(&workspace_root)
             .await

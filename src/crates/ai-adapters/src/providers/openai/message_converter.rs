@@ -44,8 +44,7 @@ impl OpenAIMessageConverter {
                                 "type": "function_call",
                                 "call_id": tool_call.id,
                                 "name": tool_call.name,
-                                "arguments": serde_json::to_string(&tool_call.arguments)
-                                    .unwrap_or_else(|_| "{}".to_string()),
+                                "arguments": tool_call.serialized_arguments(),
                             }));
                         }
                     }
@@ -308,13 +307,11 @@ impl OpenAIMessageConverter {
         }
 
         if let Some(reasoning) = msg.reasoning_content {
-            if !reasoning.is_empty() {
-                // Official OpenAI Chat Completions may ignore replayed reasoning_content, but
-                // many OpenAI-compatible providers require it to continue interleaved thinking.
-                // Replaying it here is therefore the compatibility default; at worst this only
-                // adds transport cost for providers that ignore the field.
-                openai_msg["reasoning_content"] = Value::String(reasoning);
-            }
+            // Official OpenAI Chat Completions may ignore replayed reasoning_content, but
+            // many OpenAI-compatible providers require it to continue interleaved thinking.
+            // Preserve even the empty-string case so providers like DeepSeek can validate the
+            // original assistant turn shape on follow-up requests.
+            openai_msg["reasoning_content"] = Value::String(reasoning);
         }
 
         if let Some(tool_calls) = msg.tool_calls {
@@ -326,8 +323,7 @@ impl OpenAIMessageConverter {
                         "type": "function",
                         "function": {
                             "name": tc.name,
-                            "arguments": serde_json::to_string(&tc.arguments)
-                                .unwrap_or_default()
+                            "arguments": tc.serialized_arguments()
                         }
                     })
                 })
@@ -370,20 +366,17 @@ mod tests {
     use super::OpenAIMessageConverter;
     use crate::types::{Message, ToolCall, ToolImageAttachment};
     use serde_json::json;
-    use std::collections::HashMap;
 
     #[test]
     fn converts_messages_to_responses_input() {
-        let mut args = HashMap::new();
-        args.insert("city".to_string(), json!("Beijing"));
-
         let messages = vec![
             Message::system("You are helpful".to_string()),
             Message::user("Hello".to_string()),
             Message::assistant_with_tools(vec![ToolCall {
                 id: "call_1".to_string(),
                 name: "get_weather".to_string(),
-                arguments: args.clone(),
+                arguments: json!({"city": "Beijing"}),
+                raw_arguments: None,
             }]),
             Message {
                 role: "tool".to_string(),
@@ -405,7 +398,44 @@ mod tests {
         assert_eq!(input.len(), 3);
         assert_eq!(input[0]["type"], json!("message"));
         assert_eq!(input[1]["type"], json!("function_call"));
+        assert_eq!(input[1]["arguments"], json!("{\"city\":\"Beijing\"}"));
         assert_eq!(input[2]["type"], json!("function_call_output"));
+    }
+
+    #[test]
+    fn preserves_raw_tool_arguments_for_openai_replay() {
+        let openai =
+            OpenAIMessageConverter::convert_messages(vec![Message::assistant_with_tools(vec![
+                ToolCall {
+                    id: "call_1".to_string(),
+                    name: "get_weather".to_string(),
+                    arguments: json!({"city": "Beijing", "unit": "celsius"}),
+                    raw_arguments: Some("{\"unit\":\"celsius\",\"city\":\"Beijing\"}".to_string()),
+                },
+            ])]);
+
+        assert_eq!(
+            openai[0]["tool_calls"][0]["function"]["arguments"],
+            json!("{\"unit\":\"celsius\",\"city\":\"Beijing\"}")
+        );
+    }
+
+    #[test]
+    fn falls_back_to_stable_serialization_when_raw_arguments_are_invalid() {
+        let openai =
+            OpenAIMessageConverter::convert_messages(vec![Message::assistant_with_tools(vec![
+                ToolCall {
+                    id: "call_1".to_string(),
+                    name: "get_weather".to_string(),
+                    arguments: json!({"city": "Beijing", "unit": "celsius"}),
+                    raw_arguments: Some("{\"city\":\"Beijing\"".to_string()),
+                },
+            ])]);
+
+        assert_eq!(
+            openai[0]["tool_calls"][0]["function"]["arguments"],
+            json!("{\"city\":\"Beijing\",\"unit\":\"celsius\"}")
+        );
     }
 
     #[test]
@@ -496,5 +526,24 @@ mod tests {
         assert_eq!(content[0]["type"], json!("image_url"));
         assert_eq!(content[1]["type"], json!("text"));
         assert_eq!(content[1]["text"], json!("ok"));
+    }
+
+    #[test]
+    fn preserves_empty_reasoning_content_for_chat_completions() {
+        let msg = Message {
+            role: "assistant".to_string(),
+            content: Some("Answer".to_string()),
+            reasoning_content: Some(String::new()),
+            thinking_signature: None,
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+            is_error: None,
+            tool_image_attachments: None,
+        };
+
+        let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
+
+        assert_eq!(openai[0]["reasoning_content"], json!(""));
     }
 }

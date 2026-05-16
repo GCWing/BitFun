@@ -5,15 +5,16 @@ use chrono::Local;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::{
-    atomic::{AtomicU8, Ordering},
     OnceLock,
+    atomic::{AtomicU8, Ordering},
 };
 use std::thread;
-use tauri::{plugin::TauriPlugin, Runtime};
-use tauri_plugin_log::{fern, RotationStrategy, Target, TargetKind, TimezoneStrategy};
+use tauri::{Runtime, plugin::TauriPlugin};
+use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy, fern};
 
 const SESSION_DIR_PATTERN: &str = r"^\d{8}T\d{6}$";
 const MAX_LOG_SESSIONS: usize = 10;
+const FLASHGREP_LOG_TARGET_PREFIX: &str = "flashgrep";
 static SESSION_LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
 // Default to Debug in early development for easier diagnostics
 static CURRENT_LOG_LEVEL: AtomicU8 = AtomicU8::new(level_filter_to_u8(log::LevelFilter::Debug));
@@ -175,6 +176,7 @@ pub struct RuntimeLoggingInfo {
     pub session_log_dir: String,
     pub app_log_path: String,
     pub ai_log_path: String,
+    pub flashgrep_log_path: String,
     pub webview_log_path: String,
 }
 
@@ -187,11 +189,19 @@ pub fn get_runtime_logging_info() -> RuntimeLoggingInfo {
         session_log_dir: session_dir.to_string_lossy().to_string(),
         app_log_path: session_dir.join("app.log").to_string_lossy().to_string(),
         ai_log_path: session_dir.join("ai.log").to_string_lossy().to_string(),
+        flashgrep_log_path: session_dir
+            .join("flashgrep.log")
+            .to_string_lossy()
+            .to_string(),
         webview_log_path: session_dir
             .join("webview.log")
             .to_string_lossy()
             .to_string(),
     }
+}
+
+fn is_flashgrep_target(target: &str) -> bool {
+    target.starts_with(FLASHGREP_LOG_TARGET_PREFIX)
 }
 
 pub fn create_session_log_dir() -> PathBuf {
@@ -223,7 +233,9 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
             Target::new(TargetKind::Stdout)
                 .filter(|metadata| {
                     let target = metadata.target();
-                    !target.starts_with("ai") && !target.starts_with("webview")
+                    !target.starts_with("ai")
+                        && !target.starts_with("webview")
+                        && !is_flashgrep_target(target)
                 })
         );
     }
@@ -237,7 +249,9 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
             })
             .filter(|metadata| {
                 let target = metadata.target();
-                !target.starts_with("ai") && !target.starts_with("webview")
+                !target.starts_with("ai")
+                    && !target.starts_with("webview")
+                    && !is_flashgrep_target(target)
             })
         );
 
@@ -248,6 +262,15 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
                 file_name: Some("ai".into()),
             })
             .filter(|metadata| metadata.target().starts_with("ai"))
+        );
+
+        let flashgrep_log_dir = session_dir.clone();
+        targets.push(
+            Target::new(TargetKind::Folder {
+                path: flashgrep_log_dir,
+                file_name: Some("flashgrep".into()),
+            })
+            .filter(|metadata| is_flashgrep_target(metadata.target()))
         );
 
         let webview_log_dir = session_dir;
@@ -273,10 +296,22 @@ pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>) -> TauriPlugin<R> 
         .level_for("opentelemetry_sdk", log::LevelFilter::Off)
         .level_for("opentelemetry-otlp", log::LevelFilter::Off)
         .level_for("notify", log::LevelFilter::Off)
+        // These targets can emit hot-path trace diagnostics during event
+        // routing. Keep debug diagnostics, warnings, and errors, but avoid
+        // drowning useful app traces in mechanical noise.
+        .level_for(
+            "bitfun_core::agentic::events::queue",
+            log::LevelFilter::Debug,
+        )
+        .level_for(
+            "bitfun_core::agentic::events::router",
+            log::LevelFilter::Debug,
+        )
         .level_for("hyper_util", log::LevelFilter::Info)
         .level_for("h2", log::LevelFilter::Info)
         .level_for("portable_pty", log::LevelFilter::Info)
         .level_for("russh", log::LevelFilter::Info)
+        .level_for("grep_searcher", log::LevelFilter::Warn)
         .targets(log_targets)
         .rotation_strategy(RotationStrategy::KeepSome(2)) // 1 active + 2 backups
         .max_file_size(10 * 1024 * 1024)

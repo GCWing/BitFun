@@ -62,7 +62,7 @@
   }
   
   .message-list-footer {
-    /* Inline height from VirtualMessageList (measured input + 16px + tail gap). */
+    /* Inline height from VirtualMessageList (measured drop-zone + bottom inset + tail clearance). */
     height: 120px;
     min-height: 72px;
     overflow-anchor: none;

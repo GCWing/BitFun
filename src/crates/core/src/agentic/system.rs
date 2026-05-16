@@ -25,9 +25,6 @@ pub struct AgenticSystem {
 pub async fn init_agentic_system() -> Result<AgenticSystem> {
     info!("Initializing agentic system");
 
-    use crate::service::config::get_global_config_service;
-    use crate::service::config::types::GlobalConfig;
-
     let _ai_client_factory = AIClientFactory::get_global().await?;
 
     let event_queue = Arc::new(events::EventQueue::new(Default::default()));
@@ -59,27 +56,13 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
         event_queue.clone(),
         tool_pipeline.clone(),
     ));
-    
-    // Get execution config from global settings
-    let exec_config = match get_global_config_service().await {
-        Ok(config_service) => {
-            match config_service.get_config::<GlobalConfig>(None).await {
-                Ok(global_config) => execution::ExecutionEngineConfig {
-                    max_rounds: global_config.ai.max_rounds,
-                    ..Default::default()
-                },
-                Err(_) => Default::default(),
-            }
-        },
-        Err(_) => Default::default(),
-    };
-    
+
     let execution_engine = Arc::new(execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
         session_manager.clone(),
         context_compressor,
-        exec_config,
+        execution::ExecutionEngineConfig::default(),
     ));
 
     let coordinator = Arc::new(coordination::ConversationCoordinator::new(

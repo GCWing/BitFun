@@ -1,6 +1,4 @@
 //! Session persistence service
 
-pub mod types;
-
-pub use crate::agentic::core::SessionKind;
-pub use types::*;
+pub use bitfun_services_core::session::types;
+pub use bitfun_services_core::session::*;

@@ -34,6 +34,15 @@ const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 const isDev = import.meta.env?.DEV ?? process.env.NODE_ENV === 'development';
 
 const CONSOLE_FORWARD_INSTALLED = '__bitfun_console_forward_installed__';
+let includeSensitiveDiagnostics = true;
+
+export function setIncludeSensitiveDiagnostics(enabled: boolean): void {
+  includeSensitiveDiagnostics = enabled;
+}
+
+export function areSensitiveDiagnosticsEnabled(): boolean {
+  return includeSensitiveDiagnostics;
+}
 
 function formatConsoleArg(value: unknown): string {
   if (value === undefined) return 'undefined';

@@ -43,7 +43,13 @@
     "back": "返回",
     "install": "安装",
     "installing": "准备中…",
-    "nextModel": "下一步：配置模型"
+    "nextModel": "下一步：配置模型",
+    "existingInstallTitle": "检测到本机已安装 BitFun",
+    "existingInstallVersion": "已安装版本：{{version}}",
+    "existingInstallLocation": "安装位置：{{path}}",
+    "existingInstallBinaryMissing": "该路径下未找到主程序文件，可先运行卸载程序或重新安装。",
+    "existingInstallHint": "直接点击「安装」可在原位置升级或修复。若需先卸载，可点击下方按钮运行卸载程序。",
+    "existingInstallRunUninstaller": "运行卸载程序"
   },
   "model": {
     "title": "模型",
@@ -51,7 +57,7 @@
     "installDone": "安装完成",
     "provider": "服务商",
     "config": "连接信息",
-    "modelName": "模型名称（如 deepseek-chat）",
+    "modelName": "模型名称（如 deepseek-v4-flash）",
     "apiKey": "API Key",
     "back": "返回",
     "skip": "稍后配置",
@@ -63,12 +69,12 @@
     "getApiKey": "获取 API Key",
     "modelNamePlaceholder": "输入自定义模型名称...",
     "baseUrlPlaceholder": "示例：https://open.bigmodel.cn/api/paas/v4/chat/completions",
-    "customRequestBodyPlaceholder": "{\n  \"temperature\": 0.8,\n  \"top_p\": 0.9\n}",
+    "customRequestBodyPlaceholder": "例如：\n{\n  \"temperature\": 0.8,\n  \"top_p\": 0.9\n}",
     "jsonValid": "JSON格式有效",
     "jsonInvalid": "JSON格式错误，请检查语法",
     "skipSslVerify": "跳过SSL证书验证",
-    "customHeadersModeMerge": "合并覆盖",
-    "customHeadersModeReplace": "完全替换",
+    "customHeadersModeMerge": "合并",
+    "customHeadersModeReplace": "替换",
     "addHeader": "添加字段",
     "headerKey": "key",
     "headerValue": "value",
@@ -202,7 +208,8 @@
       "bitfun-china-style": "墨韵",
       "bitfun-china-night": "墨夜",
       "bitfun-cyber": "赛博",
-      "bitfun-slate": "石板灰"
+      "bitfun-slate": "石板灰",
+      "bitfun-tokyo-night": "东京夜"
     }
   },
   "complete": {

@@ -76,6 +76,15 @@ pub struct GetAcpSessionOptionsRequest {
     pub remote_ssh_host: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbeAcpClientRequirementsRequest {
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub force_refresh: bool,
+}
+
 #[tauri::command]
 pub async fn initialize_acp_clients(state: State<'_, AppState>) -> Result<(), String> {
     let service = state
@@ -97,13 +106,17 @@ pub async fn get_acp_clients(state: State<'_, AppState>) -> Result<Vec<AcpClient
 #[tauri::command]
 pub async fn probe_acp_client_requirements(
     state: State<'_, AppState>,
+    request: ProbeAcpClientRequirementsRequest,
 ) -> Result<Vec<AcpClientRequirementProbe>, String> {
     let service = state
         .acp_client_service
         .as_ref()
         .ok_or_else(|| "ACP client service not initialized".to_string())?;
     service
-        .probe_client_requirements()
+        .probe_client_requirements(
+            request.remote_connection_id.as_deref(),
+            request.force_refresh,
+        )
         .await
         .map_err(|e| e.to_string())
 }
@@ -166,7 +179,12 @@ pub async fn create_acp_flow_session(
         .await
         .map_err(|e| e.to_string())?;
     if let Err(error) = service
-        .start_client_for_session(&request.client_id, &response.session_id)
+        .start_client_for_session(
+            &request.client_id,
+            &response.session_id,
+            Some(&request.workspace_path),
+            request.remote_connection_id.as_deref(),
+        )
         .await
     {
         if let Err(cleanup_error) = service
@@ -250,7 +268,8 @@ pub async fn start_acp_dialog_turn(
                 &request.client_id,
                 request.user_input,
                 request.workspace_path,
-                Some(request.session_id.clone()),
+                request.remote_connection_id,
+                request.session_id.clone(),
                 session_storage_path,
                 request.timeout_seconds,
                 |event| {
@@ -404,7 +423,7 @@ pub async fn cancel_acp_dialog_turn(
         .cancel_agent_session(
             &request.client_id,
             request.workspace_path,
-            Some(request.session_id),
+            request.session_id,
         )
         .await
         .map_err(|e| e.to_string())
@@ -435,8 +454,9 @@ pub async fn get_acp_session_options(
         .get_session_options(
             &request.client_id,
             request.workspace_path,
+            request.remote_connection_id,
             session_storage_path,
-            Some(request.session_id),
+            request.session_id,
         )
         .await
         .map_err(|e| e.to_string())

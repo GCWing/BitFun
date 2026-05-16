@@ -15,7 +15,6 @@ import { GlobSearchDisplay } from './GlobSearchDisplay';
 import { LSDisplay } from './LSDisplay';
 import { TodoWriteDisplay } from './TodoWriteDisplay';
 import { TaskToolDisplay } from './TaskToolDisplay';
-import { MermaidInteractiveDisplay } from './MermaidInteractiveDisplay';
 import { CodeReviewToolCard } from './CodeReviewToolCard';
 import { FileOperationToolCard } from './FileOperationToolCard';
 import { DefaultToolCard } from './DefaultToolCard';
@@ -153,16 +152,6 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     description: 'Manage task lists',
     displayMode: 'standard',
     primaryColor: '#0d9488'
-  },
-  'MermaidInteractive': {
-    toolName: 'MermaidInteractive',
-    displayName: 'Mermaid Interactive',
-    icon: 'M',
-    requiresConfirmation: false,
-    resultDisplayType: 'detailed',
-    description: 'Create interactive Mermaid diagrams',
-    displayMode: 'compact',
-    primaryColor: '#06b6d4'
   },
   'submit_code_review': {
     toolName: 'submit_code_review',
@@ -345,9 +334,6 @@ export const TOOL_CARD_COMPONENTS = {
   'Task': TaskToolDisplay,
   'TodoWrite': TodoWriteDisplay,
   
-  // Mermaid interactive
-  'MermaidInteractive': MermaidInteractiveDisplay,
-  
   'submit_code_review': CodeReviewToolCard,
   
   // Context compression
@@ -488,7 +474,7 @@ import type { FlowItem, FlowToolItem } from '../types/flow-chat';
  * They are auto-collapsed during streaming to reduce visual noise.
  */
 export const COLLAPSIBLE_TOOL_NAMES = new Set([
-  'Read', 'LS', 'Grep', 'Glob', 'WebSearch', 'Bash'
+  'Read', 'LS', 'Grep', 'Glob', 'WebSearch', 'Bash', 'Git',
 ]);
 
 /** Read tools (counted in readCount). */
@@ -498,7 +484,7 @@ export const READ_TOOL_NAMES = new Set(['Read', 'LS']);
 export const SEARCH_TOOL_NAMES = new Set(['Grep', 'Glob', 'WebSearch']);
 
 /** Command tools (counted in commandCount). */
-export const COMMAND_TOOL_NAMES = new Set(['Bash']);
+export const COMMAND_TOOL_NAMES = new Set(['Bash', 'Git']);
 
 /** Check whether a tool is collapsible. */
 export function isCollapsibleTool(toolName: string): boolean {

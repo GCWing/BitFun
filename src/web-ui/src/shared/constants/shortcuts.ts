@@ -22,14 +22,14 @@ export const NON_USER_CUSTOMIZABLE_SHORTCUT_IDS = new Set<string>([
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
-
-/** Build a ShortcutConfig using Ctrl (Win/Linux) or Meta (Mac) as the primary modifier. */
+/** Build a ShortcutConfig using BitFun's logical primary modifier.
+ * ShortcutManager maps it to Ctrl on Windows/Linux and Command on macOS.
+ */
 function mod(
   key: string,
-  extras: Omit<ShortcutConfig, 'key' | 'ctrl' | 'meta'> = {}
+  extras: Omit<ShortcutConfig, 'key' | 'ctrl'> = {}
 ): ShortcutConfig {
-  return isMac ? { key, meta: true, ...extras } : { key, ctrl: true, ...extras };
+  return { key, ctrl: true, ...extras };
 }
 
 // ─── Global shortcuts (scope: 'app') ──────────────────────────────────────

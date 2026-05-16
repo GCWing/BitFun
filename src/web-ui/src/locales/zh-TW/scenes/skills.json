@@ -41,8 +41,17 @@
   },
   "filters": {
     "all": "全部",
+    "builtin": "內建",
     "user": "用戶級",
-    "project": "項目級"
+    "project": "項目級",
+    "suite": "套件"
+  },
+  "categories": {
+    "all": "查看所有已安裝的技能，包含內建、用戶與項目級。",
+    "builtin": "系統出廠內建的核心技能，不可刪除。",
+    "user": "為目前帳戶全域安裝的用戶級技能。",
+    "project": "目前工作區底下的項目級技能。",
+    "suite": "依模式分組的內建技能套件，可一鍵控制可見性。"
   },
   "section": {
     "user": {
@@ -64,6 +73,7 @@
       "noMatch": "沒有找到匹配的市場技能",
       "noSkills": "暫時沒有可展示的市場技能"
     },
+    "resultsInfo": "關鍵詞「{{query}}」共 {{count}} 筆相關結果",
     "item": {
       "sourceLabel": "來源: ",
       "installs": "安裝量: {{count}}",
@@ -90,6 +100,64 @@
       "linkLabel": "鏈接"
     }
   },
+  "suite": {
+    "title": "內建技能套件",
+    "subtitle": "選擇一個模式後，可一鍵控制各組內建技能的可見性；也可逐個調整技能後按組保存。",
+    "modeLabel": "模式",
+    "refreshTooltip": "刷新當前模式",
+    "refreshAction": "刷新",
+    "loading": "正在載入內建技能套件...",
+    "empty": "當前沒有可用的內建技能。",
+    "groups": {
+      "office": "Office",
+      "computerUse": "Computer Use",
+      "meta": "Meta",
+      "gstack": "gstack",
+      "other": "其他"
+    },
+    "modes": {
+      "agentic": "agentic",
+      "cowork": "Cowork",
+      "claw": "Claw",
+      "team": "Team"
+    },
+    "modeDescriptions": {
+      "agentic": "偏編碼的預設模式",
+      "cowork": "辦公協作模式",
+      "claw": "助理模式",
+      "team": "團隊模式"
+    },
+    "modeActions": {
+      "reset": "重置 {{mode}}",
+      "resetShort": "重置"
+    },
+    "groupActions": {
+      "save": "保存",
+      "enableGroup": "啟用分組",
+      "disableGroup": "禁用分組"
+    },
+    "resetDialog": {
+      "title": "重置 {{mode}}？",
+      "message": "這會將該模式的技能可見性恢復為預設狀態。",
+      "messageWithUnsaved": "這會將該模式的技能可見性恢復為預設狀態，並丟棄當前未保存的改動。",
+      "confirm": "重置",
+      "cancel": "取消"
+    },
+    "groupState": {
+      "enabled": "可見",
+      "disabled": "隱藏",
+      "partial": "部分"
+    },
+    "groupCount": "{{total}} 個",
+    "messages": {
+      "saveSuccess": "已更新 {{mode}} 套件可見性",
+      "saveFailed": "更新套件失敗: {{error}}",
+      "resetSuccess": "已恢復 {{mode}} 套件預設設定",
+      "resetFailed": "重置套件失敗: {{error}}",
+      "refreshFailed": "刷新套件失敗: {{error}}",
+      "saveFirst": "請先保存當前技能改動。"
+    }
+  },
   "form": {
     "title": "添加技能",
     "closeTooltip": "關閉",
@@ -98,7 +166,8 @@
       "user": "用戶級（全局）",
       "project": "項目級（當前工作空間）",
       "projectDisabled": " - 需要先打開工作區",
-      "currentWorkspace": "當前工作區: {{path}}"
+      "currentWorkspace": "當前工作區: {{path}}",
+      "selectedProjectPath": "所選項目路徑: {{path}}"
     },
     "path": {
       "label": "技能文件夾路徑",
@@ -123,6 +192,9 @@
     "item": {
       "user": "用戶級",
       "project": "項目級",
+      "builtin": "內建",
+      "userInstalled": "已安裝",
+      "detail": "詳情",
       "deleteTooltip": "刪除",
       "pathLabel": "路徑:",
       "openPathInExplorer": "在資源管理器中打開此文件夾",

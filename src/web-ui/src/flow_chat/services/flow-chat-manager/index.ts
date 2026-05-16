@@ -49,8 +49,13 @@ export {
 export {
   sendMessage,
   cancelCurrentTask,
-  markCurrentTurnItemsAsCancelled
+  markCurrentTurnItemsAsCancelled,
+  drainPendingQueue,
+  installPendingQueueDrainListener
 } from './MessageModule';
+
+export { pendingQueueManager } from './PendingQueueModule';
+export type { EnqueueInput, PendingQueueListener } from './PendingQueueModule';
 
 export {
   shouldProcessEvent,

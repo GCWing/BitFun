@@ -652,13 +652,9 @@ mod tests {
     use super::GeminiMessageConverter;
     use crate::types::{Message, ToolCall, ToolDefinition};
     use serde_json::json;
-    use std::collections::HashMap;
 
     #[test]
     fn converts_messages_to_gemini_format() {
-        let mut args = HashMap::new();
-        args.insert("city".to_string(), json!("Beijing"));
-
         let messages = vec![
             Message::system("You are helpful".to_string()),
             Message::user("Hello".to_string()),
@@ -670,7 +666,8 @@ mod tests {
                 tool_calls: Some(vec![ToolCall {
                     id: "call_1".to_string(),
                     name: "get_weather".to_string(),
-                    arguments: args.clone(),
+                    arguments: json!({"city": "Beijing"}),
+                    raw_arguments: None,
                 }]),
                 tool_call_id: None,
                 name: None,
@@ -714,9 +711,6 @@ mod tests {
 
     #[test]
     fn injects_skip_signature_for_first_synthetic_gemini_3_tool_call() {
-        let mut args = HashMap::new();
-        args.insert("city".to_string(), json!("Paris"));
-
         let messages = vec![Message {
             role: "assistant".to_string(),
             content: None,
@@ -725,7 +719,8 @@ mod tests {
             tool_calls: Some(vec![ToolCall {
                 id: "call_1".to_string(),
                 name: "get_weather".to_string(),
-                arguments: args,
+                arguments: json!({"city": "Paris"}),
+                raw_arguments: None,
             }]),
             tool_call_id: None,
             name: None,

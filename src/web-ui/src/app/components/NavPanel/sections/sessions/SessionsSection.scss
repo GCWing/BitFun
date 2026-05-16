@@ -402,6 +402,9 @@
     width: max-content;
     min-width: 140px;
     max-width: min(220px, calc(100vw - 24px));
+    max-height: min(560px, calc(100vh - 16px));
+    overflow-x: hidden;
+    overflow-y: auto;
     padding: $size-gap-1 0;
     border-radius: $size-radius-base;
     background: var(--color-bg-elevated, #1e1e22);

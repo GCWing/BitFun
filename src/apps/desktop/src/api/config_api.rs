@@ -1,14 +1,18 @@
 //! Configuration API
 
 use crate::api::app_state::AppState;
-use log::{error, info, warn};
+use bitfun_core::util::errors::BitFunError;
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::State;
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetConfigRequest {
     pub path: Option<String>,
+    #[serde(default)]
+    pub skip_retry_on_not_found: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -29,6 +33,15 @@ fn to_json_value<T: Serialize>(value: T, context: &str) -> Result<Value, String>
     serde_json::to_value(value).map_err(|e| format!("Failed to serialize {}: {}", context, e))
 }
 
+fn is_expected_config_path_not_found(error: &BitFunError, path: Option<&str>) -> bool {
+    match (error, path) {
+        (BitFunError::NotFound(message), Some(path)) => {
+            message == &format!("Config path '{}' not found", path)
+        }
+        _ => false,
+    }
+}
+
 #[tauri::command]
 pub async fn get_config(
     state: State<'_, AppState>,
@@ -42,9 +55,40 @@ pub async fn get_config(
     {
         Ok(config) => Ok(config),
         Err(e) => {
+            if request.skip_retry_on_not_found
+                && is_expected_config_path_not_found(&e, request.path.as_deref())
+            {
+                return Err(format!("Failed to get config: {}", e));
+            }
             error!("Failed to get config: path={:?}, error={}", request.path, e);
             Err(format!("Failed to get config: {}", e))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recognizes_expected_config_path_not_found_errors() {
+        let error = BitFunError::NotFound(
+            "Config path 'ai.review_team_rate_limit_status' not found".to_string(),
+        );
+
+        assert!(is_expected_config_path_not_found(
+            &error,
+            Some("ai.review_team_rate_limit_status"),
+        ));
+        assert!(!is_expected_config_path_not_found(
+            &error,
+            Some("ai.review_team_project_strategy_overrides"),
+        ));
+        assert!(!is_expected_config_path_not_found(&error, None));
+        assert!(!is_expected_config_path_not_found(
+            &BitFunError::config("Config path 'ai.review_team_rate_limit_status' not found"),
+            Some("ai.review_team_rate_limit_status"),
+        ));
     }
 }
 
@@ -250,9 +294,7 @@ pub async fn set_mode_config(
     )
     .await
     {
-        Ok(_) => {
-            Ok(format!("Mode '{}' configuration set successfully", mode_id))
-        }
+        Ok(_) => Ok(format!("Mode '{}' configuration set successfully", mode_id)),
         Err(e) => {
             error!(
                 "Failed to set mode config: mode_id={}, error={}",
@@ -273,93 +315,16 @@ pub async fn reset_mode_config(
     )
     .await
     {
-        Ok(_) => {
-            Ok(format!(
-                "Mode '{}' configuration reset successfully",
-                mode_id
-            ))
-        }
+        Ok(_) => Ok(format!(
+            "Mode '{}' configuration reset successfully",
+            mode_id
+        )),
         Err(e) => {
             error!(
                 "Failed to reset mode config: mode_id={}, error={}",
                 mode_id, e
             );
             Err(format!("Failed to reset mode config: {}", e))
-        }
-    }
-}
-
-#[tauri::command]
-pub async fn get_subagent_configs(state: State<'_, AppState>) -> Result<Value, String> {
-    use bitfun_core::service::config::types::SubAgentConfig;
-    use std::collections::HashMap;
-
-    let config_service = &state.config_service;
-    let mut subagent_configs: HashMap<String, SubAgentConfig> = config_service
-        .get_config(Some("ai.subagent_configs"))
-        .await
-        .unwrap_or_default();
-
-    let workspace = state.workspace_path.read().await.clone();
-    let all_subagents = state
-        .agent_registry
-        .get_subagents_info(workspace.as_deref())
-        .await;
-    let mut needs_save = false;
-
-    for subagent in all_subagents {
-        let subagent_id = subagent.id;
-        if let std::collections::hash_map::Entry::Vacant(e) = subagent_configs.entry(subagent_id) {
-            e.insert(SubAgentConfig { enabled: true });
-            needs_save = true;
-        }
-    }
-
-    if needs_save {
-        match to_json_value(&subagent_configs, "subagent configs") {
-            Ok(subagent_configs_value) => {
-                if let Err(e) = config_service
-                    .set_config("ai.subagent_configs", subagent_configs_value)
-                    .await
-                {
-                    warn!("Failed to save initialized subagent configs: {}", e);
-                }
-            }
-            Err(e) => {
-                warn!("Failed to serialize initialized subagent configs: {}", e);
-            }
-        }
-    }
-
-    to_json_value(subagent_configs, "subagent configs")
-}
-
-#[tauri::command]
-pub async fn set_subagent_config(
-    state: State<'_, AppState>,
-    subagent_id: String,
-    enabled: bool,
-) -> Result<String, String> {
-    use bitfun_core::service::config::types::SubAgentConfig;
-
-    let config_service = &state.config_service;
-    let config = SubAgentConfig { enabled };
-    let path = format!("ai.subagent_configs.{}", subagent_id);
-    let config_value = to_json_value(&config, "subagent config")?;
-
-    match config_service.set_config(&path, config_value).await {
-        Ok(_) => {
-            Ok(format!(
-                "SubAgent '{}' configuration set successfully",
-                subagent_id
-            ))
-        }
-        Err(e) => {
-            error!(
-                "Failed to set subagent config: subagent_id={}, enabled={}, error={}",
-                subagent_id, enabled, e
-            );
-            Err(format!("Failed to set SubAgent config: {}", e))
         }
     }
 }

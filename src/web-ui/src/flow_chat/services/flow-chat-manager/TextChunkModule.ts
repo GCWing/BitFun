@@ -240,6 +240,15 @@ export function cleanupSessionBuffers(context: FlowChatContext, sessionId: strin
       context.runtimeStatusTimers.delete(key);
     }
   }
+
+  // P1-11: Drop terminal-event dedup keys belonging to this session so the
+  // set does not grow unbounded across the lifetime of the app.
+  const prefix = `${sessionId}:`;
+  for (const key of context.handledTerminalTurnEvents) {
+    if (key.startsWith(prefix)) {
+      context.handledTerminalTurnEvents.delete(key);
+    }
+  }
 }
 
 /**
@@ -269,4 +278,5 @@ export function clearAllBuffers(context: FlowChatContext): void {
   context.lastSaveHashes.clear();
   context.turnSavePending.clear();
   context.turnSaveInFlight.clear();
+  context.handledTerminalTurnEvents.clear();
 }

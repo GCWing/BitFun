@@ -9,7 +9,9 @@
  */
 
 import React, { ReactNode } from 'react';
+import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { BaseToolCard, type BaseToolCardProps } from './BaseToolCard';
+import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
 import { ToolCardIconSlot } from './ToolCardIconSlot';
 import { ToolCardStatusIcon } from './ToolCardStatusIcon';
 import type { ToolCardHeaderAffordanceKind } from './ToolCardHeaderLayoutContext';
@@ -41,10 +43,12 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
   header,
   expandedContent,
 }) => {
-  const handleWrapperClick = (e: React.MouseEvent) => {
-    if (onClick) {
-      onClick(e);
+  const handleWrapperClick = (event: React.MouseEvent) => {
+    if (!onClick || shouldIgnoreCardToggleClick(event)) {
+      return;
     }
+
+    onClick(event);
   };
 
   const loadingShimmer =
@@ -70,7 +74,7 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
 
   return (
     <div
-      className={`compact-tool-card-wrapper${loadingShimmer ? ' compact-tool-card-wrapper--loading-shimmer' : ''} ${className}`.trim()}
+      className={`compact-tool-card-wrapper compact-tool-card-wrapper--dense-command${loadingShimmer ? ' compact-tool-card-wrapper--loading-shimmer' : ''} ${className}`.trim()}
     >
       <div
         className={`compact-tool-card status-${status} ${clickable ? 'clickable' : ''} ${isExpanded ? 'expanded' : ''}`}
@@ -80,11 +84,11 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
         {header}
       </div>
 
-      {isExpanded && expandedContent && (
+      <SmoothHeightCollapse isOpen={Boolean(isExpanded && expandedContent)} className="compact-tool-card-expanded-collapse">
         <div className="compact-tool-card-expanded">
           {expandedContent}
         </div>
-      )}
+      </SmoothHeightCollapse>
     </div>
   );
 };
@@ -104,8 +108,8 @@ export interface CompactToolCardHeaderProps {
   onAffordanceClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   /** Whether to show the left icon divider (default false for compact) */
   showDivider?: boolean;
-  /** Action text */
-  action?: string;
+  /** Action label (text or inline markup) */
+  action?: ReactNode;
   /** Main content */
   content?: ReactNode;
   /** Right extra content (e.g., statistics) */

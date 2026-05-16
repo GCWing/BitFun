@@ -1,0 +1,40 @@
+.smooth-height-collapse {
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    height var(--smooth-height-collapse-duration, 260ms) cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 180ms ease,
+    transform var(--smooth-height-collapse-duration, 260ms) cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: height, opacity, transform;
+}
+
+.smooth-height-collapse--opening,
+.smooth-height-collapse--open {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.smooth-height-collapse--open {
+  height: auto;
+  overflow: visible;
+  will-change: auto;
+}
+
+.smooth-height-collapse--closing {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+.smooth-height-collapse__inner {
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .smooth-height-collapse {
+    transition: none;
+    transform: none;
+    will-change: auto;
+  }
+}

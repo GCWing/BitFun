@@ -9,6 +9,7 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn } from './types';
 import { immediateSaveDialogTurn } from './PersistenceModule';
 import { applyPendingAcpPermissionForTool } from './AcpPermissionToolCardModule';
+import { normalizeParamsPartialFragment } from '../EventBatcher';
 import type {
   CancelledToolEvent,
   CompletedToolEvent,
@@ -155,7 +156,11 @@ function isWriteLikeToolName(toolName: string): boolean {
   return ['write', 'write_notebook', 'file_write', 'Write'].includes(toolName);
 }
 
-function shouldIgnoreParamsPartial(status: FlowToolItem['status']): boolean {
+function shouldIgnoreParamsPartial(status: FlowToolItem['status'], toolName: string): boolean {
+  if (isWriteLikeToolName(toolName)) {
+    return ['completed', 'error', 'cancelled', 'pending_confirmation', 'confirmed'].includes(status);
+  }
+
   return ['running', 'completed', 'error', 'cancelled', 'pending_confirmation', 'confirmed'].includes(status);
 }
 
@@ -170,12 +175,18 @@ function applyParamsPartial(
   
   if (existingItem && existingItem.type === 'tool') {
     const existingToolItem = existingItem as FlowToolItem;
-    if (shouldIgnoreParamsPartial(existingToolItem.status)) {
+    const prevBuffer = existingToolItem._paramsBuffer || '';
+    const isWriteTool = isWriteLikeToolName(toolEvent.tool_name);
+    if (shouldIgnoreParamsPartial(existingToolItem.status, toolEvent.tool_name)) {
       return;
     }
 
-    const prevBuffer = existingToolItem._paramsBuffer || '';
-    const newBuffer = prevBuffer + (toolEvent.params || '');
+    const incomingParams = normalizeParamsPartialFragment(toolEvent.params);
+    if (!incomingParams) {
+      return;
+    }
+    const isWriteFullParamsSnapshot = isWriteTool && incomingParams.trimStart().startsWith('{');
+    const newBuffer = isWriteFullParamsSnapshot ? incomingParams : prevBuffer + incomingParams;
     
     let parsedParams: Record<string, any> = {};
     try {
@@ -183,7 +194,6 @@ function applyParamsPartial(
     } catch {
     }
     
-    const isWriteTool = isWriteLikeToolName(toolEvent.tool_name);
     const isEditTool = ['edit', 'search_replace', 'Edit'].includes(toolEvent.tool_name);
     const hasContentField = parsedParams && ('content' in parsedParams || 'contents' in parsedParams);
     const hasNewString = parsedParams && 'new_string' in parsedParams;
@@ -202,7 +212,7 @@ function applyParamsPartial(
       _paramsBuffer: newBuffer,
       status,
       isParamsStreaming: true,
-      _contentSize: hasContentField ? ((parsedParams.content || parsedParams.contents || '').length) : undefined
+      _contentSize: isWriteTool && hasContentField ? ((parsedParams.content || parsedParams.contents || '').length) : undefined
     }, silent);
     applyPendingTerminalSessionId(store, sessionId, turnId, toolEvent.tool_id, silent);
     applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
@@ -231,7 +241,7 @@ export function processToolParamsPartialInternal(
   turnId: string,
   toolEvent: ParamsPartialToolEvent
 ): void {
-  applyParamsPartial(FlowChatStore.getInstance(), sessionId, turnId, toolEvent, true);
+  applyParamsPartial(FlowChatStore.getInstance(), sessionId, turnId, toolEvent, false);
 }
 
 export function processToolProgressInternal(
@@ -412,7 +422,12 @@ function handleCompleted(
     requiresConfirmation: false,
     acpPermission: undefined,
     isParamsStreaming: false,
-    endTime: Date.now()
+    endTime: Date.now(),
+    durationMs: toolEvent.duration_ms,
+    queueWaitMs: toolEvent.queue_wait_ms,
+    preflightMs: toolEvent.preflight_ms,
+    confirmationWaitMs: toolEvent.confirmation_wait_ms,
+    executionMs: toolEvent.execution_ms
   };
 
   store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, updates as any);
@@ -436,12 +451,18 @@ function handleFailed(
     toolResult: {
       result: null,
       success: false,
-      error: toolEvent.error
+      error: toolEvent.error,
+      duration_ms: toolEvent.duration_ms
     },
     status: 'error',
     requiresConfirmation: false,
     acpPermission: undefined,
-    endTime: Date.now()
+    endTime: Date.now(),
+    durationMs: toolEvent.duration_ms,
+    queueWaitMs: toolEvent.queue_wait_ms,
+    preflightMs: toolEvent.preflight_ms,
+    confirmationWaitMs: toolEvent.confirmation_wait_ms,
+    executionMs: toolEvent.execution_ms
   } as any);
 
   store.clearSessionNeedsAttention(sessionId);
@@ -467,12 +488,18 @@ function handleCancelled(
     toolResult: {
       result: null,
       success: false,
-      error: toolEvent.reason || 'User cancelled operation'
+      error: toolEvent.reason || 'User cancelled operation',
+      duration_ms: toolEvent.duration_ms
     },
     status: finalStatus,
     requiresConfirmation: false,
     acpPermission: undefined,
-    endTime: Date.now()
+    endTime: Date.now(),
+    durationMs: toolEvent.duration_ms,
+    queueWaitMs: toolEvent.queue_wait_ms,
+    preflightMs: toolEvent.preflight_ms,
+    confirmationWaitMs: toolEvent.confirmation_wait_ms,
+    executionMs: toolEvent.execution_ms
   } as any);
 
   store.clearSessionNeedsAttention(sessionId);

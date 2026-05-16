@@ -52,6 +52,7 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-self: stretch;
     flex: 1;
     min-width: 0;
   }
@@ -127,23 +128,62 @@
     }
   }
 
+  /*
+   * Rail icons: fill exactly the same rectangle as ::before (hover tint) and __hit (click zone).
+   *
+   * Root cause of "偏左":
+   *   - The hover/hit area extends right: calc(-1 * --tool-card-header-pad-right) = -10px
+   *     into the card's right padding, so its total width is rail(34px) + padding(10px) = 44px.
+   *   - Previously __visual used right: 0, giving only 33px. Icon center was at 17.5px from
+   *     the divider; hover center was at 22px — a 4.5px leftward offset, visible to the eye.
+   *   - Fix: match the same right edge so icon center == hover center == 22px from divider.
+   */
   .task-header-rail__visual {
-    position: relative;
+    position: absolute;
     z-index: 1;
+    /* Start after the 1px divider line (::after sits at left: 0). */
+    left: 1px;
+    /* Match hover fill (::before) and hit area right edge — both extend into right padding. */
+    right: calc(-1 * var(--tool-card-header-pad-right, 10px));
+    top: 0;
+    bottom: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    align-self: center;
-    gap: 6px;
+    gap: 0;
+    margin: 0;
+    padding: 0;
     line-height: 0;
+    font-size: 0;
     color: var(--color-text-muted);
     pointer-events: none;
 
-    /* Drop inline-SVG strut; keeps chevron + status optically on the same midline as the title. */
+    > * + * {
+      margin-top: 6px;
+    }
+
     > svg {
       display: block;
       flex-shrink: 0;
+    }
+
+    .tool-card-status-icon:empty {
+      display: none;
+    }
+
+    .tool-card-status-icon:not(:empty) {
+      line-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .cube-loading {
+      flex-direction: column;
+      gap: 0 !important;
+      line-height: 0;
     }
   }
 
@@ -155,6 +195,7 @@
     min-height: 20px;
   }
 
+
   .task-action {
     font-size: 12px;
     font-weight: 500;
@@ -164,12 +205,20 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    &__model-tag {
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--color-text-secondary);
+      vertical-align: baseline;
+    }
   }
 
   .task-header-main--failed {
     .task-action {
       color: var(--color-text-muted, #6b7280);
     }
+
     
     .agent-type-badge {
       opacity: 0.6;
@@ -216,10 +265,8 @@
   }
 
   .task-status-icon--rail {
-    position: relative;
-    z-index: 1;
-    margin-left: 0;
-    padding-left: 0;
+    margin: 0;
+    padding: 0;
   }
 
   /* Prompt uses the thinking markdown typography, but needs its own clipping box.
@@ -292,6 +339,15 @@
       flex-shrink: 0;
       opacity: 0.95;
     }
+  }
+
+  .duration-text--completed-success {
+    color: var(--color-success, #22c55e);
+  }
+
+  .duration-text--completed-error,
+  .duration-text--completed-cancelled {
+    color: var(--color-error, #ef4444);
   }
 
   .section-header {
@@ -419,11 +475,6 @@
   margin: 4px 0 10px;
   transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   contain: layout paint style;
-
-  /* Unified task + subagent: title row is optically below geometric center; nudge the rail stack slightly down. */
-  .task-header-rail__visual {
-    transform: translateY(2px);
-  }
 
   .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display {
     margin: 0;

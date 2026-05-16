@@ -99,6 +99,10 @@ impl Tool for HarmonyBuildTool {
         )
     }
 
+    fn short_description(&self) -> String {
+        "Build the harmony project in ohos".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

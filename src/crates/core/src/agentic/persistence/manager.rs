@@ -643,9 +643,7 @@ impl PersistenceManager {
             model_name,
             created_at,
             last_active_at,
-            turn_count: existing
-                .map(|value| value.turn_count.max(session.dialog_turn_ids.len()))
-                .unwrap_or(session.dialog_turn_ids.len()),
+            turn_count: session.dialog_turn_ids.len(),
             message_count: existing.map(|value| value.message_count).unwrap_or(0),
             tool_call_count: existing.map(|value| value.tool_call_count).unwrap_or(0),
             status: existing
@@ -659,6 +657,9 @@ impl PersistenceManager {
             tags: existing.map(|value| value.tags.clone()).unwrap_or_default(),
             custom_metadata: existing.and_then(|value| value.custom_metadata.clone()),
             todos: existing.and_then(|value| value.todos.clone()),
+            deep_review_run_manifest: existing
+                .and_then(|value| value.deep_review_run_manifest.clone()),
+            deep_review_cache: existing.and_then(|value| value.deep_review_cache.clone()),
             workspace_path: Some(workspace_root),
             workspace_hostname,
             unread_completion: existing.and_then(|value| value.unread_completion.clone()),
@@ -1227,10 +1228,7 @@ impl PersistenceManager {
         Ok(metadata_list)
     }
 
-    async fn count_session_metadata_dirs(
-        &self,
-        workspace_path: &Path,
-    ) -> BitFunResult<usize> {
+    async fn count_session_metadata_dirs(&self, workspace_path: &Path) -> BitFunResult<usize> {
         let Some(sessions_root) = self.existing_project_sessions_dir(workspace_path) else {
             return Ok(0);
         };
@@ -1251,10 +1249,7 @@ impl PersistenceManager {
             }
 
             let session_id = entry.file_name().to_string_lossy().to_string();
-            if self
-                .metadata_path(workspace_path, &session_id)
-                .exists()
-            {
+            if self.metadata_path(workspace_path, &session_id).exists() {
                 count += 1;
             }
         }
@@ -1894,6 +1889,61 @@ impl PersistenceManager {
         }
 
         Ok(turns)
+    }
+
+    pub async fn delete_dialog_turns_from(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        turn_index: usize,
+    ) -> BitFunResult<()> {
+        let turns_dir = self.turns_dir(workspace_path, session_id);
+        if !turns_dir.exists() {
+            return Ok(());
+        }
+
+        let mut entries = fs::read_dir(&turns_dir)
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to read turns directory: {}", e)))?;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to iterate turns directory: {}", e)))?
+        {
+            let path = entry.path();
+            if path.extension().and_then(|value| value.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            let Some(index_str) = stem.strip_prefix("turn-") else {
+                continue;
+            };
+            let Ok(index) = index_str.parse::<usize>() else {
+                continue;
+            };
+            if index >= turn_index {
+                fs::remove_file(&path).await.map_err(|e| {
+                    BitFunError::io(format!("Failed to delete dialog turn file: {}", e))
+                })?;
+            }
+        }
+
+        if let Some(mut metadata) = self
+            .load_session_metadata(workspace_path, session_id)
+            .await?
+        {
+            let turns = self.load_session_turns(workspace_path, session_id).await?;
+            metadata.turn_count = turns.len();
+            metadata.message_count = turns.iter().map(Self::estimate_turn_message_count).sum();
+            metadata.tool_call_count = turns.iter().map(DialogTurnData::count_tool_calls).sum();
+            metadata.last_active_at = Self::system_time_to_unix_ms(SystemTime::now());
+            self.save_session_metadata(workspace_path, &metadata)
+                .await?;
+        }
+
+        Ok(())
     }
 
     pub async fn load_recent_turns(

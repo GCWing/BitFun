@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 
 interface MenuPosition {
   top: number;
@@ -77,13 +78,19 @@ export function useShellNavMenuState(
 
     const rect = trigger.getBoundingClientRect();
     const viewportPadding = 8;
-    const estimatedWidth = 220;
-    const maxLeft = window.innerWidth - estimatedWidth - viewportPadding;
+    const gap = 6;
+    const fallbackWidth = 220;
+    const fallbackHeight = 200;
 
-    setWorkspaceMenuPosition({
-      top: Math.max(viewportPadding, rect.bottom + 6),
-      left: Math.max(viewportPadding, Math.min(rect.left, maxLeft)),
-    });
+    const apply = () => {
+      const menuEl = workspaceMenuRef.current;
+      const w = menuEl?.offsetWidth ?? fallbackWidth;
+      const h = menuEl?.offsetHeight ?? fallbackHeight;
+      setWorkspaceMenuPosition(computeFixedPopoverPosition(rect, w, h, gap, viewportPadding));
+    };
+
+    apply();
+    requestAnimationFrame(apply);
   }, []);
 
   useEffect(() => {

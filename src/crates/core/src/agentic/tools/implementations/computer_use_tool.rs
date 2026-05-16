@@ -13,7 +13,7 @@ use crate::agentic::tools::computer_use_host::{
     COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE, COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
 use crate::agentic::tools::computer_use_optimizer::hash_screenshot_bytes;
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
 use crate::service::config::global::GlobalConfigManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::ToolImageAttachment;
@@ -63,7 +63,8 @@ pub(crate) async fn computer_use_augment_result_json(
         );
         map.insert("interaction_state".to_string(), json!(interaction));
 
-        // Add loop detection warning if a loop is detected
+        // Loop hint surfaced to the model as a warning only — it never forces the
+        // agent loop to stop. The model decides on its own whether to switch tactic.
         if loop_result.is_loop {
             map.insert(
                 "loop_warning".to_string(),
@@ -74,10 +75,6 @@ pub(crate) async fn computer_use_augment_result_json(
                     "suggestion": loop_result.suggestion,
                 }),
             );
-            // P4: When repetitions significantly exceed threshold, signal termination
-            if loop_result.repetitions > 3 {
-                map.insert("loop_terminated".to_string(), json!(true));
-            }
         }
     }
     body
@@ -1277,6 +1274,14 @@ impl Tool for ComputerUseTool {
         ))
     }
 
+    fn short_description(&self) -> String {
+        "Inspect the screen and control desktop input for computer-use tasks.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
+    }
+
     async fn description_with_context(
         &self,
         context: Option<&ToolUseContext>,
@@ -1411,6 +1416,13 @@ impl Tool for ComputerUseTool {
         let ai: crate::service::config::types::AIConfig =
             service.get_config(Some("ai")).await.unwrap_or_default();
         ai.computer_use_enabled
+    }
+
+    async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
+        if context.map(|ctx| ctx.is_remote()).unwrap_or(false) {
+            return false;
+        }
+        self.is_enabled().await
     }
 
     async fn call_impl(

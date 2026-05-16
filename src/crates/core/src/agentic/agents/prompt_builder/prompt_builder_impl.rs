@@ -1,12 +1,9 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
 use super::request_context::{RequestContextPolicy, RequestContextSection};
-use crate::infrastructure::try_get_path_manager_arc;
 use crate::service::agent_memory::{
     build_workspace_agent_memory_prompt, build_workspace_instruction_files_context,
     build_workspace_memory_files_context,
 };
-use crate::service::ai_memory::AIMemoryManager;
-use crate::service::ai_rules::get_global_ai_rules_service;
 use crate::service::bootstrap::build_workspace_persona_prompt;
 use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
@@ -23,6 +20,15 @@ const PLACEHOLDER_LANGUAGE_PREFERENCE: &str = "{LANGUAGE_PREFERENCE}";
 const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
+const PLACEHOLDER_SESSION_ID: &str = "{SESSION_ID}";
+const ADDITIONAL_TOOLS_PROMPT: &str = r#"# Additional Tools
+
+Some tools in the tool list are intentionally collapsed.
+Their listed descriptions are short summaries rather than full usage instructions.
+Before calling a collapsed tool, call `GetToolSpec` with its exact tool name to read its full definition and input schema.
+After reading the returned spec, call the real tool directly by its own name.
+If a tool spec is already available in the current conversation, do not call `GetToolSpec` for it again.
+"#;
 
 /// SSH remote host facts for system prompt (workspace tools run here, not on the local client).
 #[derive(Debug, Clone)]
@@ -43,6 +49,8 @@ pub struct PromptBuilderContext {
     pub remote_project_layout: Option<String>,
     /// When `Some(false)`, system prompt append Computer use text-only guidance (no screenshot tool output).
     pub supports_image_understanding: Option<bool>,
+    /// When true, append a static reminder that additional collapsed tools exist behind GetToolSpec.
+    pub has_additional_tools: bool,
 }
 
 impl PromptBuilderContext {
@@ -58,11 +66,17 @@ impl PromptBuilderContext {
             remote_execution: None,
             remote_project_layout: None,
             supports_image_understanding: None,
+            has_additional_tools: false,
         }
     }
 
     pub fn with_supports_image_understanding(mut self, supports: bool) -> Self {
         self.supports_image_understanding = Some(supports);
+        self
+    }
+
+    pub fn with_additional_tools_hint(mut self, has_additional_tools: bool) -> Self {
+        self.has_additional_tools = has_additional_tools;
         self
     }
 
@@ -185,34 +199,6 @@ impl PromptBuilder {
         project_layout
     }
 
-    /// Load AI memories from disk and format as prompt
-    pub async fn load_ai_memories(&self) -> Option<String> {
-        let path_manager = match try_get_path_manager_arc() {
-            Ok(pm) => pm,
-            Err(e) => {
-                warn!("Failed to create PathManager: {}", e);
-                return None;
-            }
-        };
-
-        let memory_manager = match AIMemoryManager::new(path_manager).await {
-            Ok(mm) => mm,
-            Err(e) => {
-                warn!("Failed to create AIMemoryManager: {}", e);
-                return None;
-            }
-        };
-
-        match memory_manager.get_memories_for_prompt().await {
-            Ok(Some(prompt)) => Some(prompt),
-            Ok(None) => None,
-            Err(e) => {
-                warn!("Failed to load memories: {}", e);
-                None
-            }
-        }
-    }
-
     pub async fn build_request_context_reminder(
         &self,
         policy: &RequestContextPolicy,
@@ -248,18 +234,6 @@ impl PromptBuilder {
             }
         }
 
-        if policy.includes(RequestContextSection::AIRules) {
-            if let Some(rules_prompt) = self.load_ai_rules().await {
-                override_sections.push(rules_prompt);
-            }
-        }
-
-        if policy.includes(RequestContextSection::AIMemories) {
-            if let Some(memory_prompt) = self.load_ai_memories().await {
-                override_sections.push(memory_prompt);
-            }
-        }
-
         if policy.includes(RequestContextSection::ProjectLayout) {
             trailing_sections.push(self.get_project_layout());
         }
@@ -277,35 +251,6 @@ impl PromptBuilder {
             None
         } else {
             Some(sections.join("\n\n"))
-        }
-    }
-
-    /// Load AI rules from disk and format as prompt
-    pub async fn load_ai_rules(&self) -> Option<String> {
-        let rules_service = match get_global_ai_rules_service().await {
-            Ok(service) => service,
-            Err(e) => {
-                warn!("Failed to get AIRulesService: {}", e);
-                return None;
-            }
-        };
-
-        let workspace_pathbuf = std::path::PathBuf::from(&self.context.workspace_path);
-        match rules_service
-            .build_system_prompt_for(Some(&workspace_pathbuf))
-            .await
-        {
-            Ok(prompt) => {
-                if prompt.is_empty() {
-                    None
-                } else {
-                    Some(prompt)
-                }
-            }
-            Err(e) => {
-                warn!("Failed to build AI rules system prompt: {}", e);
-                None
-            }
         }
     }
 
@@ -451,6 +396,16 @@ Do not read from, modify, create, move, or delete files outside this workspace u
             result = result.replace(PLACEHOLDER_VISUAL_MODE, &visual_mode);
         }
 
+        // Replace {SESSION_ID} — used by deep-research Pro mode to anchor a per-session
+        // work_dir under .bitfun/sessions/{SESSION_ID}/research/. Falls back to a
+        // timestamp slug when no session is bound (e.g. one-shot prompt builds in tests).
+        if result.contains(PLACEHOLDER_SESSION_ID) {
+            let session_id = self.context.session_id.clone().unwrap_or_else(|| {
+                format!("unbound-{}", chrono::Local::now().format("%Y%m%d-%H%M%S"))
+            });
+            result = result.replace(PLACEHOLDER_SESSION_ID, &session_id);
+        }
+
         if self.context.supports_image_understanding == Some(false) {
             result.push_str(
                 "\n\n# Computer use (text-only primary model)\n\n\
@@ -461,6 +416,43 @@ The configured **primary model does not accept image inputs**. When using **`Com
             );
         }
 
+        if self.context.has_additional_tools {
+            result.push_str("\n\n");
+            result.push_str(ADDITIONAL_TOOLS_PROMPT);
+            result.push('\n');
+        }
+
         Ok(result.trim().to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PromptBuilder;
+    use super::PromptBuilderContext;
+
+    #[tokio::test]
+    async fn appends_additional_tools_section_when_hint_is_enabled() {
+        let context =
+            PromptBuilderContext::new("E:/workspace", None, None).with_additional_tools_hint(true);
+        let prompt = PromptBuilder::new(context)
+            .build_prompt_from_template("Base prompt")
+            .await
+            .expect("prompt should build");
+
+        assert!(prompt.contains("# Additional Tools"));
+        assert!(prompt.contains("short summaries rather than full usage instructions"));
+        assert!(prompt.contains("call `GetToolSpec` with its exact tool name"));
+    }
+
+    #[tokio::test]
+    async fn omits_additional_tools_section_when_hint_is_disabled() {
+        let context = PromptBuilderContext::new("E:/workspace", None, None);
+        let prompt = PromptBuilder::new(context)
+            .build_prompt_from_template("Base prompt")
+            .await
+            .expect("prompt should build");
+
+        assert!(!prompt.contains("# Additional Tools"));
     }
 }

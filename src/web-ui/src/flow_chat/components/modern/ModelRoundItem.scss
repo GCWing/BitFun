@@ -128,6 +128,58 @@
 
 // ==================== Explore region adjustments ====================
 
+.flowchat-flow-item--tool-transition {
+  overflow: hidden;
+  will-change: opacity, transform, max-height;
+}
+
+.flowchat-flow-item--tool-active {
+  animation: flow-tool-active-enter 180ms ease-out both;
+}
+
+.flowchat-flow-item--tool-completed {
+  animation: flow-tool-completed-exit 1000ms ease-in-out both;
+}
+
+@keyframes flow-tool-active-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flow-tool-completed-exit {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 96px;
+    margin-bottom: 0.35rem;
+  }
+  55% {
+    opacity: 0.72;
+    transform: translateY(-1px);
+    max-height: 96px;
+    margin-bottom: 0.35rem;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+    max-height: 0;
+    margin-bottom: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flowchat-flow-item--tool-active,
+  .flowchat-flow-item--tool-completed {
+    animation: none;
+  }
+}
+
 /* Focus highlight for programmatic "jump to marker" navigation. */
 .flowchat-flow-item.flowchat-flow-item--focused {
   outline: 2px solid var(--border-accent);

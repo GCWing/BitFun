@@ -7,6 +7,16 @@ import { createLogger } from '@/shared/utils/logger';
 const log = createLogger('AgentCompanionPetService');
 const BUILTIN_PET_BASE = '/agent-companion-pets';
 
+export const DEFAULT_AGENT_COMPANION_PET: AgentCompanionPetSelection = {
+  id: 'panda-pix',
+  displayName: 'Panda',
+  description: 'Codux bundled pet atlas.',
+  source: 'preset',
+  packagePath: `${BUILTIN_PET_BASE}/panda-pix`,
+  spritesheetPath: `${BUILTIN_PET_BASE}/panda-pix/spritesheet.png`,
+  spritesheetMimeType: 'image/png',
+};
+
 /** Cache: absolute file path → blob URL (prevents re-reading the same file). */
 const blobUrlCache = new Map<string, string>();
 
@@ -116,13 +126,7 @@ const BUILTIN_PETS: AgentCompanionPetSelection[] = [
     spritesheetMimeType: 'image/webp',
   },
   {
-    id: 'panda-pix',
-    displayName: 'Panda',
-    description: 'Codux bundled pet atlas.',
-    source: 'preset',
-    packagePath: `${BUILTIN_PET_BASE}/panda-pix`,
-    spritesheetPath: `${BUILTIN_PET_BASE}/panda-pix/spritesheet.png`,
-    spritesheetMimeType: 'image/png',
+    ...DEFAULT_AGENT_COMPANION_PET,
   },
   {
     id: 'usagi',

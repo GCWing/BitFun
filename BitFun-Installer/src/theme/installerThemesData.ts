@@ -135,6 +135,20 @@ export const THEMES: InstallerTheme[] = [
     },
   },
   {
+    id: 'bitfun-tokyo-night',
+    name: 'Tokyo Night',
+    type: 'dark',
+    colors: {
+      background: { primary: '#1a1b26', secondary: '#16161e', tertiary: '#14141b', quaternary: '#1e202e', elevated: '#20222c', workbench: '#16161e', flowchat: '#1a1b26', tooltip: 'rgba(22, 22, 30, 0.94)' },
+      text: { primary: '#c0caf5', secondary: '#a9b1d6', muted: '#787c99', disabled: '#545c7e' },
+      accent: { '50': 'rgba(122, 162, 247, 0.05)', '100': 'rgba(122, 162, 247, 0.08)', '200': 'rgba(122, 162, 247, 0.15)', '300': 'rgba(122, 162, 247, 0.25)', '400': 'rgba(122, 162, 247, 0.4)', '500': '#7aa2f7', '600': '#6183bb', '700': 'rgba(97, 131, 187, 0.85)', '800': 'rgba(97, 131, 187, 0.95)' },
+      purple: { '50': 'rgba(187, 154, 247, 0.05)', '100': 'rgba(187, 154, 247, 0.08)', '200': 'rgba(187, 154, 247, 0.15)', '300': 'rgba(187, 154, 247, 0.25)', '400': 'rgba(187, 154, 247, 0.4)', '500': '#bb9af7', '600': '#9d7cd8', '700': 'rgba(157, 124, 216, 0.85)', '800': 'rgba(157, 124, 216, 0.95)' },
+      semantic: { success: '#9ece6a', warning: '#e0af68', error: '#f7768e', info: '#7dcfff', highlight: '#e0af68', highlightBg: 'rgba(224, 175, 104, 0.15)' },
+      border: { subtle: 'rgba(54, 59, 84, 0.45)', base: 'rgba(54, 59, 84, 0.6)', medium: 'rgba(54, 59, 84, 0.72)', strong: 'rgba(54, 59, 84, 0.85)', prominent: 'rgba(122, 162, 247, 0.45)' },
+      element: { subtle: 'rgba(122, 162, 247, 0.06)', soft: 'rgba(122, 162, 247, 0.08)', base: 'rgba(122, 162, 247, 0.11)', medium: 'rgba(122, 162, 247, 0.14)', strong: 'rgba(122, 162, 247, 0.18)', elevated: 'rgba(122, 162, 247, 0.22)' },
+    },
+  },
+  {
     id: 'bitfun-slate',
     name: 'Slate',
     type: 'dark',
@@ -158,6 +172,7 @@ export const THEME_DISPLAY_ORDER: ThemeId[] = [
   'bitfun-china-style',
   'bitfun-china-night',
   'bitfun-cyber',
+  'bitfun-tokyo-night',
 ];
 
 export function findInstallerThemeById(id: ThemeId): InstallerTheme {

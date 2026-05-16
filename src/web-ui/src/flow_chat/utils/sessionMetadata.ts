@@ -7,7 +7,7 @@ import type {
 import type { Session } from '../types/flow-chat';
 import { resolveSessionTitle } from './sessionTitle';
 
-const CHILD_SESSION_KIND_TAGS = new Set<SessionKind>(['btw', 'review', 'deep_review']);
+const CHILD_SESSION_KIND_TAGS = new Set<SessionKind>(['btw', 'review', 'deep_review', 'miniapp']);
 const RELATIONSHIP_METADATA_KEYS = new Set([
   'kind',
   'parentSessionId',
@@ -52,7 +52,7 @@ function normalizeTurnIndex(value: unknown): number | undefined {
 }
 
 export function normalizeSessionKind(value: unknown): SessionKind {
-  if (value === 'btw' || value === 'review' || value === 'deep_review') {
+  if (value === 'btw' || value === 'review' || value === 'deep_review' || value === 'miniapp') {
     return value;
   }
 
@@ -67,7 +67,7 @@ export function normalizeSessionRelationship(
     input?.btwOrigin?.parentSessionId ?? input?.parentSessionId
   );
 
-  if (sessionKind === 'normal') {
+  if (sessionKind === 'normal' || sessionKind === 'miniapp') {
     return {
       sessionKind,
       parentSessionId: undefined,
@@ -261,6 +261,7 @@ export function buildSessionMetadata(
     | 'titleI18nParams'
     | 'hasUnreadCompletion'
     | 'needsUserAttention'
+    | 'deepReviewRunManifest'
   >,
   existingMetadata?: SessionMetadata | null
 ): SessionMetadata {
@@ -317,5 +318,7 @@ export function buildSessionMetadata(
     // `undefined ?? existingMetadata.unreadCompletion` would restore the old value.
     unreadCompletion: session.hasUnreadCompletion,
     needsUserAttention: session.needsUserAttention,
+    deepReviewRunManifest:
+      session.deepReviewRunManifest ?? existingMetadata?.deepReviewRunManifest,
   };
 }

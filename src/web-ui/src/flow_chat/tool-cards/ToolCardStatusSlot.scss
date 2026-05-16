@@ -1,0 +1,72 @@
+/**
+ * ToolCardStatusSlot styles.
+ *
+ * The slot is placed inside the ToolCardIconSlot container (34 px wide rail).
+ * It fills the inner 24×24 marks area and manages the crossfade between the
+ * status icon and the tool icon.
+ *
+ * Parent-level hover is triggered by .compact-tool-card:hover and
+ * .base-tool-card:hover — see rules at the bottom of this file.
+ */
+
+.tool-card-status-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+
+  &__status-layer,
+  &__icon-layer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__status-layer {
+    opacity: 1;
+
+    svg {
+      width: var(--tool-card-icon-size, 16px);
+      height: var(--tool-card-icon-size, 16px);
+    }
+  }
+
+  &__icon-layer {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    line-height: 1;
+
+    svg {
+      display: block;
+    }
+  }
+}
+
+// Status icon colors
+.tcss-check {
+  color: var(--color-success, #4ade80);
+}
+
+.tcss-error {
+  color: var(--color-error, #f87171);
+  filter: drop-shadow(0 0 3px rgba(248, 113, 113, 0.35));
+}
+
+.tcss-cancelled {
+  color: var(--color-text-muted);
+  opacity: 0.6;
+}
+
+// ── tool-first: always show tool icon, status layer hidden ──────────────────
+.tool-card-status-slot--tool-first {
+  .tool-card-status-slot__status-layer {
+    opacity: 0;
+  }
+
+  .tool-card-status-slot__icon-layer {
+    opacity: 1;
+  }
+}

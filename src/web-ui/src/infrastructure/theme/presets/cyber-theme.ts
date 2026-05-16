@@ -188,8 +188,8 @@ export const bitfunCyberTheme: ThemeConfig = {
   
   typography: {
     font: {
-      sans: "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', 'Roboto', sans-serif",
-      mono: "'FiraCode', 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Consolas', monospace",
+      sans: "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif",
+      mono: "'JetBrains Mono', 'FiraCode', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Liberation Mono', 'Courier New', monospace",
     },
     
     weight: {

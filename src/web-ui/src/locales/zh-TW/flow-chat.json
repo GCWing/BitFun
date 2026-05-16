@@ -39,6 +39,225 @@
   "runtimeStatus": {
     "waitingForModelResponse": "等待模型回應..."
   },
+  "usage": {
+    "title": "工作階段用量",
+    "unavailable": "不可用",
+    "redacted": "已遮蔽",
+    "percent": "{{value}}%",
+    "duration": {
+      "ms": "{{value}}毫秒",
+      "seconds": "{{value}}秒",
+      "minutes": "{{value}}分鐘",
+      "minutesSeconds": "{{minutes}}分{{seconds}}秒",
+      "hours": "{{value}}小時",
+      "hoursMinutes": "{{hours}}小時{{minutes}}分鐘"
+    },
+    "actions": {
+      "copyMarkdown": "複製 Markdown",
+      "copied": "已複製",
+      "openDetails": "開啟詳情",
+      "openFileDiff": "開啟 diff",
+      "copySessionId": "複製工作階段 ID",
+      "copyWorkspacePath": "複製專案路徑",
+      "openSectionDetails": "開啟{{section}}詳情",
+      "jumpToTurn": "跳轉到該回合",
+      "viewDetails": "詳情",
+      "viewAllSection": "查看全部 {{count}} 項",
+      "showAllRows": "顯示全部 {{count}} 項",
+      "showFewerRows": "收合"
+    },
+    "export": {
+      "redactPaths": "遮蔽路徑",
+      "redactPathsHelp": "複製 Markdown 時替換專案與檔案路徑。",
+      "redactedPath": "[已遮蔽路徑]"
+    },
+    "coverage": {
+      "complete": "資料完整",
+      "partial": "部分資料可用",
+      "minimal": "僅基礎資料",
+      "partialNotice": "部分指標沒有被目前工作階段或服務商回報。懸浮帶虛線底線的數值可查看具體原因。"
+    },
+    "toolCategories": {
+      "git": "Git",
+      "shell": "Shell",
+      "file": "檔案",
+      "other": "其他"
+    },
+    "fileScopes": {
+      "snapshot_summary": "快照彙總",
+      "tool_inputs_only": "僅工具輸入",
+      "unavailable": "未追蹤"
+    },
+    "accounting": {
+      "approximate": "近似",
+      "exact": "精確",
+      "unavailable": "未回報"
+    },
+    "status": {
+      "timingNotRecorded": "未記錄耗時",
+      "cacheNotReported": "未回報快取",
+      "noFileChanges": "無檔案變更",
+      "notRecorded": "未記錄",
+      "modelNotRecorded": "未記錄模型名稱",
+      "legacyModel": "舊會話模型未統計",
+      "inferredModel": "{{model}}（推測）",
+      "p95SampleInsufficient": "樣本不足"
+    },
+    "cacheCoverage": {
+      "available": "已回報",
+      "partial": "部分回報",
+      "unavailable": "未回報"
+    },
+    "card": {
+      "heading": "會話統計",
+      "turns": "{{count}} 輪",
+      "calls": "{{count}} 次呼叫",
+      "operations": "{{count}} 次操作",
+      "tokens": "{{value}} Tokens"
+    },
+    "loading": {
+      "markdown": "正在產生用量報告...",
+      "title": "正在產生用量報告",
+      "description": "正在讀取本機工作階段記錄，並整理隱私安全的統計摘要。",
+      "steps": {
+        "collecting": "讀取工作階段記錄",
+        "tokens": "彙總 Token 和工具活動",
+        "safety": "檢查可安全顯示的欄位"
+      }
+    },
+    "metrics": {
+      "wall": "工作階段跨度",
+      "active": "已記錄回合耗時",
+      "modelTime": "模型回合耗時",
+      "toolTime": "工具呼叫耗時",
+      "tokens": "Tokens",
+      "cached": "快取",
+      "files": "檔案",
+      "errors": "錯誤",
+      "errorRate": "錯誤率"
+    },
+    "sections": {
+      "models": "模型",
+      "tools": "工具",
+      "files": "檔案",
+      "slowest": "最慢耗時"
+    },
+    "empty": {
+      "models": "暫無模型指標",
+      "tools": "暫無工具指標",
+      "files": "無檔案變更",
+      "errors": "暫無錯誤範例",
+      "modelsDescription": "當模型呼叫上報 Token 用量後，這裡會顯示模型統計。",
+      "toolsDescription": "當工作階段執行工具後，這裡會顯示工具呼叫統計。",
+      "filesDescription": "目前工作階段沒有找到檔案編輯記錄。",
+      "errorsDescription": "本次報告沒有記錄到可顯示的工具或模型錯誤範例。",
+      "slowest": "無慢耗時記錄",
+      "slowestDescription": "沒有記錄到帶耗時的回合、模型呼叫或工具片段。"
+    },
+    "runtime": {
+      "open": "產生工作階段用量",
+      "button": "用量",
+      "tooltip": "在目前聊天中產生用量報告"
+    },
+    "panel": {
+      "tabsLabel": "用量報告分區",
+      "accounting": "計量方式",
+      "turnScope": "範圍",
+      "cacheCoverage": "快取統計",
+      "compressions": "壓縮次數",
+      "fileScope": "檔案範圍",
+      "toolErrors": "工具錯誤",
+      "modelErrors": "模型錯誤",
+      "errorScope": "錯誤範圍",
+      "metadataLabel": "用量報告中繼資訊"
+    },
+    "privacy": {
+      "title": "隱私安全報告",
+      "summary": "不包含提示詞、工具輸入、命令輸出或檔案內容。"
+    },
+    "tabs": {
+      "overview": "總覽",
+      "models": "模型",
+      "tools": "工具",
+      "files": "檔案",
+      "errors": "錯誤",
+      "slowest": "慢耗時"
+    },
+    "table": {
+      "model": "模型",
+      "tool": "工具",
+      "category": "類別",
+      "calls": "呼叫",
+      "success": "成功",
+      "errors": "錯誤",
+      "input": "輸入",
+      "output": "輸出",
+      "cached": "快取",
+      "duration": "記錄耗時",
+      "p95": "P95",
+      "execution": "執行",
+      "toolDuration": "總耗時",
+      "toolP95Duration": "P95 總耗時",
+      "toolExecutionDuration": "執行耗時",
+      "file": "檔案",
+      "operations": "操作",
+      "added": "新增",
+      "deleted": "刪除",
+      "turns": "輪次",
+      "operationIds": "操作 ID",
+      "actions": "操作",
+      "label": "標籤",
+      "count": "次數",
+      "kind": "類型",
+      "rowLimitSummary": "正在顯示 {{visible}} / {{total}} 列",
+      "showAllRows": "顯示全部 {{count}} 列",
+      "showFewerRows": "顯示前 {{count}} 列"
+    },
+    "slowestKinds": {
+      "model": "模型呼叫",
+      "modelCall": "模型呼叫",
+      "tool": "工具",
+      "turn": "回合"
+    },
+    "slowestLabels": {
+      "modelCall": "第 {{turn}} 回合模型呼叫",
+      "modelCallUnknown": "模型呼叫"
+    },
+    "help": {
+      "wall": "從第一回合開始到最後一回合結束的記錄跨度，可能包含回合之間的閒置間隔。",
+      "active": "產生可統計活動的回合記錄時間段聯集，可能包含回合內的編排或等待時間。",
+      "timeShare": "占已記錄回合耗時的比例。模型與工具耗時可能重疊，因此僅作為近似參考。",
+      "modelRoundTime": "基於工作階段中保存的模型回合執行期中繼資料或起止時間計算，不等同於純服務商串流輸出或吞吐耗時；占比按已記錄回合耗時近似計算。",
+      "toolTime": "基於已記錄工具呼叫耗時計算；占比按已記錄回合耗時近似計算。",
+      "cachedTokens": "目前服務商沒有為這個工作階段回報快取讀取 Token 中繼資料；可用時仍會顯示總 Token。",
+      "cachedTokensPartial": "只有部分呼叫回報了快取讀取 Token 中繼資料，因此快取 Token 合計只涵蓋這些呼叫。",
+      "toolDuration": "目前報告範圍內該工具名稱的總記錄耗時，可能包含排隊、預檢查、確認等待和實際執行。",
+      "toolP95": "該工具總耗時的 95 分位值；同一工具至少有兩次帶耗時呼叫後才會顯示。",
+      "toolExecution": "扣除排隊、預檢查和確認等待後的工具執行階段耗時。舊工作階段可能沒有這個欄位。",
+      "legacyModel": "這個工作階段建立時尚未記錄逐回合模型名稱，因此報告無法確認精確模型。",
+      "inferredModel": "舊工作階段缺少逐回合模型名稱，已根據工作階段的模型設定推測。",
+      "filesUnavailable": "目前工作階段沒有找到本機快照或可識別的檔案編輯工具記錄。",
+      "filesNoRecordedChanges": "BitFun 沒有偵測到目前工作階段中的檔案變更。如果本次工作階段沒有編輯檔案，這是正常狀態。",
+      "filesRemoteUnavailable": "沒有找到這個遠端工作階段的快照彙總；如果工具記錄能識別到寫入、編輯或刪除檔案，仍會顯示檔案列。",
+      "filesNotTracked": "目前工作階段沒有找到本機快照或可識別的檔案編輯工具記錄。",
+      "fileTurnIndexes": "當檔案活動來自彙總而不是逐回合操作記錄時，不會記錄回合。",
+      "fileOperationIds": "當報告無法關聯到具體工具操作時，不會記錄操作 ID。",
+      "fileDiffUnavailable": "Diff 連結需要基於快照的檔案列和可見檔案路徑。",
+      "errors": "統計結束為錯誤狀態的模型回合，以及持久化結果標記為未成功的工具呼叫；不包含原始服務商回應、工具輸入或命令輸出。",
+      "toolErrors": "工具錯誤統計持久化結果標記為未成功的工具呼叫。",
+      "modelErrors": "模型錯誤統計最終進入錯誤狀態的對話回合。",
+      "errorExamples": "範例只按安全標籤分組；原始服務商回應、工具輸入和命令輸出不會進入報告。",
+      "errorExampleRow": "模型/執行期錯誤或失敗工具類型的安全分組標籤。",
+      "errorExampleCount": "目前報告範圍內符合該標籤的錯誤次數。",
+      "slowestSpans": "慢耗時來自已記錄的回合、模型呼叫與工具時間戳，用於定位耗時來源，不代表精確服務商延遲。",
+      "slowestModelCall": "該列是目前回合內的一次模型呼叫。模型：{{model}}。"
+    },
+    "meta": {
+      "generatedAt": "產生時間",
+      "sessionId": "工作階段 ID",
+      "workspacePath": "專案路徑"
+    }
+  },
   "agentCompanion": {
     "activity": {
       "starting": "啟動中",
@@ -128,6 +347,15 @@
     "copyToolInput": "複製工具輸入",
     "copyToolOutput": "複製工具輸出"
   },
+  "widgetContextMenu": {
+    "addToInput": "把選中元素加入輸入框",
+    "addedToInput": "已將選中元素加入輸入框",
+    "unknownElement": "元素",
+    "displayText": "UI：{{summary}}",
+    "promptSelected": "選中的生成式 UI 元素：{{summary}}。",
+    "promptSection": "所屬區域：{{section}}。",
+    "promptFile": "關聯文件：{{file}}{{line}}。"
+  },
   "input": {
     "placeholder": "有什麼可以幫您...",
     "placeholderWithContext": "輸入消息，或拖放文件添加上下文...",
@@ -151,6 +379,9 @@
     "openWorkspaceFolder": "打開工作區文件夾",
     "openWorkspaceFolderFailed": "打開工作區文件夾失敗：{{error}}",
     "spaceToActivate": "按<space>空格鍵</space>快速鍵入"
+  },
+  "workspaceStrip": {
+    "branchTooltipUnavailable": "非 Git 存放庫或目前無分支"
   },
   "context": {
     "title": "上下文",
@@ -180,16 +411,7 @@
     "temperature": "溫度",
     "maxTokens": "最大令牌數",
     "topP": "Top P",
-    "streaming": "流式輸出",
-    "autoMigrated": {
-      "title": "模型已自動切換",
-      "description": "當前會話先前使用的模型設定已不可用，系統已切換為自動選擇模型。",
-      "reasons": {
-        "modelUnavailableOnRestore": "這是恢復歷史會話時的自動處理，你可以繼續使用，或稍後重新指定模型。",
-        "modelReconciled": "模型設定剛發生調整，系統已為當前會話自動切換到可用模型。",
-        "fallback": "系統已為當前會話自動選擇可用模型。"
-      }
-    }
+    "streaming": "流式輸出"
   },
   "toolbar": {
     "newSession": "新建會話",
@@ -290,7 +512,13 @@
     },
     "openFolder": "打開文件夾…",
     "selectWorkspaceTitle": "選擇工作區目錄",
-    "switchWorkspaceFailed": "切換工作區失敗：{{error}}"
+    "switchWorkspaceFailed": "切換工作區失敗：{{error}}",
+    "usageAction": "工作階段用量",
+    "usageNoSession": "目前沒有可用於 /usage 的工作階段",
+    "usageCommandUsage": "請單獨輸入 /usage，不要附加其他內容。",
+    "usageBusy": "請等待目前工作階段閒置後再使用 /usage。",
+    "usageNoWorkspace": "產生用量報告需要先開啟一個專案。",
+    "usageFailed": "用量報告產生失敗"
   },
   "planner": {
     "title": "任務規劃",
@@ -377,16 +605,24 @@
         "short": "深審",
         "title": "深度審核",
         "origin": "審核來源"
+      },
+      "miniapp": {
+        "short": "小應用",
+        "title": "小應用編輯",
+        "origin": "小應用"
       }
     }
   },
   "deepReviewActionBar": {
+    "reviewRunningDeep": "深度審核進行中...",
+    "reviewRunningStandard": "審核進行中...",
     "reviewCompleted": "深度審核已完成",
     "fixRunning": "正在修復...",
     "fixCompleted": "修復完成",
     "fixFailed": "修復失敗",
     "fixTimeout": "修復超時",
     "fixInterrupted": "修復已中斷，還剩 {{count}} 項。",
+    "reviewWaitingCapacity": "審核佇列等待中",
     "continueFix": "繼續修復 {{count}} 項",
     "skipRemaining": "跳過剩餘項",
     "reviewError": "審核出錯",
@@ -394,9 +630,11 @@
     "close": "關閉",
     "minimize": "收起",
     "restore": "打開 {{label}}",
-    "fixAndReviewRunning": "正在修復\u0026準備重審...",
+    "fixAndReviewRunning": "正在修復&準備重審...",
     "minimizedDeep": "深度審核",
     "minimizedStandard": "程式碼審核",
+    "minimizedReviewRunningDeep": "深度審核進行中",
+    "minimizedReviewRunningStandard": "程式碼審核進行中",
     "minimizedFix": "正在修復",
     "minimizedFixReview": "修復並重審中",
     "minimizedFixCompleted": "修復完成",
@@ -406,8 +644,26 @@
     "showCustomInput": "補充說明",
     "hideCustomInput": "收起說明",
     "customInstructionsPlaceholder": "描述修復的額外要求或上下文信息...",
+    "remediationStatus": {
+      "fixing": "修復中",
+      "fixed": "已修復"
+    },
+    "decisionGate": {
+      "title": "修復前確認待決策項",
+      "description": "請先選擇每個待決策項的處理方案，BitFun 會依你的選擇開始修改。",
+      "supplementLabel": "補充要求",
+      "supplementPlaceholder": "可選：補充限制、範圍邊界或實作偏好。",
+      "missingSelection": "開始前需要先為每個待決策項選擇一個方案。",
+      "noOptionsHint": "該項沒有結構化選項。只有在確認依目前計畫執行時再繼續。",
+      "confirmFix": "確認並開始",
+      "confirmFixAndReview": "確認並重審",
+      "cancel": "返回選擇"
+    },
     "fillBackInput": "填入輸入框",
     "fillBackInputHint": "將選中的修復計劃填入輸入框，供手動編輯",
+    "retryIncompleteSlices": "重試未完成切片（{{count}}）",
+    "retryIncompleteRequestDisplay": "重試 {{count}} 個未完成的 Deep Review 切片",
+    "retryIncompleteFailed": "無法重試未完成的 Deep Review 切片。",
     "fixCompletedMessage": "所有修復已成功應用。",
     "replaceInputConfirmTitle": "替換當前輸入？",
     "replaceInputConfirmMessage": "輸入框中已有文本，填入計劃將替換當前草稿內容。",
@@ -424,6 +680,7 @@
     "resumeRequestDisplay": "繼續中斷的深度審核",
     "resumeFailedMessage": "無法繼續深度審核。請檢查模型設置，或稍後重試。",
     "openModelSettings": "打開模型設置",
+    "switchModel": "切換模型",
     "copyDiagnostics": "複製診斷信息",
     "diagnosticsCopied": "診斷信息已複製",
     "diagnosticsCopyFailed": "複製診斷信息失敗",
@@ -436,21 +693,74 @@
     "resumeBlockedWithReason": "無法繼續：{{reason}}",
     "resumeFailedWithReason": "繼續失敗：{{reason}}",
     "reviewErrorWithReason": "審核出錯：{{reason}}",
-    "retryResume": "重試",
-    "retryWithDifferentModel": "嘗試其他模型",
     "viewPartialResults": "查看部分結果",
     "hidePartialResults": "隱藏部分結果",
+    "progressHandled": "{{handled}}/{{total}} 已處理",
+    "progressResumePreserved": "{{preserved}}/{{total}} 已保留，繼續剩餘審核",
     "partialResultsDescription": "{{completed}}/{{total}} 個 reviewer 已完成",
     "partialIssues": "發現 {{count}} 個問題",
     "partialRemediationItems": "{{count}} 個修復項",
+    "partialReviewerSummaries": "{{count}} 條審核員摘要",
     "contextOverflowTitle": "上下文超出限制，請選擇處理方式：",
     "longRunningHint": "審核仍在進行中，可能需要更長時間...",
     "elapsedTime": "已運行 {{time}}",
-    "showRecoveryPlan": "顯示恢復計劃",
-    "hideRecoveryPlan": "隱藏恢復計劃",
     "recoveryPreserve": "{{count}} 個已完成的 reviewer 將保留",
     "recoveryRerun": "{{count}} 個 reviewer 將重新運行",
     "recoverySkip": "{{count}} 個 reviewer 將被跳過",
+    "manualCancel": {
+      "title": "審核已停止",
+      "description": "你已停止本次深度審核。已完成的審核員結果會保留，可在準備好後繼續剩餘審核。"
+    },
+    "resultRecovery": {
+      "title": "深度審核需要補全結果",
+      "missingSubmitCodeReview": "審核已結束，但 BitFun 沒有收到可確認的結構化結果。繼續會保留已完成的審核員結果，並要求 agent 補交缺失的審核報告。",
+      "invalidSubmitCodeReview": "審核回傳了 BitFun 無法讀取的結果。繼續會保留已完成的審核員結果，並要求 agent 修復報告。",
+      "wrongReviewMode": "審核回傳了標準程式碼審核結果。繼續會保留已完成的審核員結果，並要求 agent 提交深度審核報告。"
+    },
+    "capacityQueue": {
+      "title": "審核員正在等待容量",
+      "pausedTitle": "佇列已暫停",
+      "activeReviewerTitle": "等待執行中的審核員",
+      "providerTitle": "等待模型容量",
+      "detail": "排隊等待時間不會計入審核員執行時長。",
+      "activeReviewerDetail": "排隊審核員會在執行中的審核員釋放容量後繼續啟動。排隊等待時間不會計入審核員執行時長。",
+      "longLaunchBatchWaitDetail": "該審核員等待時間已超過設定的佇列窗口，因為前一批審核員仍在執行。你可以繼續等待、暫停佇列、取消排隊審核員，或開啟審核設定。",
+      "providerDetail": "BitFun 正在等待暫時模型容量恢復。這裡的等待不會計入審核員執行時長。",
+      "reason": "原因：{{reason}}",
+      "elapsed": "已等待 {{elapsed}}",
+      "elapsedWithMax": "已等待 {{elapsed}} / {{max}}",
+      "activeReviewerCount": "執行中的審核員：{{count}}",
+      "reasons": {
+        "providerRateLimit": "模型服務限速",
+        "providerConcurrencyLimit": "模型服務並發限制",
+        "retryAfter": "模型服務要求稍後重試",
+        "localConcurrencyCap": "本地審核員容量",
+        "launchBatchBlocked": "前一啟動批次仍在執行",
+        "temporaryOverload": "模型服務暫時過載"
+      },
+      "reasonDetails": {
+        "providerRateLimit": "模型服務正在限速。BitFun 會排隊等待，並在容量恢復後繼續。",
+        "providerConcurrencyLimit": "模型服務拒絕了新的並發審核員。BitFun 會在容量恢復後重試。",
+        "retryAfter": "模型服務要求稍後重試。這裡的等待不會消耗審核員執行時間。",
+        "localConcurrencyCap": "目前 Review Team 審核員並行上限已滿。已有審核員完成後，該審核員會繼續啟動。",
+        "launchBatchBlocked": "前一啟動批次仍在執行。等待可以保持計畫中的審核順序，避免後續批次提前執行。",
+        "temporaryOverload": "模型服務回報暫時過載。BitFun 會排隊等待，然後繼續或將該審核員標記為容量略過。"
+      },
+      "sessionBusy": "目前會話較忙，可暫停 Deep Review 或稍後繼續。",
+      "stopHint": "可使用停止按鈕中斷目前審核佇列。",
+      "waitingReviewersTitle": "等待中的審核員",
+      "reviewerStatusQueued": "等待中",
+      "reviewerStatusPaused": "已暫停",
+      "optionalReviewer": "選用",
+      "pauseQueue": "暫停佇列",
+      "continueQueue": "繼續佇列",
+      "cancelQueued": "取消排隊審核員",
+      "skipOptionalQueued": "略過選用擴充",
+      "openReviewSettings": "開啟審核設定",
+      "controlFailed": "佇列控制不可用，因為該審核員缺少會話、輪次或工具識別碼。可使用停止按鈕中斷審核，或等待佇列狀態重新整理後再試。",
+      "controlFailedWithReason": "佇列控制失敗：{{reason}}。請重試；如果佇列卡住，可以使用停止來中斷審核。",
+      "controlPartiallyFailedWithReason": "佇列控制已部分生效；{{total}} 位審核員中有 {{failed}} 位失敗：{{reason}}。請等待佇列狀態重新整理後重試；如果佇列卡住，可以使用停止來中斷審核。"
+    },
     "degradation": {
       "reduceReviewers": "僅運行核心 reviewer",
       "reduceReviewersDesc": "跳過額外 reviewer，只保留核心 reviewer",
@@ -481,17 +791,106 @@
     "windowTitle": "深度審核",
     "eyebrow": "程式碼審核團隊",
     "title": "開始深度審核？",
-    "body": "深度審核會啟動並行程式碼審核團隊，通常比普通審核耗時更久，也會消耗更多 Token。",
-    "readonlyLabel": "首次只讀",
-    "readonly": "首次審核默認只讀：它會先輸出問題和修復計劃，不會直接修改代碼。",
-    "costLabel": "Token 消耗更高",
-    "cost": "預期消耗：多個審核角色加質量門禁，運行時間和 Token 可能達到普通審核的數倍。",
-    "timeLabel": "耗時更久",
-    "time": "運行期間可以繼續工作；只有整個深度審核在後台完成時才會通知你。",
+    "body": "深度審核會啟動多個審核員，預計會消耗更多 Token，耗時也更久。",
+    "readonlyLabel": "唯讀",
+    "readonly": "修復需確認。",
+    "sessionConcurrencyTitle": "目前會話較忙",
+    "sessionConcurrencyBody": "目標會話已有 {{count}} 個 subagent 任務在執行。可選擇更輕量策略、暫時取消，或在容量空閒後手動繼續。",
+    "costLabel": "Token",
+    "cost": "審核員 + 質檢。",
+    "timeLabel": "耗時",
+    "time": "背景執行。",
     "dontShowAgain": "下次不再提示",
     "cancel": "取消",
     "confirm": "開始深度審核",
-    "estimatedTokens": "預計消耗：{{min}} - {{max}} tokens"
+    "estimatedTokens": "預計消耗：{{min}} - {{max}} tokens",
+    "runStrategy": "運行策略：{{strategy}}",
+    "recommendedStrategy": "推薦策略：{{strategy}}",
+    "reviewDepth": "審查深度：{{depth}}",
+    "reviewDepthLabels": {
+      "high_risk_only": "僅高風險",
+      "risk_expanded": "風險擴展",
+      "full_depth": "完整深度"
+    },
+    "recommendationTitle": "風險推薦",
+    "strategyOverrideTitle": "運行策略",
+    "strategyOverrideBody": "快速更窄，深度覆蓋更多。",
+    "selectedStrategy": "已選擇",
+    "teamDefaultStrategyBody": "本次啟動使用 {{strategy}}。",
+    "strategyTokenImpact": "Token：{{tokenImpact}}",
+    "strategyRuntimeImpact": "耗時：{{runtimeImpact}}",
+    "teamDefaultStrategy": "團隊預設",
+    "strategyLabels": {
+      "quick": "快速",
+      "normal": "標準",
+      "deep": "深度"
+    },
+    "strategySummaries": {
+      "quick": "快速會保留與目標匹配的內建審核員，跳過使用者額外加入的專家，並報告覆蓋收窄。",
+      "normal": "標準適合慢速模型下的日常審核；限制可選擴張，大範圍改動優先使用摘要式覆蓋。",
+      "deep": "面向範圍較大或風險較高的改動，允許更長耗時和拆分覆蓋。"
+    },
+    "selectedStrategyFootnote": "已選：Token {{tokenImpact}}，耗時 {{runtimeImpact}}。",
+    "lineupTitle": "審核陣容",
+    "summaryTitle": "啟動摘要",
+    "targetFiles": "{{count}} 個檔案",
+    "targetFiles_one": "{{count}} 個檔案",
+    "targetFiles_other": "{{count}} 個檔案",
+    "targetRiskTags": "風險區域：{{tags}}",
+    "targetTagsWithMore": "{{tags}}，另有 {{count}} 個",
+    "targetTagsWithMore_one": "{{tags}}，另有 {{count}} 個",
+    "targetTagsWithMore_other": "{{tags}}，另有 {{count}} 個",
+    "optionalReviewers": "{{count}} 個額外專家",
+    "optionalReviewers_one": "{{count}} 個額外專家",
+    "optionalReviewers_other": "{{count}} 個額外專家",
+    "summaryFirstReview": "先摘要再覆蓋",
+    "targetTagLabels": {
+      "frontendUi": "前端 UI",
+      "frontendStyle": "前端樣式",
+      "frontendI18n": "前端國際化",
+      "frontendContract": "前端契約",
+      "desktopContract": "桌面契約",
+      "webServerContract": "Web 服務契約",
+      "backendCore": "後端核心",
+      "transport": "傳輸層",
+      "apiLayer": "API 層",
+      "aiAdapter": "AI 介接器",
+      "installerUi": "安裝器 UI",
+      "test": "測試",
+      "docs": "文件",
+      "config": "設定",
+      "generatedOrLock": "生成檔或鎖定檔",
+      "unknown": "未知區域"
+    },
+    "estimatedCalls": "{{count}} 次審核調用",
+    "estimatedCalls_one": "{{count}} 次審核調用",
+    "estimatedCalls_other": "{{count}} 次審核調用",
+    "activeReviewers": "{{count}} 個已啟用",
+    "activeReviewers_one": "{{count}} 個已啟用",
+    "activeReviewers_other": "{{count}} 個已啟用",
+    "skippedReviewers": "{{count}} 個已跳過",
+    "skippedReviewers_one": "{{count}} 個已跳過",
+    "skippedReviewers_other": "{{count}} 個已跳過",
+    "skippedMore": "另有 {{count}} 個",
+    "skippedMore_one": "另有 {{count}} 個",
+    "skippedMore_other": "另有 {{count}} 個",
+    "activeGroupTitle": "將運行",
+    "skippedGroupTitle": "已跳過的審核者",
+    "skippedReasons": {
+      "notApplicable": "不適用於本次目標",
+      "budgetLimited": "受 Token 預算限制",
+      "invalidTooling": "設定問題",
+      "disabled": "已停用",
+      "unavailable": "不可用",
+      "skipped": "已跳過"
+    },
+    "targetSource": {
+      "manualPrompt": "給定內容",
+      "workspaceDiff": "工作區改動",
+      "gitRef": "Git 引用",
+      "selectedContext": "已選上下文",
+      "reviewTarget": "審核目標"
+    }
   },
   "flowChatHeader": {
     "turnList": "輪次列表",
@@ -516,10 +915,17 @@
   },
   "sessionFilesBadge": {
     "files": "文件",
+    "filesSummaryCount": "{{count}} 個文件",
+    "expandChangeListCue": "展開列表",
+    "expandChangeListAriaCue": "展開查看文件列表",
+    "collapseFileDiffList": "收起文件變更列表",
     "reviewLabel": "審核",
     "reviewAll": "全部審核",
     "reviewMenuLabel": "審核",
     "reviewMenuHint": "選擇審核深度",
+    "actionsMenuHint": "快捷動作",
+    "actionsButton": "動作",
+    "actionsButtonRunning": "進行中…",
     "reviewModeStandard": "普通審核",
     "reviewModeDeep": "深度審核",
     "reviewRunningStandard": "審核中",
@@ -597,11 +1003,26 @@
     "searchCount_one": "進行了 {{count}} 次搜索",
     "searchCount_other": "進行了 {{count}} 次搜索",
     "searchCount": "進行了 {{count}} 次搜索",
+    "commandCount_one": "執行了 {{count}} 個命令",
+    "commandCount_other": "執行了 {{count}} 個命令",
+    "commandCount": "執行了 {{count}} 個命令",
     "exploreCount_one": "執行了 {{count}} 次探索",
     "exploreCount_other": "執行了 {{count}} 次探索",
     "exploreCount": "執行了 {{count}} 次探索",
     "separator": "，",
     "collapse": "收起探索過程"
+  },
+  "terminalRegion": {
+    "executedCommands_one": "執行了 {{count}} 個命令",
+    "executedCommands_other": "執行了 {{count}} 個命令",
+    "executedCommands": "執行了 {{count}} 個命令",
+    "allSuccess": "全部成功",
+    "partialSuccess": "{{success}} 個成功，{{failed}} 個失敗",
+    "withRunning": "{{success}} 個成功，{{running}} 個運行中",
+    "withCancelled": "{{success}} 個成功，{{cancelled}} 個已取消",
+    "mixedStatus": "{{success}} 個成功，{{failed}} 個失敗，{{running}} 個運行中",
+    "separator": "，",
+    "collapse": "收起命令列表"
   },
   "toolCards": {
     "file": {
@@ -625,6 +1046,27 @@
       "gettingDiff": "獲取差異",
       "preparing": "準備獲取差異",
       "failed": "獲取差異失敗"
+    },
+    "generativeUI": {
+      "action": "生成式 UI",
+      "streamingPreview": "預覽流式生成中",
+      "openSource": "打開源碼",
+      "renderFailed": "組件渲染失敗。",
+      "waitingForContent": "等待組件內容中...",
+      "saving": "保存中",
+      "unsaved": "有未保存改動",
+      "saveFailed": "保存失敗",
+      "savedToSession": "已保存到會話",
+      "saveError": "保存組件源碼失敗",
+      "saveNow": "立即保存",
+      "reset": "重置",
+      "source": "源碼",
+      "empty": "暫無組件內容。",
+      "workspaceUnavailable": "當前會話沒有可用工作區，無法保存生成式 UI 源碼",
+      "openSourceFailed": "打開生成式 UI 源碼編輯器失敗"
+    },
+    "generativeWidget": {
+      "exportFileNamePrefix": "BitFun組件"
     },
     "git": {
       "title": "Git",
@@ -799,6 +1241,9 @@
     },
     "taskTool": {
       "headerLine": "{{agentType}} 智能體：{{description}}",
+      "headerLineWithModel": "{{agentType}} 智能體（{{modelName}}）：{{description}}",
+      "headerLinePrefix": "{{agentType}} 智能體",
+      "headerLineSuffix": "：{{description}}",
       "defaultAgentKind": "子代理",
       "waitingConfirm": "等待確認",
       "executing": "執行中...",
@@ -818,13 +1263,13 @@
       "statusLabel": "狀態",
       "promptLabel": "任務提示詞",
       "reviewerContextLabel": "審核員",
+      "stopSubagent": "中止此 subagent",
+      "stoppingSubagent": "正在中止 subagent...",
+      "stopSubagentFailed": "中止此 subagent 失敗。",
+      "stopSubagentHint": "只會取消目前審核員/subagent，父級深度審核可繼續執行並生成彙總。",
       "errorLabel": "錯誤信息",
       "resultLabel": "執行結果",
       "noData": "無法加載任務數據",
-      "stopSubagentFailed": "無法停止該子代理。",
-      "stoppingSubagent": "正在停止子代理……",
-      "stopSubagent": "停止子代理",
-      "stopSubagentHint": "僅取消此審查員/子代理。父級審查仍可繼續並生成摘要。",
       "executionContent": "執行內容",
       "duration": "耗時",
       "waitingForModelResponse": "等待模型回應...",
@@ -840,13 +1285,12 @@
       "disableLabel": "關閉",
       "enableTooltip": "恢復超時限制",
       "enableLabel": "啟用",
-      "restoreShort": "恢復（剩餘 {{seconds}} 秒）"
-    },
-    "diagram": {
-      "interactive": "交互圖表:",
-      "preparing": "準備中",
-      "creating": "創建中",
-      "mermaidInteractive": "Mermaid 交互圖表"
+      "restoreShort": "恢復（剩餘 {{seconds}} 秒）",
+      "durationTooltip": "耗時 {{duration}}",
+      "completedDurationTooltip": "已完成，耗時 {{duration}}",
+      "failedDurationTooltip": "執行失敗，耗時 {{duration}}",
+      "failedDurationTooltipWithReason": "執行失敗，耗時 {{duration}}：{{reason}}",
+      "cancelledDurationTooltip": "已取消，耗時 {{duration}}"
     },
     "template": {
       "get": "獲取模板:",
@@ -881,6 +1325,13 @@
       "failedLabel": "MCP 失敗",
       "executionFailed": "MCP 執行失敗"
     },
+    "acpPermission": {
+      "allowOnce": "允許一次",
+      "allowAlways": "始終允許",
+      "reject": "拒絕一次",
+      "rejectAlways": "始終拒絕",
+      "selectOption": "選擇操作"
+    },
     "default": {
       "waitingConfirm": "等待確認",
       "executing": "執行中...",
@@ -901,6 +1352,7 @@
       "parsingParams": "解析參數中...",
       "noFileSpecified": "未指定文件",
       "readFile": "讀取文件",
+      "permissionRequest": "請求讀取權限：",
       "readingFile": "正在讀取",
       "preparingRead": "準備讀取"
     },
@@ -1135,7 +1587,7 @@
         "high": "高",
         "medium": "中",
         "low": "低",
-        "info": "資訊"
+        "info": "信息"
       },
       "reviewerStatuses": {
         "completed": "已完成",
@@ -1148,8 +1600,65 @@
         "partial": "部分完成",
         "unknown": "未知"
       },
+      "runManifest": {
+        "recommendedStrategy": "推薦策略",
+        "riskRecommendationTitle": "風險推薦",
+        "reviewDepth": "審查深度",
+        "reviewDepthLabels": {
+          "high_risk_only": "僅高風險",
+          "risk_expanded": "風險擴展",
+          "full_depth": "完整深度"
+        }
+      },
       "sectionItemCount": "{{count}} 項",
       "remediationPlan": "修復計劃",
+      "reliabilityStatus": {
+        "title": "審核狀態",
+        "context_pressure": {
+          "label": "上下文壓力上升",
+          "detail": "大型或受限目標預計會呼叫 {{count}} 次審核者。"
+        },
+        "compression_preserved": {
+          "label": "壓縮已保留關鍵事實",
+          "detail": "覆蓋說明包含壓縮保留下來的上下文。"
+        },
+        "cache_hit": {
+          "label": "增量快取重用了審核結果",
+          "detail": "{{count}} 個審核包重用了相符的快取輸出。"
+        },
+        "cache_miss": {
+          "label": "增量快取未命中或已刷新",
+          "detail": "{{count}} 個審核包重新執行或刷新了過期快取。"
+        },
+        "concurrency_limited": {
+          "label": "審核員啟動受到並行限制",
+          "detail": "{{count}} 次審核員啟動觸發了並行上限。"
+        },
+        "partial_reviewer": {
+          "label": "審核者傳回了部分結果",
+          "detail": "{{count}} 個審核者結果是部分結果，信心已降低。"
+        },
+        "reduced_scope": {
+          "label": "降深度覆蓋",
+          "detail": "本次審核使用了降深度範圍設定。"
+        },
+        "retry_guidance": {
+          "label": "已給出重試指引",
+          "detail": "{{count}} 條重試指引用於補足部分審核覆蓋。"
+        },
+        "skipped_reviewers": {
+          "label": "已略過的審核員",
+          "detail": "{{count}} 個審核員因適用性、設定或預算被略過。"
+        },
+        "token_budget_limited": {
+          "label": "Token 預算限制了審核覆蓋",
+          "detail": "{{count}} 個審核員因 Token 預算模式被略過。"
+        },
+        "user_decision": {
+          "label": "需要使用者決策",
+          "detail": "{{count}} 個審核項需要先決策再修復。"
+        }
+      },
       "sections": {
         "summary": "結論摘要",
         "issues": "問題列表",
@@ -1178,8 +1687,11 @@
         "noIssues": "沒有已驗證問題。",
         "status": "狀態",
         "findings": "問題數",
+        "packet": "分包",
+        "partialOutput": "部分輸出",
         "validation": "驗證說明",
         "source": "來源",
+        "reliabilitySignals": "審核可靠性",
         "noItems": "無。"
       },
       "export": {
@@ -1214,7 +1726,7 @@
         "noSelectionHint": "至少選擇一項修復計劃後才能開始修復。",
         "ungrouped": "其他",
         "startFix": "開始修復",
-        "fixAndReview": "修復\\u0026重審",
+        "fixAndReview": "修復&重審",
         "cancel": "取消",
         "fixUnavailable": "無法開始修復：審核會話不可用。",
         "fixRequestDisplay": "開始修復深度審核問題",
@@ -1234,13 +1746,6 @@
         "approve_with_suggestions": "有條件通過",
         "request_changes": "需要修改",
         "block": "阻止合併"
-      },
-      "severities": {
-        "critical": "嚴重",
-        "high": "高",
-        "medium": "中",
-        "low": "低",
-        "info": "信息"
       },
       "certainties": {
         "confirmed": "已確認",
@@ -1295,7 +1800,7 @@
     "openOne": "打開一個",
     "toStart": "開始吧。",
     "workingIn": "我們正在",
-    "project": "項目裡工作。",
+    "project": "工作。",
     "workingInCowork": "在",
     "gitClean": "一切乾淨，可以放手大幹了 ✦",
     "gitUnstaged": "{{count}} 個文件",
@@ -1307,7 +1812,6 @@
     "currentlyHas": "目前有",
     "commaSeparator": "，",
     "period": "。",
-    "project": "工作。",
     "projectCowork": "項目裡工作。"
   },
   "modelSelector": {
@@ -1422,5 +1926,33 @@
   "subagent": {
     "showingLines": "當前僅顯示 {{shown}} / {{total}} 行",
     "showAll": "顯示全部"
+  },
+  "pendingQueue": {
+    "title": "待發送 ({{count}})",
+    "hint": "當前對話結束後會按順序自動發送",
+    "editorHint": "⌘/Ctrl+Enter 儲存 · Esc 取消",
+    "emptyPlaceholder": "（空訊息）",
+    "statusSending": "正在引導…",
+    "statusFailed": "發送失敗 — 請編輯 / 立即發送 / 刪除以清除該項",
+    "actions": {
+      "edit": "編輯",
+      "sendNow": "立即發送（引導）",
+      "delete": "刪除",
+      "saveEdit": "儲存（⌘/Ctrl+Enter）",
+      "cancelEdit": "取消（Esc）"
+    },
+    "tooltip": {
+      "sendNow": "立即作為引導訊息插入當前對話"
+    },
+    "errors": {
+      "emptyContent": "訊息內容不能為空",
+      "sendNowFailed": "立即發送失敗，請稍後重試"
+    }
+  },
+  "steering": {
+    "title": "立即引導",
+    "injectedAt": "已在第 {{round}} 輪前插入",
+    "statusPending": "等待觸發",
+    "statusInjected": "已觸發"
   }
 }

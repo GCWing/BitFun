@@ -4,10 +4,19 @@ use crate::miniapp::compiler::compile;
 use crate::miniapp::permission_policy::resolve_policy;
 use crate::miniapp::storage::MiniAppStorage;
 use crate::miniapp::types::{
-    MiniApp, MiniAppAiContext, MiniAppMeta, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource,
+    MiniApp, MiniAppAiContext, MiniAppMeta, MiniAppPermissions, MiniAppSource,
 };
-use crate::util::errors::BitFunResult;
+use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_product_domains::miniapp::customization::{
+    diff_permissions, MiniAppAvailableBuiltinUpdate, MiniAppCustomizationMetadata,
+    MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind, MiniAppPermissionDiff,
+};
+use bitfun_product_domains::miniapp::lifecycle::{
+    build_deps_revision, build_runtime_state, build_source_revision, build_worker_revision,
+    ensure_runtime_state, workspace_dir_string,
+};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -34,6 +43,30 @@ pub struct MiniAppManager {
     granted_paths: RwLock<HashMap<String, Vec<PathBuf>>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppDraftManifest {
+    pub app_id: String,
+    pub draft_id: String,
+    pub source_version: u32,
+    pub status: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppDraft {
+    pub app_id: String,
+    pub draft_id: String,
+    pub source_version: u32,
+    pub status: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub draft_root: String,
+    pub app: MiniApp,
+}
+
 impl MiniAppManager {
     pub fn new(path_manager: Arc<crate::infrastructure::PathManager>) -> Self {
         let storage = MiniAppStorage::new(path_manager.clone());
@@ -44,61 +77,8 @@ impl MiniAppManager {
         }
     }
 
-    fn build_source_revision(version: u32, updated_at: i64) -> String {
-        format!("src:{version}:{updated_at}")
-    }
-
-    fn build_deps_revision(source: &MiniAppSource) -> String {
-        let mut deps: Vec<String> = source
-            .npm_dependencies
-            .iter()
-            .map(|dep| format!("{}@{}", dep.name, dep.version))
-            .collect();
-        deps.sort();
-        deps.join("|")
-    }
-
-    fn build_runtime_state(
-        version: u32,
-        updated_at: i64,
-        source: &MiniAppSource,
-        deps_dirty: bool,
-        worker_restart_required: bool,
-    ) -> MiniAppRuntimeState {
-        MiniAppRuntimeState {
-            source_revision: Self::build_source_revision(version, updated_at),
-            deps_revision: Self::build_deps_revision(source),
-            deps_dirty,
-            worker_restart_required,
-            ui_recompile_required: false,
-        }
-    }
-
-    fn ensure_runtime_state(app: &mut MiniApp) -> bool {
-        let mut changed = false;
-        if app.runtime.source_revision.is_empty() {
-            app.runtime.source_revision = Self::build_source_revision(app.version, app.updated_at);
-            changed = true;
-        }
-        let deps_revision = Self::build_deps_revision(&app.source);
-        if app.runtime.deps_revision != deps_revision {
-            app.runtime.deps_revision = deps_revision;
-            changed = true;
-        }
-        changed
-    }
-
     pub fn build_worker_revision(&self, app: &MiniApp, policy_json: &str) -> String {
-        format!(
-            "{}::{}::{}",
-            app.runtime.source_revision, app.runtime.deps_revision, policy_json
-        )
-    }
-
-    fn workspace_dir_string(workspace_root: Option<&Path>) -> String {
-        workspace_root
-            .map(|path| path.to_string_lossy().to_string())
-            .unwrap_or_default()
+        build_worker_revision(app, policy_json)
     }
 
     pub fn compile_source(
@@ -111,7 +91,29 @@ impl MiniAppManager {
     ) -> BitFunResult<String> {
         let app_data_dir = self.path_manager.miniapp_dir(app_id);
         let app_data_dir_str = app_data_dir.to_string_lossy().to_string();
-        let workspace_dir = Self::workspace_dir_string(workspace_root);
+        let workspace_dir = workspace_dir_string(workspace_root);
+
+        compile(
+            source,
+            permissions,
+            app_id,
+            &app_data_dir_str,
+            &workspace_dir,
+            theme,
+        )
+    }
+
+    fn compile_source_with_app_data_dir(
+        &self,
+        app_id: &str,
+        app_data_dir: &Path,
+        source: &MiniAppSource,
+        permissions: &MiniAppPermissions,
+        theme: &str,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<String> {
+        let app_data_dir_str = app_data_dir.to_string_lossy().to_string();
+        let workspace_dir = workspace_dir_string(workspace_root);
 
         compile(
             source,
@@ -139,7 +141,7 @@ impl MiniAppManager {
     /// Get full MiniApp by id.
     pub async fn get(&self, app_id: &str) -> BitFunResult<MiniApp> {
         let mut app = self.storage.load(app_id).await?;
-        if Self::ensure_runtime_state(&mut app) {
+        if ensure_runtime_state(&mut app) {
             self.storage.save(&app).await?;
         }
         Ok(app)
@@ -165,7 +167,7 @@ impl MiniAppManager {
         let compiled_html =
             self.compile_source(&id, &source, &permissions, "dark", workspace_root)?;
         let runtime =
-            Self::build_runtime_state(1, now, &source, !source.npm_dependencies.is_empty(), true);
+            build_runtime_state(1, now, &source, !source.npm_dependencies.is_empty(), true);
 
         let app = MiniApp {
             id: id.clone(),
@@ -246,16 +248,16 @@ impl MiniAppManager {
         )?;
         let deps_changed = previous_app.source.npm_dependencies != app.source.npm_dependencies;
         if source_changed || permissions_changed {
-            app.runtime.source_revision = Self::build_source_revision(app.version, app.updated_at);
+            app.runtime.source_revision = build_source_revision(app.version, app.updated_at);
             app.runtime.worker_restart_required = true;
         }
         if deps_changed {
-            app.runtime.deps_revision = Self::build_deps_revision(&app.source);
+            app.runtime.deps_revision = build_deps_revision(&app.source);
             app.runtime.deps_dirty = !app.source.npm_dependencies.is_empty();
             app.runtime.worker_restart_required = true;
         }
         app.runtime.ui_recompile_required = false;
-        Self::ensure_runtime_state(&mut app);
+        ensure_runtime_state(&mut app);
 
         self.storage
             .save_version(app_id, previous_app.version, &previous_app)
@@ -283,6 +285,19 @@ impl MiniAppManager {
         workspace_root: Option<&Path>,
     ) -> serde_json::Value {
         let app_data_dir = self.path_manager.miniapp_dir(app_id);
+        let gp = self.granted_paths.read().await;
+        let granted = gp.get(app_id).map(|v| v.as_slice()).unwrap_or(&[]);
+        resolve_policy(permissions, app_id, &app_data_dir, workspace_root, granted)
+    }
+
+    pub async fn resolve_policy_for_draft(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+        permissions: &MiniAppPermissions,
+        workspace_root: Option<&Path>,
+    ) -> serde_json::Value {
+        let app_data_dir = self.storage.draft_dir(app_id, draft_id);
         let gp = self.granted_paths.read().await;
         let granted = gp.get(app_id).map(|v| v.as_slice()).unwrap_or(&[]);
         resolve_policy(permissions, app_id, &app_data_dir, workspace_root, granted)
@@ -323,9 +338,336 @@ impl MiniAppManager {
         self.storage.save_app_storage(app_id, key, value).await
     }
 
+    pub async fn get_draft_storage(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+        key: &str,
+    ) -> BitFunResult<serde_json::Value> {
+        let storage = self.storage.load_draft_storage(app_id, draft_id).await?;
+        Ok(storage.get(key).cloned().unwrap_or(serde_json::Value::Null))
+    }
+
+    pub async fn set_draft_storage(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+        key: &str,
+        value: serde_json::Value,
+    ) -> BitFunResult<()> {
+        self.storage
+            .save_draft_storage(app_id, draft_id, key, value)
+            .await
+    }
+
+    pub async fn create_draft(
+        &self,
+        app_id: &str,
+        theme: &str,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<MiniAppDraft> {
+        let mut app = self.get(app_id).await?;
+        let now = Utc::now().timestamp_millis();
+        let draft_id = Uuid::new_v4().to_string();
+        app.updated_at = now;
+        app.compiled_html = self.compile_source_with_app_data_dir(
+            app_id,
+            &self.storage.draft_dir(app_id, &draft_id),
+            &app.source,
+            &app.permissions,
+            theme,
+            workspace_root,
+        )?;
+        ensure_runtime_state(&mut app);
+
+        let manifest = MiniAppDraftManifest {
+            app_id: app_id.to_string(),
+            draft_id,
+            source_version: app.version,
+            status: "draft".to_string(),
+            created_at: now,
+            updated_at: now,
+        };
+        self.save_draft_with_manifest(app_id, app, manifest).await
+    }
+
+    pub async fn get_draft(&self, app_id: &str, draft_id: &str) -> BitFunResult<MiniAppDraft> {
+        let app = self.storage.load_draft_app(app_id, draft_id).await?;
+        let manifest = self.load_draft_manifest(app_id, draft_id).await?;
+        Ok(self.build_draft_response(app_id, app, manifest))
+    }
+
+    pub async fn sync_draft_from_fs(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+        theme: &str,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<MiniAppDraft> {
+        let mut app = self.storage.load_draft_app(app_id, draft_id).await?;
+        let mut manifest = self.load_draft_manifest(app_id, draft_id).await?;
+        app.updated_at = Utc::now().timestamp_millis();
+        app.compiled_html = self.compile_source_with_app_data_dir(
+            app_id,
+            &self.storage.draft_dir(app_id, draft_id),
+            &app.source,
+            &app.permissions,
+            theme,
+            workspace_root,
+        )?;
+        app.runtime = build_runtime_state(
+            app.version,
+            app.updated_at,
+            &app.source,
+            !app.source.npm_dependencies.is_empty(),
+            true,
+        );
+        manifest.updated_at = app.updated_at;
+        self.save_draft_with_manifest(app_id, app, manifest).await
+    }
+
+    pub async fn set_draft_permissions(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+        permissions: MiniAppPermissions,
+        theme: &str,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<MiniAppDraft> {
+        let mut app = self.storage.load_draft_app(app_id, draft_id).await?;
+        let mut manifest = self.load_draft_manifest(app_id, draft_id).await?;
+        app.permissions = permissions;
+        app.updated_at = Utc::now().timestamp_millis();
+        app.compiled_html = self.compile_source_with_app_data_dir(
+            app_id,
+            &self.storage.draft_dir(app_id, draft_id),
+            &app.source,
+            &app.permissions,
+            theme,
+            workspace_root,
+        )?;
+        app.runtime = build_runtime_state(
+            app.version,
+            app.updated_at,
+            &app.source,
+            !app.source.npm_dependencies.is_empty(),
+            true,
+        );
+        manifest.updated_at = app.updated_at;
+        self.save_draft_with_manifest(app_id, app, manifest).await
+    }
+
+    pub async fn permission_diff_for_draft(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+    ) -> BitFunResult<MiniAppPermissionDiff> {
+        let active = self.get(app_id).await?;
+        let draft = self.storage.load_draft_app(app_id, draft_id).await?;
+        Ok(diff_permissions(&active.permissions, &draft.permissions))
+    }
+
+    pub async fn apply_draft(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+        theme: &str,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<MiniApp> {
+        let current = self.get(app_id).await?;
+        let draft = self.storage.load_draft_app(app_id, draft_id).await?;
+        let mut app = current.clone();
+        let now = Utc::now().timestamp_millis();
+
+        app.name = draft.name;
+        app.description = draft.description;
+        app.icon = draft.icon;
+        app.category = draft.category;
+        app.tags = draft.tags;
+        app.source = draft.source;
+        app.permissions = draft.permissions;
+        app.ai_context = draft.ai_context;
+        app.i18n = draft.i18n;
+        app.version = current.version + 1;
+        app.updated_at = now;
+        app.compiled_html =
+            self.compile_source(app_id, &app.source, &app.permissions, theme, workspace_root)?;
+        app.runtime = build_runtime_state(
+            app.version,
+            app.updated_at,
+            &app.source,
+            !app.source.npm_dependencies.is_empty(),
+            true,
+        );
+
+        self.storage
+            .save_version(app_id, current.version, &current)
+            .await?;
+        self.storage.save(&app).await?;
+        self.record_draft_applied(app_id, draft_id, now).await?;
+        Ok(app)
+    }
+
+    pub async fn discard_draft(&self, app_id: &str, draft_id: &str) -> BitFunResult<()> {
+        self.storage.delete_draft(app_id, draft_id).await
+    }
+
+    pub async fn mark_stale_drafts_for_cleanup(&self) -> BitFunResult<Vec<PathBuf>> {
+        self.storage.mark_stale_drafts_for_cleanup().await
+    }
+
+    pub async fn cleanup_marked_drafts(&self, targets: Vec<PathBuf>) -> BitFunResult<()> {
+        self.storage.cleanup_marked_drafts(targets).await
+    }
+
+    pub async fn load_customization_metadata(
+        &self,
+        app_id: &str,
+    ) -> BitFunResult<Option<MiniAppCustomizationMetadata>> {
+        self.storage.load_customization_metadata(app_id).await
+    }
+
+    pub async fn save_customization_metadata(
+        &self,
+        app_id: &str,
+        metadata: &MiniAppCustomizationMetadata,
+    ) -> BitFunResult<()> {
+        self.storage
+            .save_customization_metadata(app_id, metadata)
+            .await
+    }
+
+    pub fn draft_dir(&self, app_id: &str, draft_id: &str) -> PathBuf {
+        self.storage.draft_dir(app_id, draft_id)
+    }
+
+    fn build_draft_response(
+        &self,
+        app_id: &str,
+        app: MiniApp,
+        manifest: MiniAppDraftManifest,
+    ) -> MiniAppDraft {
+        let draft_id = manifest.draft_id;
+        let draft_root = self
+            .storage
+            .draft_dir(app_id, &draft_id)
+            .to_string_lossy()
+            .to_string();
+        MiniAppDraft {
+            app_id: manifest.app_id,
+            draft_id,
+            source_version: manifest.source_version,
+            status: manifest.status,
+            created_at: manifest.created_at,
+            updated_at: manifest.updated_at,
+            draft_root,
+            app,
+        }
+    }
+
+    async fn load_draft_manifest(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+    ) -> BitFunResult<MiniAppDraftManifest> {
+        let value = self.storage.load_draft_manifest(app_id, draft_id).await?;
+        serde_json::from_value(value)
+            .map_err(|e| BitFunError::parse(format!("Invalid draft manifest: {}", e)))
+    }
+
+    async fn save_draft_with_manifest(
+        &self,
+        app_id: &str,
+        app: MiniApp,
+        manifest: MiniAppDraftManifest,
+    ) -> BitFunResult<MiniAppDraft> {
+        let manifest_value = serde_json::to_value(&manifest).map_err(BitFunError::from)?;
+        self.storage
+            .save_draft(app_id, &manifest.draft_id, &app, &manifest_value)
+            .await?;
+        Ok(self.build_draft_response(app_id, app, manifest))
+    }
+
+    async fn record_draft_applied(
+        &self,
+        app_id: &str,
+        draft_id: &str,
+        now: i64,
+    ) -> BitFunResult<()> {
+        let mut metadata =
+            if let Some(existing) = self.storage.load_customization_metadata(app_id).await? {
+                existing
+            } else if let Some(builtin) = crate::miniapp::BUILTIN_APPS
+                .iter()
+                .find(|builtin| builtin.id == app_id)
+            {
+                MiniAppCustomizationMetadata {
+                    origin: MiniAppCustomizationOrigin {
+                        kind: MiniAppCustomizationOriginKind::Builtin,
+                        builtin_id: Some(builtin.id.to_string()),
+                        builtin_version: Some(builtin.version),
+                    },
+                    local_override: true,
+                    last_applied_draft_id: None,
+                    available_builtin_update: None,
+                    updated_at: now,
+                }
+            } else {
+                MiniAppCustomizationMetadata {
+                    origin: MiniAppCustomizationOrigin {
+                        kind: MiniAppCustomizationOriginKind::UserCreated,
+                        builtin_id: None,
+                        builtin_version: None,
+                    },
+                    local_override: false,
+                    last_applied_draft_id: None,
+                    available_builtin_update: None,
+                    updated_at: now,
+                }
+            };
+
+        if matches!(
+            metadata.origin.kind,
+            MiniAppCustomizationOriginKind::Builtin
+        ) {
+            metadata.local_override = true;
+            if let Some(builtin) = crate::miniapp::BUILTIN_APPS
+                .iter()
+                .find(|builtin| builtin.id == app_id)
+            {
+                metadata.origin.builtin_version = Some(builtin.version);
+                metadata.available_builtin_update = None;
+            }
+        }
+        metadata.last_applied_draft_id = Some(draft_id.to_string());
+        metadata.updated_at = now;
+        self.storage
+            .save_customization_metadata(app_id, &metadata)
+            .await
+    }
+
+    pub async fn mark_builtin_update_available(
+        &self,
+        app_id: &str,
+        builtin_version: u32,
+        detected_at: i64,
+    ) -> BitFunResult<()> {
+        if let Some(mut metadata) = self.storage.load_customization_metadata(app_id).await? {
+            metadata.available_builtin_update = Some(MiniAppAvailableBuiltinUpdate {
+                builtin_version,
+                detected_at,
+            });
+            metadata.updated_at = detected_at;
+            self.storage
+                .save_customization_metadata(app_id, &metadata)
+                .await?;
+        }
+        Ok(())
+    }
+
     pub async fn mark_deps_installed(&self, app_id: &str) -> BitFunResult<MiniApp> {
         let mut app = self.storage.load(app_id).await?;
-        Self::ensure_runtime_state(&mut app);
+        ensure_runtime_state(&mut app);
         app.runtime.deps_dirty = false;
         app.runtime.worker_restart_required = true;
         self.storage.save(&app).await?;
@@ -334,7 +676,7 @@ impl MiniAppManager {
 
     pub async fn clear_worker_restart_required(&self, app_id: &str) -> BitFunResult<MiniApp> {
         let mut app = self.storage.load(app_id).await?;
-        Self::ensure_runtime_state(&mut app);
+        ensure_runtime_state(&mut app);
         if app.runtime.worker_restart_required {
             app.runtime.worker_restart_required = false;
             self.storage.save(&app).await?;
@@ -354,7 +696,7 @@ impl MiniAppManager {
         let now = Utc::now().timestamp_millis();
         app.version = current.version + 1;
         app.updated_at = now;
-        app.runtime = Self::build_runtime_state(
+        app.runtime = build_runtime_state(
             app.version,
             app.updated_at,
             &app.source,
@@ -379,7 +721,7 @@ impl MiniAppManager {
         app.compiled_html =
             self.compile_source(app_id, &app.source, &app.permissions, theme, workspace_root)?;
         app.updated_at = Utc::now().timestamp_millis();
-        Self::ensure_runtime_state(&mut app);
+        ensure_runtime_state(&mut app);
         app.runtime.ui_recompile_required = false;
         self.storage.save(&app).await?;
         Ok(app)
@@ -399,7 +741,7 @@ impl MiniAppManager {
 
         app.compiled_html =
             self.compile_source(app_id, &app.source, &app.permissions, theme, workspace_root)?;
-        app.runtime = Self::build_runtime_state(
+        app.runtime = build_runtime_state(
             app.version,
             app.updated_at,
             &app.source,
@@ -534,7 +876,7 @@ impl MiniAppManager {
             .map_err(|_e| BitFunError::io("Failed to write placeholder compiled.html"))?;
 
         let mut app = self.recompile(&id, "dark", workspace_root).await?;
-        app.runtime = Self::build_runtime_state(
+        app.runtime = build_runtime_state(
             app.version,
             app.updated_at,
             &app.source,
@@ -543,5 +885,127 @@ impl MiniAppManager {
         );
         self.storage.save(&app).await?;
         Ok(app)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::miniapp::types::{FsPermissions, MiniAppPermissions, MiniAppSource};
+
+    fn test_manager() -> MiniAppManager {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-manager-draft-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager =
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        MiniAppManager::new(path_manager)
+    }
+
+    fn sample_source(css: &str) -> MiniAppSource {
+        MiniAppSource {
+            html: "<!DOCTYPE html><html><head></head><body><div id=\"app\"></div></body></html>"
+                .to_string(),
+            css: css.to_string(),
+            ui_js: "document.getElementById('app').textContent = 'demo';".to_string(),
+            esm_dependencies: Vec::new(),
+            worker_js: String::new(),
+            npm_dependencies: Vec::new(),
+        }
+    }
+
+    async fn create_sample_app(manager: &MiniAppManager) -> MiniApp {
+        manager
+            .create(
+                "Demo".to_string(),
+                "Demo app".to_string(),
+                "box".to_string(),
+                "utility".to_string(),
+                vec!["demo".to_string()],
+                sample_source("body { color: black; }"),
+                MiniAppPermissions::default(),
+                None,
+                None,
+            )
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn draft_lifecycle_keeps_active_storage_and_source_isolated_until_apply() {
+        let manager = test_manager();
+        let app = create_sample_app(&manager).await;
+        manager
+            .set_storage(&app.id, "score", serde_json::json!(3))
+            .await
+            .unwrap();
+
+        let draft = manager.create_draft(&app.id, "dark", None).await.unwrap();
+        assert_eq!(draft.source_version, app.version);
+        assert_eq!(draft.app.source.css, "body { color: black; }");
+
+        let draft_css = manager
+            .storage
+            .draft_dir(&app.id, &draft.draft_id)
+            .join("source")
+            .join("style.css");
+        tokio::fs::write(&draft_css, "body { background: white; }")
+            .await
+            .unwrap();
+
+        let draft = manager
+            .sync_draft_from_fs(&app.id, &draft.draft_id, "dark", None)
+            .await
+            .unwrap();
+        assert_eq!(draft.app.source.css, "body { background: white; }");
+
+        let active_before_apply = manager.get(&app.id).await.unwrap();
+        assert_eq!(active_before_apply.source.css, "body { color: black; }");
+        assert_eq!(
+            manager.get_storage(&app.id, "score").await.unwrap(),
+            serde_json::json!(3)
+        );
+
+        let applied = manager
+            .apply_draft(&app.id, &draft.draft_id, "dark", None)
+            .await
+            .unwrap();
+
+        assert_eq!(applied.version, app.version + 1);
+        assert_eq!(applied.source.css, "body { background: white; }");
+        assert_eq!(manager.list_versions(&app.id).await.unwrap(), vec![1]);
+        assert_eq!(
+            manager.get_storage(&app.id, "score").await.unwrap(),
+            serde_json::json!(3)
+        );
+    }
+
+    #[tokio::test]
+    async fn draft_permission_diff_flags_high_risk_changes_before_apply() {
+        let manager = test_manager();
+        let app = create_sample_app(&manager).await;
+        let draft = manager.create_draft(&app.id, "dark", None).await.unwrap();
+
+        let draft_permissions = MiniAppPermissions {
+            fs: Some(FsPermissions {
+                read: None,
+                write: Some(vec!["{workspace}".to_string()]),
+            }),
+            ..Default::default()
+        };
+        manager
+            .set_draft_permissions(&app.id, &draft.draft_id, draft_permissions, "dark", None)
+            .await
+            .unwrap();
+
+        let diff = manager
+            .permission_diff_for_draft(&app.id, &draft.draft_id)
+            .await
+            .unwrap();
+
+        assert!(diff.high_risk);
+        assert_eq!(diff.added, vec!["fs.write:{workspace}".to_string()]);
+        assert!(manager.get(&app.id).await.unwrap().permissions.fs.is_none());
     }
 }

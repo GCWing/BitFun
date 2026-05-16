@@ -117,11 +117,15 @@ class LspDocumentService {
     const manager = WorkspaceLspManager.getOrCreate(workspacePath);
     
     try {
-      await manager.openDocument(
+      const openResult = await manager.openDocument(
         event.uri,
         state.language,
         event.content
       );
+
+      if (!openResult.opened) {
+        return;
+      }
       
       state.isOpen = true;
       state.lastSyncedContent = event.content;

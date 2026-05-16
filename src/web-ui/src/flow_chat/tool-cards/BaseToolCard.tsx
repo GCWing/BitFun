@@ -3,6 +3,8 @@
  * Provides unified card styles and interaction logic
  */
 import React, { ReactNode } from 'react';
+import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
+import { SmoothHeightCollapse } from '../components/modern/SmoothHeightCollapse';
 import {
   ToolCardHeaderLayoutContext,
   useToolCardHeaderLayout,
@@ -70,6 +72,14 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   headerExpandAffordance: headerExpandAffordanceProp,
   headerAffordanceKind: headerAffordanceKindProp = 'expand',
 }) => {
+  const handleCardClick = (event: React.MouseEvent) => {
+    if (!onClick || shouldIgnoreCardToggleClick(event)) {
+      return;
+    }
+
+    onClick(event);
+  };
+
   const hasExpandedContent = isExpanded && expandedContent && !isFailed;
   const showConfirmationHighlight = requiresConfirmation && 
     status !== 'completed' && 
@@ -96,7 +106,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
     >
       <div 
         className={`base-tool-card status-${status} ${isExpanded ? 'expanded' : ''} ${resolvedHeaderExpandAffordance ? 'base-tool-card--header-expandable' : ''}`.trim()}
-        onClick={onClick}
+        onClick={handleCardClick}
       >
         <ToolCardHeaderLayoutContext.Provider value={headerLayoutValue}>
           <div className="base-tool-card-header">
@@ -105,17 +115,17 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
         </ToolCardHeaderLayoutContext.Provider>
       </div>
       
-      {hasExpandedContent && (
+      <SmoothHeightCollapse isOpen={Boolean(hasExpandedContent)} className="base-tool-card-expanded-collapse">
         <div className="base-tool-card-expanded">
           {expandedContent}
         </div>
-      )}
+      </SmoothHeightCollapse>
       
-      {isFailed && errorContent && (
+      <SmoothHeightCollapse isOpen={Boolean(isFailed && errorContent)} className="base-tool-card-error-collapse">
         <div className="base-tool-card-error">
           {errorContent}
         </div>
-      )}
+      </SmoothHeightCollapse>
     </div>
   );
 };

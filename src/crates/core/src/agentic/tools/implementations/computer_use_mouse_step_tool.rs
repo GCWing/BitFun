@@ -34,6 +34,10 @@ impl Tool for ComputerUseMouseStepTool {
         )
     }
 
+    fn short_description(&self) -> String {
+        "Move the mouse pointer by a small directional step.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

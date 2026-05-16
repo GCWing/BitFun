@@ -93,6 +93,16 @@ pub async fn i18n_set_language(
                     &_app, language, mode, edit_mode,
                 );
             }
+
+            // Rebuild the system tray menu in the new language.
+            #[cfg(not(target_env = "ohos"))]
+            {
+                let app_handle = _app.clone();
+                tauri::async_runtime::spawn(async move {
+                    crate::tray::rebuild_tray_menu_public(&app_handle).await;
+                });
+            }
+
             Ok(format!("Language switched to: {}", language))
         }
         Err(e) => {

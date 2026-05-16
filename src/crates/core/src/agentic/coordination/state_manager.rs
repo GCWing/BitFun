@@ -38,9 +38,16 @@ impl SessionStateManager {
 
     /// Update session state
     pub async fn update_state(&self, session_id: &str, new_state: SessionState) {
-        if let Some(mut state) = self.states.get_mut(session_id) {
+        // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
+        let should_emit = if let Some(mut state) = self.states.get_mut(session_id) {
             *state = new_state.clone();
+            true
+        } else {
+            false
+        };
+        // RefMut guard released here -- DashMap shard lock is free.
 
+        if should_emit {
             self.emit_state_change_event(session_id, new_state).await;
         }
     }

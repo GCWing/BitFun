@@ -99,7 +99,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     descriptionKey: 'model.providers.deepseek.description',
     baseUrl: 'https://api.deepseek.com/v1',
     format: 'openai',
-    models: ['deepseek-chat', 'deepseek-reasoner'],
+    models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     helpUrl: 'https://platform.deepseek.com/api_keys',
   },
   zhipu: {

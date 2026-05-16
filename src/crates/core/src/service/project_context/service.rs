@@ -10,6 +10,7 @@ use super::types::{
 };
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::tools::pipeline::SubagentParentInfo;
+use crate::service::bootstrap::ensure_workspace_gitignore_ignores_bitfun;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
 use std::collections::HashSet;
@@ -651,6 +652,14 @@ impl ProjectContextService {
             fs::create_dir_all(parent).await.map_err(|e| {
                 BitFunError::service(format!("Failed to create .bitfun directory: {}", e))
             })?;
+        }
+
+        if let Err(e) = ensure_workspace_gitignore_ignores_bitfun(workspace).await {
+            warn!(
+                "Failed to ensure workspace .gitignore ignores .bitfun: workspace={}, error={}",
+                workspace.display(),
+                e
+            );
         }
 
         let content = serde_json::to_string_pretty(config)

@@ -1,16 +1,18 @@
 use crate::infrastructure::{FileSearchOutcome, FileSearchResult, SearchMatchType};
+use crate::service::bootstrap::ensure_workspace_gitignore_ignores_bitfun;
 use crate::service::config::{get_global_config_service, types::WorkspaceConfig};
 use crate::service::search::flashgrep::{
-    ConsistencyMode, GlobRequest, ManagedClient, OpenRepoParams, PathScope, QuerySpec,
-    RefreshPolicyConfig, RepoConfig, RepoSession, SearchRequest, SearchResults,
+    ConsistencyMode, FLASHGREP_LOG_TARGET, FlashgrepRepoSession, GlobRequest, ManagedClient,
+    OpenRepoParams, PathScope, QuerySpec, RefreshPolicyConfig, RepoConfig, RepoSession,
+    SearchRequest, SearchResults,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{
+    Arc, LazyLock, Mutex as StdMutex, Weak,
     atomic::{AtomicU64, Ordering},
-    Arc, OnceLock,
 };
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
@@ -21,7 +23,8 @@ use super::types::{
     WorkspaceSearchHit,
 };
 
-static GLOBAL_WORKSPACE_SEARCH_SERVICE: OnceLock<Arc<WorkspaceSearchService>> = OnceLock::new();
+static GLOBAL_WORKSPACE_SEARCH_SERVICE: LazyLock<StdMutex<Weak<WorkspaceSearchService>>> =
+    LazyLock::new(|| StdMutex::new(Weak::new()));
 
 const DEFAULT_TOP_K_TOKENS: usize = 6;
 const DEFAULT_SESSION_IDLE_GRACE: Duration = Duration::from_secs(45);
@@ -47,12 +50,16 @@ impl WorkspaceSearchService {
         let program = resolve_daemon_program();
         if let Some(program) = program {
             log::info!(
+                target: FLASHGREP_LOG_TARGET,
                 "WorkspaceSearchService daemon configured: program={}",
                 PathBuf::from(&program).display()
             );
             client = client.with_daemon_program(program);
         } else {
-            log::info!("WorkspaceSearchService daemon configured: program=flashgrep");
+            log::info!(
+                target: FLASHGREP_LOG_TARGET,
+                "WorkspaceSearchService daemon configured: program=flashgrep"
+            );
         }
 
         Self {
@@ -81,14 +88,20 @@ impl WorkspaceSearchService {
 
     pub async fn build_index(&self, repo_root: impl AsRef<Path>) -> BitFunResult<IndexTaskHandle> {
         let session = self.get_or_open_session(repo_root.as_ref()).await?;
-        let task = session
-            .index_build()
+        let task = FlashgrepRepoSession::build_index(session.as_ref())
             .await
             .map_err(map_flashgrep_error("Failed to start index build"))?;
         let repo_status = session
             .status()
             .await
             .map_err(map_flashgrep_error("Failed to fetch repository status"))?;
+        log::info!(
+            target: FLASHGREP_LOG_TARGET,
+            "Workspace search build index requested: repo_root={}, task_id={}, phase={:?}",
+            repo_root.as_ref().display(),
+            task.task_id,
+            repo_status.phase
+        );
         Ok(IndexTaskHandle {
             task: task.into(),
             repo_status: repo_status.into(),
@@ -100,14 +113,20 @@ impl WorkspaceSearchService {
         repo_root: impl AsRef<Path>,
     ) -> BitFunResult<IndexTaskHandle> {
         let session = self.get_or_open_session(repo_root.as_ref()).await?;
-        let task = session
-            .index_rebuild()
+        let task = FlashgrepRepoSession::rebuild_index(session.as_ref())
             .await
             .map_err(map_flashgrep_error("Failed to start index rebuild"))?;
         let repo_status = session
             .status()
             .await
             .map_err(map_flashgrep_error("Failed to fetch repository status"))?;
+        log::info!(
+            target: FLASHGREP_LOG_TARGET,
+            "Workspace search rebuild index requested: repo_root={}, task_id={}, phase={:?}",
+            repo_root.as_ref().display(),
+            task.task_id,
+            repo_status.phase
+        );
         Ok(IndexTaskHandle {
             task: task.into(),
             repo_status: repo_status.into(),
@@ -153,15 +172,15 @@ impl WorkspaceSearchService {
 
         let session = self.get_or_open_session(&repo_root).await?;
         let session_ready_at = Instant::now();
-        let search = session
-            .search(
-                SearchRequest::new(query)
-                    .with_scope(scope)
-                    .with_consistency(ConsistencyMode::WorkspaceEventual)
-                    .with_scan_fallback(true),
-            )
-            .await
-            .map_err(map_flashgrep_error("Content search failed"))?;
+        let search = FlashgrepRepoSession::search(
+            session.as_ref(),
+            SearchRequest::new(query)
+                .with_scope(scope)
+                .with_consistency(ConsistencyMode::WorkspaceEventual)
+                .with_scan_fallback(true),
+        )
+        .await
+        .map_err(map_flashgrep_error("Content search failed"))?;
         let search_completed_at = Instant::now();
 
         let mut results = convert_search_results(&search.results, request.output_mode);
@@ -196,7 +215,8 @@ impl WorkspaceSearchService {
             matched_occurrences: search.results.matched_occurrences,
         };
 
-        log::info!(
+        log::debug!(
+            target: FLASHGREP_LOG_TARGET,
             "Workspace content search completed: repo_root={}, pattern={}, output_mode={:?}, search_mode={:?}, scope_roots={}, globs={}, file_types={}, max_results={:?}, backend={:?}, repo_phase={:?}, rebuild_recommended={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, returned_results={}, truncated={}, normalize_ms={}, build_scope_ms={}, session_ms={}, search_ms={}, convert_ms={}, total_ms={}",
             repo_root.display(),
             pattern_for_log,
@@ -238,10 +258,10 @@ impl WorkspaceSearchService {
             vec![],
         )?;
         let session = self.get_or_open_session(&repo_root).await?;
-        let mut outcome = session
-            .glob(GlobRequest::new().with_scope(scope))
-            .await
-            .map_err(map_flashgrep_error("Glob search failed"))?;
+        let mut outcome =
+            FlashgrepRepoSession::glob(session.as_ref(), GlobRequest::new().with_scope(scope))
+                .await
+                .map_err(map_flashgrep_error("Glob search failed"))?;
         outcome.paths.sort();
         if request.limit > 0 {
             outcome.paths.truncate(request.limit);
@@ -259,9 +279,14 @@ impl WorkspaceSearchService {
         let Ok(repo_root) = normalize_repo_root(repo_root.as_ref()) else {
             return;
         };
-        let service = Arc::clone(self);
+        let delay = self.session_idle_grace;
+        let service = Arc::downgrade(self);
         tokio::spawn(async move {
-            service.release_repo_after_grace(repo_root).await;
+            tokio::time::sleep(delay).await;
+            let Some(service) = service.upgrade() else {
+                return;
+            };
+            service.release_repo_if_idle(repo_root).await;
         });
     }
 
@@ -270,12 +295,17 @@ impl WorkspaceSearchService {
         self.open_guards.lock().await.clear();
         if released_sessions > 0 {
             log::info!(
+                target: FLASHGREP_LOG_TARGET,
                 "Workspace search shutdown releasing sessions via daemon shutdown: count={}",
                 released_sessions
             );
         }
         if let Err(error) = self.client.shutdown_daemon().await {
-            log::debug!("Workspace search daemon shutdown skipped: {}", error);
+            log::debug!(
+                target: FLASHGREP_LOG_TARGET,
+                "Workspace search daemon shutdown skipped: {}",
+                error
+            );
         }
     }
 
@@ -284,12 +314,58 @@ impl WorkspaceSearchService {
         self.open_guards.lock().await.clear();
         if released_sessions > 0 {
             log::info!(
+                target: FLASHGREP_LOG_TARGET,
                 "Workspace search stop releasing sessions via daemon stop: count={}",
                 released_sessions
             );
         }
         if let Err(error) = self.client.stop_daemon().await {
-            log::debug!("Workspace search daemon stop skipped: {}", error);
+            log::debug!(
+                target: FLASHGREP_LOG_TARGET,
+                "Workspace search daemon stop skipped: {}",
+                error
+            );
+        }
+    }
+
+    pub fn shutdown_blocking(self: &Arc<Self>) {
+        let service = Arc::clone(self);
+        match std::thread::Builder::new()
+            .name("workspace-search-shutdown".to_string())
+            .spawn(move || {
+                match tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    Ok(runtime) => {
+                        runtime.block_on(async move {
+                            service.shutdown_all_daemons().await;
+                        });
+                    }
+                    Err(error) => {
+                        log::warn!(
+                            target: FLASHGREP_LOG_TARGET,
+                            "Failed to create runtime for workspace search shutdown: {}",
+                            error
+                        );
+                    }
+                }
+            }) {
+            Ok(handle) => {
+                if handle.join().is_err() {
+                    log::warn!(
+                        target: FLASHGREP_LOG_TARGET,
+                        "Workspace search shutdown thread panicked during blocking shutdown"
+                    );
+                }
+            }
+            Err(error) => {
+                log::warn!(
+                    target: FLASHGREP_LOG_TARGET,
+                    "Failed to spawn workspace search shutdown thread: {}",
+                    error
+                );
+            }
         }
     }
 
@@ -310,12 +386,14 @@ impl WorkspaceSearchService {
                 return Ok(existing.session);
             }
             log::warn!(
+                target: FLASHGREP_LOG_TARGET,
                 "Workspace search session became unhealthy, reopening repository session: path={}",
                 repo_root.display()
             );
             self.sessions.write().await.remove(&repo_root);
             if let Err(error) = existing.session.close().await {
                 log::debug!(
+                    target: FLASHGREP_LOG_TARGET,
                     "Workspace search repo close after unhealthy session failed: path={}, error={}",
                     repo_root.display(),
                     error
@@ -324,12 +402,25 @@ impl WorkspaceSearchService {
         }
 
         let repo_config = repo_config_for_workspace_search().await;
+        if let Err(error) = ensure_workspace_gitignore_ignores_bitfun(&repo_root).await {
+            log::warn!(
+                target: FLASHGREP_LOG_TARGET,
+                "Failed to ensure workspace .gitignore ignores .bitfun before search warmup: path={}, error={}",
+                repo_root.display(),
+                error
+            );
+        }
         let params = OpenRepoParams {
             repo_path: repo_root.clone(),
             storage_root: Some(default_storage_root(&repo_root)),
             config: repo_config,
             refresh: RefreshPolicyConfig::default(),
         };
+        let storage_root = params
+            .storage_root
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "-".to_string());
 
         let entry =
             SessionEntry {
@@ -338,6 +429,12 @@ impl WorkspaceSearchService {
                 )?),
                 activity_epoch: Arc::new(AtomicU64::new(1)),
             };
+        log::info!(
+            target: FLASHGREP_LOG_TARGET,
+            "Opened workspace search repository session: path={}, storage_root={}",
+            repo_root.display(),
+            storage_root
+        );
 
         let mut sessions = self.sessions.write().await;
         Ok(sessions
@@ -347,10 +444,13 @@ impl WorkspaceSearchService {
             .clone())
     }
 
-    async fn index_status_for_session(
+    async fn index_status_for_session<S>(
         &self,
-        session: Arc<RepoSession>,
-    ) -> BitFunResult<WorkspaceIndexStatus> {
+        session: Arc<S>,
+    ) -> BitFunResult<WorkspaceIndexStatus>
+    where
+        S: FlashgrepRepoSession + ?Sized,
+    {
         let repo_status = session
             .status()
             .await
@@ -359,7 +459,11 @@ impl WorkspaceSearchService {
             Some(task_id) => match session.task_status(task_id).await {
                 Ok(task) => Some(task),
                 Err(error) => {
-                    log::warn!("Failed to fetch active flashgrep task status: {}", error);
+                    log::warn!(
+                        target: FLASHGREP_LOG_TARGET,
+                        "Failed to fetch active flashgrep task status: {}",
+                        error
+                    );
                     None
                 }
             },
@@ -372,7 +476,7 @@ impl WorkspaceSearchService {
         })
     }
 
-    async fn release_repo_after_grace(self: Arc<Self>, repo_root: PathBuf) {
+    async fn release_repo_if_idle(&self, repo_root: PathBuf) {
         let Some(expected_epoch) = self
             .sessions
             .read()
@@ -382,8 +486,6 @@ impl WorkspaceSearchService {
         else {
             return;
         };
-
-        tokio::time::sleep(self.session_idle_grace).await;
 
         let entry = {
             let mut sessions = self.sessions.write().await;
@@ -397,12 +499,14 @@ impl WorkspaceSearchService {
         };
 
         if let Some(entry) = entry {
-            log::info!(
+            log::debug!(
+                target: FLASHGREP_LOG_TARGET,
                 "Releasing idle workspace search repository session: path={}",
                 repo_root.display()
             );
-            if let Err(error) = entry.session.close().await {
+            if let Err(error) = FlashgrepRepoSession::close(entry.session.as_ref()).await {
                 log::warn!(
+                    target: FLASHGREP_LOG_TARGET,
                     "Failed to release idle workspace search repository session: path={}, error={}",
                     repo_root.display(),
                     error
@@ -420,11 +524,19 @@ impl Default for WorkspaceSearchService {
 }
 
 pub fn set_global_workspace_search_service(service: Arc<WorkspaceSearchService>) {
-    let _ = GLOBAL_WORKSPACE_SEARCH_SERVICE.set(service);
+    let mut global = match GLOBAL_WORKSPACE_SEARCH_SERVICE.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    *global = Arc::downgrade(&service);
 }
 
 pub fn get_global_workspace_search_service() -> Option<Arc<WorkspaceSearchService>> {
-    GLOBAL_WORKSPACE_SEARCH_SERVICE.get().cloned()
+    let global = match GLOBAL_WORKSPACE_SEARCH_SERVICE.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    global.upgrade()
 }
 
 pub fn workspace_search_daemon_binary_names() -> &'static [&'static str] {
@@ -437,9 +549,15 @@ pub fn workspace_search_daemon_binary_names() -> &'static [&'static str] {
     } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         &["flashgrep-aarch64-apple-darwin"]
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        &["flashgrep-x86_64-unknown-linux-gnu"]
+        &[
+            "flashgrep-x86_64-unknown-linux-musl",
+            "flashgrep-x86_64-unknown-linux-gnu",
+        ]
     } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
-        &["flashgrep-aarch64-unknown-linux-gnu"]
+        &[
+            "flashgrep-aarch64-unknown-linux-musl",
+            "flashgrep-aarch64-unknown-linux-gnu",
+        ]
     } else if cfg!(windows) {
         &["flashgrep.exe"]
     } else {
@@ -702,12 +820,58 @@ fn convert_search_results(
     output_mode: ContentSearchOutputMode,
 ) -> Vec<FileSearchResult> {
     match output_mode {
-        ContentSearchOutputMode::Content => convert_hits_to_file_search_results(search_results),
+        ContentSearchOutputMode::Content => {
+            let hit_results = convert_hits_to_file_search_results(search_results);
+            if !hit_results.is_empty() {
+                return hit_results;
+            }
+
+            let line_results = convert_line_matches_to_file_search_results(search_results);
+            if !line_results.is_empty() {
+                return line_results;
+            }
+
+            let count_results = convert_file_counts_to_search_results(search_results);
+            if !count_results.is_empty() {
+                return count_results;
+            }
+
+            let match_count_results = convert_file_match_counts_to_search_results(search_results);
+            if !match_count_results.is_empty() {
+                return match_count_results;
+            }
+
+            convert_matched_paths_to_file_only_results(search_results)
+        }
         ContentSearchOutputMode::Count => convert_file_counts_to_search_results(search_results),
         ContentSearchOutputMode::FilesWithMatches => {
-            convert_hits_to_file_only_results(search_results)
+            convert_matched_paths_to_file_only_results(search_results)
         }
     }
+}
+
+fn convert_line_matches_to_file_search_results(
+    search_results: &SearchResults,
+) -> Vec<FileSearchResult> {
+    search_results
+        .line_matches
+        .iter()
+        .map(|matched| FileSearchResult {
+            path: matched.path.clone(),
+            name: Path::new(&matched.path)
+                .file_name()
+                .and_then(|file_name| file_name.to_str())
+                .unwrap_or(&matched.path)
+                .to_string(),
+            is_directory: false,
+            match_type: SearchMatchType::Content,
+            line_number: Some(matched.line_number),
+            matched_content: Some(matched.line_text.clone()),
+            preview_before: None,
+            preview_inside: Some(matched.line_text.clone()),
+            preview_after: None,
+        })
+        .collect()
 }
 
 fn convert_file_counts_to_search_results(search_results: &SearchResults) -> Vec<FileSearchResult> {
@@ -725,6 +889,30 @@ fn convert_file_counts_to_search_results(search_results: &SearchResults) -> Vec<
             match_type: SearchMatchType::Content,
             line_number: None,
             matched_content: Some(count.matched_lines.to_string()),
+            preview_before: None,
+            preview_inside: None,
+            preview_after: None,
+        })
+        .collect()
+}
+
+fn convert_file_match_counts_to_search_results(
+    search_results: &SearchResults,
+) -> Vec<FileSearchResult> {
+    search_results
+        .file_match_counts
+        .iter()
+        .map(|count| FileSearchResult {
+            path: count.path.clone(),
+            name: Path::new(&count.path)
+                .file_name()
+                .and_then(|file_name| file_name.to_str())
+                .unwrap_or(&count.path)
+                .to_string(),
+            is_directory: false,
+            match_type: SearchMatchType::Content,
+            line_number: None,
+            matched_content: Some(count.matched_occurrences.to_string()),
             preview_before: None,
             preview_inside: None,
             preview_after: None,
@@ -767,16 +955,18 @@ fn convert_hits_to_file_search_results(search_results: &SearchResults) -> Vec<Fi
     file_results
 }
 
-fn convert_hits_to_file_only_results(search_results: &SearchResults) -> Vec<FileSearchResult> {
+fn convert_matched_paths_to_file_only_results(
+    search_results: &SearchResults,
+) -> Vec<FileSearchResult> {
     search_results
-        .hits
+        .matched_paths
         .iter()
-        .map(|hit| FileSearchResult {
-            path: hit.path.clone(),
-            name: Path::new(&hit.path)
+        .map(|path| FileSearchResult {
+            path: path.clone(),
+            name: Path::new(path)
                 .file_name()
                 .and_then(|file_name| file_name.to_str())
-                .unwrap_or(&hit.path)
+                .unwrap_or(path)
                 .to_string(),
             is_directory: false,
             match_type: SearchMatchType::Content,
@@ -824,5 +1014,51 @@ fn map_flashgrep_error(
             _ => error.to_string(),
         };
         BitFunError::service(format!("{prefix}: {detail}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_search_results() -> SearchResults {
+        serde_json::from_value(serde_json::json!({
+            "candidate_docs": 0,
+            "searches_with_match": 0,
+            "bytes_searched": 0,
+            "matched_lines": 0,
+            "matched_occurrences": 0
+        }))
+        .expect("empty search results should decode with defaulted collections")
+    }
+
+    #[test]
+    fn content_search_uses_flashgrep_line_matches_protocol() {
+        assert_eq!(
+            ContentSearchOutputMode::Content.search_mode(),
+            crate::service::search::flashgrep::SearchModeConfig::LineMatches
+        );
+    }
+
+    #[test]
+    fn content_search_converts_legacy_line_matches() {
+        let mut search_results = empty_search_results();
+        search_results.line_matches = serde_json::from_value(serde_json::json!([{
+            "path": "src/search.rs",
+            "line_number": 42,
+            "line_text": "pub enum SearchMode"
+        }]))
+        .expect("legacy line_matches should decode");
+
+        let results = convert_search_results(&search_results, ContentSearchOutputMode::Content);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, "src/search.rs");
+        assert_eq!(results[0].name, "search.rs");
+        assert_eq!(results[0].line_number, Some(42));
+        assert_eq!(
+            results[0].matched_content.as_deref(),
+            Some("pub enum SearchMode")
+        );
     }
 }

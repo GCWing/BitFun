@@ -2,12 +2,13 @@ use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
-use crate::service::ai_rules::get_global_ai_rules_service;
 use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, warn};
 use serde_json::{json, Value};
 use std::path::Path;
+use std::time::Instant;
 use tool_runtime::fs::read_file::read_file;
 
 pub struct FileReadTool {
@@ -73,10 +74,40 @@ impl FileReadTool {
             hit_marker = HIT_TOTAL_CHAR_LIMIT_MARKER,
         );
 
+        let remote_read_started_at = Instant::now();
+        debug!(
+            "Remote file read started: path={}, start_line={}, limit={}, timeout_ms={:?}, session_id={:?}, dialog_turn_id={:?}",
+            resolved_path,
+            start_line,
+            limit,
+            Option::<u64>::None,
+            context.session_id,
+            context.dialog_turn_id
+        );
         let (stdout, stderr, status) = ws_shell
             .exec(&command, None)
             .await
-            .map_err(|e| BitFunError::tool(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| {
+                warn!(
+                    "Remote file read failed: path={}, start_line={}, limit={}, duration_ms={}, error={}",
+                    resolved_path,
+                    start_line,
+                    limit,
+                    elapsed_ms_u64(remote_read_started_at),
+                    e
+                );
+                BitFunError::tool(format!("Failed to read file: {}", e))
+            })?;
+        debug!(
+            "Remote file read command completed: path={}, start_line={}, limit={}, status={}, stdout_len={}, stderr_len={}, duration_ms={}",
+            resolved_path,
+            start_line,
+            limit,
+            status,
+            stdout.len(),
+            stderr.len(),
+            elapsed_ms_u64(remote_read_started_at)
+        );
 
         let mut total_lines = None;
         let mut hit_total_char_limit = false;
@@ -106,7 +137,9 @@ impl FileReadTool {
         }
 
         let total_lines = total_lines.ok_or_else(|| {
-            BitFunError::tool("Failed to read file: remote line count was unavailable".to_string())
+            BitFunError::tool(
+                "Failed to read file: remote command did not return line-count markers".to_string(),
+            )
         })?;
 
         if total_lines == 0 {
@@ -138,6 +171,16 @@ impl FileReadTool {
             (start_line + lines_read).saturating_sub(1)
         };
 
+        debug!(
+            "Remote file read parsed successfully: path={}, start_line={}, end_line={}, total_lines={}, hit_total_char_limit={}, duration_ms={}",
+            resolved_path,
+            start_line,
+            end_line,
+            total_lines,
+            hit_total_char_limit,
+            elapsed_ms_u64(remote_read_started_at)
+        );
+
         Ok(tool_runtime::fs::read_file::ReadFileResult {
             start_line,
             end_line,
@@ -160,11 +203,11 @@ impl Tool for FileReadTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok(format!(
-            r#"Reads a file from the local filesystem. You can access any file directly by using this tool.
-Assume this tool is able to read all files on the machine. If the User provides a path to a file assume that path is valid. It is okay to read a file that does not exist; an error will be returned.
+            r#"Reads a file from the current workspace filesystem. If the User provides a path to a file assume that path is valid. It is okay to read a file that does not exist; an error will be returned.
 
 Usage:
-- The file_path parameter must be either an absolute path or an exact `bitfun://runtime/...` URI returned by another tool.
+- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
+- Do not read host roots or placeholder paths such as `/workspace`.
 - By default, it reads up to {} lines starting from the beginning of the file.
 - You can optionally specify a start_line and limit. For large files, prefer reading targeted ranges instead of starting over from the beginning every time.
 - Any lines longer than {} characters will be truncated.
@@ -178,13 +221,17 @@ Usage:
         ))
     }
 
+    fn short_description(&self) -> String {
+        "Read file contents from the current workspace.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "The absolute path to the file to read, or an exact bitfun://runtime URI returned by another tool"
+                    "description": "The file to read. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
                 },
                 "start_line": {
                     "type": "number",
@@ -362,31 +409,6 @@ Usage:
             .map_err(BitFunError::tool)?
         };
 
-        let file_rules = if resolved.is_runtime_artifact() {
-            crate::service::ai_rules::FileRulesResult {
-                matched_count: 0,
-                formatted_content: None,
-            }
-        } else {
-            match get_global_ai_rules_service().await {
-                Ok(rules_service) => {
-                    rules_service
-                        .get_rules_for_file_with_workspace(
-                            &resolved.resolved_path,
-                            context.workspace_root(),
-                        )
-                        .await
-                }
-                Err(e) => {
-                    debug!("Failed to get AIRulesService: {}", e);
-                    crate::service::ai_rules::FileRulesResult {
-                        matched_count: 0,
-                        formatted_content: None,
-                    }
-                }
-            }
-        };
-
         let mut result_for_assistant = format!(
             "Read lines {}-{} from {} ({} total lines)\n<file_content>\n{}\n</file_content>",
             read_file_result.start_line,
@@ -395,11 +417,6 @@ Usage:
             read_file_result.total_lines,
             read_file_result.content
         );
-
-        if let Some(rules_content) = &file_rules.formatted_content {
-            result_for_assistant.push_str("\n\n");
-            result_for_assistant.push_str(rules_content);
-        }
 
         let has_more = read_file_result.end_line < read_file_result.total_lines;
         if has_more {
@@ -430,8 +447,7 @@ Usage:
                 "lines_read": lines_read,
                 "start_line": read_file_result.start_line,
                 "size": read_file_result.content.len(),
-                "hit_total_char_limit": read_file_result.hit_total_char_limit,
-                "matched_rules_count": file_rules.matched_count
+                "hit_total_char_limit": read_file_result.hit_total_char_limit
             }),
             result_for_assistant: Some(result_for_assistant),
             image_attachments: None,

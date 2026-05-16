@@ -9,6 +9,9 @@ use bitfun_core::infrastructure::PathManager;
 use bitfun_core::service::session::{
     DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
 };
+use bitfun_core::service::session_usage::{
+    generate_session_usage_report, SessionUsageReport, SessionUsageReportRequest,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::State;
@@ -107,6 +110,16 @@ pub struct LoadPersistedSessionMetadataRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetSessionUsageReportRequest {
+    pub session_id: String,
+    pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForkSessionRequest {
     pub source_session_id: String,
     pub source_turn_id: String,
@@ -168,6 +181,43 @@ pub async fn load_session_turns(
     };
 
     turns.map_err(|e| format!("Failed to load session turns: {}", e))
+}
+
+#[tauri::command]
+pub async fn get_session_usage_report(
+    request: GetSessionUsageReportRequest,
+    app_state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+) -> Result<SessionUsageReport, String> {
+    let storage_workspace_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
+
+    let mut report = generate_session_usage_report(
+        &manager,
+        Some(app_state.token_usage_service.as_ref()),
+        SessionUsageReportRequest {
+            session_id: request.session_id,
+            workspace_path: Some(storage_workspace_path.to_string_lossy().to_string()),
+            remote_connection_id: request.remote_connection_id.clone(),
+            remote_ssh_host: request.remote_ssh_host.clone(),
+            include_hidden_subagents: true,
+        },
+    )
+    .await
+    .map_err(|e| format!("Failed to generate session usage report: {}", e))?;
+
+    report.workspace.path_label = Some(request.workspace_path);
+    report.workspace.remote_connection_id = request.remote_connection_id;
+    report.workspace.remote_ssh_host = request.remote_ssh_host;
+
+    Ok(report)
 }
 
 #[tauri::command]

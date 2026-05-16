@@ -1,7 +1,9 @@
 pub(crate) mod flashgrep;
+mod remote;
 pub mod service;
 pub mod types;
 
+pub use remote::{remote_workspace_search_service_for_path, RemoteWorkspaceSearchService};
 pub use service::{
     get_global_workspace_search_service, resolve_workspace_search_daemon_program_path,
     set_global_workspace_search_service, workspace_search_daemon_available,

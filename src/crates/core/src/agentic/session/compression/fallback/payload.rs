@@ -14,15 +14,29 @@ pub(super) fn trim_payload_to_budget(
     }
 
     let units = flatten_entries_to_units(entries);
-    let mut selected_units = Vec::new();
+    let mut selected_units: Vec<CompressionUnit> = units
+        .iter()
+        .filter_map(|unit| match unit {
+            CompressionUnit::Contract { .. } => Some(unit.clone()),
+            _ => None,
+        })
+        .collect();
+    let history_units: Vec<CompressionUnit> = units
+        .into_iter()
+        .filter(|unit| !matches!(unit, CompressionUnit::Contract { .. }))
+        .collect();
 
-    for unit in units.into_iter().rev() {
+    for unit in history_units.into_iter().rev() {
         let mut candidate_units = vec![unit.clone()];
         candidate_units.extend(selected_units.clone());
 
         let candidate_payload = rebuild_payload_from_units(candidate_units);
         if estimate_payload_tokens(&candidate_payload) <= options.max_tokens {
-            selected_units.insert(0, unit);
+            let history_insert_index = selected_units
+                .iter()
+                .take_while(|selected| matches!(selected, CompressionUnit::Contract { .. }))
+                .count();
+            selected_units.insert(history_insert_index, unit);
         }
     }
 
@@ -34,6 +48,9 @@ fn flatten_entries_to_units(entries: Vec<CompressionEntry>) -> Vec<CompressionUn
 
     for (entry_id, entry) in entries.into_iter().enumerate() {
         match entry {
+            CompressionEntry::Contract { contract } => {
+                units.push(CompressionUnit::Contract { contract });
+            }
             CompressionEntry::ModelSummary { text } => {
                 units.push(CompressionUnit::ModelSummary { text });
             }
@@ -72,6 +89,16 @@ fn rebuild_payload_from_units(units: Vec<CompressionUnit>) -> CompressionPayload
 
     for unit in units {
         match unit {
+            CompressionUnit::Contract { contract } => {
+                flush_rebuilt_turn(
+                    &mut entries,
+                    &mut current_turn_entry_id,
+                    &mut current_turn_id,
+                    &mut current_messages,
+                    &mut current_todo,
+                );
+                entries.push(CompressionEntry::Contract { contract });
+            }
             CompressionUnit::ModelSummary { text } => {
                 flush_rebuilt_turn(
                     &mut entries,

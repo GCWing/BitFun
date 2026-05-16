@@ -70,6 +70,15 @@ pub struct AcpClientRequirementProbe {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RemoteAcpClientRequirementSnapshot {
+    pub connection_id: String,
+    pub last_probed_at: u64,
+    #[serde(default)]
+    pub probes: Vec<AcpClientRequirementProbe>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AcpRequirementProbeItem {
     pub name: String,
     pub installed: bool,

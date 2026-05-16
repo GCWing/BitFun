@@ -4,6 +4,7 @@ use bitfun_core::agentic::tools::browser_control::browser_launcher::{
     BrowserKind, BrowserLauncher, LaunchResult, DEFAULT_CDP_PORT,
 };
 use bitfun_core::agentic::tools::browser_control::cdp_client::CdpClient;
+use bitfun_core::service::config::{get_global_config_service, GlobalConfig};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -15,6 +16,75 @@ pub struct BrowserControlStatusRequest {
 
 fn default_cdp_port() -> u16 {
     DEFAULT_CDP_PORT
+}
+
+async fn selected_browser_kind() -> Result<BrowserKind, String> {
+    let config = get_global_config_service()
+        .await
+        .map_err(|e| e.to_string())?
+        .get_config::<GlobalConfig>(None)
+        .await
+        .map_err(|e| e.to_string())?;
+    BrowserLauncher::resolve_browser_kind(Some(&config.ai.browser_control_preferred_browser))
+        .map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserControlBrowserOption {
+    pub value: String,
+    pub label: String,
+    pub installed: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserControlBrowsersResponse {
+    pub options: Vec<BrowserControlBrowserOption>,
+}
+
+/// List selectable browsers for CDP browser control.
+#[tauri::command]
+pub async fn browser_control_list_browsers() -> Result<BrowserControlBrowsersResponse, String> {
+    let browsers = [
+        ("default", "Default browser", true),
+        (
+            "chrome",
+            "Google Chrome",
+            BrowserLauncher::is_browser_installed(&BrowserKind::Chrome),
+        ),
+        (
+            "edge",
+            "Microsoft Edge",
+            BrowserLauncher::is_browser_installed(&BrowserKind::Edge),
+        ),
+        (
+            "brave",
+            "Brave Browser",
+            BrowserLauncher::is_browser_installed(&BrowserKind::Brave),
+        ),
+        (
+            "chromium",
+            "Chromium",
+            BrowserLauncher::is_browser_installed(&BrowserKind::Chromium),
+        ),
+        (
+            "arc",
+            "Arc",
+            BrowserLauncher::is_browser_installed(&BrowserKind::Arc),
+        ),
+    ];
+
+    Ok(BrowserControlBrowsersResponse {
+        options: browsers
+            .into_iter()
+            .map(|(value, label, installed)| BrowserControlBrowserOption {
+                value: value.to_string(),
+                label: label.to_string(),
+                installed,
+            })
+            .collect(),
+    })
 }
 
 #[derive(Debug, Serialize)]
@@ -34,26 +104,35 @@ pub async fn browser_control_get_status(
 ) -> Result<BrowserControlStatusResponse, String> {
     let port = request.port;
     let available = BrowserLauncher::is_cdp_available(port).await;
-    let kind = BrowserLauncher::detect_default_browser().unwrap_or(BrowserKind::Chrome);
+    let configured_kind = selected_browser_kind().await?;
 
-    let (version, page_count) = if available {
-        let ver = CdpClient::get_version(port)
-            .await
-            .ok()
-            .and_then(|v| v.browser);
+    let (version, page_count, actual_kind) = if available {
+        let ver_info = CdpClient::get_version(port).await.ok();
+        let ver = ver_info.as_ref().and_then(|v| v.browser.clone());
+        // Identify the actual browser from CDP version response.
+        let kind = ver
+            .as_deref()
+            .and_then(|v| BrowserLauncher::browser_kind_from_cdp_version(v))
+            .unwrap_or_else(|| configured_kind.clone());
+        // Only count targets of type "page" (real browser tabs),
+        // not service workers, browser targets, etc.
         let pages = CdpClient::list_pages(port)
             .await
             .ok()
-            .map(|p| p.len())
+            .map(|p| {
+                p.iter()
+                    .filter(|t| t.page_type.as_deref() == Some("page"))
+                    .count()
+            })
             .unwrap_or(0);
-        (ver, pages)
+        (ver, pages, kind)
     } else {
-        (None, 0)
+        (None, 0, configured_kind)
     };
 
     Ok(BrowserControlStatusResponse {
         cdp_available: available,
-        browser_kind: kind.to_string(),
+        browser_kind: actual_kind.to_string(),
         browser_version: version,
         port,
         page_count,
@@ -113,7 +192,7 @@ pub async fn browser_control_launch(
     request: BrowserControlLaunchRequest,
 ) -> Result<BrowserControlLaunchResponse, String> {
     let port = request.port;
-    let kind = BrowserLauncher::detect_default_browser().map_err(|e| e.to_string())?;
+    let kind = selected_browser_kind().await?;
 
     let result = BrowserLauncher::launch_with_cdp(&kind, port)
         .await
@@ -128,7 +207,7 @@ pub async fn browser_control_restart_with_cdp(
     request: BrowserControlLaunchRequest,
 ) -> Result<BrowserControlLaunchResponse, String> {
     let port = request.port;
-    let kind = BrowserLauncher::detect_default_browser().map_err(|e| e.to_string())?;
+    let kind = selected_browser_kind().await?;
 
     let result = BrowserLauncher::restart_with_cdp(&kind, port)
         .await
@@ -142,7 +221,7 @@ pub async fn browser_control_restart_with_cdp(
 pub async fn browser_control_create_launcher() -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
-        let kind = BrowserLauncher::detect_default_browser().map_err(|e| e.to_string())?;
+        let kind = selected_browser_kind().await?;
         BrowserLauncher::create_cdp_launcher_app(&kind, DEFAULT_CDP_PORT).map_err(|e| e.to_string())
     }
     #[cfg(not(target_os = "macos"))]

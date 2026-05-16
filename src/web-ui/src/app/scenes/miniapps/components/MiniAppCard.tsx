@@ -10,6 +10,7 @@ interface MiniAppCardProps {
   app: MiniAppMeta;
   index?: number;
   isRunning?: boolean;
+  isCustomizing?: boolean;
   onOpenDetails: (app: MiniAppMeta) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
@@ -20,6 +21,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
   app,
   index = 0,
   isRunning = false,
+  isCustomizing = false,
   onOpenDetails,
   onOpen,
   onDelete,
@@ -53,6 +55,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
       className={[
         'miniapp-card',
         isRunning && 'miniapp-card--running',
+        isCustomizing && 'miniapp-card--customizing',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -79,7 +82,12 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
           <span className="miniapp-card__name">{localizedName}</span>
           <span className="miniapp-card__version">v{app.version}</span>
         </div>
-        {isRunning && <span className="miniapp-card__run-dot" />}
+        {(isRunning || isCustomizing) && (
+          <span className="miniapp-card__status-dots" aria-hidden="true">
+            {isRunning && <span className="miniapp-card__run-dot" />}
+            {isCustomizing && <span className="miniapp-card__customize-dot" />}
+          </span>
+        )}
       </div>
 
       {/* Body: description + tags */}

@@ -11,6 +11,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 anyhow = { workspace = true }
+bitfun-core-types = { path = "../core-types" }
 chrono = { workspace = true }
 eventsource-stream = { workspace = true }
 futures = { workspace = true }

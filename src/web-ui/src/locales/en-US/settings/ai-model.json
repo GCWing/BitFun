@@ -190,7 +190,7 @@
   },
   "reasoningEffort": {
     "label": "Reasoning Effort",
-    "hint": "Controls provider-specific reasoning depth for Responses API and supported Claude adaptive reasoning models",
+    "hint": "Controls provider-specific reasoning depth for DeepSeek, the Responses API, and supported Claude adaptive reasoning models",
     "placeholder": "Use API default"
   },
   "details": {

@@ -1,5 +1,5 @@
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -41,6 +41,14 @@ The terminal_session_id is returned inside <terminal_session_id>...</terminal_se
             .to_string())
     }
 
+    fn short_description(&self) -> String {
+        "Interrupt or close a managed terminal session.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",
@@ -70,6 +78,10 @@ The terminal_session_id is returned inside <terminal_session_id>...</terminal_se
 
     fn needs_permissions(&self, _input: Option<&Value>) -> bool {
         false
+    }
+
+    async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
+        !context.map(|ctx| ctx.is_remote()).unwrap_or(false)
     }
 
     async fn validate_input(

@@ -154,22 +154,6 @@ export class PanelController implements IdeController {
           title: i18nService.getT()('common:tabs.taskPlanner'),
         };
 
-      case 'mermaid-editor':
-        return {
-          ...baseDetail,
-          title: config.title || i18nService.getT()('common:tabs.mermaidChart'),
-          data: {
-            
-            mermaid_code: config.mermaid_code,
-            sourceCode: config.mermaid_code || config.sourceCode, 
-            mode: config.mode || 'interactive',
-            session_id: config.session_id,
-            allow_mode_switch: config.allow_mode_switch !== false,
-            editor_config: config.editor_config,
-            interactive_config: config.interactive_config,
-          },
-        };
-
       case 'generative-widget':
         return {
           ...baseDetail,
@@ -219,8 +203,6 @@ export class PanelController implements IdeController {
         return config.file_path || t('common:tabs.editor');
       case 'markdown-editor':
         return config.file_path || t('common:tabs.markdown');
-      case 'mermaid-editor':
-        return config.title || t('common:tabs.mermaidChart');
       case 'generative-widget':
         return config.title || 'Widget Preview';
       default:
@@ -236,8 +218,6 @@ export class PanelController implements IdeController {
       case 'code-editor':
       case 'markdown-editor':
         return config.file_path ? config.file_path : `${panelType}-${Date.now()}`;
-      case 'mermaid-editor':
-        return config.session_id ? `mermaid-${config.session_id}` : `mermaid-${Date.now()}`;
       case 'planner':
       case 'git-settings':
         

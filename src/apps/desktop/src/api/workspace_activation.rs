@@ -1,6 +1,6 @@
 use crate::api::app_state::AppState;
-use bitfun_core::service::search::workspace_search_runtime_available;
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
+use bitfun_core::service::search::workspace_search_runtime_available;
 use bitfun_core::service::workspace::{WorkspaceInfo, WorkspaceKind};
 use log::{debug, info, warn};
 use std::path::{Path, PathBuf};

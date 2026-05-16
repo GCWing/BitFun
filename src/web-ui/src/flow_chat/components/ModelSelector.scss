@@ -60,11 +60,6 @@
     }
   }
   
-  &__icon {
-    color: var(--color-text-tertiary);
-    flex-shrink: 0;
-  }
-  
   &__name {
     max-width: 100px;
     overflow: hidden;
@@ -73,7 +68,7 @@
   }
   
   &__thinking-icon {
-    color: var(--color-purple-400);
+    color: var(--color-text-tertiary);
     flex-shrink: 0;
   }
   
@@ -296,7 +291,7 @@
   }
   
   &__option-thinking {
-    color: rgba(180, 160, 255, 0.8);
+    color: var(--color-text-tertiary);
     flex-shrink: 0;
   }
   

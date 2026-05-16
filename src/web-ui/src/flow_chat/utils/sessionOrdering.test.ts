@@ -114,4 +114,21 @@ describe('sessionOrdering', () => {
       sessionBelongsToWorkspaceNavRow(sessionB, rowPath, conn, host)
     ).toBe(false);
   });
+
+  it('remote SSH: parses stable connection ids without ports when host metadata is absent', () => {
+    const session = {
+      workspacePath: '/home/u/project-a',
+      remoteConnectionId: 'ssh-user@myserver.example.com:22',
+      remoteSshHost: undefined,
+    };
+
+    expect(
+      sessionBelongsToWorkspaceNavRow(
+        session,
+        '/home/u/project-a',
+        'ssh-user@myserver.example.com',
+        undefined
+      )
+    ).toBe(true);
+  });
 });

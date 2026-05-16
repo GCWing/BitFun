@@ -4,13 +4,15 @@
  * Provides various function agents for automating specific tasks
  */
 
-pub mod common;
+pub use bitfun_product_domains::function_agents::common;
 
 #[path = "git-func-agent/mod.rs"]
 pub mod git_func_agent;
 
 #[path = "startchat-func-agent/mod.rs"]
 pub mod startchat_func_agent;
+
+pub mod port_adapters;
 
 // Re-export shared types from common module
 pub use common::{AgentError, AgentErrorType, AgentResult, Language};

@@ -48,7 +48,10 @@ pub async fn btw_cancel(
         return Err("requestId is required".to_string());
     }
 
-    state.side_question_runtime.cancel(&request.request_id).await;
+    state
+        .side_question_runtime
+        .cancel(&request.request_id)
+        .await;
     if let Some(active_turn) = state
         .side_question_runtime
         .get_btw_turn(&request.request_id)
@@ -58,7 +61,10 @@ pub async fn btw_cancel(
             .cancel_dialog_turn(&active_turn.session_id, &active_turn.turn_id)
             .await
             .map_err(|e| e.to_string())?;
-        state.side_question_runtime.remove(&request.request_id).await;
+        state
+            .side_question_runtime
+            .remove(&request.request_id)
+            .await;
     }
     Ok(())
 }
@@ -110,7 +116,10 @@ pub async fn btw_ask_stream(
     let coordinator = coordinator.inner().clone();
     tokio::spawn(async move {
         loop {
-            let Some(session) = coordinator.get_session_manager().get_session(&child_session_id) else {
+            let Some(session) = coordinator
+                .get_session_manager()
+                .get_session(&child_session_id)
+            else {
                 runtime.remove(&request_id).await;
                 break;
             };

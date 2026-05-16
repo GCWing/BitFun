@@ -41,6 +41,14 @@ export interface FlowChatContext {
   runtimeStatusTimers: Map<string, ReturnType<typeof setTimeout>>;
   /** Session IDs that the user explicitly cancelled; used to skip unread marking */
   userCancelledSessionIds: Set<string>;
+  /**
+   * Turn IDs whose terminal lifecycle event (cancelled / failed / completed)
+   * has already been applied. Backend may emit the same terminal event twice
+   * (e.g. cancelled emitted both by the execution engine when a cancel is
+   * detected mid-round and by the coordinator wrapper on the resulting Err);
+   * this set is used to make handlers idempotent. Key format: `sessionId:turnId`.
+   */
+  handledTerminalTurnEvents: Set<string>;
   currentWorkspacePath: string | null;
 }
 

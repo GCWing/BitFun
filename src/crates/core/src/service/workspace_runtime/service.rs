@@ -306,11 +306,6 @@ impl WorkspaceRuntimeService {
                         target: context.snapshots_dir.clone(),
                         strategy: RuntimeMigrationStrategy::MoveIfTargetMissing,
                     },
-                    RuntimeMigrationSpec {
-                        source: legacy_project_root.join("ai_memories.json"),
-                        target: context.runtime_root.join("ai_memories.json"),
-                        strategy: RuntimeMigrationStrategy::MoveIfTargetMissing,
-                    },
                 ]
             }
             WorkspaceRuntimeTarget::RemoteWorkspaceMirror {

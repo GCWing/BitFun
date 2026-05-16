@@ -235,14 +235,27 @@ export class GlobalAPI {
   }
 
    
+  // In-flight deduplicator: if many components call getCurrentWorkspace at the
+  // same time (e.g. 20+ Markdown blocks mounting after a workspace switch) only
+  // one Tauri IPC round-trip is made; all callers share the same Promise.
+  private _getCurrentWorkspaceInFlight: Promise<WorkspaceInfo | null> | null = null;
+
   async getCurrentWorkspace(): Promise<WorkspaceInfo | null> {
-    try {
-      return await api.invoke('get_current_workspace', { 
-        request: {} 
-      });
-    } catch (error) {
-      throw createTauriCommandError('get_current_workspace', error);
+    if (this._getCurrentWorkspaceInFlight) {
+      return this._getCurrentWorkspaceInFlight;
     }
+    this._getCurrentWorkspaceInFlight = (async () => {
+      try {
+        return await api.invoke<WorkspaceInfo | null>('get_current_workspace', {
+          request: {}
+        });
+      } catch (error) {
+        throw createTauriCommandError('get_current_workspace', error);
+      } finally {
+        this._getCurrentWorkspaceInFlight = null;
+      }
+    })();
+    return this._getCurrentWorkspaceInFlight;
   }
 
    

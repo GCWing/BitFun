@@ -285,7 +285,7 @@ pub async fn record_file_change(
             return Err(format!(
                 "Unknown operation type: {}",
                 request.operation_type
-            ))
+            ));
         }
     };
 
@@ -424,7 +424,10 @@ pub async fn rollback_to_turn(
                             deleted_turns_count = count;
                         }
                         Err(e) => {
-                            warn!("Failed to delete conversation turns: session_id={}, turn_index={}, error={}", request.session_id, request.turn_index, e);
+                            warn!(
+                                "Failed to delete conversation turns: session_id={}, turn_index={}, error={}",
+                                request.session_id, request.turn_index, e
+                            );
                         }
                     }
                 }
@@ -546,6 +549,10 @@ pub async fn reject_file(
 
 #[tauri::command]
 pub async fn get_session_files(request: GetSessionFilesRequest) -> Result<Vec<String>, String> {
+    if is_remote_path(&request.workspace_path).await {
+        return Ok(vec![]);
+    }
+
     let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
 
     let files = manager
@@ -580,7 +587,10 @@ pub async fn get_session_turns(
                     }
                     Ok(None) => {}
                     Err(e) => {
-                        warn!("Failed to load conversation metadata: session_id={}, error={}, falling back to snapshot", request.session_id, e);
+                        warn!(
+                            "Failed to load conversation metadata: session_id={}, error={}, falling back to snapshot",
+                            request.session_id, e
+                        );
                     }
                 }
             }
@@ -840,6 +850,15 @@ pub async fn reject_operation(
 pub async fn get_session_stats(
     request: GetSessionStatsRequest,
 ) -> Result<serde_json::Value, String> {
+    if is_remote_path(&request.workspace_path).await {
+        return Ok(serde_json::json!({
+            "session_id": request.session_id,
+            "total_files": 0,
+            "total_turns": 0,
+            "total_changes": 0
+        }));
+    }
+
     let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
 
     let stats = manager

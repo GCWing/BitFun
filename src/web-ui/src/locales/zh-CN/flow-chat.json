@@ -39,6 +39,225 @@
   "runtimeStatus": {
     "waitingForModelResponse": "等待模型响应..."
   },
+  "usage": {
+    "title": "会话用量",
+    "unavailable": "不可用",
+    "redacted": "已脱敏",
+    "percent": "{{value}}%",
+    "duration": {
+      "ms": "{{value}}毫秒",
+      "seconds": "{{value}}秒",
+      "minutes": "{{value}}分钟",
+      "minutesSeconds": "{{minutes}}分{{seconds}}秒",
+      "hours": "{{value}}小时",
+      "hoursMinutes": "{{hours}}小时{{minutes}}分钟"
+    },
+    "actions": {
+      "copyMarkdown": "复制 Markdown",
+      "copied": "已复制",
+      "openDetails": "打开详情",
+      "openFileDiff": "打开 diff",
+      "copySessionId": "复制会话 ID",
+      "copyWorkspacePath": "复制项目路径",
+      "openSectionDetails": "打开{{section}}详情",
+      "jumpToTurn": "跳转到该轮次",
+      "viewDetails": "详情",
+      "viewAllSection": "查看全部 {{count}} 项",
+      "showAllRows": "显示全部 {{count}} 项",
+      "showFewerRows": "收起"
+    },
+    "export": {
+      "redactPaths": "脱敏路径",
+      "redactPathsHelp": "复制 Markdown 时替换项目和文件路径。",
+      "redactedPath": "[已脱敏路径]"
+    },
+    "coverage": {
+      "complete": "数据完整",
+      "partial": "部分数据可用",
+      "minimal": "仅基础数据",
+      "partialNotice": "部分指标没有被当前会话或服务商上报。悬浮带虚线下划线的数值可查看具体原因。"
+    },
+    "toolCategories": {
+      "git": "Git",
+      "shell": "Shell",
+      "file": "文件",
+      "other": "其他"
+    },
+    "fileScopes": {
+      "snapshot_summary": "快照汇总",
+      "tool_inputs_only": "仅工具输入",
+      "unavailable": "未跟踪"
+    },
+    "accounting": {
+      "approximate": "近似",
+      "exact": "精确",
+      "unavailable": "未上报"
+    },
+    "status": {
+      "timingNotRecorded": "未记录耗时",
+      "cacheNotReported": "未上报缓存",
+      "noFileChanges": "无文件变更",
+      "notRecorded": "未记录",
+      "modelNotRecorded": "未记录模型名称",
+      "legacyModel": "旧会话模型未统计",
+      "inferredModel": "{{model}}（推测）",
+      "p95SampleInsufficient": "样本不足"
+    },
+    "cacheCoverage": {
+      "available": "已上报",
+      "partial": "部分上报",
+      "unavailable": "未上报"
+    },
+    "card": {
+      "heading": "会话统计",
+      "turns": "{{count}} 轮",
+      "calls": "{{count}} 次调用",
+      "operations": "{{count}} 次操作",
+      "tokens": "{{value}} Tokens"
+    },
+    "loading": {
+      "markdown": "正在生成用量报告...",
+      "title": "正在生成用量报告",
+      "description": "正在读取本地会话记录，并整理隐私安全的统计摘要。",
+      "steps": {
+        "collecting": "读取会话记录",
+        "tokens": "汇总 Token 和工具活动",
+        "safety": "检查可安全展示的字段"
+      }
+    },
+    "metrics": {
+      "wall": "会话跨度",
+      "active": "已记录轮次耗时",
+      "modelTime": "模型轮次耗时",
+      "toolTime": "工具调用耗时",
+      "tokens": "Tokens",
+      "cached": "缓存",
+      "files": "文件",
+      "errors": "错误",
+      "errorRate": "错误率"
+    },
+    "sections": {
+      "models": "模型",
+      "tools": "工具",
+      "files": "文件",
+      "slowest": "最慢耗时"
+    },
+    "empty": {
+      "models": "暂无模型指标",
+      "tools": "暂无工具指标",
+      "files": "无文件变更",
+      "errors": "暂无错误示例",
+      "modelsDescription": "当模型调用上报 Token 用量后，这里会显示模型统计。",
+      "toolsDescription": "当会话执行工具后，这里会显示工具调用统计。",
+      "filesDescription": "当前会话没有找到文件编辑记录。",
+      "errorsDescription": "本次报告没有记录到可展示的工具或模型错误样例。",
+      "slowest": "无慢耗时记录",
+      "slowestDescription": "没有记录到带耗时的轮次、模型调用或工具片段。"
+    },
+    "runtime": {
+      "open": "生成会话用量",
+      "button": "用量",
+      "tooltip": "在当前聊天中生成用量报告"
+    },
+    "panel": {
+      "tabsLabel": "用量报告分区",
+      "accounting": "计量方式",
+      "turnScope": "范围",
+      "cacheCoverage": "缓存统计",
+      "compressions": "压缩次数",
+      "fileScope": "文件范围",
+      "toolErrors": "工具错误",
+      "modelErrors": "模型错误",
+      "errorScope": "错误范围",
+      "metadataLabel": "用量报告元信息"
+    },
+    "privacy": {
+      "title": "隐私安全报告",
+      "summary": "不包含提示词、工具输入、命令输出或文件内容。"
+    },
+    "tabs": {
+      "overview": "总览",
+      "models": "模型",
+      "tools": "工具",
+      "files": "文件",
+      "errors": "错误",
+      "slowest": "慢耗时"
+    },
+    "table": {
+      "model": "模型",
+      "tool": "工具",
+      "category": "类别",
+      "calls": "调用",
+      "success": "成功",
+      "errors": "错误",
+      "input": "输入",
+      "output": "输出",
+      "cached": "缓存",
+      "duration": "记录耗时",
+      "p95": "P95",
+      "execution": "执行",
+      "toolDuration": "总耗时",
+      "toolP95Duration": "P95 总耗时",
+      "toolExecutionDuration": "执行耗时",
+      "file": "文件",
+      "operations": "操作",
+      "added": "新增",
+      "deleted": "删除",
+      "turns": "轮次",
+      "operationIds": "操作 ID",
+      "actions": "操作",
+      "label": "标签",
+      "count": "次数",
+      "kind": "类型",
+      "rowLimitSummary": "正在显示 {{visible}} / {{total}} 行",
+      "showAllRows": "显示全部 {{count}} 行",
+      "showFewerRows": "显示前 {{count}} 行"
+    },
+    "slowestKinds": {
+      "model": "模型调用",
+      "modelCall": "模型调用",
+      "tool": "工具",
+      "turn": "轮次"
+    },
+    "slowestLabels": {
+      "modelCall": "第 {{turn}} 轮模型调用",
+      "modelCallUnknown": "模型调用"
+    },
+    "help": {
+      "wall": "从第一轮开始到最后一轮结束的记录跨度，可能包含轮次之间的空闲间隔。",
+      "active": "产生可统计活动的轮次记录时间段并集，可能包含轮次内的编排或等待时间。",
+      "timeShare": "占已记录轮次耗时的比例。模型与工具耗时可能重叠，因此仅作为近似参考。",
+      "modelRoundTime": "基于会话中保存的模型轮次运行时元数据或起止时间计算，不等同于纯服务商流式输出或吞吐耗时；占比按已记录轮次耗时近似计算。",
+      "toolTime": "基于已记录工具调用耗时计算；占比按已记录轮次耗时近似计算。",
+      "cachedTokens": "当前服务商没有为这个会话上报缓存读取 Token 元数据；可用时仍会显示总 Token。",
+      "cachedTokensPartial": "只有部分调用上报了缓存读取 Token 元数据，因此缓存 Token 合计只覆盖这些调用。",
+      "toolDuration": "当前报告范围内该工具名称的总记录耗时，可能包含排队、预检查、确认等待和实际执行。",
+      "toolP95": "该工具总耗时的 95 分位值；同一工具至少有两次带耗时调用后才会显示。",
+      "toolExecution": "扣除排队、预检查和确认等待后的工具执行阶段耗时。旧会话可能没有这个字段。",
+      "legacyModel": "这个会话创建时尚未记录逐轮模型名称，因此报告无法确认精确模型。",
+      "inferredModel": "旧会话缺少逐轮模型名称，已根据会话的模型设置推测。",
+      "filesUnavailable": "当前会话没有找到本地快照或可识别的文件编辑工具记录。",
+      "filesNoRecordedChanges": "BitFun 没有检测到当前会话中的文件变更。如果本次会话没有编辑文件，这是正常状态。",
+      "filesRemoteUnavailable": "没有找到这个远程会话的快照汇总；如果工具记录能识别到写入、编辑或删除文件，仍会显示文件行。",
+      "filesNotTracked": "当前会话没有找到本地快照或可识别的文件编辑工具记录。",
+      "fileTurnIndexes": "当文件活动来自汇总而不是逐轮操作记录时，不会记录轮次。",
+      "fileOperationIds": "当报告无法关联到具体工具操作时，不会记录操作 ID。",
+      "fileDiffUnavailable": "Diff 链接需要基于快照的文件行和可见文件路径。",
+      "errors": "统计结束为错误状态的模型轮次，以及持久化结果标记为未成功的工具调用；不包含原始服务商响应、工具输入或命令输出。",
+      "toolErrors": "工具错误统计持久化结果标记为未成功的工具调用。",
+      "modelErrors": "模型错误统计最终进入错误状态的对话轮次。",
+      "errorExamples": "示例只按安全标签分组；原始服务商响应、工具输入和命令输出不会进入报告。",
+      "errorExampleRow": "模型/运行时错误或失败工具类型的安全分组标签。",
+      "errorExampleCount": "当前报告范围内匹配该标签的错误次数。",
+      "slowestSpans": "慢耗时来自已记录的轮次、模型调用与工具时间戳，用于定位耗时来源，不代表精确服务商延迟。",
+      "slowestModelCall": "该行是当前轮次内的一次模型调用。模型：{{model}}。"
+    },
+    "meta": {
+      "generatedAt": "生成时间",
+      "sessionId": "会话 ID",
+      "workspacePath": "项目路径"
+    }
+  },
   "agentCompanion": {
     "activity": {
       "starting": "启动中",
@@ -161,6 +380,9 @@
     "openWorkspaceFolderFailed": "打开工作区文件夹失败：{{error}}",
     "spaceToActivate": "按<space>空格键</space>快速键入"
   },
+  "workspaceStrip": {
+    "branchTooltipUnavailable": "非 Git 仓库或当前无分支"
+  },
   "context": {
     "title": "上下文",
     "add": "添加上下文",
@@ -189,16 +411,7 @@
     "temperature": "温度",
     "maxTokens": "最大令牌数",
     "topP": "Top P",
-    "streaming": "流式输出",
-    "autoMigrated": {
-      "title": "模型已自动切换",
-      "description": "当前会话之前使用的模型配置已不可用，系统已切换为自动选择模型。",
-      "reasons": {
-        "modelUnavailableOnRestore": "这是恢复历史会话时的自动处理，你可以继续使用，或稍后重新指定模型。",
-        "modelReconciled": "模型配置刚发生过调整，系统已为当前会话自动切换到可用模型。",
-        "fallback": "系统已为当前会话自动选择可用模型。"
-      }
-    }
+    "streaming": "流式输出"
   },
   "toolbar": {
     "newSession": "新建会话",
@@ -299,7 +512,13 @@
     },
     "openFolder": "打开文件夹…",
     "selectWorkspaceTitle": "选择工作区目录",
-    "switchWorkspaceFailed": "切换工作区失败：{{error}}"
+    "switchWorkspaceFailed": "切换工作区失败：{{error}}",
+    "usageAction": "会话用量",
+    "usageNoSession": "当前没有可用于 /usage 的会话",
+    "usageCommandUsage": "请单独输入 /usage，不要附加其他内容。",
+    "usageBusy": "请等待当前会话空闲后再使用 /usage。",
+    "usageNoWorkspace": "生成用量报告需要先打开一个项目。",
+    "usageFailed": "用量报告生成失败"
   },
   "planner": {
     "title": "任务规划",
@@ -386,16 +605,24 @@
         "short": "深审",
         "title": "深度审核",
         "origin": "审核来源"
+      },
+      "miniapp": {
+        "short": "小应用",
+        "title": "小应用编辑",
+        "origin": "小应用"
       }
     }
   },
   "deepReviewActionBar": {
+    "reviewRunningDeep": "深度审核进行中...",
+    "reviewRunningStandard": "审核进行中...",
     "reviewCompleted": "深度审核已完成",
     "fixRunning": "正在修复...",
     "fixCompleted": "修复完成",
     "fixFailed": "修复失败",
     "fixTimeout": "修复超时",
     "fixInterrupted": "修复已中断，还剩 {{count}} 项。",
+    "reviewWaitingCapacity": "审核队列等待中",
     "continueFix": "继续修复 {{count}} 项",
     "skipRemaining": "跳过剩余项",
     "reviewError": "审核出错",
@@ -403,9 +630,11 @@
     "close": "关闭",
     "minimize": "收起",
     "restore": "打开 {{label}}",
-    "fixAndReviewRunning": "正在修复\u0026准备重审...",
+    "fixAndReviewRunning": "正在修复&准备重审...",
     "minimizedDeep": "深度审核",
     "minimizedStandard": "代码审核",
+    "minimizedReviewRunningDeep": "深度审核进行中",
+    "minimizedReviewRunningStandard": "代码审核进行中",
     "minimizedFix": "正在修复",
     "minimizedFixReview": "修复并重审中",
     "minimizedFixCompleted": "修复完成",
@@ -415,8 +644,26 @@
     "showCustomInput": "补充说明",
     "hideCustomInput": "收起说明",
     "customInstructionsPlaceholder": "描述修复的额外要求或上下文信息...",
+    "remediationStatus": {
+      "fixing": "修复中",
+      "fixed": "已修复"
+    },
+    "decisionGate": {
+      "title": "修复前确认待决策项",
+      "description": "请先选择每个待决策项的处理方案，BitFun 会按你的选择开始修改。",
+      "supplementLabel": "补充要求",
+      "supplementPlaceholder": "可选：补充约束、范围边界或实现偏好。",
+      "missingSelection": "开始前需要先为每个待决策项选择一个方案。",
+      "noOptionsHint": "该项没有结构化选项。只有在确认按当前计划执行时再继续。",
+      "confirmFix": "确认并开始",
+      "confirmFixAndReview": "确认并重审",
+      "cancel": "返回选择"
+    },
     "fillBackInput": "填入输入框",
     "fillBackInputHint": "将选中的修复计划填入输入框，供手动编辑",
+    "retryIncompleteSlices": "重试未完成切片（{{count}}）",
+    "retryIncompleteRequestDisplay": "重试 {{count}} 个未完成的 Deep Review 切片",
+    "retryIncompleteFailed": "无法重试未完成的 Deep Review 切片。",
     "fixCompletedMessage": "所有修复已成功应用。",
     "replaceInputConfirmTitle": "替换当前输入？",
     "replaceInputConfirmMessage": "输入框中已有文本，填入计划将替换当前草稿内容。",
@@ -433,6 +680,7 @@
     "resumeRequestDisplay": "继续中断的深度审核",
     "resumeFailedMessage": "无法继续深度审核。请检查模型设置，或稍后重试。",
     "openModelSettings": "打开模型设置",
+    "switchModel": "切换模型",
     "copyDiagnostics": "复制诊断信息",
     "diagnosticsCopied": "诊断信息已复制",
     "diagnosticsCopyFailed": "复制诊断信息失败",
@@ -445,21 +693,74 @@
     "resumeBlockedWithReason": "无法继续：{{reason}}",
     "resumeFailedWithReason": "继续失败：{{reason}}",
     "reviewErrorWithReason": "审核出错：{{reason}}",
-    "retryResume": "重试",
-    "retryWithDifferentModel": "尝试其他模型",
     "viewPartialResults": "查看部分结果",
     "hidePartialResults": "隐藏部分结果",
+    "progressHandled": "{{handled}}/{{total}} 已处理",
+    "progressResumePreserved": "{{preserved}}/{{total}} 已保留，继续剩余审核",
     "partialResultsDescription": "{{completed}}/{{total}} 个 reviewer 已完成",
     "partialIssues": "发现 {{count}} 个问题",
     "partialRemediationItems": "{{count}} 个修复项",
+    "partialReviewerSummaries": "{{count}} 条审核员摘要",
     "contextOverflowTitle": "上下文超出限制，请选择处理方式：",
     "longRunningHint": "审核仍在进行中，可能需要更长时间...",
     "elapsedTime": "已运行 {{time}}",
-    "showRecoveryPlan": "显示恢复计划",
-    "hideRecoveryPlan": "隐藏恢复计划",
     "recoveryPreserve": "{{count}} 个已完成的 reviewer 将保留",
     "recoveryRerun": "{{count}} 个 reviewer 将重新运行",
     "recoverySkip": "{{count}} 个 reviewer 将被跳过",
+    "manualCancel": {
+      "title": "审核已停止",
+      "description": "你已停止本次深度审核。已完成的审核员结果会保留，可在准备好后继续剩余审核。"
+    },
+    "resultRecovery": {
+      "title": "深度审核需要补全结果",
+      "missingSubmitCodeReview": "审核已结束，但 BitFun 没有收到可确认的结构化结果。继续会保留已完成的审核员结果，并要求 agent 补交缺失的审核报告。",
+      "invalidSubmitCodeReview": "审核返回了 BitFun 无法读取的结果。继续会保留已完成的审核员结果，并要求 agent 修复报告。",
+      "wrongReviewMode": "审核返回了标准代码审核结果。继续会保留已完成的审核员结果，并要求 agent 提交深度审核报告。"
+    },
+    "capacityQueue": {
+      "title": "审核员正在等待容量",
+      "pausedTitle": "队列已暂停",
+      "activeReviewerTitle": "等待运行中的审核员",
+      "providerTitle": "等待模型容量",
+      "detail": "排队等待时间不会计入审核员运行时长。",
+      "activeReviewerDetail": "排队审核员会在运行中的审核员释放容量后继续启动。排队等待时间不会计入审核员运行时长。",
+      "longLaunchBatchWaitDetail": "该审核员等待时间已超过配置的队列窗口，因为前一批审核员仍在运行。你可以继续等待、暂停队列、取消排队审核员，或打开审核设置。",
+      "providerDetail": "BitFun 正在等待临时模型容量恢复。这里的等待不会计入审核员运行时长。",
+      "reason": "原因：{{reason}}",
+      "elapsed": "已等待 {{elapsed}}",
+      "elapsedWithMax": "已等待 {{elapsed}} / {{max}}",
+      "activeReviewerCount": "运行中的审核员：{{count}}",
+      "reasons": {
+        "providerRateLimit": "模型服务限速",
+        "providerConcurrencyLimit": "模型服务并发限制",
+        "retryAfter": "模型服务要求稍后重试",
+        "localConcurrencyCap": "本地审核员容量",
+        "launchBatchBlocked": "前一启动批次仍在运行",
+        "temporaryOverload": "模型服务临时过载"
+      },
+      "reasonDetails": {
+        "providerRateLimit": "模型服务正在限速。BitFun 会排队等待，并在容量恢复后继续。",
+        "providerConcurrencyLimit": "模型服务拒绝了新的并发审核员。BitFun 会在容量恢复后重试。",
+        "retryAfter": "模型服务要求稍后重试。这里的等待不会消耗审核员运行时间。",
+        "localConcurrencyCap": "当前 Review Team 审核员并行上限已满。已有审核员完成后，该审核员会继续启动。",
+        "launchBatchBlocked": "前一启动批次仍在运行。等待可以保持计划中的审核顺序，避免后续批次提前执行。",
+        "temporaryOverload": "模型服务报告临时过载。BitFun 会排队等待，然后继续或将该审核员标记为容量跳过。"
+      },
+      "sessionBusy": "当前会话较忙，可暂停 Deep Review 或稍后继续。",
+      "stopHint": "可使用停止按钮中断当前审核队列。",
+      "waitingReviewersTitle": "等待中的审核员",
+      "reviewerStatusQueued": "等待中",
+      "reviewerStatusPaused": "已暂停",
+      "optionalReviewer": "可选",
+      "pauseQueue": "暂停队列",
+      "continueQueue": "继续队列",
+      "cancelQueued": "取消排队审核员",
+      "skipOptionalQueued": "跳过可选扩展",
+      "openReviewSettings": "打开审核设置",
+      "controlFailed": "队列控制不可用，因为该审核员缺少会话、轮次或工具标识。可使用停止按钮中断审核，或等待队列状态刷新后再试。",
+      "controlFailedWithReason": "队列控制失败：{{reason}}。请重试；如果队列卡住，可以使用停止来中断审核。",
+      "controlPartiallyFailedWithReason": "队列控制已部分生效；{{total}} 位审核员中有 {{failed}} 位失败：{{reason}}。请等待队列状态刷新后重试；如果队列卡住，可以使用停止来中断审核。"
+    },
     "degradation": {
       "reduceReviewers": "仅运行核心 reviewer",
       "reduceReviewersDesc": "跳过额外 reviewer，只保留核心 reviewer",
@@ -490,17 +791,106 @@
     "windowTitle": "深度审核",
     "eyebrow": "代码审核团队",
     "title": "开始深度审核？",
-    "body": "深度审核会启动并行代码审核团队，通常比普通审核耗时更久，也会消耗更多 Token。",
-    "readonlyLabel": "首次只读",
-    "readonly": "首次审核默认只读：它会先输出问题和修复计划，不会直接修改代码。",
-    "costLabel": "Token 消耗更高",
-    "cost": "预期消耗：多个审核角色加质量门禁，运行时间和 Token 可能达到普通审核的数倍。",
-    "timeLabel": "耗时更久",
-    "time": "运行期间可以继续工作；只有整个深度审核在后台完成时才会通知你。",
+    "body": "深度审核会启动多个审核员，预计会消耗更多 Token，耗时也更久。",
+    "readonlyLabel": "只读",
+    "readonly": "修复需确认。",
+    "sessionConcurrencyTitle": "当前会话较忙",
+    "sessionConcurrencyBody": "目标会话已有 {{count}} 个 subagent 任务在运行。可选择更轻量策略、暂时取消，或在容量空闲后手动继续。",
+    "costLabel": "Token",
+    "cost": "审核员 + 质检。",
+    "timeLabel": "耗时",
+    "time": "后台运行。",
     "dontShowAgain": "下次不再提示",
     "cancel": "取消",
     "confirm": "开始深度审核",
-    "estimatedTokens": "预计消耗：{{min}} - {{max}} tokens"
+    "estimatedTokens": "预计消耗：{{min}} - {{max}} tokens",
+    "runStrategy": "运行策略：{{strategy}}",
+    "recommendedStrategy": "推荐策略：{{strategy}}",
+    "reviewDepth": "审查深度：{{depth}}",
+    "reviewDepthLabels": {
+      "high_risk_only": "仅高风险",
+      "risk_expanded": "风险扩展",
+      "full_depth": "完整深度"
+    },
+    "recommendationTitle": "风险推荐",
+    "strategyOverrideTitle": "运行策略",
+    "strategyOverrideBody": "快速更窄，深度覆盖更多。",
+    "selectedStrategy": "已选择",
+    "teamDefaultStrategyBody": "本次启动使用 {{strategy}}。",
+    "strategyTokenImpact": "Token：{{tokenImpact}}",
+    "strategyRuntimeImpact": "耗时：{{runtimeImpact}}",
+    "teamDefaultStrategy": "团队默认",
+    "strategyLabels": {
+      "quick": "快速",
+      "normal": "标准",
+      "deep": "深度"
+    },
+    "strategySummaries": {
+      "quick": "快速会保留与目标匹配的内置审核员，跳过用户额外添加的专家，并报告覆盖收窄。",
+      "normal": "标准适合慢速模型下的日常审核；限制可选扩张，大范围改动优先使用摘要式覆盖。",
+      "deep": "面向范围较大或风险较高的改动，允许更长耗时和拆分覆盖。"
+    },
+    "selectedStrategyFootnote": "已选：Token {{tokenImpact}}，耗时 {{runtimeImpact}}。",
+    "lineupTitle": "审核阵容",
+    "summaryTitle": "启动摘要",
+    "targetFiles": "{{count}} 个文件",
+    "targetFiles_one": "{{count}} 个文件",
+    "targetFiles_other": "{{count}} 个文件",
+    "targetRiskTags": "风险区域：{{tags}}",
+    "targetTagsWithMore": "{{tags}}，另有 {{count}} 个",
+    "targetTagsWithMore_one": "{{tags}}，另有 {{count}} 个",
+    "targetTagsWithMore_other": "{{tags}}，另有 {{count}} 个",
+    "optionalReviewers": "{{count}} 个额外专家",
+    "optionalReviewers_one": "{{count}} 个额外专家",
+    "optionalReviewers_other": "{{count}} 个额外专家",
+    "summaryFirstReview": "先摘要再覆盖",
+    "targetTagLabels": {
+      "frontendUi": "前端 UI",
+      "frontendStyle": "前端样式",
+      "frontendI18n": "前端国际化",
+      "frontendContract": "前端契约",
+      "desktopContract": "桌面契约",
+      "webServerContract": "Web 服务契约",
+      "backendCore": "后端核心",
+      "transport": "传输层",
+      "apiLayer": "API 层",
+      "aiAdapter": "AI 适配器",
+      "installerUi": "安装器 UI",
+      "test": "测试",
+      "docs": "文档",
+      "config": "配置",
+      "generatedOrLock": "生成文件或锁文件",
+      "unknown": "未知区域"
+    },
+    "estimatedCalls": "{{count}} 次审核调用",
+    "estimatedCalls_one": "{{count}} 次审核调用",
+    "estimatedCalls_other": "{{count}} 次审核调用",
+    "activeReviewers": "{{count}} 个已启用",
+    "activeReviewers_one": "{{count}} 个已启用",
+    "activeReviewers_other": "{{count}} 个已启用",
+    "skippedReviewers": "{{count}} 个已跳过",
+    "skippedReviewers_one": "{{count}} 个已跳过",
+    "skippedReviewers_other": "{{count}} 个已跳过",
+    "skippedMore": "另有 {{count}} 个",
+    "skippedMore_one": "另有 {{count}} 个",
+    "skippedMore_other": "另有 {{count}} 个",
+    "activeGroupTitle": "将运行",
+    "skippedGroupTitle": "已跳过的审核者",
+    "skippedReasons": {
+      "notApplicable": "不适用于本次目标",
+      "budgetLimited": "受 Token 预算限制",
+      "invalidTooling": "配置问题",
+      "disabled": "已停用",
+      "unavailable": "不可用",
+      "skipped": "已跳过"
+    },
+    "targetSource": {
+      "manualPrompt": "给定内容",
+      "workspaceDiff": "工作区改动",
+      "gitRef": "Git 引用",
+      "selectedContext": "已选上下文",
+      "reviewTarget": "审核目标"
+    }
   },
   "flowChatHeader": {
     "turnList": "轮次列表",
@@ -525,10 +915,17 @@
   },
   "sessionFilesBadge": {
     "files": "文件",
+    "filesSummaryCount": "{{count}} 个文件",
+    "expandChangeListCue": "展开列表",
+    "expandChangeListAriaCue": "展开查看文件列表",
+    "collapseFileDiffList": "收起文件变更列表",
     "reviewLabel": "审核",
     "reviewAll": "全部审核",
     "reviewMenuLabel": "审核",
     "reviewMenuHint": "选择审核深度",
+    "actionsMenuHint": "快捷动作",
+    "actionsButton": "动作",
+    "actionsButtonRunning": "进行中…",
     "reviewModeStandard": "普通审核",
     "reviewModeDeep": "深度审核",
     "reviewRunningStandard": "审核中",
@@ -844,6 +1241,9 @@
     },
     "taskTool": {
       "headerLine": "{{agentType}} 智能体：{{description}}",
+      "headerLineWithModel": "{{agentType}} 智能体（{{modelName}}）：{{description}}",
+      "headerLinePrefix": "{{agentType}} 智能体",
+      "headerLineSuffix": "：{{description}}",
       "defaultAgentKind": "子代理",
       "waitingConfirm": "等待确认",
       "executing": "执行中...",
@@ -863,13 +1263,13 @@
       "statusLabel": "状态",
       "promptLabel": "任务提示词",
       "reviewerContextLabel": "审核员",
+      "stopSubagent": "中止此 subagent",
+      "stoppingSubagent": "正在中止 subagent...",
+      "stopSubagentFailed": "中止此 subagent 失败。",
+      "stopSubagentHint": "只会取消当前审核员/subagent，父级深度审核可继续运行并生成汇总。",
       "errorLabel": "错误信息",
       "resultLabel": "执行结果",
       "noData": "无法加载任务数据",
-      "stopSubagentFailed": "无法停止该子代理。",
-      "stoppingSubagent": "正在停止子代理……",
-      "stopSubagent": "停止子代理",
-      "stopSubagentHint": "仅取消此审查员/子代理。父级审查仍可继续并生成摘要。",
       "executionContent": "执行内容",
       "duration": "耗时",
       "waitingForModelResponse": "等待模型响应...",
@@ -885,13 +1285,12 @@
       "disableLabel": "忽略限时",
       "enableTooltip": "恢复超时限制",
       "enableLabel": "恢复限时",
-      "restoreShort": "恢复（剩余 {{seconds}} 秒）"
-    },
-    "diagram": {
-      "interactive": "交互图表:",
-      "preparing": "准备中",
-      "creating": "创建中",
-      "mermaidInteractive": "Mermaid 交互图表"
+      "restoreShort": "恢复（剩余 {{seconds}} 秒）",
+      "durationTooltip": "耗时 {{duration}}",
+      "completedDurationTooltip": "已完成，耗时 {{duration}}",
+      "failedDurationTooltip": "执行失败，耗时 {{duration}}",
+      "failedDurationTooltipWithReason": "执行失败，耗时 {{duration}}：{{reason}}",
+      "cancelledDurationTooltip": "已取消，耗时 {{duration}}"
     },
     "template": {
       "get": "获取模板:",
@@ -926,6 +1325,13 @@
       "failedLabel": "MCP 失败",
       "executionFailed": "MCP 执行失败"
     },
+    "acpPermission": {
+      "allowOnce": "允许一次",
+      "allowAlways": "始终允许",
+      "reject": "拒绝一次",
+      "rejectAlways": "始终拒绝",
+      "selectOption": "选择操作"
+    },
     "default": {
       "waitingConfirm": "等待确认",
       "executing": "执行中...",
@@ -946,6 +1352,7 @@
       "parsingParams": "解析参数中...",
       "noFileSpecified": "未指定文件",
       "readFile": "读取文件",
+      "permissionRequest": "请求读取权限：",
       "readingFile": "正在读取",
       "preparingRead": "准备读取"
     },
@@ -1193,8 +1600,65 @@
         "partial": "部分完成",
         "unknown": "未知"
       },
+      "runManifest": {
+        "recommendedStrategy": "推荐策略",
+        "riskRecommendationTitle": "风险推荐",
+        "reviewDepth": "审查深度",
+        "reviewDepthLabels": {
+          "high_risk_only": "仅高风险",
+          "risk_expanded": "风险扩展",
+          "full_depth": "完整深度"
+        }
+      },
       "sectionItemCount": "{{count}} 项",
       "remediationPlan": "修复计划",
+      "reliabilityStatus": {
+        "title": "审核状态",
+        "context_pressure": {
+          "label": "上下文压力上升",
+          "detail": "大型或受限目标预计会调用 {{count}} 次审核者。"
+        },
+        "compression_preserved": {
+          "label": "压缩已保留关键事实",
+          "detail": "覆盖说明包含压缩保留下来的上下文。"
+        },
+        "cache_hit": {
+          "label": "增量缓存复用了审核结果",
+          "detail": "{{count}} 个审核包复用了匹配的缓存输出。"
+        },
+        "cache_miss": {
+          "label": "增量缓存未命中或已刷新",
+          "detail": "{{count}} 个审核包重新执行或刷新了过期缓存。"
+        },
+        "concurrency_limited": {
+          "label": "审核员启动受到并发限制",
+          "detail": "{{count}} 次审核员启动触发了并发上限。"
+        },
+        "partial_reviewer": {
+          "label": "审核者返回了部分结果",
+          "detail": "{{count}} 个审核者结果是部分结果，置信度已降低。"
+        },
+        "reduced_scope": {
+          "label": "降深度覆盖",
+          "detail": "本次审核使用了降深度范围配置。"
+        },
+        "retry_guidance": {
+          "label": "已给出重试指引",
+          "detail": "{{count}} 条重试指引用于补足部分审核覆盖。"
+        },
+        "skipped_reviewers": {
+          "label": "已跳过的审核员",
+          "detail": "{{count}} 个审核员因适用性、配置或预算被跳过。"
+        },
+        "token_budget_limited": {
+          "label": "Token 预算限制了审核覆盖",
+          "detail": "{{count}} 个审核员因 Token 预算模式被跳过。"
+        },
+        "user_decision": {
+          "label": "需要用户决策",
+          "detail": "{{count}} 个审核项需要先决策再修复。"
+        }
+      },
       "sections": {
         "summary": "结论摘要",
         "issues": "问题列表",
@@ -1223,8 +1687,11 @@
         "noIssues": "没有已验证问题。",
         "status": "状态",
         "findings": "问题数",
+        "packet": "分包",
+        "partialOutput": "部分输出",
         "validation": "验证说明",
         "source": "来源",
+        "reliabilitySignals": "审核可靠性",
         "noItems": "无。"
       },
       "export": {
@@ -1259,7 +1726,7 @@
         "noSelectionHint": "至少选择一项修复计划后才能开始修复。",
         "ungrouped": "其他",
         "startFix": "开始修复",
-        "fixAndReview": "修复\\u0026重审",
+        "fixAndReview": "修复&重审",
         "cancel": "取消",
         "fixUnavailable": "无法开始修复：审核会话不可用。",
         "fixRequestDisplay": "开始修复深度审核问题",
@@ -1279,13 +1746,6 @@
         "approve_with_suggestions": "有条件通过",
         "request_changes": "需要修改",
         "block": "阻止合并"
-      },
-      "severities": {
-        "critical": "严重",
-        "high": "高",
-        "medium": "中",
-        "low": "低",
-        "info": "信息"
       },
       "certainties": {
         "confirmed": "已确认",
@@ -1340,7 +1800,7 @@
     "openOne": "打开一个",
     "toStart": "开始吧。",
     "workingIn": "我们正在",
-    "project": "项目里工作。",
+    "project": "工作。",
     "workingInCowork": "在",
     "gitClean": "一切干净，可以放手大干了 ✦",
     "gitUnstaged": "{{count}} 个文件",
@@ -1352,7 +1812,6 @@
     "currentlyHas": "目前有",
     "commaSeparator": "，",
     "period": "。",
-    "project": "工作。",
     "projectCowork": "项目里工作。"
   },
   "modelSelector": {
@@ -1467,5 +1926,33 @@
   "subagent": {
     "showingLines": "当前仅显示 {{shown}} / {{total}} 行",
     "showAll": "显示全部"
+  },
+  "pendingQueue": {
+    "title": "待发送 ({{count}})",
+    "hint": "当前对话结束后会按顺序自动发送",
+    "editorHint": "⌘/Ctrl+Enter 保存 · Esc 取消",
+    "emptyPlaceholder": "（空消息）",
+    "statusSending": "正在引导…",
+    "statusFailed": "发送失败 — 请编辑 / 立即发送 / 删除以清除该项",
+    "actions": {
+      "edit": "编辑",
+      "sendNow": "立即发送（引导）",
+      "delete": "删除",
+      "saveEdit": "保存（⌘/Ctrl+Enter）",
+      "cancelEdit": "取消（Esc）"
+    },
+    "tooltip": {
+      "sendNow": "立即作为引导消息插入当前对话"
+    },
+    "errors": {
+      "emptyContent": "消息内容不能为空",
+      "sendNowFailed": "立即发送失败，请稍后重试"
+    }
+  },
+  "steering": {
+    "title": "立即引导",
+    "injectedAt": "已在第 {{round}} 轮前插入",
+    "statusPending": "等待触发",
+    "statusInjected": "已触发"
   }
 }

@@ -1,16 +1,14 @@
-//! Service layer module
+//! Service facade and core-owned product service assembly.
 //!
-//! Contains core business logic: Workspace, Config, FileSystem, Git, Agentic, AIRules, MCP.
+//! Owner-crate implementations are re-exported here when they are safely
+//! isolated. High-coupling runtime services stay here until their port
+//! contracts and equivalence tests are explicit.
 
 pub(crate) mod agent_memory; // Agent memory prompt helpers
-pub mod ai_memory; // AI memory point management
-pub mod ai_rules; // AI rules management
 pub mod announcement; // Announcement / feature-demo / tips system
 pub(crate) mod bootstrap; // Workspace persona bootstrap helpers
 pub mod config; // Config management
 pub mod cron; // Scheduled jobs
-pub mod diff;
-pub mod file_watch;
 pub mod filesystem; // FileSystem management
 pub mod git; // Git service
 pub mod i18n; // I18n service
@@ -22,19 +20,20 @@ pub mod remote_ssh; // Remote SSH (desktop → server)
 pub mod runtime; // Managed runtime and capability management
 pub mod search; // Workspace search via managed flashgrep daemon
 pub mod session; // Session persistence
+pub mod session_usage; // Session runtime usage reports
 pub mod snapshot; // Snapshot-based change tracking
-pub mod system; // System command detection and execution
 pub mod token_usage; // Token usage tracking
 pub mod workspace; // Workspace management // Diff calculation and merge service
 pub mod workspace_runtime; // Workspace runtime layout / migration / initialization
 
-// Terminal is a standalone crate; re-export it here.
+// Terminal is implemented in the workspace-level `terminal-core` crate.
+// This re-export preserves the legacy `bitfun_core::service::terminal` path.
 pub use terminal_core as terminal;
 
 // Re-export main components.
-pub use ai_memory::{AIMemory, AIMemoryManager, MemoryType};
-pub use ai_rules::AIRulesService;
 pub use announcement::{AnnouncementCard, AnnouncementScheduler, AnnouncementSchedulerRef};
+pub use bitfun_services_core::{diagnostics, diff, system};
+pub use bitfun_services_integrations::file_watch;
 pub use bootstrap::reset_workspace_persona_files_to_default;
 pub use config::{ConfigManager, ConfigProvider, ConfigService};
 pub use cron::{

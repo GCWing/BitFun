@@ -124,6 +124,70 @@ describe('PersistenceModule', () => {
     expect(persisted.modelRounds[0].textItems.map((item: any) => item.id)).toEqual(['real-text']);
   });
 
+  it('persists ACP permission metadata for pending confirmation tools', () => {
+    const turn = createDialogTurn('processing');
+    turn.modelRounds[0].items = [
+      {
+        id: 'tool-1',
+        type: 'tool',
+        toolName: 'Read',
+        toolCall: {
+          id: 'tool-1',
+          input: {
+            filePath: '/',
+          },
+        },
+        status: 'pending_confirmation',
+        timestamp: 1001,
+        startTime: 1001,
+        requiresConfirmation: true,
+        userConfirmed: false,
+        acpPermission: {
+          permissionId: 'acp_permission_1',
+          sessionId: 'remote-session-1',
+          toolCallId: 'tool-1',
+          requestedAt: 1002,
+          options: [
+            {
+              optionId: 'once',
+              name: 'Allow once',
+              kind: 'allow_once',
+            },
+            {
+              optionId: 'reject',
+              name: 'Reject',
+              kind: 'reject_once',
+            },
+          ],
+        },
+      } as any,
+    ];
+
+    const persisted = convertDialogTurnToBackendFormat(turn, 0);
+    const [toolItem] = persisted.modelRounds[0].toolItems;
+
+    expect(toolItem.requiresConfirmation).toBe(true);
+    expect(toolItem.userConfirmed).toBe(false);
+    expect(toolItem.acpPermission).toEqual({
+      permissionId: 'acp_permission_1',
+      sessionId: 'remote-session-1',
+      toolCallId: 'tool-1',
+      requestedAt: 1002,
+      options: [
+        {
+          optionId: 'once',
+          name: 'Allow once',
+          kind: 'allow_once',
+        },
+        {
+          optionId: 'reject',
+          name: 'Reject',
+          kind: 'reject_once',
+        },
+      ],
+    });
+  });
+
   it('coalesces non-terminal immediate saves into a short latest-state window', async () => {
     const turn = createDialogTurn('processing');
     const context = createContext(turn);

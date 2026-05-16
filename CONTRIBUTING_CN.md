@@ -85,6 +85,10 @@ pnpm run e2e:test
 - ❌ `tauri::AppHandle`
 - ✅ `bitfun_events::EventEmitter`
 
+进行 `bitfun-core` 拆解或构建提速重构时，请遵循
+[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)，
+不要把产品 feature set 或 release 脚本变更作为顺手改动。
+
 ### Tauri 命令规范
 
 - 命令名使用 `snake_case`
@@ -156,6 +160,8 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 ## 测试与验证
 
 按改动范围运行相关测试：
+
+修改 `/usage` UI 文案时，请同步 `en-US`、`zh-CN`、`zh-TW` 多语言文本。
 
 ```bash
 # Rust

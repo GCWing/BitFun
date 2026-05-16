@@ -342,12 +342,12 @@ impl GeminiSSEData {
         };
 
         let mut responses = Vec::new();
-        let mut finish_reason = candidate.finish_reason;
+        let finish_reason = candidate.finish_reason;
         let grounding_metadata = candidate.grounding_metadata;
         let safety_ratings = candidate.safety_ratings;
 
         if let Some(content) = candidate.content {
-            for part in content.parts {
+            for (part_index, part) in content.parts.into_iter().enumerate() {
                 let has_function_call = part.function_call.is_some();
                 let text = part.text.filter(|text| !text.is_empty());
                 let is_thought = part.thought.unwrap_or(false);
@@ -360,14 +360,14 @@ impl GeminiSSEData {
                         reasoning_content: None,
                         thinking_signature,
                         tool_call: Some(UnifiedToolCall {
-                            tool_call_index: None,
+                            tool_call_index: Some(part_index),
                             id: None,
                             name: function_call.name,
                             arguments: serde_json::to_string(&arguments).ok(),
-                            arguments_is_snapshot: false,
+                            arguments_is_snapshot: true,
                         }),
                         usage: usage.take(),
-                        finish_reason: finish_reason.take(),
+                        finish_reason: None,
                         provider_metadata: None,
                     });
                     continue;
@@ -381,7 +381,7 @@ impl GeminiSSEData {
                             thinking_signature,
                             tool_call: None,
                             usage: usage.take(),
-                            finish_reason: finish_reason.take(),
+                            finish_reason: None,
                             provider_metadata: None,
                         });
                         continue;
@@ -398,7 +398,7 @@ impl GeminiSSEData {
                             thinking_signature,
                             tool_call: None,
                             usage: usage.take(),
-                            finish_reason: finish_reason.take(),
+                            finish_reason: None,
                             provider_metadata: None,
                         });
                         continue;
@@ -412,7 +412,7 @@ impl GeminiSSEData {
                         thinking_signature,
                         tool_call: None,
                         usage: usage.take(),
-                        finish_reason: finish_reason.take(),
+                        finish_reason: None,
                         provider_metadata: None,
                     });
                     continue;
@@ -425,7 +425,7 @@ impl GeminiSSEData {
                         thinking_signature,
                         tool_call: None,
                         usage: usage.take(),
-                        finish_reason: finish_reason.take(),
+                        finish_reason: None,
                         provider_metadata: None,
                     });
                 }
@@ -459,9 +459,23 @@ impl GeminiSSEData {
                 thinking_signature: None,
                 tool_call: None,
                 usage: usage.take(),
-                finish_reason: finish_reason.take(),
+                finish_reason: None,
                 provider_metadata: Some(provider_metadata),
             });
+        }
+
+        if let Some(finish_reason) = finish_reason {
+            if let Some(last_response) = responses.last_mut() {
+                last_response.finish_reason = Some(finish_reason);
+                return responses;
+            }
+
+            responses.push(UnifiedResponse {
+                usage,
+                finish_reason: Some(finish_reason),
+                ..Default::default()
+            });
+            return responses;
         }
 
         if responses.is_empty() {
@@ -560,6 +574,63 @@ mod tests {
                 .and_then(|tool_call| tool_call.name.as_deref()),
             Some("get_weather")
         );
+        assert_eq!(
+            responses[0]
+                .tool_call
+                .as_ref()
+                .and_then(|tool_call| tool_call.tool_call_index),
+            Some(0)
+        );
+        assert!(responses[0]
+            .tool_call
+            .as_ref()
+            .is_some_and(|tool_call| tool_call.arguments_is_snapshot));
+    }
+
+    #[test]
+    fn indexes_parallel_function_call_parts_and_finishes_after_all_tools() {
+        let payload = serde_json::json!({
+            "candidates": [{
+                "content": {
+                    "parts": [
+                        {
+                            "functionCall": {
+                                "name": "read_file",
+                                "args": { "path": "a.rs" }
+                            }
+                        },
+                        {
+                            "functionCall": {
+                                "name": "read_file",
+                                "args": { "path": "b.rs" }
+                            }
+                        }
+                    ]
+                },
+                "finishReason": "STOP"
+            }]
+        });
+
+        let data: GeminiSSEData = serde_json::from_value(payload).expect("gemini payload");
+        let responses = data.into_unified_responses();
+
+        assert_eq!(responses.len(), 2);
+        assert_eq!(
+            responses[0]
+                .tool_call
+                .as_ref()
+                .and_then(|tool_call| tool_call.tool_call_index),
+            Some(0)
+        );
+        assert_eq!(
+            responses[1]
+                .tool_call
+                .as_ref()
+                .and_then(|tool_call| tool_call.tool_call_index),
+            Some(1)
+        );
+        assert!(responses[0].finish_reason.is_none());
+        assert_eq!(responses[1].finish_reason.as_deref(), Some("STOP"));
     }
 
     #[test]

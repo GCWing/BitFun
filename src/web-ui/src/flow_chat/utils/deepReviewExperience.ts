@@ -28,8 +28,9 @@ export interface ReviewerProgressSummary {
   running: number;
   skipped: number;
   unknown: number;
+  handled: number;
   total: number;
-  /** Localised short text, e.g. "3/5 completed" */
+  /** Fallback short text, e.g. "4/5 handled" */
   text: string;
 }
 
@@ -52,10 +53,15 @@ export function buildReviewerProgressSummary(
 ): ReviewerProgressSummary {
   const completed = progress.filter((p) => p.status === 'completed').length;
   const failed = progress.filter((p) => p.status === 'failed').length;
-  const timedOut = progress.filter((p) => p.status === 'timed_out').length;
+  const timedOut = progress.filter((p) => (
+    p.status === 'timed_out' || p.status === 'partial_timeout'
+  )).length;
   const running = progress.filter((p) => p.status === 'unknown').length;
-  const skipped = progress.filter((p) => p.status === 'cancelled').length;
+  const skipped = progress.filter((p) => (
+    p.status === 'cancelled' || p.status === 'skipped'
+  )).length;
   const unknown = progress.filter((p) => p.status === 'unknown').length;
+  const handled = completed + failed + timedOut + skipped;
   const total = progress.length;
 
   return {
@@ -65,8 +71,9 @@ export function buildReviewerProgressSummary(
     running,
     skipped,
     unknown,
+    handled,
     total,
-    text: `${completed}/${total} completed`,
+    text: `${handled}/${total} handled`,
   };
 }
 
@@ -87,6 +94,92 @@ export interface PartialReviewData {
   completedRemediationItems: string[];
   /** Summaries from completed reviewers */
   completedReviewerSummaries: string[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function extractSummaryText(summary: unknown): string | null {
+  if (typeof summary === 'string') {
+    const trimmed = summary.trim();
+    return trimmed || null;
+  }
+
+  if (!isRecord(summary)) {
+    return null;
+  }
+
+  const assessment = summary.overall_assessment;
+  if (typeof assessment === 'string' && assessment.trim()) {
+    return assessment.trim();
+  }
+
+  return null;
+}
+
+function extractTextField(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function appendPartialReviewResult(
+  result: unknown,
+  completedIssues: NonNullable<CodeReviewRemediationData['issues']>,
+  completedRemediationItems: string[],
+  completedReviewerSummaries: string[],
+): void {
+  if (!result) {
+    return;
+  }
+
+  if (typeof result === 'string') {
+    const trimmed = result.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    try {
+      appendPartialReviewResult(
+        JSON.parse(trimmed),
+        completedIssues,
+        completedRemediationItems,
+        completedReviewerSummaries,
+      );
+    } catch {
+      completedReviewerSummaries.push(trimmed);
+    }
+    return;
+  }
+
+  if (!isRecord(result)) {
+    return;
+  }
+
+  if (Array.isArray(result.issues)) {
+    completedIssues.push(
+      ...(result.issues.filter(isRecord) as NonNullable<CodeReviewRemediationData['issues']>),
+    );
+  }
+
+  if (Array.isArray(result.remediation_plan)) {
+    completedRemediationItems.push(
+      ...result.remediation_plan.filter((item): item is string => (
+        typeof item === 'string' && item.trim().length > 0
+      )),
+    );
+  }
+
+  const summaryText =
+    extractSummaryText(result.summary) ??
+    extractTextField(result.partial_output) ??
+    extractTextField(result.partialOutput);
+  if (summaryText) {
+    completedReviewerSummaries.push(summaryText);
+  }
 }
 
 /**
@@ -126,28 +219,22 @@ export function extractPartialReviewData(
           continue;
         }
 
-        // Try to parse the tool result for review data.
-        const result = item.toolResult.result;
-        if (typeof result === 'string') {
-          try {
-            const parsed = JSON.parse(result) as Record<string, unknown>;
-            if (parsed.issues && Array.isArray(parsed.issues)) {
-              const issues = parsed.issues as NonNullable<CodeReviewRemediationData['issues']>;
-              completedIssues.push(...issues);
-            }
-            if (parsed.remediation_plan && Array.isArray(parsed.remediation_plan)) {
-              completedRemediationItems.push(...(parsed.remediation_plan as string[]));
-            }
-            if (parsed.summary) {
-              completedReviewerSummaries.push(String(parsed.summary));
-            }
-          } catch {
-            // Not JSON, treat as plain text summary
-            completedReviewerSummaries.push(result);
-          }
-        }
+        appendPartialReviewResult(
+          item.toolResult.result,
+          completedIssues,
+          completedRemediationItems,
+          completedReviewerSummaries,
+        );
       }
     }
+  }
+
+  const hasExtractedDetails =
+    completedIssues.length > 0 ||
+    completedRemediationItems.length > 0 ||
+    completedReviewerSummaries.length > 0;
+  if (!hasExtractedDetails) {
+    return null;
   }
 
   return {
@@ -179,6 +266,41 @@ export interface ErrorAttribution {
 export function buildErrorAttribution(
   interruption: DeepReviewInterruption,
 ): ErrorAttribution {
+  if (interruption.interruptionReason === 'manual_cancelled') {
+    return {
+      category: 'manual_cancelled',
+      title: 'deepReviewActionBar.manualCancel.title',
+      description: 'deepReviewActionBar.manualCancel.description',
+      severity: 'warning',
+      actions: interruption.recommendedActions.map((a) => ({
+        code: a.code,
+        labelKey: a.labelKey,
+      })),
+    };
+  }
+
+  if (interruption.resultRecoveryReason) {
+    const descriptionByReason: Record<
+      NonNullable<DeepReviewInterruption['resultRecoveryReason']>,
+      string
+    > = {
+      missing_submit_code_review: 'deepReviewActionBar.resultRecovery.missingSubmitCodeReview',
+      invalid_submit_code_review: 'deepReviewActionBar.resultRecovery.invalidSubmitCodeReview',
+      wrong_review_mode: 'deepReviewActionBar.resultRecovery.wrongReviewMode',
+    };
+
+    return {
+      category: 'result_recovery',
+      title: 'deepReviewActionBar.resultRecovery.title',
+      description: descriptionByReason[interruption.resultRecoveryReason],
+      severity: 'warning',
+      actions: interruption.recommendedActions.map((a) => ({
+        code: a.code,
+        labelKey: a.labelKey,
+      })),
+    };
+  }
+
   const presentation = getAiErrorPresentation(interruption.errorDetail);
 
   return {
@@ -227,7 +349,9 @@ export function buildRecoveryPlan(
     )
     .map((r) => r.reviewer);
 
-  const willSkip: string[] = [];
+  const willSkip = reviewers
+    .filter((r) => r.status === 'skipped')
+    .map((r) => r.reviewer);
 
   const parts: string[] = [];
   if (willPreserve.length > 0) {

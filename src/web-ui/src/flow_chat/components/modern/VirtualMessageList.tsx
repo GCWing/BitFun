@@ -472,7 +472,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     // protected collapse, and subtracting it here makes the list think the
     // viewport is still pinned near the bottom when the user has already moved
     // away. That misclassification re-arms anchor restore and causes jitter.
-    const fallbackAdditionalCompensation = Math.max(0, shrinkAmount - distanceFromBottom);
+    const currentCollapseCompensation = getReservationTotalPx(bottomReservationStateRef.current.collapse);
+    const fallbackRequiredCollapseCompensation = Math.max(0, shrinkAmount - distanceFromBottom);
     const cumulativeShrinkPx = hasValidCollapseIntent
       ? collapseIntent.cumulativeShrinkPx + shrinkAmount
       : 0;
@@ -485,7 +486,10 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
           ? Math.max(currentTotalCompensation, resolvedIntentCompensation)
           : resolvedIntentCompensation
       )
-      : currentTotalCompensation + fallbackAdditionalCompensation;
+      : getReservationTotalPx(bottomReservationStateRef.current.pin) + Math.max(
+        currentCollapseCompensation,
+        fallbackRequiredCollapseCompensation,
+      );
     if (hasValidCollapseIntent) {
       pendingCollapseIntentRef.current = {
         ...collapseIntent,
@@ -493,7 +497,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       };
     }
 
-    if (!hasValidCollapseIntent && fallbackAdditionalCompensation <= COMPENSATION_EPSILON_PX) {
+    if (!hasValidCollapseIntent && fallbackRequiredCollapseCompensation <= COMPENSATION_EPSILON_PX) {
       // If the user is already far enough from the bottom, this shrink does not
       // need protection. Reusing stale bottom compensation here makes the
       // scroll listener restore an older anchor during upward scroll and causes
@@ -707,13 +711,6 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       )
     );
     const preservedPx = shouldPreserveCurrentPx ? currentPinReservation.px : 0;
-    const additiveRetryPx = (
-      shouldPreserveCurrentPx &&
-      pinMode === 'transient' &&
-      resolvedRequiredTailSpacePx > COMPENSATION_EPSILON_PX
-    )
-      ? currentPinReservation.px + resolvedRequiredTailSpacePx
-      : 0;
     const shouldRetainTarget = (
       pinMode === 'sticky-latest' ||
       resolvedRequiredTailSpacePx > COMPENSATION_EPSILON_PX ||
@@ -722,7 +719,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     return {
       kind: 'pin',
-      px: Math.max(nextFloorPx, resolvedRequiredTailSpacePx, preservedPx, additiveRetryPx),
+      px: Math.max(nextFloorPx, resolvedRequiredTailSpacePx, preservedPx),
       floorPx: nextFloorPx,
       mode: pinMode,
       targetTurnId: shouldRetainTarget ? turnId : null,
@@ -1197,6 +1194,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     const handleWheel = (event: WheelEvent) => {
       if (event.deltaY < 0) {
         followOutputControllerRef.current.handleUserScrollIntent();
+        releaseAnchorLock('wheel-up');
       }
     };
 
@@ -1214,6 +1212,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       if (currentY - startY > TOUCH_SCROLL_INTENT_EXIT_THRESHOLD_PX) {
         touchScrollIntentStartYRef.current = currentY;
         followOutputControllerRef.current.handleUserScrollIntent();
+        releaseAnchorLock('touch-scroll-up');
       }
     };
 
@@ -1227,6 +1226,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       }
 
       followOutputControllerRef.current.handleUserScrollIntent();
+      releaseAnchorLock('keyboard-scroll-up');
     };
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -1240,6 +1240,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
       scrollbarPointerInteractionActiveRef.current = true;
       followOutputControllerRef.current.handleUserScrollIntent();
+      releaseAnchorLock('scrollbar-pointer-down');
     };
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -1253,6 +1254,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       }
 
       followOutputControllerRef.current.handleUserScrollIntent();
+      releaseAnchorLock('scrollbar-pointer-move');
     };
 
     const endScrollbarPointerInteraction = () => {
@@ -1451,6 +1453,44 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   }, [pendingTurnPin, scheduleVisibleTurnMeasure, tryResolvePendingTurnPin]);
 
   // ── Navigation helpers ────────────────────────────────────────────────
+  const clearAllBottomReservationsForUserNavigation = useCallback(() => {
+    const currentState = bottomReservationStateRef.current;
+    const scroller = scrollerElementRef.current;
+    const nextReservationState = createInitialBottomReservationState();
+    const hasActiveReservation = !areBottomReservationStatesEqual(currentState, nextReservationState);
+
+    releaseAnchorLock('user-navigation');
+    setPendingTurnPin(null);
+    pendingCollapseIntentRef.current = {
+      active: false,
+      anchorScrollTop: 0,
+      toolId: null,
+      toolName: null,
+      expiresAtMs: 0,
+      distanceFromBottomBeforeCollapse: 0,
+      baseTotalCompensationPx: 0,
+      cumulativeShrinkPx: 0,
+    };
+
+    if (!hasActiveReservation) {
+      return;
+    }
+
+    bottomReservationStateRef.current = nextReservationState;
+    updateBottomReservationState(nextReservationState);
+    applyFooterCompensationNow(nextReservationState);
+
+    if (scroller) {
+      previousScrollTopRef.current = scroller.scrollTop;
+      previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller, nextReservationState);
+    }
+  }, [
+    applyFooterCompensationNow,
+    releaseAnchorLock,
+    snapshotMeasuredContentHeight,
+    updateBottomReservationState,
+  ]);
+
   const clearPinReservationForUserNavigation = useCallback(() => {
     const currentState = bottomReservationStateRef.current;
     const scroller = scrollerElementRef.current;
@@ -1517,13 +1557,16 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     return lastDialogTurn.modelRounds.some(round => round.isStreaming);
   }, [activeSession, isProcessing]);
 
-  const scrollToLatestEndPositionInternal = useCallback((behavior: ScrollBehavior) => {
-    if (virtuosoRef.current && virtualItems.length > 0) {
-      releaseAnchorLock('scroll-to-latest');
-      setPendingTurnPin(null);
-      virtuosoRef.current.scrollTo({ top: 999999999, behavior });
+  const scrollToLatestEndPositionInternal = useCallback((behavior: 'auto' | 'smooth') => {
+    const scroller = scrollerElementRef.current;
+    if (scroller) {
+      clearAllBottomReservationsForUserNavigation();
+      scroller.scrollTo({
+        top: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+        behavior,
+      });
     }
-  }, [releaseAnchorLock, virtualItems.length]);
+  }, [clearAllBottomReservationsForUserNavigation]);
 
   const requestTurnPinToTop = useCallback((turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }) => {
     const requestedPinMode = options?.pinMode ?? 'transient';
@@ -1553,58 +1596,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   }, [userMessageItems]);
 
   const performAutoFollowSync = useCallback(() => {
-    if (!latestTurnId) {
-      return;
-    }
-
-    const currentPinReservation = bottomReservationStateRef.current.pin;
-    const totalBottomCompensationPx = getTotalBottomCompensationPx();
-    const hasPendingLatestStickyPin = (
-      pendingTurnPin?.turnId === latestTurnId &&
-      pendingTurnPin.pinMode === 'sticky-latest'
-    );
-    const hasAppliedLatestStickyPin = (
-      currentPinReservation.mode === 'sticky-latest' &&
-      currentPinReservation.targetTurnId === latestTurnId
-    );
-    const shouldKeepStickyLatest = (
-      hasAppliedLatestStickyPin &&
-      currentPinReservation.floorPx > COMPENSATION_EPSILON_PX
-    );
-    const shouldPreserveSyntheticTail = (
-      hasAppliedLatestStickyPin &&
-      totalBottomCompensationPx > COMPENSATION_EPSILON_PX
-    );
-
-    if (hasPendingLatestStickyPin) {
-      return;
-    }
-
-    if (!hasAppliedLatestStickyPin) {
-      requestTurnPinToTop(latestTurnId, {
-        behavior: 'auto',
-        pinMode: 'sticky-latest',
-      });
-      return;
-    }
-
-    if (shouldKeepStickyLatest) {
-      return;
-    }
-
-    if (shouldPreserveSyntheticTail) {
-      return;
-    }
-
     scrollToLatestEndPositionInternal('auto');
-  }, [
-    getTotalBottomCompensationPx,
-    latestTurnId,
-    pendingTurnPin?.pinMode,
-    pendingTurnPin?.turnId,
-    requestTurnPinToTop,
-    scrollToLatestEndPositionInternal,
-  ]);
+  }, [scrollToLatestEndPositionInternal]);
 
   const {
     isFollowingOutput,
@@ -1636,15 +1629,9 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     },
     shouldSuspendAutoFollow,
     getAutoFollowDistanceFromBottom: (scroller) => (
-      Math.max(0, scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop - getTotalBottomCompensationPx())
+      Math.max(0, scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop)
     ),
-    onContinuousFollowFrame: () => {
-      // Keep sticky-latest pin floor aligned with the live DOM as collapses
-      // shrink the layout. Without this the pin reservation would lag for one
-      // RAF tick and the viewport would briefly land below the latest user
-      // message.
-      reconcileStickyPinReservation();
-    },
+    onContinuousFollowFrame: undefined,
   });
 
   useEffect(() => {
@@ -1858,11 +1845,15 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   });
 
   const scrollToPhysicalBottomAndClearPin = useCallback(() => {
-    if (virtuosoRef.current && virtualItems.length > 0) {
-      clearPinReservationForUserNavigation();
-      virtuosoRef.current.scrollTo({ top: 999999999, behavior: 'smooth' });
+    const scroller = scrollerElementRef.current;
+    if (scroller) {
+      clearAllBottomReservationsForUserNavigation();
+      scroller.scrollTo({
+        top: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+        behavior: 'smooth',
+      });
     }
-  }, [clearPinReservationForUserNavigation, virtualItems.length]);
+  }, [clearAllBottomReservationsForUserNavigation]);
 
   const scrollToLatestEndPosition = useCallback(() => {
     enterFollowOutput('jump-to-latest');

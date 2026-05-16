@@ -39,6 +39,7 @@ import {
   pickWorkspaceForProjectChatSession,
 } from '@/app/utils/projectSessionWorkspace';
 import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
+import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { useSSHRemoteContext, SSHConnectionDialog, RemoteFileBrowser } from '@/features/ssh-remote';
 import { useSessionModeStore } from '../../stores/sessionModeStore';
 import NavSearchDialog from './NavSearchDialog';
@@ -125,6 +126,26 @@ const MainNav: React.FC<MainNavProps> = ({
     }, 150);
   }, []);
 
+  const updateWorkspaceMenuPos = useCallback(() => {
+    const btn = workspaceMenuButtonRef.current;
+    if (!btn || !workspaceMenuOpen) return;
+    const rect = btn.getBoundingClientRect();
+    const viewportPadding = 8;
+    const gap = 6;
+    const fallbackWidth = 300;
+    const fallbackHeight = 420;
+
+    const apply = () => {
+      const menuEl = workspaceMenuRef.current;
+      const w = menuEl?.offsetWidth ?? fallbackWidth;
+      const h = menuEl?.offsetHeight ?? fallbackHeight;
+      setWorkspaceMenuPos(computeFixedPopoverPosition(rect, w, h, gap, viewportPadding));
+    };
+
+    apply();
+    requestAnimationFrame(apply);
+  }, [workspaceMenuOpen]);
+
   const openWorkspaceMenu = useCallback(async () => {
     try {
       await workspaceManager.cleanupInvalidWorkspaces();
@@ -133,7 +154,7 @@ const MainNav: React.FC<MainNavProps> = ({
     }
     const rect = workspaceMenuButtonRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setWorkspaceMenuPos({ top: rect.bottom + 6, left: rect.left });
+    setWorkspaceMenuPos(computeFixedPopoverPosition(rect, 300, 420, 6, 8));
     setWorkspaceMenuOpen(true);
     setWorkspaceMenuClosing(false);
   }, []);
@@ -294,6 +315,21 @@ const MainNav: React.FC<MainNavProps> = ({
       document.removeEventListener('keydown', handleEscape);
     };
   }, [closeWorkspaceMenu, workspaceMenuOpen]);
+
+  useEffect(() => {
+    if (!workspaceMenuOpen) return;
+
+    updateWorkspaceMenuPos();
+
+    const handleViewportChange = () => updateWorkspaceMenuPos();
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+    };
+  }, [workspaceMenuOpen, updateWorkspaceMenuPos]);
 
   const handleOpenAssistant = useCallback(() => {
     const targetAssistantWorkspace =
@@ -659,8 +695,16 @@ const MainNav: React.FC<MainNavProps> = ({
           homePath={sshRemote.remoteFileBrowserInitialPath}
           onSelect={handleSelectRemoteWorkspace}
           onCancel={() => {
+            const hasActiveRemoteWorkspace =
+              Boolean(sshRemote.remoteWorkspace) ||
+              openedWorkspacesList.some(workspace =>
+                isRemoteWorkspace(workspace) &&
+                workspace.connectionId === sshRemote.connectionId
+              );
             sshRemote.setShowFileBrowser(false);
-            void sshRemote.disconnect();
+            if (!hasActiveRemoteWorkspace) {
+              void sshRemote.disconnect();
+            }
           }}
         />
       )}

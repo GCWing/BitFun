@@ -15,8 +15,8 @@ export interface FlowChatContextValue {
   onSwitchToChatPanel?: () => void;
 
   // Tool actions
-  onToolConfirm?: (toolId: string, updatedInput?: any) => Promise<void>;
-  onToolReject?: (toolId: string) => Promise<void>;
+  onToolConfirm?: (toolId: string, updatedInput?: any, permissionOptionId?: string, approve?: boolean) => Promise<void>;
+  onToolReject?: (toolId: string, permissionOptionId?: string) => Promise<void>;
 
   // Session info
   sessionId?: string;
@@ -57,9 +57,6 @@ export interface FlowChatContextValue {
   searchQuery?: string;
   searchMatchIndices?: ReadonlySet<number>;
   searchCurrentMatchVirtualIndex?: number;
-
-  // Continue dialog turn when max_rounds is reached
-  onContinueTurn?: (sessionId: string, turnId: string) => void;
 }
 
 export const FlowChatContext = createContext<FlowChatContextValue>({});
@@ -70,4 +67,3 @@ export const FlowChatContext = createContext<FlowChatContextValue>({});
 export const useFlowChatContext = () => {
   return useContext(FlowChatContext);
 };
-

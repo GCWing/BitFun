@@ -47,8 +47,9 @@ body, html { margin: 0; padding: 0; height: 100%; }
   --g-radius:    var(--bitfun-radius-lg, 8px);
   --g-radius-sm: var(--bitfun-radius, 6px);
 
-  --g-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI",
-            "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif);
+  --g-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "PingFang SC",
+            "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
+            "Helvetica Neue", Helvetica, Arial, sans-serif);
 
   --g-dur: 160ms;
   --g-ease: cubic-bezier(.2, .8, .2, 1);
@@ -63,7 +64,7 @@ body, html { margin: 0; padding: 0; height: 100%; }
 
 body {
   font-family: var(--g-sans);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--g-text);
   background: var(--g-bg);
 }
@@ -120,14 +121,14 @@ button { font-family: inherit; cursor: pointer; }
 .brand__text { min-width: 0; }
 .brand__title {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--g-text);
   letter-spacing: 0.1px;
 }
 .brand__subtitle {
   margin: 2px 0 0;
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--g-text-mute);
   letter-spacing: 0.1px;
 }
@@ -147,7 +148,7 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--g-text-soft);
   padding: 6px 14px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.1px;
   transition: color var(--g-dur) var(--g-ease),
@@ -271,7 +272,7 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--g-text);
 }
 .result-card__sub {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-text-mute);
   margin-bottom: 18px;
 }
@@ -300,7 +301,7 @@ button { font-family: inherit; cursor: pointer; }
   background: var(--g-bg-elevated);
   color: var(--g-text-soft);
   font-family: inherit;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   letter-spacing: 0.1px;
   cursor: pointer;
@@ -340,7 +341,7 @@ button { font-family: inherit; cursor: pointer; }
   padding: 12px 14px;
 }
 .card__label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--g-text-mute);
   text-transform: uppercase;
   letter-spacing: 0.6px;
@@ -348,7 +349,7 @@ button { font-family: inherit; cursor: pointer; }
   font-weight: 500;
 }
 .card__title {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-text-soft);
   margin-bottom: 10px;
   font-weight: 600;
@@ -379,7 +380,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .turn__hint {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-text-mute);
 }
 
@@ -400,7 +401,7 @@ button { font-family: inherit; cursor: pointer; }
   background: var(--g-element);
   color: var(--g-text);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.1px;
   transition: color var(--g-dur) var(--g-ease),
@@ -446,7 +447,7 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-text-soft);
 }
 .stat__value {
@@ -481,11 +482,11 @@ button { font-family: inherit; cursor: pointer; }
   font-variant-numeric: tabular-nums;
 }
 .history__empty {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--g-text-mute);
 }
 .move-pill {
-  font-size: 11.5px;
+  font-size: 12.5px;
   padding: 3px 8px;
   border-radius: var(--g-radius-sm);
   background: var(--g-bg-elevated);

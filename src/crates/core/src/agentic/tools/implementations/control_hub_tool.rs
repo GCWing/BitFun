@@ -17,8 +17,9 @@ use crate::agentic::tools::browser_control::session_registry::{
     BrowserSession, BrowserSessionRegistry,
 };
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::service::config::{get_global_config_service, GlobalConfig};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -398,7 +399,6 @@ Branch on `ok` and `error.code`, not on English messages.
         match action {
             "connect" => {
                 let mode = Self::browser_connect_mode_from_params(params);
-                let kind = BrowserLauncher::detect_default_browser()?;
 
                 if mode == "headless" {
                     if !BrowserLauncher::is_cdp_available(port).await {
@@ -416,6 +416,21 @@ Branch on `ok` and `error.code`, not on English messages.
                         ));
                     }
                 }
+
+                let kind = if let Some(browser_str) = params.get("browser").and_then(|v| v.as_str())
+                {
+                    parse_browser_kind(browser_str)
+                } else if mode == "headless" {
+                    Ok(BrowserKind::Chrome)
+                } else {
+                    let config = get_global_config_service()
+                        .await?
+                        .get_config::<GlobalConfig>(None)
+                        .await?;
+                    BrowserLauncher::resolve_browser_kind(Some(
+                        &config.ai.browser_control_preferred_browser,
+                    ))
+                }?;
 
                 let user_data_dir = params.get("user_data_dir").and_then(|v| v.as_str());
                 let launch_result = if mode == "headless" {
@@ -1145,6 +1160,13 @@ Branch on `ok` and `error.code`, not on English messages.
     }
 }
 
+fn parse_browser_kind(browser: &str) -> BitFunResult<BrowserKind> {
+    match BrowserLauncher::browser_kind_from_config(browser) {
+        Some(kind) => Ok(kind),
+        None => BrowserLauncher::detect_default_browser(),
+    }
+}
+
 /// Parse a leading `"[CODE] rest"` prefix produced by the front-end
 /// front-end error prefix so we can recover the structured `ErrorCode`
 /// in the backend instead of falling back to the heuristic classifier.
@@ -1197,6 +1219,15 @@ impl Tool for ControlHubTool {
 
     async fn description(&self) -> BitFunResult<String> {
         Ok(Self::description_text())
+    }
+
+    fn short_description(&self) -> String {
+        "Control browser, terminal, and desktop helper domains through one tool."
+            .to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     async fn description_with_context(
@@ -1447,6 +1478,7 @@ mod control_hub_tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: std::collections::HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,

@@ -259,7 +259,7 @@ export function createMarkdownEditorTab(
 
  
 export function createConfigCenterTab(
-  _initialTab: 'models' | 'ai-context' | 'agents' = 'models',
+  _initialTab: 'models' | 'agents' = 'models',
   _mode: 'agent' | 'project' = 'agent'
 ): void {
   // Settings is now an independent scene — open via event bus.

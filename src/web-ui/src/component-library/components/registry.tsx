@@ -30,7 +30,6 @@ import { GlobSearchDisplay } from '@/flow_chat/tool-cards/GlobSearchDisplay';
 import { FileOperationToolCard } from '@/flow_chat/tool-cards/FileOperationToolCard';
 import { LSDisplay } from '@/flow_chat/tool-cards/LSDisplay';
 import { MCPToolDisplay } from '@/flow_chat/tool-cards/MCPToolDisplay';
-import { MermaidInteractiveDisplay } from '@/flow_chat/tool-cards/MermaidInteractiveDisplay';
 import { ContextCompressionDisplay } from '@/flow_chat/tool-cards/ContextCompressionDisplay';
 import { SkillDisplay } from '@/flow_chat/tool-cards/SkillDisplay';
 import { AskUserQuestionCard } from '@/flow_chat/tool-cards/AskUserQuestionCard';
@@ -1499,48 +1498,6 @@ console.log(user.greet());`);
                 displayMode: 'compact',
                 primaryColor: '#8b5cf6'
               }}
-              sessionId="preview-session"
-            />
-          </div>
-        ),
-      },
-      {
-        id: 'mermaid-interactive-card',
-        name: 'MermaidInteractive - Mermaid图表',
-        description: '展示Mermaid交互式图表',
-        category: 'flowchat-cards',
-        component: () => (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>Mermaid - 已完成</h3>
-            <MermaidInteractiveDisplay
-              toolItem={createMockToolItem('MermaidInteractive',
-                {
-                  mermaid_code: 'graph TD\n  A[Start] --> B[Process]\n  B --> C[End]',
-                  title: '流程图',
-                  mode: 'interactive'
-                },
-                {
-                  panel_id: 'mermaid-123',
-                  success: true
-                },
-                'completed'
-              )}
-              config={TOOL_CARD_CONFIGS['MermaidInteractive']}
-              sessionId="preview-session"
-            />
-
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Mermaid - 执行中</h3>
-            <MermaidInteractiveDisplay
-              toolItem={createMockToolItem('MermaidInteractive',
-                {
-                  mermaid_code: 'sequenceDiagram\n  Alice->>Bob: Hello',
-                  title: '时序图',
-                  mode: 'interactive'
-                },
-                undefined,
-                'running'
-              )}
-              config={TOOL_CARD_CONFIGS['MermaidInteractive']}
               sessionId="preview-session"
             />
           </div>

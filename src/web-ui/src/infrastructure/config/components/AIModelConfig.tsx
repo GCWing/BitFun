@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, SquarePen, Trash2, Wifi, Loader, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { Plus, SquarePen, Trash2, Wifi, Loader, RefreshCw, AlertTriangle, X, Settings, ExternalLink, Eye, EyeOff, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { Button, Switch, Select, IconButton, NumberInput, Card, Modal, Input, Textarea, Tooltip, type SelectOption } from '@/component-library';
 import { 
   AIModelConfig as AIModelConfigType, 
@@ -11,7 +11,7 @@ import {
 } from '../types';
 import { configManager } from '../services/ConfigManager';
 import { PROVIDER_TEMPLATES, getModelDisplayName, getProviderDisplayName, getProviderTemplateId } from '../services/modelConfigs';
-import { DEFAULT_REASONING_MODE, getEffectiveReasoningMode, supportsAnthropicAdaptive, supportsAnthropicReasoning, supportsAnthropicThinkingBudget, supportsResponsesReasoning } from '../utils/reasoning';
+import { DEFAULT_REASONING_MODE, getEffectiveReasoningMode, supportsAnthropicAdaptive, supportsAnthropicReasoning, supportsAnthropicThinkingBudget, supportsDeepSeekReasoningEffort, supportsResponsesReasoning } from '../utils/reasoning';
 import { aiApi, systemAPI } from '@/infrastructure/api';
 import type { DiscoveredCliCredential } from '@/infrastructure/api/service-api/AIApi';
 import { useNotification } from '@/shared/notification-system';
@@ -72,8 +72,9 @@ function createModelDraft(
 
 function normalizeDraftReasoningForProvider(
   draft: SelectedModelDraft,
-  provider?: string
+  config?: Partial<Pick<AIModelConfigType, 'name' | 'provider' | 'base_url'>>
 ): SelectedModelDraft {
+  const provider = config?.provider;
   let reasoningMode = draft.reasoningMode;
 
   if (supportsResponsesReasoning(provider)) {
@@ -86,8 +87,14 @@ function normalizeDraftReasoningForProvider(
     reasoningMode = 'enabled';
   }
 
+  const supportsDeepSeekEffort = supportsDeepSeekReasoningEffort({
+    name: config?.name,
+    base_url: config?.base_url,
+    model_name: draft.modelName,
+  });
   const keepReasoningEffort = supportsResponsesReasoning(provider)
-    || (supportsAnthropicReasoning(provider) && reasoningMode === 'adaptive');
+    || (supportsAnthropicReasoning(provider) && reasoningMode === 'adaptive')
+    || (supportsDeepSeekEffort && reasoningMode !== 'disabled');
   const keepThinkingBudget = supportsAnthropicReasoning(provider)
     && reasoningMode === 'enabled'
     && supportsAnthropicThinkingBudget(draft.modelName);
@@ -190,6 +197,30 @@ function parseOptionalPositiveIntegerInput(value: string): number | null | undef
   }
 
   return parsed;
+}
+
+const DEEPSEEK_REASONING_EFFORT_MODE_PREFIX = 'deepseek-effort:';
+
+function getDeepSeekReasoningModeSelectValue(draft: SelectedModelDraft): string {
+  if (draft.reasoningMode === 'enabled' && draft.reasoningEffort) {
+    return `${DEEPSEEK_REASONING_EFFORT_MODE_PREFIX}${draft.reasoningEffort}`;
+  }
+
+  return draft.reasoningMode;
+}
+
+function getUpdatesFromDeepSeekReasoningModeSelectValue(value: string): Partial<SelectedModelDraft> {
+  if (value.startsWith(DEEPSEEK_REASONING_EFFORT_MODE_PREFIX)) {
+    return {
+      reasoningMode: 'enabled',
+      reasoningEffort: value.slice(DEEPSEEK_REASONING_EFFORT_MODE_PREFIX.length),
+    };
+  }
+
+  return {
+    reasoningMode: value as ReasoningMode,
+    reasoningEffort: undefined,
+  };
 }
 
 /** Last line of defense: same logical model name once per save; prefer draft tied to an existing config id. */
@@ -339,6 +370,14 @@ const AIModelConfig: React.FC = () => {
     []
   );
 
+  const deepSeekReasoningEffortOptions = useMemo<SelectOption[]>(
+    () => [
+      { label: 'High', value: 'high' },
+      { label: 'Max', value: 'max' },
+    ],
+    []
+  );
+
   const buildReasoningModeOptions = useCallback((provider?: string, modelName?: string, currentMode?: ReasoningMode): SelectOption[] => {
     const options: SelectOption[] = [
       { label: t('thinking.optionDefault'), value: DEFAULT_REASONING_MODE },
@@ -346,7 +385,16 @@ const AIModelConfig: React.FC = () => {
       { label: t('thinking.optionDisabled'), value: 'disabled' },
     ];
 
-    if (
+    if (supportsDeepSeekReasoningEffort({ name: editingConfig?.name, base_url: editingConfig?.base_url, model_name: modelName })) {
+      options.splice(
+        1,
+        1,
+        ...deepSeekReasoningEffortOptions.map(option => ({
+          label: `${t('thinking.optionEnabled')} · ${option.label}`,
+          value: `${DEEPSEEK_REASONING_EFFORT_MODE_PREFIX}${option.value}`,
+        }))
+      );
+    } else if (
       supportsAnthropicReasoning(provider)
       && (supportsAnthropicAdaptive(modelName) || currentMode === 'adaptive')
     ) {
@@ -354,7 +402,7 @@ const AIModelConfig: React.FC = () => {
     }
 
     return options;
-  }, [t]);
+  }, [deepSeekReasoningEffortOptions, editingConfig?.base_url, editingConfig?.name, t]);
 
   const categoryOptions = useMemo<SelectOption[]>(
     () => [
@@ -510,6 +558,11 @@ const AIModelConfig: React.FC = () => {
     baseConfig?: Partial<AIModelConfigType>,
     singleSelection = false
   ) => {
+    const reasoningProviderConfig = {
+      name: baseConfig?.name ?? editingConfig?.name ?? currentTemplate?.name,
+      provider: baseConfig?.provider ?? editingConfig?.provider ?? currentTemplate?.format,
+      base_url: baseConfig?.base_url ?? editingConfig?.base_url ?? currentTemplate?.baseUrl,
+    };
     const providerName = (
       baseConfig?.name ||
       editingConfig?.name ||
@@ -538,17 +591,17 @@ const AIModelConfig: React.FC = () => {
 
         if (existingDraft) {
           const configId = pinnedRowId ?? configuredModel?.id ?? existingDraft.configId;
-          return {
+          return normalizeDraftReasoningForProvider({
             ...existingDraft,
             modelName,
             configId,
             key: configId ?? modelName,
-          };
+          }, reasoningProviderConfig);
         }
 
-        return createModelDraft(modelName, configuredModel || baseConfig, {
+        return normalizeDraftReasoningForProvider(createModelDraft(modelName, configuredModel || baseConfig, {
           configId: pinnedRowId ?? configuredModel?.id,
-        });
+        }), reasoningProviderConfig);
       })
     );
 
@@ -1493,12 +1546,18 @@ const AIModelConfig: React.FC = () => {
       return parts.join(' · ');
     };
 
-    const getDraftReasoningEffortOptions = (provider?: string) => {
-      if (supportsResponsesReasoning(provider)) {
+    const getDraftReasoningEffortOptions = (
+      config?: Partial<Pick<AIModelConfigType, 'name' | 'provider' | 'base_url' | 'model_name'>>
+    ) => {
+      if (supportsDeepSeekReasoningEffort(config)) {
+        return deepSeekReasoningEffortOptions;
+      }
+
+      if (supportsResponsesReasoning(config?.provider)) {
         return responsesReasoningEffortOptions;
       }
 
-      if (supportsAnthropicReasoning(provider)) {
+      if (supportsAnthropicReasoning(config?.provider)) {
         return anthropicReasoningEffortOptions;
       }
 
@@ -1522,9 +1581,17 @@ const AIModelConfig: React.FC = () => {
             const canToggleExpand = selectedModelDrafts.length > 1;
             const modelDisplayName = draft.modelName;
             const reasoningModeOptions = buildReasoningModeOptions(editingConfig.provider, draft.modelName, draft.reasoningMode);
-            const reasoningEffortOptions = getDraftReasoningEffortOptions(editingConfig.provider);
+            const reasoningCapabilityConfig = {
+              name: editingConfig.name,
+              provider: editingConfig.provider,
+              base_url: editingConfig.base_url,
+              model_name: draft.modelName,
+            };
+            const reasoningEffortOptions = getDraftReasoningEffortOptions(reasoningCapabilityConfig);
             const showReasoningModeControl = !supportsResponsesReasoning(editingConfig.provider);
+            const supportsDeepSeekEffort = supportsDeepSeekReasoningEffort(reasoningCapabilityConfig);
             const showReasoningEffortControl = reasoningEffortOptions.length > 0
+              && !supportsDeepSeekEffort
               && (
                 supportsResponsesReasoning(editingConfig.provider)
                 || (supportsAnthropicReasoning(editingConfig.provider) && draft.reasoningMode === 'adaptive')
@@ -1647,8 +1714,13 @@ const AIModelConfig: React.FC = () => {
                       <div className="bitfun-ai-model-config__selected-model-field">
                         <span>{t('thinking.mode')}</span>
                         <Select
-                          value={draft.reasoningMode}
-                          onChange={(value) => updateModelDraft(draft.modelName, { reasoningMode: value as ReasoningMode })}
+                          value={supportsDeepSeekEffort ? getDeepSeekReasoningModeSelectValue(draft) : draft.reasoningMode}
+                          onChange={(value) => updateModelDraft(
+                            draft.modelName,
+                            supportsDeepSeekEffort
+                              ? getUpdatesFromDeepSeekReasoningModeSelectValue(value as string)
+                              : { reasoningMode: value as ReasoningMode }
+                          )}
                           options={reasoningModeOptions}
                           size="small"
                         />
@@ -1817,7 +1889,11 @@ const AIModelConfig: React.FC = () => {
                       const provider = value as string;
                       resetRemoteModelDiscovery();
                       setSelectedModelDrafts(prevDrafts =>
-                        prevDrafts.map(draft => normalizeDraftReasoningForProvider(draft, provider))
+                        prevDrafts.map(draft => normalizeDraftReasoningForProvider(draft, {
+                          name: editingConfig?.name,
+                          provider,
+                          base_url: editingConfig?.base_url,
+                        }))
                       );
                       setEditingConfig(prev => ({
                         ...prev,
@@ -1885,6 +1961,8 @@ const AIModelConfig: React.FC = () => {
                     <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
                       <Input value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
                     </ConfigPageRow>
+                    {renderAuthRow()}
+                    {!authIsCli && renderApiKeyRow(`${t('form.apiKey')} *`)}
                     <ConfigPageRow label={`${t('form.baseUrl')} *`} align="center" wide>
                       <div className="bitfun-ai-model-config__control-stack">
                         <Input
@@ -1915,14 +1993,16 @@ const AIModelConfig: React.FC = () => {
                         )}
                       </div>
                     </ConfigPageRow>
-                    {renderAuthRow()}
-                    {!authIsCli && renderApiKeyRow(`${t('form.apiKey')} *`)}
                     <ConfigPageRow label={t('form.provider')} align="center" wide>
                       <Select value={editingConfig.provider || 'openai'} onChange={(value) => {
                         const provider = value as string;
                         resetRemoteModelDiscovery();
                         setSelectedModelDrafts(prevDrafts =>
-                          prevDrafts.map(draft => normalizeDraftReasoningForProvider(draft, provider))
+                          prevDrafts.map(draft => normalizeDraftReasoningForProvider(draft, {
+                            name: editingConfig?.name,
+                            provider,
+                            base_url: editingConfig?.base_url,
+                          }))
                         );
                         setEditingConfig(prev => ({
                           ...prev,
@@ -2329,7 +2409,7 @@ const AIModelConfig: React.FC = () => {
               tooltip={t('cliAuth.rescan')}
               disabled={isDiscoveringCli}
             >
-              <Loader size={16} className={isDiscoveringCli ? 'bitfun-ai-model-config__spin' : ''} />
+              <RefreshCw size={16} className={isDiscoveringCli ? 'bitfun-ai-model-config__spin' : ''} />
             </IconButton>
           )}
         >

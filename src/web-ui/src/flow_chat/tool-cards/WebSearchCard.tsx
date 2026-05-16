@@ -3,12 +3,13 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Globe, Loader2, Link, Clock, Check } from 'lucide-react';
+import { Globe, Link } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { systemAPI } from '../../infrastructure/api';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { Tooltip } from '@/component-library';
+import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 
@@ -26,19 +27,6 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
     toolId,
     toolName: toolItem.toolName,
   });
-
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'running':
-      case 'streaming':
-      case 'preparing':
-        return <Loader2 className="animate-spin" size={14} />;
-      case 'completed':
-        return <Check size={14} className="icon-check-done" />;
-      default:
-        return <Clock size={14} />;
-    }
-  };
 
   const getSearchTerm = () => {
     const searchTerm = toolCall?.input?.search_term || toolCall?.input?.query;
@@ -179,10 +167,8 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
         clickable={isExpandable}
         header={
           <CompactToolCardHeader
-            icon={<Globe size={16} className="web-search-card-icon" />}
-            content={renderContent()}
-            rightStatusIcon={getStatusIcon()}
-            rightStatusIconWithDivider
+          icon={<ToolCardStatusSlot status={status} toolIcon={<Globe size={16} className="web-search-card-icon" />} />}
+          content={renderContent()}
           />
         }
         expandedContent={isExpandable ? renderExpandedContent() : undefined}

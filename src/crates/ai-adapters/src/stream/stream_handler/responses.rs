@@ -84,6 +84,54 @@ fn cleanup_tool_call_tracking(
     }
 }
 
+fn handle_function_call_arguments_delta(
+    tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
+    stats: &mut StreamStats,
+    output_index: Option<usize>,
+    delta: Option<String>,
+    tool_calls_by_output_index: &mut HashMap<usize, InProgressToolCall>,
+) -> Result<()> {
+    let Some(delta) = delta.filter(|delta| !delta.is_empty()) else {
+        return Ok(());
+    };
+    let Some(output_index) = output_index else {
+        return Err(anyhow!(
+            "Responses function_call_arguments.delta missing output_index"
+        ));
+    };
+    let Some(tc) = tool_calls_by_output_index.get_mut(&output_index) else {
+        return Err(anyhow!(
+            "Responses function_call_arguments.delta for untracked output_index {}",
+            output_index
+        ));
+    };
+
+    tc.saw_any_delta = true;
+    tc.args_so_far.push_str(&delta);
+
+    // Some consumers treat `id` as a "new tool call" marker and reset buffers when it repeats.
+    // Only send id/name once per tool call; deltas that follow carry arguments only.
+    let (id, name) = if tc.sent_header {
+        (None, None)
+    } else {
+        tc.sent_header = true;
+        (tc.call_id.clone(), tc.name.clone())
+    };
+
+    let unified_response = UnifiedResponse {
+        tool_call: Some(crate::stream::types::unified::UnifiedToolCall {
+            tool_call_index: Some(output_index),
+            id,
+            name,
+            arguments: Some(delta),
+            arguments_is_snapshot: false,
+        }),
+        ..Default::default()
+    };
+    emit_unified_response(tx_event, stats, unified_response);
+    Ok(())
+}
+
 fn handle_function_call_output_item_done(
     tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
     stats: &mut StreamStats,
@@ -272,9 +320,17 @@ pub async fn handle_responses_stream(
         match event.kind.as_str() {
             "response.output_item.added" => {
                 // Track tool calls so we can stream arguments via `response.function_call_arguments.delta`.
-                if let (Some(output_index), Some(item)) = (event.output_index, event.item.as_ref())
-                {
+                if let Some(item) = event.item.as_ref() {
                     if let Some(tc) = InProgressToolCall::from_item_value(item) {
+                        let Some(output_index) = event.output_index else {
+                            let error_msg =
+                                "Responses function_call output_item.added missing output_index";
+                            stats.increment("error:missing_output_index");
+                            stats.log_summary("responses_tool_call_missing_output_index");
+                            error!("{}", error_msg);
+                            let _ = tx_event.send(Err(anyhow!(error_msg)));
+                            return;
+                        };
                         if let Some(ref call_id) = tc.call_id {
                             tool_call_index_by_id.insert(call_id.clone(), output_index);
                         }
@@ -302,39 +358,20 @@ pub async fn handle_responses_stream(
                 }
             }
             "response.function_call_arguments.delta" => {
-                let Some(delta) = event.delta.filter(|delta| !delta.is_empty()) else {
-                    continue;
-                };
-                let Some(output_index) = event.output_index else {
-                    continue;
-                };
-                let Some(tc) = tool_calls_by_output_index.get_mut(&output_index) else {
-                    continue;
-                };
-
-                tc.saw_any_delta = true;
-                tc.args_so_far.push_str(&delta);
-
-                // Some consumers treat `id` as a "new tool call" marker and reset buffers when it repeats.
-                // Only send id/name once per tool call; deltas that follow carry arguments only.
-                let (id, name) = if tc.sent_header {
-                    (None, None)
-                } else {
-                    tc.sent_header = true;
-                    (tc.call_id.clone(), tc.name.clone())
-                };
-
-                let unified_response = UnifiedResponse {
-                    tool_call: Some(crate::stream::types::unified::UnifiedToolCall {
-                        tool_call_index: Some(output_index),
-                        id,
-                        name,
-                        arguments: Some(delta),
-                        arguments_is_snapshot: false,
-                    }),
-                    ..Default::default()
-                };
-                emit_unified_response(&tx_event, &mut stats, unified_response);
+                if let Err(err) = handle_function_call_arguments_delta(
+                    &tx_event,
+                    &mut stats,
+                    event.output_index,
+                    event.delta,
+                    &mut tool_calls_by_output_index,
+                ) {
+                    let error_msg = err.to_string();
+                    stats.increment("error:function_call_arguments_delta");
+                    stats.log_summary("responses_function_call_arguments_delta_error");
+                    error!("{}", error_msg);
+                    let _ = tx_event.send(Err(anyhow!(error_msg)));
+                    return;
+                }
             }
             "response.output_item.done" => {
                 let Some(item_value) = event.item else {
@@ -540,7 +577,8 @@ pub async fn handle_responses_stream(
 mod tests {
     use super::{
         super::stream_stats::StreamStats, extract_api_error_message,
-        handle_function_call_output_item_done, InProgressToolCall,
+        handle_function_call_arguments_delta, handle_function_call_output_item_done,
+        InProgressToolCall,
     };
     use serde_json::json;
     use std::collections::HashMap;
@@ -621,5 +659,41 @@ mod tests {
             tool_call.arguments.as_deref(),
             Some("{\"city\":\"Beijing\"}")
         );
+    }
+
+    #[test]
+    fn function_call_delta_requires_output_index() {
+        let (tx_event, _rx_event) = mpsc::unbounded_channel();
+        let mut tool_calls_by_output_index: HashMap<usize, InProgressToolCall> = HashMap::new();
+        let mut stats = StreamStats::new("Responses");
+
+        let err = handle_function_call_arguments_delta(
+            &tx_event,
+            &mut stats,
+            None,
+            Some("{\"city\"".to_string()),
+            &mut tool_calls_by_output_index,
+        )
+        .expect_err("missing output_index should fail");
+
+        assert!(err.to_string().contains("missing output_index"));
+    }
+
+    #[test]
+    fn function_call_delta_requires_tracked_output_item() {
+        let (tx_event, _rx_event) = mpsc::unbounded_channel();
+        let mut tool_calls_by_output_index: HashMap<usize, InProgressToolCall> = HashMap::new();
+        let mut stats = StreamStats::new("Responses");
+
+        let err = handle_function_call_arguments_delta(
+            &tx_event,
+            &mut stats,
+            Some(2),
+            Some("{\"city\"".to_string()),
+            &mut tool_calls_by_output_index,
+        )
+        .expect_err("untracked output_index should fail");
+
+        assert!(err.to_string().contains("untracked output_index 2"));
     }
 }

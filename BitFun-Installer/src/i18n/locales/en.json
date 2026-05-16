@@ -43,7 +43,13 @@
     "back": "Back",
     "install": "Install",
     "installing": "Preparing…",
-    "nextModel": "Next: Configure model"
+    "nextModel": "Next: Configure model",
+    "existingInstallTitle": "Existing BitFun installation detected",
+    "existingInstallVersion": "Installed version: {{version}}",
+    "existingInstallLocation": "Install location: {{path}}",
+    "existingInstallBinaryMissing": "The main application file was not found at that location. You can run the uninstaller first or reinstall.",
+    "existingInstallHint": "Click Install to upgrade or repair in place. To uninstall first, run the registered uninstaller below.",
+    "existingInstallRunUninstaller": "Run uninstaller"
   },
   "model": {
     "title": "Model",
@@ -51,7 +57,7 @@
     "installDone": "Installation complete",
     "provider": "Provider",
     "config": "Connection",
-    "modelName": "Model name (e.g. deepseek-chat)",
+    "modelName": "Model name (e.g. deepseek-v4-flash)",
     "apiKey": "API key",
     "back": "Back",
     "skip": "Skip for now",
@@ -63,12 +69,12 @@
     "getApiKey": "Get API Key",
     "modelNamePlaceholder": "Enter model name...",
     "baseUrlPlaceholder": "e.g., https://open.bigmodel.cn/api/paas/v4/chat/completions",
-    "customRequestBodyPlaceholder": "{\n  \"temperature\": 0.8,\n  \"top_p\": 0.9\n}",
+    "customRequestBodyPlaceholder": "Example:\n{\n  \"temperature\": 0.8,\n  \"top_p\": 0.9\n}",
     "jsonValid": "JSON format is valid",
     "jsonInvalid": "Invalid JSON format, please check syntax",
     "skipSslVerify": "Skip SSL Certificate Verification",
-    "customHeadersModeMerge": "Merge Override",
-    "customHeadersModeReplace": "Replace All",
+    "customHeadersModeMerge": "Merge",
+    "customHeadersModeReplace": "Replace",
     "addHeader": "Add Field",
     "headerKey": "key",
     "headerValue": "value",
@@ -202,7 +208,8 @@
       "bitfun-china-style": "Ink Charm",
       "bitfun-china-night": "Ink Night",
       "bitfun-cyber": "Cyber",
-      "bitfun-slate": "Slate"
+      "bitfun-slate": "Slate",
+      "bitfun-tokyo-night": "Tokyo Night"
     }
   },
   "complete": {

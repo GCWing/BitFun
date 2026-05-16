@@ -7,6 +7,7 @@ export { bitfunChinaStyleTheme } from './china-style-theme';
 export { bitfunChinaNightTheme } from './china-night-theme';
 export { bitfunCyberTheme } from './cyber-theme';
 export { bitfunSlateTheme } from './slate-theme';
+export { bitfunTokyoNightTheme } from './tokyo-night-theme';
 
 import { bitfunDarkTheme } from './dark-theme';
 import { bitfunLightTheme } from './light-theme';
@@ -15,6 +16,7 @@ import { bitfunChinaStyleTheme } from './china-style-theme';
 import { bitfunChinaNightTheme } from './china-night-theme';
 import { bitfunCyberTheme } from './cyber-theme';
 import { bitfunSlateTheme } from './slate-theme';
+import { bitfunTokyoNightTheme } from './tokyo-night-theme';
 import { ThemeConfig, ThemeId } from '../types';
 
 /** Default light / dark builtin themes used when following system appearance. */
@@ -46,6 +48,7 @@ export const builtinThemes: ThemeConfig[] = [
   bitfunChinaStyleTheme,
   bitfunChinaNightTheme,
   bitfunCyberTheme,
+  bitfunTokyoNightTheme,
 ];
 
  

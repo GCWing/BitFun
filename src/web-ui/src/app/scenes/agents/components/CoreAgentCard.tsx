@@ -24,6 +24,7 @@ interface CoreAgentCardProps {
   meta: CoreAgentMeta;
   toolCount?: number;
   skillCount?: number;
+  subagentCount?: number;
   onOpenDetails: (agent: AgentWithCapabilities) => void;
 }
 
@@ -33,6 +34,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
   meta,
   toolCount,
   skillCount = 0,
+  subagentCount = 0,
   onOpenDetails,
 }) => {
   const { t } = useTranslation('scenes/agents');
@@ -42,10 +44,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
 
   return (
     <div
-      className={[
-        'core-agent-card',
-        !agent.enabled && 'core-agent-card--disabled',
-      ].filter(Boolean).join(' ')}
+      className="core-agent-card"
       style={{
         '--card-index': index,
         '--core-accent': meta.accentColor,
@@ -91,6 +90,12 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
             <span className="core-agent-card__meta-item">
               <Puzzle size={11} />
               {skillCount}
+            </span>
+          ) : null}
+          {agent.agentKind === 'mode' && subagentCount > 0 ? (
+            <span className="core-agent-card__meta-item">
+              <Bot size={11} />
+              {subagentCount}
             </span>
           ) : null}
           <span className="core-agent-card__meta-item">

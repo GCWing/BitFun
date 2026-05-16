@@ -52,6 +52,11 @@ $matrix-epsilon: 0.0001%;
     --dm-cell: 6px;
     --dm-gap: 2px;
   }
+
+  &--large {
+    --dm-cell: 8px;
+    --dm-gap: 2px;
+  }
 }
 
 .dot-matrix-loader__dot {

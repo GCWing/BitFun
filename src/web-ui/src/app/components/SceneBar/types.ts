@@ -17,7 +17,6 @@ export type SceneTabId =
   | 'skills'
   | 'miniapps'
   | 'browser'
-  | 'mermaid'
   | 'assistant'
   | 'insights'
   | 'shell'

@@ -4,6 +4,7 @@
 
 use super::types::{AgenticEvent, EventEnvelope, EventPriority};
 use crate::util::errors::BitFunResult;
+use bitfun_agent_stream::StreamEventSink;
 use log::{debug, trace, warn};
 use std::collections::BinaryHeap;
 use std::sync::Arc;
@@ -176,6 +177,13 @@ impl EventQueue {
         self.broadcast_tx.subscribe()
     }
 
+    #[cfg(test)]
+    pub(crate) async fn lock_queue_for_test(
+        &self,
+    ) -> tokio::sync::MutexGuard<'_, BinaryHeap<std::cmp::Reverse<EventEnvelope>>> {
+        self.queue.lock().await
+    }
+
     /// Clear all events for a session
     pub async fn clear_session(&self, session_id: &str) -> BitFunResult<()> {
         // Remove all events for this session from the queue
@@ -222,5 +230,12 @@ impl EventQueue {
     /// Check if the queue is empty
     pub async fn is_empty(&self) -> bool {
         self.queue.lock().await.is_empty()
+    }
+}
+
+#[async_trait::async_trait]
+impl StreamEventSink for EventQueue {
+    async fn enqueue(&self, event: AgenticEvent, priority: Option<EventPriority>) {
+        let _ = EventQueue::enqueue(self, event, priority).await;
     }
 }

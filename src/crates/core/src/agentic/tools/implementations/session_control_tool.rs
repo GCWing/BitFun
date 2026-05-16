@@ -8,7 +8,7 @@ use super::util::normalize_path;
 use crate::agentic::coordination::{get_global_coordinator, get_global_scheduler};
 use crate::agentic::core::SessionConfig;
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -321,6 +321,14 @@ Optional inputs:
 - "session_id": Required for cancel and delete."#
                 .to_string(),
         )
+    }
+
+    fn short_description(&self) -> String {
+        "Create, list, cancel, and delete persisted agent sessions.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {
@@ -699,6 +707,7 @@ mod tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             cancellation_token: None,

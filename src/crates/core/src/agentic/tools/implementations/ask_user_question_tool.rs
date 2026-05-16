@@ -6,7 +6,6 @@ use async_trait::async_trait;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tokio::time::{timeout, Duration};
 use uuid::Uuid;
 
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
@@ -49,6 +48,12 @@ impl Default for AskUserQuestionTool {
 impl AskUserQuestionTool {
     pub fn new() -> Self {
         Self
+    }
+
+    fn is_acp_context(context: Option<&ToolUseContext>) -> bool {
+        context
+            .and_then(|ctx| ctx.custom_data.get("acp_transport"))
+            .is_some_and(|value| value == "true" || value == &json!(true))
     }
 
     /// Validate question format (supports multiple questions)
@@ -202,6 +207,10 @@ Usage notes:
 - Use multiSelect: true to allow multiple answers to be selected for a question"#.to_string())
     }
 
+    fn short_description(&self) -> String {
+        "Ask the user focused follow-up questions during execution.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",
@@ -217,7 +226,8 @@ Usage notes:
                             },
                             "header": {
                                 "type": "string",
-                                "description": "Very short label displayed as a chip/tag (max 12 chars). Examples: \"Auth method\", \"Library\", \"Approach\"."
+                                "maxLength": 20,
+                                "description": "Very short label displayed as a chip/tag (max 20 characters). Examples: \"Auth method\", \"Library\", \"Approach\"."
                             },
                             "options": {
                                 "type": "array",
@@ -276,6 +286,10 @@ Usage notes:
         true
     }
 
+    async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
+        !Self::is_acp_context(context)
+    }
+
     async fn call_impl(
         &self,
         input: &Value,
@@ -331,10 +345,9 @@ Usage notes:
             tool_id
         );
 
-        // 7. Wait for user answer (10 minute timeout)
-        let timeout_duration = Duration::from_secs(600); // 10 minutes
-        match timeout(timeout_duration, rx).await {
-            Ok(Ok(response)) => {
+        // 7. Wait for user answer until the user responds, cancels, or the turn is cancelled.
+        match rx.await {
+            Ok(response) => {
                 debug!(
                     "AskUserQuestion tool received user response, tool_id: {}",
                     tool_id
@@ -364,7 +377,7 @@ Usage notes:
                     image_attachments: None,
                 }])
             }
-            Ok(Err(_)) => {
+            Err(_) => {
                 warn!("AskUserQuestion tool channel closed, tool_id: {}", tool_id);
                 Ok(vec![ToolResult::Result {
                     data: json!({
@@ -375,24 +388,50 @@ Usage notes:
                     image_attachments: None,
                 }])
             }
-            Err(_) => {
-                warn!(
-                    "AskUserQuestion tool timeout after 600 seconds, tool_id: {}",
-                    tool_id
-                );
-                manager.cancel(&tool_id); // Clean up channel
-
-                Ok(vec![ToolResult::Result {
-                    data: json!({
-                        "questions_count": tool_input.questions.len(),
-                        "status": "timeout"
-                    }),
-                    result_for_assistant: Some(
-                        "User didn't answer your questions within 600 seconds.".to_string(),
-                    ),
-                    image_attachments: None,
-                }])
-            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AskUserQuestionTool;
+    use crate::agentic::tools::framework::{Tool, ToolUseContext};
+    use std::collections::HashMap;
+
+    fn context_with_custom_data(custom_data: HashMap<String, serde_json::Value>) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data,
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: Default::default(),
+            workspace_services: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn ask_user_question_is_hidden_for_acp_transport() {
+        let tool = AskUserQuestionTool::new();
+        let mut custom_data = HashMap::new();
+        custom_data.insert(
+            "acp_transport".to_string(),
+            serde_json::Value::String("true".to_string()),
+        );
+        let context = context_with_custom_data(custom_data);
+
+        assert!(!tool.is_available_in_context(Some(&context)).await);
+    }
+
+    #[tokio::test]
+    async fn ask_user_question_remains_available_without_acp_transport() {
+        let tool = AskUserQuestionTool::new();
+        let context = context_with_custom_data(HashMap::new());
+
+        assert!(tool.is_available_in_context(Some(&context)).await);
     }
 }

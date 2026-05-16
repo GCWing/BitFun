@@ -1,6 +1,12 @@
 {
-  "title": "Session Config",
-  "subtitle": "Session-related AI features and tool execution behavior",
+  "personalizationPage": {
+    "title": "Personalization",
+    "subtitle": "Auto session title and Agent companion"
+  },
+  "permissionsPage": {
+    "title": "Permission management",
+    "subtitle": "Accelerated workspace search, tool execution, Computer use, browser control, and debug mode"
+  },
   "features": {
     "sessionTitle": {
       "title": "Auto Session Title",
@@ -19,9 +25,7 @@
       "displayDesktopDesc": "Show a borderless always-on-top mini window outside the app. Drag to move it.",
       "petLabel": "Companion appearance",
       "petDescription": "Choose a preset, or import a Petdex zip downloaded from petdex.crafter.run.",
-      "defaultPet": "Default panda",
       "petPlaceholder": "Choose companion appearance",
-      "groupBuiltin": "Built-in",
       "groupPreset": "Presets",
       "groupImported": "Imported",
       "import": "Import",
@@ -64,8 +68,11 @@
   },
   "browserControl": {
     "sectionTitle": "Browser control",
-    "sectionDescription": "Reuse your default browser with logins, cookies, and extensions.",
+    "sectionDescription": "Choose a browser and start CDP control.",
     "desktopOnly": "Browser control is only available in the BitFun desktop app.",
+    "preferredBrowser": "Browser",
+    "preferredBrowserDesc": "Choose which browser BitFun controls through CDP. Default follows the system default browser.",
+    "notInstalled": "not installed",
     "status": "Connection",
     "statusDesc": "",
     "notConnected": "Not connected",
@@ -103,10 +110,6 @@
   },
   "loading": {
     "text": "Loading configuration..."
-  },
-  "maxRounds": {
-    "label": "Maximum dialog rounds",
-    "description": "Maximum number of AI rounds per dialog turn before pausing. Increase for complex tasks."
   },
   "messages": {
     "saveSuccess": "Settings saved",

@@ -26,6 +26,10 @@ impl Tool for HarmonyProjectGenTool {
             .to_string())
     }
 
+    fn short_description(&self) -> String {
+        "Create the project in the ohos".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

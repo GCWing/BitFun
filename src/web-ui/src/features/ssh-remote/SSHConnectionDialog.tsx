@@ -135,8 +135,12 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     if (path) setFormData((prev) => ({ ...prev, keyPath: path }));
   }, [isConnecting, status, t]);
 
-  const generateConnectionId = (host: string, port: number, username: string) => {
-    return `ssh-${username}@${host}:${port}`;
+  // Port is intentionally excluded so that the ID stays stable when the user
+  // changes the SSH port.  Old-format IDs that include the port (e.g.
+  // "ssh-root@host:22") are migrated on the Rust side when saved connections
+  // are loaded from disk.
+  const generateConnectionId = (host: string, _port: number, username: string) => {
+    return `ssh-${username}@${host}`;
   };
 
   const buildAuthMethod = (): SSHAuthMethod => {
@@ -200,7 +204,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     setIsConnecting(true);
     setLocalError(null);
     try {
-      await connect(config.id, config);
+      await connect(config.id, config, { browseAfterConnect: true });
       // Don't call onClose() here - connect() handles closing the dialog via context
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : 'Connection failed');
@@ -216,14 +220,18 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       setIsConnecting(true);
       setLocalError(null);
       try {
-        await connect(conn.id, {
-          id: conn.id,
-          name: conn.name,
-          host: conn.host,
-          port: conn.port,
-          username: conn.username,
-          auth: { type: 'Password', password: '' },
-        });
+        await connect(
+          conn.id,
+          {
+            id: conn.id,
+            name: conn.name,
+            host: conn.host,
+            port: conn.port,
+            username: conn.username,
+            auth: { type: 'Password', password: '' },
+          },
+          { browseAfterConnect: true }
+        );
       } catch {
         setCredentialsPrompt({ kind: 'saved', connection: conn });
       } finally {
@@ -237,14 +245,18 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
 
       setIsConnecting(true);
       try {
-        await connect(conn.id, {
-          id: conn.id,
-          name: conn.name,
-          host: conn.host,
-          port: conn.port,
-          username: conn.username,
-          auth,
-        });
+        await connect(
+          conn.id,
+          {
+            id: conn.id,
+            name: conn.name,
+            host: conn.host,
+            port: conn.port,
+            username: conn.username,
+            auth,
+          },
+          { browseAfterConnect: true }
+        );
       } catch (e) {
         setLocalError(e instanceof Error ? e.message : 'Connection failed');
       } finally {
@@ -288,7 +300,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
 
     setIsConnecting(true);
     try {
-      await connect(connectionId, authConfig);
+      await connect(connectionId, authConfig, { browseAfterConnect: true });
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : 'Authentication failed');
     } finally {
@@ -327,7 +339,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           username: resolvedUsername,
           auth,
         };
-        await connect(conn.id, full);
+        await connect(conn.id, full, { browseAfterConnect: true });
       } else {
         const { entry, connectHost, port } = credentialsPrompt;
         const connectionId = generateConnectionId(connectHost, port, resolvedUsername);
@@ -339,11 +351,10 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           username: resolvedUsername,
           auth,
         };
-        await connect(connectionId, full);
+        await connect(connectionId, full, { browseAfterConnect: true });
         await loadSavedConnections();
       }
       setCredentialsPrompt(null);
-      onClose();
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : 'Connection failed');
     } finally {

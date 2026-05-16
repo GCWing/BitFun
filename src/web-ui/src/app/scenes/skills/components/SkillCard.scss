@@ -1,7 +1,7 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 /* ───────────────────────────────────────────────────
-   SkillCard — vertical card with glassmorphism effect
+   SkillCard — compact card for discover tab grid
    DOM:
      .skill-card
        ::before (decorative circle blur)
@@ -18,9 +18,10 @@
    ─────────────────────────────────────────────────── */
 
 .skill-card {
-  width: 360px;
-  height: 200px;
-  border-radius: 15px;
+  width: 100%;
+  height: 100%;
+  min-height: 150px;
+  border-radius: 12px;
   background: var(--element-bg-soft);
   display: flex;
   flex-direction: column;
@@ -33,14 +34,14 @@
     transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.35s ease;
 
-  // Top gradient overlay - shows on hover, covers entire card except footer
+  // Top gradient overlay
   &::before {
     content: "";
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    bottom: 40px;
+    bottom: 0;
     background: var(--skill-card-gradient);
     opacity: 0;
     transition: opacity 0.35s ease;
@@ -48,16 +49,12 @@
     z-index: 0;
   }
 
-  &--no-actions::before {
-    bottom: 0;
-  }
-
   &:hover {
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+    transform: translateY(-3px) scale(1.01);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
 
     &::before {
-      opacity: 0.4;
+      opacity: 0.25;
     }
   }
 
@@ -71,8 +68,7 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    padding: $size-gap-3;
-    padding-bottom: 0;
+    padding: 12px 12px 8px;
     position: relative;
     z-index: 1;
   }
@@ -81,8 +77,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.12);
     backdrop-filter: blur(8px);
@@ -104,7 +100,7 @@
   // ── Body ──
   &__body {
     flex: 1;
-    padding: $size-gap-2 $size-gap-3;
+    padding: 0 12px;
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -116,12 +112,12 @@
   &__title-row {
     display: flex;
     align-items: center;
-    gap: $size-gap-2;
+    gap: 8px;
     min-width: 0;
   }
 
   &__name {
-    font-size: 0.92em;
+    font-size: 0.9em;
     font-weight: $font-weight-semibold;
     color: var(--color-text-primary);
     line-height: $line-height-base;
@@ -165,10 +161,11 @@
     display: flex;
     align-items: center;
     width: 100%;
-    border-radius: 0 0 15px 15px;
+    border-radius: 0 0 12px 12px;
     overflow: hidden;
     position: relative;
     z-index: 1;
+    margin-top: auto;
 
     // Bottom gradient blur background matching card color
     &::after {
@@ -179,14 +176,14 @@
       right: 0;
       bottom: 0;
       background: var(--skill-card-gradient);
-      opacity: 0.5;
+      opacity: 0.35;
       transition: opacity 0.35s ease;
       pointer-events: none;
     }
   }
 
   &:hover &__footer::after {
-    opacity: 1;
+    opacity: 0.6;
   }
 
   &__actions {
@@ -202,7 +199,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 35px;
+    height: 32px;
     padding: 0;
     border: none;
     background: rgba(255, 255, 255, 0.08);
@@ -241,14 +238,6 @@
     &--muted {
       background: transparent;
     }
-  }
-}
-
-// ── Responsive ──
-@media (max-width: 720px) {
-  .skill-card {
-    width: 100%;
-    min-height: 180px;
   }
 }
 

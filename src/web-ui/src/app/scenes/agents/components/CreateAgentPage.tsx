@@ -48,7 +48,7 @@ const CreateAgentPage: React.FC = () => {
             if (!name) return null;
             return {
               name,
-              isReadonly: Boolean(tool?.isReadonly ?? tool?.is_readonly),
+              isReadonly: Boolean(tool?.is_readonly),
             };
           })
           .filter((tool): tool is SubagentEditorToolInfo => Boolean(tool));

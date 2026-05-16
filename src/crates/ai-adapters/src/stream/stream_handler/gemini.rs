@@ -7,6 +7,7 @@ use eventsource_stream::Eventsource;
 use log::{error, trace};
 use reqwest::Response;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -17,8 +18,7 @@ static GEMINI_STREAM_ID_SEQ: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug)]
 struct GeminiToolCallState {
-    active_name: Option<String>,
-    active_id: Option<String>,
+    active_calls: HashMap<Option<usize>, (String, Option<String>)>,
     stream_id: u64,
     next_index: usize,
 }
@@ -26,38 +26,42 @@ struct GeminiToolCallState {
 impl GeminiToolCallState {
     fn new() -> Self {
         Self {
-            active_name: None,
-            active_id: None,
+            active_calls: HashMap::new(),
             stream_id: GEMINI_STREAM_ID_SEQ.fetch_add(1, Ordering::Relaxed),
             next_index: 0,
         }
     }
 
     fn on_non_tool_response(&mut self) {
-        self.active_name = None;
-        self.active_id = None;
+        self.active_calls.clear();
     }
 
     fn assign_id(&mut self, tool_call: &mut crate::stream::types::unified::UnifiedToolCall) {
+        let tool_key = tool_call.tool_call_index;
         if let Some(existing_id) = tool_call.id.as_ref().filter(|value| !value.is_empty()) {
-            self.active_id = Some(existing_id.clone());
-            self.active_name = tool_call.name.clone().filter(|value| !value.is_empty());
+            self.active_calls.insert(
+                tool_key,
+                (
+                    existing_id.clone(),
+                    tool_call.name.clone().filter(|value| !value.is_empty()),
+                ),
+            );
             return;
         }
 
         let tool_name = tool_call.name.clone().filter(|value| !value.is_empty());
-        let is_same_active_call = self.active_id.is_some() && self.active_name == tool_name;
-
-        if is_same_active_call {
-            tool_call.id = None;
-            return;
+        if let Some((_, active_name)) = self.active_calls.get(&tool_key) {
+            if active_name == &tool_name {
+                tool_call.id = None;
+                return;
+            }
         }
 
         self.next_index += 1;
         let generated_id = format!("gemini_call_{}_{}", self.stream_id, self.next_index);
         tool_call.id = Some(generated_id.clone());
-        self.active_id = Some(generated_id);
-        self.active_name = tool_name;
+        self.active_calls
+            .insert(tool_key, (generated_id, tool_name));
     }
 }
 
@@ -201,7 +205,7 @@ mod tests {
         let mut state = GeminiToolCallState::new();
 
         let mut first = UnifiedToolCall {
-            tool_call_index: None,
+            tool_call_index: Some(0),
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{\"city\":".to_string()),
@@ -210,7 +214,7 @@ mod tests {
         state.assign_id(&mut first);
 
         let mut second = UnifiedToolCall {
-            tool_call_index: None,
+            tool_call_index: Some(0),
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("\"Paris\"}".to_string()),
@@ -226,11 +230,38 @@ mod tests {
     }
 
     #[test]
+    fn assigns_distinct_ids_for_same_named_calls_with_different_indices() {
+        let mut state = GeminiToolCallState::new();
+
+        let mut first = UnifiedToolCall {
+            tool_call_index: Some(0),
+            id: None,
+            name: Some("read_file".to_string()),
+            arguments: Some("{\"path\":\"a.rs\"}".to_string()),
+            arguments_is_snapshot: true,
+        };
+        state.assign_id(&mut first);
+
+        let mut second = UnifiedToolCall {
+            tool_call_index: Some(1),
+            id: None,
+            name: Some("read_file".to_string()),
+            arguments: Some("{\"path\":\"b.rs\"}".to_string()),
+            arguments_is_snapshot: true,
+        };
+        state.assign_id(&mut second);
+
+        let first_id = first.id.expect("first id");
+        let second_id = second.id.expect("second id");
+        assert_ne!(first_id, second_id);
+    }
+
+    #[test]
     fn clears_active_tool_after_non_tool_response() {
         let mut state = GeminiToolCallState::new();
 
         let mut first = UnifiedToolCall {
-            tool_call_index: None,
+            tool_call_index: Some(0),
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{}".to_string()),
@@ -240,7 +271,7 @@ mod tests {
         state.on_non_tool_response();
 
         let mut second = UnifiedToolCall {
-            tool_call_index: None,
+            tool_call_index: Some(0),
             id: None,
             name: Some("get_weather".to_string()),
             arguments: Some("{}".to_string()),

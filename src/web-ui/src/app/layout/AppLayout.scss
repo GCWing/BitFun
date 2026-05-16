@@ -53,6 +53,10 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 
+  &:focus {
+    outline: none;
+  }
+
   // All children
   * {
     box-sizing: border-box;
@@ -154,10 +158,62 @@ html, body {
   }
 }
 
+.bitfun-window-mode-hint {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + #{$size-gap-3});
+  left: 50%;
+  z-index: $z-notification;
+  display: inline-flex;
+  align-items: center;
+  gap: $size-gap-2;
+  max-width: min(560px, calc(100vw - 32px));
+  min-height: 34px;
+  padding: $size-gap-1 $size-gap-3;
+  border: 1px solid var(--border-subtle);
+  border-radius: $size-radius-base;
+  background: color-mix(in srgb, var(--color-bg-elevated) 90%, transparent);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.30);
+  color: var(--color-text-primary);
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: bitfun-window-mode-hint-in $motion-base $easing-decelerate both;
+  backdrop-filter: blur(12px);
+
+  &__title {
+    flex: 0 0 auto;
+    min-width: 0;
+    font-size: var(--font-size-sm);
+    font-weight: $font-weight-semibold;
+    line-height: 1.35;
+    white-space: nowrap;
+  }
+
+  &__detail {
+    min-width: 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 @keyframes bitfun-acp-session-loading-in {
   from {
     opacity: 0;
     transform: translateX(-50%) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes bitfun-window-mode-hint-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px);
   }
   to {
     opacity: 1;
@@ -185,6 +241,19 @@ html, body {
   .bitfun-app-layout {
     --header-height: 32px;
   }
+
+  .bitfun-window-mode-hint {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1px;
+    width: calc(100vw - 24px);
+    max-width: none;
+
+    &__title,
+    &__detail {
+      white-space: normal;
+    }
+  }
 }
 
 // ==================== Dark theme tweaks ====================
@@ -205,6 +274,10 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .bitfun-app-layout * {
     transition: none;
+    animation: none;
+  }
+
+  .bitfun-window-mode-hint {
     animation: none;
   }
 }

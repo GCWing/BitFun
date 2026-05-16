@@ -1,26 +1,13 @@
-Noto Sans SC Variable Font
-==========================
+Noto Sans SC Static Fonts
+=========================
 
-This download contains Noto Sans SC as both a variable font and static fonts.
+This bundled directory keeps only the static Noto Sans SC weights referenced by
+../fonts.css.
 
-Noto Sans SC is a variable font with this axis:
-  wght
-
-This means all the styles are contained in a single file:
-  NotoSansSC-VariableFont_wght.ttf
-
-If your app fully supports variable fonts, you can now pick intermediate styles
-that aren’t available as static fonts. Not all apps support variable fonts, and
-in those cases you can use the static font files for Noto Sans SC:
-  static/NotoSansSC-Thin.ttf
-  static/NotoSansSC-ExtraLight.ttf
-  static/NotoSansSC-Light.ttf
+Included static font files:
   static/NotoSansSC-Regular.ttf
   static/NotoSansSC-Medium.ttf
   static/NotoSansSC-SemiBold.ttf
-  static/NotoSansSC-Bold.ttf
-  static/NotoSansSC-ExtraBold.ttf
-  static/NotoSansSC-Black.ttf
 
 Get started
 -----------

@@ -22,6 +22,9 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
   const { t } = useI18n('common');
   const apps = useMiniAppStore((state) => state.apps);
   const runningWorkerIds = useMiniAppStore((state) => state.runningWorkerIds);
+  const customizingAppIds = useMiniAppStore((state) => state.customizingAppIds);
+  const customizingIdSet = useMemo(() => new Set(customizingAppIds), [customizingAppIds]);
+  const hasCustomizingApps = customizingAppIds.length > 0;
 
   const runningApps = useMemo(() => {
     const appMap = new Map(apps.map((app) => [app.id, app]));
@@ -50,6 +53,7 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
           'bitfun-nav-panel__miniapp-entry',
           isActive && 'is-active',
           runningApps.length > 0 && 'has-running-apps',
+          hasCustomizingApps && 'has-customizing-apps',
         ].filter(Boolean).join(' ')}
         onClick={onOpenMiniApps}
         onKeyDown={(event) => {
@@ -81,6 +85,7 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
                       className={[
                         'bitfun-nav-panel__miniapp-bubble',
                         isAppActive && 'is-active',
+                        customizingIdSet.has(app.id) && 'is-customizing',
                       ].filter(Boolean).join(' ')}
                       style={{ background: getMiniAppIconGradient(app.icon || 'box') }}
                       onClick={(event) => {
@@ -100,6 +105,9 @@ const MiniAppEntry: React.FC<MiniAppEntryProps> = ({
                       }}
                     >
                       {renderMiniAppIcon(app.icon || 'box', 14)}
+                      {customizingIdSet.has(app.id) && (
+                        <span className="bitfun-nav-panel__miniapp-bubble-customize-dot" aria-hidden="true" />
+                      )}
                     </span>
                   </Tooltip>
                 );

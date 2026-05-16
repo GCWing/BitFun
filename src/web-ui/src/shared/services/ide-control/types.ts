@@ -86,26 +86,8 @@ export interface PanelConfig {
   
    
   title?: string;
-   
-  mermaid_code?: string;
-   
-  sourceCode?: string;
-   
-  mode?: 'interactive' | 'editor';
-   
-  allow_mode_switch?: boolean;
-   
-  editor_config?: any;
-   
-  interactive_config?: {
-    node_metadata?: Record<string, any>;
-    highlights?: any;
-    enable_navigation?: boolean;
-    enable_tooltips?: boolean;
-  };
 }
 
- 
 export interface IdeControlOptions {
    
   auto_focus?: boolean;

@@ -308,36 +308,10 @@
     flex-shrink: 0;
 
     &--left {
+      position: relative;
+      z-index: 2;
       margin-right: $size-gap-2;
-    }
-  }
-
-  &__git-branch {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    flex-shrink: 0;
-    min-width: 0;
-    max-width: 140px;
-    height: 24px;
-    padding: 0 6px;
-    border-radius: $size-radius-sm;
-    color: var(--color-text-secondary);
-    font-size: var(--flowchat-font-size-xs);
-    line-height: 1.4;
-    white-space: nowrap;
-
-    svg {
-      flex-shrink: 0;
-      display: block;
-      opacity: 0.8;
-    }
-
-    > span {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      overflow: visible;
     }
   }
 

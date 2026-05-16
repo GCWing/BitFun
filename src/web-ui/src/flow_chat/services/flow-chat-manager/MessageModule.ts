@@ -13,7 +13,7 @@ import { SessionExecutionEvent, SessionExecutionState } from '../../state-machin
 import { generateTempTitle } from '../../utils/titleUtils';
 import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, DialogTurn } from './types';
-import { ensureBackendSession, retryCreateBackendSession } from './SessionModule';
+import { ensureBackendSession, getModelMaxTokens, retryCreateBackendSession } from './SessionModule';
 import { cleanupSessionBuffers } from './TextChunkModule';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -25,6 +25,7 @@ import {
   isTransientBtwSession,
   sendMessageToTransientBtwSession,
 } from '../BtwThreadService';
+import { pendingQueueManager } from './PendingQueueModule';
 
 const log = createLogger('MessageModule');
 
@@ -67,21 +68,30 @@ async function syncSessionModelSelection(
     throw new Error(`Session does not exist: ${sessionId}`);
   }
 
-  const [agentModels, allModels, defaultModels] = await Promise.all([
-    configManager.getConfig<Record<string, string>>('ai.agent_models') || {},
-    configManager.getConfig<AIModelConfig[]>('ai.models') || [],
-    configManager.getConfig<DefaultModelsConfig>('ai.default_models') || {},
+  const [agentModelsConfig, allModelsConfig, defaultModelsConfig] = await Promise.all([
+    configManager.getConfig<Record<string, string>>('ai.agent_models'),
+    configManager.getConfig<AIModelConfig[]>('ai.models'),
+    configManager.getConfig<DefaultModelsConfig>('ai.default_models'),
   ]);
+  const agentModels = agentModelsConfig || {};
+  const allModels = allModelsConfig || [];
+  const defaultModels = defaultModelsConfig || {};
 
   const desiredModelId = normalizeModelSelection(agentModels[agentType], allModels, defaultModels);
   const currentModelId = (session.config.modelName || 'auto').trim() || 'auto';
   const shouldForceAutoSync = desiredModelId === 'auto';
-  if (!shouldForceAutoSync && desiredModelId === currentModelId) {
+  const desiredMaxContextTokens = await getModelMaxTokens(desiredModelId, agentType);
+  const shouldSyncContextWindow = session.maxContextTokens !== desiredMaxContextTokens;
+
+  if (!shouldForceAutoSync && desiredModelId === currentModelId && !shouldSyncContextWindow) {
     return;
   }
 
   if (currentModelId !== desiredModelId) {
     context.flowChatStore.updateSessionModelName(sessionId, desiredModelId);
+  }
+  if (shouldSyncContextWindow) {
+    context.flowChatStore.updateSessionMaxContextTokens(sessionId, desiredMaxContextTokens);
   }
   await agentAPI.updateSessionModel({
     sessionId,
@@ -115,11 +125,54 @@ export async function sendMessage(
   options?: {
     imageContexts?: ImageInputContextData[];
     imageDisplayData?: Array<{ id: string; name: string; dataUrl?: string; imagePath?: string; mimeType?: string }>;
+    /**
+     * When true, bypass the pending-queue check. Used by the queue drain path
+     * to actually start a new dialog turn after the previous one finished.
+     * Callers should not set this directly.
+     */
+    bypassPendingQueue?: boolean;
+    userMessageMetadata?: Record<string, unknown>;
   }
 ): Promise<void> {
   const session = context.flowChatStore.getState().sessions.get(sessionId);
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
+  }
+
+  if (!options?.bypassPendingQueue) {
+    const machineState = stateMachineManager.getCurrentState(sessionId);
+    const sessionBusy =
+      machineState === SessionExecutionState.PROCESSING ||
+      machineState === SessionExecutionState.FINISHING;
+    const hasPendingQueue = pendingQueueManager.list(sessionId).length > 0;
+
+    if (sessionBusy || hasPendingQueue) {
+      try {
+        const item = pendingQueueManager.enqueue({
+          sessionId,
+          content: message,
+          displayMessage,
+          agentType,
+          imageContexts: options?.imageContexts,
+          imageDisplayData: options?.imageDisplayData,
+        });
+        log.info('Message enqueued: session busy or queue non-empty', {
+          sessionId,
+          state: machineState,
+          queuedItemId: item.id,
+          queueDepth: pendingQueueManager.list(sessionId).length,
+        });
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Failed to queue message';
+        log.error('Failed to enqueue pending message', { sessionId, error });
+        notificationService.error(reason, {
+          title: 'Queue full',
+          duration: 4000,
+        });
+        throw error;
+      }
+      return;
+    }
   }
 
   // Switch UI mode if specified
@@ -192,6 +245,7 @@ export async function sendMessage(
         timestamp: Date.now(),
         hasImages,
         images: options?.imageDisplayData,
+        metadata: options?.userMessageMetadata,
       },
       modelRounds: [],
       // Images are attached for multimodal primary models or reduced to text placeholders for text-only models.
@@ -261,6 +315,8 @@ export async function sendMessage(
         originalUserInput: displayMessage || message,
         turnId: dialogTurnId,
         workspacePath,
+        imageContexts: options?.imageContexts,
+        userMessageMetadata: options?.userMessageMetadata,
         remoteConnectionId: updatedSession.remoteConnectionId,
         remoteSshHost: updatedSession.remoteSshHost,
       });
@@ -274,6 +330,7 @@ export async function sendMessage(
           agentType: currentAgentType,
           workspacePath,
           imageContexts: options?.imageContexts,
+          userMessageMetadata: options?.userMessageMetadata,
         });
       } catch (error: any) {
         if (error?.message?.includes('Session does not exist') || error?.message?.includes('Not found')) {
@@ -370,6 +427,97 @@ export async function cancelCurrentTask(context: FlowChatContext): Promise<boole
     log.error('Failed to cancel current task', error);
     return false;
   }
+}
+
+/**
+ * Drain a single head item from the pending queue if the session is currently IDLE.
+ * Called by the global state-machine subscriber after a turn completes.
+ */
+export async function drainPendingQueue(
+  context: FlowChatContext,
+  sessionId: string,
+): Promise<void> {
+  const machineState = stateMachineManager.getCurrentState(sessionId);
+  if (machineState !== SessionExecutionState.IDLE) {
+    return;
+  }
+  // Find the head item *that is still eligible for auto-drain*. Items with
+  // `retryCount > 0` (e.g. restored from a failed turn) are deliberately
+  // skipped here — the user must explicitly act on them to avoid re-entering
+  // the same failure mode automatically.
+  const allItems = pendingQueueManager.list(sessionId);
+  const next = allItems.find(
+    (item) => (item.retryCount ?? 0) === 0 && item.status === 'queued',
+  );
+  if (!next) return;
+
+  // If there are blocking failed items in front of this one, also skip — the
+  // user expects FIFO order, so we should not silently jump ahead of a failed
+  // entry. Once they clear / send-now the failed entry, the listener will
+  // re-fire on the next IDLE state event.
+  const blockedByFailed = allItems
+    .slice(0, allItems.indexOf(next))
+    .some((item) => (item.retryCount ?? 0) > 0 || item.status === 'failed');
+  if (blockedByFailed) {
+    log.debug('Auto-drain blocked by a failed item ahead of head', {
+      sessionId,
+      pending: allItems.length,
+    });
+    return;
+  }
+
+  pendingQueueManager.setStatus(sessionId, next.id, 'sending');
+
+  try {
+    await sendMessage(
+      context,
+      next.content,
+      sessionId,
+      next.displayMessage,
+      next.agentType,
+      undefined,
+      {
+        imageContexts: next.imageContexts as ImageInputContextData[] | undefined,
+        imageDisplayData: next.imageDisplayData as
+          | Array<{
+              id: string;
+              name: string;
+              dataUrl?: string;
+              imagePath?: string;
+              mimeType?: string;
+            }>
+          | undefined,
+        bypassPendingQueue: true,
+      },
+    );
+    // Only remove the item AFTER sendMessage completes successfully so we keep
+    // the original id / timestamp / retryCount on failure (no UI flicker, no
+    // reset of the retry counter, and FIFO order is preserved).
+    pendingQueueManager.remove(sessionId, next.id);
+  } catch (error) {
+    log.error('Failed to drain pending queue item', { sessionId, itemId: next.id, error });
+    // Mark in place. The auto-drain listener skips `failed` items so the user
+    // can edit / send-now / delete without entering a tight retry loop.
+    pendingQueueManager.setStatus(sessionId, next.id, 'failed');
+  }
+}
+
+let queueDrainListenerInstalled = false;
+let queueDrainContext: FlowChatContext | null = null;
+
+/** Install (once) the state-machine listener that drains the queue when a session returns to IDLE. */
+export function installPendingQueueDrainListener(context: FlowChatContext): void {
+  queueDrainContext = context;
+  if (queueDrainListenerInstalled) {
+    return;
+  }
+  queueDrainListenerInstalled = true;
+  stateMachineManager.subscribeGlobal((sessionId, machine) => {
+    if (machine.currentState !== SessionExecutionState.IDLE) return;
+    if (!queueDrainContext) return;
+    if (pendingQueueManager.list(sessionId).length === 0) return;
+    void drainPendingQueue(queueDrainContext, sessionId);
+  });
 }
 
 export function markCurrentTurnItemsAsCancelled(

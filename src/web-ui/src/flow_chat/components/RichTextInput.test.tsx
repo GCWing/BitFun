@@ -133,4 +133,33 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(editor.textContent).toBe('server rewrite');
     expect(editor.firstChild).not.toBe(originalTextNode);
   });
+
+  it('keeps Escape owned by IME composition', async () => {
+    const onKeyDown = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={() => {}}
+          onKeyDown={onKeyDown}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input');
+    expect(editor).toBeInstanceOf(HTMLDivElement);
+
+    await act(async () => {
+      editor!.dispatchEvent(new window.KeyboardEvent('keydown', {
+        key: 'Escape',
+        keyCode: 229,
+        bubbles: true,
+      }));
+    });
+
+    expect(onKeyDown).not.toHaveBeenCalled();
+  });
 });

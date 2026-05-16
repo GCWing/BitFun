@@ -4,6 +4,7 @@
  */
 
 import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo } from 'react';
+import path from 'path-browserify';
 import { Trans, useTranslation } from 'react-i18next';
 import { ArrowUp, Image, Maximize2, Minimize2, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
@@ -33,32 +34,38 @@ import { useMessageSender } from '../hooks/useMessageSender';
 import { useChatInputState } from '../store/chatInputStateStore';
 import { useInputHistoryStore } from '../store/inputHistoryStore';
 import { startBtwThread } from '../services/BtwThreadService';
+import { runUsageReportCommand } from '../services/usageReportService';
 import { FlowChatManager } from '@/flow_chat';
 import {
   DEEP_REVIEW_SLASH_COMMAND,
-  buildDeepReviewPromptFromSlashCommand,
   getDeepReviewLaunchErrorMessage,
+  buildDeepReviewLaunchFromSlashCommand,
+  buildDeepReviewPreviewFromSlashCommand,
   isDeepReviewSlashCommand,
   launchDeepReviewSession,
 } from '../services/DeepReviewService';
 import { createLogger } from '@/shared/utils/logger';
 import { Tooltip, IconButton } from '@/component-library';
+import { PendingQueuePanel } from './PendingQueuePanel';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { openBtwSessionInAuxPane, selectActiveBtwSessionTab } from '../services/openBtwSession';
 import { resolveSessionRelationship } from '../utils/sessionMetadata';
 import { resolveWorkspaceChatInputMode } from '../utils/chatInputMode';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
-import type { SkillInfo } from '@/infrastructure/config/types';
+import { configAPI } from '@/infrastructure/api';
+import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { deriveChatInputPetMood } from '../utils/chatInputPetMood';
 import { ChatInputPixelPet } from './ChatInputPixelPet';
+import { ChatInputWorkspaceStrip } from './ChatInputWorkspaceStrip';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
 import { useDeepReviewConsent } from './DeepReviewConsentDialog';
 import { useAgentCompanionActivity } from '../hooks/useAgentCompanionActivity';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
+import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import './ChatInput.scss';
 import { sessionStorageAdapter } from '@/shared/utils/sessionStorageAdapter';
 
@@ -309,11 +316,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     agentCompanionInInput && !inputState.isActive && !inputState.value.trim();
   const { transition, setQueuedInput } = useSessionStateMachineActions(effectiveTargetSessionId);
 
-  const { workspace, workspacePath } = useCurrentWorkspace();
+  const { workspace, workspacePath, workspaceName } = useCurrentWorkspace();
+
+  const chatStripRepositoryPath = useMemo(() => {
+    const fromContext = (workspacePath || '').trim();
+    const fromSession = (effectiveTargetSession?.workspacePath || '').trim();
+    return fromContext || fromSession;
+  }, [workspacePath, effectiveTargetSession?.workspacePath]);
+
+  const chatStripWorkspaceLabel = useMemo(() => {
+    const name = (workspaceName || '').trim();
+    if (name) return name;
+    if (chatStripRepositoryPath) return path.basename(chatStripRepositoryPath);
+    return '';
+  }, [workspaceName, chatStripRepositoryPath]);
   
   const [tokenUsage, setTokenUsage] = React.useState({ current: 0, max: 128128 });
   const isAssistantWorkspace = workspace?.workspaceKind === WorkspaceKind.Assistant;
   const currentMode = modeState.current;
+  const isModeDropdownOpen = modeState.dropdownOpen;
   const activeSessionMode = effectiveTargetSessionId
     ? flowChatState.sessions.get(effectiveTargetSessionId)?.mode
     : undefined;
@@ -323,7 +344,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const switchableModes = useMemo(
     () =>
       modeState.available.filter(mode =>
-        mode.enabled &&
         mode.id !== 'Cowork' &&
         (isAssistantWorkspace || mode.id !== 'Claw')
       ),
@@ -337,7 +357,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
 
   const openScene = useSceneStore(s => s.openScene);
-  const [boostPanelSkills, setBoostPanelSkills] = useState<SkillInfo[]>([]);
+  const [boostPanelSkills, setBoostPanelSkills] = useState<ModeSkillInfo[]>([]);
   const [boostSkillsLoading, setBoostSkillsLoading] = useState(false);
 
   const [skillsFlyoutOpen, setSkillsFlyoutOpen] = useState(false);
@@ -375,6 +395,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const setChatInputActive = useChatInputState(state => state.setActive);
   const setChatInputExpanded = useChatInputState(state => state.setExpanded);
   const setChatInputHeight = useChatInputState(state => state.setInputHeight);
+  const runtimeBoostSkills = useMemo(
+    // Only surface skills that this mode will actually resolve at runtime.
+    () => boostPanelSkills.filter(skill => skill.selectedForRuntime),
+    [boostPanelSkills]
+  );
 
   useEffect(() => {
     const unsubscribe = FlowChatStore.getInstance().subscribe(setFlowChatState);
@@ -667,13 +692,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     void loadMcpPromptCommands();
   }, [derivedState?.isProcessing, loadMcpPromptCommands, slashCommandState.isActive, slashCommandState.kind]);
 
+  // Stable ref so the mcp-app:message handler can read the latest value without
+  // being included in the effect's dependency array (prevents rapid listener
+  // teardown/re-registration on every keystroke or streaming update).
+  const inputStateValueRef = React.useRef(inputState.value);
+  React.useEffect(() => {
+    inputStateValueRef.current = inputState.value;
+  });
+
   // Handle MCP App ui/message requests (aligned with VSCode behavior)
   React.useEffect(() => {
     const handleMcpAppMessage = async (event: import('@/infrastructure/api/service-api/MCPAPI').McpAppMessageEvent) => {
       const { requestId, params } = event;
 
       // Don't fill if input already has content (aligned with VSCode behavior)
-      if (inputState.value.trim()) {
+      if (inputStateValueRef.current.trim()) {
         log.warn('MCP App ui/message rejected: input already has content');
         // Send error response (VSCode returns { isError: true } in this case)
         globalEventBus.emit('mcp-app:message-response', {
@@ -744,7 +777,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       globalEventBus.off('mcp-app:message', handleMcpAppMessage);
     };
-  }, [inputState.value, addContext, clearPendingLargePastes, currentImageCount]);
+  }, [addContext, clearPendingLargePastes, currentImageCount]);
 
   React.useEffect(() => {
     const handleInsertContextTag = (event: Event) => {
@@ -898,22 +931,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [modeState.dropdownOpen]);
 
   useEffect(() => {
-    if (!modeState.dropdownOpen) {
+    if (!isModeDropdownOpen) {
       return;
     }
     let cancelled = false;
     setBoostSkillsLoading(true);
     (async () => {
       try {
-        const { configAPI } = await import('@/infrastructure/api');
-        const list = await configAPI.getSkillConfigs({
+        const list = await configAPI.getModeSkillConfigs({
+          modeId: currentMode,
           workspacePath: workspacePath || undefined,
         });
         if (!cancelled) {
           setBoostPanelSkills(list);
         }
       } catch (err) {
-        log.error('Failed to load skills for boost panel', { err });
+        log.error('Failed to load mode-resolved skills for boost panel', {
+          err,
+          modeId: currentMode,
+          workspacePath: workspacePath || undefined,
+        });
         if (!cancelled) setBoostPanelSkills([]);
       } finally {
         if (!cancelled) setBoostSkillsLoading(false);
@@ -922,7 +959,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [modeState.dropdownOpen, workspacePath]);
+  }, [currentMode, isModeDropdownOpen, workspacePath]);
 
   useEffect(() => {
     if (!modeState.dropdownOpen) {
@@ -1039,6 +1076,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           }]),
       {
         kind: 'action',
+        id: 'usage',
+        command: '/usage',
+        label: t('chatInput.usageAction', { defaultValue: 'Usage report' }),
+      },
+      {
+        kind: 'action',
         id: 'deepreview',
         command: DEEP_REVIEW_SLASH_COMMAND,
         label: t('chatInput.deepreviewAction', { defaultValue: 'Deep review' }),
@@ -1145,11 +1188,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const trimmedLower = text.trim().toLowerCase();
     const isBtwCommand = trimmedLower.startsWith('/btw');
     const isCompactCommand = trimmedLower.startsWith('/compact');
+    const isUsageCommand = trimmedLower.startsWith('/usage');
     const isDeepReviewCommand = isDeepReviewSlashCommand(text);
     const isProcessing = !!derivedState?.isProcessing;
 
     // Don't queue /btw while the main session is processing; /btw runs independently.
-    if (derivedState?.isProcessing && !isBtwCommand && !isCompactCommand && !isDeepReviewCommand) {
+    if (derivedState?.isProcessing && !isBtwCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand) {
       setQueuedInput(text);
     }
 
@@ -1164,7 +1208,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         // Only show the picker for "/..." patterns that are plausibly a command (/ or /b... /d...).
         // Once the user types a space (starts composing the real question), stop showing the picker
         // so Enter can submit "/btw ..." or "/DeepReview ..." instead of selecting from the picker.
-        if (!hasWhitespace && (query === '' || query.startsWith('b') || query.startsWith('d'))) {
+        if (!hasWhitespace && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('u'))) {
           setSlashCommandState({
             isActive: true,
             kind: 'actions',
@@ -1178,7 +1222,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
 
       // When idle, keep the picker for mode switching, but don't interfere with executable slash commands.
-      if (!isBtwCommand && !isCompactCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
+      if (!isBtwCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
         setSlashCommandState({
           isActive: true,
           kind: 'all',
@@ -1326,6 +1370,87 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     t,
   ]);
 
+  const runEffectiveSessionUsageReport = useCallback(async () => {
+    if (!effectiveTargetSessionId || !effectiveTargetSession) {
+      notificationService.error(
+        t('chatInput.usageNoSession', { defaultValue: 'No active session for /usage' })
+      );
+      return;
+    }
+
+    try {
+      const result = await runUsageReportCommand({
+        session: effectiveTargetSession,
+        isProcessing: !!derivedState?.isProcessing,
+        busyMessage: t('chatInput.usageBusy', {
+          defaultValue: 'Wait until the session is idle before using /usage.',
+        }),
+        noWorkspaceMessage: t('chatInput.usageNoWorkspace', {
+          defaultValue: 'A workspace is required to build a usage report.',
+        }),
+        failedTitle: t('chatInput.usageFailed', { defaultValue: 'Usage report failed' }),
+        unknownErrorMessage: t('error.unknown'),
+        loadingMarkdown: t('usage.loading.markdown', { defaultValue: 'Generating usage report...' }),
+      });
+
+      if (result.inserted) {
+        dispatchInput({ type: 'DEACTIVATE' });
+      }
+    } catch (error) {
+      log.error('Failed to trigger /usage', {
+        error,
+        sessionId: effectiveTargetSessionId,
+      });
+      throw error;
+    }
+  }, [
+    derivedState?.isProcessing,
+    effectiveTargetSession,
+    effectiveTargetSessionId,
+    t,
+  ]);
+
+  const submitUsageFromInput = useCallback(async () => {
+    if (!effectiveTargetSessionId || !effectiveTargetSession) {
+      notificationService.error(
+        t('chatInput.usageNoSession', { defaultValue: 'No active session for /usage' })
+      );
+      return;
+    }
+
+    const message = inputState.value.trim();
+    if (!/^\/usage\s*$/i.test(message)) {
+      notificationService.warning(
+        t('chatInput.usageCommandUsage', { defaultValue: 'Use /usage without extra arguments.' })
+      );
+      return;
+    }
+
+    dispatchInput({ type: 'CLEAR_VALUE' });
+    setQueuedInput(null);
+    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+
+    try {
+      await runEffectiveSessionUsageReport();
+    } catch {
+      dispatchInput({ type: 'ACTIVATE' });
+      dispatchInput({ type: 'SET_VALUE', payload: message });
+    }
+  }, [
+    effectiveTargetSession,
+    effectiveTargetSessionId,
+    inputState.value,
+    runEffectiveSessionUsageReport,
+    setQueuedInput,
+    t,
+  ]);
+
+  const handleToolbarUsageReport = useCallback(() => {
+    void runEffectiveSessionUsageReport().catch(() => {
+      /* errors surfaced by runUsageReportCommand */
+    });
+  }, [runEffectiveSessionUsageReport]);
+
   const submitInitFromInput = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
       notificationService.error(
@@ -1430,24 +1555,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    const confirmed = await confirmDeepReviewLaunch();
-    if (!confirmed) {
-      return;
-    }
-
     const originalPendingLargePastes = { ...pendingLargePastesRef.current };
-    if (effectiveTargetSessionId) {
-      addToHistory(effectiveTargetSessionId, message);
-    }
-    setHistoryIndex(-1);
-    setSavedDraft('');
-    dispatchInput({ type: 'CLEAR_VALUE' });
-    clearPendingLargePastes();
-    setQueuedInput(null);
-    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
     try {
-      const prompt = await buildDeepReviewPromptFromSlashCommand(
+      const preview = await buildDeepReviewPreviewFromSlashCommand(
+        message,
+        effectiveTargetSession.workspacePath,
+      );
+      const confirmed = await confirmDeepReviewLaunch(preview, {
+        sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
+          flowChatState,
+          effectiveTargetSessionId,
+        ),
+      });
+      if (!confirmed) {
+        return;
+      }
+
+      if (effectiveTargetSessionId) {
+        addToHistory(effectiveTargetSessionId, message);
+      }
+      setHistoryIndex(-1);
+      setSavedDraft('');
+      dispatchInput({ type: 'CLEAR_VALUE' });
+      clearPendingLargePastes();
+      setQueuedInput(null);
+      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+
+      const { prompt, runManifest } = await buildDeepReviewLaunchFromSlashCommand(
         message,
         effectiveTargetSession.workspacePath,
       );
@@ -1457,6 +1592,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         workspacePath: effectiveTargetSession.workspacePath,
         prompt,
         displayMessage: message,
+        runManifest,
         childSessionName: t('chatInput.deepreviewThreadTitle', {
           defaultValue: 'Deep review',
         }),
@@ -1485,6 +1621,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     currentReviewActivity,
     effectiveTargetSession,
     effectiveTargetSessionId,
+    flowChatState,
     inputState.value,
     isBtwSession,
     setQueuedInput,
@@ -1626,6 +1763,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
+    if (/^\/usage\s*$/i.test(message)) {
+      await submitUsageFromInput();
+      return;
+    }
+
     if (/^\/init\s*$/i.test(message)) {
       await submitInitFromInput();
       return;
@@ -1644,6 +1786,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (message.toLowerCase().startsWith('/compact')) {
       notificationService.warning(
         t('chatInput.compactUsage', { defaultValue: 'Use /compact without extra arguments.' })
+      );
+      return;
+    }
+
+    if (message.toLowerCase().startsWith('/usage')) {
+      notificationService.warning(
+        t('chatInput.usageCommandUsage', { defaultValue: 'Use /usage without extra arguments.' })
       );
       return;
     }
@@ -1711,6 +1860,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setQueuedInput,
     submitBtwFromInput,
     submitCompactFromInput,
+    submitUsageFromInput,
     submitInitFromInput,
     submitDeepreviewFromInput,
     submitMcpPromptFromInput,
@@ -1802,6 +1952,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     } else if (actionId === 'compact') {
       next = '/compact';
+    } else if (actionId === 'usage') {
+      next = '/usage';
     } else if (actionId === 'init') {
       next = '/init';
     } else if (actionId === 'deepreview') {
@@ -1868,6 +2020,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: initial });
       window.setTimeout(() => richTextInputRef.current?.focus(), 0);
+      return;
+    }
+
+    const nativeEvt = e.nativeEvent as KeyboardEvent;
+    // IME-owned keys must stay with the input method. In particular, Escape
+    // closes the Chinese/Japanese/Korean candidate window and must not cancel
+    // the running BitFun session.
+    const isComposing =
+      isImeComposingRef.current
+      || nativeEvt.isComposing
+      || nativeEvt.keyCode === 229;
+
+    if (e.key === 'Escape' && isComposing) {
       return;
     }
 
@@ -2044,18 +2209,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
     
-    const nativeEvt = e.nativeEvent as KeyboardEvent;
-    // IME-safe Enter detection (see useImeEnterGuard for the rationale):
-    //  - our own composition flag covers browsers where `isComposing` is flaky
-    //  - `keyCode === 229` is the W3C "composition keyCode" still emitted by
-    //    every evergreen browser while the IME owns the key, even after
-    //    `isComposing` has flipped back to false. Replaces the previous
-    //    120ms time-window guard which would swallow legitimate fast Enters.
-    const isComposing =
-      isImeComposingRef.current
-      || nativeEvt.isComposing
-      || nativeEvt.keyCode === 229;
-
     if (e.key === 'Enter' && !e.shiftKey) {
       if (isComposing) {
         return;
@@ -2216,6 +2369,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         target.tagName === 'TEXTAREA' ||
         target.isContentEditable ||
         target.closest('[contenteditable="true"]') !== null;
+
+      const isImeOwnedKey = e.key === 'Escape' && (e.isComposing || e.keyCode === 229);
+      if (isImeOwnedKey) return;
 
       if (e.key === 'Escape' && derivedState?.canCancel) {
         if (isEditable) return;
@@ -2415,6 +2571,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             className="bitfun-chat-input__recommendations"
           />
         )}
+
+        <PendingQueuePanel sessionId={effectiveTargetSessionId || undefined} />
 
         <div className="bitfun-chat-input__container">
           <div className={`bitfun-chat-input__box ${inputState.isExpanded ? 'bitfun-chat-input__box--expanded' : ''}`}>
@@ -2842,13 +3000,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                   <Loader2 size={14} className="bitfun-chat-input__boost-submenu-spinner" aria-hidden />
                                   <span>{t('chatInput.boostSkillsLoading')}</span>
                                 </div>
-                              ) : boostPanelSkills.length === 0 ? (
+                              ) : runtimeBoostSkills.length === 0 ? (
                                 <div className="bitfun-chat-input__boost-submenu-empty">{t('chatInput.boostSkillsEmpty')}</div>
                               ) : (
                                 <div className="bitfun-chat-input__boost-submenu-list">
-                                  {boostPanelSkills.map(skill => (
+                                  {runtimeBoostSkills.map(skill => (
                                     <div
-                                      key={skill.name}
+                                      key={skill.key}
                                       role="button"
                                       tabIndex={0}
                                       className="bitfun-chat-input__boost-submenu-item"
@@ -2899,12 +3057,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   )}
                 </div>
 
-                <ModelSelector
-                  currentMode={modeState.current}
-                  sessionId={effectiveTargetSessionId || undefined}
-                  currentTokens={tokenUsage.current}
-                  maxTokens={tokenUsage.max}
-                />
+                <div className="bitfun-chat-input__model-usage-group">
+                  <ModelSelector
+                    currentMode={modeState.current}
+                    sessionId={effectiveTargetSessionId || undefined}
+                    currentTokens={tokenUsage.current}
+                    maxTokens={tokenUsage.max}
+                  />
+                </div>
               </div>
               <div className="bitfun-chat-input__actions-right">
                 {isCollapsedProcessing && !petReplacesStopChrome && (
@@ -2923,6 +3083,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         </div>
       </div>
+      {((chatStripRepositoryPath || chatStripWorkspaceLabel) ||
+        (effectiveTargetSessionId && effectiveTargetSession)) && (
+        <ChatInputWorkspaceStrip
+          repositoryPath={chatStripRepositoryPath}
+          workspaceLabel={chatStripWorkspaceLabel}
+          usageReport={
+            effectiveTargetSessionId && effectiveTargetSession
+              ? { visible: true, onOpen: handleToolbarUsageReport }
+              : undefined
+          }
+        />
+      )}
     </ContextDropZone>
     </>
   );

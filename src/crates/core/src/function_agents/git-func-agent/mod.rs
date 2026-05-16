@@ -7,7 +7,7 @@ pub mod context_analyzer;
  * Provides Git-related intelligent functions:
  * - Automatic commit message generation
  */
-pub mod types;
+pub use bitfun_product_domains::function_agents::git_func_agent::types;
 pub mod utils;
 
 pub use ai_service::AIAnalysisService;

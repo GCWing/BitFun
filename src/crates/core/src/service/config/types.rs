@@ -7,6 +7,18 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+fn deserialize_mode_configs<'de, D>(deserializer: D) -> Result<HashMap<String, ModeConfig>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Option::<HashMap<String, Option<ModeConfig>>>::deserialize(deserializer)?;
+    Ok(raw
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|(mode_id, config)| config.map(|config| (mode_id, config)))
+        .collect())
+}
+
 /// Web UI font preferences (settings → basics). Keys match `FontPreference` in the frontend (camelCase).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +53,9 @@ pub struct GlobalConfig {
     pub terminal: TerminalConfig,
     pub workspace: WorkspaceConfig,
     pub ai: AIConfig,
+    /// Project-scoped overlays stored in the shared config document.
+    #[serde(default, skip_serializing_if = "ProjectConfig::is_empty")]
+    pub project: ProjectConfig,
     /// MCP server configuration (stored uniformly; supports both JSON and structured formats).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mcp_servers: Option<serde_json::Value>,
@@ -58,7 +73,26 @@ pub struct GlobalConfig {
     pub last_modified: chrono::DateTime<chrono::Utc>,
 }
 
+/// Project-scoped configuration overlay.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProjectConfig {
+    /// Project-level MCP server configuration.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_servers: Option<serde_json::Value>,
+}
+
+impl ProjectConfig {
+    fn is_empty(&self) -> bool {
+        self.mcp_servers.is_none()
+    }
+}
+
 /// App configuration.
+fn default_close_button_behavior() -> String {
+    "quit".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
@@ -82,6 +116,10 @@ pub struct AppConfig {
     /// the frontend owns the versioned format (StoredKeybindingsV1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keybindings: Option<serde_json::Value>,
+    /// What happens when the window close button is clicked on Windows / Linux.
+    /// Allowed values: "quit" | "minimize_to_tray" | "ask".
+    #[serde(default = "default_close_button_behavior")]
+    pub close_button_behavior: String,
 }
 
 /// App logging configuration.
@@ -91,6 +129,9 @@ pub struct AppLoggingConfig {
     /// Runtime backend log level.
     /// Allowed values: trace, debug, info, warn, error, off.
     pub level: String,
+    /// Whether diagnostic logs may include sensitive troubleshooting payloads.
+    #[serde(default = "default_true")]
+    pub include_sensitive_diagnostics: bool,
 }
 
 /// Session-related UI preferences.
@@ -100,6 +141,15 @@ pub struct AppSessionConfig {
     /// Default new session mode used by the frontend.
     /// Supported values: "code", "cowork".
     pub default_mode: String,
+}
+
+/// A user-defined quick action for the FlowChat post-coding actions menu.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AiExperienceQuickAction {
+    pub id: String,
+    pub label: String,
+    pub prompt: String,
+    pub enabled: bool,
 }
 
 /// AI experience configuration.
@@ -117,10 +167,13 @@ pub struct AIExperienceConfig {
     /// Where to show the Agent companion: "input" or "desktop".
     pub agent_companion_display_mode: String,
     /// Optional Petdex-compatible companion package selected by the user.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "default_agent_companion_pet", skip_serializing_if = "Option::is_none")]
     pub agent_companion_pet: Option<AgentCompanionPetSelection>,
     /// Whether to enable flashgrep-backed accelerated workspace search.
     pub enable_workspace_search: bool,
+    /// User-defined quick actions (post-coding menu); persisted for the web UI.
+    #[serde(default)]
+    pub quick_actions: Vec<AiExperienceQuickAction>,
 }
 
 /// User-selected Agent companion pet package.
@@ -135,6 +188,18 @@ pub struct AgentCompanionPetSelection {
     pub package_path: String,
     pub spritesheet_path: String,
     pub spritesheet_mime_type: String,
+}
+
+fn default_agent_companion_pet() -> Option<AgentCompanionPetSelection> {
+    Some(AgentCompanionPetSelection {
+        id: "panda-pix".to_string(),
+        display_name: "Panda".to_string(),
+        description: Some("Codux bundled pet atlas.".to_string()),
+        source: "preset".to_string(),
+        package_path: "/agent-companion-pets/panda-pix".to_string(),
+        spritesheet_path: "/agent-companion-pets/panda-pix/spritesheet.png".to_string(),
+        spritesheet_mime_type: "image/png".to_string(),
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -421,16 +486,12 @@ pub struct ReviewTeamConfig {
     pub strategy_level: String,
     /// Per-reviewer review depth overrides keyed by subagent ID.
     pub member_strategy_overrides: HashMap<String, String>,
-    /// Hard timeout applied to reviewer Task calls. 0 disables the cap.
+    /// Optional timeout applied to reviewer Task calls. 0 disables the cap.
     pub reviewer_timeout_seconds: u64,
-    /// Hard timeout applied to ReviewJudge Task calls. 0 disables the cap.
+    /// Optional timeout applied to ReviewJudge Task calls. 0 disables the cap.
     pub judge_timeout_seconds: u64,
     /// Whether ReviewFixer may be launched by DeepReview.
     pub auto_fix_enabled: bool,
-    /// Maximum number of ReviewFixer rounds in a parent DeepReview turn.
-    pub auto_fix_max_rounds: usize,
-    /// Prompt-level stalled-round guard used by DeepReview orchestration.
-    pub auto_fix_max_stalled_rounds: usize,
     /// Minimum number of target files that triggers same-role reviewer splitting.
     /// 0 disables file splitting.
     pub reviewer_file_split_threshold: usize,
@@ -444,11 +505,9 @@ impl Default for ReviewTeamConfig {
             extra_subagent_ids: Vec::new(),
             strategy_level: "normal".to_string(),
             member_strategy_overrides: HashMap::new(),
-            reviewer_timeout_seconds: 300,
-            judge_timeout_seconds: 240,
+            reviewer_timeout_seconds: 3600,
+            judge_timeout_seconds: 2400,
             auto_fix_enabled: false,
-            auto_fix_max_rounds: 2,
-            auto_fix_max_stalled_rounds: 1,
             reviewer_file_split_threshold: 20,
             max_same_role_instances: 3,
         }
@@ -457,6 +516,10 @@ impl Default for ReviewTeamConfig {
 
 fn default_review_team_configs() -> HashMap<String, ReviewTeamConfig> {
     HashMap::from([("default".to_string(), ReviewTeamConfig::default())])
+}
+
+fn default_review_team_rate_limit_status() -> serde_json::Value {
+    serde_json::Value::Object(serde_json::Map::new())
 }
 
 /// AI configuration.
@@ -481,18 +544,26 @@ pub struct AIConfig {
 
     /// Mode configuration.
     /// mode_id -> ModeConfig
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_mode_configs")]
     pub mode_configs: HashMap<String, ModeConfig>,
 
-    /// SubAgent configuration (enable/disable state).
-    /// subagent_id -> SubAgentConfig
+    /// Per-parent sparse subagent availability overrides.
+    /// parent_agent_id -> (subagent_key -> override_state)
     #[serde(default)]
-    pub subagent_configs: HashMap<String, SubAgentConfig>,
+    pub agent_subagent_overrides: AgentSubagentOverrideConfig,
 
     /// Review team configuration.
     /// team_id -> ReviewTeamConfig
     #[serde(default = "default_review_team_configs")]
     pub review_teams: HashMap<String, ReviewTeamConfig>,
+
+    /// Runtime rate-limit snapshot for Review Team launches.
+    #[serde(default = "default_review_team_rate_limit_status")]
+    pub review_team_rate_limit_status: serde_json::Value,
+
+    /// Workspace path -> Review Team strategy override.
+    #[serde(default)]
+    pub review_team_project_strategy_overrides: HashMap<String, String>,
 
     /// Maximum number of subagents that may execute concurrently.
     #[serde(default = "default_subagent_max_concurrency")]
@@ -524,6 +595,10 @@ pub struct AIConfig {
     /// Allow Computer use (desktop automation) when the desktop host is available (all session modes).
     #[serde(default)]
     pub computer_use_enabled: bool,
+
+    /// Preferred browser for CDP browser control. Empty/default uses the system default browser.
+    #[serde(default)]
+    pub browser_control_preferred_browser: String,
 
     /// Maximum number of rounds per dialog turn before soft-pausing.
     #[serde(default = "default_max_rounds")]
@@ -617,10 +692,6 @@ pub struct ModeConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub removed_tools: Vec<String>,
 
-    /// Whether this mode is enabled.
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-
     /// User-level skills disabled for this mode.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disabled_user_skills: Vec<String>,
@@ -637,7 +708,6 @@ pub struct ModeConfigView {
     pub mode_id: String,
     pub enabled_tools: Vec<String>,
     pub default_tools: Vec<String>,
-    pub enabled: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disabled_user_skills: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -683,7 +753,6 @@ impl Default for ModeConfig {
             mode_id: String::new(),
             added_tools: Vec::new(),
             removed_tools: Vec::new(),
-            enabled: true,
             disabled_user_skills: Vec::new(),
             enabled_user_skills: Vec::new(),
         }
@@ -696,7 +765,6 @@ impl Default for ModeConfigView {
             mode_id: String::new(),
             enabled_tools: Vec::new(),
             default_tools: Vec::new(),
-            enabled: true,
             disabled_user_skills: Vec::new(),
             enabled_user_skills: Vec::new(),
         }
@@ -924,20 +992,15 @@ impl Default for LanguageDebugTemplate {
     }
 }
 
-/// SubAgent configuration (enabled/disabled per sub-agent).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct SubAgentConfig {
-    /// Whether this SubAgent is enabled.
-    #[serde(default = "default_true")]
-    pub enabled: bool,
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentSubagentOverrideState {
+    Enabled,
+    Disabled,
 }
 
-impl Default for SubAgentConfig {
-    fn default() -> Self {
-        Self { enabled: true }
-    }
-}
+pub type ParentSubagentOverrideConfig = HashMap<String, AgentSubagentOverrideState>;
+pub type AgentSubagentOverrideConfig = HashMap<String, ParentSubagentOverrideConfig>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, from = "AIModelConfigCompat")]
@@ -1208,6 +1271,7 @@ impl Default for GlobalConfig {
             terminal: TerminalConfig::default(),
             workspace: WorkspaceConfig::default(),
             ai: AIConfig::default(),
+            project: ProjectConfig::default(),
             mcp_servers: None,
             acp_clients: None,
             themes: Some(ThemesConfig::default()),
@@ -1247,6 +1311,7 @@ impl Default for AppConfig {
             session_config: AppSessionConfig::default(),
             ai_experience: AIExperienceConfig::default(),
             keybindings: None,
+            close_button_behavior: default_close_button_behavior(),
         }
     }
 }
@@ -1256,6 +1321,7 @@ impl Default for AppLoggingConfig {
         Self {
             // Set to Debug in early development for easier diagnostics
             level: "debug".to_string(),
+            include_sensitive_diagnostics: true,
         }
     }
 }
@@ -1276,8 +1342,9 @@ impl Default for AIExperienceConfig {
             enable_visual_mode: false,
             enable_agent_companion: true,
             agent_companion_display_mode: "desktop".to_string(),
-            agent_companion_pet: None,
+            agent_companion_pet: default_agent_companion_pet(),
             enable_workspace_search: false,
+            quick_actions: Vec::new(),
         }
     }
 }
@@ -1472,8 +1539,10 @@ impl Default for AIConfig {
             func_agent_models: std::collections::HashMap::new(),
             default_models: DefaultModelsConfig::default(),
             mode_configs: std::collections::HashMap::new(),
-            subagent_configs: std::collections::HashMap::new(),
+            agent_subagent_overrides: std::collections::HashMap::new(),
             review_teams: default_review_team_configs(),
+            review_team_rate_limit_status: default_review_team_rate_limit_status(),
+            review_team_project_strategy_overrides: std::collections::HashMap::new(),
             subagent_max_concurrency: default_subagent_max_concurrency(),
             proxy: ProxyConfig::default(),
             stream_idle_timeout_secs: default_stream_idle_timeout(),
@@ -1482,6 +1551,7 @@ impl Default for AIConfig {
             skip_tool_confirmation: true,
             debug_mode_config: DebugModeConfig::default(),
             computer_use_enabled: false,
+            browser_control_preferred_browser: String::new(),
             max_rounds: default_max_rounds(),
         }
     }
@@ -1687,7 +1757,9 @@ impl AIModelConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{AIConfig, AIExperienceConfig, AIModelConfig, ReasoningMode};
+    use super::{
+        AIConfig, AIExperienceConfig, AIModelConfig, AppLoggingConfig, GlobalConfig, ReasoningMode,
+    };
 
     #[test]
     fn deserializes_compatibility_thinking_flag_into_reasoning_mode() {
@@ -1705,6 +1777,58 @@ mod tests {
 
         assert_eq!(config.reasoning_mode, Some(ReasoningMode::Enabled));
         assert!(config.enable_thinking_process);
+    }
+
+    #[test]
+    fn global_config_preserves_project_mcp_servers() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "project": {
+                "mcp_servers": [
+                    {
+                        "id": "project-docs",
+                        "name": "Project Docs",
+                        "server_type": "local",
+                        "command": "docs-mcp",
+                        "args": []
+                    }
+                ]
+            }
+        }))
+        .expect("project scoped MCP config should deserialize");
+
+        assert_eq!(
+            config
+                .project
+                .mcp_servers
+                .as_ref()
+                .and_then(|value| value.as_array())
+                .map(Vec::len),
+            Some(1)
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["project"]["mcp_servers"][0]["id"],
+            "project-docs"
+        );
+    }
+
+    #[test]
+    fn defaults_agent_companion_pet_to_panda() {
+        let config: AIExperienceConfig =
+            serde_json::from_value(serde_json::json!({})).expect("empty config should default");
+
+        let pet = config
+            .agent_companion_pet
+            .as_ref()
+            .expect("default companion pet should be present");
+        assert_eq!(pet.id, "panda-pix");
+        assert_eq!(pet.display_name, "Panda");
+        assert_eq!(pet.package_path, "/agent-companion-pets/panda-pix");
+        assert_eq!(
+            pet.spritesheet_path,
+            "/agent-companion-pets/panda-pix/spritesheet.png"
+        );
     }
 
     #[test]
@@ -1737,13 +1861,63 @@ mod tests {
         assert_eq!(config.agent_companion_display_mode, "desktop");
 
         let serialized = serde_json::to_value(&config).expect("config should serialize");
-        assert_eq!(
-            serialized["agent_companion_pet"]["displayName"],
-            "Boxcat"
-        );
+        assert_eq!(serialized["agent_companion_pet"]["displayName"], "Boxcat");
         assert_eq!(
             serialized["agent_companion_pet"]["spritesheetPath"],
             "/agent-companion-pets/boxcat/spritesheet.webp"
+        );
+    }
+
+    #[test]
+    fn ai_experience_quick_actions_round_trip_through_global_config() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "language": "en-US",
+                "auto_update": true,
+                "telemetry": true,
+                "startup_behavior": "default",
+                "confirm_on_exit": true,
+                "restore_windows": false,
+                "zoom_level": 100,
+                "sidebar": { "width": 260, "collapsed": false },
+                "right_panel": { "width": 400, "collapsed": true },
+                "notifications": {
+                    "enabled": true,
+                    "position": "top-right",
+                    "duration": 4000,
+                    "dialog_completion_notify": true,
+                    "enable_startup_tips": true
+                },
+                "session_config": { "default_mode": "code" },
+                "ai_experience": {
+                    "enable_session_title_generation": true,
+                    "enable_welcome_panel_ai_analysis": false,
+                    "enable_visual_mode": false,
+                    "enable_agent_companion": true,
+                    "agent_companion_display_mode": "desktop",
+                    "enable_workspace_search": false,
+                    "quick_actions": [
+                        {
+                            "id": "custom_1",
+                            "label": "Run tests",
+                            "prompt": "Run the test suite",
+                            "enabled": true
+                        }
+                    ]
+                }
+            }
+        }))
+        .expect("minimal app config with quick_actions should deserialize");
+
+        let actions = &config.app.ai_experience.quick_actions;
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].id, "custom_1");
+        assert_eq!(actions[0].label, "Run tests");
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["app"]["ai_experience"]["quick_actions"][0]["id"],
+            "custom_1"
         );
     }
 
@@ -1820,13 +1994,16 @@ mod tests {
             .review_teams
             .get("default")
             .expect("default review team config should exist");
-        assert_eq!(review_team.reviewer_timeout_seconds, 300);
-        assert_eq!(review_team.judge_timeout_seconds, 240);
+        assert_eq!(review_team.reviewer_timeout_seconds, 3600);
+        assert_eq!(review_team.judge_timeout_seconds, 2400);
         assert!(!review_team.auto_fix_enabled);
-        assert_eq!(review_team.auto_fix_max_rounds, 2);
-        assert_eq!(review_team.auto_fix_max_stalled_rounds, 1);
         assert_eq!(review_team.strategy_level, "normal");
         assert!(review_team.member_strategy_overrides.is_empty());
+        assert_eq!(
+            config.review_team_rate_limit_status,
+            serde_json::json!({})
+        );
+        assert!(config.review_team_project_strategy_overrides.is_empty());
     }
 
     #[test]
@@ -1837,7 +2014,7 @@ mod tests {
             "func_agent_models": {},
             "default_models": {},
             "mode_configs": {},
-            "subagent_configs": {},
+            "agent_subagent_overrides": {},
             "proxy": {
                 "enabled": false,
                 "url": ""
@@ -1851,6 +2028,16 @@ mod tests {
     }
 
     #[test]
+    fn app_logging_defaults_to_sensitive_diagnostics_enabled() {
+        let config: AppLoggingConfig = serde_json::from_value(serde_json::json!({
+            "level": "trace"
+        }))
+        .expect("logging config without sensitive preference should deserialize");
+
+        assert!(config.include_sensitive_diagnostics);
+    }
+
+    #[test]
     fn deserializes_explicit_subagent_max_concurrency() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
@@ -1858,7 +2045,7 @@ mod tests {
             "func_agent_models": {},
             "default_models": {},
             "mode_configs": {},
-            "subagent_configs": {},
+            "agent_subagent_overrides": {},
             "subagent_max_concurrency": 9,
             "proxy": {
                 "enabled": false,
@@ -1871,6 +2058,39 @@ mod tests {
     }
 
     #[test]
+    fn deserializes_mode_configs_with_null_entries() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "agent_models": {},
+            "func_agent_models": {},
+            "default_models": {},
+            "mode_configs": {
+                "Claw": null,
+                "Cowork": {
+                    "mode_id": "Cowork",
+                    "removed_tools": ["shell"]
+                }
+            },
+            "agent_subagent_overrides": {},
+            "proxy": {
+                "enabled": false,
+                "url": ""
+            }
+        }))
+        .expect("config with null mode config entries should deserialize");
+
+        assert!(!config.mode_configs.contains_key("Claw"));
+        assert_eq!(
+            config
+                .mode_configs
+                .get("Cowork")
+                .expect("non-null mode config should be retained")
+                .removed_tools,
+            vec!["shell".to_string()]
+        );
+    }
+
+    #[test]
     fn deserializes_explicit_default_review_team_config() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
@@ -1878,7 +2098,7 @@ mod tests {
             "func_agent_models": {},
             "default_models": {},
             "mode_configs": {},
-            "subagent_configs": {},
+            "agent_subagent_overrides": {},
             "review_teams": {
                 "default": {
                     "extra_subagent_ids": ["ExtraReviewer"],
@@ -1889,9 +2109,7 @@ mod tests {
                         "ReviewSecurity": "quick",
                         "ExtraReviewer": "normal"
                     },
-                    "auto_fix_enabled": false,
-                    "auto_fix_max_rounds": 1,
-                    "auto_fix_max_stalled_rounds": 1
+                    "auto_fix_enabled": false
                 }
             },
             "proxy": {
@@ -1926,6 +2144,47 @@ mod tests {
         );
         assert_eq!(
             serialized["review_teams"]["default"]["member_strategy_overrides"]["ReviewSecurity"],
+            "quick"
+        );
+    }
+
+    #[test]
+    fn review_team_auxiliary_config_is_not_stored_inside_review_team_map() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "agent_models": {},
+            "review_teams": {
+                "default": {
+                    "strategy_level": "normal"
+                }
+            },
+            "review_team_rate_limit_status": {
+                "remaining": 2
+            },
+            "review_team_project_strategy_overrides": {
+                "d:/workspace/repo": "quick"
+            }
+        }))
+        .expect("review team auxiliary config should deserialize");
+
+        assert!(config.review_teams.contains_key("default"));
+        assert!(!config.review_teams.contains_key("rate_limit_status"));
+        assert_eq!(
+            config.review_team_rate_limit_status["remaining"],
+            serde_json::json!(2)
+        );
+        assert_eq!(
+            config
+                .review_team_project_strategy_overrides
+                .get("d:/workspace/repo"),
+            Some(&"quick".to_string())
+        );
+
+        let serialized = serde_json::to_value(&config)
+            .expect("review team auxiliary config should serialize");
+        assert!(serialized["review_teams"]["rate_limit_status"].is_null());
+        assert_eq!(
+            serialized["review_team_project_strategy_overrides"]["d:/workspace/repo"],
             "quick"
         );
     }

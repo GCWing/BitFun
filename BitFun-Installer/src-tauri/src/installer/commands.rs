@@ -1,5 +1,6 @@
 //! Tauri commands exposed to the frontend installer UI.
 
+use super::MAIN_APP_EXE;
 use super::extract::{self, ESTIMATED_INSTALL_SIZE};
 use super::types::{
     ConnectionTestResult, DiskSpaceInfo, InstallOptions, InstallProgress, ModelConfig,
@@ -16,19 +17,29 @@ use tauri::{Emitter, Manager, Window};
 #[cfg(target_os = "windows")]
 #[derive(Default)]
 struct WindowsInstallState {
+    manufacturer_registered: bool,
     uninstall_registered: bool,
     desktop_shortcut_created: bool,
     start_menu_shortcut_created: bool,
-    context_menu_registered: bool,
-    added_to_path: bool,
 }
 
 const MIN_WINDOWS_APP_EXE_BYTES: u64 = 5 * 1024 * 1024;
 const PAYLOAD_MANIFEST_FILE: &str = "payload-manifest.json";
-const INSTALL_MANIFEST_FILE: &str = ".bitfun-install-manifest.json";
 const INSTALLER_STATE_FILE: &str = "installer-state.json";
+const DEFAULT_MODEL_CONTEXT_WINDOW: u64 = 200_000;
 const EMBEDDED_PAYLOAD_ZIP: &[u8] =
     include_bytes!(concat!(env!("OUT_DIR"), "/embedded_payload.zip"));
+
+#[cfg(target_os = "windows")]
+fn create_windows_silent_command<S: AsRef<std::ffi::OsStr>>(program: S) -> std::process::Command {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    let mut command = std::process::Command::new(program);
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
 
 struct InstallerAppLanguage {
     code: &'static str,
@@ -76,12 +87,6 @@ struct PayloadManifestFile {
     path: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct InstalledManifest {
-    version: u32,
-    files: Vec<String>,
-}
-
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchContext {
@@ -94,6 +99,18 @@ pub struct LaunchContext {
 #[serde(rename_all = "camelCase")]
 pub struct InstallPathValidation {
     pub install_path: String,
+}
+
+/// Matches Tauri NSIS detection via `UNINSTKEY` / `MANUPRODUCTKEY`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExistingInstallationResponse {
+    pub detected: bool,
+    pub install_location: Option<String>,
+    pub display_version: Option<String>,
+    pub uninstall_string: Option<String>,
+    pub main_binary_present: bool,
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -127,12 +144,207 @@ pub fn get_default_install_path() -> String {
 /// Last successful install path if still valid, otherwise platform default.
 #[tauri::command]
 pub fn get_initial_install_path() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        use super::registry;
+        if let Some(data) = registry::read_existing_install_from_uninstall_registry() {
+            if let Ok(resolved) = prepare_install_target(Path::new(&data.install_location)) {
+                return resolved.to_string_lossy().to_string();
+            }
+        }
+        if let Some(from_reg) = registry::read_tauri_install_location() {
+            if let Ok(resolved) = prepare_install_target(Path::new(&from_reg)) {
+                return resolved.to_string_lossy().to_string();
+            }
+        }
+    }
     if let Some(saved) = read_last_install_path() {
         if let Ok(resolved) = prepare_install_target(Path::new(&saved)) {
             return resolved.to_string_lossy().to_string();
         }
     }
     get_default_install_path()
+}
+
+/// Detect existing BitFun install (Tauri NSIS or this installer) via Add/Remove Programs registry.
+#[tauri::command]
+pub fn get_existing_installation() -> ExistingInstallationResponse {
+    #[cfg(not(target_os = "windows"))]
+    {
+        return ExistingInstallationResponse {
+            detected: false,
+            install_location: None,
+            display_version: None,
+            uninstall_string: None,
+            main_binary_present: false,
+            source: None,
+        };
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use super::registry;
+        if let Some(data) = registry::read_existing_install_from_uninstall_registry() {
+            let loc = PathBuf::from(&data.install_location);
+            let main_present = loc.join(MAIN_APP_EXE).is_file();
+            return ExistingInstallationResponse {
+                detected: true,
+                install_location: Some(data.install_location),
+                display_version: data.display_version,
+                uninstall_string: data.uninstall_string,
+                main_binary_present: main_present,
+                source: Some(format!("uninstall_{}", data.hive)),
+            };
+        }
+        if let Some(loc) = registry::read_tauri_install_location() {
+            let pb = PathBuf::from(&loc);
+            let main_present = pb.join(MAIN_APP_EXE).is_file();
+            return ExistingInstallationResponse {
+                detected: true,
+                install_location: Some(loc),
+                display_version: None,
+                uninstall_string: None,
+                main_binary_present: main_present,
+                source: Some("manufacturer_key".to_string()),
+            };
+        }
+        ExistingInstallationResponse {
+            detected: false,
+            install_location: None,
+            display_version: None,
+            uninstall_string: None,
+            main_binary_present: false,
+            source: None,
+        }
+    }
+}
+
+/// Run the uninstall command stored in Add/Remove Programs (NSIS or custom `uninstall.exe`), like NSIS maintenance.
+#[tauri::command]
+pub async fn launch_registered_uninstaller(
+    uninstall_command: String,
+    install_path: Option<String>,
+) -> Result<(), String> {
+    let s = uninstall_command.trim();
+    if s.is_empty() {
+        return Err("Empty uninstall command".to_string());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let install_path = install_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(PathBuf::from);
+        launch_windows_registered_uninstaller(s, install_path.as_deref())?;
+        return Ok(());
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = install_path;
+        let _ = s;
+        Err("Uninstaller launch is only supported on Windows".to_string())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn launch_windows_registered_uninstaller(
+    uninstall_command: &str,
+    install_path: Option<&Path>,
+) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+    if let Some(install_path) = install_path {
+        let uninstaller_path = install_path.join("uninstall.exe");
+        if uninstaller_path.is_file() {
+            std::process::Command::new(&uninstaller_path)
+                .arg("--uninstall")
+                .arg(install_path)
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn()
+                .map_err(|e| {
+                    format!(
+                        "Failed to start uninstaller '{}': {}",
+                        uninstaller_path.display(),
+                        e
+                    )
+                })?;
+            return Ok(());
+        }
+    }
+
+    let argv = parse_windows_command_line(uninstall_command)?;
+    let (program, args) = argv
+        .split_first()
+        .ok_or_else(|| "Registered uninstall command is empty".to_string())?;
+    let program_path = PathBuf::from(program);
+    if !program_path.is_file() {
+        return Err(format!(
+            "Registered uninstaller not found: {}",
+            program_path.display()
+        ));
+    }
+
+    std::process::Command::new(&program_path)
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| {
+            format!(
+                "Failed to start registered uninstaller '{}': {}",
+                program_path.display(),
+                e
+            )
+        })?;
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn parse_windows_command_line(command_line: &str) -> Result<Vec<String>, String> {
+    use std::ffi::{OsStr, OsString, c_void};
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+
+    #[link(name = "shell32")]
+    extern "system" {
+        fn CommandLineToArgvW(lp_cmd_line: *const u16, p_num_args: *mut i32) -> *mut *mut u16;
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn LocalFree(h_mem: *mut c_void) -> *mut c_void;
+    }
+
+    let wide: Vec<u16> = OsStr::new(command_line)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut argc = 0i32;
+    let argv_ptr = unsafe { CommandLineToArgvW(wide.as_ptr(), &mut argc) };
+    if argv_ptr.is_null() || argc <= 0 {
+        return Err("Failed to parse uninstall command line".to_string());
+    }
+
+    let args = unsafe {
+        let argv = std::slice::from_raw_parts(argv_ptr, argc as usize);
+        let parsed = argv
+            .iter()
+            .map(|arg_ptr| {
+                let mut len = 0usize;
+                while *arg_ptr.add(len) != 0 {
+                    len += 1;
+                }
+                OsString::from_wide(std::slice::from_raw_parts(*arg_ptr, len))
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect::<Vec<_>>();
+        LocalFree(argv_ptr.cast::<c_void>());
+        parsed
+    };
+
+    Ok(args)
 }
 
 /// Get available disk space for the given path.
@@ -267,17 +479,12 @@ pub async fn start_installation(window: Window, options: InstallOptions) -> Resu
         let mut extracted = false;
         let mut used_debug_placeholder = false;
         let mut checked_locations: Vec<String> = Vec::new();
-        let mut installed_files: Vec<String> = Vec::new();
 
         if embedded_payload_available() {
             checked_locations.push("embedded payload zip".to_string());
             preflight_validate_payload_zip_bytes(EMBEDDED_PAYLOAD_ZIP, "embedded payload zip")?;
-            installed_files =
-                read_payload_manifest_from_zip_bytes(EMBEDDED_PAYLOAD_ZIP, "embedded payload zip")?
-                    .files
-                    .into_iter()
-                    .map(|entry| entry.path)
-                    .collect();
+            let _ =
+                read_payload_manifest_from_zip_bytes(EMBEDDED_PAYLOAD_ZIP, "embedded payload zip")?;
             extract::extract_zip_bytes_with_filter(
                 EMBEDDED_PAYLOAD_ZIP,
                 &install_path,
@@ -303,12 +510,7 @@ pub async fn start_installation(window: Window, options: InstallOptions) -> Resu
                         continue;
                     }
                     preflight_validate_payload_zip_file(&candidate.path, &candidate.label)?;
-                    installed_files =
-                        read_payload_manifest_from_zip_file(&candidate.path, &candidate.label)?
-                            .files
-                            .into_iter()
-                            .map(|entry| entry.path)
-                            .collect();
+                    let _ = read_payload_manifest_from_zip_file(&candidate.path, &candidate.label)?;
                     extract::extract_zip_with_filter(
                         &candidate.path,
                         &install_path,
@@ -325,12 +527,7 @@ pub async fn start_installation(window: Window, options: InstallOptions) -> Resu
                     continue;
                 }
                 preflight_validate_payload_dir(&candidate.path, &candidate.label)?;
-                installed_files =
-                    read_payload_manifest_from_dir(&candidate.path, &candidate.label)?
-                        .files
-                        .into_iter()
-                        .map(|entry| entry.path)
-                        .collect();
+                let _ = read_payload_manifest_from_dir(&candidate.path, &candidate.label)?;
                 extract::copy_directory_with_filter(
                     &candidate.path,
                     &install_path,
@@ -347,12 +544,11 @@ pub async fn start_installation(window: Window, options: InstallOptions) -> Resu
             if cfg!(debug_assertions) {
                 // Development mode: create a placeholder to simplify local UI iteration.
                 log::warn!("No payload found - running in development mode");
-                let placeholder = install_path.join("BitFun.exe");
+                let placeholder = install_path.join(MAIN_APP_EXE);
                 if !placeholder.exists() {
                     std::fs::write(&placeholder, "placeholder")
                         .map_err(|e| format!("Failed to write placeholder: {}", e))?;
                 }
-                installed_files.push("BitFun.exe".to_string());
                 used_debug_placeholder = true;
             } else {
                 return Err(format!(
@@ -378,14 +574,12 @@ pub async fn start_installation(window: Window, options: InstallOptions) -> Resu
             let uninstaller_path = install_path.join("uninstall.exe");
             std::fs::copy(&current_exe, &uninstaller_path)
                 .map_err(|e| format!("Failed to create uninstaller executable: {}", e))?;
-            let uninstall_command = format!(
-                "\"{}\" --uninstall \"{}\"",
-                uninstaller_path.display(),
-                install_path.display()
-            );
-            installed_files.push("uninstall.exe".to_string());
+            let uninstall_command = format!("\"{}\"", uninstaller_path.display());
 
             emit_progress(&window, "registry", 60, "Registering application...");
+            registry::register_tauri_install_location(&install_path)
+                .map_err(|e| format!("Registry error: {}", e))?;
+            windows_state.manufacturer_registered = true;
             registry::register_uninstall_entry(
                 &install_path,
                 env!("CARGO_PKG_VERSION"),
@@ -409,29 +603,7 @@ pub async fn start_installation(window: Window, options: InstallOptions) -> Resu
                     .map_err(|e| format!("Start Menu error: {}", e))?;
                 windows_state.start_menu_shortcut_created = true;
             }
-
-            // Context menu
-            if options.context_menu {
-                emit_progress(
-                    &window,
-                    "context_menu",
-                    80,
-                    "Adding context menu integration...",
-                );
-                registry::register_context_menu(&install_path)
-                    .map_err(|e| format!("Context menu error: {}", e))?;
-                windows_state.context_menu_registered = true;
-            }
-
-            // PATH
-            if options.add_to_path {
-                emit_progress(&window, "path", 85, "Adding to system PATH...");
-                registry::add_to_path(&install_path).map_err(|e| format!("PATH error: {}", e))?;
-                windows_state.added_to_path = true;
-            }
         }
-
-        write_installed_manifest(&install_path, installed_files)?;
 
         // Step 4: Save first-launch language preference for BitFun app.
         emit_progress(&window, "config", 92, "Applying startup preferences...");
@@ -470,6 +642,8 @@ pub async fn uninstall(install_path: String) -> Result<(), String> {
         let _ = shortcut::remove_start_menu_shortcut();
         let _ = registry::remove_context_menu();
         let _ = registry::remove_from_path(&install_path);
+        let _ = registry::remove_autostart_run_entry();
+        let _ = registry::remove_tauri_install_location();
         let _ = registry::remove_uninstall_entry();
     }
 
@@ -522,10 +696,6 @@ pub async fn uninstall(install_path: String) -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn schedule_windows_self_uninstall_cleanup(uninstall_exe_path: &Path) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-
     let temp_dir = std::env::temp_dir();
     let pid = std::process::id();
     let script_path = temp_dir.join(format!("bitfun-uninstall-{}.cmd", pid));
@@ -535,6 +705,7 @@ fn schedule_windows_self_uninstall_cleanup(uninstall_exe_path: &Path) -> Result<
 setlocal enableextensions
 set "TARGET=%~1"
 set "LOG=%~2"
+set "TARGET_DIR=%~dp1"
 if "%TARGET%"=="" exit /b 2
 if "%LOG%"=="" set "LOG=%TEMP%\bitfun-uninstall-cleanup.log"
 echo [%DATE% %TIME%] cleanup start > "%LOG%"
@@ -546,6 +717,7 @@ for /L %%i in (1,1,30) do (
   )
   del /f /q "%TARGET%" >> "%LOG%" 2>&1
   if not exist "%TARGET%" (
+    if not "%TARGET_DIR%"=="" rmdir "%TARGET_DIR%" >> "%LOG%" 2>&1
     echo [%DATE% %TIME%] cleanup success on try %%i >> "%LOG%"
     exit /b 0
   )
@@ -566,14 +738,13 @@ exit /b 1
         log_path.display()
     ));
 
-    let child = std::process::Command::new("cmd")
+    let child = create_windows_silent_command("cmd")
         .arg("/C")
         .arg("call")
         .arg(&script_path)
         .arg(uninstall_exe_path)
         .arg(&log_path)
         .current_dir(&temp_dir)
-        .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| format!("Failed to schedule uninstall cleanup: {}", e))?;
 
@@ -615,13 +786,20 @@ fn append_uninstall_runtime_log(message: &str) {
 #[tauri::command]
 pub fn launch_application(install_path: String) -> Result<(), String> {
     let exe = if cfg!(target_os = "windows") {
-        PathBuf::from(&install_path).join("BitFun.exe")
+        PathBuf::from(&install_path).join(MAIN_APP_EXE)
     } else if cfg!(target_os = "macos") {
         PathBuf::from(&install_path).join("BitFun")
     } else {
         PathBuf::from(&install_path).join("bitfun")
     };
 
+    #[cfg(target_os = "windows")]
+    create_windows_silent_command(&exe)
+        .current_dir(&install_path)
+        .spawn()
+        .map_err(|e| format!("Failed to launch BitFun: {}", e))?;
+
+    #[cfg(not(target_os = "windows"))]
     std::process::Command::new(&exe)
         .current_dir(&install_path)
         .spawn()
@@ -648,6 +826,7 @@ pub fn set_theme_preference(theme_preference: String) -> Result<(), String> {
         "bitfun-china-night",
         "bitfun-cyber",
         "bitfun-slate",
+        "bitfun-tokyo-night",
     ];
     if !allowed.contains(&theme_preference.as_str()) {
         return Err("Unsupported theme preference".to_string());
@@ -1011,10 +1190,7 @@ fn prepare_install_target(requested_path: &Path) -> Result<PathBuf, String> {
         if !install_path.is_dir() {
             return Err(format!("{}path_not_directory", INSTALL_PATH_ERR_PREFIX));
         }
-        if directory_has_entries(&install_path)?
-            && !install_path.join(INSTALL_MANIFEST_FILE).exists()
-            && !install_path.join("BitFun.exe").exists()
-        {
+        if directory_has_entries(&install_path)? && !install_path.join(MAIN_APP_EXE).exists() {
             return Err(format!(
                 "{}directory_must_be_empty_or_bitfun",
                 INSTALL_PATH_ERR_PREFIX
@@ -1247,6 +1423,10 @@ fn apply_first_launch_model(model: &ModelConfig) -> Result<(), String> {
     model_map.insert("metadata".to_string(), Value::Null);
     model_map.insert("enable_thinking_process".to_string(), Value::Bool(false));
     model_map.insert("inline_think_in_text".to_string(), Value::Bool(false));
+    model_map.insert(
+        "context_window".to_string(),
+        Value::Number(DEFAULT_MODEL_CONTEXT_WINDOW.into()),
+    );
 
     if let Some(skip_ssl_verify) = model.skip_ssl_verify {
         model_map.insert("skip_ssl_verify".to_string(), Value::Bool(skip_ssl_verify));
@@ -1345,19 +1525,23 @@ fn preflight_validate_payload_zip_archive<R: std::io::Read + std::io::Seek>(
             continue;
         }
         let file_name = zip_entry_file_name(file.name());
-        if file_name.eq_ignore_ascii_case("BitFun.exe") {
+        if file_name.eq_ignore_ascii_case(MAIN_APP_EXE) {
             exe_size = Some(file.size());
             break;
         }
     }
 
-    let size = exe_size
-        .ok_or_else(|| format!("Payload from {source_label} does not contain BitFun.exe"))?;
+    let size = exe_size.ok_or_else(|| {
+        format!(
+            "Payload from {source_label} does not contain {}",
+            MAIN_APP_EXE
+        )
+    })?;
     validate_payload_exe_size(size, source_label)
 }
 
 fn preflight_validate_payload_dir(path: &Path, source_label: &str) -> Result<(), String> {
-    let app_exe = path.join("BitFun.exe");
+    let app_exe = path.join(MAIN_APP_EXE);
     let meta = std::fs::metadata(&app_exe).map_err(|_| {
         format!(
             "Payload directory from {source_label} does not contain {}",
@@ -1370,7 +1554,8 @@ fn preflight_validate_payload_dir(path: &Path, source_label: &str) -> Result<(),
 fn validate_payload_exe_size(size: u64, source_label: &str) -> Result<(), String> {
     if size < MIN_WINDOWS_APP_EXE_BYTES {
         return Err(format!(
-            "Payload BitFun.exe from {source_label} is too small ({size} bytes)"
+            "Payload {} from {source_label} is too small ({size} bytes)",
+            MAIN_APP_EXE
         ));
     }
     Ok(())
@@ -1460,46 +1645,23 @@ fn should_install_payload_path(relative_path: &Path) -> bool {
     !is_payload_manifest_path(relative_path)
 }
 
-fn write_installed_manifest(install_path: &Path, files: Vec<String>) -> Result<(), String> {
-    let mut normalized: Vec<String> = files
-        .into_iter()
-        .map(|entry| sanitize_manifest_relative_path(&entry))
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .map(path_buf_to_manifest_string)
-        .collect();
-    normalized.sort();
-    normalized.dedup();
-
-    let manifest = InstalledManifest {
-        version: 1,
-        files: normalized,
-    };
-    let path = install_path.join(INSTALL_MANIFEST_FILE);
-    let body = serde_json::to_string_pretty(&manifest)
-        .map_err(|e| format!("Failed to serialize install manifest: {}", e))?;
-    std::fs::write(&path, body).map_err(|e| format!("Failed to write install manifest: {}", e))
-}
-
-fn read_installed_manifest(install_path: &Path) -> Result<Option<InstalledManifest>, String> {
-    let path = install_path.join(INSTALL_MANIFEST_FILE);
-    if !path.exists() {
-        return Ok(None);
+fn collect_payload_relative_paths_for_uninstall() -> Result<Vec<String>, String> {
+    if embedded_payload_available() {
+        return Ok(
+            read_payload_manifest_from_zip_bytes(EMBEDDED_PAYLOAD_ZIP, "embedded payload zip")?
+                .files
+                .into_iter()
+                .map(|entry| entry.path)
+                .collect(),
+        );
     }
 
-    let raw = std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read install manifest: {}", e))?;
-    let manifest = serde_json::from_str::<InstalledManifest>(&raw)
-        .map_err(|e| format!("Invalid install manifest: {}", e))?;
-    Ok(Some(manifest))
+    Ok(vec![MAIN_APP_EXE.to_string()])
 }
 
 fn collect_uninstall_targets(install_path: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut relative_paths = match read_installed_manifest(install_path)? {
-        Some(manifest) => manifest.files,
-        None => vec!["BitFun.exe".to_string(), "uninstall.exe".to_string()],
-    };
-    relative_paths.push(INSTALL_MANIFEST_FILE.to_string());
+    let mut relative_paths = collect_payload_relative_paths_for_uninstall()?;
+    relative_paths.push("uninstall.exe".to_string());
 
     let mut targets: Vec<PathBuf> = relative_paths
         .into_iter()
@@ -1540,6 +1702,7 @@ fn remove_installed_targets(
     for dir in collect_parent_directories(install_path, targets) {
         let _ = std::fs::remove_dir(&dir);
     }
+    let _ = std::fs::remove_dir(install_path);
 
     Ok(())
 }
@@ -1585,17 +1748,18 @@ fn sanitize_manifest_relative_path(raw: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn path_buf_to_manifest_string(path: PathBuf) -> String {
-    path.to_string_lossy().replace('\\', "/")
-}
-
 fn verify_installed_payload(install_path: &Path) -> Result<(), String> {
-    let app_exe = install_path.join("BitFun.exe");
-    let app_meta = std::fs::metadata(&app_exe)
-        .map_err(|_| "Installed BitFun.exe is missing after extraction".to_string())?;
+    let app_exe = install_path.join(MAIN_APP_EXE);
+    let app_meta = std::fs::metadata(&app_exe).map_err(|_| {
+        format!(
+            "Installed {} is missing after extraction",
+            MAIN_APP_EXE
+        )
+    })?;
     if app_meta.len() < MIN_WINDOWS_APP_EXE_BYTES {
         return Err(format!(
-            "Installed BitFun.exe is too small ({} bytes). Payload is likely invalid.",
+            "Installed {} is too small ({} bytes). Payload is likely invalid.",
+            MAIN_APP_EXE,
             app_meta.len()
         ));
     }
@@ -1626,11 +1790,8 @@ fn rollback_installation(
 
     log::warn!("Installation failed, starting rollback");
 
-    if windows_state.added_to_path {
-        let _ = registry::remove_from_path(install_path);
-    }
-    if windows_state.context_menu_registered {
-        let _ = registry::remove_context_menu();
+    if windows_state.manufacturer_registered {
+        let _ = registry::remove_tauri_install_location();
     }
     if windows_state.start_menu_shortcut_created {
         let _ = shortcut::remove_start_menu_shortcut();

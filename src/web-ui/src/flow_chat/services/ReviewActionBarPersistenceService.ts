@@ -8,8 +8,9 @@
 import { createLogger } from '@/shared/utils/logger';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { flowChatStore } from '../store/FlowChatStore';
+import { buildSessionMetadata } from '../utils/sessionMetadata';
 import type { ReviewActionBarState } from '../store/deepReviewActionBarStore';
-import type { ReviewActionPersistedState } from '@/shared/types/session-history';
+import type { ReviewActionPersistedState, SessionMetadata } from '@/shared/types/session-history';
 
 const log = createLogger('ReviewActionBarPersistence');
 
@@ -29,11 +30,28 @@ export async function persistReviewActionState(state: ReviewActionBarState): Pro
   };
 
   try {
-    await sessionAPI.saveSessionMetadata(
-      {
+    let existingMetadata: SessionMetadata | null = null;
+    try {
+      existingMetadata = await sessionAPI.loadSessionMetadata(
+        state.childSessionId,
+        session.workspacePath,
+        session.remoteConnectionId,
+        session.remoteSshHost
+      );
+    } catch (error) {
+      log.warn('Failed to load session metadata before persisting review action state', {
         sessionId: state.childSessionId,
-        reviewActionState: payload,
-      } as any,
+        error,
+      });
+    }
+
+    const metadata = {
+      ...(existingMetadata ?? buildSessionMetadata(session, null)),
+      reviewActionState: payload,
+    };
+
+    await sessionAPI.saveSessionMetadata(
+      metadata,
       session.workspacePath,
       session.remoteConnectionId,
       session.remoteSshHost
@@ -46,11 +64,14 @@ export async function persistReviewActionState(state: ReviewActionBarState): Pro
 
 export async function clearPersistedReviewState(sessionId: string, workspacePath: string): Promise<void> {
   try {
+    const existingMetadata = await sessionAPI.loadSessionMetadata(sessionId, workspacePath);
+    if (!existingMetadata) return;
+
+    const metadata = { ...existingMetadata };
+    delete metadata.reviewActionState;
+
     await sessionAPI.saveSessionMetadata(
-      {
-        sessionId,
-        reviewActionState: undefined,
-      } as any,
+      metadata,
       workspacePath
     );
   } catch (error) {

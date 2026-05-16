@@ -5,6 +5,169 @@
 
 @use '../../../component-library/styles/tokens' as *;
 
+// ==================== App updates (desktop) ====================
+
+.bitfun-about-dialog__update-card {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bitfun-about-dialog__update-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.bitfun-about-dialog__update-card-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.bitfun-about-dialog__update-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.bitfun-about-dialog__update-card-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--element-bg-subtle);
+  color: var(--color-accent-400);
+}
+
+.bitfun-about-dialog__update-card-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.bitfun-about-dialog__update-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: 0.02em;
+}
+
+.bitfun-about-dialog__update-card-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.bitfun-about-dialog__update-card-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.bitfun-about-dialog__update-card-feedback {
+  margin-top: 10px;
+}
+
+.bitfun-about-dialog__update-btn-icon {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.bitfun-about-dialog__update-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: var(--color-success, #22c55e);
+  }
+
+  &--success {
+    color: var(--color-text-secondary);
+  }
+}
+
+.bitfun-about-dialog__update-alert {
+  width: 100%;
+}
+
+.bitfun-about-dialog__download-status {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.bitfun-about-dialog__download-bar {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--element-bg-subtle);
+}
+
+.bitfun-about-dialog__download-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent-500);
+  transition: width 0.2s ease;
+}
+
+.bitfun-about-dialog__download-fill--indeterminate {
+  width: 38%;
+  animation: about-update-progress-indeterminate 1.1s ease-in-out infinite;
+}
+
+@keyframes about-update-progress-indeterminate {
+  0% {
+    transform: translateX(-105%);
+  }
+  100% {
+    transform: translateX(265%);
+  }
+}
+
+.bitfun-about-dialog__download-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+}
+
+.bitfun-about-dialog__download-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.bitfun-about-dialog__update-installed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 // ==================== Content area (inside Modal) ====================
 
 .bitfun-about-dialog__content {
@@ -129,7 +292,6 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0 24px;
-  
 }
 
 // ==================== Info section ====================

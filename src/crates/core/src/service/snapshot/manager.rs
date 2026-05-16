@@ -1,4 +1,6 @@
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{
+    DynamicToolInfo, Tool, ToolExposure, ToolResult, ToolUseContext,
+};
 use crate::agentic::tools::registry::ToolRegistry;
 use crate::service::remote_ssh::workspace_state::is_remote_path;
 use crate::service::snapshot::service::SnapshotService;
@@ -357,6 +359,21 @@ impl Tool for WrappedTool {
         Ok(self.original_tool.description().await?)
     }
 
+    async fn description_with_context(
+        &self,
+        context: Option<&ToolUseContext>,
+    ) -> crate::util::errors::BitFunResult<String> {
+        self.original_tool.description_with_context(context).await
+    }
+
+    fn short_description(&self) -> String {
+        self.original_tool.short_description()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        self.original_tool.default_exposure()
+    }
+
     fn input_schema(&self) -> Value {
         self.original_tool.input_schema()
     }
@@ -378,12 +395,24 @@ impl Tool for WrappedTool {
         self.original_tool.input_json_schema()
     }
 
+    fn dynamic_provider_id(&self) -> Option<&str> {
+        self.original_tool.dynamic_provider_id()
+    }
+
+    fn dynamic_tool_info(&self) -> Option<DynamicToolInfo> {
+        self.original_tool.dynamic_tool_info()
+    }
+
     fn user_facing_name(&self) -> String {
         self.original_tool.user_facing_name().to_string()
     }
 
     async fn is_enabled(&self) -> bool {
         self.original_tool.is_enabled().await
+    }
+
+    async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
+        self.original_tool.is_available_in_context(context).await
     }
 
     fn is_readonly(&self) -> bool {

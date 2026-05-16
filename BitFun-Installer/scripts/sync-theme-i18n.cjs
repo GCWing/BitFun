@@ -12,6 +12,7 @@ const THEME_IDS = [
   "bitfun-china-night",
   "bitfun-cyber",
   "bitfun-slate",
+  "bitfun-tokyo-night",
 ];
 
 function readJson(filePath) {

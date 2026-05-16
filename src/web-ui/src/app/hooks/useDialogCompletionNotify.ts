@@ -66,6 +66,8 @@ export const useDialogCompletionNotify = () => {
 
       const notificationCopy = buildDialogCompletionNotificationCopy({
         sessionTitle: session?.title,
+        success: event?.success,
+        finishReason: event?.finishReason ?? event?.finish_reason,
         t,
       });
 
