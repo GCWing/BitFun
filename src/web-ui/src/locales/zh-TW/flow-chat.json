@@ -39,6 +39,13 @@
   "runtimeStatus": {
     "waitingForModelResponse": "等待模型回應..."
   },
+  "historyState": {
+    "loadingTitle": "正在載入歷史會話",
+    "loadingDescription": "正在準備該會話的歷史內容。",
+    "failedTitle": "歷史會話載入失敗",
+    "failedDescription": "可以重新載入已儲存的會話內容。",
+    "retry": "重試"
+  },
   "usage": {
     "title": "工作階段用量",
     "unavailable": "不可用",

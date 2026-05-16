@@ -270,12 +270,15 @@ impl ThemeConfig {
         theme_id
     }
 
-    pub fn generate_init_script(&self) -> String {
+    pub fn generate_init_script(&self, startup_trace_id: &str) -> String {
         let theme_type = if self.is_light { "light" } else { "dark" };
+        let startup_trace_id_json = serde_json::to_string(startup_trace_id)
+            .unwrap_or_else(|_| "\"desktop-unknown\"".to_string());
 
         format!(
             r#"
             (function() {{
+                window.__BITFUN_STARTUP_TRACE_ID__ = {startup_trace_id_json};
                 function applyTheme() {{
                     var root = document.documentElement;
                     if (!root) return false;
@@ -318,6 +321,7 @@ impl ThemeConfig {
             bg_secondary = self.bg_secondary,
             bg_scene = self.bg_scene,
             text_primary = self.text_primary,
+            startup_trace_id_json = startup_trace_id_json,
         )
     }
 
@@ -330,10 +334,10 @@ impl ThemeConfig {
     }
 }
 
-pub fn create_main_window(app_handle: &tauri::AppHandle) {
+pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str) {
     let theme = ThemeConfig::load_from_config();
     let bg_color = theme.to_tauri_color();
-    let init_script = theme.generate_init_script();
+    let init_script = theme.generate_init_script(startup_trace_id);
 
     let main_url = if cfg!(debug_assertions) {
         match "http://localhost:1422".parse() {

@@ -232,6 +232,13 @@ export interface TodoItem {
   status: 'pending' | 'in_progress' | 'completed';
 }
 
+export type SessionHistoryState =
+  | 'new'
+  | 'metadata-only'
+  | 'hydrating'
+  | 'ready'
+  | 'failed';
+
 // Session state.
 export interface Session {
   sessionId: string;
@@ -263,6 +270,16 @@ export interface Session {
   
   // Historical sessions are persisted and require lazy loading.
   isHistorical?: boolean;
+
+  /**
+   * Lazy history lifecycle for persisted sessions:
+   * - 'new': an empty local session that should show the normal welcome state.
+   * - 'metadata-only': persisted metadata is visible, but turns have not hydrated yet.
+   * - 'hydrating': history is currently being restored / loaded.
+   * - 'ready': turns are available, or the session no longer needs lazy history.
+   * - 'failed': hydrate failed and the UI should offer retry instead of showing a new session.
+   */
+  historyState?: SessionHistoryState;
   
   todos?: TodoItem[];
   

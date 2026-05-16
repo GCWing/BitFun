@@ -2,6 +2,45 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flowChatStore } from './FlowChatStore';
 import type { FlowChatState, Session } from '../types/flow-chat';
 
+const apiMocks = vi.hoisted(() => ({
+  listSessions: vi.fn(),
+  loadSessionTurns: vi.fn(),
+  saveSessionTurn: vi.fn(),
+  restoreSession: vi.fn(),
+}));
+
+const configManagerMock = vi.hoisted(() => ({
+  getConfig: vi.fn(async (path: string) => {
+    if (path === 'ai.models') return [];
+    if (path === 'ai.default_models') return {};
+    return undefined;
+  }),
+}));
+
+const stateMachineManagerMock = vi.hoisted(() => ({
+  getOrCreate: vi.fn(),
+  reset: vi.fn(),
+}));
+
+vi.mock('@/infrastructure/api', () => ({
+  sessionAPI: {
+    listSessions: apiMocks.listSessions,
+    loadSessionTurns: apiMocks.loadSessionTurns,
+    saveSessionTurn: apiMocks.saveSessionTurn,
+  },
+  agentAPI: {
+    restoreSession: apiMocks.restoreSession,
+  },
+}));
+
+vi.mock('@/infrastructure/config/services/ConfigManager', () => ({
+  configManager: configManagerMock,
+}));
+
+vi.mock('../state-machine', () => ({
+  stateMachineManager: stateMachineManagerMock,
+}));
+
 const resetStore = () => {
   flowChatStore.setState((): FlowChatState => ({
     sessions: new Map(),
@@ -27,6 +66,22 @@ const createSession = (overrides: Partial<Session> = {}): Session => ({
   isTransient: false,
   ...overrides,
 });
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+async function flushAsyncWork(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 describe('FlowChatStore metadata persistence callbacks', () => {
   afterEach(() => {
@@ -164,5 +219,137 @@ describe('FlowChatStore local usage reports', () => {
       'local-usage-usage-1',
       'local-usage-usage-2',
     ]);
+  });
+});
+
+describe('FlowChatStore historical session hydration state', () => {
+  afterEach(() => {
+    resetStore();
+    vi.clearAllMocks();
+  });
+
+  it('loads persisted metadata as metadata-only historical sessions', async () => {
+    apiMocks.listSessions.mockResolvedValueOnce([
+      {
+        sessionId: 'history-1',
+        title: 'Saved session',
+        agentType: 'agentic',
+        modelName: 'auto',
+        createdAt: 10,
+        lastActiveAt: 20,
+      },
+    ]);
+
+    await flowChatStore.initializeFromDisk('D:/workspace/BitFun');
+
+    const session = flowChatStore.getState().sessions.get('history-1');
+    expect(session).toMatchObject({
+      sessionId: 'history-1',
+      isHistorical: true,
+      historyState: 'metadata-only',
+      dialogTurns: [],
+    });
+  });
+
+  it('marks historical sessions hydrating while turns are loading and ready after completion', async () => {
+    const turns = createDeferred<any[]>();
+    apiMocks.restoreSession.mockResolvedValueOnce(undefined);
+    apiMocks.loadSessionTurns.mockReturnValueOnce(turns.promise);
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    const load = flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+    await flushAsyncWork();
+
+    expect(flowChatStore.getState().sessions.get('history-1')?.historyState).toBe('hydrating');
+
+    turns.resolve([]);
+    await load;
+
+    expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [],
+    });
+  });
+
+  it('marks historical sessions failed when hydrate fails', async () => {
+    apiMocks.restoreSession.mockResolvedValueOnce(undefined);
+    apiMocks.loadSessionTurns.mockRejectedValueOnce(new Error('turn load failed'));
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    await expect(
+      flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun')
+    ).rejects.toThrow('turn load failed');
+
+    expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      isHistorical: true,
+      historyState: 'failed',
+    });
+  });
+
+  it('does not change the active session when an older hydrate completes', async () => {
+    apiMocks.restoreSession.mockResolvedValueOnce(undefined);
+    apiMocks.loadSessionTurns.mockResolvedValueOnce([]);
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+        ['history-2', createSession({
+          sessionId: 'history-2',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-2',
+    }));
+
+    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+
+    expect(flowChatStore.getState().activeSessionId).toBe('history-2');
+    expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      isHistorical: false,
+      historyState: 'ready',
+    });
+  });
+
+  it('does not restore ACP historical sessions through the normal backend path', async () => {
+    apiMocks.loadSessionTurns.mockResolvedValueOnce([]);
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['acp-1', createSession({
+          sessionId: 'acp-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+          mode: 'acp:test',
+          config: { agentType: 'acp:test' },
+        })],
+      ]),
+      activeSessionId: 'acp-1',
+    }));
+
+    await flowChatStore.loadSessionHistory('acp-1', 'D:/workspace/BitFun');
+
+    expect(apiMocks.restoreSession).not.toHaveBeenCalled();
   });
 });

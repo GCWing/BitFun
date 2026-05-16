@@ -11,6 +11,7 @@ import { useSessionModeStore } from '@/app/stores/sessionModeStore';
 import { VirtualMessageList, VirtualMessageListRef } from './VirtualMessageList';
 import { FlowChatHeader, type FlowChatHeaderTurnSummary } from './FlowChatHeader';
 import { WelcomePanel } from '../WelcomePanel';
+import { HistorySessionPlaceholder } from './HistorySessionPlaceholder';
 import { FlowChatContext, FlowChatContextValue } from './FlowChatContext';
 import { useExploreGroupState } from './useExploreGroupState';
 import { useFlowChatFileActions } from './useFlowChatFileActions';
@@ -56,6 +57,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const chatScopeRef = useRef<HTMLDivElement>(null);
   const { workspacePath } = useWorkspaceContext();
   const allowUserMessageRollback = !isAcpFlowSession(activeSession);
+  const historyState = activeSession?.historyState;
+  const showHistoryPlaceholder = virtualItems.length === 0 && (
+    historyState === 'metadata-only' ||
+    historyState === 'hydrating' ||
+    historyState === 'failed'
+  );
   const {
     exploreGroupStates,
     onExploreGroupToggle: handleExploreGroupToggle,
@@ -266,6 +273,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     handleJumpToTurn(nextTurn.turnId);
   }, [effectiveVisibleTurnInfo, handleJumpToTurn, turnSummaries]);
 
+  const handleRetryHistoryLoad = useCallback(() => {
+    const sessionId = activeSession?.sessionId;
+    if (!sessionId) return;
+    void FlowChatManager.getInstance().switchChatSession(sessionId);
+  }, [activeSession?.sessionId]);
+
   useShortcut(
     'chat.stopGeneration',
     { key: 'Escape', scope: 'chat', allowInInput: true },
@@ -343,7 +356,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         />
 
         <div className="modern-flowchat-container__messages">
-          {virtualItems.length === 0 ? (
+          {showHistoryPlaceholder ? (
+            <HistorySessionPlaceholder
+              state={historyState}
+              onRetry={handleRetryHistoryLoad}
+            />
+          ) : virtualItems.length === 0 ? (
             <WelcomePanel
               key={activeSession?.sessionId ?? 'welcome'}
               sessionMode={activeSession?.mode}

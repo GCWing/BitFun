@@ -15,6 +15,7 @@ import {
 } from './types';
 import { createLogger } from '@/shared/utils/logger';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
+import { estimateJsonBytes, isRemoteTraceRequest, startupTrace } from '@/shared/utils/startupTrace';
 import { sanitizeErrorForLog, sanitizeLogValue, sanitizeTextForLog } from '../logSanitizer';
 
 const log = createLogger('ApiClient');
@@ -129,6 +130,19 @@ export class ApiClient implements IApiClient {
 
   private async executeRequest<T>(request: ApiRequest): Promise<T> {
     const startedAt = nowMs();
+    const tracePayloadStartedAt = nowMs();
+    const tracePayload = request.type === 'tauri'
+      ? (request.config as TauriCommandConfig).args
+      : {
+          params: (request.config as HttpRequestConfig).params,
+          data: (request.config as HttpRequestConfig).data,
+        };
+    const traceCommand = request.type === 'tauri'
+      ? (request.config as TauriCommandConfig).command
+      : `${(request.config as HttpRequestConfig).method} ${(request.config as HttpRequestConfig).url}`;
+    const requestBytes = estimateJsonBytes(tracePayload);
+    const remote = isRemoteTraceRequest(tracePayload);
+    const requestPayloadEstimateDurationMs = elapsedMs(tracePayloadStartedAt);
     
     this.updateStats({ totalRequests: this.stats.totalRequests + 1 });
 
@@ -157,6 +171,19 @@ export class ApiClient implements IApiClient {
 
         
         const durationMs = elapsedMs(startedAt);
+        const responseEstimateStartedAt = nowMs();
+        const responseBytes = estimateJsonBytes(response.data);
+        const responseEstimateDurationMs = elapsedMs(responseEstimateStartedAt);
+        startupTrace.recordApiCall({
+          type: request.type,
+          command: traceCommand,
+          durationMs,
+          outcome: 'success',
+          requestBytes,
+          responseBytes,
+          payloadEstimateDurationMs: requestPayloadEstimateDurationMs + responseEstimateDurationMs,
+          remote,
+        });
         this.recordResponseTime(durationMs);
         this.updateStats({ successfulRequests: this.stats.successfulRequests + 1 });
 
@@ -176,6 +203,15 @@ export class ApiClient implements IApiClient {
       }
     } catch (error) {
       this.updateStats({ failedRequests: this.stats.failedRequests + 1 });
+      startupTrace.recordApiCall({
+        type: request.type,
+        command: traceCommand,
+        durationMs: elapsedMs(startedAt),
+        outcome: 'failure',
+        requestBytes,
+        payloadEstimateDurationMs: requestPayloadEstimateDurationMs,
+        remote,
+      });
 
       
       if (request.retryCount < (request.config.retries || this.config.retries)) {

@@ -21,7 +21,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::Manager;
 
@@ -194,6 +194,10 @@ async fn webdriver_bridge_result(request: WebdriverBridgeResultRequest) -> Resul
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
     let startup_started = Instant::now();
+    let startup_trace_id = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| format!("desktop-{}", duration.as_millis()))
+        .unwrap_or_else(|_| "desktop-unknown".to_string());
     let mut startup_timings = TimingCollector::default();
     let in_debug = cfg!(debug_assertions) || std::env::var("DEBUG").unwrap_or_default() == "1";
     let log_config = logging::LogConfig::new(in_debug);
@@ -303,6 +307,11 @@ pub async fn run() {
         .manage(terminal_state)
         .setup(move |app| {
             let setup_started = Instant::now();
+            log::debug!(
+                "Desktop startup trace event: trace_id={}, phase=tauri_setup_start, since_process_start_ms={}",
+                startup_trace_id,
+                elapsed_ms(startup_started)
+            );
             #[cfg(target_os = "macos")]
             {
                 app.on_menu_event(|app, event| {
@@ -414,16 +423,34 @@ pub async fn run() {
 
             let app_handle = app.handle().clone();
             let window_started = Instant::now();
-            theme::create_main_window(&app_handle);
+            log::debug!(
+                "Desktop startup trace event: trace_id={}, phase=main_window_create_start",
+                startup_trace_id
+            );
+            theme::create_main_window(&app_handle, &startup_trace_id);
+            let window_duration_ms = elapsed_ms(window_started);
             log::debug!(
                 "Desktop startup step completed: step=create_main_window, duration_ms={}",
-                elapsed_ms(window_started)
+                window_duration_ms
+            );
+            log::debug!(
+                "Desktop startup trace event: trace_id={}, phase=main_window_create_end, duration_ms={}",
+                startup_trace_id,
+                window_duration_ms
             );
             bitfun_webdriver::maybe_start(app_handle.clone());
+            let setup_duration_ms = elapsed_ms(setup_started);
+            let since_process_start_ms = elapsed_ms(startup_started);
             log::debug!(
                 "Desktop startup timing: phase=tauri_setup, duration_ms={}, since_process_start_ms={}",
-                elapsed_ms(setup_started),
-                elapsed_ms(startup_started)
+                setup_duration_ms,
+                since_process_start_ms
+            );
+            log::debug!(
+                "Desktop startup trace event: trace_id={}, phase=tauri_setup_end, duration_ms={}, since_process_start_ms={}",
+                startup_trace_id,
+                setup_duration_ms,
+                since_process_start_ms
             );
 
             #[cfg(target_os = "macos")]

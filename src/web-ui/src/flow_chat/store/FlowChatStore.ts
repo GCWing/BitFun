@@ -14,8 +14,11 @@ import {
   ImageAnalysisResult,
   AnyFlowItem,
   SessionConfig,
+  SessionHistoryState,
 } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
+import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import type { LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
 import {
@@ -249,6 +252,7 @@ export class FlowChatStore {
         lastActiveAt: Date.now(),
         lastFinishedAt: undefined,
         error: null,
+        historyState: 'new',
         maxContextTokens: maxContextTokens || 128128,
         mode: mode || 'agentic',
         workspacePath,
@@ -320,6 +324,7 @@ export class FlowChatStore {
         maxContextTokens: 128128,
         mode: mode || 'agentic',
         isHistorical: false,
+        historyState: 'new',
         workspacePath,
         remoteConnectionId,
         remoteSshHost,
@@ -1731,9 +1736,15 @@ export class FlowChatStore {
     remoteConnectionId?: string,
     remoteSshHost?: string
   ): Promise<void> {
+    const traceStartedAt = nowMs();
+    const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
+    let sessionCount = 0;
+    startupTrace.markPhase('session_metadata_list_start', { remote });
     try {
       const { sessionAPI } = await import('@/infrastructure/api');
       const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost);
+      sessionCount = sessions.length;
+      startupTrace.markPhase('session_metadata_list_loaded', { remote, sessionCount });
 
       const { stateMachineManager } = await import('../state-machine');
       sessions.forEach(metadata => {
@@ -1811,6 +1822,7 @@ export class FlowChatStore {
             lastFinishedAt,
             error: null,
             isHistorical: true,
+            historyState: 'metadata-only',
             todos: (metadata as any).todos || [],
             maxContextTokens,
             mode: validatedAgentType,
@@ -1839,9 +1851,39 @@ export class FlowChatStore {
       };
       
       await Promise.all(sessions.map(processSession));
+      startupTrace.markPhase('session_metadata_list_end', {
+        remote,
+        sessionCount,
+        durationMs: elapsedMs(traceStartedAt),
+      });
     } catch (error) {
+      startupTrace.markPhase('session_metadata_list_failed', {
+        remote,
+        sessionCount,
+        durationMs: elapsedMs(traceStartedAt),
+      });
       log.error('Failed to load persisted sessions', error);
     }
+  }
+
+  public setSessionHistoryState(sessionId: string, historyState: SessionHistoryState): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session || session.historyState === historyState) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        historyState,
+      });
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
   }
 
   /**
@@ -1854,6 +1896,10 @@ export class FlowChatStore {
     remoteConnectionId?: string,
     remoteSshHost?: string
   ): Promise<void> {
+    const traceStartedAt = nowMs();
+    const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
+    startupTrace.markPhase('historical_session_hydrate_start', { remote });
+    this.setSessionHistoryState(sessionId, 'hydrating');
     try {
       const { stateMachineManager } = await import('../state-machine');
       stateMachineManager.getOrCreate(sessionId);
@@ -1878,6 +1924,10 @@ export class FlowChatStore {
         remoteConnectionId,
         remoteSshHost
       );
+      startupTrace.markPhase('historical_session_turns_loaded', {
+        remote,
+        turnCount: Array.isArray(turns) ? turns.length : 0,
+      });
       
       const dialogTurns = this.convertToDialogTurns(turns);
       
@@ -1889,6 +1939,8 @@ export class FlowChatStore {
           ...session,
           dialogTurns,
           isHistorical: false,
+          historyState: 'ready' as const,
+          error: null,
         };
         
         const newSessions = new Map(prev.sessions);
@@ -1903,7 +1955,32 @@ export class FlowChatStore {
       // Reset state machine to IDLE after loading history
       // This handles the case where restoreSession triggered events that left the state machine in PROCESSING
       stateMachineManager.reset(sessionId);
+      startupTrace.markPhase('historical_session_hydrate_end', {
+        remote,
+        turnCount: dialogTurns.length,
+        durationMs: elapsedMs(traceStartedAt),
+      });
     } catch (error) {
+      this.setState(prev => {
+        const session = prev.sessions.get(sessionId);
+        if (!session) return prev;
+
+        const newSessions = new Map(prev.sessions);
+        newSessions.set(sessionId, {
+          ...session,
+          isHistorical: true,
+          historyState: 'failed',
+        });
+
+        return {
+          ...prev,
+          sessions: newSessions,
+        };
+      });
+      startupTrace.markPhase('historical_session_hydrate_failed', {
+        remote,
+        durationMs: elapsedMs(traceStartedAt),
+      });
       log.error('Failed to load session history', { sessionId, error });
       throw error;
     }

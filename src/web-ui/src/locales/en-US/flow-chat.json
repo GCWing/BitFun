@@ -39,6 +39,13 @@
   "runtimeStatus": {
     "waitingForModelResponse": "Waiting for model response..."
   },
+  "historyState": {
+    "loadingTitle": "Loading saved session",
+    "loadingDescription": "Preparing the conversation history.",
+    "failedTitle": "Session history did not load",
+    "failedDescription": "Retry loading the saved conversation.",
+    "retry": "Retry"
+  },
   "usage": {
     "title": "Session Usage",
     "unavailable": "Unavailable",

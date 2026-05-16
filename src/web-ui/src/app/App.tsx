@@ -10,6 +10,7 @@ import { NotificationContainer, NotificationCenter } from '../shared/notificatio
 import { AnnouncementProvider } from '../shared/announcement-system';
 import { ConfirmDialogRenderer } from '../component-library';
 import { createLogger } from '@/shared/utils/logger';
+import { startupTrace } from '@/shared/utils/startupTrace';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { syncAgentCompanionDesktopWindow } from '@/infrastructure/config/services/AgentCompanionWindowService';
 import { isTauriRuntime } from '@/infrastructure/runtime';
@@ -51,6 +52,7 @@ function App() {
   const [splashExiting, setSplashExiting] = useState(false);
   const mountTimeRef = useRef(Date.now());
   const mainWindowShownRef = useRef(false);
+  const interactiveShellReadyRef = useRef(false);
 
   // Once the workspace finishes loading, wait for the remaining min-display
   // time and then begin the exit animation.
@@ -76,6 +78,7 @@ function App() {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('show_main_window');
       log.debug('Main window shown', { reason });
+      startupTrace.markPhase('main_window_shown', { reason });
     } catch (error: any) {
       log.error('Failed to show main window', error);
 
@@ -85,6 +88,7 @@ function App() {
         await mainWindow.show();
         await mainWindow.setFocus();
         log.debug('Main window shown via fallback', { reason });
+        startupTrace.markPhase('main_window_shown_fallback', { reason });
       } catch (fallbackError) {
         log.error('Fallback window show failed', fallbackError);
         mainWindowShownRef.current = false;
@@ -96,8 +100,17 @@ function App() {
   // The splash still covers the UI, so users see immediate feedback instead
   // of waiting on a hidden window while startup continues in the background.
   useEffect(() => {
+    startupTrace.markPhase('app_effect_mounted');
     void showMainWindow('startup-overlay');
   }, [showMainWindow]);
+
+  useEffect(() => {
+    if (workspaceLoading || interactiveShellReadyRef.current) {
+      return;
+    }
+    interactiveShellReadyRef.current = true;
+    startupTrace.markPhase('interactive_shell_ready');
+  }, [workspaceLoading]);
 
   // If the early reveal path fails, keep the old post-splash show as a retry.
   useEffect(() => {

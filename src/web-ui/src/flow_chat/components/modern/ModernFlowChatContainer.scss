@@ -43,3 +43,84 @@
     border-top: 1px solid var(--color-border, #3a3a3a);
   }
 }
+
+.history-session-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 32px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.history-session-placeholder__icon {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent, #5b8def);
+
+  svg {
+    animation: history-placeholder-spin 1.1s linear infinite;
+  }
+}
+
+.history-session-placeholder__icon--failed {
+  color: var(--color-warning, #f59e0b);
+
+  svg {
+    animation: none;
+  }
+}
+
+.history-session-placeholder__text {
+  display: grid;
+  gap: 6px;
+  max-width: min(420px, 100%);
+}
+
+.history-session-placeholder__title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.history-session-placeholder__description {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.history-session-placeholder__retry {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover, rgba(255, 255, 255, 0.06));
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.history-session-placeholder__retry:hover {
+  background: var(--color-surface-active, rgba(255, 255, 255, 0.1));
+}
+
+@keyframes history-placeholder-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
