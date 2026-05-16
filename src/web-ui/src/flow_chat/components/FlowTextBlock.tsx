@@ -101,7 +101,14 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
       {textItem.isMarkdown ? (
         <MarkdownRenderer
           content={displayContent}
-          isStreaming={isActivelyStreaming}
+          // Pass the raw streaming flag (not the idle-gated
+          // `isActivelyStreaming`) so the code-block render path inside
+          // Markdown stays stable across bursty AI output. Otherwise
+          // `isContentGrowing` toggles every >500ms idle and forces the
+          // fallback <pre> / Prism highlighter to swap back and forth,
+          // which makes line numbers and the code body visibly shake
+          // until the stream finally completes.
+          isStreaming={isStreaming}
           onFileViewRequest={onFileViewRequest}
           onTabOpen={onTabOpen}
           onOpenVisualization={(visualization) => {
