@@ -697,11 +697,13 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, turnId, isLas
     case 'tool': {
       const toolItem = item as FlowToolItem;
       const isCompletedTool = toolItem.status === 'completed';
+      const isCollapsible = isCollapsibleTool(toolItem.toolName);
       const toolClassName = [
         'flowchat-flow-item',
-        'flowchat-flow-item--tool-transition',
-        isCompletedTool ? 'flowchat-flow-item--tool-completed' : 'flowchat-flow-item--tool-active',
-      ].join(' ');
+        isCollapsible && isCompletedTool ? 'flowchat-flow-item--tool-transition' : null,
+        isCollapsible && isCompletedTool ? 'flowchat-flow-item--tool-completed' : null,
+        isCollapsible && !isCompletedTool ? 'flowchat-flow-item--tool-active' : null,
+      ].filter(Boolean).join(' ');
 
       return wrapContent(
         <div className={toolClassName} data-flow-item-id={item.id} data-flow-item-type="tool">
