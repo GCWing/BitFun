@@ -104,6 +104,21 @@ pub async fn set_user_mode_skill_state(
     load_user_mode_skill_overrides(mode_id).await
 }
 
+pub async fn clear_user_mode_skill_overrides(
+    mode_id: &str,
+) -> BitFunResult<UserModeSkillOverrides> {
+    persist_mode_config_from_value(
+        mode_id,
+        json!({
+            "disabled_user_skills": Vec::<String>::new(),
+            "enabled_user_skills": Vec::<String>::new(),
+        }),
+    )
+    .await?;
+
+    load_user_mode_skill_overrides(mode_id).await
+}
+
 pub fn project_mode_skills_path_for_remote(remote_root: &str) -> String {
     format!(
         "{}/.bitfun/config/{}",

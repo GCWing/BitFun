@@ -215,6 +215,27 @@
   }
 }
 
+// Utility: child elements hidden by default, revealed on card hover.
+// Uses max-width + overflow to collapse layout space when hidden so no gap
+// appears before the hover target is revealed.
+.compact-tool-card .compact-extra-on-hover {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  flex-shrink: 0;
+  transition: max-width 0.18s ease, opacity 0.15s ease;
+}
+
+.compact-tool-card:hover .compact-extra-on-hover {
+  max-width: 240px;
+  opacity: 1;
+  pointer-events: auto;
+  border-left: 1px solid var(--border-base);
+  padding-left: 6px;
+  margin-left: 6px;
+}
+
 /* ========== Expanded compact tools use the shared BaseToolCard shell ========== */
 .base-tool-card-wrapper.compact-tool-card-wrapper--expanded-card {
   width: 100%;
@@ -282,7 +303,8 @@
   background: var(--color-bg-primary);
   border: 1px solid var(--border-base);
   border-radius: 6px;
-  animation: expandDown 0.2s ease-out;
+  opacity: 1;
+  transform: none;
   box-shadow: 
     0 2px 8px rgba(0, 0, 0, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.02);

@@ -1,6 +1,6 @@
 [package]
 name = "bitfun-installer"
-version = "0.2.5"
+version = "0.2.7"
 authors = ["BitFun Team"]
 edition = "2021"
 description = "BitFun Custom Installer - Modern branded installation experience"

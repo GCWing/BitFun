@@ -81,13 +81,6 @@ export interface SendMessageRequest {
   context?: any;
 }
 
-export interface FixMermaidCodeRequest {
-  sourceCode: string;
-  errorMessage: string;
-}
-
-
-
 export interface GetToolInfoRequest {
   toolName: string;
 }

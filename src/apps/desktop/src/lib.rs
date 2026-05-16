@@ -5,6 +5,8 @@ pub mod api;
 pub mod logging;
 pub mod macos_menubar;
 pub mod theme;
+#[cfg(not(target_env = "ohos"))]
+pub mod tray;
 
 use bitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
 use bitfun_core::infrastructure::ai::AIClientFactory;
@@ -19,7 +21,6 @@ use std::sync::{
     Arc,
 };
 use std::time::Instant;
-#[cfg(target_os = "macos")]
 use tauri::Emitter;
 use tauri::Manager;
 
@@ -33,7 +34,6 @@ use crate::ohos::window::{
 };
 use std::path::PathBuf;
 use api::acp_client_api::*;
-use api::ai_rules_api::*;
 use api::clipboard_file_api::*;
 use api::commands::*;
 use api::computer_use_api::*;
@@ -75,6 +75,121 @@ pub struct OhosPlatform {
     pub api_level: i32,
     pub feature: Vec<String>,
 }
+
+#[cfg(target_os = "macos")]
+static MAIN_WINDOW_HIDDEN_ON_MACOS: AtomicBool = AtomicBool::new(false);
+
+#[cfg(target_os = "macos")]
+static MAIN_WINDOW_CLOSE_PENDING_ON_MACOS: AtomicBool = AtomicBool::new(false);
+
+const MAIN_WINDOW_CLOSE_REQUESTED_EVENT: &str = "bitfun_main_window_close_requested";
+
+#[cfg(target_os = "macos")]
+const MAIN_WINDOW_CLOSE_FALLBACK_HIDE_MS: u64 = 2_500;
+
+// ─── Close-button behavior ────────────────────────────────────────────────────
+// The close-button behavior is owned by the frontend; the Rust window-event
+// handler only emits a notification event and the frontend decides what to do.
+// No per-platform caching needed here.
+
+#[cfg(target_os = "macos")]
+pub(crate) fn mark_main_window_hidden_on_macos(hidden: bool) {
+    MAIN_WINDOW_HIDDEN_ON_MACOS.store(hidden, Ordering::SeqCst);
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn cancel_main_window_close_request_on_macos() {
+    MAIN_WINDOW_CLOSE_PENDING_ON_MACOS.store(false, Ordering::SeqCst);
+}
+
+#[cfg(target_os = "macos")]
+fn begin_main_window_close_request_on_macos() -> bool {
+    MAIN_WINDOW_CLOSE_PENDING_ON_MACOS
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
+}
+
+#[cfg(target_os = "macos")]
+fn take_main_window_close_request_on_macos() -> bool {
+    MAIN_WINDOW_CLOSE_PENDING_ON_MACOS
+        .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
+}
+
+#[cfg(target_os = "macos")]
+fn hide_main_window_on_macos(app: &tauri::AppHandle, reason: &str) -> Result<(), String> {
+    let Some(main_window) = app.get_webview_window("main") else {
+        mark_main_window_hidden_on_macos(false);
+        return Err("Main window not found".to_string());
+    };
+
+    main_window.hide().map_err(|error| {
+        mark_main_window_hidden_on_macos(false);
+        log::warn!(
+            "Failed to hide main window on macOS close request: reason={}, error={}",
+            reason,
+            error
+        );
+        format!("Failed to hide main window: {}", error)
+    })?;
+
+    mark_main_window_hidden_on_macos(true);
+    log::info!(
+        "Main window close requested on macOS; hid window instead of exiting: reason={}",
+        reason
+    );
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn show_main_window_on_macos(app: &tauri::AppHandle, reason: &str) {
+    cancel_main_window_close_request_on_macos();
+
+    let Some(main_window) = app.get_webview_window("main") else {
+        log::warn!(
+            "Failed to show main window on macOS reopen event: reason={}, error=main window not found",
+            reason
+        );
+        return;
+    };
+
+    let _ = main_window.unminimize();
+    if let Err(error) = main_window.show() {
+        mark_main_window_hidden_on_macos(false);
+        log::warn!(
+            "Failed to show main window on macOS reopen event: reason={}, error={}",
+            reason,
+            error
+        );
+        return;
+    }
+
+    mark_main_window_hidden_on_macos(false);
+    if let Err(error) = main_window.set_focus() {
+        log::warn!(
+            "Failed to focus main window on macOS reopen event: reason={}, error={}",
+            reason,
+            error
+        );
+    }
+}
+
+#[tauri::command]
+async fn hide_main_window_after_close_request(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        if take_main_window_close_request_on_macos() {
+            hide_main_window_on_macos(&app, "frontend_ack")?;
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+    }
+
+    Ok(())
+}
+
 
 impl Default for OhosPlatform {
     fn default() -> Self {
@@ -166,7 +281,8 @@ pub async fn _run() {
     }
     startup_timings.record_elapsed("init_function_agents", step_started);
 
-    let workspace_search_enabled = bitfun_core::service::search::workspace_search_feature_enabled().await;
+    let workspace_search_enabled =
+        bitfun_core::service::search::workspace_search_feature_enabled().await;
     let startup_flashgrep_path = configure_workspace_search_daemon_env();
 
     let step_started = Instant::now();
@@ -190,6 +306,8 @@ pub async fn _run() {
     let terminal_state = api::terminal_api::TerminalState::new();
 
     let path_manager = get_path_manager_arc();
+
+    setup_panic_hook();
 
     let app = tauri::Builder::default()
         .plugin(logging::build_log_plugin(log_targets))
@@ -377,16 +495,68 @@ pub async fn _run() {
 
             logging::spawn_log_cleanup_task();
 
+            // Set up system tray icon.
+            #[cfg(not(target_env = "ohos"))]
+            {
+                if let Err(error) = crate::tray::setup_tray(app) {
+                    log::warn!("Failed to set up system tray: {}", error);
+                }
+            }
+
             log::info!("BitFun Desktop started successfully");
             Ok(())
         })
         .on_window_event({
             move |window, event| {
-                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if let tauri::WindowEvent::CloseRequested { api: _api, .. } = event {
                     if window.label() == "main" {
-                        if perform_process_exit_cleanup() {
-                            log::info!("Main window close requested, cleaning up");
-                            window.app_handle().exit(0);
+                        #[cfg(target_os = "macos")]
+                        {
+                            _api.prevent_close();
+                            if !begin_main_window_close_request_on_macos() {
+                                return;
+                            }
+
+                            if let Err(error) = window.emit(MAIN_WINDOW_CLOSE_REQUESTED_EVENT, ()) {
+                                log::warn!(
+                                    "Failed to emit macOS main window close request event: {}",
+                                    error
+                                );
+                            }
+
+                            let app_handle = window.app_handle().clone();
+                            tauri::async_runtime::spawn(async move {
+                                tokio::time::sleep(std::time::Duration::from_millis(
+                                    MAIN_WINDOW_CLOSE_FALLBACK_HIDE_MS,
+                                ))
+                                .await;
+
+                                if take_main_window_close_request_on_macos() {
+                                    if let Err(error) =
+                                        hide_main_window_on_macos(&app_handle, "frontend_timeout")
+                                    {
+                                        log::warn!(
+                                            "macOS close fallback hide failed after frontend timeout: {}",
+                                            error
+                                        );
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    if window.label() == "main" {
+                        // Prevent the OS from closing the window; let the frontend
+                        // decide whether to minimize to tray, show a dialog, or quit.
+                        api.prevent_close();
+                        if let Err(error) = window.emit(MAIN_WINDOW_CLOSE_REQUESTED_EVENT, ()) {
+                            log::warn!(
+                                "Failed to emit main window close request event: {}",
+                                error
+                            );
                         }
                     }
                 }
@@ -394,6 +564,7 @@ pub async fn _run() {
         })
         .invoke_handler(tauri::generate_handler![
             theme::show_main_window,
+            hide_main_window_after_close_request,
             api::agentic_api::create_session,
             api::agentic_api::update_session_model,
             api::agentic_api::update_session_title,
@@ -402,6 +573,8 @@ pub async fn _run() {
             api::agentic_api::compact_session,
             api::agentic_api::ensure_assistant_bootstrap,
             api::agentic_api::cancel_dialog_turn,
+            api::agentic_api::steer_dialog_turn,
+            api::agentic_api::control_deep_review_queue,
             api::agentic_api::cancel_session,
             api::agentic_api::set_subagent_timeout,
             api::agentic_api::delete_session,
@@ -412,6 +585,7 @@ pub async fn _run() {
             api::agentic_api::cancel_tool,
             api::agentic_api::generate_session_title,
             api::agentic_api::get_available_modes,
+            api::agentic_api::get_default_review_team_definition,
             api::btw_api::btw_ask_stream,
             api::btw_api::btw_cancel,
             api::editor_ai_api::editor_ai_stream,
@@ -422,7 +596,6 @@ pub async fn _run() {
             get_tool_info,
             validate_tool_input,
             execute_tool,
-            is_tool_enabled,
             submit_user_answers,
             initialize_global_state,
             get_available_tools,
@@ -438,7 +611,6 @@ pub async fn _run() {
             set_agent_model,
             get_agent_models,
             refresh_model_client,
-            fix_mermaid_code,
             get_app_state,
             update_app_status,
             theme::show_agent_companion_desktop_pet,
@@ -499,9 +671,9 @@ pub async fn _run() {
             get_mode_config,
             set_mode_config,
             reset_mode_config,
-            get_subagent_configs,
-            set_subagent_config,
             list_subagents,
+            list_visible_subagents,
+            list_manageable_subagents,
             get_subagent_detail,
             delete_subagent,
             create_subagent,
@@ -516,6 +688,7 @@ pub async fn _run() {
             download_skill_market,
             set_mode_skill_disabled,
             replace_mode_skill_selection,
+            reset_mode_skill_selection,
             validate_skill_path,
             add_skill,
             delete_skill,
@@ -533,6 +706,7 @@ pub async fn _run() {
             git_create_branch,
             git_delete_branch,
             git_get_diff,
+            git_get_changed_files,
             git_reset_files,
             git_reset_to_commit,
             git_get_file_content,
@@ -585,18 +759,10 @@ pub async fn _run() {
             cleanup_storage_with_policy,
             get_storage_statistics,
             initialize_project_storage,
-            get_ai_rules,
-            get_ai_rule,
-            create_ai_rule,
-            update_ai_rule,
-            delete_ai_rule,
-            get_ai_rules_stats,
-            build_ai_rules_system_prompt,
-            reload_ai_rules,
-            toggle_ai_rule,
             // Session persistence API
             list_persisted_sessions,
             load_session_turns,
+            get_session_usage_report,
             save_session_turn,
             save_session_metadata,
             export_session_transcript,
@@ -604,12 +770,6 @@ pub async fn _run() {
             touch_session_activity,
             load_persisted_session_metadata,
             fork_session,
-            // AI Memory API
-            api::ai_memory_api::get_all_memories,
-            api::ai_memory_api::add_memory,
-            api::ai_memory_api::update_memory,
-            api::ai_memory_api::delete_memory,
-            api::ai_memory_api::toggle_memory,
             api::project_context_api::get_document_statuses,
             api::project_context_api::toggle_document_enabled,
             api::project_context_api::create_context_document,
@@ -742,8 +902,15 @@ pub async fn _run() {
             api::terminal_api::terminal_shutdown_all,
             api::terminal_api::terminal_get_history,
             get_system_info,
+            get_app_version,
+            check_for_updates,
+            install_update,
+            restart_app,
             open_external_ohos,
             send_system_notification,
+            api::system_api::quit_app,
+            api::system_api::minimize_to_tray,
+            api::system_api::toggle_main_window_fullscreen,
             check_command_exists,
             check_commands_exist,
             run_system_command,
@@ -793,6 +960,19 @@ pub async fn _run() {
             api::miniapp_api::miniapp_dialog_message,
             api::miniapp_api::miniapp_import_from_path,
             api::miniapp_api::miniapp_sync_from_fs,
+            api::miniapp_api::miniapp_create_draft,
+            api::miniapp_api::miniapp_get_draft,
+            api::miniapp_api::miniapp_sync_draft_from_fs,
+            api::miniapp_api::miniapp_set_draft_permissions,
+            api::miniapp_api::miniapp_permission_diff_for_draft,
+            api::miniapp_api::miniapp_apply_draft,
+            api::miniapp_api::miniapp_discard_draft,
+            api::miniapp_api::get_miniapp_draft_storage,
+            api::miniapp_api::set_miniapp_draft_storage,
+            api::miniapp_api::miniapp_draft_worker_call,
+            api::miniapp_api::miniapp_draft_host_call,
+            api::miniapp_api::miniapp_draft_worker_stop,
+            api::miniapp_api::miniapp_get_customization_metadata,
             api::miniapp_api::miniapp_ai_complete,
             api::miniapp_api::miniapp_ai_chat,
             api::miniapp_api::miniapp_ai_cancel,
@@ -801,6 +981,7 @@ pub async fn _run() {
             api::browser_api::browser_webview_eval,
             api::browser_api::browser_get_url,
             // Browser Control API (CDP-based user browser control)
+            api::browser_control_api::browser_control_list_browsers,
             api::browser_control_api::browser_control_get_status,
             api::browser_control_api::browser_control_launch,
             api::browser_control_api::browser_control_restart_with_cdp,
@@ -865,13 +1046,23 @@ pub async fn _run() {
 
     match app {
         Ok(app) => {
-            app.run(|_app_handle, event| {
-                if matches!(
-                    event,
-                    tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
-                ) {
+            app.run(|_app_handle, event| match event {
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
                     perform_process_exit_cleanup();
                 }
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Reopen {
+                    has_visible_windows,
+                    ..
+                } => {
+                    let reason = if has_visible_windows {
+                        "dock_reopen_with_visible_aux_window"
+                    } else {
+                        "dock_reopen_no_visible_windows"
+                    };
+                    show_main_window_on_macos(_app_handle, reason);
+                }
+                _ => {}
             });
         }
         Err(e) => {
@@ -889,7 +1080,6 @@ async fn init_agentic_system() -> anyhow::Result<(
     Arc<bitfun_core::service::token_usage::TokenUsageService>,
 )> {
     use bitfun_core::agentic::*;
-    use bitfun_core::service::config::get_global_config_service;
 
     let ai_client_factory = AIClientFactory::get_global().await?;
 
@@ -925,6 +1115,24 @@ async fn init_agentic_system() -> anyhow::Result<(
         event_queue.clone(),
         tool_pipeline.clone(),
     ));
+
+    // Get execution config from global settings
+    let exec_config = match bitfun_core::service::config::get_global_config_service().await {
+        Ok(config_service) => {
+            match config_service
+                .get_config::<bitfun_core::service::config::types::GlobalConfig>(None)
+                .await
+            {
+                Ok(global_config) => execution::ExecutionEngineConfig {
+                    max_rounds: global_config.ai.max_rounds,
+                    ..Default::default()
+                },
+                Err(_) => Default::default(),
+            }
+        }
+        Err(_) => Default::default(),
+    };
+
     let execution_engine = Arc::new(execution::ExecutionEngine::new(
         round_executor,
         event_queue.clone(),
@@ -961,6 +1169,7 @@ async fn init_agentic_system() -> anyhow::Result<(
         coordination::DialogScheduler::new(coordinator.clone(), session_manager.clone());
     coordinator.set_scheduler_notifier(scheduler.outcome_sender());
     coordinator.set_round_preempt_source(scheduler.preempt_monitor());
+    coordinator.set_round_steering_source(scheduler.steering_monitor());
     coordination::set_global_scheduler(scheduler.clone());
 
     let cron_service =
@@ -1059,7 +1268,7 @@ fn setup_panic_hook() {
     }));
 }
 
-fn perform_process_exit_cleanup() -> bool {
+pub(crate) fn perform_process_exit_cleanup() -> bool {
     static CLEANUP_DONE: AtomicBool = AtomicBool::new(false);
 
     if CLEANUP_DONE
@@ -1070,33 +1279,7 @@ fn perform_process_exit_cleanup() -> bool {
     }
 
     if let Some(search_service) = get_global_workspace_search_service() {
-        let shutdown_thread = std::thread::Builder::new()
-            .name("workspace-search-shutdown".to_string())
-            .spawn(move || {
-                match tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                {
-                    Ok(runtime) => {
-                        runtime.block_on(async move {
-                            search_service.shutdown_all_daemons().await;
-                        });
-                    }
-                    Err(error) => {
-                        log::warn!(
-                            "Failed to create runtime for workspace search shutdown: {}",
-                            error
-                        );
-                    }
-                }
-            });
-
-        if let Err(error) = shutdown_thread {
-            log::warn!(
-                "Failed to spawn workspace search shutdown thread: {}",
-                error
-            );
-        }
+        search_service.shutdown_blocking();
     }
     bitfun_core::util::process_manager::cleanup_all_processes();
     api::remote_connect_api::cleanup_on_exit();

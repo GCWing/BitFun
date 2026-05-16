@@ -1,9 +1,10 @@
 /**
  * Export dialog turns as long images.
  * Uses React rendering to match FlowChat styles.
+ * Uses modern-screenshot (fork of html-to-image with better CSS var / font / CORS handling).
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Image, Loader2 } from 'lucide-react';
 import { FlowChatStore } from '../../store/FlowChatStore';
@@ -15,6 +16,7 @@ import type { DialogTurn, FlowTextItem, FlowToolItem, FlowThinkingItem } from '.
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
+import { withTimeout } from '@/shared/utils/timing';
 import { downloadDir, join } from '@tauri-apps/api/path';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
@@ -22,8 +24,47 @@ import './ExportImageButton.scss';
 
 const log = createLogger('ExportImageButton');
 
-// Lazy-load html-to-image.
-const loadHtmlToImage = () => import('html-to-image');
+// Lazy-load modern-screenshot.
+const loadModernScreenshot = () => import('modern-screenshot');
+
+/** Maximum time to wait for capture before aborting (ms). */
+const CAPTURE_TIMEOUT_MS = 15_000;
+
+/** Minimum time to wait for React render before capture (ms). */
+const MIN_RENDER_WAIT_MS = 300;
+
+/** Additional time per model-round item for complex content (ms). */
+const PER_ROUND_WAIT_MS = 80;
+
+/** Maximum total render wait time (ms). */
+const MAX_RENDER_WAIT_MS = 2_000;
+
+/** Collect ALL CSS custom properties from document :root so the offscreen
+ *  render inherits the full theme (fonts, radii, shadows, spacing, etc.).
+ *  modern-screenshot resolves var() by cloning computed styles, but
+ *  variables used inside the captured subtree must still be available on
+ *  the wrapper element for correct initial layout. */
+function collectAllCssVariables(): Record<string, string> {
+  const vars: Record<string, string> = {};
+  const computedStyle = getComputedStyle(document.documentElement);
+  for (let i = 0; i < computedStyle.length; i++) {
+    const prop = computedStyle[i];
+    if (prop.startsWith('--')) {
+      const value = computedStyle.getPropertyValue(prop).trim();
+      if (value) {
+        vars[prop] = value;
+      }
+    }
+  }
+  return vars;
+}
+
+/** Validate that a data-URL is not blank/corrupt. */
+function validateDataUrl(dataUrl: string): void {
+  if (!dataUrl || dataUrl === 'data:,' || dataUrl.length < 100) {
+    throw new Error('Capture returned empty or corrupt image data');
+  }
+}
 
 interface ExportImageButtonProps {
   turnId: string;
@@ -43,8 +84,8 @@ const ExportContent: React.FC<ExportContentProps> = ({ dialogTurn }) => {
     <div className="export-content">
       <div className="export-content__header">
         {/* Placeholder reserves space for the logo. The actual logo is drawn
-            onto the final image via canvas compositing to avoid html-to-image
-            issues with embedding <img>/data URLs inside an SVG foreignObject. */}
+            onto the final image via canvas compositing to avoid issues with
+            embedding <img>/data URLs inside an SVG foreignObject. */}
         <div
           className={`export-content__logo ${LOGO_PLACEHOLDER_CLASS}`}
           aria-label="BitFun"
@@ -129,105 +170,135 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
   className = ''
 }) => {
   const [isExporting, setIsExporting] = useState(false);
+  // Ref guard to prevent double-invocation while state update is pending.
+  const isExportingRef = useRef(false);
 
-  // Resolve the DialogTurn by id.
-  const getDialogTurn = useCallback((): DialogTurn | null => {
+  // Resolve the DialogTurn and its session title by turn id.
+  const getDialogTurn = useCallback((): { turn: DialogTurn; sessionTitle: string } | null => {
     const flowChatStore = FlowChatStore.getInstance();
     const state = flowChatStore.getState();
     
     for (const [, session] of state.sessions) {
       const turn = session.dialogTurns.find((t: DialogTurn) => t.id === turnId);
-      if (turn) return turn;
+      if (turn) return { turn, sessionTitle: session.title?.trim() || '' };
     }
     return null;
   }, [turnId]);
 
   const handleExport = useCallback(async () => {
+    if (isExportingRef.current) return;
+    isExportingRef.current = true;
     setIsExporting(true);
     
     // Let animations start rendering.
     await new Promise(resolve => setTimeout(resolve, 50));
     
+    // Track offscreen DOM so we can clean up on any exit path.
+    let root: ReturnType<typeof createRoot> | null = null;
+    let wrapper: HTMLDivElement | null = null;
+    
+    const cleanupDom = () => {
+      try {
+        if (root) { root.unmount(); root = null; }
+        if (wrapper && wrapper.parentNode) { wrapper.parentNode.removeChild(wrapper); wrapper = null; }
+      } catch (e) {
+        log.warn('DOM cleanup error', e);
+      }
+    };
+    
     try {
-      const dialogTurn = getDialogTurn();
+      const result = getDialogTurn();
       
-      if (!dialogTurn) {
+      if (!result) {
         notificationService.error(i18nService.t('flow-chat:exportImage.dialogNotFound'));
         return;
       }
+      
+      const { turn: dialogTurn, sessionTitle } = result;
       
       // Get theme background color.
       const computedStyle = getComputedStyle(document.documentElement);
       const bgColor = computedStyle.getPropertyValue('--color-bg-flowchat').trim() || '#121214';
 
       // Pre-load the logo as an HTMLImageElement. We do NOT try to embed it
-      // inside the captured DOM (html-to-image is unreliable with <img>/data URLs
-      // inside an SVG foreignObject and frequently drops them). Instead we
-      // reserve space with a placeholder element and composite the logo onto
-      // the final raster via canvas after html-to-image finishes.
+      // inside the captured DOM (unreliable with <img>/data URLs inside an
+      // SVG foreignObject). Instead we reserve space with a placeholder
+      // element and composite the logo onto the final raster via canvas.
       let logoImage: HTMLImageElement | null = null;
       try {
-        logoImage = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const img = new window.Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => resolve(img);
-          img.onerror = reject;
-          // Cache-bust to avoid stale decoded copies when re-exporting.
-          img.src = `/Logo-ICON.png?t=${Date.now()}`;
-        });
+        logoImage = await withTimeout(
+          new Promise<HTMLImageElement>((resolve, reject) => {
+            const img = new window.Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            // Cache-bust to avoid stale decoded copies when re-exporting.
+            img.src = `/Logo-ICON.png?t=${Date.now()}`;
+          }),
+          3_000,
+          'Logo preload',
+        );
       } catch (e) {
         log.warn('Logo preload failed; export will proceed without logo overlay', e);
       }
       
       // Create hidden wrapper for rendering.
-      // Use left: -9999px (not z-index: -9999) so elements remain visible to html-to-image.
-      const wrapper = document.createElement('div');
+      // Use left: -9999px (not z-index: -9999) so elements remain visible to capture.
+      wrapper = document.createElement('div');
       wrapper.id = 'export-image-wrapper';
       wrapper.className = 'export-image-wrapper';
+
+      // Measure the actual chat pane width so the exported image uses the
+      // exact same text-wrap width as the live chat. Fallback to 1200px.
+      const chatPane = document.querySelector('.bitfun-chat-pane__content');
+      const chatWidth = chatPane?.getBoundingClientRect().width || 1200;
+
       wrapper.style.cssText = `
-        position: fixed;
+        position: absolute;
         left: -9999px;
         top: 0;
-        z-index: 9999;
+        z-index: -9999;
         pointer-events: none;
         background: ${bgColor};
         visibility: visible;
         opacity: 1;
+        overflow: visible;
+        width: ${chatWidth}px;
       `;
       
-      // Copy CSS variables for consistent styling.
-      const cssVars = [
-        '--color-bg-flowchat', '--color-bg-elevated', '--color-bg-base',
-        '--color-text-primary', '--color-text-secondary', '--color-text-muted',
-        '--border-base', '--border-medium', '--border-prominent',
-        '--element-bg-base', '--element-bg-soft', '--element-bg-medium', '--element-bg-strong',
-        '--color-success', '--color-success-bg', '--color-warning', '--color-error',
-        '--color-primary', '--color-accent',
-      ];
-      cssVars.forEach(varName => {
-        const value = computedStyle.getPropertyValue(varName);
-        if (value) {
-          wrapper.style.setProperty(varName, value.trim());
-        }
-      });
+      // Copy ALL CSS variables for consistent styling.
+      const allVars = collectAllCssVariables();
+      for (const [varName, value] of Object.entries(allVars)) {
+        wrapper.style.setProperty(varName, value);
+      }
       
       document.body.appendChild(wrapper);
       
       // Render export content with React.
-      const root = createRoot(wrapper);
+      root = createRoot(wrapper);
       root.render(<ExportContent dialogTurn={dialogTurn} />);
       
-      // Wait for render and images to load.
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Adaptive render wait: base time + per-round allowance, capped.
+      const roundCount = dialogTurn.modelRounds?.length ?? 1;
+      const renderWait = Math.min(
+        MIN_RENDER_WAIT_MS + roundCount * PER_ROUND_WAIT_MS,
+        MAX_RENDER_WAIT_MS,
+      );
+      await new Promise(resolve => setTimeout(resolve, renderWait));
       
       // Find rendered container.
       const container = wrapper.querySelector('.export-content') as HTMLElement;
+
+      // Match the export width exactly to the live chat pane so text wrapping
+      // is identical. SCSS sets a fixed width; override it here dynamically.
+      container.style.width = `${chatWidth}px`;
+      container.style.maxWidth = 'none';
       
       if (!container) {
         throw new Error(i18nService.t('flow-chat:exportImage.containerNotFound'));
       }
       
-      // Yield to the main thread.
+      // Yield to the main thread so the browser can finish layout/paint.
       await new Promise(resolve => setTimeout(resolve, 0));
 
       // Capture the logo placeholder position (relative to the container)
@@ -249,59 +320,101 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         };
       }
 
-      // Generate image via html-to-image.
-      const htmlToImage = await loadHtmlToImage();
+      // Generate image via modern-screenshot with timeout guard.
+      const modernScreenshot = await loadModernScreenshot();
       
       // Yield again before capture.
       await new Promise(resolve => setTimeout(resolve, 0));
       
       const pixelRatio = 2;
-      const captureFilter = (node: HTMLElement) => {
+      const captureFilter = (node: Node) => {
         // Filter out action buttons and other non-export elements.
-        if (node.classList?.contains('model-round-item__footer')) return false;
-        if (node.classList?.contains('user-message-item__actions')) return false;
-        if (node.classList?.contains('tool-card__actions')) return false;
-        if (node.classList?.contains('base-tool-card__confirm-actions')) return false;
-        if (node.classList?.contains('base-tool-card-expanded')) return false;
-        if (node.classList?.contains('compact-tool-card-expanded')) return false;
+        if (node instanceof HTMLElement) {
+          if (node.classList?.contains('model-round-item__footer')) return false;
+          if (node.classList?.contains('user-message-item__actions')) return false;
+          if (node.classList?.contains('tool-card__actions')) return false;
+          if (node.classList?.contains('base-tool-card__confirm-actions')) return false;
+          if (node.classList?.contains('base-tool-card-expanded')) return false;
+          if (node.classList?.contains('compact-tool-card-expanded')) return false;
+        }
         return true;
       };
 
+      const captureOptions = {
+        quality: 1,
+        scale: pixelRatio,
+        backgroundColor: bgColor,
+        fetch: {
+          bypassingCache: true,
+        } as const,
+        filter: captureFilter,
+        // Disable font embedding to avoid cross-origin stylesheet issues;
+        // the offscreen DOM already has system fonts available.
+        font: false as const,
+        features: {
+          removeControlCharacter: true,
+          fixSvgXmlDecode: true,
+        } as const,
+      };
+
       let baseDataUrl: string;
+
+      // Strategy 1: domToPng (primary)
       try {
-        baseDataUrl = await htmlToImage.toPng(container, {
-          quality: 1,
-          pixelRatio,
-          backgroundColor: bgColor,
-          skipFonts: true,
-          cacheBust: true,
-          filter: captureFilter,
-        });
-      } catch (e) {
-        log.warn('toPng failed, retrying with toBlob', e);
-        const fallbackBlob = await htmlToImage.toBlob(container, {
-          quality: 1,
-          pixelRatio,
-          backgroundColor: bgColor,
-          skipFonts: true,
-          cacheBust: true,
-          filter: captureFilter,
-        });
-        if (!fallbackBlob) throw new Error(i18nService.t('flow-chat:exportImage.generateFailed'));
-        baseDataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(fallbackBlob);
-        });
+        baseDataUrl = await withTimeout(
+          modernScreenshot.domToPng(container, captureOptions),
+          CAPTURE_TIMEOUT_MS,
+          'domToPng capture',
+          cleanupDom,
+        );
+        validateDataUrl(baseDataUrl);
+      } catch (e1) {
+        log.warn('domToPng failed, trying domToBlob fallback', e1);
+        // Ensure DOM is still alive for fallback.
+        if (!wrapper || !wrapper.parentNode) {
+          throw new Error('DOM was cleaned up before fallback could run');
+        }
+
+        // Strategy 2: domToBlob (fallback)
+        try {
+          const fallbackBlob = await withTimeout(
+            modernScreenshot.domToBlob(container, { ...captureOptions, type: 'image/png' }),
+            CAPTURE_TIMEOUT_MS,
+            'domToBlob capture',
+            cleanupDom,
+          );
+          if (!fallbackBlob) throw new Error(i18nService.t('flow-chat:exportImage.generateFailed'));
+          baseDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(fallbackBlob);
+          });
+          validateDataUrl(baseDataUrl);
+        } catch (e2) {
+          log.warn('domToBlob fallback also failed, trying reduced scale', e2);
+          // Ensure DOM is still alive for second fallback.
+          if (!wrapper || !wrapper.parentNode) {
+            throw new Error('DOM was cleaned up before reduced-scale fallback could run');
+          }
+
+          // Strategy 3: domToPng with scale=1 (reduced memory for large DOMs)
+          const reducedOptions = { ...captureOptions, scale: 1 };
+          baseDataUrl = await withTimeout(
+            modernScreenshot.domToPng(container, reducedOptions),
+            CAPTURE_TIMEOUT_MS,
+            'domToPng reduced-scale capture',
+            cleanupDom,
+          );
+          validateDataUrl(baseDataUrl);
+        }
       }
 
       // Cleanup the offscreen DOM as soon as we have the base capture.
-      root.unmount();
-      document.body.removeChild(wrapper);
+      cleanupDom();
 
       // Composite the logo onto the captured image so it always appears,
-      // regardless of html-to-image's behavior with <img> elements.
+      // regardless of capture library behavior with <img> elements.
       const blob: Blob | null = await new Promise<Blob | null>((resolve, reject) => {
         const baseImg = new window.Image();
         baseImg.onload = () => {
@@ -364,7 +477,14 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         hour: '2-digit',
         minute: '2-digit',
       }).replace(/[/:\s]/g, '-');
-      const fileName = `${i18nService.t('flow-chat:exportImage.fileNamePrefix')}_${timestampStr}.png`;
+      // Sanitize session title for use as filename (replace unsafe chars).
+      const safeTitle = sessionTitle
+        .replace(/[/\\:*?"<>|]/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 80);
+      const namePrefix = safeTitle || i18nService.t('flow-chat:exportImage.fileNamePrefix');
+      const fileName = `${namePrefix}_${timestampStr}.png`;
       const downloadsPath = await downloadDir();
       const filePath = await join(downloadsPath, fileName);
 
@@ -404,9 +524,12 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
         ),
       });
     } catch (error) {
+      // Ensure DOM is always cleaned up on error.
+      cleanupDom();
       log.error('Export failed', error);
       notificationService.error(i18nService.t('flow-chat:exportImage.exportFailed'));
     } finally {
+      isExportingRef.current = false;
       setIsExporting(false);
     }
   }, [getDialogTurn]);

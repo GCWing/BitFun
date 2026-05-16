@@ -1,6 +1,6 @@
 {
   "title": "基础",
-  "subtitle": "界面语言、主题、日志、终端与登录启动",
+  "subtitle": "日志、终端、通知与登录时启动",
   "appearance": {
     "title": "外观",
     "hint": "界面语言与视觉主题",
@@ -43,6 +43,10 @@
       "bitfun-slate": {
         "name": "石板灰",
         "description": "石板灰几何主题 - 极深沉浸，高对比度灰度美学"
+      },
+      "bitfun-tokyo-night": {
+        "name": "东京夜",
+        "description": "Tokyo Night 经典配色 - 靛蓝夜色，蓝紫高光"
       }
     },
     "fontSize": {
@@ -69,6 +73,20 @@
       "flowChatPxOption": "{{n}} px"
     }
   },
+  "autoUpdate": {
+    "sections": {
+      "title": "更新",
+      "hint": "启动后是否自动检查新版本"
+    },
+    "toggleLabel": "自动检查更新",
+    "toggleDescription": "开启后，启动片刻若发现新版本可能会提示。关闭后仍可在「关于」中手动检查更新。",
+    "messages": {
+      "loading": "加载中…",
+      "loadFailed": "无法读取更新相关设置",
+      "saveFailed": "无法保存更新相关设置",
+      "saved": "已保存更新偏好"
+    }
+  },
   "launchAtLogin": {
     "sections": {
       "title": "登录时启动",
@@ -92,6 +110,10 @@
     "level": {
       "description": "实时控制日志输出级别，修改后立即生效。"
     },
+    "sensitiveDiagnostics": {
+      "label": "包含敏感调试信息",
+      "description": "开启后，本地日志可能包含用户 Prompt、模型请求和响应 payload、工具参数、文件路径以及 Webview 事件 payload，用于问题排查。BitFun 不会自动上传这些日志文件。"
+    },
     "path": {
       "description": "本次启动写入日志文件所在的目录。"
     },
@@ -113,6 +135,7 @@
       "loadFailed": "加载日志配置失败",
       "saveFailed": "保存日志级别失败",
       "levelUpdated": "日志级别已更新",
+      "sensitiveDiagnosticsUpdated": "敏感调试信息日志偏好已更新",
       "refreshed": "运行时状态已刷新",
       "openedFolder": "日志文件夹已打开",
       "openFailed": "打开日志文件夹失败",
@@ -152,8 +175,26 @@
       "refreshed": "已刷新可用终端列表"
     }
   },
-  "notifications": {
-    "title": "通知",
+  "windowBehavior": {
+    "sections": {
+      "title": "窗口行为",
+      "hint": "点击关闭按钮时的操作"
+    },
+    "closeButtonLabel": "关闭按钮行为",
+    "closeButtonDescription": "点击窗口关闭按钮（×）时的默认操作。",
+    "options": {
+      "quit": "退出程序",
+      "minimizeToTray": "最小化到系统托盘",
+      "ask": "每次询问"
+    },
+    "messages": {
+      "loading": "加载中…",
+      "loadFailed": "无法读取窗口行为设置",
+      "saveFailed": "无法保存窗口行为设置",
+      "saved": "窗口行为设置已保存"
+    }
+  },
+  "notifications": {    "title": "通知",
     "hint": "Toast 弹窗通知偏好设置",
     "dialogCompletion": {
       "label": "任务完成通知",

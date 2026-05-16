@@ -537,6 +537,24 @@ impl ConfigService {
     }
 }
 
+#[async_trait::async_trait]
+impl bitfun_runtime_ports::ConfigReadPort for ConfigService {
+    async fn get_config_value(
+        &self,
+        key: &str,
+    ) -> bitfun_runtime_ports::PortResult<Option<serde_json::Value>> {
+        self.get_config::<serde_json::Value>(Some(key))
+            .await
+            .map(Some)
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::Backend,
+                    error.to_string(),
+                )
+            })
+    }
+}
+
 /// Outcome of [`ConfigService::reconcile_models`].
 #[derive(Debug, Clone, Default)]
 pub struct ReconcileModelsReport {

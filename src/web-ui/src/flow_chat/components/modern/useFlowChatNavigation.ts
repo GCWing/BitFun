@@ -18,6 +18,7 @@ import {
   type FlowChatPinTurnToTopRequest,
 } from '../../events/flowchatNavigation';
 import type { VirtualMessageListRef } from './VirtualMessageList';
+import { resolveFlowChatFocusTarget, type ResolvedFocusTarget } from './flowChatFocusTarget';
 
 const log = createLogger('useFlowChatNavigation');
 
@@ -25,13 +26,7 @@ interface UseFlowChatNavigationOptions {
   activeSessionId?: string;
   virtualItems: VirtualItem[];
   virtualListRef: RefObject<VirtualMessageListRef | null>;
-}
-
-interface ResolvedFocusTarget {
-  resolvedVirtualIndex?: number;
-  resolvedTurnId?: string;
-  resolvedTurnIndex?: number;
-  preferPinnedTurnNavigation: boolean;
+  onExpandExploreGroup?: (groupId: string) => void;
 }
 
 async function waitForCondition(predicate: () => boolean, timeoutMs: number): Promise<boolean> {
@@ -49,59 +44,6 @@ async function waitForAnimationFrames(frameCount: number): Promise<void> {
     await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
     remaining -= 1;
   }
-}
-
-function resolveFocusTarget(
-  request: FlowChatFocusItemRequest,
-  currentVirtualItems: VirtualItem[],
-): ResolvedFocusTarget {
-  const { sessionId, turnIndex, itemId, source } = request;
-  let resolvedVirtualIndex: number | undefined = undefined;
-  let resolvedTurnIndex = turnIndex;
-  let resolvedTurnId: string | undefined = undefined;
-  const targetSession = flowChatStore.getState().sessions.get(sessionId);
-
-  if (targetSession && turnIndex && turnIndex >= 1 && turnIndex <= targetSession.dialogTurns.length) {
-    resolvedTurnId = targetSession.dialogTurns[turnIndex - 1]?.id;
-  }
-
-  if (itemId) {
-    if (targetSession) {
-      for (let i = 0; i < targetSession.dialogTurns.length; i += 1) {
-        const turn = targetSession.dialogTurns[i];
-        const found = turn.modelRounds?.some(round => round.items?.some(item => item.id === itemId));
-        if (found) {
-          resolvedTurnIndex = i + 1;
-          resolvedTurnId = turn.id;
-          break;
-        }
-      }
-    }
-
-    for (let i = 0; i < currentVirtualItems.length; i += 1) {
-      const item = currentVirtualItems[i];
-      if (item.type === 'model-round') {
-        const hit = item.data?.items?.some(flowItem => flowItem?.id === itemId);
-        if (hit) {
-          resolvedVirtualIndex = i;
-          break;
-        }
-      } else if (item.type === 'explore-group') {
-        const hit = item.data?.allItems?.some(flowItem => flowItem?.id === itemId);
-        if (hit) {
-          resolvedVirtualIndex = i;
-          break;
-        }
-      }
-    }
-  }
-
-  return {
-    resolvedVirtualIndex,
-    resolvedTurnId,
-    resolvedTurnIndex,
-    preferPinnedTurnNavigation: source === 'btw-back',
-  };
 }
 
 function navigateToResolvedTarget(
@@ -130,6 +72,7 @@ export function useFlowChatNavigation({
   activeSessionId,
   virtualItems,
   virtualListRef,
+  onExpandExploreGroup,
 }: UseFlowChatNavigationOptions): void {
   const [pendingTurnPinRequest, setPendingTurnPinRequest] = useState<FlowChatPinTurnToTopRequest | null>(null);
 
@@ -180,10 +123,16 @@ export function useFlowChatNavigation({
         return modernActiveSessionId === sessionId && !!virtualListRef.current;
       }, 1500);
 
-      const resolvedTarget = resolveFocusTarget(
+      const targetSession = flowChatStore.getState().sessions.get(sessionId);
+      const resolvedTarget = resolveFlowChatFocusTarget(
         request,
         useModernFlowChatStore.getState().virtualItems,
+        targetSession,
       );
+
+      if (resolvedTarget.expandExploreGroupId) {
+        onExpandExploreGroup?.(resolvedTarget.expandExploreGroupId);
+      }
 
       navigateToResolvedTarget(virtualListRef, resolvedTarget);
 
@@ -195,7 +144,8 @@ export function useFlowChatNavigation({
       let attempts = 0;
       const tryFocus = () => {
         attempts += 1;
-        const element = document.querySelector(`[data-flow-item-id="${CSS.escape(itemId)}"]`) as HTMLElement | null;
+        const focusItemId = resolvedTarget.focusItemId ?? itemId;
+        const element = document.querySelector(`[data-flow-item-id="${CSS.escape(focusItemId)}"]`) as HTMLElement | null;
         if (!element) {
           if (attempts % 12 === 0 && !resolvedTarget.preferPinnedTurnNavigation) {
             navigateToResolvedTarget(virtualListRef, resolvedTarget);
@@ -206,6 +156,7 @@ export function useFlowChatNavigation({
           return;
         }
 
+        element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
         element.classList.add('flowchat-flow-item--focused');
         window.setTimeout(() => element.classList.remove('flowchat-flow-item--focused'), 1600);
       };
@@ -214,5 +165,5 @@ export function useFlowChatNavigation({
     });
 
     return unsubscribe;
-  }, [activeSessionId, virtualListRef]);
+  }, [activeSessionId, onExpandExploreGroup, virtualListRef]);
 }

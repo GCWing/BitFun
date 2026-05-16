@@ -1,0 +1,55 @@
+{
+  "page": {
+    "title": "Quick actions",
+    "subtitle": "One-click AI actions after coding. Triggered from the lightning bolt icon in the chat header. AI completes them autonomously end-to-end."
+  },
+  "loading": "Loading...",
+  "quickActions": {
+    "defaults": {
+      "commit": {
+        "label": "Commit",
+        "prompt": "Commit all current code changes"
+      },
+      "createPr": {
+        "label": "Create PR",
+        "prompt": "Create a Pull Request for the current branch"
+      }
+    }
+  },
+  "sections": {
+    "builtin": {
+      "title": "Built-in actions",
+      "description": "Ready-to-use Git workflow actions. You can edit the prompt or toggle them on or off."
+    },
+    "custom": {
+      "title": "Custom actions",
+      "description": "Add your own shortcut prompts — clicking sends them directly to the AI.",
+      "empty": "No custom actions yet. Add your first one below."
+    }
+  },
+  "edit": {
+    "button": "Edit"
+  },
+  "delete": {
+    "button": "Delete"
+  },
+  "add": {
+    "button": "Add action"
+  },
+  "modal": {
+    "addTitle": "New quick action",
+    "editTitle": "Edit quick action",
+    "labelField": "Action name",
+    "labelPlaceholder": "e.g. Generate unit tests",
+    "promptField": "Prompt",
+    "promptPlaceholder": "e.g. Generate unit tests for the current code changes",
+    "promptHint": "When clicked, this prompt is sent directly to the AI, which completes it autonomously.",
+    "cancel": "Cancel",
+    "saveEdit": "Save",
+    "confirmAdd": "Add"
+  },
+  "messages": {
+    "saved": "Saved",
+    "saveFailed": "Failed to save"
+  }
+}

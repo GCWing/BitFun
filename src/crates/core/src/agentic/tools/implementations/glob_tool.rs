@@ -1,8 +1,10 @@
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::service::search::{
-    get_global_workspace_search_service, workspace_search_runtime_available, GlobSearchRequest,
+    get_global_workspace_search_service, remote_workspace_search_service_for_path,
+    workspace_search_feature_enabled, workspace_search_runtime_available, GlobSearchRequest,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::process_manager;
 use async_trait::async_trait;
 use globset::{GlobBuilder, GlobMatcher};
 use ignore::WalkBuilder;
@@ -11,7 +13,6 @@ use serde_json::{json, Value};
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::path::{Component, Path, PathBuf};
-use std::process::Command;
 
 fn extract_glob_base_directory(pattern: &str) -> (String, String) {
     let glob_start = pattern.find(['*', '?', '[', '{']);
@@ -242,7 +243,7 @@ fn call_rg(search_path: &str, pattern: &str, limit: usize) -> Result<Vec<String>
     }
 
     let args = build_rg_args(&relative_pattern, apply_gitignore, ignore_hidden_files);
-    let output = Command::new("rg")
+    let output = process_manager::create_command("rg")
         .current_dir(&walk_root)
         .args(&args)
         .arg(".")
@@ -416,13 +417,18 @@ impl Tool for GlobTool {
 - Supports glob patterns like "**/*.js" or "src/**/*.ts"
 - Returns matching file paths
 - Use this tool when you need to find files by name patterns
-- The path parameter may be an absolute path or an exact `bitfun://runtime/...` URI returned by another tool
+- The path parameter may be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool
+- Omit path to search the current workspace. Do not use host roots or placeholder paths such as `/workspace`.
 - You can call multiple tools in a single response. It is always better to speculatively perform multiple searches in parallel if they are potentially useful.
 <example>
-- List files in path: path = "/path/to/search", pattern = "*"
-- Search all markdown files in path recursively: path = "/path/to/search", pattern = "**/*.md"
+- List files in current workspace: pattern = "*"
+- Search all markdown files in src recursively: path = "src", pattern = "**/*.md"
 </example>
 "#.to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "Find files by glob pattern.".to_string()
     }
 
     fn input_schema(&self) -> Value {
@@ -435,7 +441,7 @@ impl Tool for GlobTool {
                 },
                 "path": {
                     "type": "string",
-                    "description": "The directory to search in. If not specified, the current working directory will be used. IMPORTANT: Omit this field to use the default directory. DO NOT enter \"undefined\" or \"null\" - simply omit it for the default behavior. Must be a valid absolute path or exact bitfun://runtime URI if provided."
+                    "description": "The directory to search in. Omit this field to search the current workspace. If provided, use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI. Do not enter \"undefined\", \"null\", host roots, or placeholder paths such as /workspace."
                 },
                 "limit": {
                     "type": "number",
@@ -500,8 +506,75 @@ impl Tool for GlobTool {
             .map(|v| v as usize)
             .unwrap_or(100);
 
-        // Remote workspace: prefer `rg --files --glob`, but fall back to `find`
         if resolved.uses_remote_workspace_backend() {
+            if workspace_search_feature_enabled().await {
+                let remote_workspace_glob_result = async {
+                    let workspace_root = context
+                        .workspace
+                        .as_ref()
+                        .map(|workspace| PathBuf::from(workspace.root_path_string()))
+                        .ok_or_else(|| {
+                            BitFunError::tool(
+                                "workspace_path is required when Glob path is omitted".to_string(),
+                            )
+                        })?;
+                    let resolved_path = PathBuf::from(&resolved.resolved_path);
+                    let repo_root = workspace_root.to_string_lossy().to_string();
+                    let preferred_connection_id = context
+                        .workspace
+                        .as_ref()
+                        .and_then(|workspace| workspace.connection_id())
+                        .map(str::to_string);
+                    let search_service = remote_workspace_search_service_for_path(
+                        &repo_root,
+                        preferred_connection_id,
+                    )
+                    .await
+                    .map_err(BitFunError::tool)?;
+                    let glob_result = search_service
+                        .glob(GlobSearchRequest {
+                            repo_root: workspace_root.clone(),
+                            search_path: (resolved_path != workspace_root).then_some(resolved_path),
+                            pattern: pattern.to_string(),
+                            limit,
+                        })
+                        .await
+                        .map_err(BitFunError::tool)?;
+
+                    let match_count = glob_result.paths.len();
+                    let result_text = if glob_result.paths.is_empty() {
+                        format!("No files found matching pattern '{}'", pattern)
+                    } else {
+                        glob_result.paths.join("\n")
+                    };
+
+                    Ok::<Vec<ToolResult>, BitFunError>(vec![ToolResult::Result {
+                        data: json!({
+                            "pattern": pattern,
+                            "path": resolved.logical_path,
+                            "matches": glob_result.paths,
+                            "match_count": match_count,
+                            "repo_phase": glob_result.repo_status.phase,
+                            "rebuild_recommended": glob_result.repo_status.rebuild_recommended
+                        }),
+                        result_for_assistant: Some(result_text),
+                        image_attachments: None,
+                    }])
+                }
+                .await;
+
+                match remote_workspace_glob_result {
+                    Ok(results) => return Ok(results),
+                    Err(error) => {
+                        warn!(
+                            "Glob tool remote workspace-search failed; falling back to shell glob: {}",
+                            error
+                        );
+                    }
+                }
+            }
+
+            // Remote workspace fallback: prefer `rg --files --glob`, but fall back to `find`.
             let ws_shell = context
                 .ws_shell()
                 .ok_or_else(|| BitFunError::tool("Workspace shell not available".to_string()))?;
@@ -652,9 +725,9 @@ impl Tool for GlobTool {
 #[cfg(test)]
 mod tests {
     use super::{call_rg, derive_walk_root, extract_glob_base_directory};
+    use crate::util::process_manager;
     use std::fs;
     use std::path::PathBuf;
-    use std::process::Command;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn make_temp_dir(name: &str) -> PathBuf {
@@ -694,7 +767,11 @@ mod tests {
 
     #[test]
     fn keeps_shallowest_matches_from_rg_results() {
-        if Command::new("rg").arg("--version").output().is_err() {
+        if process_manager::create_command("rg")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
             return;
         }
 
@@ -720,7 +797,11 @@ mod tests {
 
     #[test]
     fn wildcard_search_now_returns_files_only() {
-        if Command::new("rg").arg("--version").output().is_err() {
+        if process_manager::create_command("rg")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
             return;
         }
 

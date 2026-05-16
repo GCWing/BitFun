@@ -67,11 +67,12 @@ pub(crate) async fn aggregate_stream_response(
                                 finalized.raw_arguments.len()
                             );
                         } else {
-                            let arguments = finalized.arguments_as_object_map();
                             tool_calls.push(ToolCall {
                                 id: finalized.tool_id,
                                 name: finalized.tool_name,
-                                arguments,
+                                arguments: finalized.arguments,
+                                raw_arguments: (!finalized.raw_arguments.is_empty())
+                                    .then_some(finalized.raw_arguments),
                             });
                         }
                     }
@@ -95,11 +96,12 @@ pub(crate) async fn aggregate_stream_response(
                                 finalized.raw_arguments.len()
                             );
                         } else {
-                            let arguments = finalized.arguments_as_object_map();
                             tool_calls.push(ToolCall {
                                 id: finalized.tool_id,
                                 name: finalized.tool_name,
-                                arguments,
+                                arguments: finalized.arguments,
+                                raw_arguments: (!finalized.raw_arguments.is_empty())
+                                    .then_some(finalized.raw_arguments),
                             });
                         }
                     }
@@ -135,11 +137,12 @@ pub(crate) async fn aggregate_stream_response(
                 finalized.raw_arguments.len()
             );
         } else {
-            let arguments = finalized.arguments_as_object_map();
             tool_calls.push(ToolCall {
                 id: finalized.tool_id,
                 name: finalized.tool_name,
-                arguments,
+                arguments: finalized.arguments,
+                raw_arguments: (!finalized.raw_arguments.is_empty())
+                    .then_some(finalized.raw_arguments),
             });
         }
     }

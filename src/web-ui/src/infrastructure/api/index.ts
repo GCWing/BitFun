@@ -38,6 +38,7 @@ export { workspaceAPI, configAPI, aiApi, toolAPI, agentAPI, systemAPI, projectAP
 
 // Export types
 export type { GitRepoHistory };
+export type { CheckForUpdatesResponse } from './service-api/SystemAPI';
 
 // BitFun API collection: a single access point for all API modules.
 export const bitfunAPI = {

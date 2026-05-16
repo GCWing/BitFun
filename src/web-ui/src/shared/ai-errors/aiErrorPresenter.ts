@@ -3,7 +3,6 @@ export type AiErrorCategory =
   | 'auth'
   | 'rate_limit'
   | 'context_overflow'
-  | 'loop_detected'
   | 'timeout'
   | 'provider_quota'
   | 'provider_billing'
@@ -83,11 +82,6 @@ const PRESENTATION_KEYS: Record<AiErrorCategory, { titleKey: string; messageKey:
     messageKey: 'errors:ai.contextOverflowSuggestion',
     severity: 'warning',
   },
-  loop_detected: {
-    titleKey: 'errors:ai.loopDetected',
-    messageKey: 'errors:ai.loopDetectedSuggestion',
-    severity: 'warning',
-  },
   timeout: {
     titleKey: 'errors:ai.timeoutError',
     messageKey: 'errors:ai.timeoutSuggestion',
@@ -140,7 +134,6 @@ const DEFAULT_ACTIONS: Record<AiErrorCategory, AiErrorActionCode[]> = {
   auth: ['open_model_settings', 'copy_diagnostics'],
   rate_limit: ['wait_and_retry', 'switch_model', 'copy_diagnostics'],
   context_overflow: ['compress_context', 'start_new_chat'],
-  loop_detected: ['copy_diagnostics'],
   timeout: ['retry', 'switch_model', 'copy_diagnostics'],
   provider_quota: ['open_model_settings', 'switch_model', 'copy_diagnostics'],
   provider_billing: ['open_model_settings', 'switch_model', 'copy_diagnostics'],

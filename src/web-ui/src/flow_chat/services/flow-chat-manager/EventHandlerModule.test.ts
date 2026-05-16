@@ -1,18 +1,44 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { normalizeSubagentParentInfo } from './subagentParentInfo';
-import { formatDialogErrorForNotification, shouldProcessEvent } from './EventHandlerModule';
+import {
+  formatDialogErrorForNotification,
+  handleDialogTurnComplete,
+  handleSessionStateChanged,
+  insertSteeringItemIfAbsent,
+  isAppWindowFocused,
+  shouldProcessEvent,
+} from './EventHandlerModule';
 import { stateMachineManager } from '../../state-machine';
-import { SessionExecutionState } from '../../state-machine/types';
+import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
+import { FlowChatStore } from '../../store/FlowChatStore';
+import type { DialogTurn, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
+import type { FlowChatContext } from './types';
 
 vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
   i18nService: {
     t: (key: string) => ({
+      'errors:ai.unknown.title': 'AI request failed',
+      'errors:ai.unknown.message': 'The model stopped before returning a usable response. Try again or switch models.',
       'errors:ai.invalidRequest.title': 'Model request invalid',
       'errors:ai.invalidRequest.message': 'The provider rejected the request format, parameters, model name, or payload size. Adjust the request or choose another model.',
       'errors:ai.actions.copyDiagnostics': 'Copy diagnostics',
     }[key] ?? key),
   },
 }));
+
+vi.mock('../../../shared/notification-system/services/NotificationService', () => ({
+  notificationService: {
+    error: vi.fn(),
+    warning: vi.fn(),
+    success: vi.fn(),
+  },
+}));
+
+describe('isAppWindowFocused', () => {
+  it('returns true when no document is available', () => {
+    expect(isAppWindowFocused()).toBe(true);
+  });
+});
 
 describe('normalizeSubagentParentInfo', () => {
   it('normalizes snake_case subagent parent metadata from backend events', () => {
@@ -54,9 +80,11 @@ describe('shouldProcessEvent', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    resetFlowChatStore();
   });
 
   afterEach(() => {
+    resetFlowChatStore();
     stateMachineManager.clear();
   });
 
@@ -105,6 +133,132 @@ describe('shouldProcessEvent', () => {
     ).toBe(false);
   });
 
+  it('recovers active latest-turn data when the state machine was reset to idle', () => {
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        mockSessionId,
+        {
+          sessionId: mockSessionId,
+          title: 'Test Session',
+          dialogTurns: [{
+            id: mockTurnId,
+            sessionId: mockSessionId,
+            userMessage: {
+              id: 'user-1',
+              content: 'Continue review',
+              timestamp: 1000,
+            },
+            modelRounds: [],
+            status: 'processing',
+            startTime: 1000,
+          }],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 1000,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: mockSessionId,
+    }));
+    stateMachineManager.getOrCreate(mockSessionId);
+
+    expect(
+      shouldProcessEvent(mockSessionId, mockTurnId, 'data', 'ToolEvent'),
+    ).toBe(true);
+    expect(stateMachineManager.getCurrentState(mockSessionId)).toBe(SessionExecutionState.PROCESSING);
+    expect(stateMachineManager.get(mockSessionId)?.getContext().currentDialogTurnId).toBe(mockTurnId);
+  });
+
+  it('does not recover idle data for an old non-latest turn', () => {
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        mockSessionId,
+        {
+          sessionId: mockSessionId,
+          title: 'Test Session',
+          dialogTurns: [
+            {
+              id: mockTurnId,
+              sessionId: mockSessionId,
+              userMessage: {
+                id: 'user-1',
+                content: 'Old turn',
+                timestamp: 1000,
+              },
+              modelRounds: [],
+              status: 'processing',
+              startTime: 1000,
+            },
+            {
+              id: 'newer-turn',
+              sessionId: mockSessionId,
+              userMessage: {
+                id: 'user-2',
+                content: 'New turn',
+                timestamp: 2000,
+              },
+              modelRounds: [],
+              status: 'processing',
+              startTime: 2000,
+            },
+          ],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 1000,
+          lastActiveAt: 2000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: mockSessionId,
+    }));
+    stateMachineManager.getOrCreate(mockSessionId);
+
+    expect(
+      shouldProcessEvent(mockSessionId, mockTurnId, 'data', 'ToolEvent'),
+    ).toBe(false);
+    expect(stateMachineManager.getCurrentState(mockSessionId)).toBe(SessionExecutionState.IDLE);
+  });
+
+  it('does not recover idle data for a cancelled latest turn', () => {
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        mockSessionId,
+        {
+          sessionId: mockSessionId,
+          title: 'Test Session',
+          dialogTurns: [{
+            id: mockTurnId,
+            sessionId: mockSessionId,
+            userMessage: {
+              id: 'user-1',
+              content: 'Cancelled review',
+              timestamp: 1000,
+            },
+            modelRounds: [],
+            status: 'cancelled',
+            startTime: 1000,
+          }],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 1000,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: mockSessionId,
+    }));
+    stateMachineManager.getOrCreate(mockSessionId);
+
+    expect(
+      shouldProcessEvent(mockSessionId, mockTurnId, 'data', 'ToolEvent'),
+    ).toBe(false);
+    expect(stateMachineManager.getCurrentState(mockSessionId)).toBe(SessionExecutionState.IDLE);
+  });
+
   it('returns false for data event when turn ID mismatches', () => {
     vi.spyOn(stateMachineManager, 'get').mockReturnValue({
       getCurrentState: () => SessionExecutionState.PROCESSING,
@@ -146,5 +300,288 @@ describe('formatDialogErrorForNotification', () => {
     expect(formatted.metadata?.aiError?.rawError).toBe(rawError);
     expect(formatted.metadata?.aiError?.diagnostics).toContain('code=invalid_request_error');
     expect(formatted.actions?.map((action) => action.label)).toContain('Copy diagnostics');
+  });
+});
+
+function resetFlowChatStore(): void {
+  FlowChatStore.getInstance().setState(() => ({
+    sessions: new Map(),
+    activeSessionId: null,
+  }));
+}
+
+function makeRound(id: string, items: ModelRound['items'] = []): ModelRound {
+  return {
+    id,
+    index: 0,
+    items,
+    isStreaming: true,
+    isComplete: false,
+    status: 'streaming',
+    startTime: 1000,
+  };
+}
+
+function createSessionWithTurn(turn: DialogTurn): void {
+  const store = FlowChatStore.getInstance();
+  store.createSession('session-1', {});
+  store.addDialogTurn('session-1', turn);
+}
+
+function createFinishingTurn(): DialogTurn {
+  return {
+    id: 'turn-1',
+    sessionId: 'session-1',
+    userMessage: {
+      id: 'user-1',
+      content: 'Initial request',
+      timestamp: 900,
+    },
+    modelRounds: [{
+      ...makeRound('round-1'),
+      items: [],
+    }],
+    status: 'finishing',
+    startTime: 900,
+  };
+}
+
+function createFinishingSession(): Session {
+  return {
+    sessionId: 'session-1',
+    title: 'Session 1',
+    dialogTurns: [createFinishingTurn()],
+    status: 'idle',
+    config: { agentType: 'agentic' },
+    createdAt: 800,
+    lastActiveAt: 1000,
+    error: null,
+    isTransient: true,
+  };
+}
+
+function createFlowChatContext(): FlowChatContext {
+  return {
+    flowChatStore: FlowChatStore.getInstance(),
+    processingManager: {
+      clearSessionStatus: vi.fn(),
+    } as any,
+    eventBatcher: {
+      getBufferSize: vi.fn(() => 0),
+      flushNow: vi.fn(),
+      clear: vi.fn(),
+    } as any,
+    pendingTurnCompletions: new Map(),
+    pendingHistoryLoads: new Map(),
+    contentBuffers: new Map(),
+    activeTextItems: new Map(),
+    saveDebouncers: new Map(),
+    lastSaveTimestamps: new Map(),
+    lastSaveHashes: new Map(),
+    turnSaveInFlight: new Map(),
+    turnSavePending: new Set(),
+    runtimeStatusTimers: new Map(),
+    userCancelledSessionIds: new Set(),
+    handledTerminalTurnEvents: new Set(),
+    currentWorkspacePath: null,
+  };
+}
+
+async function setFinishingMachine(): Promise<void> {
+  await stateMachineManager.transition('session-1', SessionExecutionEvent.START, {
+    taskId: 'session-1',
+    dialogTurnId: 'turn-1',
+  });
+  await stateMachineManager.transition('session-1', SessionExecutionEvent.BACKEND_STREAM_COMPLETED);
+}
+
+function putFinishingSessionInStore(): void {
+  FlowChatStore.getInstance().setState(() => ({
+    sessions: new Map([['session-1', createFinishingSession()]]),
+    activeSessionId: 'session-1',
+  }));
+}
+
+describe('insertSteeringItemIfAbsent', () => {
+  beforeEach(() => {
+    resetFlowChatStore();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+  });
+
+  it('inserts a visible steering item even before the first model round starts', () => {
+    createSessionWithTurn({
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'Initial request',
+        timestamp: 900,
+      },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 900,
+    });
+
+    const inserted = insertSteeringItemIfAbsent({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      steeringId: 'steer-1',
+      content: 'Please adjust this now',
+      status: 'pending',
+    });
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns.find(item => item.id === 'turn-1');
+
+    expect(inserted).toBe(true);
+    expect(turn?.modelRounds).toHaveLength(1);
+    expect(turn?.modelRounds[0]?.items[0]).toMatchObject({
+      id: 'steering_steer-1',
+      type: 'user-steering',
+      content: 'Please adjust this now',
+      status: 'pending',
+    });
+  });
+
+  it('dedupes an existing steering item across all rounds when backend confirms it', () => {
+    const pendingSteering: FlowUserSteeringItem = {
+      id: 'steering_steer-1',
+      type: 'user-steering',
+      steeringId: 'steer-1',
+      content: 'Original steering',
+      roundIndex: 0,
+      timestamp: 1001,
+      status: 'pending',
+    };
+    createSessionWithTurn({
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'Initial request',
+        timestamp: 900,
+      },
+      modelRounds: [
+        makeRound('round-1', [pendingSteering]),
+        makeRound('round-2'),
+      ],
+      status: 'processing',
+      startTime: 900,
+    });
+
+    const inserted = insertSteeringItemIfAbsent({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      steeringId: 'steer-1',
+      content: 'Original steering',
+      roundIndex: 1,
+      status: 'completed',
+    });
+
+    const rounds = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns.find(item => item.id === 'turn-1')
+      ?.modelRounds ?? [];
+    const steeringItems = rounds.flatMap(round =>
+      round.items.filter(item => item.type === 'user-steering'),
+    );
+
+    expect(inserted).toBe(false);
+    expect(steeringItems).toHaveLength(1);
+    expect(steeringItems[0]).toMatchObject({
+      id: 'steering_steer-1',
+      status: 'completed',
+      roundIndex: 1,
+    });
+  });
+});
+
+describe('handleSessionStateChanged', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('finalizes pending turn completion when backend reports idle during finishing', async () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+    context.pendingTurnCompletions.set('session-1', {
+      turnId: 'turn-1',
+      lastActivityAt: Date.now(),
+      timer: null,
+    });
+    await setFinishingMachine();
+
+    handleSessionStateChanged(context, { sessionId: 'session-1', newState: 'Idle' });
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0];
+    expect(turn?.status).toBe('completed');
+    expect(context.pendingTurnCompletions.has('session-1')).toBe(false);
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
+  });
+
+  it('finalizes a finishing turn even if the pending completion record was lost', async () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+    await setFinishingMachine();
+
+    handleSessionStateChanged(context, { sessionId: 'session-1', newState: 'Idle' });
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0];
+    expect(turn?.status).toBe('completed');
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
+  });
+});
+
+describe('handleDialogTurnComplete', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('treats unsuccessful completed events as errors instead of normal completion', async () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+    await setFinishingMachine();
+
+    handleDialogTurnComplete(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      success: false,
+      finishReason: 'empty_round',
+    }, vi.fn());
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0];
+
+    expect(turn?.status).toBe('error');
+    expect(turn?.error).toContain('empty response');
+    expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
   });
 });

@@ -10,6 +10,8 @@ pub fn run() {
             commands::get_launch_context,
             commands::get_default_install_path,
             commands::get_initial_install_path,
+            commands::get_existing_installation,
+            commands::launch_registered_uninstaller,
             commands::get_disk_space,
             commands::validate_install_path,
             commands::start_installation,

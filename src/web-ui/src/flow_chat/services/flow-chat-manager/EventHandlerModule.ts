@@ -10,6 +10,7 @@ import { agenticEventListener, type AgenticEventCallbacks } from '../AgenticEven
 import { 
   generateTextChunkKey, 
   generateToolEventKey,
+  normalizeParamsPartialFragment,
   parseEventKey,
   type FlowToolEvent,
   type SubagentParentInfo,
@@ -21,7 +22,9 @@ import { notificationService } from '../../../shared/notification-system/service
 import type { NotificationAction } from '../../../shared/notification-system/types';
 import { createLogger } from '@/shared/utils/logger';
 import type {
+  DeepReviewQueueStateChangedEvent,
   ImageAnalysisEvent,
+  ModelRoundCompletedEvent,
   SessionModelAutoMigratedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
@@ -30,20 +33,15 @@ import { ACPClientAPI, type AcpPermissionRequestEvent } from '@/infrastructure/a
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { FlowChatContext, DialogTurn, ModelRound, FlowToolItem } from './types';
 import {
-  buildSessionModelMigrationNotice,
-  shouldSuppressSessionModelMigrationNotice,
-} from '../../utils/sessionModelMigrationNotice';
-import {
   getAiErrorPresentation,
   normalizeAiErrorDetail,
   type AiErrorPresentation,
   type AiErrorDetail,
 } from '@/shared/ai-errors/aiErrorPresenter';
+import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
+import { buildDeepReviewCapacityQueueStateFromEvent } from '../../utils/deepReviewQueueStateEvents';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
-// `restore_session` and assistant bootstrap can race on the same historical
-// session, so collapse identical auto-migration toasts into one short-lived UX notice.
-const recentSessionModelMigrationNoticeTimestamps = new Map<string, number>();
 import { 
   debouncedSaveDialogTurn, 
   immediateSaveDialogTurn, 
@@ -57,6 +55,7 @@ import {
   completeActiveTextItems,
   cleanupSessionBuffers
 } from './TextChunkModule';
+import { pendingQueueManager } from './PendingQueueModule';
 import { 
   processToolEvent, 
   processToolParamsPartialInternal,
@@ -91,6 +90,26 @@ function isStreamingExecutionState(state: SessionExecutionState): boolean {
   return state === SessionExecutionState.PROCESSING || state === SessionExecutionState.FINISHING;
 }
 
+const RECOVERABLE_IDLE_TURN_STATUSES = new Set<DialogTurn['status']>([
+  'pending',
+  'image_analyzing',
+  'processing',
+  'finishing',
+]);
+
+export function isAppWindowFocused(): boolean {
+  if (typeof document === 'undefined') {
+    return true;
+  }
+
+  return document.visibilityState === 'visible' && document.hasFocus();
+}
+
+function shouldMarkUnreadCompletion(sessionId: string): boolean {
+  const activeSessionId = FlowChatStore.getInstance().getState().activeSessionId;
+  return sessionId !== activeSessionId || !isAppWindowFocused();
+}
+
 function logDroppedDataEvent(
   eventName: string,
   sessionId: string,
@@ -102,6 +121,94 @@ function logDroppedDataEvent(
     sessionId,
     turnId,
     ...details,
+  });
+}
+
+function recoverIdleLatestTurnDataEvent(
+  eventName: string,
+  sessionId: string,
+  turnId: string | null,
+  currentState: SessionExecutionState,
+  currentDialogTurnId: string | null
+): boolean {
+  if (
+    currentState !== SessionExecutionState.IDLE ||
+    !turnId ||
+    currentDialogTurnId
+  ) {
+    return false;
+  }
+
+  const session = FlowChatStore.getInstance().getState().sessions.get(sessionId);
+  const latestTurn = session?.dialogTurns[session.dialogTurns.length - 1];
+  if (
+    !latestTurn ||
+    latestTurn.id !== turnId ||
+    !RECOVERABLE_IDLE_TURN_STATUSES.has(latestTurn.status)
+  ) {
+    return false;
+  }
+
+  const machine = stateMachineManager.get(sessionId);
+  const machineContext = machine?.getContext();
+  if (machineContext) {
+    machineContext.currentDialogTurnId = turnId;
+  }
+
+  void stateMachineManager
+    .transition(sessionId, SessionExecutionEvent.START, {
+      taskId: sessionId,
+      dialogTurnId: turnId,
+    })
+    .catch(error => {
+      log.error('State machine transition failed while recovering active data event', {
+        sessionId,
+        turnId,
+        eventName,
+        error,
+      });
+    });
+
+  log.debug('Recovered active data event after idle state', {
+    sessionId,
+    turnId,
+    eventName,
+  });
+  return true;
+}
+
+function handleDeepReviewQueueStateChanged(event: DeepReviewQueueStateChangedEvent): void {
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(event.sessionId);
+  const queueState = buildDeepReviewCapacityQueueStateFromEvent(event, session);
+  if (!queueState) {
+    return;
+  }
+
+  const actionBar = useReviewActionBarStore.getState();
+  const existingActionState = actionBar.getSessionState(event.sessionId);
+  if (existingActionState) {
+    actionBar.applyCapacityQueueState(queueState, event.sessionId);
+    const nextActionBar = useReviewActionBarStore.getState();
+    const nextActionState = nextActionBar.getSessionState(event.sessionId);
+    if (
+      queueState.status !== 'running' &&
+      queueState.status !== 'capacity_skipped' &&
+      (nextActionState?.phase === 'idle' || nextActionState?.phase === 'review_running')
+    ) {
+      actionBar.updatePhase('review_waiting_capacity', undefined, event.sessionId);
+    }
+    return;
+  }
+
+  if (queueState.status === 'running' || queueState.status === 'capacity_skipped') {
+    return;
+  }
+
+  actionBar.showCapacityQueueBar({
+    childSessionId: event.sessionId,
+    parentSessionId: session?.parentSessionId ?? null,
+    capacityQueueState: queueState,
   });
 }
 
@@ -280,6 +387,16 @@ export function shouldProcessEvent(
   }
 
   if (!isStreamingExecutionState(currentState)) {
+    if (recoverIdleLatestTurnDataEvent(
+      eventName,
+      sessionId,
+      turnId,
+      currentState,
+      context.currentDialogTurnId,
+    )) {
+      return true;
+    }
+
     logDroppedDataEvent(eventName, sessionId, turnId, {
       reason: 'state_not_accepting_data',
       currentState,
@@ -373,7 +490,7 @@ export async function initializeEventListeners(
       handleSessionDeleted(context, event);
     },
     onSessionStateChanged: (event) => {
-      handleSessionStateChanged(event);
+      handleSessionStateChanged(context, event);
     },
     onImageAnalysisStarted: (event) => {
       handleImageAnalysisStarted(context, event as ImageAnalysisEvent);
@@ -390,8 +507,14 @@ export async function initializeEventListeners(
     onToolEvent: (event) => {
       handleToolEvent(context, event, onTodoWriteResult);
     },
+    onDeepReviewQueueStateChanged: (event) => {
+      handleDeepReviewQueueStateChanged(event);
+    },
     onModelRoundStarted: (event) => {
       handleModelRoundStart(context, event);
+    },
+    onModelRoundCompleted: (event) => {
+      handleModelRoundComplete(context, event);
     },
     onDialogTurnCompleted: (event) => {
       handleDialogTurnComplete(context, event, onTodoWriteResult);
@@ -419,6 +542,9 @@ export async function initializeEventListeners(
     },
     onSessionModelAutoMigrated: (event) => {
       handleSessionModelAutoMigrated(event);
+    },
+    onUserSteeringInjected: (event) => {
+      handleUserSteeringInjected(context, event);
     }
   };
 
@@ -676,9 +802,7 @@ function finalizeTurnCompletionState(
     log.warn('Failed to save dialog turn (non-critical)', { sessionId, turnId, error });
   });
 
-  // Mark unread completion for non-active sessions
-  const activeSessionId = store.getState().activeSessionId;
-  if (sessionId !== activeSessionId) {
+  if (shouldMarkUnreadCompletion(sessionId)) {
     const pending = context.pendingTurnCompletions.get(sessionId);
     const isPartialRecovery = !!pending?.partialRecoveryReason;
     // Partial recovery after retry failure is treated as an error state (red dot)
@@ -722,6 +846,27 @@ function finalizePendingTurnCompletionNow(context: FlowChatContext, sessionId: s
   finalizeTurnCompletionState(context, sessionId, pending.turnId);
 }
 
+function findFinishingTurnForBackendIdle(
+  context: FlowChatContext,
+  sessionId: string,
+  turnId?: string | null
+): string | null {
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  if (!session) {
+    return null;
+  }
+
+  if (turnId) {
+    const trackedTurn = session.dialogTurns.find(turn => turn.id === turnId);
+    if (trackedTurn?.status === 'finishing') {
+      return trackedTurn.id;
+    }
+  }
+
+  const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
+  return latestTurn?.status === 'finishing' ? latestTurn.id : null;
+}
+
 /**
  * Handle session title generated event (AI or fallback auto-generation)
  */
@@ -734,32 +879,118 @@ function handleSessionTitleGenerated(event: any): void {
 }
 
 function handleSessionModelAutoMigrated(event: SessionModelAutoMigratedEvent): void {
-  const { sessionId, newModelId, reason } = event;
+  const { sessionId, newModelId } = event;
   if (!sessionId || !newModelId) return;
 
   const store = FlowChatStore.getInstance();
   store.updateSessionModelName(sessionId, newModelId);
+}
 
-  const notice = buildSessionModelMigrationNotice(event, (key, options) =>
-    i18nService.t(key, options)
-  );
-  if (
-    shouldSuppressSessionModelMigrationNotice(
-      recentSessionModelMigrationNoticeTimestamps,
-      notice.dedupeKey
-    )
-  ) {
+/**
+ * Upsert a `user-steering` flow item into the latest model round of the given
+ * dialog turn. Used both by the optimistic client-side path (right after
+ * `steerDialogTurn` succeeds, status `pending`) and by the
+ * `UserSteeringInjected` event handler (status `completed`). Dedupes by
+ * `steering_${steeringId}`. If the item already exists, its status/roundIndex
+ * is upgraded in place.
+ *
+ * Returns true if the item was inserted (newly added), false if it already
+ * existed (status was upgraded if applicable) or the target turn/round is not
+ * yet available.
+ */
+export function insertSteeringItemIfAbsent(params: {
+  sessionId: string;
+  turnId: string;
+  steeringId: string;
+  content: string;
+  roundIndex?: number;
+  status?: 'pending' | 'completed';
+}): boolean {
+  const { sessionId, turnId, steeringId, content } = params;
+  const roundIndex = typeof params.roundIndex === 'number' ? params.roundIndex : 0;
+  const status = params.status ?? 'completed';
+
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
+  if (!session) return false;
+  const dialogTurn = session.dialogTurns.find(turn => turn.id === turnId);
+  if (!dialogTurn) return false;
+
+  const itemId = `steering_${steeringId}`;
+  const existing = dialogTurn.modelRounds
+    .flatMap(round => round.items)
+    .find(it => it.id === itemId) as
+      | { status: string; roundIndex?: number }
+      | undefined;
+  if (existing) {
+    // Upgrade pending -> completed when the backend confirms injection.
+    if (existing.status !== 'completed' && status === 'completed') {
+      store.updateModelRoundItem(sessionId, turnId, itemId, {
+        status: 'completed',
+        roundIndex,
+      } as any);
+    }
+    return false;
+  }
+
+  const item = {
+    id: itemId,
+    type: 'user-steering' as const,
+    timestamp: Date.now(),
+    status,
+    steeringId,
+    content,
+    roundIndex,
+  };
+
+  const lastModelRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
+  if (!lastModelRound) {
+    const modelRound: ModelRound = {
+      id: `steering_round_${steeringId}`,
+      index: roundIndex,
+      items: [item as any],
+      isStreaming: true,
+      isComplete: false,
+      status: 'streaming',
+      startTime: Date.now(),
+    };
+    store.updateDialogTurn(sessionId, turnId, turn => ({
+      ...turn,
+      modelRounds: [...turn.modelRounds, modelRound],
+      status: 'processing',
+    }));
+    return true;
+  }
+
+  store.addModelRoundItem(sessionId, turnId, item as any, lastModelRound.id);
+  return true;
+}
+
+/**
+ * Handle the `UserSteeringInjected` event: render an inline `user-steering`
+ * item inside the latest model round of the running dialog turn so the user
+ * can see the steering message they just submitted. Idempotent — if the
+ * client-side optimistic path already added the item, this is a no-op.
+ */
+function handleUserSteeringInjected(_context: FlowChatContext, event: any): void {
+  const sessionId: string | undefined = event?.sessionId;
+  const turnId: string | undefined = event?.turnId;
+  const steeringId: string | undefined = event?.steeringId;
+  const content: string | undefined = event?.displayContent ?? event?.content;
+  const roundIndex: number =
+    typeof event?.roundIndex === 'number' ? event.roundIndex : 0;
+
+  if (!sessionId || !turnId || !steeringId || !content) {
+    log.warn('UserSteeringInjected: missing fields', { event });
     return;
   }
 
-  notificationService.warning(notice.message, {
-    title: notice.title,
-    duration: 6000,
-    metadata: {
-      sessionId,
-      reason,
-      newModelId,
-    },
+  insertSteeringItemIfAbsent({
+    sessionId,
+    turnId,
+    steeringId,
+    content,
+    roundIndex,
   });
 }
 
@@ -788,7 +1019,7 @@ function handleSessionDeleted(context: FlowChatContext, event: any): void {
 /**
  * Handle backend session state sync event
  */
-function handleSessionStateChanged(event: any): void {
+export function handleSessionStateChanged(context: FlowChatContext, event: any): void {
   const { sessionId, newState } = event;
   
   const machine = stateMachineManager.get(sessionId);
@@ -803,8 +1034,29 @@ function handleSessionStateChanged(event: any): void {
     currentFrontendState === SessionExecutionState.FINISHING &&
     frontendState === SessionExecutionState.IDLE;
   
-  const context = machine.getContext();
-  (context as any).backendSyncedAt = Date.now();
+  const machineContext = machine.getContext();
+  machineContext.backendSyncedAt = Date.now();
+
+  if (isExpectedFinishingDrift) {
+    finalizePendingTurnCompletionNow(context, sessionId);
+    if (stateMachineManager.getCurrentState(sessionId) === SessionExecutionState.FINISHING) {
+      const finishingTurnId = findFinishingTurnForBackendIdle(
+        context,
+        sessionId,
+        machineContext.currentDialogTurnId,
+      );
+      if (finishingTurnId) {
+        finalizeTurnCompletionState(context, sessionId, finishingTurnId);
+      } else {
+        void stateMachineManager
+          .transition(sessionId, SessionExecutionEvent.FINISHING_SETTLED)
+          .catch(error => {
+            log.error('State machine transition failed on backend idle sync', { sessionId, error });
+          });
+      }
+    }
+    return;
+  }
   
   if (currentFrontendState !== frontendState && !isExpectedFinishingDrift) {
     log.warn('Frontend and backend state mismatch', {
@@ -1295,8 +1547,8 @@ function handleToolEvent(
           toolEvent: {
             ...(existing.toolEvent as ParamsPartialToolEvent),
             params:
-              (existing.toolEvent as ParamsPartialToolEvent).params +
-              (incoming.toolEvent as ParamsPartialToolEvent).params
+              normalizeParamsPartialFragment((existing.toolEvent as ParamsPartialToolEvent).params) +
+              normalizeParamsPartialFragment((incoming.toolEvent as ParamsPartialToolEvent).params)
           }
         })
       );
@@ -1336,6 +1588,18 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
       subagentParentInfo.toolCallId,
       { sessionId, turnId, roundId },
     );
+
+    const modelIdRaw = event.modelId ?? (event as any).model_id;
+    const modelId = typeof modelIdRaw === 'string' ? modelIdRaw.trim() : '';
+    if (modelId) {
+      const store = FlowChatStore.getInstance();
+      store.updateModelRoundItem(
+        subagentParentInfo.sessionId,
+        subagentParentInfo.dialogTurnId,
+        subagentParentInfo.toolCallId,
+        { subagentModelId: modelId, subagentModelAlias: modelId } as Partial<FlowToolItem>,
+      );
+    }
     return;
   }
   
@@ -1391,6 +1655,70 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
   context.flowChatStore.addModelRound(sessionId, turnId, modelRound);
   scheduleModelResponseStatus(context, sessionId, turnId, roundId);
   
+  immediateSaveDialogTurn(context, sessionId, turnId);
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Handle model round completed event.
+ */
+function handleModelRoundComplete(context: FlowChatContext, event: ModelRoundCompletedEvent): void {
+  const sessionId = event?.sessionId ?? (event as any)?.session_id;
+  const turnId = event?.turnId ?? (event as any)?.turn_id;
+  const roundId = event?.roundId ?? (event as any)?.round_id;
+  const subagentParentInfo = normalizeSubagentParentInfo(event);
+
+  if (subagentParentInfo) {
+    attachSubagentSessionToParentTool(subagentParentInfo, sessionId);
+    immediateSaveDialogTurn(context, subagentParentInfo.sessionId, subagentParentInfo.dialogTurnId);
+    return;
+  }
+
+  if (!sessionId || !turnId || !roundId) {
+    log.warn('ModelRoundCompleted missing identity fields', { event });
+    return;
+  }
+
+  if (!shouldProcessEvent(sessionId, turnId, 'data', 'ModelRoundCompleted')) {
+    return;
+  }
+
+  const store = FlowChatStore.getInstance();
+  const session = store.getState().sessions.get(sessionId);
+  const dialogTurn = session?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
+  const round = dialogTurn?.modelRounds.find(modelRound => modelRound.id === roundId);
+  if (!round) {
+    log.debug('Model round not found (model round complete)', { sessionId, turnId, roundId });
+    return;
+  }
+
+  const durationMs = optionalNumber(event.durationMs ?? (event as any).duration_ms);
+  const completedAt = Date.now();
+  const endTime = round.endTime ?? (durationMs !== undefined ? round.startTime + durationMs : completedAt);
+
+  context.flowChatStore.updateModelRound(sessionId, turnId, roundId, current => ({
+    ...current,
+    isStreaming: false,
+    isComplete: true,
+    status: current.status === 'error' || current.status === 'cancelled'
+      ? current.status
+      : 'completed',
+    endTime,
+    durationMs,
+    providerId: event.providerId ?? (event as any).provider_id,
+    modelId: event.modelId ?? (event as any).model_id,
+    modelAlias: event.modelAlias ?? (event as any).model_alias,
+    firstChunkMs: optionalNumber(event.firstChunkMs ?? (event as any).first_chunk_ms),
+    firstVisibleOutputMs: optionalNumber(event.firstVisibleOutputMs ?? (event as any).first_visible_output_ms),
+    streamDurationMs: optionalNumber(event.streamDurationMs ?? (event as any).stream_duration_ms),
+    attemptCount: optionalNumber(event.attemptCount ?? (event as any).attempt_count),
+    failureCategory: event.failureCategory ?? (event as any).failure_category,
+    tokenDetails: event.tokenDetails ?? (event as any).token_details,
+  }));
+
   immediateSaveDialogTurn(context, sessionId, turnId);
 }
 
@@ -1553,7 +1881,17 @@ function handleCompressionFailed(context: FlowChatContext, event: any): void {
 /**
  * Handle dialog turn completed event
  */
-function handleDialogTurnComplete(
+function buildUnsuccessfulCompletionError(finishReason?: string): string {
+  if (finishReason === 'empty_round') {
+    return 'Model returned an empty response after retrying. finish_reason=empty_round';
+  }
+
+  return finishReason
+    ? `Dialog turn ended without a usable result. finish_reason=${finishReason}`
+    : 'Dialog turn ended without a usable result.';
+}
+
+export function handleDialogTurnComplete(
   context: FlowChatContext,
   event: any,
   _onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
@@ -1569,7 +1907,17 @@ function handleDialogTurnComplete(
   if (subagentParentInfo) {
     if (sessionId) {
       attachSubagentSessionToParentTool(subagentParentInfo, sessionId);
-      settleSubagentItems(context, subagentParentInfo, sessionId, 'completed');
+      if (success === false) {
+        settleSubagentItems(
+          context,
+          subagentParentInfo,
+          sessionId,
+          'error',
+          buildUnsuccessfulCompletionError(finishReason),
+        );
+      } else {
+        settleSubagentItems(context, subagentParentInfo, sessionId, 'completed');
+      }
     }
     return;
   }
@@ -1578,6 +1926,26 @@ function handleDialogTurnComplete(
     log.warn('DialogTurnCompleted missing sessionId or turnId', { event });
     return;
   }
+
+  if (success === false) {
+    handleDialogTurnFailed(context, {
+      ...event,
+      sessionId,
+      turnId,
+      error: event?.error || buildUnsuccessfulCompletionError(finishReason),
+    });
+    return;
+  }
+
+  // P1-11: Idempotent terminal-event handling. The backend may emit
+  // DialogTurnCompleted only once for a turn, but if a future change adds a
+  // duplicate emit path, we want this handler to be a no-op the second time.
+  const terminalKey = `${sessionId}:${turnId}`;
+  if (context.handledTerminalTurnEvents.has(terminalKey)) {
+    log.debug('Ignoring duplicate DialogTurnCompleted', { sessionId, turnId });
+    return;
+  }
+  context.handledTerminalTurnEvents.add(terminalKey);
 
   const machine = stateMachineManager.get(sessionId);
   if (machine) {
@@ -1727,7 +2095,17 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
     }
     return;
   }
-  
+
+  // P1-11: Idempotent terminal-event handling.
+  if (sessionId && turnId) {
+    const terminalKey = `${sessionId}:${turnId}`;
+    if (context.handledTerminalTurnEvents.has(terminalKey)) {
+      log.debug('Ignoring duplicate DialogTurnFailed', { sessionId, turnId });
+      return;
+    }
+    context.handledTerminalTurnEvents.add(terminalKey);
+  }
+
   log.error('Dialog turn failed', { sessionId, turnId, error, errorDetail });
   clearPendingTurnCompletion(context, sessionId, turnId);
   clearRuntimeStatus(context, sessionId, turnId);
@@ -1784,12 +2162,29 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
     });
   } else {
     if (dialogTurn?.userMessage?.content) {
-      const machine = stateMachineManager.get(sessionId);
-      if (machine) {
-        machine.setQueuedInput(dialogTurn.userMessage.content);
+      try {
+        // B-policy: restore the failed turn's user content into the pending
+        // queue exactly once, marked `failed` and `retryCount=1`. The auto-drain
+        // listener skips items with `retryCount > 0`, so the user must
+        // explicitly edit / send-now / delete to clear the entry. This prevents
+        // the previous behaviour where a hard error (auth, rate-limit, bad
+        // tool args) would auto-resend in a tight loop.
+        pendingQueueManager.enqueue({
+          sessionId,
+          content: dialogTurn.userMessage.content,
+          displayMessage: dialogTurn.userMessage.content,
+          retryCount: 1,
+          initialStatus: 'failed',
+        });
+      } catch (err) {
+        log.warn('Failed to restore failed turn into pending queue', {
+          sessionId,
+          turnId,
+          err,
+        });
       }
     }
-    
+
     context.flowChatStore.deleteDialogTurn(sessionId, turnId);
     updateSessionMetadata(context, sessionId).catch(err => {
       log.warn('Failed to update failed session metadata', { sessionId, error: err });
@@ -1822,9 +2217,7 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
     notificationService.error(formatted.message, options);
   }
 
-  // Mark unread error completion for non-active sessions
-  const activeSessionIdForError = store.getState().activeSessionId;
-  if (sessionId !== activeSessionIdForError) {
+  if (shouldMarkUnreadCompletion(sessionId)) {
     context.flowChatStore.markSessionUnreadCompletion(sessionId, 'error');
   }
 }
@@ -1847,7 +2240,21 @@ function handleDialogTurnCancelled(
     }
     return;
   }
-  
+
+  // P1-11: Idempotent terminal-event handling. The execution engine may emit
+  // DialogTurnCancelled when it detects cancellation between rounds, and the
+  // coordinator wrapper unconditionally re-emits one when the turn returns
+  // BitFunError::Cancelled. Both paths can fire on the same turn — make
+  // sure we only run the visible side-effects once.
+  if (sessionId && turnId) {
+    const terminalKey = `${sessionId}:${turnId}`;
+    if (context.handledTerminalTurnEvents.has(terminalKey)) {
+      log.debug('Ignoring duplicate DialogTurnCancelled', { sessionId, turnId });
+      return;
+    }
+    context.handledTerminalTurnEvents.add(terminalKey);
+  }
+
   log.info('Dialog turn cancelled', { sessionId, turnId });
   clearPendingTurnCompletion(context, sessionId, turnId);
   clearRuntimeStatus(context, sessionId, turnId);
@@ -1916,9 +2323,7 @@ function handleDialogTurnCancelled(
       });
   }
 
-  // Mark unread completion for non-active sessions (skip if user explicitly cancelled)
-  const activeSessionIdForCancelled = store.getState().activeSessionId;
-  if (sessionId !== activeSessionIdForCancelled && !context.userCancelledSessionIds.has(sessionId)) {
+  if (shouldMarkUnreadCompletion(sessionId) && !context.userCancelledSessionIds.has(sessionId)) {
     context.flowChatStore.markSessionUnreadCompletion(sessionId, 'completed');
   }
   context.userCancelledSessionIds.delete(sessionId);

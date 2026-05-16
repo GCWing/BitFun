@@ -205,7 +205,6 @@ impl OpenAISSEData {
             finish_reason,
             ..
         } = first_choice;
-        let mut finish_reason = finish_reason;
         let Delta {
             reasoning_content,
             reasoning_details,
@@ -214,10 +213,11 @@ impl OpenAISSEData {
             ..
         } = delta;
 
-        // Treat empty strings the same as absent fields (MiniMax sends `content: ""` in
-        // reasoning-only chunks).
+        // Treat empty strings the same as absent fields for assistant text (MiniMax sends
+        // `content: ""` in reasoning-only chunks). Keep empty reasoning content so downstream
+        // can replay structurally present thinking blocks when a provider requires it.
         let content = content.filter(|s| !s.is_empty());
-        let reasoning_content = reasoning_content.filter(|s| !s.is_empty());
+        let reasoning_content = reasoning_content;
 
         // MiniMax uses `reasoning_details` instead of `reasoning_content`.
         // Collect all "reasoning.text" entries and join them as a fallback.
@@ -245,7 +245,7 @@ impl OpenAISSEData {
                 thinking_signature: None,
                 tool_call: None,
                 usage: usage.take(),
-                finish_reason: finish_reason.take(),
+                finish_reason: None,
                 provider_metadata: None,
             });
         }
@@ -259,14 +259,28 @@ impl OpenAISSEData {
                     thinking_signature: None,
                     tool_call: Some(UnifiedToolCall::from(tool_call)),
                     usage: if is_first_event { usage.take() } else { None },
-                    finish_reason: if is_first_event {
-                        finish_reason.take()
-                    } else {
-                        None
-                    },
+                    finish_reason: None,
                     provider_metadata: None,
                 });
             }
+        }
+
+        if let Some(finish_reason) = finish_reason {
+            if let Some(last_response) = responses.last_mut() {
+                last_response.finish_reason = Some(finish_reason);
+                return responses;
+            }
+
+            responses.push(UnifiedResponse {
+                text: None,
+                reasoning_content: None,
+                thinking_signature: None,
+                tool_call: None,
+                usage,
+                finish_reason: Some(finish_reason),
+                provider_metadata: None,
+            });
+            return responses;
         }
 
         if responses.is_empty() {
@@ -372,10 +386,33 @@ mod tests {
                 .and_then(|tool| tool.id.as_deref()),
             Some("call_2")
         );
-        assert_eq!(responses[0].finish_reason.as_deref(), Some("tool_calls"));
-        assert!(responses[1].finish_reason.is_none());
+        assert!(responses[0].finish_reason.is_none());
+        assert_eq!(responses[1].finish_reason.as_deref(), Some("tool_calls"));
         assert!(responses[0].usage.is_some());
         assert!(responses[1].usage.is_none());
+    }
+
+    #[test]
+    fn preserves_empty_reasoning_content_chunk() {
+        let raw = r#"{
+            "id": "chatcmpl_test",
+            "created": 123,
+            "model": "deepseek-test",
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "reasoning_content": ""
+                },
+                "finish_reason": "stop"
+            }]
+        }"#;
+
+        let sse_data: OpenAISSEData = serde_json::from_str(raw).expect("valid openai sse data");
+        let responses = sse_data.into_unified_responses();
+
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0].reasoning_content.as_deref(), Some(""));
+        assert_eq!(responses[0].finish_reason.as_deref(), Some("stop"));
     }
 
     #[test]
@@ -455,7 +492,7 @@ mod tests {
         assert_eq!(responses[0].text.as_deref(), Some("hello"));
         assert!(responses[0].tool_call.is_none());
         assert!(responses[0].usage.is_some());
-        assert_eq!(responses[0].finish_reason.as_deref(), Some("tool_calls"));
+        assert!(responses[0].finish_reason.is_none());
 
         assert!(responses[1].text.is_none());
         assert_eq!(
@@ -466,7 +503,7 @@ mod tests {
             Some("call_1")
         );
         assert!(responses[1].usage.is_none());
-        assert!(responses[1].finish_reason.is_none());
+        assert_eq!(responses[1].finish_reason.as_deref(), Some("tool_calls"));
     }
 
     #[test]

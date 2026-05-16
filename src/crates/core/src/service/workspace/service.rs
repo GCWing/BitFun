@@ -10,7 +10,9 @@ use super::manager::{
 use crate::agentic::persistence::{PersistenceManager, SessionWorkspaceMaintenanceService};
 use crate::infrastructure::storage::{PersistenceService, StorageOptions};
 use crate::infrastructure::{try_get_path_manager_arc, PathManager};
-use crate::service::bootstrap::initialize_workspace_persona_files;
+use crate::service::bootstrap::{
+    ensure_workspace_gitignore_ignores_bitfun, initialize_workspace_persona_files,
+};
 use crate::service::remote_ssh::workspace_state::local_workspace_roots_equal;
 use crate::service::workspace_runtime::{
     try_get_workspace_runtime_service_arc, WorkspaceRuntimeService,
@@ -127,6 +129,8 @@ impl WorkspaceService {
 
     async fn prepare_startup_restored_workspaces(&self, workspaces: Vec<WorkspaceInfo>) {
         for workspace in workspaces {
+            self.ensure_workspace_gitignore_best_effort(&workspace, "restored")
+                .await;
             self.ensure_workspace_runtime_best_effort(&workspace, "restored")
                 .await;
             self.maintain_workspace_sessions_best_effort(
@@ -134,6 +138,25 @@ impl WorkspaceService {
                 "workspace_history_restored",
             )
             .await;
+        }
+    }
+
+    async fn ensure_workspace_gitignore_best_effort(
+        &self,
+        workspace: &WorkspaceInfo,
+        trigger: &str,
+    ) {
+        if workspace.workspace_kind == WorkspaceKind::Remote || !workspace.root_path.exists() {
+            return;
+        }
+
+        if let Err(e) = ensure_workspace_gitignore_ignores_bitfun(&workspace.root_path).await {
+            warn!(
+                "Failed to ensure workspace .gitignore ignores .bitfun: workspace_path={} trigger={} error={}",
+                workspace.root_path.display(),
+                trigger,
+                e
+            );
         }
     }
 
@@ -299,6 +322,8 @@ impl WorkspaceService {
         };
 
         if let Ok(workspace) = result.as_ref() {
+            self.ensure_workspace_gitignore_best_effort(workspace, "opened")
+                .await;
             self.ensure_workspace_runtime_best_effort(workspace, "opened")
                 .await;
         }
@@ -1209,11 +1234,13 @@ impl WorkspaceService {
             .map_err(|e| BitFunError::service(format!("Failed to load workspace data: {}", e)))?;
 
         let mut workspaces_to_restore = Vec::new();
+        let mut should_persist_cleaned_history = false;
 
         if let Some(data) = workspace_data {
             let mut manager = self.manager.write().await;
 
             let mut workspaces = data.workspaces;
+            let original_workspace_count = workspaces.len();
             // Filter out legacy remote workspaces that don't have the required metadata (sshHost and connectionId)
             workspaces.retain(|_id, ws| {
                 if ws.workspace_kind == WorkspaceKind::Remote {
@@ -1228,6 +1255,9 @@ impl WorkspaceService {
                 }
                 true
             });
+            if workspaces.len() != original_workspace_count {
+                should_persist_cleaned_history = true;
+            }
 
             *manager.get_workspaces_mut() = workspaces;
             // Also filter opened/recent lists to remove references to removed legacy workspaces
@@ -1237,6 +1267,9 @@ impl WorkspaceService {
                 .into_iter()
                 .filter(|id| manager.get_workspaces().contains_key(id))
                 .collect();
+            if filtered_opened_ids != data.opened_workspace_ids {
+                should_persist_cleaned_history = true;
+            }
             manager.set_opened_workspace_ids(filtered_opened_ids);
 
             let filtered_recent: Vec<String> = data
@@ -1245,6 +1278,9 @@ impl WorkspaceService {
                 .into_iter()
                 .filter(|id| manager.get_workspaces().contains_key(id))
                 .collect();
+            if filtered_recent != data.recent_workspaces {
+                should_persist_cleaned_history = true;
+            }
             manager.set_recent_workspaces(filtered_recent);
 
             let filtered_recent_assistant: Vec<String> = data
@@ -1253,9 +1289,15 @@ impl WorkspaceService {
                 .into_iter()
                 .filter(|id| manager.get_workspaces().contains_key(id))
                 .collect();
+            if filtered_recent_assistant != data.recent_assistant_workspaces {
+                should_persist_cleaned_history = true;
+            }
             manager.set_recent_assistant_workspaces(filtered_recent_assistant);
 
             let id_remap = manager.migrate_local_workspace_ids_to_stable_storage();
+            if !id_remap.is_empty() {
+                should_persist_cleaned_history = true;
+            }
 
             let raw_current = data
                 .current_workspace_id
@@ -1271,6 +1313,10 @@ impl WorkspaceService {
             }
 
             workspaces_to_restore = Self::collect_startup_restored_workspaces(&manager);
+        }
+
+        if should_persist_cleaned_history {
+            self.save_workspace_data().await?;
         }
 
         self.prepare_startup_restored_workspaces(workspaces_to_restore)
@@ -1884,6 +1930,36 @@ mod tests {
             runtime_service,
             session_workspace_maintenance,
         }
+    }
+
+    #[tokio::test]
+    async fn ensure_workspace_gitignore_best_effort_skips_remote_workspaces() {
+        let env = TestEnvironment::new();
+        let service = build_test_workspace_service(env.path_manager.clone()).await;
+        let remote_workspace_root = env.create_workspace_dir("remote-workspace-shadow");
+        std::fs::write(remote_workspace_root.join(".gitignore"), "target/\n")
+            .expect("gitignore should be seeded");
+
+        let remote_workspace = WorkspaceInfo::new(
+            remote_workspace_root.clone(),
+            WorkspaceOpenOptions {
+                workspace_kind: WorkspaceKind::Remote,
+                remote_ssh_host: Some("example-host".to_string()),
+                remote_connection_id: Some("conn-1".to_string()),
+                stable_workspace_id: Some("remote-test".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("remote workspace should initialize");
+
+        service
+            .ensure_workspace_gitignore_best_effort(&remote_workspace, "test")
+            .await;
+
+        let gitignore = std::fs::read_to_string(remote_workspace_root.join(".gitignore"))
+            .expect("gitignore should be readable");
+        assert_eq!(gitignore, "target/\n");
     }
 
     #[tokio::test]

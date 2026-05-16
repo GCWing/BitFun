@@ -1,7 +1,5 @@
-use super::types::{
-    AICommitAnalysis, CommitFormat, CommitMessageOptions, CommitType, ProjectContext,
-};
-use crate::function_agents::common::{AgentError, AgentResult, Language};
+use super::types::{AICommitAnalysis, CommitMessageOptions, ProjectContext};
+use crate::function_agents::common::{AgentError, AgentResult};
 use crate::infrastructure::ai::AIClient;
 use crate::util::types::Message;
 /**
@@ -10,7 +8,6 @@ use crate::util::types::Message;
  * Handles AI client interaction and provides intelligent analysis for commit message generation
  */
 use log::{debug, error, warn};
-use serde_json::Value;
 use std::sync::Arc;
 
 /// Prompt template constants (embedded at compile time)
@@ -92,50 +89,23 @@ impl AIAnalysisService {
         project_context: &ProjectContext,
         options: &CommitMessageOptions,
     ) -> String {
-        let language_desc = match options.language {
-            Language::Chinese => "Chinese",
-            Language::English => "English",
-        };
-
-        let format_desc = match options.format {
-            CommitFormat::Conventional => "Conventional Commits",
-            CommitFormat::Angular => "Angular Style",
-            CommitFormat::Simple => "Simple Format",
-            CommitFormat::Custom => "Custom Format",
-        };
-
-        COMMIT_MESSAGE_PROMPT
-            .replace("{project_type}", &project_context.project_type)
-            .replace("{tech_stack}", &project_context.tech_stack.join(", "))
-            .replace("{format_desc}", format_desc)
-            .replace("{language_desc}", language_desc)
-            .replace("{diff_content}", diff_content)
-            .replace("{max_title_length}", &options.max_title_length.to_string())
+        super::utils::build_commit_prompt(
+            COMMIT_MESSAGE_PROMPT,
+            diff_content,
+            project_context,
+            options,
+        )
     }
 
     fn parse_commit_response(&self, response: &str) -> AgentResult<AICommitAnalysis> {
         let json_str = crate::util::extract_json_from_ai_response(response)
             .ok_or_else(|| AgentError::analysis_error("Cannot extract JSON from response"))?;
 
-        let value: Value = serde_json::from_str(&json_str).map_err(|e| {
+        let value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
             AgentError::analysis_error(format!("Failed to parse AI response: {}", e))
         })?;
 
-        Ok(AICommitAnalysis {
-            commit_type: self.parse_commit_type(value["type"].as_str().unwrap_or("chore"))?,
-            scope: value["scope"].as_str().map(|s| s.to_string()),
-            title: value["title"]
-                .as_str()
-                .ok_or_else(|| AgentError::analysis_error("Missing title field"))?
-                .to_string(),
-            body: value["body"].as_str().map(|s| s.to_string()),
-            breaking_changes: value["breaking_changes"].as_str().map(|s| s.to_string()),
-            reasoning: value["reasoning"]
-                .as_str()
-                .unwrap_or("AI analysis")
-                .to_string(),
-            confidence: value["confidence"].as_f64().unwrap_or(0.8) as f32,
-        })
+        super::utils::parse_commit_analysis_value(&value).map_err(AgentError::analysis_error)
     }
 
     fn truncate_diff_if_needed(&self, diff: &str, max_chars: usize) -> String {
@@ -153,21 +123,5 @@ impl AIAnalysisService {
         truncated.push_str("\n\n... [content truncated] ...");
 
         truncated
-    }
-
-    fn parse_commit_type(&self, s: &str) -> AgentResult<CommitType> {
-        match s.to_lowercase().as_str() {
-            "feat" | "feature" => Ok(CommitType::Feat),
-            "fix" => Ok(CommitType::Fix),
-            "docs" | "doc" => Ok(CommitType::Docs),
-            "style" => Ok(CommitType::Style),
-            "refactor" => Ok(CommitType::Refactor),
-            "perf" | "performance" => Ok(CommitType::Perf),
-            "test" => Ok(CommitType::Test),
-            "chore" => Ok(CommitType::Chore),
-            "ci" => Ok(CommitType::CI),
-            "revert" => Ok(CommitType::Revert),
-            _ => Ok(CommitType::Chore),
-        }
     }
 }

@@ -163,7 +163,17 @@ export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSk
 
   const filteredSkills = useMemo(() => {
     return skills.filter((skill) => {
-      const matchesFilter = activeFilter === 'all' || skill.level === activeFilter;
+      let matchesFilter = true;
+      if (activeFilter === 'user') {
+        matchesFilter = skill.level === 'user' && !skill.isBuiltin;
+      } else if (activeFilter === 'project') {
+        matchesFilter = skill.level === 'project' && !skill.isBuiltin;
+      } else if (activeFilter === 'builtin') {
+        matchesFilter = skill.isBuiltin;
+      } else if (activeFilter === 'suite') {
+        matchesFilter = skill.isBuiltin;
+      }
+
       const matchesQuery = !normalizedQuery || [
         skill.name,
         skill.description,
@@ -175,8 +185,10 @@ export function useInstalledSkills({ searchQuery, activeFilter }: UseInstalledSk
 
   const counts = useMemo(() => ({
     all: skills.length,
-    user: skills.filter((skill) => skill.level === 'user').length,
-    project: skills.filter((skill) => skill.level === 'project').length,
+    builtin: skills.filter((skill) => skill.isBuiltin).length,
+    user: skills.filter((skill) => skill.level === 'user' && !skill.isBuiltin).length,
+    project: skills.filter((skill) => skill.level === 'project' && !skill.isBuiltin).length,
+    suite: skills.filter((skill) => skill.isBuiltin).length,
   }), [skills]);
 
   return {

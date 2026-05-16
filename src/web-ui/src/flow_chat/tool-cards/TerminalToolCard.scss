@@ -16,13 +16,32 @@
 }
 
 .compact-tool-card-wrapper.terminal-tool-card--compact-collapsed {
+  /*
+   * Match collapsed thinking summary (`.thinking-label`, `ModelThinkingDisplay.scss`):
+   * sans + `sm` + line-height 1.5 + normal — not monospace (mono reads “thinner” vs “思考了 N 字”).
+   */
+  --tool-compact-summary-font:
+    var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif);
+
+  .compact-card-action,
+  .compact-card-content .tool-command-preview.tool-command-preview--compact {
+    font-family: var(--tool-compact-summary-font);
+    font-size: var(--flowchat-font-size-sm);
+    line-height: 1.5;
+    font-weight: normal;
+    color: var(--color-text-muted);
+  }
+
   .terminal-header-extra {
     gap: 4px;
   }
 
   .terminal-header-duration .duration-text {
     gap: 3px;
-    font-size: var(--flowchat-font-size-xs);
+    font-family: var(--tool-compact-summary-font);
+    font-size: var(--flowchat-font-size-sm);
+    line-height: 1.5;
+    font-weight: normal;
   }
 
   .terminal-header-duration .duration-text svg {
@@ -240,6 +259,35 @@
 
 .terminal-header-extra > .terminal-status-text {
   margin-right: 0;
+}
+
+/* ========== Compact content row (command + inline hover actions) ========== */
+.terminal-compact-content {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  gap: 0;
+
+  .tool-command-preview {
+    flex: 0 1 auto;
+    max-width: 60%;
+  }
+}
+
+/* ========== Hover-only actions wrapper (compact collapsed state) ========== */
+.terminal-hover-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ========== Always-visible critical actions (compact collapsed state) ========== */
+.terminal-critical-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 /* ========== Confirmation action button group ========== */
@@ -575,6 +623,21 @@
     .terminal-command,
     .terminal-command-input {
       font-size: 11px;
+    }
+
+    .compact-card-action,
+    .compact-card-content .tool-command-preview--compact {
+      font-size: 11px;
+      line-height: 1.5;
+      font-weight: normal;
+      font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif);
+    }
+
+    .terminal-header-duration .duration-text {
+      font-size: 11px;
+      line-height: 1.5;
+      font-weight: normal;
+      font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif);
     }
   }
 }

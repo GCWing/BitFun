@@ -3,10 +3,11 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Search, Loader2, Clock, Check } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
+import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
   toolItem,
@@ -20,18 +21,6 @@ export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
     toolId,
     toolName: toolItem.toolName,
   });
-
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'running':
-      case 'streaming':
-        return <Loader2 className="animate-spin" size={14} />;
-      case 'completed':
-        return <Check size={14} className="icon-check-done" />;
-      default:
-        return <Clock size={14} />;
-    }
-  };
 
   const getSearchPattern = (): string => {
     const pattern = toolCall?.input?.pattern || 
@@ -151,10 +140,8 @@ export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
         clickable={hasDetails}
         header={
           <CompactToolCardHeader
-            icon={<Search size={16} className="grep-search-card-icon" />}
+            icon={<ToolCardStatusSlot status={status} toolIcon={<Search size={16} className="grep-search-card-icon" />} />}
             content={renderContent()}
-            rightStatusIcon={getStatusIcon()}
-            rightStatusIconWithDivider
           />
         }
         expandedContent={hasDetails ? renderExpandedContent() : undefined}

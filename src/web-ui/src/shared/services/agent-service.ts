@@ -477,7 +477,7 @@ export class AgentService {
   async getReadonlyToolsInfo(): Promise<ToolInfo[]> {
     
     const allTools = await toolAPI.getAllToolsInfo();
-    return allTools.filter((tool: any) => tool.readonly === true);
+    return allTools.filter((tool: any) => tool.is_readonly === true);
   }
 
    
@@ -506,13 +506,6 @@ export class AgentService {
     };
     return toolAPI.executeTool(executeRequest);
   }
-
-   
-  async isToolEnabled(toolName: string): Promise<boolean | null> {
-    return toolAPI.isToolEnabled(toolName);
-  }
-
-  
 
    
   async executeTask(

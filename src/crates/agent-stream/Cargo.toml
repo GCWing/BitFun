@@ -1,0 +1,28 @@
+[package]
+name = "bitfun-agent-stream"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Lightweight agent stream processing for BitFun"
+
+[lib]
+name = "bitfun_agent_stream"
+crate-type = ["rlib"]
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+bitfun-ai-adapters = { path = "../ai-adapters" }
+bitfun-events = { path = "../events" }
+futures = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true }
+reqwest = { workspace = true }
+tokio-stream = { workspace = true }

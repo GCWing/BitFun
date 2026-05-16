@@ -16,14 +16,14 @@
     transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.35s ease;
 
-  // Top gradient overlay - shows on hover, covers entire card except footer
+  // Top gradient overlay - shows on hover across the whole card
   &::before {
     content: "";
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    bottom: 40px;
+    bottom: 0;
     background: var(--agent-card-gradient);
     opacity: 0;
     transition: opacity 0.35s ease;
@@ -43,10 +43,6 @@
   &:focus-visible {
     outline: 2px solid var(--color-accent-500);
     outline-offset: 2px;
-  }
-
-  &--disabled {
-    opacity: 0.7;
   }
 
   // ── Header with icon ──
@@ -135,12 +131,10 @@
   }
 
   &__meta {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: $size-gap-2;
     flex-wrap: wrap;
-    margin-top: auto;
-    padding-top: $size-gap-2;
     color: var(--color-text-muted);
     font-size: var(--font-size-xs);
     line-height: $line-height-base;
@@ -149,7 +143,9 @@
   &__meta-item {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
+    font-size: 10px;
+    color: var(--color-text-muted);
   }
 
   &__cap-chips {
@@ -157,6 +153,7 @@
     align-items: center;
     gap: 4px;
     flex-wrap: wrap;
+    min-width: 0;
   }
 
   &__cap-chip {
@@ -171,24 +168,22 @@
     white-space: nowrap;
   }
 
-  // ── Footer with actions ──
+  // ── Footer summary bar ──
   &__footer {
     display: flex;
     align-items: center;
-    width: 100%;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
     border-radius: 0 0 15px 15px;
     overflow: hidden;
     position: relative;
     z-index: 1;
 
-    // Bottom gradient blur background matching card color
     &::after {
       content: "";
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      inset: 0;
       background: var(--agent-card-gradient);
       opacity: 0.5;
       transition: opacity 0.35s ease;
@@ -200,12 +195,8 @@
     opacity: 1;
   }
 
-  &__footer-actions {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    flex: 1;
-    padding: $size-gap-2 $size-gap-3;
+  &__cap-chips,
+  &__meta {
     position: relative;
     z-index: 1;
   }
@@ -322,6 +313,74 @@
     align-items: center;
     gap: $size-gap-2;
     flex-shrink: 0;
+  }
+
+  &__tab-list {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+    min-width: 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+  }
+
+  &__tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 26px;
+    padding: 0 8px;
+    margin-bottom: -5px;
+    border: 1px solid transparent;
+    border-bottom-color: transparent;
+    border-radius: $size-radius-base $size-radius-base 0 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: $font-weight-semibold;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      border-color $motion-fast $easing-standard,
+      background $motion-fast $easing-standard,
+      color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard,
+      transform $motion-fast $easing-standard;
+
+    &:hover {
+      background: color-mix(in srgb, var(--element-bg-subtle) 92%, transparent);
+      color: var(--color-text-secondary);
+      transform: translateY(-1px);
+    }
+
+    &.is-active {
+      border-color: color-mix(in srgb, var(--border-subtle) 88%, transparent);
+      border-bottom-color: var(--color-surface-base, var(--surface-base, transparent));
+      background: color-mix(in srgb, var(--element-bg-subtle) 96%, transparent);
+      color: var(--color-accent-500);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 -1px 0 color-mix(in srgb, var(--color-accent-500, #60a5fa) 24%, transparent);
+    }
+  }
+
+  &__tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--element-bg-medium) 92%, transparent);
+    color: inherit;
+    font-size: 9px;
+    line-height: 1.4;
+    font-weight: $font-weight-semibold;
+    font-variant-numeric: tabular-nums;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
   }
 
   &__skill-groups {

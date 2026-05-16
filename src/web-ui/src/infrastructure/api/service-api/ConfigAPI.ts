@@ -37,6 +37,11 @@ export interface ReplaceModeSkillSelectionParams {
   workspacePath?: string;
 }
 
+export interface ResetModeSkillSelectionParams {
+  modeId: string;
+  workspacePath?: string;
+}
+
 export interface AddSkillParams {
   sourcePath: string;
   level: SkillLevel;
@@ -63,7 +68,11 @@ export class ConfigAPI {
       const shouldSkipRetry = options?.skipRetryOnNotFound ?? false;
       
       return await api.invoke('get_config', 
-        { request: path ? { path } : {} },
+        {
+          request: path
+            ? { path, skipRetryOnNotFound: shouldSkipRetry }
+            : { skipRetryOnNotFound: shouldSkipRetry },
+        },
         shouldSkipRetry ? { retries: 0 } : undefined
       );
     } catch (error) {
@@ -216,27 +225,6 @@ export class ConfigAPI {
     }
   }
 
-  
-
-   
-  async getSubagentConfigs(): Promise<Record<string, { enabled: boolean }>> {
-    try {
-      return await api.invoke('get_subagent_configs');
-    } catch (error) {
-      throw createTauriCommandError('get_subagent_configs', error);
-    }
-  }
-
-   
-  async setSubagentConfig(subagentId: string, enabled: boolean): Promise<string> {
-    try {
-      return await api.invoke('set_subagent_config', { subagentId, enabled });
-    } catch (error) {
-      throw createTauriCommandError('set_subagent_config', error, { subagentId, enabled });
-    }
-  }
-
-   
   async deleteSubagent(subagentId: string): Promise<void> {
     try {
       await api.invoke('delete_subagent', {
@@ -301,6 +289,22 @@ export class ConfigAPI {
       throw createTauriCommandError('replace_mode_skill_selection', error, {
         modeId,
         enabledSkillKeys,
+        workspacePath,
+      });
+    }
+  }
+
+  async resetModeSkillSelection({
+    modeId,
+    workspacePath,
+  }: ResetModeSkillSelectionParams): Promise<string> {
+    try {
+      return await api.invoke('reset_mode_skill_selection', {
+        request: { modeId, workspacePath },
+      });
+    } catch (error) {
+      throw createTauriCommandError('reset_mode_skill_selection', error, {
+        modeId,
         workspacePath,
       });
     }

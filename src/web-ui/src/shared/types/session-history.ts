@@ -4,7 +4,9 @@
  * Used by session lists and persistence metadata in the frontend.
  */
 
-export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review';
+import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+
+export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review' | 'miniapp';
 export type PersistedSessionKind = 'standard' | 'subagent';
 export type SessionTitleSource = 'text' | 'i18n';
 
@@ -63,6 +65,11 @@ export interface SessionMetadata {
    * Allows restoring the review action bar across app restarts.
    */
   reviewActionState?: ReviewActionPersistedState;
+  /**
+   * The per-run Deep Review reviewer manifest used to launch this session.
+   * Continuation and later backend gates use this as the source of truth.
+   */
+  deepReviewRunManifest?: ReviewTeamRunManifest;
 }
 
 export interface ReviewActionPersistedState {
@@ -75,7 +82,17 @@ export interface ReviewActionPersistedState {
 }
 
 export type SessionStatus = 'active' | 'archived' | 'completed';
-export type DialogTurnKind = 'user_dialog' | 'manual_compaction';
+export type DialogTurnKind = 'user_dialog' | 'manual_compaction' | 'local_command';
+
+export interface LocalCommandMetadata {
+  localCommandKind: 'usage_report';
+  reportId: string;
+  schemaVersion: number;
+  generatedAt: number;
+  modelVisible: false;
+  usageReport?: Record<string, any>;
+  usageReportStatus?: 'loading' | 'completed';
+}
 
 export interface SessionList {
   sessions: SessionMetadata[];
@@ -115,6 +132,16 @@ export interface ModelRoundData {
   thinkingItems?: ThinkingItemData[];
   startTime: number;
   endTime?: number;
+  durationMs?: number;
+  providerId?: string;
+  modelId?: string;
+  modelAlias?: string;
+  firstChunkMs?: number;
+  firstVisibleOutputMs?: number;
+  streamDurationMs?: number;
+  attemptCount?: number;
+  failureCategory?: string;
+  tokenDetails?: unknown;
   status: string;
 }
 
@@ -157,6 +184,10 @@ export interface ToolItemData {
   startTime: number;
   endTime?: number;
   durationMs?: number;
+  queueWaitMs?: number;
+  preflightMs?: number;
+  confirmationWaitMs?: number;
+  executionMs?: number;
   orderIndex?: number;
   status?: string;
   interruptionReason?: 'app_restart';

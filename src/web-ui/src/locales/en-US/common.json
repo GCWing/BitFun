@@ -77,7 +77,7 @@
     "items": {
       "sessions": "Sessions",
       "project": "Directory",
-      "persona": "Nursery",
+      "persona": "Assistant",
       "agents": "Agents",
       "skills": "Skills",
       "tools": "Tools",
@@ -87,7 +87,7 @@
       "insights": "Insights"
     },
     "tooltips": {
-      "persona": "Nursery — create and manage all assistant instances",
+      "persona": "Assistant — create and manage all assistant instances",
       "agents": "Which agents it can call",
       "skills": "What it knows — specialized knowledge files",
       "tools": "What it can use — built-in tools & MCP services",
@@ -161,7 +161,7 @@
       "newCodeSession": "New Code session",
       "newCoworkSession": "New Cowork session",
       "newCodeSessionShort": "Code Session",
-      "newCoworkSessionShort": "Office Session",
+      "newCoworkSessionShort": "Cowork Session",
       "newExternalAgentSessionShort": "{{agentName}} Session",
       "newClawSession": "New Claw session",
       "modeCode": "Code",
@@ -297,6 +297,7 @@
       "copyPathFailed": "Failed to copy path",
       "createSessionFailed": "Failed to create session",
       "creatingAcpSession": "Starting {{agentName}} session...",
+      "restoringAcpSession": "Restoring {{agentName}} session...",
       "initSessionFailed": "Failed to start AGENTS.md initialization session",
       "worktreeCreated": "Worktree created",
       "worktreeCreatedAndOpened": "Worktree created and opened",
@@ -485,10 +486,45 @@
     "commit": "Commit",
     "branch": "Branch",
     "copyright": "© 2025 BitFun. All rights reserved.",
-    "openSource": "Open Source Software",
-    "openSourceDesc": "BitFun uses the following open source components:",
-    "openSourceFootnote": "Click a component name to open its official page for more information.",
-    "userAgreement": "User Agreement"
+    "updateSectionTitle": "App updates",
+    "updateSectionHint": "Keep BitFun up to date for the latest fixes and features."
+  },
+  "update": {
+    "checkForUpdates": "Check for updates",
+    "checking": "Checking…",
+    "noUpdate": "You are on the latest version.",
+    "checkFailed": "Update check failed.",
+    "availableTitle": "Update available",
+    "availableSubtitle": "A newer release is ready to install.",
+    "currentVersion": "Current",
+    "latestVersion": "Latest",
+    "releaseNotes": "Release notes",
+    "later": "Later",
+    "skipVersion": "Skip this version",
+    "cancel": "Cancel",
+    "install": "Download and install",
+    "backgroundInstall": "Download in background",
+    "downloadingTitle": "Downloading update",
+    "downloadFailedTitle": "Update could not be installed",
+    "installedTitle": "Update installed",
+    "installedMessage": "The update has been installed. Restart BitFun to start using the new version.",
+    "progressPercent": "{{percent}}%",
+    "progressUnknown": "Downloading…",
+    "backgroundDownloading": "Downloading in background",
+    "backgroundDownloadHint": "You can keep using BitFun. Restart will be offered after installation finishes.",
+    "restartHint": "The app will need to restart after installation completes.",
+    "restartNow": "Restart now",
+    "restartLater": "Later",
+    "desktopOnly": "Updates are available in the desktop app only.",
+    "errors": {
+      "unknown": "Something went wrong. Please try again later.",
+      "network": "Could not reach the update server. Check your internet connection and try again.",
+      "signature": "The update file could not be verified. If this continues, download the latest installer from the website.",
+      "noUpdateAvailable": "No update package is available right now. Try again later.",
+      "notFound": "The update information was not found on the server. The release may still be publishing.",
+      "tls": "A secure connection to the update server could not be established.",
+      "generic": "Update failed: {{detail}}"
+    }
   },
   "actions": {
     "confirm": "Confirm",
@@ -775,7 +811,6 @@
     "fileBrowser": "File Browser",
     "editor": "Editor",
     "markdown": "Markdown",
-    "mermaidChart": "Mermaid Chart",
     "settings": "Settings",
     "settingsWithSection": "Settings - {{section}}"
   },
@@ -817,7 +852,6 @@
     "skills": "Skills",
     "miniApps": "Mini App",
     "browser": "Browser",
-    "mermaidEditor": "Mermaid",
     "insights": "Insights",
     "assistant": "Assistant",
     "shell": "Shell",
@@ -1008,6 +1042,15 @@
     "dialogCompleted": "AI agent has finished the task.",
     "dialogCompletedTitle": "BitFun task finished",
     "dialogCompletedWithSession": "\"{{sessionTitle}}\" is ready. Return to BitFun to review the result.",
-    "dialogCompletedFallback": "A BitFun session is ready. Return to BitFun to review the result."
+    "dialogCompletedFallback": "A BitFun session is ready. Return to BitFun to review the result.",
+    "dialogFailedTitle": "BitFun task stopped",
+    "dialogFailedWithSession": "\"{{sessionTitle}}\" stopped unexpectedly. Return to BitFun to review the reason.",
+    "dialogFailedFallback": "A BitFun session stopped unexpectedly. Return to BitFun to review the reason."
+  },
+  "closeDialog": {
+    "title": "Close BitFun",
+    "message": "Choose what happens when you click the close button: quit exits the app completely, or minimize to tray keeps it running in the background.",
+    "quit": "Quit",
+    "minimizeToTray": "Minimize to Tray"
   }
 }

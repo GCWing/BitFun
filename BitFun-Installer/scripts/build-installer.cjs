@@ -154,10 +154,8 @@ function getCandidateAppExePaths(mode) {
     candidates.push(
       path.join(
         BITFUN_ROOT,
-        "src",
-        "apps",
-        "desktop",
         "target",
+        "x86_64-pc-windows-msvc",
         profile,
         "bitfun-desktop.exe"
       ),
@@ -168,10 +166,9 @@ function getCandidateAppExePaths(mode) {
         "desktop",
         "target",
         profile,
-        "BitFun.exe"
+        "bitfun-desktop.exe"
       ),
-      path.join(BITFUN_ROOT, "target", profile, "bitfun-desktop.exe"),
-      path.join(BITFUN_ROOT, "target", profile, "BitFun.exe")
+      path.join(BITFUN_ROOT, "target", profile, "bitfun-desktop.exe")
     );
   }
 
@@ -229,14 +226,14 @@ if (appExePath) {
     files: [],
   };
 
-  const destExe = path.join(PAYLOAD_DIR, "BitFun.exe");
+  const destExe = path.join(PAYLOAD_DIR, "bitfun-desktop.exe");
   writeFileWithManifest(appExePath, destExe, manifest, PAYLOAD_DIR);
   log(`Copied: ${appExePath} -> ${destExe}`);
 
   const exeSize = fs.statSync(destExe).size;
   if (STRICT_PAYLOAD_VALIDATION && exeSize < MIN_APP_EXE_BYTES) {
     error(
-      `BitFun.exe in payload is unexpectedly small (${exeSize} bytes). Refusing to continue.`
+      `bitfun-desktop.exe in payload is unexpectedly small (${exeSize} bytes). Refusing to continue.`
     );
   }
 

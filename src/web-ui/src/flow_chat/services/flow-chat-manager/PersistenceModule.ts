@@ -297,8 +297,9 @@ async function performSaveDialogTurnToDisk(
 }
 
 /**
- * Save all in-progress dialog turns
- * Used when closing the window to persist unfinished session turns
+ * Save all in-progress dialog turns by settling them for persistence.
+ * Call only when the app process is about to exit; hiding to tray/dock keeps the
+ * app alive and settling here would clear in-memory "active" state (e.g. desktop pet bubbles).
  */
 export async function saveAllInProgressTurns(context: FlowChatContext): Promise<void> {
   const state = context.flowChatStore.getState();
@@ -427,6 +428,9 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               toolCall: toolItem.toolCall || { input: {}, id: item.id },
               toolResult: toolItem.toolResult,
               aiIntent: toolItem.aiIntent,
+              requiresConfirmation: toolItem.requiresConfirmation,
+              userConfirmed: toolItem.userConfirmed,
+              acpPermission: toolItem.acpPermission,
               startTime: toolItem.startTime || item.timestamp,
               endTime: toolItem.endTime,
               status: item.status || 'completed',
@@ -434,6 +438,8 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               isSubagentItem: toolItem.isSubagentItem,
               parentTaskToolId: toolItem.parentTaskToolId,
               subagentSessionId: toolItem.subagentSessionId,
+              subagentModelId: toolItem.subagentModelId,
+              subagentModelAlias: toolItem.subagentModelAlias,
             };
           }),
         thinkingItems: round.items

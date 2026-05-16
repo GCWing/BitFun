@@ -35,6 +35,10 @@ impl Tool for ComputerUseMouseClickTool {
         )
     }
 
+    fn short_description(&self) -> String {
+        "Click or scroll at the current mouse pointer position.".to_string()
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

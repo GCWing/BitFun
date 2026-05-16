@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Check, Clock, Loader2, X } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
+import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 
 interface SessionSummary {
@@ -86,23 +87,6 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
     cancelledTurnId ||
     toolResult?.error
   );
-
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'running':
-      case 'streaming':
-        return <Loader2 className="animate-spin" size={16} />;
-      case 'completed':
-        return <Check size={16} className="icon-check-done" />;
-      case 'error':
-      case 'cancelled':
-        return <X size={16} />;
-      case 'pending':
-      case 'preparing':
-      default:
-        return <Clock size={16} />;
-    }
-  };
 
   const getActionLabel = () => {
     switch (action) {
@@ -286,10 +270,9 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
         clickable={hasDetails}
         header={(
           <CompactToolCardHeader
-            icon={getStatusIcon()}
+            icon={<ToolCardStatusSlot status={status} toolIcon={<Layers size={16} />} />}
             action={`${t('toolCards.sessionControl.title')}:`}
             content={renderContent()}
-            extra={action === 'list' && status === 'completed' ? `${sessionCount}` : undefined}
           />
         )}
         expandedContent={expandedContent}

@@ -15,6 +15,7 @@
 
 import React, { useEffect, useCallback, useMemo, useState, useRef, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import path from 'path-browserify';
 import {
   XCircle,
   GitBranch,
@@ -24,11 +25,10 @@ import {
   FileX2,
   ChevronRight,
   Loader2,
-  Clock,
   Check,
   X,
 } from 'lucide-react';
-import { CubeLoading, IconButton } from '../../component-library';
+import { CubeLoading, IconButton, ToolProcessingDots } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { useSnapshotState } from '../../tools/snapshot_system/hooks/useSnapshotState';
@@ -47,11 +47,42 @@ import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import { notificationService } from '@/shared/notification-system';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import { ToolCardHeaderActions } from './ToolCardHeaderActions';
+import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
+import { AcpPermissionActions } from './AcpPermissionActions';
 import './FileOperationToolCard.scss';
 
 const log = createLogger('FileOperationToolCard');
 const FILE_OPERATION_STREAMING_MAX_HEIGHT = 4 * 22; // 88px – compact while streaming
 const FILE_OPERATION_DIFF_MAX_HEIGHT = 15 * 22;     // 330px – comfortable diff reading when expanded
+
+function stringPath(value: unknown): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : '';
+}
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null ? value as Record<string, unknown> : null;
+}
+
+function firstStringValue(source: Record<string, unknown> | null | undefined, keys: string[]): string {
+  if (!source) return '';
+  for (const key of keys) {
+    const value = stringPath(source[key]);
+    if (value) return value;
+  }
+  return '';
+}
+
+function isWindowsAbsolutePath(filePath: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(filePath);
+}
+
+function resolveOpenFilePath(filePath: string, workspacePath?: string): string {
+  if (!filePath || hasNonFileUriScheme(filePath) || isWindowsAbsolutePath(filePath) || path.isAbsolute(filePath)) {
+    return filePath;
+  }
+
+  return workspacePath ? path.join(workspacePath, filePath) : filePath;
+}
 
 interface FileOperationToolCardProps extends ToolCardProps {
   sessionId?: string;
@@ -107,15 +138,33 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   });
 
   const getFilePath = useCallback((): string => {
-    const params = partialParams || toolCall?.input;
+    const result = toolResult?.result;
+    const resultPath = stringPath(result?.file_path) || stringPath(result?.filePath);
+    if (resultPath) {
+      return resultPath;
+    }
+
+    const params = objectValue(partialParams || toolCall?.input);
     if (!params) return '';
     
     if (Object.keys(params).length === 0) return '';
     
-    return params.file_path || params.target_file || params.path || params.filename || '';
-  }, [toolCall, partialParams]);
+    return firstStringValue(params, [
+      'file_path',
+      'filePath',
+      'filepath',
+      'target_file',
+      'targetFile',
+      'path',
+      'filename',
+    ]);
+  }, [toolCall, partialParams, toolResult]);
 
   const currentFilePath = getFilePath();
+  const openFilePath = useMemo(
+    () => resolveOpenFilePath(currentFilePath, currentWorkspace?.rootPath),
+    [currentFilePath, currentWorkspace?.rootPath],
+  );
 
   const getOldString = useCallback((): string => {
     const params = partialParams || toolCall?.input;
@@ -138,6 +187,16 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const oldStringContent = getOldString();
   const newStringContent = getNewString();
   const contentPreview = getContent();
+  const writeContentCharCount = toolItem.toolName === 'Write' ? contentPreview.length : 0;
+  const writeContentStatusText = useMemo(() => {
+    if (toolItem.toolName !== 'Write' || writeContentCharCount <= 0) return null;
+
+    const formattedCount = writeContentCharCount.toLocaleString();
+    if (status === 'completed') {
+      return `${formattedCount} chars written`;
+    }
+    return `${formattedCount} chars received`;
+  }, [status, toolItem.toolName, writeContentCharCount]);
   
   const isFailed = status === 'error' || (toolResult && 'success' in toolResult && !toolResult.success);
   const showConfirmationActions = Boolean(
@@ -273,6 +332,24 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     return operationDiffStats ?? localDiffStats ?? { additions: 0, deletions: 0 };
   }, [operationDiffStats, localDiffStats]);
 
+  const localDiffContent = useMemo(() => {
+    if (toolItem.toolName === 'Edit' && (oldStringContent || newStringContent)) {
+      return {
+        originalContent: oldStringContent,
+        modifiedContent: newStringContent,
+      };
+    }
+
+    if (toolItem.toolName === 'Write' && contentPreview) {
+      return {
+        originalContent: '',
+        modifiedContent: contentPreview,
+      };
+    }
+
+    return null;
+  }, [contentPreview, newStringContent, oldStringContent, toolItem.toolName]);
+
   useEffect(() => {
     if (!sessionId || !toolCall?.id || status !== 'completed' || isFailed) return;
     let cancelled = false;
@@ -387,9 +464,9 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const handleOpenInCodeEditor = useCallback(async () => {
     if (!currentFilePath) return;
 
-    if (!sessionId || !currentFilePath || hasNonFileUriScheme(currentFilePath)) {
+    if (!sessionId || !openFilePath || hasNonFileUriScheme(openFilePath)) {
       fileTabManager.openFile({
-        filePath: currentFilePath,
+        filePath: openFilePath,
         fileName,
         mode: 'agent',
       });
@@ -398,14 +475,14 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
     try {
       const { snapshotAPI } = await import('../../infrastructure/api');
-      const diffData = await snapshotAPI.getOperationDiff(sessionId, currentFilePath, toolCall?.id);
+      const diffData = await snapshotAPI.getOperationDiff(sessionId, openFilePath, toolCall?.id);
       const jumpToLine = diffData.anchorLine ? Number(diffData.anchorLine) : undefined;
 
       if (toolItem.toolName === 'Delete') {
         window.dispatchEvent(new CustomEvent('expand-right-panel'));
         setTimeout(() => {
           createDiffEditorTab(
-            currentFilePath,
+            openFilePath,
             fileName,
             diffData.originalContent || '',
             diffData.modifiedContent || '',
@@ -419,18 +496,18 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       }
 
       fileTabManager.openFile({
-        filePath: currentFilePath,
+        filePath: openFilePath,
         fileName,
         jumpToLine,
         mode: 'agent',
       });
     } catch (error) {
-      log.error('Failed to open in CodeEditor', { sessionId, filePath: currentFilePath, error });
+      log.error('Failed to open in CodeEditor', { sessionId, filePath: openFilePath, error });
       if (toolItem.toolName === 'Delete') {
         window.dispatchEvent(new CustomEvent('expand-right-panel'));
         setTimeout(() => {
           createDiffEditorTab(
-            currentFilePath,
+            openFilePath,
             fileName,
             '',
             '',
@@ -442,12 +519,12 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       }
 
       fileTabManager.openFile({
-        filePath: currentFilePath,
+        filePath: openFilePath,
         fileName,
         mode: 'agent',
       });
     }
-  }, [sessionId, currentFilePath, toolCall?.id, fileName, toolItem.toolName]);
+  }, [sessionId, currentFilePath, openFilePath, toolCall?.id, fileName, toolItem.toolName]);
 
   const canOpenFullCode =
     !isFailed &&
@@ -522,7 +599,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   ]);
 
   const handleOpenBaselineDiff = useCallback(async () => {
-    if (!currentFilePath || !currentWorkspace || !sessionId) {
+    if (!currentFilePath) {
       log.warn('Cannot open diff: missing required info', {
         hasFilePath: !!currentFilePath,
         hasWorkspace: !!currentWorkspace,
@@ -533,6 +610,50 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
     const diffFilePath = currentFile?.filePath || currentFilePath;
     const fileName = diffFilePath.split(/[/\\]/).pop() || diffFilePath;
+
+    const openLocalDiff = () => {
+      if (!localDiffContent) return false;
+
+      if (localDiffContent.originalContent === localDiffContent.modifiedContent) {
+        notificationService.info(
+          `No changes to display for ${fileName}: original and modified content are identical.`
+        );
+        return true;
+      }
+
+      window.dispatchEvent(new CustomEvent('expand-right-panel'));
+
+      setTimeout(() => {
+        createDiffEditorTab(
+          diffFilePath,
+          fileName,
+          localDiffContent.originalContent,
+          localDiffContent.modifiedContent,
+          false,
+          'agent',
+          currentWorkspace?.rootPath,
+          undefined,
+          false,
+          {
+            titleKind: 'diff',
+            duplicateKeyPrefix: 'diff'
+          }
+        );
+      }, 250);
+
+      return true;
+    };
+
+    if (!currentWorkspace || !sessionId) {
+      if (openLocalDiff()) return;
+
+      log.warn('Cannot open diff: no snapshot context and no local diff content', {
+        filePath: currentFilePath,
+        hasWorkspace: !!currentWorkspace,
+        hasSessionId: !!sessionId,
+      });
+      return;
+    }
 
     try {
       const { snapshotAPI } = await import('../../infrastructure/api');
@@ -548,6 +669,14 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       const modifiedContent = diffData.modifiedContent || '';
 
       if (originalContent === modifiedContent) {
+        if (
+          localDiffContent &&
+          localDiffContent.originalContent !== localDiffContent.modifiedContent
+        ) {
+          openLocalDiff();
+          return;
+        }
+
         log.info('Baseline diff has no changes, skipping diff editor', {
           filePath: diffFilePath,
           originalLength: originalContent.length,
@@ -581,9 +710,17 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         );
       }, 250);
     } catch (error) {
+      if (openLocalDiff()) {
+        log.warn('Snapshot diff unavailable, opened local tool diff instead', {
+          filePath: currentFilePath,
+          error,
+        });
+        return;
+      }
+
       log.error('Failed to open Baseline Diff', { filePath: currentFilePath, error });
     }
-  }, [currentFile, currentFilePath, currentWorkspace, sessionId, toolCall?.id]);
+  }, [currentFile, currentFilePath, currentWorkspace, localDiffContent, sessionId, toolCall?.id]);
 
   const getToolIconInfo = () => {
     const iconMap: Record<string, { icon: React.ReactNode; className: string }> = {
@@ -737,7 +874,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       case 'pending_confirmation':
       case 'analyzing':
       default:
-        return <Clock size={16} />;
+        return <ToolProcessingDots size={16} />;
     }
   };
 
@@ -761,7 +898,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const renderHeader = () => {
     const { className: iconClassName } = getToolIconInfo();
     const gitDiffDisabled =
-      !currentFilePath || !currentWorkspace || !sessionId;
+      !currentFilePath || (!localDiffContent && (!currentWorkspace || !sessionId));
     const hasDiffStats =
       currentFileDiffStats.additions > 0 || currentFileDiffStats.deletions > 0;
 
@@ -824,32 +961,47 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       }
       extra={
         <ToolCardHeaderActions className="file-op-header-actions">
-          {isParamsStreaming && (status === 'preparing' || status === 'streaming') && (
+          {writeContentStatusText && (
+            <span className="params-streaming-indicator">
+              {writeContentStatusText}
+            </span>
+          )}
+          {isParamsStreaming && (status === 'preparing' || status === 'streaming') && !writeContentStatusText && (
             <span className="params-streaming-indicator">
               {currentFilePath ? t('toolCards.file.receivingParams') : t('toolCards.file.analyzing')}
             </span>
           )}
           {showConfirmationActions && (
-            <>
-              <IconButton
-                className="tool-card-header-action file-op-header-action file-op-confirm-btn"
-                variant="success"
-                size="xs"
-                onClick={handleConfirmClick}
-                tooltip={t('toolCards.mcp.confirmExecute')}
-              >
-                <Check size={12} />
-              </IconButton>
-              <IconButton
-                className="tool-card-header-action file-op-header-action file-op-reject-btn"
-                variant="danger"
-                size="xs"
-                onClick={handleRejectClick}
-                tooltip={t('toolCards.mcp.cancel')}
-              >
-                <X size={12} />
-              </IconButton>
-            </>
+            hasAcpPermissionOptions(toolItem) ? (
+              <AcpPermissionActions
+                toolItem={toolItem}
+                input={toolCall?.input}
+                buttonClassName="file-op-header-action"
+                onConfirm={onConfirm}
+                onReject={onReject}
+              />
+            ) : (
+              <>
+                <IconButton
+                  className="tool-card-header-action file-op-header-action file-op-confirm-btn"
+                  variant="success"
+                  size="xs"
+                  onClick={handleConfirmClick}
+                  tooltip={t('toolCards.mcp.confirmExecute')}
+                >
+                  <Check size={12} />
+                </IconButton>
+                <IconButton
+                  className="tool-card-header-action file-op-header-action file-op-reject-btn"
+                  variant="danger"
+                  size="xs"
+                  onClick={handleRejectClick}
+                  tooltip={t('toolCards.mcp.cancel')}
+                >
+                  <X size={12} />
+                </IconButton>
+              </>
+            )
           )}
           {canOpenFullCode && (
             <Tooltip content={t('toolCards.file.openFullCodeHint')} placement="top">
@@ -883,24 +1035,36 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
             content={renderDeleteContent()}
             extra={showConfirmationActions ? (
               <ToolCardHeaderActions className="file-op-header-actions">
-                <IconButton
-                  className="tool-card-header-action file-op-header-action file-op-confirm-btn"
-                  variant="success"
-                  size="xs"
-                  onClick={handleConfirmClick}
-                  tooltip={t('toolCards.mcp.confirmExecute')}
-                >
-                  <Check size={12} />
-                </IconButton>
-                <IconButton
-                  className="tool-card-header-action file-op-header-action file-op-reject-btn"
-                  variant="danger"
-                  size="xs"
-                  onClick={handleRejectClick}
-                  tooltip={t('toolCards.mcp.cancel')}
-                >
-                  <X size={12} />
-                </IconButton>
+                {hasAcpPermissionOptions(toolItem) ? (
+                  <AcpPermissionActions
+                    toolItem={toolItem}
+                    input={toolCall?.input}
+                    buttonClassName="file-op-header-action"
+                    onConfirm={onConfirm}
+                    onReject={onReject}
+                  />
+                ) : (
+                  <>
+                    <IconButton
+                      className="tool-card-header-action file-op-header-action file-op-confirm-btn"
+                      variant="success"
+                      size="xs"
+                      onClick={handleConfirmClick}
+                      tooltip={t('toolCards.mcp.confirmExecute')}
+                    >
+                      <Check size={12} />
+                    </IconButton>
+                    <IconButton
+                      className="tool-card-header-action file-op-header-action file-op-reject-btn"
+                      variant="danger"
+                      size="xs"
+                      onClick={handleRejectClick}
+                      tooltip={t('toolCards.mcp.cancel')}
+                    >
+                      <X size={12} />
+                    </IconButton>
+                  </>
+                )}
               </ToolCardHeaderActions>
             ) : undefined}
           />

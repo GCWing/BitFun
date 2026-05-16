@@ -2,15 +2,14 @@
 //!
 //! Manages skill discovery, mode-specific filtering, and loading.
 
-use super::builtin::{
-    builtin_skill_group_key, ensure_builtin_skills_installed, is_builtin_skill_dir_name,
-};
-use super::default_profiles::is_skill_enabled_for_mode;
+use super::builtin::ensure_builtin_skills_installed;
+use super::catalog::builtin_skill_group_key;
 use super::mode_overrides::{
     load_disabled_mode_skills_local, load_disabled_mode_skills_remote,
     load_user_mode_skill_overrides, UserModeSkillOverrides,
 };
-use super::types::{SkillData, SkillInfo, SkillLocation};
+use super::resolver::{resolve_skill_default_enabled_for_mode, resolve_skill_state_for_mode};
+use super::types::{ModeSkillInfo, SkillData, SkillInfo, SkillLocation};
 use crate::agentic::workspace::WorkspaceFileSystem;
 use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -26,6 +25,9 @@ static SKILL_REGISTRY: OnceLock<SkillRegistry> = OnceLock::new();
 
 const USER_PREFIX: &str = "user";
 const PROJECT_PREFIX: &str = "project";
+const BITFUN_USER_SLOT: &str = "bitfun";
+const BITFUN_SYSTEM_SLOT: &str = "bitfun-system";
+const BITFUN_SYSTEM_DIR_NAME: &str = ".system";
 
 /// Project-level skill roots under a workspace.
 const PROJECT_SKILL_SLOTS: &[(&str, &str, &str)] = &[
@@ -57,6 +59,7 @@ struct SkillRootEntry {
     level: SkillLocation,
     slot: &'static str,
     priority: usize,
+    is_builtin: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -73,12 +76,15 @@ struct SkillCandidate {
 }
 
 impl SkillCandidate {
-    fn from_data(mut data: SkillData, slot: &str, key_prefix: &str, priority: usize) -> Self {
+    fn from_data(
+        mut data: SkillData,
+        slot: &str,
+        key_prefix: &str,
+        priority: usize,
+        is_builtin: bool,
+    ) -> Self {
         data.source_slot = slot.to_string();
         data.key = build_skill_key(key_prefix, slot, &data.dir_name);
-        let is_builtin = data.location == SkillLocation::User
-            && slot == "bitfun"
-            && is_builtin_skill_dir_name(&data.dir_name);
         let group_key = if is_builtin {
             builtin_skill_group_key(&data.dir_name).map(str::to_string)
         } else {
@@ -145,42 +151,103 @@ fn dedupe_preserving_order(keys: Vec<String>) -> Vec<String> {
 
 fn sort_skills(mut skills: Vec<SkillInfo>) -> Vec<SkillInfo> {
     skills.sort_by(|a, b| {
-        let level_order = match a.level {
-            SkillLocation::Project => 0,
-            SkillLocation::User => 1,
-        }
-        .cmp(&match b.level {
-            SkillLocation::Project => 0,
-            SkillLocation::User => 1,
-        });
-
-        level_order
+        skill_level_rank(a.level)
+            .cmp(&skill_level_rank(b.level))
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            .then_with(|| a.name.cmp(&b.name))
             .then_with(|| a.key.cmp(&b.key))
     });
     skills
 }
 
+fn skill_level_rank(level: SkillLocation) -> u8 {
+    match level {
+        SkillLocation::Project => 0,
+        SkillLocation::User => 1,
+    }
+}
+
+fn skill_candidate_precedence(candidate: &SkillCandidate) -> (usize, u8, String, String, String) {
+    (
+        candidate.priority,
+        skill_level_rank(candidate.info.level),
+        candidate.info.name.to_lowercase(),
+        candidate.info.name.clone(),
+        candidate.info.key.clone(),
+    )
+}
+
+fn sort_resolved_skill_candidates(mut resolved: Vec<SkillCandidate>) -> Vec<SkillCandidate> {
+    resolved.sort_by(|a, b| skill_candidate_precedence(a).cmp(&skill_candidate_precedence(b)));
+    resolved
+}
+
+fn sort_skill_candidates_for_resolution(mut candidates: Vec<SkillCandidate>) -> Vec<SkillCandidate> {
+    candidates.sort_by(|a, b| {
+        skill_candidate_precedence(a)
+            .cmp(&skill_candidate_precedence(b))
+            .then_with(|| a.info.path.cmp(&b.info.path))
+    });
+    candidates
+}
+
+fn sort_remote_dir_entries(entries: &mut [crate::agentic::workspace::WorkspaceDirEntry]) {
+    entries.sort_by(|a, b| {
+        a.name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.path.cmp(&b.path))
+    });
+}
+
 fn resolve_visible_skills(candidates: Vec<SkillCandidate>) -> Vec<SkillInfo> {
     let mut by_name: HashMap<String, SkillCandidate> = HashMap::new();
-    for candidate in candidates {
+    for candidate in sort_skill_candidates_for_resolution(candidates) {
         match by_name.get(&candidate.info.name) {
-            Some(existing) if existing.priority <= candidate.priority => {}
+            Some(existing)
+                if skill_candidate_precedence(existing) <= skill_candidate_precedence(&candidate) => {}
             _ => {
                 by_name.insert(candidate.info.name.clone(), candidate);
             }
         }
     }
 
-    let mut resolved: Vec<SkillCandidate> = by_name.into_values().collect();
-    resolved.sort_by(|a, b| {
-        a.priority
-            .cmp(&b.priority)
-            .then_with(|| a.info.name.to_lowercase().cmp(&b.info.name.to_lowercase()))
-    });
-    resolved
+    sort_resolved_skill_candidates(by_name.into_values().collect())
         .into_iter()
         .map(|candidate| candidate.info)
+        .collect()
+}
+
+fn sort_resolved_skills_for_presentation(skills: Vec<SkillInfo>) -> Vec<SkillInfo> {
+    let mut skills = skills;
+    skills.sort_by(|a, b| {
+        skill_level_rank(a.level)
+            .cmp(&skill_level_rank(b.level))
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            .then_with(|| a.name.cmp(&b.name))
+            .then_with(|| a.key.cmp(&b.key))
+    });
+    skills
+}
+
+fn filter_candidates_for_mode(
+    candidates: Vec<SkillCandidate>,
+    mode_id: &str,
+    user_overrides: &UserModeSkillOverrides,
+    disabled_project_skills: &HashSet<String>,
+) -> Vec<SkillCandidate> {
+    candidates
+        .into_iter()
+        .filter(|candidate| {
+            resolve_skill_state_for_mode(
+                &candidate.info,
+                mode_id,
+                user_overrides,
+                disabled_project_skills,
+            )
+            .effective_enabled
+        })
         .collect()
 }
 
@@ -242,6 +309,7 @@ impl SkillRegistry {
                         level: SkillLocation::Project,
                         slot,
                         priority,
+                        is_builtin: false,
                     });
                 }
                 priority += 1;
@@ -257,13 +325,14 @@ impl SkillRegistry {
                         level: SkillLocation::User,
                         slot,
                         priority,
+                        is_builtin: false,
                     });
                 }
                 priority += 1;
             }
         }
 
-        // BitFun's own user skills dir sits between home slots and config slots.
+        // BitFun's own user-defined skills sit between home slots and config slots.
         // This lets other agent directories (e.g. ~/.claude/skills) take precedence
         // while still keeping config-level overrides after BitFun defaults.
         let path_manager = get_path_manager_arc();
@@ -272,8 +341,21 @@ impl SkillRegistry {
             entries.push(SkillRootEntry {
                 path: bitfun_skills,
                 level: SkillLocation::User,
-                slot: "bitfun",
+                slot: BITFUN_USER_SLOT,
                 priority,
+                is_builtin: false,
+            });
+        }
+        priority += 1;
+
+        let builtin_skills = path_manager.builtin_skills_dir();
+        if builtin_skills.exists() && builtin_skills.is_dir() {
+            entries.push(SkillRootEntry {
+                path: builtin_skills,
+                level: SkillLocation::User,
+                slot: BITFUN_SYSTEM_SLOT,
+                priority,
+                is_builtin: true,
             });
         }
         priority += 1;
@@ -287,6 +369,7 @@ impl SkillRegistry {
                         level: SkillLocation::User,
                         slot,
                         priority,
+                        is_builtin: false,
                     });
                 }
                 priority += 1;
@@ -316,6 +399,10 @@ impl SkillRegistry {
                 continue;
             };
 
+            if entry.slot == BITFUN_USER_SLOT && dir_name == BITFUN_SYSTEM_DIR_NAME {
+                continue;
+            }
+
             let skill_md_path = path.join("SKILL.md");
             if !skill_md_path.exists() {
                 continue;
@@ -339,6 +426,7 @@ impl SkillRegistry {
                             entry.slot,
                             key_prefix,
                             entry.priority,
+                            entry.is_builtin,
                         ));
                     }
                     Err(error) => {
@@ -351,6 +439,14 @@ impl SkillRegistry {
             }
         }
 
+        skills.sort_by(|a, b| {
+            a.info
+                .dir_name
+                .to_lowercase()
+                .cmp(&b.info.dir_name.to_lowercase())
+                .then_with(|| a.info.dir_name.cmp(&b.info.dir_name))
+                .then_with(|| a.info.key.cmp(&b.info.key))
+        });
         skills
     }
 
@@ -389,10 +485,11 @@ impl SkillRegistry {
 
         let mut skills = Vec::new();
         for entry in roots {
-            let entries = match fs.read_dir(&entry.path).await {
+            let mut entries = match fs.read_dir(&entry.path).await {
                 Ok(value) => value,
                 Err(_) => continue,
             };
+            sort_remote_dir_entries(&mut entries);
 
             for item in entries {
                 if !item.is_dir || item.is_symlink {
@@ -421,6 +518,7 @@ impl SkillRegistry {
                                 entry.slot,
                                 PROJECT_PREFIX,
                                 entry.priority,
+                                false,
                             ));
                         }
                         Err(error) => {
@@ -471,17 +569,7 @@ impl SkillRegistry {
             .into_iter()
             .collect();
 
-        candidates
-            .into_iter()
-            .filter(|candidate| {
-                is_skill_enabled_for_mode(
-                    &candidate.info,
-                    mode_id,
-                    &user_overrides,
-                    &disabled_project,
-                )
-            })
-            .collect()
+        filter_candidates_for_mode(candidates, mode_id, &user_overrides, &disabled_project)
     }
 
     async fn apply_mode_filters_for_remote_workspace(
@@ -506,17 +594,125 @@ impl SkillRegistry {
             .into_iter()
             .collect();
 
-        candidates
+        filter_candidates_for_mode(candidates, mode_id, &user_overrides, &disabled_project)
+    }
+
+    fn build_mode_skill_infos(
+        all_skills: Vec<SkillInfo>,
+        resolved_skills: Vec<SkillInfo>,
+        mode_id: &str,
+        user_overrides: &UserModeSkillOverrides,
+        disabled_project_skills: &HashSet<String>,
+    ) -> Vec<ModeSkillInfo> {
+        let resolved_keys: HashSet<String> =
+            resolved_skills.into_iter().map(|skill| skill.key).collect();
+
+        all_skills
             .into_iter()
-            .filter(|candidate| {
-                is_skill_enabled_for_mode(
-                    &candidate.info,
+            .map(|skill| {
+                let state = resolve_skill_state_for_mode(
+                    &skill,
                     mode_id,
-                    &user_overrides,
-                    &disabled_project,
-                )
+                    user_overrides,
+                    disabled_project_skills,
+                );
+                let selected_for_runtime = resolved_keys.contains(&skill.key);
+
+                ModeSkillInfo {
+                    skill,
+                    default_enabled: state.default_enabled,
+                    effective_enabled: state.effective_enabled,
+                    disabled_by_mode: !state.effective_enabled,
+                    selected_for_runtime,
+                    state_reason: state.reason,
+                }
             })
             .collect()
+    }
+
+    fn find_default_hidden_builtin_for_explicit_invocation(
+        skill_name: &str,
+        candidates: Vec<SkillCandidate>,
+        agent_type: Option<&str>,
+    ) -> BitFunResult<SkillInfo> {
+        let Some(mode_id) = agent_type.map(str::trim).filter(|value| !value.is_empty()) else {
+            return Err(BitFunError::tool(format!(
+                "Skill '{}' not found",
+                skill_name
+            )));
+        };
+
+        let info = resolve_visible_skills(candidates)
+            .into_iter()
+            .find(|skill| skill.name == skill_name)
+            .ok_or_else(|| BitFunError::tool(format!("Skill '{}' not found", skill_name)))?;
+
+        if info.level == SkillLocation::User
+            && info.is_builtin
+            && info.group_key.as_deref() == Some("gstack")
+            && !resolve_skill_default_enabled_for_mode(&info, mode_id)
+        {
+            return Ok(info);
+        }
+
+        Err(BitFunError::tool(format!(
+            "Skill '{}' is disabled for mode '{}'. Enable it in mode skill settings or switch to a mode where it is enabled.",
+            skill_name, mode_id
+        )))
+    }
+
+    async fn find_skill_info_for_explicit_invocation_workspace(
+        &self,
+        skill_name: &str,
+        workspace_root: Option<&Path>,
+        agent_type: Option<&str>,
+    ) -> BitFunResult<SkillInfo> {
+        let candidates = self
+            .scan_skill_candidates_for_workspace(workspace_root)
+            .await;
+        let filtered = self
+            .apply_mode_filters_for_workspace(candidates.clone(), workspace_root, agent_type)
+            .await;
+        if let Some(info) = resolve_visible_skills(filtered)
+            .into_iter()
+            .find(|skill| skill.name == skill_name)
+        {
+            return Ok(info);
+        }
+
+        Self::find_default_hidden_builtin_for_explicit_invocation(
+            skill_name, candidates, agent_type,
+        )
+    }
+
+    async fn find_skill_info_for_explicit_invocation_remote_workspace(
+        &self,
+        skill_name: &str,
+        fs: &dyn WorkspaceFileSystem,
+        remote_root: &str,
+        agent_type: Option<&str>,
+    ) -> BitFunResult<SkillInfo> {
+        let candidates = self
+            .scan_skill_candidates_for_remote_workspace(fs, remote_root)
+            .await;
+        let filtered = self
+            .apply_mode_filters_for_remote_workspace(
+                candidates.clone(),
+                fs,
+                remote_root,
+                agent_type,
+            )
+            .await;
+        if let Some(info) = resolve_visible_skills(filtered)
+            .into_iter()
+            .find(|skill| skill.name == skill_name)
+        {
+            return Ok(info);
+        }
+
+        Self::find_default_hidden_builtin_for_explicit_invocation(
+            skill_name, candidates, agent_type,
+        )
     }
 
     async fn ensure_loaded(&self) {
@@ -529,8 +725,7 @@ impl SkillRegistry {
 
     pub async fn refresh(&self) {
         let skills = sort_skills(annotate_shadowed_skills(
-            self.scan_skill_candidates_for_workspace(None)
-                .await,
+            self.scan_skill_candidates_for_workspace(None).await,
         ));
         let mut cache = self.cache.write().await;
         *cache = skills;
@@ -578,7 +773,7 @@ impl SkillRegistry {
         let filtered = self
             .apply_mode_filters_for_workspace(candidates, workspace_root, agent_type)
             .await;
-        resolve_visible_skills(filtered)
+        sort_resolved_skills_for_presentation(resolve_visible_skills(filtered))
     }
 
     pub async fn get_resolved_skills_for_remote_workspace(
@@ -593,7 +788,73 @@ impl SkillRegistry {
         let filtered = self
             .apply_mode_filters_for_remote_workspace(candidates, fs, remote_root, agent_type)
             .await;
-        resolve_visible_skills(filtered)
+        sort_resolved_skills_for_presentation(resolve_visible_skills(filtered))
+    }
+
+    pub async fn get_mode_skill_infos_for_workspace(
+        &self,
+        workspace_root: Option<&Path>,
+        mode_id: &str,
+    ) -> Vec<ModeSkillInfo> {
+        let candidates = self
+            .scan_skill_candidates_for_workspace(workspace_root)
+            .await;
+        let all_skills = sort_skills(annotate_shadowed_skills(candidates.clone()));
+        let user_overrides = load_user_mode_skill_overrides(mode_id)
+            .await
+            .unwrap_or_else(|_| UserModeSkillOverrides::default());
+        let disabled_project = match workspace_root {
+            Some(root) => load_disabled_mode_skills_local(root, mode_id)
+                .await
+                .unwrap_or_default(),
+            None => Vec::new(),
+        };
+        let disabled_project: HashSet<String> = dedupe_preserving_order(disabled_project)
+            .into_iter()
+            .collect();
+        let filtered =
+            filter_candidates_for_mode(candidates, mode_id, &user_overrides, &disabled_project);
+        let resolved = resolve_visible_skills(filtered);
+
+        Self::build_mode_skill_infos(
+            all_skills,
+            resolved,
+            mode_id,
+            &user_overrides,
+            &disabled_project,
+        )
+    }
+
+    pub async fn get_mode_skill_infos_for_remote_workspace(
+        &self,
+        fs: &dyn WorkspaceFileSystem,
+        remote_root: &str,
+        mode_id: &str,
+    ) -> Vec<ModeSkillInfo> {
+        let candidates = self
+            .scan_skill_candidates_for_remote_workspace(fs, remote_root)
+            .await;
+        let all_skills = sort_skills(annotate_shadowed_skills(candidates.clone()));
+        let user_overrides = load_user_mode_skill_overrides(mode_id)
+            .await
+            .unwrap_or_else(|_| UserModeSkillOverrides::default());
+        let disabled_project = load_disabled_mode_skills_remote(fs, remote_root, mode_id)
+            .await
+            .unwrap_or_default();
+        let disabled_project: HashSet<String> = dedupe_preserving_order(disabled_project)
+            .into_iter()
+            .collect();
+        let filtered =
+            filter_candidates_for_mode(candidates, mode_id, &user_overrides, &disabled_project);
+        let resolved = resolve_visible_skills(filtered);
+
+        Self::build_mode_skill_infos(
+            all_skills,
+            resolved,
+            mode_id,
+            &user_overrides,
+            &disabled_project,
+        )
     }
 
     pub async fn find_skill_by_key_for_workspace(
@@ -626,11 +887,12 @@ impl SkillRegistry {
         agent_type: Option<&str>,
     ) -> BitFunResult<SkillData> {
         let info = self
-            .get_resolved_skills_for_workspace(workspace_root, agent_type)
-            .await
-            .into_iter()
-            .find(|skill| skill.name == skill_name)
-            .ok_or_else(|| BitFunError::tool(format!("Skill '{}' not found", skill_name)))?;
+            .find_skill_info_for_explicit_invocation_workspace(
+                skill_name,
+                workspace_root,
+                agent_type,
+            )
+            .await?;
 
         let skill_md_path = PathBuf::from(&info.path).join("SKILL.md");
         let content = fs::read_to_string(&skill_md_path)
@@ -652,11 +914,13 @@ impl SkillRegistry {
         agent_type: Option<&str>,
     ) -> BitFunResult<SkillData> {
         let info = self
-            .get_resolved_skills_for_remote_workspace(fs, remote_root, agent_type)
-            .await
-            .into_iter()
-            .find(|skill| skill.name == skill_name)
-            .ok_or_else(|| BitFunError::tool(format!("Skill '{}' not found", skill_name)))?;
+            .find_skill_info_for_explicit_invocation_remote_workspace(
+                skill_name,
+                fs,
+                remote_root,
+                agent_type,
+            )
+            .await?;
 
         let content = Self::read_skill_md_for_remote_merge(&info, fs).await?;
         let mut data = SkillData::from_markdown(info.path.clone(), &content, info.level, true)?;

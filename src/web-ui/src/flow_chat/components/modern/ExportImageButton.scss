@@ -2,18 +2,21 @@
 
 // Export wrapper
 .export-image-wrapper {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
+  overflow: visible;
 }
 
 // Export content container
 .export-content {
-  width: 800px;
-  padding: 24px;
+  /* Width is set dynamically in JS to match the live chat pane width.
+     Padding matches ModelRoundItem (3rem ≈ 48px each side) so the
+     effective content width is identical to the live chat. */
+  padding: 24px 48px;
   background: var(--color-bg-flowchat);
   box-sizing: border-box;
   font-family: var(--font-family-sans);
+  /* Use a fixed 800px layout context so text wraps at exactly the same
+     width regardless of the wrapper's position or viewport. */
+  container-type: inline-size;
 
   /* Prevent unwanted wrapping of short inline text */
   .thinking-label,
@@ -32,21 +35,26 @@
     flex-shrink: 0 !important;
   }
 
-  /* Fix html-to-image inline text wrapping bug (last character wrapping) */
+  /* modern-screenshot does not have the last-character wrapping bug that
+     html-to-image had, so links can stay display:inline for natural line
+     breaking. We keep padding-right to give inline elements a tiny buffer. */
   a, code, strong, em, u, .file-mention {
     padding-right: 2px;
-    margin-right: -2px;
-    display: inline-block;
-    max-width: 100%;
-    word-break: break-word;
   }
   
-  /* Fix html-to-image font rendering differences that cause text wrapping */
+  /* Keep font rendering as close to the live chat as possible so text
+     wrapping is identical. Do NOT override letter-spacing or ligatures
+     globally — those can change word widths and cause line-break deltas. */
   * {
     -webkit-font-smoothing: antialiased;
     text-rendering: geometricPrecision;
-    letter-spacing: normal !important;
-    font-variant-ligatures: none !important;
+  }
+
+  /* Prevent links from being broken across lines inside the exported image.
+     FileLink is a <button> (inline-block) whose default white-space:normal
+     can wrap its text in SVG foreignObject contexts. */
+  a, .file-link, .tab-link, .visualization-link {
+    white-space: nowrap !important;
   }
 
   // ===== Header =====

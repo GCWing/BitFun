@@ -322,8 +322,7 @@ impl MCPServerManager {
         let stop_result = proc.stop().await;
 
         self.connection_pool.remove_connection(server_id).await;
-        self.resource_catalog_cache.write().await.remove(server_id);
-        self.prompt_catalog_cache.write().await.remove(server_id);
+        self.catalog_cache.remove_server(server_id).await;
 
         Self::unregister_mcp_tools(server_id).await;
 
@@ -476,8 +475,7 @@ impl MCPServerManager {
 
         self.ephemeral_configs.write().await.remove(server_id);
         self.clear_reconnect_state(server_id).await;
-        self.resource_catalog_cache.write().await.remove(server_id);
-        self.prompt_catalog_cache.write().await.remove(server_id);
+        self.catalog_cache.remove_server(server_id).await;
 
         Ok(())
     }
@@ -503,8 +501,7 @@ impl MCPServerManager {
 
         self.config_service.delete_server_config(server_id).await?;
         self.clear_reconnect_state(server_id).await;
-        self.resource_catalog_cache.write().await.remove(server_id);
-        self.prompt_catalog_cache.write().await.remove(server_id);
+        self.catalog_cache.remove_server(server_id).await;
         info!("Deleted MCP server config: id={}", server_id);
 
         Ok(())
@@ -593,8 +590,7 @@ impl MCPServerManager {
 
         self.registry.clear().await?;
         self.reconnect_states.write().await.clear();
-        self.resource_catalog_cache.write().await.clear();
-        self.prompt_catalog_cache.write().await.clear();
+        self.catalog_cache.clear().await;
         self.pending_interactions.write().await.clear();
         let oauth_sessions: Vec<_> = self
             .oauth_sessions

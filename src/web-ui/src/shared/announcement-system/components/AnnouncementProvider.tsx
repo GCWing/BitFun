@@ -3,6 +3,7 @@ import { useAnnouncementStore } from '../store/announcementStore';
 import { announcementService } from '../services/AnnouncementService';
 import AnnouncementToastStack from './AnnouncementToastStack';
 import FeatureModal from './FeatureModal';
+import { configAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('AnnouncementProvider');
@@ -46,10 +47,12 @@ const AnnouncementProvider: React.FC = () => {
     const load = async () => {
       try {
         const cards = await announcementService.getPendingAnnouncements();
-        if (cards.length > 0) {
-          log.debug('Announcement cards loaded', { count: cards.length });
-          const maxDelay = Math.max(...cards.map((c) => c.trigger.delay_ms ?? 0));
-          setTimeout(() => loadQueue(cards), maxDelay);
+        const tipsEnabled = await configAPI.getConfig('app.notifications.enable_startup_tips') !== false;
+        const visibleCards = tipsEnabled ? cards : cards.filter((card) => card.card_type !== 'tip');
+        if (visibleCards.length > 0) {
+          log.debug('Announcement cards loaded', { count: visibleCards.length });
+          const maxDelay = Math.max(...visibleCards.map((c) => c.trigger.delay_ms ?? 0));
+          setTimeout(() => loadQueue(visibleCards), maxDelay);
         }
       } catch (e) {
         log.error('Failed to load announcement cards', e);

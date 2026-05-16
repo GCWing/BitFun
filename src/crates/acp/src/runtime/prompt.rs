@@ -9,6 +9,7 @@ use bitfun_core::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSo
 use bitfun_core::agentic::events::EventEnvelope;
 use bitfun_events::AgenticEvent as CoreEvent;
 use log::warn;
+use serde_json::json;
 use tokio::sync::broadcast;
 
 use super::content::parse_prompt_blocks;
@@ -51,6 +52,7 @@ impl BitfunAcpRuntime {
                     acp_session.mode_id.clone(),
                     Some(acp_session.cwd.clone()),
                     DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                    Some(acp_user_message_metadata()),
                 )
                 .await
                 .map_err(Self::internal_error)?;
@@ -66,6 +68,7 @@ impl BitfunAcpRuntime {
                     acp_session.mode_id.clone(),
                     Some(acp_session.cwd.clone()),
                     DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                    Some(acp_user_message_metadata()),
                 )
                 .await
                 .map_err(Self::internal_error)?;
@@ -102,6 +105,10 @@ impl BitfunAcpRuntime {
 
         Ok(())
     }
+}
+
+fn acp_user_message_metadata() -> serde_json::Value {
+    json!({ "acp_transport": true })
 }
 
 async fn wait_for_prompt_completion(

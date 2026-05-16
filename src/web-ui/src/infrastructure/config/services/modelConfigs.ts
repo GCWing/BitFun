@@ -121,7 +121,7 @@ export const PROVIDER_TEMPLATES: Record<string, ProviderTemplate> = {
     name: t('settings/ai-model:providers.deepseek.name'),
     baseUrl: 'https://api.deepseek.com/v1',
     format: 'openai',
-    models: ['deepseek-chat', 'deepseek-reasoner'],
+    models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     requiresApiKey: true,
     description: t('settings/ai-model:providers.deepseek.description'),
     helpUrl: 'https://platform.deepseek.com/api_keys'

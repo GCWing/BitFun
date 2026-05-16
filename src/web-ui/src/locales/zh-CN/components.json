@@ -53,7 +53,6 @@
     "renderFailed": "图表渲染失败",
     "codeIncomplete": "代码不完整，等待更多内容...",
     "rendering": "正在渲染图表...",
-    "openInEditor": "在编辑器中打开",
     "showCode": "查看源码",
     "hideCode": "隐藏源码",
     "copyCode": "复制代码"
@@ -532,7 +531,11 @@
     "projectRequestMessage": "我想创建一个新项目：\n\n{{description}}\n\n请帮我设计项目结构并开始实现。",
     "projectRequestSent": "已将项目需求发送给小方，开始协作创建！",
     "projectRequestSendFailed": "发送项目描述失败，请手动输入",
-    "flowChatInitFailed": "初始化失败，请刷新页面重试"
+    "flowChatInitFailed": "初始化失败，请刷新页面重试",
+    "windowFullscreenEntered": "已进入窗口全屏",
+    "windowFullscreenExited": "已退出窗口全屏",
+    "windowFullscreenExitHint": "按 {{shortcut}} 退出。",
+    "windowFullscreenEnterHint": "按 {{shortcut}} 再次进入。"
   },
   "bottomBar": {
     "sessions": "Agent 工作台",
@@ -606,8 +609,6 @@
       "close": "关闭"
     },
     "loading": {
-      "mermaidPanel": "加载Mermaid双模式面板...",
-      "mermaidEditor": "加载Mermaid编辑器...",
       "gitDiff": "加载Git差异...",
       "gitGraph": "加载Git图表...",
       "gitBranchHistory": "加载分支提交历史...",
@@ -629,9 +630,7 @@
       "fileOperations": "文件操作"
     },
     "fallback": {
-      "noCodeContent": "无代码内容",
-      "mermaidChartTitle": "Mermaid图表",
-      "mermaidDefaultCode": "flowchart TD\n    A[开始] --> B[结束]"
+      "noCodeContent": "无代码内容"
     }
   }
 }

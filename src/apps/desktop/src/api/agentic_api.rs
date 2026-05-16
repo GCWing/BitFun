@@ -13,6 +13,10 @@ use bitfun_core::agentic::coordination::{
     SubagentTimeoutAction,
 };
 use bitfun_core::agentic::core::*;
+use bitfun_core::agentic::deep_review_policy::{
+    apply_deep_review_queue_control, default_review_team_definition, DeepReviewQueueControlAction,
+    ReviewTeamDefinition,
+};
 use bitfun_core::agentic::image_analysis::ImageContextData;
 use bitfun_core::agentic::tools::image_context::get_image_context;
 #[derive(Debug, Deserialize)]
@@ -22,6 +26,8 @@ pub struct CreateSessionRequest {
     pub session_name: String,
     pub agent_type: String,
     pub workspace_path: String,
+    #[serde(default)]
+    pub session_kind: Option<SessionKind>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
     #[serde(default)]
@@ -84,6 +90,8 @@ pub struct StartDialogTurnRequest {
     pub turn_id: Option<String>,
     #[serde(default)]
     pub image_contexts: Option<Vec<ImageContextData>>,
+    #[serde(default)]
+    pub user_message_metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -154,6 +162,57 @@ pub struct SessionResponse {
 pub struct CancelDialogTurnRequest {
     pub session_id: String,
     pub dialog_turn_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SteerDialogTurnRequest {
+    pub session_id: String,
+    pub dialog_turn_id: String,
+    /// Rendered content delivered to the model. When omitted by the caller this
+    /// equals the displayed user text.
+    pub content: String,
+    /// Original user text for UI rendering (defaults to `content`).
+    #[serde(default)]
+    pub display_content: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SteerDialogTurnResponse {
+    pub success: bool,
+    pub steering_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlDeepReviewQueueRequest {
+    pub session_id: String,
+    pub dialog_turn_id: String,
+    pub tool_id: String,
+    pub action: ControlDeepReviewQueueActionDTO,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlDeepReviewQueueActionDTO {
+    Pause,
+    Continue,
+    Cancel,
+    SkipOptional,
+}
+
+impl From<ControlDeepReviewQueueActionDTO> for DeepReviewQueueControlAction {
+    fn from(value: ControlDeepReviewQueueActionDTO) -> Self {
+        match value {
+            ControlDeepReviewQueueActionDTO::Pause => DeepReviewQueueControlAction::Pause,
+            ControlDeepReviewQueueActionDTO::Continue => DeepReviewQueueControlAction::Continue,
+            ControlDeepReviewQueueActionDTO::Cancel => DeepReviewQueueControlAction::Cancel,
+            ControlDeepReviewQueueActionDTO::SkipOptional => {
+                DeepReviewQueueControlAction::SkipOptional
+            }
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -268,16 +327,30 @@ pub async fn create_session(
             ..Default::default()
         });
 
-    let session = coordinator
-        .create_session_with_workspace(
-            request.session_id,
-            request.session_name.clone(),
-            request.agent_type.clone(),
-            config,
-            request.workspace_path,
-        )
-        .await
-        .map_err(|e| format!("Failed to create session: {}", e))?;
+    let session_kind = request.session_kind.unwrap_or_default();
+    let session = if matches!(session_kind, SessionKind::Subagent) {
+        coordinator
+            .create_hidden_subagent_session_with_workspace(
+                request.session_id,
+                request.session_name.clone(),
+                request.agent_type.clone(),
+                config,
+                request.workspace_path,
+                None,
+            )
+            .await
+    } else {
+        coordinator
+            .create_session_with_workspace(
+                request.session_id,
+                request.session_name.clone(),
+                request.agent_type.clone(),
+                config,
+                request.workspace_path,
+            )
+            .await
+    }
+    .map_err(|e| format!("Failed to create session: {}", e))?;
 
     Ok(CreateSessionResponse {
         session_id: session.session_id,
@@ -396,6 +469,7 @@ pub async fn start_dialog_turn(
         workspace_path,
         turn_id,
         image_contexts,
+        user_message_metadata,
     } = request;
 
     let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi);
@@ -419,6 +493,7 @@ pub async fn start_dialog_turn(
             workspace_path,
             policy,
             None,
+            user_message_metadata,
             resolved_images,
         )
         .await
@@ -613,6 +688,62 @@ pub async fn cancel_dialog_turn(
             );
             format!("Failed to cancel dialog turn: {}", e)
         })
+}
+
+#[tauri::command]
+pub async fn steer_dialog_turn(
+    scheduler: State<'_, Arc<DialogScheduler>>,
+    request: SteerDialogTurnRequest,
+) -> Result<SteerDialogTurnResponse, String> {
+    let SteerDialogTurnRequest {
+        session_id,
+        dialog_turn_id,
+        content,
+        display_content,
+    } = request;
+
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return Err("Steering content cannot be empty".to_string());
+    }
+
+    let outcome = scheduler
+        .submit_steering(session_id, dialog_turn_id, content, display_content)
+        .await
+        .map_err(|e| format!("Failed to steer dialog turn: {}", e))?;
+
+    let steering_id = match outcome {
+        bitfun_core::agentic::coordination::DialogSteerOutcome::Buffered {
+            steering_id, ..
+        } => steering_id,
+    };
+
+    Ok(SteerDialogTurnResponse {
+        success: true,
+        steering_id,
+    })
+}
+
+#[tauri::command]
+pub async fn control_deep_review_queue(
+    request: ControlDeepReviewQueueRequest,
+) -> Result<(), String> {
+    if request.session_id.trim().is_empty() {
+        return Err("Missing session_id".to_string());
+    }
+    if request.dialog_turn_id.trim().is_empty() {
+        return Err("Missing dialog_turn_id".to_string());
+    }
+    if request.tool_id.trim().is_empty() {
+        return Err("Missing tool_id".to_string());
+    }
+
+    apply_deep_review_queue_control(
+        &request.dialog_turn_id,
+        &request.tool_id,
+        request.action.into(),
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -835,11 +966,15 @@ pub async fn get_available_modes(state: State<'_, AppState>) -> Result<Vec<ModeI
             is_readonly: info.is_readonly,
             tool_count: info.tool_count,
             default_tools: info.default_tools,
-            enabled: info.enabled,
         })
         .collect();
 
     Ok(dtos)
+}
+
+#[tauri::command]
+pub async fn get_default_review_team_definition() -> Result<ReviewTeamDefinition, String> {
+    Ok(default_review_team_definition())
 }
 
 #[derive(Debug, Serialize)]
@@ -851,7 +986,6 @@ pub struct ModeInfoDTO {
     pub is_readonly: bool,
     pub tool_count: usize,
     pub default_tools: Vec<String>,
-    pub enabled: bool,
 }
 
 fn assistant_bootstrap_outcome_to_response(

@@ -18,14 +18,19 @@ import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { AIModelConfig, ModeConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { notificationService } from '@/shared/notification-system';
+import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import { createLogger } from '@/shared/utils/logger';
-import { isMcpToolName, parseMcpToolName } from '@/infrastructure/mcp/toolName';
 import { useNurseryStore } from '../nurseryStore';
 import { formatTokenCount } from './useTokenEstimate';
 
 const log = createLogger('TemplateConfigPage');
 
-interface ToolInfo { name: string; description: string; is_readonly: boolean; }
+interface ToolInfo {
+  name: string;
+  description: string;
+  is_readonly: boolean;
+  dynamic_info?: DynamicToolInfo;
+}
 
 type TemplateDetail =
   | { type: 'tool'; tool: ToolInfo; isMcp: boolean }
@@ -34,16 +39,16 @@ type TemplateDetail =
 
 type ModelSlot = 'primary' | 'fast';
 
-function isMcpTool(name: string): boolean {
-  return isMcpToolName(name);
+function isMcpTool(tool: ToolInfo): boolean {
+  return tool.dynamic_info?.providerKind === 'mcp' && Boolean(tool.dynamic_info.mcp);
 }
 
-function getMcpServerName(toolName: string): string {
-  return parseMcpToolName(toolName)?.serverId ?? toolName;
+function getMcpServerName(tool: ToolInfo): string {
+  return tool.dynamic_info?.mcp?.serverId ?? tool.name;
 }
 
-function getMcpShortName(toolName: string): string {
-  return parseMcpToolName(toolName)?.toolName ?? toolName;
+function getMcpShortName(tool: ToolInfo): string {
+  return tool.dynamic_info?.mcp?.toolName ?? tool.name;
 }
 
 type CtxSegKey = 'systemPrompt' | 'toolInjection' | 'rules' | 'memories';
@@ -142,12 +147,12 @@ const TemplateConfigPage: React.FC = () => {
   );
 
   const skillsEnabled = useMemo(
-    () => modeSkills.filter((skill) => !skill.disabledByMode),
+    () => modeSkills.filter((skill) => skill.effectiveEnabled),
     [modeSkills],
   );
 
   const skillsDisabled = useMemo(
-    () => modeSkills.filter((skill) => skill.disabledByMode),
+    () => modeSkills.filter((skill) => !skill.effectiveEnabled),
     [modeSkills],
   );
   const duplicateSkillNames = useMemo(
@@ -171,7 +176,7 @@ const TemplateConfigPage: React.FC = () => {
 
   // Split tools into built-in vs MCP
   const builtinTools = useMemo(
-    () => availableTools.filter((t) => !isMcpTool(t.name)),
+    () => availableTools.filter((tool) => !isMcpTool(tool)),
     [availableTools],
   );
 
@@ -189,8 +194,8 @@ const TemplateConfigPage: React.FC = () => {
   const mcpToolsByServer = useMemo(() => {
     const map = new Map<string, ToolInfo[]>();
     for (const tool of availableTools) {
-      if (!isMcpTool(tool.name)) continue;
-      const server = getMcpServerName(tool.name);
+      if (!isMcpTool(tool)) continue;
+      const server = getMcpServerName(tool);
       if (!map.has(server)) map.set(server, []);
       map.get(server)!.push(tool);
     }
@@ -338,7 +343,7 @@ const TemplateConfigPage: React.FC = () => {
   const handleSkillToggle = useCallback(async (skill: ModeSkillInfo) => {
     const loadingKey = skill.key;
     setSkillsLoading((prev) => ({ ...prev, [loadingKey]: true }));
-    const nextDisabled = !skill.disabledByMode;
+    const nextDisabled = skill.effectiveEnabled;
     try {
       await configAPI.setModeSkillDisabled({
         modeId: 'agentic',
@@ -415,7 +420,7 @@ const TemplateConfigPage: React.FC = () => {
     <div className="tc-tool-list">
       {tools.map((tool) => {
         const enabled = agenticConfig?.enabled_tools?.includes(tool.name) ?? false;
-        const displayName = isMcp ? getMcpShortName(tool.name) : tool.name;
+        const displayName = isMcp ? getMcpShortName(tool) : tool.name;
         const selected = detail?.type === 'tool' && detail.tool.name === tool.name;
         return (
           <div
@@ -473,7 +478,7 @@ const TemplateConfigPage: React.FC = () => {
   const renderSkillList = (list: ModeSkillInfo[]) => (
     <div className="tc-skill-list">
       {list.map((skill) => {
-        const on = !skill.disabledByMode;
+        const on = skill.effectiveEnabled;
         const selected = detail?.type === 'skill' && detail.skill.key === skill.key;
         const displayName = formatSkillDisplayName(skill, duplicateSkillNames);
         return (
@@ -598,7 +603,7 @@ const TemplateConfigPage: React.FC = () => {
 
     if (detail.type === 'tool') {
       const { tool, isMcp } = detail;
-      const displayName = isMcp ? getMcpShortName(tool.name) : tool.name;
+      const displayName = isMcp ? getMcpShortName(tool) : tool.name;
       const enabled = agenticConfig?.enabled_tools?.includes(tool.name) ?? false;
       return (
         <aside className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
@@ -676,7 +681,7 @@ const TemplateConfigPage: React.FC = () => {
             ) : (
               <ul className="tc-template-detail__tool-names">
                 {serverTools.map((tool) => (
-                  <li key={tool.name}>{getMcpShortName(tool.name)}</li>
+                  <li key={tool.name}>{getMcpShortName(tool)}</li>
                 ))}
               </ul>
             )}
@@ -686,7 +691,7 @@ const TemplateConfigPage: React.FC = () => {
     }
 
     const { skill } = detail;
-    const on = !skill.disabledByMode;
+    const on = skill.effectiveEnabled;
     return (
       <aside className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
         <div className="tc-template-detail__head tc-template-detail__head--center-line">

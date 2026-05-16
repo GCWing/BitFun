@@ -1,0 +1,44 @@
+.acp-permission-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.acp-permission-actions--text {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.acp-permission-actions__text-button {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface, transparent);
+  color: var(--color-text);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.acp-permission-actions__text-button:hover:not(:disabled) {
+  background: var(--color-bg-tertiary, rgba(255, 255, 255, 0.08));
+}
+
+.acp-permission-actions__text-button--allow {
+  border-color: color-mix(in srgb, var(--color-success, #22c55e) 55%, var(--color-border, rgba(255, 255, 255, 0.12)));
+  color: var(--color-success, #22c55e);
+}
+
+.acp-permission-actions__text-button--reject {
+  border-color: color-mix(in srgb, var(--color-danger, #ef4444) 55%, var(--color-border, rgba(255, 255, 255, 0.12)));
+  color: var(--color-danger, #ef4444);
+}
+
+.acp-permission-actions__text-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

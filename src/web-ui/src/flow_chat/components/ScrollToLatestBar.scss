@@ -13,15 +13,15 @@
   pointer-events: none;
   
   // Default height fallback (overridden by inline style when inputHeight is measured).
-  // Active non-expanded: ~80px input + 16px gap + 6px clearance + 24px gradient = 126px.
-  height: 126px;
+  // Active non-expanded: ~80px input + 4px gap + 6px clearance + 24px gradient ≈ 114px.
+  height: 114px;
   
   transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   
   // ========== ChatInput collapsed ==========
   &--input-collapsed {
-    // Pill ~42px + 16px gap + 6px clearance + 24px gradient = 88px (fallback only)
-    height: 88px;
+    // Pill ~42px + 4px gap + 6px clearance + 24px gradient ≈ 76px (fallback only)
+    height: 76px;
   }
   
   // ========== Gradient background layer ==========
@@ -50,10 +50,10 @@
   }
   
   // ========== Divider content layer ==========
-  // bottom is driven by inline style (inputHeight + 16 + 6); CSS value is fallback only.
+  // bottom is driven by inline style (inputHeight + 4 + 6); CSS value is fallback only.
   &__content {
     position: absolute;
-    bottom: 102px;
+    bottom: 90px;
     left: 0;
     right: 0;
     pointer-events: auto;
@@ -113,10 +113,10 @@
 // ========== Responsive tweaks ==========
 @media (max-width: 768px) {
   .scroll-to-latest-bar {
-    height: 135px;
+    height: 123px;
     
     &--input-collapsed {
-      height: 70px;
+      height: 58px;
     }
     
     &__btn {

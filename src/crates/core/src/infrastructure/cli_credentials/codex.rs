@@ -371,7 +371,7 @@ impl CredentialResolver for CodexResolver {
                     .clone()
                     .or_else(|| tokens.id_token.as_deref().and_then(jwt_chatgpt_account_id));
                 if let Some(account) = account_id {
-                    headers.insert("chatgpt-account-id".to_string(), account);
+                    headers.insert("ChatGPT-Account-ID".to_string(), account);
                 }
                 headers.insert("originator".to_string(), "codex_cli_rs".to_string());
                 headers.insert(
@@ -389,9 +389,9 @@ impl CredentialResolver for CodexResolver {
                     .map(|version| format!("codex_cli_rs/{version}"))
                     .unwrap_or_else(|| {
                         log::warn!(
-                            "Unable to detect codex CLI version; using BitFun user agent for Codex backend requests"
+                            "Unable to detect codex CLI version; using codex-compatible user agent for Codex backend requests"
                         );
-                        format!("BitFun/{}", env!("CARGO_PKG_VERSION"))
+                        "codex_cli_rs/0.0.0".to_string()
                     });
                 headers.insert("User-Agent".to_string(), user_agent);
                 let exp = tokens.access_token.as_deref().and_then(jwt_exp);

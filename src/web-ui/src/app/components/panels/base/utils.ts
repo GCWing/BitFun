@@ -17,6 +17,7 @@ import {
   Network,
   MessageSquareQuote,
   Globe,
+  Activity,
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
 
@@ -66,14 +67,6 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     type: 'markdown-editor',
     displayName: 'Markdown Editor',
     icon: FileText,
-    supportsCopy: true,
-    supportsDownload: true,
-    showHeader: false
-  },
-  'mermaid-editor': {
-    type: 'mermaid-editor',
-    displayName: 'Mermaid Editor',
-    icon: Edit3,
     supportsCopy: true,
     supportsDownload: true,
     showHeader: false
@@ -206,6 +199,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     supportsDownload: false,
     showHeader: false
   },
+  'session-usage': {
+    type: 'session-usage',
+    displayName: 'Session Usage',
+    icon: Activity,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
   'terminal': {
     type: 'terminal',
     displayName: 'Terminal',
@@ -325,8 +326,6 @@ export const generateFileName = (type: PanelContentType, title: string): string 
       return `${baseName}.md`;
     case 'code-preview':
       return `${baseName}.txt`;
-    case 'mermaid-editor':
-      return `${baseName}.mmd`;
     default:
       return `${baseName}.txt`;
   }

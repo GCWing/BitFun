@@ -4,7 +4,7 @@
 
 use super::providers::ConfigProviderRegistry;
 use super::types::*;
-use crate::infrastructure::{try_get_path_manager_arc, PathManager};
+use crate::infrastructure::{PathManager, try_get_path_manager_arc};
 use crate::util::errors::*;
 use log::{debug, info, warn};
 
@@ -16,6 +16,14 @@ use tokio::fs;
 
 type ConfigMigrationFn = fn(Value) -> BitFunResult<Value>;
 type ConfigMigration = (&'static str, &'static str, ConfigMigrationFn);
+
+fn canonical_config_path(path: &str) -> &str {
+    match path {
+        "ai.review_teams.rate_limit_status" => "ai.review_team_rate_limit_status",
+        "ai.review_teams.project_strategy_overrides" => "ai.review_team_project_strategy_overrides",
+        _ => path,
+    }
+}
 
 /// Configuration manager.
 pub struct ConfigManager {
@@ -68,6 +76,9 @@ impl ConfigManager {
         };
 
         manager.load_or_create_config().await?;
+        bitfun_ai_adapters::diagnostics::set_include_sensitive_diagnostics(
+            manager.config.app.logging.include_sensitive_diagnostics,
+        );
 
         debug!("ConfigManager initialized at {:?}", manager.config_file);
         Ok(manager)
@@ -277,6 +288,7 @@ impl ConfigManager {
     where
         T: serde::de::DeserializeOwned,
     {
+        let path = canonical_config_path(path);
         let value = self.get_value_by_path(path)?;
         serde_json::from_value(value).map_err(|e| {
             BitFunError::config(format!(
@@ -295,6 +307,7 @@ impl ConfigManager {
         let json_value = serde_json::to_value(value)
             .map_err(|e| BitFunError::config(format!("Failed to serialize config value: {}", e)))?;
 
+        let path = canonical_config_path(path);
         self.set_value_by_path(path, json_value)?;
         self.config.last_modified = chrono::Utc::now();
 
@@ -509,6 +522,8 @@ impl ConfigManager {
         self.check_and_broadcast_app_change(path).await;
         self.check_and_broadcast_debug_mode_change(old_config).await;
         self.check_and_broadcast_log_level_change(old_config).await;
+        self.check_and_broadcast_sensitive_diagnostics_change(old_config)
+            .await;
 
         self.providers
             .notify_config_changed(path, old_config, &self.config)
@@ -564,6 +579,29 @@ impl ConfigManager {
                 .await;
         }
     }
+
+    /// Detects and broadcasts runtime sensitive diagnostics changes.
+    async fn check_and_broadcast_sensitive_diagnostics_change(&self, old_config: &GlobalConfig) {
+        let old_include = old_config.app.logging.include_sensitive_diagnostics;
+        let new_include = self.config.app.logging.include_sensitive_diagnostics;
+
+        if old_include != new_include {
+            debug!(
+                "App logging sensitive diagnostics preference changed: {} -> {}",
+                old_include, new_include
+            );
+
+            bitfun_ai_adapters::diagnostics::set_include_sensitive_diagnostics(new_include);
+
+            use super::global::{ConfigUpdateEvent, GlobalConfigManager};
+            GlobalConfigManager::broadcast_update(
+                ConfigUpdateEvent::LoggingSensitiveDiagnosticsUpdated {
+                    include_sensitive_diagnostics: new_include,
+                },
+            )
+            .await;
+        }
+    }
 }
 
 /// Configuration statistics.
@@ -574,6 +612,27 @@ pub struct ConfigStatistics {
     pub config_directory: PathBuf,
     pub providers_count: usize,
     pub last_modified: chrono::DateTime<chrono::Utc>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::canonical_config_path;
+
+    #[test]
+    fn canonicalizes_legacy_review_team_auxiliary_paths() {
+        assert_eq!(
+            canonical_config_path("ai.review_teams.rate_limit_status"),
+            "ai.review_team_rate_limit_status"
+        );
+        assert_eq!(
+            canonical_config_path("ai.review_teams.project_strategy_overrides"),
+            "ai.review_team_project_strategy_overrides"
+        );
+        assert_eq!(
+            canonical_config_path("ai.review_teams.default"),
+            "ai.review_teams.default"
+        );
+    }
 }
 
 /// Deeply merges JSON values.

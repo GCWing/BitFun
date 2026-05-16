@@ -1,1 +1,1 @@
-pub use bitfun_ai_adapters::types::ToolImageAttachment;
+pub use bitfun_core_types::ToolImageAttachment;

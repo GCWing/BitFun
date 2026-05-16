@@ -74,8 +74,16 @@
     align-self: stretch;
     display: flex;
     flex-direction: row;
-    align-items: center;
+    align-items: stretch;
     gap: 2px;
+    min-height: 0;
+  }
+
+  /* Extra rail fills header height so .file-op-open-full-button stretch + hover::before bleed match the full row */
+  .file-op-header-actions {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
     min-height: 0;
   }
 }
@@ -242,6 +250,14 @@
     height: 16px;
     flex-shrink: 0;
     stroke: currentColor;
+    /*
+     * The hover/hit area (::before) extends right: -10px into the card's right padding,
+     * making the perceived button zone 34 + 10 = 44px wide.
+     * The icon is flex-centered in 34px → geometric center at 17px.
+     * Hover-zone center = 44/2 = 22px.  Delta = 5px = pad-right/2.
+     * Shift the icon by half the right padding to align with the hover-zone center.
+     */
+    transform: translateX(calc(var(--tool-card-header-pad-right, 10px) / 2));
   }
 }
 

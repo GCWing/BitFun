@@ -13,8 +13,12 @@ import { createLogger } from '@/shared/utils/logger';
 import { MCPAPI, MCP_APPS_PROTOCOL_VERSION, type McpUiResourceCsp, type McpUiResourcePermissions, type McpUiMessageParams, type McpUiMessageResult, type McpAppMessageEvent, type McpAppMessageResponseEvent } from '@/infrastructure/api/service-api/MCPAPI';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
-import { isMcpToolName, parseMcpToolName } from '@/infrastructure/mcp/toolName';
+import { isMcpToolName } from '@/infrastructure/mcp/toolName';
+import { getCachedToolInfo } from '@/infrastructure/mcp/toolInfoCache';
+import type { ToolInfo } from '@/shared/types/agent-api';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
+import { AcpPermissionActions } from './AcpPermissionActions';
 import './MCPToolDisplay.scss';
 
 const log = createLogger('MCPToolDisplay');
@@ -157,6 +161,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     toolId,
     toolName: toolItem.toolName,
   });
+  const [resolvedToolInfo, setResolvedToolInfo] = useState<ToolInfo | null>(null);
 
   const getResultData = (): MCPToolResult | null => {
     if (!toolResult?.result) return null;
@@ -174,16 +179,34 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
 
   const resultData = getResultData();
 
-  const getToolInfo = () => {
-    const fullToolName = config.toolName;
-    const parsed = parseMcpToolName(fullToolName);
-    return {
-      toolName: parsed?.toolName ?? fullToolName,
-      serverId: parsed?.serverId ?? 'unknown',
-    };
-  };
+  useEffect(() => {
+    let cancelled = false;
 
-  const { toolName, serverId } = getToolInfo();
+    if (!isMcpToolName(config.toolName)) {
+      setResolvedToolInfo(null);
+      return;
+    }
+
+    getCachedToolInfo(config.toolName)
+      .then((info) => {
+        if (!cancelled) {
+          setResolvedToolInfo(info);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setResolvedToolInfo(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [config.toolName]);
+
+  const resolvedMcpToolName = resolvedToolInfo?.dynamic_info?.mcp?.toolName ?? null;
+  const toolName = resolvedMcpToolName ?? config.toolName;
+  const serverId = resolvedToolInfo?.dynamic_info?.mcp?.serverId ?? null;
   const isFailed = status === 'error';
 
   const mcpAppIframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -227,7 +250,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     MCPAPI.getMCPToolUiUri(config.toolName)
       .then((uri) => setToolMetaUiUri(uri))
       .catch(() => setToolMetaUiUri(null));
-  }, [config.toolName, uiResourceUriFromResult, status, isFailed]);
+  }, [config.toolName, uiResourceUriFromResult, status, isFailed, toolId]);
 
   // Auto-expand when MCP App UI is ready so user sees the interactive UI immediately
   useEffect(() => {
@@ -273,7 +296,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
               toolInfo: {
                 id: tc?.id,
                 tool: {
-                  name: cfg.toolName,
+                  name: resolvedMcpToolName ?? cfg.toolName,
                   description: undefined,
                   inputSchema: { type: 'object' as const, properties: {}, additionalProperties: true }
                 }
@@ -472,7 +495,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [mcpAppState?.html, serverId]);
+  }, [mcpAppState?.html, serverId, resolvedMcpToolName]);
 
   const handleIframeLoad = useCallback(() => {
     /* iframe loaded, ref is ready for postMessage bridge */
@@ -518,7 +541,17 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
         );
       });
     return () => { cancelled = true; };
-  }, [uiResourceUri, serverId, status, isFailed]);
+  }, [
+    config.toolName,
+    isFailed,
+    resultData,
+    serverId,
+    status,
+    toolId,
+    toolMetaUiUri,
+    uiResourceUri,
+    uiResourceUriFromResult,
+  ]);
 
   const getContentSummary = () => {
     if (!resultData?.content && !uiResourceUri) return null;
@@ -611,32 +644,45 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
           
           {requiresConfirmation && !userConfirmed && status !== 'completed' && (
             <div className="mcp-action-buttons">
-              <IconButton
-                className="mcp-icon-button mcp-confirm-btn"
-                variant="success"
-                size="xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onConfirm?.(toolCall?.input);
-                }}
-                disabled={status === 'streaming'}
-                tooltip={t('toolCards.mcp.confirmExecute')}
-              >
-                <Check size={14} />
-              </IconButton>
-              <IconButton
-                className="mcp-icon-button mcp-reject-btn"
-                variant="danger"
-                size="xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReject?.();
-                }}
-                disabled={status === 'streaming'}
-                tooltip={t('toolCards.mcp.cancel')}
-              >
-                <X size={14} />
-              </IconButton>
+              {hasAcpPermissionOptions(toolItem) ? (
+                <AcpPermissionActions
+                  toolItem={toolItem}
+                  input={toolCall?.input}
+                  disabled={status === 'streaming'}
+                  buttonClassName="mcp-icon-button"
+                  onConfirm={onConfirm}
+                  onReject={onReject}
+                />
+              ) : (
+                <>
+                  <IconButton
+                    className="mcp-icon-button mcp-confirm-btn"
+                    variant="success"
+                    size="xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onConfirm?.(toolCall?.input);
+                    }}
+                    disabled={status === 'streaming'}
+                    tooltip={t('toolCards.mcp.confirmExecute')}
+                  >
+                    <Check size={14} />
+                  </IconButton>
+                  <IconButton
+                    className="mcp-icon-button mcp-reject-btn"
+                    variant="danger"
+                    size="xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onReject?.();
+                    }}
+                    disabled={status === 'streaming'}
+                    tooltip={t('toolCards.mcp.cancel')}
+                  >
+                    <X size={14} />
+                  </IconButton>
+                </>
+              )}
             </div>
           )}
           

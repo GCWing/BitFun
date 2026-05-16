@@ -1,4 +1,5 @@
 use super::*;
+use bitfun_services_integrations::mcp::server::compute_mcp_backoff_delay;
 
 impl MCPServerManager {
     pub(super) fn start_reconnect_monitor_if_needed(&self) {
@@ -84,23 +85,12 @@ impl MCPServerManager {
                 .entry(server_id.to_string())
                 .or_insert_with(|| ReconnectAttemptState::new(now));
 
-            if state.attempts >= self.reconnect_policy.max_attempts {
-                if !state.exhausted_logged {
-                    warn!(
-                        "MCP reconnect attempts exhausted: server_name={} server_id={} max_attempts={} status={:?}",
-                        server_name, server_id, self.reconnect_policy.max_attempts, status
-                    );
-                    state.exhausted_logged = true;
-                }
-                return;
-            }
-
             if now < state.next_retry_at {
                 return;
             }
 
             state.attempts += 1;
-            let delay = Self::compute_backoff_delay(
+            let delay = compute_mcp_backoff_delay(
                 self.reconnect_policy.base_delay,
                 self.reconnect_policy.max_delay,
                 state.attempts,
@@ -110,8 +100,8 @@ impl MCPServerManager {
         };
 
         info!(
-            "Attempting MCP reconnect: server_name={} server_id={} attempt={}/{} status={:?}",
-            server_name, server_id, attempt_number, self.reconnect_policy.max_attempts, status
+            "Attempting MCP reconnect: server_name={} server_id={} attempt={} status={:?}",
+            server_name, server_id, attempt_number, status
         );
 
         let _ = self.stop_server(server_id).await;
@@ -125,25 +115,15 @@ impl MCPServerManager {
             }
             Err(e) => {
                 warn!(
-                    "MCP reconnect failed: server_name={} server_id={} attempt={}/{} next_retry_in={}s error={}",
+                    "MCP reconnect failed: server_name={} server_id={} attempt={} next_retry_in={}s error={}",
                     server_name,
                     server_id,
                     attempt_number,
-                    self.reconnect_policy.max_attempts,
                     next_delay.as_secs(),
                     e
                 );
             }
         }
-    }
-
-    pub(super) fn compute_backoff_delay(base: Duration, max: Duration, attempt: u32) -> Duration {
-        let shift = attempt.saturating_sub(1).min(20);
-        let factor = 1u64 << shift;
-        let base_ms = base.as_millis() as u64;
-        let max_ms = max.as_millis() as u64;
-        let delay_ms = base_ms.saturating_mul(factor).min(max_ms);
-        Duration::from_millis(delay_ms)
     }
 
     pub(super) async fn clear_reconnect_state(&self, server_id: &str) {

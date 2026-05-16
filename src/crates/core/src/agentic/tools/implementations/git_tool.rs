@@ -3,7 +3,7 @@
 //! Provides safe and convenient Git command execution functionality, reuses underlying GitService
 
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::service::git::{
     execute_git_command, execute_git_command_raw, GitAddParams, GitCommitParams, GitDiffParams,
@@ -794,6 +794,8 @@ This tool provides a safe and convenient way to execute Git commands. It support
 - The `operation` field already specifies the Git subcommand (e.g. `diff`, `log`, `add`).
 - The `args` field must contain **only additional arguments** for that subcommand.
 - **Do NOT include the subcommand name itself in `args`.** For example, use `{"operation": "diff", "args": "HEAD~2..HEAD --stat"}` — NOT `{"operation": "diff", "args": "diff HEAD~2..HEAD --stat"}`.
+- A raw shell command string is invalid. Use `{"operation": "status"}` instead of `"git status"`.
+- An object with only `args` and no `operation` is invalid, even if `args` contains flags such as `--since` or `--oneline`. Retry with the explicit operation, for example `{"operation": "log", "args": "--since=\"2026-05-02\" --oneline"}`.
 
 ## Safety Notes
 
@@ -810,14 +812,10 @@ When the workspace is opened over Remote SSH, Git runs on the **server** (see to
 ## Commit Message Guidelines
 
 When creating commits, use this format for the commit message:
-- Start with a concise summary (50 chars or less)
-- Leave a blank line after the summary
-- Add detailed description if needed
-- End with:
-  
-  Generated with BitFun
-
-  Co-Authored-By: BitFun"#.to_string())
+- Start with a concise summary, preferably 50 characters or less
+- Leave a blank line after the summary when adding a body
+- Add a body only when it helps explain the rationale, scope, or verification
+- Do not add generated-by or co-author footers unless the user or repository convention asks for them"#.to_string())
     }
 
     async fn description_with_context(
@@ -833,22 +831,30 @@ When creating commits, use this format for the commit message:
         Ok(base)
     }
 
+    fn short_description(&self) -> String {
+        "Inspect and operate on the Git repository.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
+    }
+
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",
             "properties": {
                 "operation": {
                     "type": "string",
-                    "description": "The Git operation to perform (e.g., status, diff, log, add, commit, branch, checkout, pull, push)",
+                    "description": "Required Git operation/subcommand to perform (e.g., status, diff, log, add, commit, branch, checkout, pull, push). Do not omit this and do not place the subcommand in args.",
                     "enum": ALLOWED_OPERATIONS
                 },
                 "args": {
                     "type": "string",
-                    "description": "Additional arguments for the Git command (e.g., file paths, flags, options)"
+                    "description": "Only additional arguments for the selected Git operation (e.g., file paths, flags, options). Do not include the operation/subcommand itself here."
                 },
                 "working_directory": {
                     "type": "string",
-                    "description": "The directory to run the Git command in (defaults to current workspace)"
+                    "description": "Optional directory to run the Git command in. Omit to use the current workspace. If provided, use a workspace-relative path or an absolute path inside the current workspace; never use placeholder paths such as /workspace."
                 }
             },
             "required": ["operation"],
@@ -913,7 +919,10 @@ When creating commits, use this format for the commit message:
             None => {
                 return ValidationResult {
                     result: false,
-                    message: Some("operation is required".to_string()),
+                    message: Some(
+                        "operation is required. Provide an explicit top-level operation such as {\"operation\":\"status\"}; do not send a raw git command string or an args-only object."
+                            .to_string(),
+                    ),
                     error_code: Some(400),
                     meta: None,
                 };
@@ -1066,6 +1075,16 @@ When creating commits, use this format for the commit message:
             args.unwrap_or("")
         );
 
+        if git_operation_needs_light_checkpoint(operation, args) {
+            context
+                .record_light_checkpoint(
+                    "Git",
+                    &format!("git {} {}", operation, args.unwrap_or("").trim()),
+                    Vec::new(),
+                )
+                .await;
+        }
+
         let start_time = std::time::Instant::now();
 
         // Remote SSH workspace: run git on the server (not libgit2 on the PC).
@@ -1121,6 +1140,15 @@ When creating commits, use this format for the commit message:
     }
 }
 
+fn git_operation_needs_light_checkpoint(operation: &str, args: Option<&str>) -> bool {
+    match operation {
+        "add" | "commit" | "pull" | "checkout" | "switch" | "merge" | "rebase" | "stash"
+        | "reset" | "restore" | "clean" | "cherry-pick" => true,
+        "branch" => args.is_some_and(|value| !value.trim().is_empty()),
+        _ => false,
+    }
+}
+
 impl Default for GitTool {
     fn default() -> Self {
         Self::new()
@@ -1129,7 +1157,58 @@ impl Default for GitTool {
 
 #[cfg(test)]
 mod tests {
-    use super::{GitTool, ParsedDiffArgs};
+    use crate::agentic::tools::framework::Tool;
+
+    use super::{git_operation_needs_light_checkpoint, GitTool, ParsedDiffArgs};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn git_schema_requires_explicit_operation_instead_of_args_only() {
+        let tool = GitTool::new();
+        let schema = tool.input_schema();
+        assert_eq!(schema["additionalProperties"], false);
+        assert_eq!(schema["required"], json!(["operation"]));
+        assert!(schema["properties"]["operation"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Do not omit this"));
+        assert!(schema["properties"]["args"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Do not include the operation"));
+
+        let validation = tool
+            .validate_input(&json!({"args": "--since=\"2026-05-02\" --oneline"}), None)
+            .await;
+        assert!(!validation.result);
+        assert!(validation
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("operation is required"));
+    }
+
+    #[test]
+    fn checkpoint_detection_flags_mutating_git_operations() {
+        assert!(git_operation_needs_light_checkpoint(
+            "checkout",
+            Some("main")
+        ));
+        assert!(git_operation_needs_light_checkpoint(
+            "reset",
+            Some("--hard HEAD")
+        ));
+        assert!(git_operation_needs_light_checkpoint(
+            "branch",
+            Some("-D old")
+        ));
+        assert!(!git_operation_needs_light_checkpoint("status", None));
+        assert!(!git_operation_needs_light_checkpoint(
+            "diff",
+            Some("-- src/lib.rs")
+        ));
+        assert!(!git_operation_needs_light_checkpoint("branch", None));
+    }
 
     #[test]
     fn parse_diff_args_empty() {

@@ -9,7 +9,7 @@
 //! - Push real-time events to the frontend
 
 use anyhow::{anyhow, Result};
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -310,7 +310,7 @@ impl WorkspaceLspManager {
         let server_language = match self.get_running_server_for_language(&language).await {
             Some(lang) => lang,
             None => {
-                debug!(
+                trace!(
                     "LSP server not running for language: {}, skipping didOpen",
                     language
                 );

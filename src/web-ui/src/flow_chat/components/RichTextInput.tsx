@@ -552,8 +552,8 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   }, [internalRef, onLargePaste, onMentionStateChange]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    const nativeIsComposing = (e.nativeEvent as KeyboardEvent).isComposing;
-    const composing = nativeIsComposing || isComposingRef.current;
+    const nativeEvent = e.nativeEvent as KeyboardEvent;
+    const composing = nativeEvent.isComposing || isComposingRef.current || nativeEvent.keyCode === 229;
     
     if (!composing && e.key === 'Backspace' && internalRef.current) {
       const selection = window.getSelection();
@@ -580,7 +580,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       }
     }
     
-    if (composing && e.key === 'Enter') {
+    if (composing && (e.key === 'Enter' || e.key === 'Escape')) {
       return;
     }
 

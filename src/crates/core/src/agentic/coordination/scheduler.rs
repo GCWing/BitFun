@@ -14,7 +14,10 @@ use super::coordinator::{ConversationCoordinator, DialogTriggerSource};
 use super::turn_outcome::{TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus};
 use crate::agentic::core::{PromptEnvelope, SessionState};
 use crate::agentic::image_analysis::ImageContextData;
-use crate::agentic::round_preempt::{DialogRoundPreemptSource, SessionRoundYieldFlags};
+use crate::agentic::round_preempt::{
+    DialogRoundPreemptSource, DialogRoundSteeringSource, SessionRoundYieldFlags,
+    SessionSteeringBuffer, SteeringMessage,
+};
 use crate::agentic::session::SessionManager;
 use dashmap::DashMap;
 use log::{debug, info, warn};
@@ -135,6 +138,7 @@ pub struct QueuedTurn {
     pub workspace_path: Option<String>,
     pub policy: DialogSubmissionPolicy,
     pub reply_route: Option<AgentSessionReplyRoute>,
+    pub user_message_metadata: Option<serde_json::Value>,
     pub image_contexts: Option<Vec<ImageContextData>>,
     #[allow(dead_code)]
     pub enqueued_at: SystemTime,
@@ -159,6 +163,21 @@ pub struct DialogScheduler {
     outcome_tx: mpsc::Sender<(String, TurnOutcome)>,
     /// When a user submits while `Processing`, engine yields after the current model round.
     round_yield_flags: Arc<SessionRoundYieldFlags>,
+    /// Per-session FIFO buffer of user "steering" messages drained at round boundaries
+    /// by the engine and injected into the running dialog turn.
+    steering_buffer: Arc<SessionSteeringBuffer>,
+}
+
+/// Outcome of [`DialogScheduler::submit_steering`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DialogSteerOutcome {
+    /// Steering message was buffered for the running turn. The engine will pick it up
+    /// at the next model-round boundary.
+    Buffered {
+        session_id: String,
+        turn_id: String,
+        steering_id: String,
+    },
 }
 
 impl DialogScheduler {
@@ -181,6 +200,7 @@ impl DialogScheduler {
             suppressed_cancelled_replies: Arc::new(DashMap::new()),
             outcome_tx,
             round_yield_flags: Arc::new(SessionRoundYieldFlags::default()),
+            steering_buffer: Arc::new(SessionSteeringBuffer::default()),
         });
 
         let scheduler_for_handler = Arc::clone(&scheduler);
@@ -199,6 +219,74 @@ impl DialogScheduler {
     /// Pass to [`ConversationCoordinator::set_round_preempt_source`](super::coordinator::ConversationCoordinator::set_round_preempt_source).
     pub fn preempt_monitor(&self) -> Arc<dyn DialogRoundPreemptSource> {
         self.round_yield_flags.clone()
+    }
+
+    /// Pass to [`ConversationCoordinator::set_round_steering_source`](super::coordinator::ConversationCoordinator::set_round_steering_source).
+    pub fn steering_monitor(&self) -> Arc<dyn DialogRoundSteeringSource> {
+        self.steering_buffer.clone()
+    }
+
+    /// Submit a user "steering" message into the currently running dialog turn.
+    ///
+    /// Unlike [`Self::submit`], this never starts or queues a new turn — it only buffers
+    /// the message so the [`ExecutionEngine`](super::super::execution::ExecutionEngine)
+    /// can inject it at the next model-round boundary. Errors:
+    ///
+    /// - Session is not currently `Processing` the requested `turn_id` (the targeted turn
+    ///   already finished or never existed). Caller should fall back to `submit`.
+    pub async fn submit_steering(
+        &self,
+        session_id: String,
+        turn_id: String,
+        content: String,
+        display_content: Option<String>,
+    ) -> Result<DialogSteerOutcome, String> {
+        let active_matches_turn = match self
+            .session_manager
+            .get_session(&session_id)
+            .map(|s| s.state.clone())
+        {
+            Some(SessionState::Processing {
+                current_turn_id, ..
+            }) => current_turn_id == turn_id,
+            _ => false,
+        };
+
+        if !active_matches_turn {
+            warn!(
+                "submit_steering rejected: target turn is not running: session_id={}, turn_id={}",
+                session_id, turn_id
+            );
+            return Err(format!(
+                "Dialog turn is no longer running and cannot be steered: session_id={}, turn_id={}",
+                session_id, turn_id
+            ));
+        }
+
+        let steering_id = Uuid::new_v4().to_string();
+        let display = display_content.unwrap_or_else(|| content.clone());
+        let message = SteeringMessage {
+            id: steering_id.clone(),
+            turn_id: turn_id.clone(),
+            content,
+            display_content: display,
+            created_at: SystemTime::now(),
+        };
+
+        self.steering_buffer.push(&session_id, message);
+        info!(
+            "Steering message buffered: session_id={}, turn_id={}, steering_id={}, pending={}",
+            session_id,
+            turn_id,
+            steering_id,
+            self.steering_buffer.pending_count(&session_id)
+        );
+
+        Ok(DialogSteerOutcome::Buffered {
+            session_id,
+            turn_id,
+            steering_id,
+        })
     }
 
     fn user_message_may_preempt(policy: &DialogSubmissionPolicy) -> bool {
@@ -233,6 +321,7 @@ impl DialogScheduler {
         workspace_path: Option<String>,
         policy: DialogSubmissionPolicy,
         reply_route: Option<AgentSessionReplyRoute>,
+        user_message_metadata: Option<serde_json::Value>,
         image_contexts: Option<Vec<ImageContextData>>,
     ) -> Result<DialogSubmitOutcome, String> {
         let resolved_turn_id = turn_id.unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -244,6 +333,7 @@ impl DialogScheduler {
             workspace_path,
             policy,
             reply_route,
+            user_message_metadata,
             image_contexts,
             enqueued_at: SystemTime::now(),
         };
@@ -488,6 +578,7 @@ impl DialogScheduler {
                         queued_turn.agent_type.clone(),
                         queued_turn.workspace_path.clone(),
                         queued_turn.policy,
+                        queued_turn.user_message_metadata.clone(),
                     )
                     .await
             }
@@ -501,6 +592,7 @@ impl DialogScheduler {
                         queued_turn.agent_type.clone(),
                         queued_turn.workspace_path.clone(),
                         queued_turn.policy,
+                        queued_turn.user_message_metadata.clone(),
                     )
                     .await
             }
@@ -565,6 +657,7 @@ impl DialogScheduler {
                 DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
                 None,
                 None,
+                None,
             )
             .await
         {
@@ -615,6 +708,15 @@ Status: {status}"
     async fn run_outcome_handler(&self, mut outcome_rx: mpsc::Receiver<(String, TurnOutcome)>) {
         while let Some((session_id, outcome)) = outcome_rx.recv().await {
             self.round_yield_flags.clear(&session_id);
+            // Only drop steering messages targeted at the *finished* turn. We
+            // must NOT clear the entire session buffer here: a user might have
+            // legitimately submitted steering against a brand-new follow-up
+            // turn that the dispatcher will pick up immediately after this
+            // outcome is processed (race window between turn finalize and the
+            // next turn starting). Targeting by turn_id keeps those alive.
+            let _drained = self
+                .steering_buffer
+                .drain_for_turn(&session_id, outcome.turn_id());
             let suppressed_cancelled_reply =
                 self.take_suppressed_cancelled_reply(&session_id, outcome.turn_id());
 
@@ -645,9 +747,7 @@ Status: {status}"
                     if let Err(e) = self.dispatch_next_if_idle(&session_id).await {
                         warn!(
                             "Failed to dispatch next queued message after {}: session_id={}, error={}",
-                            status,
-                            session_id,
-                            e
+                            status, session_id, e
                         );
                     }
                 }
@@ -714,5 +814,23 @@ mod tests {
         assert!(!DialogScheduler::should_skip_agent_session_reply(
             &completed, true
         ));
+    }
+
+    #[test]
+    fn remote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary() {
+        let remote = DialogSubmissionPolicy::for_source(DialogTriggerSource::RemoteRelay);
+        assert_eq!(remote.queue_priority, DialogQueuePriority::Normal);
+        assert!(remote.skip_tool_confirmation);
+        assert!(DialogScheduler::user_message_may_preempt(&remote));
+
+        let bot = DialogSubmissionPolicy::for_source(DialogTriggerSource::Bot);
+        assert_eq!(bot.queue_priority, DialogQueuePriority::Normal);
+        assert!(bot.skip_tool_confirmation);
+        assert!(DialogScheduler::user_message_may_preempt(&bot));
+
+        let agent_session = DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession);
+        assert_eq!(agent_session.queue_priority, DialogQueuePriority::Low);
+        assert!(agent_session.skip_tool_confirmation);
+        assert!(!DialogScheduler::user_message_may_preempt(&agent_session));
     }
 }

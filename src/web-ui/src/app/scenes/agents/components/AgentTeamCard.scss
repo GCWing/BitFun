@@ -116,6 +116,8 @@
     align-items: center;
     gap: 4px;
     flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
     position: relative;
     z-index: 1;
   }

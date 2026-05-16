@@ -1,226 +1,169 @@
-/* TodoWrite tool styles with dot-track progress. */
+/* TodoWrite tool styles. */
 @use './_tool-card-common.scss';
 
-/* Compact mode */
+/* Compact mode (single-line listing) */
 .todo-write-compact {
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--tool-card-action-line-height);
+
   .todo-count {
-    color: var(--tool-card-text-secondary);
-    font-size: 11px;
+    color: var(--color-text-muted);
+    font-size: inherit;
     flex-shrink: 0;
     font-family: var(--tool-card-font-mono);
   }
 
   .todo-progress {
-    color: var(--tool-card-text-muted);
-    font-size: 10px;
+    color: var(--color-text-muted);
+    font-size: inherit;
     margin-left: 4px;
     font-family: var(--tool-card-font-mono);
   }
-
-  &:hover {
-    border-left-color: var(--color-info);
-  }
 }
 
-/* Standard card layout */
-.flow-tool-card.todo-write-card {
+/* Standard mode — wraps a CompactToolCard */
+.todo-write-host {
   width: 100%;
-  display: block;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  margin-top: 12px;
-  margin-bottom: 12px;
-  padding: 0;
-  overflow: visible;
-  box-sizing: border-box;
-  position: relative;
 
-  /* Header: dashed lines left & right, content centered */
-  .tool-card-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0;
-    background: transparent;
-    user-select: none;
+  .compact-card-action {
+    font-weight: 400;
+  }
 
-    &.clickable {
-      cursor: pointer;
+  /* Collapsed + expanded header: same type metrics */
+  .compact-card-action .todo-header-action-cluster,
+  .compact-card-action .todo-header-tasks-label,
+  .compact-card-action .todo-stats,
+  .compact-card-content .todo-header-content,
+  .compact-card-content .todo-header-current,
+  .compact-card-content .todo-header-more,
+  .compact-card-content .todo-stats {
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--tool-card-action-line-height);
+  }
+
+  .compact-card-content .todo-header-more {
+    padding: 0 5px;
+  }
+
+  .todo-write-card {
+    /* No extra chrome; CompactToolCard provides collapsed/expanded styling. */
+  }
+
+  /* Expanded shell: thin neutral frame, no heavy elevation. */
+  .base-tool-card-wrapper.todo-write-card {
+    border: 1px solid var(--border-subtle, var(--border-base));
+    box-shadow: none;
+
+    &:hover {
+      border-color: var(--border-base);
+      box-shadow: none;
     }
 
-    /* Left dashed line */
-    &::before,
-    &::after {
-      content: '';
-      flex: 1;
-      height: 0;
-      border-top: 1px dashed var(--border-base);
-      transition: border-top 0.2s ease;
-      min-width: 16px;
-    }
-
-    &.clickable:hover::before,
-    &.clickable:hover::after {
-      border-top: 1px solid var(--border-medium);
-    }
-
-    &.clickable:hover .todo-header-center {
-      border-color: var(--border-medium);
-      background: rgba(255, 255, 255, 0.12);
-      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.04);
-    }
-
-    &.clickable:hover .expand-icon {
-      color: var(--tool-card-text-secondary);
-    }
-
-    &.clickable:hover .track-dots {
-      gap: 4px;
+    &:active {
+      box-shadow: none;
     }
   }
 
-  /* Centered content pill */
-  .todo-header-center {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-    padding: 3px 8px;
-    border-radius: 20px;
-    background: var(--element-bg-subtle, rgba(255, 255, 255, 0.04));
-    border: 1px solid var(--border-base);
-    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-    max-width: 70%;
-  }
-
-  .track-dots,
-  .todo-track,
-  .current-task-inline {
-  }
-
-  /* All-completed label inside pill */
-  .all-completed-icon {
-    color: var(--color-success);
-    flex-shrink: 0;
-  }
-
-  .all-completed-label {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--color-success);
-    white-space: nowrap;
-  }
-
-  /* Inline current task */
-  .current-task-inline {
-    display: flex;
-    align-items: center;
+  /* Collapsed row: “任务 (n/m)” in the action column; expanded omits action (see TSX). */
+  .todo-header-action-cluster {
+    display: inline-flex;
+    align-items: baseline;
     gap: 4px;
     min-width: 0;
-    max-width: 200px;
+  }
+
+  .todo-header-tasks-label {
+    flex-shrink: 0;
+  }
+
+  /* Muted body copy (expanded header has no action column). */
+  .compact-card-content {
+    color: var(--color-text-muted);
+    font-weight: 400;
+  }
+
+  .base-tool-card-wrapper.compact-tool-card-wrapper--expanded-card {
+    .compact-card-content {
+      color: var(--color-text-muted);
+      font-weight: 400;
+    }
+
+    /* Tighter icon rail → text (expanded todo header) */
+    &.todo-write-card .base-tool-card-header {
+      gap: 3px;
+    }
+
+    &.todo-write-card .tool-card-icon-slot {
+      margin-right: 2px;
+      width: calc(var(--tool-card-header-icon-rail) + 8px);
+    }
+  }
+
+  /* Header copy — same tone as action label */
+  .todo-header-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
     overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--color-text-muted);
+    font-weight: 400;
 
-    .inline-task-icon {
+    &--muted {
+      color: var(--color-text-muted);
+      font-weight: 400;
+    }
+
+    &--success {
+      color: var(--color-text-muted);
+      font-weight: 400;
+    }
+  }
+
+  .todo-header-current {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-muted);
+    font-weight: 400;
+  }
+
+  .todo-header-more {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    background: var(--element-bg-subtle, rgba(255, 255, 255, 0.06));
+    border-radius: 8px;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+  }
+
+  .todo-stats {
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-muted);
+    letter-spacing: normal;
+    white-space: nowrap;
+
+    &--suffix {
       flex-shrink: 0;
-      width: 10px;
-      height: 10px;
-
-      &--in-progress { color: var(--color-info); }
-      &--completed   { color: var(--color-success); }
-      &--pending     { color: var(--tool-card-text-muted); opacity: 0.6; }
-      &--cancelled   { color: var(--color-error); opacity: 0.6; }
-    }
-
-    .inline-task-text {
-      font-size: 10px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      color: var(--tool-card-text-secondary);
-    }
-
-    .inline-task-more {
-      flex-shrink: 0;
-      font-size: 9px;
-      color: var(--tool-card-text-muted);
-      padding: 0 3px;
-      background: rgba(255, 255, 255, 0.06);
-      border-radius: 3px;
-    }
-
-    &--in_progress .inline-task-text {
-      color: var(--tool-card-text-primary);
-      font-weight: 500;
-    }
-
-    &--completed .inline-task-text {
-      color: var(--tool-card-text-muted);
-      text-decoration: line-through;
-      opacity: 0.7;
-    }
-
-    &--cancelled .inline-task-text {
-      color: var(--tool-card-text-muted);
-      text-decoration: line-through;
-      opacity: 0.5;
     }
   }
 
-  .track-dots {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    flex-shrink: 0;
-    transition: gap 0.2s ease;
+  /* Expanded body — align list with card edges */
+  .todo-expanded-body {
+    margin: calc(var(--tool-card-expanded-pad-y) * -1) calc(var(--tool-card-expanded-pad-x) * -1);
   }
-
-  /* Progress track (stats + chevron) */
-  .todo-track {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex-shrink: 0;
-  }
-
-  .track-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-
-    &--completed  { background: var(--color-success); }
-    &--in_progress { background: var(--color-info); }
-    &--pending    { background: var(--tool-card-text-muted); opacity: 0.35; }
-    &--cancelled  { background: var(--color-error); opacity: 0.5; }
-  }
-
-  .track-stats {
-    font-size: 10px;
-    font-family: var(--tool-card-font-mono);
-    color: var(--tool-card-text-muted);
-    letter-spacing: 0.02em;
-  }
-
-  .expand-icon {
-    color: var(--tool-card-text-muted);
-    transition: transform 0.2s ease, color 0.2s ease;
-    flex-shrink: 0;
-  }
-
-  /* Expanded list */
   .todo-full-list {
-    margin-top: 6px;
-    border: 1px solid var(--border-base);
-    border-radius: 6px;
-    background: var(--element-bg-subtle, rgba(255, 255, 255, 0.03));
-    max-height: 240px;
+    background: transparent;
+    max-height: 280px;
     overflow-y: auto;
     overflow-x: hidden;
-    animation: slideDown 0.18s ease;
 
     &::-webkit-scrollbar {
-      width: 3px;
+      width: 4px;
     }
     &::-webkit-scrollbar-track {
       background: transparent;
@@ -231,149 +174,86 @@
     }
   }
 
-  @keyframes slideDown {
-    from { opacity: 0; transform: translateY(-4px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
   .todo-item {
     display: flex;
     align-items: center;
-    padding: 6px 10px;
-    font-size: 11px;
+    padding: 7px 12px;
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--tool-card-action-line-height);
+    font-weight: 400;
     transition: background 0.12s ease;
     position: relative;
+    border-left: none;
 
     &:hover {
       background: var(--element-bg-subtle, rgba(255, 255, 255, 0.04));
     }
 
-    /* in_progress: subtle highlight */
     &.status-in_progress {
-      background: var(--color-info-bg);
+      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.06));
 
       .todo-content {
-        color: var(--tool-card-text-primary);
-        font-weight: 500;
+        color: var(--color-text-muted);
+        font-weight: 400;
       }
     }
 
     &.status-completed {
       .todo-content {
         text-decoration: line-through;
-        color: var(--tool-card-text-muted);
-        opacity: 0.55;
+        color: var(--color-text-muted);
+        opacity: 0.75;
       }
     }
 
     &.status-cancelled {
-      opacity: 0.45;
+      opacity: 0.65;
+      .todo-content {
+        text-decoration: line-through;
+        color: var(--color-text-muted);
+      }
     }
 
     &.status-pending .todo-content {
-      color: var(--tool-card-text-secondary);
+      color: var(--color-text-muted);
     }
   }
 
   .todo-item-left {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 6px;
     flex: 1;
     min-width: 0;
   }
 
   .todo-status-icon {
     flex-shrink: 0;
-    width: 11px;
-    height: 11px;
+    width: 12px;
+    height: 12px;
 
-    &--completed  { color: var(--color-success); }
-    &--pending    { color: var(--tool-card-text-muted); opacity: 0.5; }
-    &--cancelled  { color: var(--color-error); opacity: 0.6; }
+    &--completed  { color: var(--color-text-muted); opacity: 0.85; }
+    &--pending    { color: var(--color-text-muted); opacity: 0.65; }
+    &--cancelled  { color: var(--color-text-muted); opacity: 0.65; }
 
     &--in-progress {
-      color: var(--color-info);
+      color: var(--color-text-muted);
       width: auto;
       height: auto;
     }
   }
 
-  /* Compact mode loading icon alignment */
-  .todo-compact-loading-icon {
-    color: var(--color-info);
-  }
-
   .todo-content {
     flex: 1;
-    color: var(--tool-card-text-secondary);
-    line-height: 1.4;
+    color: var(--color-text-muted);
+    font-weight: 400;
+    line-height: var(--tool-card-action-line-height);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  /* All-completed state: dashed lines turn green */
-  &:not(.all-completed) {
-    .tool-card-header.clickable:hover::before,
-    .tool-card-header.clickable:hover::after {
-      border-top: 1px solid var(--border-medium);
-    }
-
-    .tool-card-header.clickable:hover .track-dot--in_progress {
-      box-shadow: 0 0 4px var(--color-info);
-    }
-
-    .tool-card-header.clickable:hover .track-dot--pending {
-      opacity: 0.6;
-    }
-  }
-
-  &.all-completed {
-    .tool-card-header::before,
-    .tool-card-header::after {
-      border-color: var(--color-success);
-      opacity: 0.3;
-    }
-
-    .todo-header-center {
-      border-color: var(--color-success);
-      opacity: 0.6;
-    }
-
-    .tool-card-header.clickable:hover::before,
-    .tool-card-header.clickable:hover::after {
-      border-top: 1px solid var(--color-success);
-      opacity: 0.5;
-    }
-
-    .tool-card-header.clickable:hover .todo-header-center {
-      opacity: 1;
-      background: rgba(34, 197, 94, 0.12);
-      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.06);
-    }
-  }
-}
-
-/* Light theme overrides */
-:root[data-theme-type="light"],
-[data-theme*="light"] {
-  .flow-tool-card.todo-write-card {
-    .todo-header-center {
-      background: rgba(0, 0, 0, 0.03);
-    }
-
-    .tool-card-header.clickable:hover .todo-header-center {
-      background: rgba(0, 0, 0, 0.07);
-      box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.03);
-    }
-
-    &.all-completed .tool-card-header.clickable:hover .todo-header-center {
-      background: var(--color-success-bg);
-    }
-
-    &:not(.all-completed) .tool-card-header.clickable:hover .track-dot--in_progress {
-      box-shadow: 0 0 4px var(--color-info);
-    }
+  .todo-compact-loading-icon {
+    color: var(--color-info);
   }
 }

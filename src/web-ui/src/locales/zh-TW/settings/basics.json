@@ -1,6 +1,6 @@
 {
   "title": "基礎",
-  "subtitle": "界面語言、主題、日誌、終端與登錄啟動",
+  "subtitle": "日誌、終端、通知與登入時啟動",
   "appearance": {
     "title": "外觀",
     "hint": "界面語言與視覺主題",
@@ -43,6 +43,10 @@
       "bitfun-slate": {
         "name": "石板灰",
         "description": "石板灰幾何主題 - 極深沉浸，高對比度灰度美學"
+      },
+      "bitfun-tokyo-night": {
+        "name": "東京夜",
+        "description": "Tokyo Night 經典配色 - 靛藍夜色，藍紫高光"
       }
     },
     "fontSize": {
@@ -92,6 +96,10 @@
     "level": {
       "description": "實時控制日誌輸出級別，修改後立即生效。"
     },
+    "sensitiveDiagnostics": {
+      "label": "包含敏感除錯資訊",
+      "description": "開啟後，本機日誌可能包含使用者 Prompt、模型請求與回應 payload、工具參數、檔案路徑以及 Webview 事件 payload，用於問題排查。BitFun 不會自動上傳這些日誌檔案。"
+    },
     "path": {
       "description": "本次啟動寫入日誌文件所在的目錄。"
     },
@@ -113,6 +121,7 @@
       "loadFailed": "加載日誌配置失敗",
       "saveFailed": "保存日誌級別失敗",
       "levelUpdated": "日誌級別已更新",
+      "sensitiveDiagnosticsUpdated": "敏感除錯資訊日誌偏好已更新",
       "refreshed": "運行時狀態已刷新",
       "openedFolder": "日誌文件夾已打開",
       "openFailed": "打開日誌文件夾失敗",
@@ -150,6 +159,25 @@
       "updated": "默認終端已更新",
       "saveFailed": "保存配置失敗",
       "refreshed": "已刷新可用終端列表"
+    }
+  },
+  "windowBehavior": {
+    "sections": {
+      "title": "視窗行為",
+      "hint": "點擊關閉按鈕時的操作"
+    },
+    "closeButtonLabel": "關閉按鈕行為",
+    "closeButtonDescription": "點擊視窗關閉按鈕（×）時的預設操作。",
+    "options": {
+      "quit": "退出程式",
+      "minimizeToTray": "最小化到系統托盤",
+      "ask": "每次詢問"
+    },
+    "messages": {
+      "loading": "載入中…",
+      "loadFailed": "無法讀取視窗行為設置",
+      "saveFailed": "無法儲存視窗行為設置",
+      "saved": "視窗行為設置已儲存"
     }
   },
   "notifications": {

@@ -10,7 +10,6 @@ export type PanelContentType =
   | 'code-editor'
   | 'markdown-viewer' 
   | 'markdown-editor'
-  | 'mermaid-editor'
   | 'text-viewer'
   | 'file-viewer'
   | 'image-viewer'
@@ -27,6 +26,7 @@ export type PanelContentType =
   | 'task-detail'
   | 'plan-viewer'
   | 'btw-session'
+  | 'session-usage'
   | 'terminal'
   | 'generative-widget'
   | 'browser';

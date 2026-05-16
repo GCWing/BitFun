@@ -1,15 +1,17 @@
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use agent_client_protocol::schema::{
     PermissionOption, PermissionOptionKind, RequestPermissionRequest, SessionId,
-    SessionNotification, SessionUpdate, ToolCall, ToolCallContent, ToolCallStatus, ToolCallUpdate,
-    ToolCallUpdateFields, ToolKind,
+    SessionNotification, SessionUpdate, ToolCall, ToolCallContent, ToolCallLocation,
+    ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{Client, ConnectionTo, Result};
 use bitfun_events::ToolEventData;
 
 pub(super) const PERMISSION_ALLOW_ONCE: &str = "allow_once";
 pub(super) const PERMISSION_REJECT_ONCE: &str = "reject_once";
+const ACP_LARGE_TEXT_PREVIEW_CHARS: usize = 2_000;
 
 pub(super) fn send_update(
     connection: &ConnectionTo<Client>,
@@ -55,7 +57,8 @@ pub(super) fn permission_request(
                 .title(format!("Allow {}?", tool_name))
                 .status(ToolCallStatus::Pending)
                 .kind(tool_kind(tool_name))
-                .raw_input(params.clone())
+                .locations(tool_locations(params))
+                .raw_input(sanitize_tool_input(tool_name, params.clone()))
                 .content(vec![text_content(format!(
                     "Permission required to run {}.",
                     tool_name
@@ -79,15 +82,10 @@ pub(super) fn permission_request(
 fn initial_tool_call(tool_event: &ToolEventData) -> ToolCall {
     let tool_id = tool_event.tool_id().to_string();
     let tool_name = tool_event.tool_name();
-    let mut tool_call = ToolCall::new(tool_id, tool_title(tool_name))
+    ToolCall::new(tool_id, tool_title(tool_name))
         .kind(tool_kind(tool_name))
-        .status(tool_status(tool_event));
-
-    if let Some(raw_input) = tool_event.raw_input() {
-        tool_call = tool_call.raw_input(raw_input);
-    }
-
-    tool_call
+        .status(ToolCallStatus::Pending)
+        .raw_input(serde_json::json!({}))
 }
 
 fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
@@ -97,9 +95,24 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
             .title(tool_title(tool_name))
             .kind(tool_kind(tool_name))
             .status(ToolCallStatus::Pending),
-        ToolEventData::ParamsPartial { params, .. } => ToolCallUpdateFields::new()
-            .status(ToolCallStatus::Pending)
-            .content(vec![text_content(format!("Input: {}", params))]),
+        ToolEventData::ParamsPartial {
+            tool_name, params, ..
+        } => {
+            let fields = ToolCallUpdateFields::new().status(ToolCallStatus::Pending);
+            if is_write_like_tool(tool_name) {
+                match serde_json::from_str::<serde_json::Value>(params) {
+                    Ok(value) => fields
+                        .raw_input(sanitize_tool_input(tool_name, value.clone()))
+                        .content(vec![text_content(write_input_status_text(&value))]),
+                    Err(_) => fields.content(vec![text_content(format!(
+                        "Receiving Write input ({} bytes).",
+                        params.len()
+                    ))]),
+                }
+            } else {
+                fields.content(vec![text_content(format!("Input: {}", params))])
+            }
+        }
         ToolEventData::Queued { position, .. } => ToolCallUpdateFields::new()
             .status(ToolCallStatus::Pending)
             .content(vec![text_content(format!(
@@ -118,7 +131,8 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
             .title(tool_title(tool_name))
             .kind(tool_kind(tool_name))
             .status(ToolCallStatus::InProgress)
-            .raw_input(params.clone()),
+            .locations(tool_locations(params))
+            .raw_input(sanitize_tool_input(tool_name, params.clone())),
         ToolEventData::Progress {
             message,
             percentage,
@@ -145,7 +159,8 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
         } => ToolCallUpdateFields::new()
             .title(format!("Allow {}?", tool_name))
             .status(ToolCallStatus::Pending)
-            .raw_input(params.clone())
+            .locations(tool_locations(params))
+            .raw_input(sanitize_tool_input(tool_name, params.clone()))
             .content(vec![text_content("Waiting for permission.")]),
         ToolEventData::Confirmed { .. } => ToolCallUpdateFields::new()
             .status(ToolCallStatus::InProgress)
@@ -154,17 +169,20 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
             .status(ToolCallStatus::Failed)
             .content(vec![text_content("Permission rejected.")]),
         ToolEventData::Completed {
+            tool_name,
             result,
             result_for_assistant,
             duration_ms,
             ..
         } => {
+            let raw_output = sanitize_tool_payload(tool_name, result.clone());
             let display = result_for_assistant
                 .clone()
-                .unwrap_or_else(|| value_to_display_text(result));
+                .unwrap_or_else(|| value_to_display_text(&raw_output));
             ToolCallUpdateFields::new()
                 .status(ToolCallStatus::Completed)
-                .raw_output(result.clone())
+                .locations(tool_locations(&raw_output))
+                .raw_output(raw_output)
                 .content(vec![text_content(format!(
                     "{}\nCompleted in {} ms.",
                     display, duration_ms
@@ -185,21 +203,6 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
 
 fn tool_title(tool_name: &str) -> String {
     format!("Run {}", tool_name)
-}
-
-fn tool_status(tool_event: &ToolEventData) -> ToolCallStatus {
-    match tool_event {
-        ToolEventData::Started { .. }
-        | ToolEventData::Progress { .. }
-        | ToolEventData::Streaming { .. }
-        | ToolEventData::StreamChunk { .. }
-        | ToolEventData::Confirmed { .. } => ToolCallStatus::InProgress,
-        ToolEventData::Completed { .. } => ToolCallStatus::Completed,
-        ToolEventData::Failed { .. }
-        | ToolEventData::Cancelled { .. }
-        | ToolEventData::Rejected { .. } => ToolCallStatus::Failed,
-        _ => ToolCallStatus::Pending,
-    }
 }
 
 fn tool_kind(tool_name: &str) -> ToolKind {
@@ -237,6 +240,118 @@ fn tool_kind(tool_name: &str) -> ToolKind {
     }
 }
 
+fn tool_locations(input: &serde_json::Value) -> Vec<ToolCallLocation> {
+    input
+        .get("file_path")
+        .or_else(|| input.get("path"))
+        .and_then(|value| value.as_str())
+        .filter(|path| !path.trim().is_empty())
+        .map(|path| vec![ToolCallLocation::new(PathBuf::from(path))])
+        .unwrap_or_default()
+}
+
+fn is_write_like_tool(tool_name: &str) -> bool {
+    matches!(
+        tool_name.to_ascii_lowercase().as_str(),
+        "write" | "file_write" | "write_file" | "write_notebook"
+    )
+}
+
+fn sanitize_tool_input(tool_name: &str, mut input: serde_json::Value) -> serde_json::Value {
+    if !is_large_text_payload_tool(tool_name) {
+        return input;
+    }
+
+    let Some(object) = input.as_object_mut() else {
+        return input;
+    };
+
+    sanitize_large_text_fields(object);
+
+    input
+}
+
+fn sanitize_tool_payload(tool_name: &str, mut payload: serde_json::Value) -> serde_json::Value {
+    if !is_large_text_payload_tool(tool_name) {
+        return payload;
+    }
+
+    let Some(object) = payload.as_object_mut() else {
+        return payload;
+    };
+
+    sanitize_large_text_fields(object);
+
+    payload
+}
+
+fn is_large_text_payload_tool(tool_name: &str) -> bool {
+    matches!(
+        tool_name.to_ascii_lowercase().as_str(),
+        "write"
+            | "file_write"
+            | "write_file"
+            | "write_notebook"
+            | "edit"
+            | "file_edit"
+            | "search_replace"
+    )
+}
+
+fn sanitize_large_text_fields(object: &mut serde_json::Map<String, serde_json::Value>) {
+    for key in ["content", "contents", "old_string", "new_string"] {
+        let Some(value) = object.get_mut(key) else {
+            continue;
+        };
+        let Some(content) = value.as_str() else {
+            continue;
+        };
+
+        let content_len = content.len();
+        let Some(preview) = large_text_preview(content) else {
+            continue;
+        };
+        *value = serde_json::Value::String(preview);
+        object.insert(format!("{}_bytes", key), serde_json::json!(content_len));
+        object.insert(format!("{}_truncated", key), serde_json::json!(true));
+    }
+}
+
+fn large_text_preview(content: &str) -> Option<String> {
+    if content.chars().count() <= ACP_LARGE_TEXT_PREVIEW_CHARS {
+        return None;
+    }
+
+    Some(truncate_chars(content, ACP_LARGE_TEXT_PREVIEW_CHARS))
+}
+
+fn write_input_status_text(input: &serde_json::Value) -> String {
+    let path = input
+        .get("file_path")
+        .or_else(|| input.get("path"))
+        .and_then(|value| value.as_str())
+        .unwrap_or("file");
+    let content_len = input
+        .get("content")
+        .or_else(|| input.get("contents"))
+        .and_then(|value| value.as_str())
+        .map(str::len)
+        .unwrap_or(0);
+
+    format!(
+        "Receiving Write content for {} ({} bytes).",
+        path, content_len
+    )
+}
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value.to_string();
+    }
+
+    value.chars().take(max_chars).collect()
+}
+
 fn text_content(text: impl Into<String>) -> ToolCallContent {
     ToolCallContent::from(text.into())
 }
@@ -251,7 +366,6 @@ fn value_to_display_text(value: &serde_json::Value) -> String {
 trait ToolEventExt {
     fn tool_id(&self) -> &str;
     fn tool_name(&self) -> &str;
-    fn raw_input(&self) -> Option<serde_json::Value>;
 }
 
 impl ToolEventExt for ToolEventData {
@@ -292,15 +406,6 @@ impl ToolEventExt for ToolEventData {
             | Self::Cancelled { tool_name, .. } => tool_name,
         }
     }
-
-    fn raw_input(&self) -> Option<serde_json::Value> {
-        match self {
-            Self::Started { params, .. } | Self::ConfirmationNeeded { params, .. } => {
-                Some(params.clone())
-            }
-            _ => None,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -334,6 +439,10 @@ mod tests {
             result: serde_json::json!({ "stdout": "ok" }),
             result_for_assistant: Some("done".to_string()),
             duration_ms: 42,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: None,
         };
 
         let updates = tool_event_updates(&event, &mut seen);
@@ -346,6 +455,235 @@ mod tests {
             update.fields.raw_output,
             Some(serde_json::json!({ "stdout": "ok" }))
         );
+    }
+
+    #[test]
+    fn write_started_redacts_large_content_from_raw_input() {
+        let mut seen = HashSet::new();
+        let content = "x".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS + 10);
+        let event = ToolEventData::Started {
+            tool_id: "tool-1".to_string(),
+            tool_name: "Write".to_string(),
+            params: serde_json::json!({
+                "file_path": "src/lib.rs",
+                "content": content,
+            }),
+            timeout_seconds: None,
+        };
+
+        let updates = tool_event_updates(&event, &mut seen);
+        let SessionUpdate::ToolCall(tool_call) = &updates[0] else {
+            panic!("expected initial tool call");
+        };
+        assert_eq!(tool_call.status, ToolCallStatus::Pending);
+        assert_eq!(tool_call.raw_input, Some(serde_json::json!({})));
+
+        let SessionUpdate::ToolCallUpdate(update) = &updates[1] else {
+            panic!("expected tool call update");
+        };
+        assert_eq!(update.fields.status, Some(ToolCallStatus::InProgress));
+        assert_eq!(
+            update.fields.locations.as_ref().unwrap()[0].path,
+            PathBuf::from("src/lib.rs")
+        );
+
+        let raw_input = update
+            .fields
+            .raw_input
+            .as_ref()
+            .expect("raw input should be present");
+
+        assert_eq!(raw_input["file_path"], "src/lib.rs");
+        assert_eq!(
+            raw_input["content_bytes"],
+            ACP_LARGE_TEXT_PREVIEW_CHARS + 10
+        );
+        assert_eq!(
+            raw_input["content"].as_str().unwrap().len(),
+            ACP_LARGE_TEXT_PREVIEW_CHARS
+        );
+        assert_eq!(raw_input["content_truncated"], true);
+    }
+
+    #[test]
+    fn write_params_partial_sends_bounded_raw_input() {
+        let mut seen = HashSet::new();
+        let content = "a".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS + 25);
+        let event = ToolEventData::ParamsPartial {
+            tool_id: "tool-1".to_string(),
+            tool_name: "Write".to_string(),
+            params: serde_json::json!({
+                "file_path": "src/main.rs",
+                "content": content,
+            })
+            .to_string(),
+        };
+
+        let updates = tool_event_updates(&event, &mut seen);
+        let SessionUpdate::ToolCallUpdate(update) = &updates[1] else {
+            panic!("expected tool call update");
+        };
+        let raw_input = update
+            .fields
+            .raw_input
+            .as_ref()
+            .expect("raw input should be present");
+
+        assert_eq!(raw_input["file_path"], "src/main.rs");
+        assert_eq!(
+            raw_input["content_bytes"],
+            ACP_LARGE_TEXT_PREVIEW_CHARS + 25
+        );
+        assert_eq!(
+            raw_input["content"].as_str().unwrap().len(),
+            ACP_LARGE_TEXT_PREVIEW_CHARS
+        );
+        assert_eq!(raw_input["content_truncated"], true);
+    }
+
+    #[test]
+    fn write_started_sends_small_content_on_in_progress_update() {
+        let mut seen = HashSet::new();
+        let event = ToolEventData::Started {
+            tool_id: "tool-1".to_string(),
+            tool_name: "Write".to_string(),
+            params: serde_json::json!({
+                "file_path": "tiny.txt",
+                "content": "hello\n",
+            }),
+            timeout_seconds: None,
+        };
+
+        let updates = tool_event_updates(&event, &mut seen);
+        let SessionUpdate::ToolCall(tool_call) = &updates[0] else {
+            panic!("expected initial tool call");
+        };
+        assert_eq!(tool_call.status, ToolCallStatus::Pending);
+        assert_eq!(tool_call.raw_input, Some(serde_json::json!({})));
+
+        let SessionUpdate::ToolCallUpdate(update) = &updates[1] else {
+            panic!("expected tool call update");
+        };
+        let raw_input = update
+            .fields
+            .raw_input
+            .as_ref()
+            .expect("raw input should be present");
+
+        assert_eq!(update.fields.status, Some(ToolCallStatus::InProgress));
+        assert_eq!(
+            update.fields.locations.as_ref().unwrap()[0].path,
+            PathBuf::from("tiny.txt")
+        );
+        assert_eq!(raw_input["file_path"], "tiny.txt");
+        assert_eq!(raw_input["content"], "hello\n");
+        assert!(raw_input.get("content_bytes").is_none());
+        assert!(raw_input.get("content_truncated").is_none());
+    }
+
+    #[test]
+    fn edit_started_redacts_large_strings_from_raw_input() {
+        let mut seen = HashSet::new();
+        let old_string = "old".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS);
+        let new_string = "new".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS);
+        let event = ToolEventData::Started {
+            tool_id: "tool-1".to_string(),
+            tool_name: "Edit".to_string(),
+            params: serde_json::json!({
+                "file_path": "src/lib.rs",
+                "old_string": old_string,
+                "new_string": new_string,
+            }),
+            timeout_seconds: None,
+        };
+
+        let updates = tool_event_updates(&event, &mut seen);
+        let SessionUpdate::ToolCallUpdate(update) = &updates[1] else {
+            panic!("expected tool call update");
+        };
+        let raw_input = update
+            .fields
+            .raw_input
+            .as_ref()
+            .expect("raw input should be present");
+
+        assert_eq!(update.fields.status, Some(ToolCallStatus::InProgress));
+        assert_eq!(
+            update.fields.locations.as_ref().unwrap()[0].path,
+            PathBuf::from("src/lib.rs")
+        );
+        assert_eq!(raw_input["file_path"], "src/lib.rs");
+        assert_eq!(
+            raw_input["old_string_bytes"],
+            ACP_LARGE_TEXT_PREVIEW_CHARS * 3
+        );
+        assert_eq!(
+            raw_input["new_string_bytes"],
+            ACP_LARGE_TEXT_PREVIEW_CHARS * 3
+        );
+        assert_eq!(
+            raw_input["old_string"].as_str().unwrap().len(),
+            ACP_LARGE_TEXT_PREVIEW_CHARS
+        );
+        assert_eq!(
+            raw_input["new_string"].as_str().unwrap().len(),
+            ACP_LARGE_TEXT_PREVIEW_CHARS
+        );
+        assert_eq!(raw_input["old_string_truncated"], true);
+        assert_eq!(raw_input["new_string_truncated"], true);
+    }
+
+    #[test]
+    fn edit_completed_redacts_large_strings_from_raw_output() {
+        let mut seen = HashSet::new();
+        let old_string = "old".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS);
+        let new_string = "new".repeat(ACP_LARGE_TEXT_PREVIEW_CHARS);
+        let event = ToolEventData::Completed {
+            tool_id: "tool-1".to_string(),
+            tool_name: "Edit".to_string(),
+            result: serde_json::json!({
+                "file_path": "src/lib.rs",
+                "old_string": old_string,
+                "new_string": new_string,
+                "success": true,
+            }),
+            result_for_assistant: None,
+            duration_ms: 15,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: None,
+        };
+
+        let updates = tool_event_updates(&event, &mut seen);
+        let SessionUpdate::ToolCallUpdate(update) = &updates[1] else {
+            panic!("expected tool call update");
+        };
+        let raw_output = update
+            .fields
+            .raw_output
+            .as_ref()
+            .expect("raw output should be present");
+
+        assert_eq!(raw_output["file_path"], "src/lib.rs");
+        assert_eq!(
+            raw_output["old_string_bytes"],
+            ACP_LARGE_TEXT_PREVIEW_CHARS * 3
+        );
+        assert_eq!(
+            raw_output["new_string_bytes"],
+            ACP_LARGE_TEXT_PREVIEW_CHARS * 3
+        );
+        assert_eq!(
+            raw_output["old_string"].as_str().unwrap().len(),
+            ACP_LARGE_TEXT_PREVIEW_CHARS
+        );
+        assert_eq!(
+            raw_output["new_string"].as_str().unwrap().len(),
+            ACP_LARGE_TEXT_PREVIEW_CHARS
+        );
+        assert_eq!(raw_output["old_string_truncated"], true);
+        assert_eq!(raw_output["new_string_truncated"], true);
     }
 
     #[test]

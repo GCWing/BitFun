@@ -3,10 +3,11 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { FolderOpen, Loader2, Clock, File, Folder, Check } from 'lucide-react';
+import { FolderOpen, File, Folder } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
+import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 interface LSEntry {
   name: string;
@@ -27,18 +28,6 @@ export const LSDisplay: React.FC<ToolCardProps> = ({
     toolId,
     toolName: toolItem.toolName,
   });
-
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'running':
-      case 'streaming':
-        return <Loader2 className="animate-spin" size={14} />;
-      case 'completed':
-        return <Check size={14} className="icon-check-done" />;
-      default:
-        return <Clock size={14} />;
-    }
-  };
 
   const getDirectoryPath = (): string => {
     const path = toolCall?.input?.path;
@@ -192,10 +181,8 @@ export const LSDisplay: React.FC<ToolCardProps> = ({
         clickable={hasDetails}
         header={
           <CompactToolCardHeader
-            icon={<FolderOpen size={16} className="ls-display-card-icon" />}
+            icon={<ToolCardStatusSlot status={status} toolIcon={<FolderOpen size={16} className="ls-display-card-icon" />} />}
             content={renderContent()}
-            rightStatusIcon={getStatusIcon()}
-            rightStatusIconWithDivider
           />
         }
         expandedContent={hasDetails ? renderExpandedContent() : undefined}

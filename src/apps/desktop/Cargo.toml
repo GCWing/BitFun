@@ -19,7 +19,7 @@ serde_json = { workspace = true }
 
 [dependencies]
 # Internal crates
-bitfun-core = { path = "../../crates/core", features = ["ssh-remote"] }
+bitfun-core = { path = "../../crates/core", default-features = false, features = ["product-full"] }
 bitfun-transport = { path = "../../crates/transport", features = ["tauri-adapter"] }
 bitfun-webdriver = { path = "../../crates/webdriver" }
 bitfun-acp = { path = "../../crates/acp" }

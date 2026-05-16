@@ -3,10 +3,11 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { FolderSearch, Loader2, Clock, File, Folder, Check } from 'lucide-react';
+import { FolderSearch, File, Folder } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
+import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 export const GlobSearchDisplay: React.FC<ToolCardProps> = ({
   toolItem,
@@ -20,18 +21,6 @@ export const GlobSearchDisplay: React.FC<ToolCardProps> = ({
     toolId,
     toolName: toolItem.toolName,
   });
-
-  const getStatusIcon = () => {
-    switch (status) {
-      case 'running':
-      case 'streaming':
-        return <Loader2 className="animate-spin" size={14} />;
-      case 'completed':
-        return <Check size={14} className="icon-check-done" />;
-      default:
-        return <Clock size={14} />;
-    }
-  };
 
   const getSearchPattern = (): string => {
     const pattern = toolCall?.input?.pattern || 
@@ -192,13 +181,12 @@ export const GlobSearchDisplay: React.FC<ToolCardProps> = ({
         status={status}
         isExpanded={isExpanded}
         onClick={handleClick}
+        className="glob-search-card"
         clickable={hasDetails}
         header={
           <CompactToolCardHeader
-            icon={<FolderSearch size={16} className="glob-search-card-icon" />}
+            icon={<ToolCardStatusSlot status={status} toolIcon={<FolderSearch size={16} className="glob-search-card-icon" />} />}
             content={renderContent()}
-            rightStatusIcon={getStatusIcon()}
-            rightStatusIconWithDivider
           />
         }
         expandedContent={hasDetails ? renderExpandedContent() : undefined}

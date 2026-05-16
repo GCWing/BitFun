@@ -4,9 +4,11 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use bitfun_core::service::remote_ssh::SSHConnectionManager;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use tokio::process::Command;
 
+use super::builtin_clients::builtin_acp_client_preset;
 use super::config::{AcpClientConfig, AcpRequirementProbeItem};
 
 const REQUIREMENT_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
@@ -28,35 +30,23 @@ pub(crate) fn acp_requirement_spec<'a>(
     client_id: &'a str,
     config: Option<&'a AcpClientConfig>,
 ) -> AcpRequirementSpec<'a> {
-    match client_id {
-        "claude-code" => AcpRequirementSpec {
-            tool_command: "claude",
-            install_package: Some("@anthropic-ai/claude-code"),
-            adapter: Some(AcpAdapterSpec {
-                package: "@zed-industries/claude-code-acp",
-                bin: "claude-code-acp",
-            }),
-        },
-        "codex" => AcpRequirementSpec {
-            tool_command: "codex",
-            install_package: Some("@openai/codex"),
-            adapter: Some(AcpAdapterSpec {
-                package: "@zed-industries/codex-acp",
-                bin: "codex-acp",
-            }),
-        },
-        "opencode" => AcpRequirementSpec {
-            tool_command: "opencode",
-            install_package: Some("opencode-ai"),
-            adapter: None,
-        },
-        _ => AcpRequirementSpec {
-            tool_command: config
-                .map(|config| config.command.as_str())
-                .unwrap_or(client_id),
-            install_package: None,
-            adapter: None,
-        },
+    if let Some(preset) = builtin_acp_client_preset(client_id) {
+        return AcpRequirementSpec {
+            tool_command: preset.tool_command,
+            install_package: Some(preset.install_package),
+            adapter: match (preset.adapter_package, preset.adapter_bin) {
+                (Some(package), Some(bin)) => Some(AcpAdapterSpec { package, bin }),
+                _ => None,
+            },
+        };
+    }
+
+    AcpRequirementSpec {
+        tool_command: config
+            .map(|config| config.command.as_str())
+            .unwrap_or(client_id),
+        install_package: None,
+        adapter: None,
     }
 }
 
@@ -157,6 +147,109 @@ pub(crate) async fn probe_npm_adapter(package: &str, bin: &str) -> AcpRequiremen
         item.installed = true;
         item.path = Some("npx auto-install".to_string());
         item.error = None;
+    }
+
+    item
+}
+
+pub(crate) async fn probe_remote_executable(
+    ssh_manager: &SSHConnectionManager,
+    connection_id: &str,
+    command: &str,
+) -> AcpRequirementProbeItem {
+    let mut item = AcpRequirementProbeItem {
+        name: command.to_string(),
+        installed: false,
+        version: None,
+        path: None,
+        error: None,
+    };
+
+    let resolve_command = format!("command -v {}", shell_escape(command));
+    match ssh_manager
+        .execute_command(connection_id, &resolve_command)
+        .await
+    {
+        Ok((stdout, _stderr, exit_code)) if exit_code == 0 => {
+            let resolved_path = stdout
+                .lines()
+                .map(str::trim)
+                .find(|line| !line.is_empty())
+                .map(ToString::to_string);
+            item.installed = resolved_path.is_some();
+            item.path = resolved_path;
+        }
+        Ok((stdout, stderr, _)) => {
+            let summary = remote_command_error_summary(&stderr, &stdout);
+            if !summary.is_empty() {
+                item.error = Some(summary);
+            }
+        }
+        Err(error) => {
+            item.error = Some(error.to_string());
+        }
+    }
+
+    if item.installed {
+        let version_command = format!("{} --version", shell_escape(command));
+        match ssh_manager
+            .execute_command(connection_id, &version_command)
+            .await
+        {
+            Ok((stdout, stderr, exit_code)) if exit_code == 0 => {
+                item.version = parse_version_text(stdout.as_bytes())
+                    .or_else(|| parse_version_text(stderr.as_bytes()));
+            }
+            Ok((stdout, stderr, _)) => {
+                item.error = Some(remote_command_error_summary(&stderr, &stdout));
+            }
+            Err(error) => {
+                item.error = Some(error.to_string());
+            }
+        }
+    }
+
+    item
+}
+
+pub(crate) async fn probe_remote_npx_adapter(
+    ssh_manager: &SSHConnectionManager,
+    connection_id: &str,
+    package: &str,
+) -> AcpRequirementProbeItem {
+    let mut item = AcpRequirementProbeItem {
+        name: package.to_string(),
+        installed: false,
+        version: None,
+        path: None,
+        error: None,
+    };
+
+    let resolve_command = "command -v npx";
+    match ssh_manager
+        .execute_command(connection_id, resolve_command)
+        .await
+    {
+        Ok((stdout, _stderr, exit_code)) if exit_code == 0 => {
+            item.installed = true;
+            item.path = stdout
+                .lines()
+                .map(str::trim)
+                .find(|line| !line.is_empty())
+                .map(ToString::to_string)
+                .or_else(|| Some("remote npx auto-install".to_string()));
+        }
+        Ok((stdout, stderr, _)) => {
+            let summary = remote_command_error_summary(&stderr, &stdout);
+            item.error = Some(if summary.is_empty() {
+                "npx is not available on remote PATH".to_string()
+            } else {
+                summary
+            });
+        }
+        Err(error) => {
+            item.error = Some(error.to_string());
+        }
     }
 
     item
@@ -290,12 +383,34 @@ fn command_error_summary(stderr: &[u8], stdout: &[u8]) -> String {
     "Command exited unsuccessfully".to_string()
 }
 
+fn remote_command_error_summary(stderr: &str, stdout: &str) -> String {
+    let stderr = stderr.trim().to_string();
+    if !stderr.is_empty() {
+        return truncate_error(stderr);
+    }
+    let stdout = stdout.trim().to_string();
+    if !stdout.is_empty() {
+        return truncate_error(stdout);
+    }
+    String::new()
+}
+
 fn truncate_error(value: String) -> String {
     const MAX_LEN: usize = 240;
     if value.chars().count() <= MAX_LEN {
         return value;
     }
     format!("{}...", value.chars().take(MAX_LEN).collect::<String>())
+}
+
+fn shell_escape(value: &str) -> String {
+    if value.chars().all(|ch| {
+        ch.is_ascii_alphanumeric() || matches!(ch, '/' | '.' | '-' | '_' | ':' | '=' | '@')
+    }) {
+        value.to_string()
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
 }
 
 fn find_executable(command: &str) -> Option<PathBuf> {
@@ -379,6 +494,10 @@ fn push_system_bin_paths(paths: &mut Vec<PathBuf>, seen: &mut HashSet<OsString>)
                 );
             }
         }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (paths, seen);
     }
 }
 

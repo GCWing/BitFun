@@ -9,21 +9,24 @@ use crate::api::path_target::{
     write_text_file, DesktopPathTarget,
 };
 use crate::api::search_api::{
-    group_search_results, search_file_contents_via_workspace_search,
-    search_metadata_from_content_result, should_use_workspace_search, SearchMetadataResponse,
+    build_content_search_request, group_search_results, prepare_content_search_runner,
+    search_file_contents_via_workspace_search, search_metadata_from_content_result,
+    should_use_workspace_search, SearchMetadataResponse,
 };
 use crate::api::workspace_activation::spawn_workspace_background_warmup;
 use bitfun_core::infrastructure::{
-    BatchedFileSearchProgressSink, FileSearchResult, FileSearchResultGroup, FileTreeNode,
-    SearchMatchType,
+    BatchedFileSearchProgressSink, FileSearchOutcome, FileSearchProgressSink, FileSearchResult,
+    FileSearchResultGroup, FileTreeNode, SearchMatchType,
 };
 use bitfun_core::service::file_watch;
 use bitfun_core::service::remote_ssh::get_remote_workspace_manager;
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
+use bitfun_core::service::remote_ssh::{RemoteDirEntry, RemoteFileService, RemoteWorkspaceEntry};
 use bitfun_core::service::workspace::{
     ScanOptions, WorkspaceInfo, WorkspaceKind, WorkspaceOpenOptions,
 };
 use log::{debug, error, info, warn};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -412,13 +415,6 @@ pub struct ListAIModelsByConfigRequest {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FixMermaidCodeRequest {
-    pub source_code: String,
-    pub error_message: String,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct UpdateAppStatusRequest {
     pub status: String,
     pub message: Option<String>,
@@ -595,6 +591,191 @@ fn resolve_search_limit(requested: Option<usize>, fallback: usize) -> usize {
         .clamp(1, HARD_MAX_SEARCH_RESULTS)
 }
 
+fn compile_filename_search_regex(
+    pattern: &str,
+    case_sensitive: bool,
+    use_regex: bool,
+    whole_word: bool,
+) -> Result<Regex, String> {
+    let mut pattern = if use_regex {
+        pattern.to_string()
+    } else {
+        regex::escape(pattern)
+    };
+
+    if whole_word {
+        pattern = format!(r"\b(?:{})\b", pattern);
+    }
+
+    if !case_sensitive {
+        pattern = format!("(?i){}", pattern);
+    }
+
+    Regex::new(&pattern).map_err(|error| format!("Invalid search pattern: {}", error))
+}
+
+fn should_skip_remote_search_directory(name: &str) -> bool {
+    matches!(
+        name,
+        ".git"
+            | ".svn"
+            | ".hg"
+            | "node_modules"
+            | "target"
+            | "dist"
+            | "build"
+            | ".next"
+            | ".nuxt"
+            | ".cache"
+            | ".turbo"
+    )
+}
+
+fn should_skip_remote_search_file(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    matches!(
+        lower.rsplit_once('.').map(|(_, ext)| ext),
+        Some(
+            "png"
+                | "jpg"
+                | "jpeg"
+                | "gif"
+                | "webp"
+                | "ico"
+                | "pdf"
+                | "zip"
+                | "tar"
+                | "gz"
+                | "rar"
+                | "7z"
+                | "exe"
+                | "dll"
+                | "so"
+                | "dylib"
+        )
+    )
+}
+
+fn remote_filename_search_result(entry: &RemoteDirEntry) -> FileSearchResult {
+    FileSearchResult {
+        path: entry.path.clone(),
+        name: entry.name.clone(),
+        is_directory: entry.is_dir,
+        match_type: SearchMatchType::FileName,
+        line_number: None,
+        matched_content: None,
+        preview_before: None,
+        preview_inside: None,
+        preview_after: None,
+    }
+}
+
+async fn search_remote_file_names_with_progress(
+    remote_fs: RemoteFileService,
+    entry: RemoteWorkspaceEntry,
+    root_path: String,
+    pattern: String,
+    case_sensitive: bool,
+    use_regex: bool,
+    whole_word: bool,
+    include_directories: bool,
+    limit: usize,
+    cancel_flag: Option<Arc<AtomicBool>>,
+    progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
+) -> Result<FileSearchOutcome, String> {
+    let matcher = compile_filename_search_regex(&pattern, case_sensitive, use_regex, whole_word)?;
+    let mut stack = vec![root_path];
+    let mut results = Vec::new();
+    let mut truncated = false;
+
+    while let Some(directory) = stack.pop() {
+        if cancel_flag
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::Relaxed))
+        {
+            break;
+        }
+
+        let mut entries = remote_fs
+            .read_dir(&entry.connection_id, &directory)
+            .await
+            .map_err(|error| format!("Failed to read remote directory: {}", error))?;
+        entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.cmp(&b.name),
+        });
+
+        for child in entries {
+            if cancel_flag
+                .as_ref()
+                .is_some_and(|flag| flag.load(Ordering::Relaxed))
+            {
+                break;
+            }
+
+            if child.is_dir {
+                if should_skip_remote_search_directory(&child.name) {
+                    continue;
+                }
+
+                if include_directories && matcher.is_match(&child.name) {
+                    let result = remote_filename_search_result(&child);
+                    if let Some(sink) = progress_sink.as_ref() {
+                        sink.report(FileSearchResultGroup {
+                            path: result.path.clone(),
+                            name: result.name.clone(),
+                            is_directory: result.is_directory,
+                            file_name_match: Some(result.clone()),
+                            content_matches: Vec::new(),
+                        });
+                    }
+                    results.push(result);
+                    if results.len() >= limit {
+                        truncated = true;
+                        break;
+                    }
+                }
+
+                stack.push(child.path);
+                continue;
+            }
+
+            if !child.is_file || should_skip_remote_search_file(&child.name) {
+                continue;
+            }
+
+            if matcher.is_match(&child.name) {
+                let result = remote_filename_search_result(&child);
+                if let Some(sink) = progress_sink.as_ref() {
+                    sink.report(FileSearchResultGroup {
+                        path: result.path.clone(),
+                        name: result.name.clone(),
+                        is_directory: result.is_directory,
+                        file_name_match: Some(result.clone()),
+                        content_matches: Vec::new(),
+                    });
+                }
+                results.push(result);
+                if results.len() >= limit {
+                    truncated = true;
+                    break;
+                }
+            }
+        }
+
+        if truncated {
+            break;
+        }
+    }
+
+    if let Some(sink) = progress_sink.as_ref() {
+        sink.flush();
+    }
+
+    Ok(FileSearchOutcome { results, truncated })
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameFileRequest {
@@ -655,7 +836,6 @@ async fn clear_active_workspace_context(state: &State<'_, AppState>, app: &AppHa
         pool.stop_all().await;
     }
 
-    state.ai_rules_service.clear_workspace().await;
     state.agent_registry.clear_custom_subagents();
 
     #[cfg(target_os = "macos")]
@@ -686,21 +866,6 @@ async fn apply_active_workspace_context(
     clear_active_workspace_context(state, app).await;
 
     *state.workspace_path.write().await = Some(workspace_info.root_path.clone());
-
-    // Remote workspace roots are POSIX paths on the SSH host — not writable local directories on
-    // Windows. Snapshot hooks already skip file tracking for registered remote paths; avoid
-    // creating `/.bitfun` (or drive root) here which fails with access denied.
-    if let Err(e) = state
-        .ai_rules_service
-        .set_workspace(workspace_info.root_path.clone())
-        .await
-    {
-        warn!(
-            "Failed to set AI rules workspace: path={}, error={}",
-            workspace_info.root_path.display(),
-            e
-        );
-    }
 
     spawn_workspace_background_warmup(&*state, workspace_info.clone());
 
@@ -968,78 +1133,6 @@ pub async fn list_ai_models_by_config(
         );
         format!("Failed to list models: {}", e)
     })
-}
-
-#[tauri::command]
-pub async fn fix_mermaid_code(
-    state: State<'_, AppState>,
-    request: FixMermaidCodeRequest,
-) -> Result<String, String> {
-    use bitfun_core::util::types::message::Message;
-
-    let ai_client_guard = state.ai_client.read().await;
-    let ai_client = ai_client_guard.as_ref().ok_or_else(|| {
-        "AI client not initialized, please configure AI model in settings first".to_string()
-    })?;
-
-    const MERMAID_FIX_PROMPT: &str = r#"role:
-
-You are a Mermaid diagram syntax expert specialized in fixing erroneous Mermaid code.
-
-mission:
-
-Fix syntax errors in the provided Mermaid diagram code to ensure it renders correctly.
-
-workflow:
-
-1. Analyze the provided Mermaid code and error message
-2. Identify and fix the syntax errors
-3. Preserve the original diagram structure and content
-4. Return ONLY the fixed Mermaid code without any wrapper or explanation
-
-context:
-
-**Original Mermaid Code:**
-```
-{source_code}
-```
-
-**Error Message:**
-```
-{error_message}
-```
-
-**Output Requirements:**
-- Return ONLY the fixed Mermaid code as plain text
-- Do NOT wrap the code in markdown code blocks (no ```)
-- Do NOT add any explanations or comments
-- Preserve the original diagram type, direction, and node content
-- Only fix syntax errors
-"#;
-    let prompt = MERMAID_FIX_PROMPT
-        .replace("{source_code}", &request.source_code)
-        .replace("{error_message}", &request.error_message);
-
-    let messages = vec![Message::user(prompt)];
-
-    let response = ai_client.send_message(messages, None).await.map_err(|e| {
-        error!("Failed to call AI for Mermaid code fix: {}", e);
-        format!("AI call failed: {}", e)
-    })?;
-
-    let fixed_code = response.text.trim().to_string();
-
-    if fixed_code.is_empty() {
-        error!("AI returned empty fix code for Mermaid diagram");
-        return Err("AI returned empty fix code, please try again".to_string());
-    }
-
-    info!(
-        "Mermaid code fixed successfully: original_length={}, fixed_length={}",
-        request.source_code.len(),
-        fixed_code.len()
-    );
-    Ok(fixed_code)
 }
 
 #[tauri::command]
@@ -1682,7 +1775,10 @@ pub async fn cleanup_invalid_workspaces(
     app: tauri::AppHandle,
 ) -> Result<usize, String> {
     match state.workspace_service.cleanup_invalid_workspaces().await {
-        Ok(removed_count) => {
+        Ok(local_removed_count) => {
+            let remote_removed_count = prune_unrecoverable_remote_workspaces(&state).await;
+            let removed_count = local_removed_count + remote_removed_count;
+
             if let Some(workspace_info) = state.workspace_service.get_current_workspace().await {
                 apply_active_workspace_context(&state, &app, &workspace_info).await;
             } else {
@@ -1711,6 +1807,80 @@ pub async fn cleanup_invalid_workspaces(
             Err(format!("Failed to cleanup invalid workspaces: {}", e))
         }
     }
+}
+
+async fn prune_unrecoverable_remote_workspaces(state: &State<'_, AppState>) -> usize {
+    let saved_connection_ids: std::collections::HashSet<String> = match state
+        .get_ssh_manager_async()
+        .await
+    {
+        Ok(manager) => manager
+            .get_saved_connections()
+            .await
+            .into_iter()
+            .map(|connection| connection.id)
+            .collect(),
+        Err(error) => {
+            warn!(
+                "Skipping remote workspace cleanup because SSH manager is unavailable: {}",
+                error
+            );
+            return 0;
+        }
+    };
+
+    let workspaces = state.workspace_service.list_workspace_infos().await;
+    let mut removed = 0usize;
+
+    for workspace in workspaces {
+        if workspace.workspace_kind != WorkspaceKind::Remote {
+            continue;
+        }
+
+        let connection_id = workspace
+            .metadata
+            .get("connectionId")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+
+        let should_remove = connection_id
+            .as_deref()
+            .map(|id| !saved_connection_ids.contains(id))
+            .unwrap_or(true);
+
+        if !should_remove {
+            continue;
+        }
+
+        if let Some(id) = connection_id.as_deref() {
+            state
+                .unregister_remote_workspace_entry(id, &workspace.root_path.to_string_lossy())
+                .await;
+        }
+
+        match state.workspace_service.remove_workspace(&workspace.id).await {
+            Ok(()) => {
+                removed += 1;
+                info!(
+                    "Removed unrecoverable remote workspace: workspace_id={}, connection_id={:?}, path={}",
+                    workspace.id,
+                    connection_id,
+                    workspace.root_path.display()
+                );
+            }
+            Err(error) => {
+                warn!(
+                    "Failed to remove unrecoverable remote workspace: workspace_id={}, error={}",
+                    workspace.id,
+                    error
+                );
+            }
+        }
+    }
+
+    removed
 }
 
 #[tauri::command]
@@ -2028,8 +2198,8 @@ fn load_pet_manifest_from_bytes(bytes: &[u8]) -> Result<(serde_json::Value, Path
 fn load_pet_package_source(source_path: &Path) -> Result<PetPackageSource, String> {
     if source_path.is_dir() {
         let pet_json_path = source_path.join("pet.json");
-        let pet_json = std::fs::read(&pet_json_path)
-            .map_err(|e| format!("Failed to read pet.json: {}", e))?;
+        let pet_json =
+            std::fs::read(&pet_json_path).map_err(|e| format!("Failed to read pet.json: {}", e))?;
         let (_, spritesheet_name) = load_pet_manifest_from_bytes(&pet_json)?;
         let spritesheet_path = source_path.join(&spritesheet_name);
         let spritesheet = std::fs::read(&spritesheet_path)
@@ -2043,8 +2213,8 @@ fn load_pet_package_source(source_path: &Path) -> Result<PetPackageSource, Strin
 
     let file = std::fs::File::open(source_path)
         .map_err(|e| format!("Failed to open pet zip package: {}", e))?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| format!("Failed to read pet zip package: {}", e))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| format!("Failed to read pet zip package: {}", e))?;
 
     let mut manifest_index = None;
     for index in 0..archive.len() {
@@ -2098,7 +2268,10 @@ fn companion_user_packages_dir(state: &AppState) -> PathBuf {
         .join("agent-companions")
 }
 
-fn pet_package_dto_from_dir(dir: &Path, source: &str) -> Result<AgentCompanionPetPackageDto, String> {
+fn pet_package_dto_from_dir(
+    dir: &Path,
+    source: &str,
+) -> Result<AgentCompanionPetPackageDto, String> {
     let pet_json_path = dir.join("pet.json");
     let pet_json = std::fs::read(&pet_json_path)
         .map_err(|e| format!("Failed to read {}: {}", pet_json_path.display(), e))?;
@@ -2106,7 +2279,11 @@ fn pet_package_dto_from_dir(dir: &Path, source: &str) -> Result<AgentCompanionPe
     let raw_id = manifest
         .get("id")
         .and_then(|value| value.as_str())
-        .unwrap_or_else(|| dir.file_name().and_then(|name| name.to_str()).unwrap_or("pet"));
+        .unwrap_or_else(|| {
+            dir.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("pet")
+        });
     let display_name = manifest
         .get("displayName")
         .and_then(|value| value.as_str())
@@ -2121,7 +2298,10 @@ fn pet_package_dto_from_dir(dir: &Path, source: &str) -> Result<AgentCompanionPe
         .filter(|value| !value.is_empty());
     let spritesheet_path = dir.join(&spritesheet_rel_path);
     if !spritesheet_path.is_file() {
-        return Err(format!("Spritesheet not found: {}", spritesheet_path.display()));
+        return Err(format!(
+            "Spritesheet not found: {}",
+            spritesheet_path.display()
+        ));
     }
     let spritesheet_file_name = spritesheet_rel_path
         .file_name()
@@ -2154,7 +2334,11 @@ fn scan_pet_package_dirs(root: &Path, source: &str) -> Vec<AgentCompanionPetPack
             Err(err) => warn!("Skipping invalid Agent companion pet package: {}", err),
         }
     }
-    pets.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+    pets.sort_by(|a, b| {
+        a.display_name
+            .to_lowercase()
+            .cmp(&b.display_name.to_lowercase())
+    });
     pets
 }
 
@@ -2262,7 +2446,9 @@ pub async fn delete_agent_companion_pet_package(
         .map_err(|e| format!("Pet package path not found: {}", e))?;
 
     if !resolved.starts_with(&root) {
-        return Err("Refusing to delete path outside imported Agent companion packages".to_string());
+        return Err(
+            "Refusing to delete path outside imported Agent companion packages".to_string(),
+        );
     }
     if !resolved.is_dir() {
         return Err("Pet package is not a directory".to_string());
@@ -2636,28 +2822,12 @@ pub async fn search_files(
     };
 
     let use_workspace_search =
-        request.search_content && should_use_workspace_search(&request.root_path).await;
+        request.search_content && should_use_workspace_search(&state, &request.root_path).await;
     let result = if request.search_content {
-        let filename_outcome = state
-            .filesystem_service
-            .search_file_names(
-                &request.root_path,
-                &request.pattern,
-                FileSearchOptions {
-                    include_content: false,
-                    include_directories: request.include_directories,
-                    ..options.clone()
-                },
-                cancel_flag.clone(),
-            )
-            .await?;
-        let mut filename_results = filename_outcome.results;
-
-        if filename_results.len() >= max_results {
-            Ok(filename_results)
-        } else {
-            let remaining = max_results - filename_results.len();
-            let mut content_outcome = if use_workspace_search {
+        if is_remote_path(request.root_path.trim()).await {
+            if !use_workspace_search {
+                Err("Remote content search requires workspace search support".to_string())
+            } else {
                 search_file_contents_via_workspace_search(
                     &state,
                     &request.root_path,
@@ -2665,37 +2835,71 @@ pub async fn search_files(
                     request.case_sensitive,
                     request.use_regex,
                     request.whole_word,
-                    remaining,
+                    max_results,
                 )
                 .await
-                .map(|result| result.outcome)?
+                .map(|result| result.outcome.results)
+            }
+        } else {
+            let filename_outcome = state
+                .filesystem_service
+                .search_file_names(
+                    &request.root_path,
+                    &request.pattern,
+                    FileSearchOptions {
+                        include_content: false,
+                        include_directories: request.include_directories,
+                        ..options.clone()
+                    },
+                    cancel_flag.clone(),
+                )
+                .await?;
+            let mut filename_results = filename_outcome.results;
+
+            if filename_results.len() >= max_results {
+                Ok(filename_results)
             } else {
-                state
-                    .filesystem_service
-                    .search_file_contents(
+                let remaining = max_results - filename_results.len();
+                let mut content_outcome = if use_workspace_search {
+                    search_file_contents_via_workspace_search(
+                        &state,
                         &request.root_path,
                         &request.pattern,
-                        FileSearchOptions {
-                            include_content: true,
-                            include_directories: false,
-                            max_results: Some(remaining),
-                            ..options
-                        },
-                        cancel_flag,
+                        request.case_sensitive,
+                        request.use_regex,
+                        request.whole_word,
+                        remaining,
                     )
-                    .await?
-            };
-            if filename_outcome.truncated || content_outcome.truncated {
-                debug!(
-                    "Legacy search truncated: root_path={}, pattern={}, search_content={}, limit={}",
-                    request.root_path,
-                    request.pattern,
-                    request.search_content,
-                    max_results
-                );
+                    .await
+                    .map(|result| result.outcome)?
+                } else {
+                    state
+                        .filesystem_service
+                        .search_file_contents(
+                            &request.root_path,
+                            &request.pattern,
+                            FileSearchOptions {
+                                include_content: true,
+                                include_directories: false,
+                                max_results: Some(remaining),
+                                ..options
+                            },
+                            cancel_flag,
+                        )
+                        .await?
+                };
+                if filename_outcome.truncated || content_outcome.truncated {
+                    debug!(
+                        "Legacy search truncated: root_path={}, pattern={}, search_content={}, limit={}",
+                        request.root_path,
+                        request.pattern,
+                        request.search_content,
+                        max_results
+                    );
+                }
+                filename_results.append(&mut content_outcome.results);
+                Ok(filename_results)
             }
-            filename_results.append(&mut content_outcome.results);
-            Ok(filename_results)
         }
     } else {
         state
@@ -2703,6 +2907,7 @@ pub async fn search_files(
             .search_file_names(&request.root_path, &request.pattern, options, cancel_flag)
             .await
             .map(|outcome| outcome.results)
+            .map_err(|error| format!("Failed to search filenames: {}", error))
     };
     unregister_search(&state, search_id.as_deref());
 
@@ -2747,10 +2952,39 @@ pub async fn search_filenames(
         include_directories: request.include_directories,
     };
 
-    let result = state
-        .filesystem_service
-        .search_file_names(&request.root_path, &request.pattern, options, cancel_flag)
-        .await;
+    let result = match resolve_desktop_path_target(&state, &request.root_path, None).await {
+        Ok(DesktopPathTarget::Remote {
+            requested_path,
+            entry,
+        }) => match state.get_remote_file_service_async().await {
+            Ok(remote_fs) => search_remote_file_names_with_progress(
+                remote_fs,
+                entry,
+                requested_path,
+                request.pattern.clone(),
+                request.case_sensitive,
+                request.use_regex,
+                request.whole_word,
+                request.include_directories,
+                limit,
+                cancel_flag,
+                None,
+            )
+            .await
+            .map_err(bitfun_core::util::errors::BitFunError::service),
+            Err(error) => Err(bitfun_core::util::errors::BitFunError::service(format!(
+                "Remote file service not available: {}",
+                error
+            ))),
+        },
+        Ok(DesktopPathTarget::Local { .. }) => {
+            state
+                .filesystem_service
+                .search_file_names(&request.root_path, &request.pattern, options, cancel_flag)
+                .await
+        }
+        Err(error) => Err(bitfun_core::util::errors::BitFunError::service(error)),
+    };
     unregister_search(&state, search_id.as_deref());
 
     match result {
@@ -2795,7 +3029,7 @@ pub async fn search_file_contents(
         include_directories: false,
     };
 
-    let result = if should_use_workspace_search(&request.root_path).await {
+    let result = if should_use_workspace_search(&state, &request.root_path).await {
         search_file_contents_via_workspace_search(
             &state,
             &request.root_path,
@@ -2863,10 +3097,36 @@ pub async fn start_search_filenames_stream(
         include_directories: request.include_directories,
     };
 
+    let remote_search_target =
+        match resolve_desktop_path_target(&state, &request.root_path, None).await {
+            Ok(DesktopPathTarget::Remote {
+                requested_path,
+                entry,
+            }) => {
+                let remote_fs = match state.get_remote_file_service_async().await {
+                    Ok(remote_fs) => remote_fs,
+                    Err(error) => {
+                        unregister_search(&state, Some(&search_id));
+                        return Err(format!("Remote file service not available: {}", error));
+                    }
+                };
+                Some((remote_fs, entry, requested_path))
+            }
+            Ok(DesktopPathTarget::Local { .. }) => None,
+            Err(error) => {
+                unregister_search(&state, Some(&search_id));
+                return Err(error);
+            }
+        };
+
     let filesystem_service = state.filesystem_service.clone();
     let active_searches = state.active_searches.clone();
     let root_path = request.root_path.clone();
     let pattern = request.pattern.clone();
+    let case_sensitive = request.case_sensitive;
+    let use_regex = request.use_regex;
+    let whole_word = request.whole_word;
+    let include_directories = request.include_directories;
     let response_search_id = search_id.clone();
     let progress_search_id = search_id.clone();
     let progress_app_handle = app_handle.clone();
@@ -2884,15 +3144,33 @@ pub async fn start_search_filenames_stream(
     ));
 
     tokio::spawn(async move {
-        let result = filesystem_service
-            .search_file_names_with_progress(
-                &root_path,
-                &pattern,
-                options,
-                cancel_flag,
+        let result = if let Some((remote_fs, entry, requested_path)) = remote_search_target {
+            search_remote_file_names_with_progress(
+                remote_fs,
+                entry,
+                requested_path,
+                pattern.clone(),
+                case_sensitive,
+                use_regex,
+                whole_word,
+                include_directories,
+                limit,
+                cancel_flag.clone(),
                 Some(progress_sink),
             )
-            .await;
+            .await
+            .map_err(bitfun_core::util::errors::BitFunError::service)
+        } else {
+            filesystem_service
+                .search_file_names_with_progress(
+                    &root_path,
+                    &pattern,
+                    options,
+                    cancel_flag,
+                    Some(progress_sink),
+                )
+                .await
+        };
 
         unregister_search_registry(&active_searches, Some(&search_id));
 
@@ -2961,14 +3239,22 @@ pub async fn start_search_file_contents_stream(
     };
 
     let filesystem_service = state.filesystem_service.clone();
-    let workspace_search_service = state.workspace_search_service.clone();
     let active_searches = state.active_searches.clone();
     let root_path = request.root_path.clone();
     let pattern = request.pattern.clone();
     let case_sensitive = request.case_sensitive;
     let use_regex = request.use_regex;
     let whole_word = request.whole_word;
-    let use_workspace_search = should_use_workspace_search(&root_path).await;
+    let use_workspace_search = should_use_workspace_search(&state, &root_path).await;
+    let workspace_search_runner = if use_workspace_search {
+        Some(
+            prepare_content_search_runner(&state, &root_path)
+                .await
+                .map_err(|error| format!("Failed to prepare workspace search: {}", error))?,
+        )
+    } else {
+        None
+    };
     let response_search_id = search_id.clone();
     let progress_search_id = search_id.clone();
     let progress_app_handle = app_handle.clone();
@@ -2987,23 +3273,17 @@ pub async fn start_search_file_contents_stream(
 
     tokio::spawn(async move {
         let result = if use_workspace_search {
-            let result = workspace_search_service
-                .search_content(bitfun_core::service::search::ContentSearchRequest {
-                    repo_root: root_path.clone().into(),
-                    search_path: None,
-                    pattern: pattern.clone(),
-                    output_mode: bitfun_core::service::search::ContentSearchOutputMode::Content,
+            let result = workspace_search_runner
+                .as_ref()
+                .expect("workspace search runner should exist when enabled")
+                .search_content(build_content_search_request(
+                    &root_path,
+                    &pattern,
                     case_sensitive,
                     use_regex,
                     whole_word,
-                    multiline: false,
-                    before_context: 0,
-                    after_context: 0,
-                    max_results: Some(limit),
-                    globs: Vec::new(),
-                    file_types: Vec::new(),
-                    exclude_file_types: Vec::new(),
-                })
+                    limit,
+                ))
                 .await
                 .map(|result| {
                     let search_metadata = search_metadata_from_content_result(&result);
@@ -3026,7 +3306,6 @@ pub async fn start_search_file_contents_stream(
                     );
                 }
             }
-
             result.map_err(|error| {
                 bitfun_core::util::errors::BitFunError::service(format!(
                     "Failed to search file contents via workspace search: {}",

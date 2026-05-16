@@ -4,11 +4,16 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use bitfun_core::agentic::{
     tools::framework::ToolUseContext,
     tools::{get_all_tools, get_readonly_tools},
+    workspace::{local_workspace_services, remote_workspace_services},
     WorkspaceBinding,
+};
+use bitfun_core::service::remote_ssh::workspace_state::{
+    get_remote_workspace_manager, lookup_remote_connection, workspace_session_identity,
 };
 use bitfun_core::util::elapsed_ms_u64;
 
@@ -23,6 +28,30 @@ pub struct ToolExecutionRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetToolInfoRequest {
+    pub tool_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicMcpToolInfo {
+    pub server_id: String,
+    pub server_name: String,
+    pub tool_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicToolInfo {
+    pub provider_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<DynamicMcpToolInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolInfo {
     pub name: String,
     pub description: String,
@@ -30,6 +59,8 @@ pub struct ToolInfo {
     pub is_readonly: bool,
     pub is_concurrency_safe: bool,
     pub needs_permissions: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dynamic_info: Option<DynamicToolInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,23 +113,114 @@ pub struct ToolConfirmationResponse {
     pub message: String,
 }
 
-fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
+async fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
     let normalized_workspace_path = workspace_path
         .map(str::trim)
         .filter(|path| !path.is_empty());
+
+    let workspace = match normalized_workspace_path {
+        Some(path) => {
+            if let Some(entry) = lookup_remote_connection(path).await {
+                let identity = workspace_session_identity(
+                    path,
+                    Some(&entry.connection_id),
+                    Some(&entry.ssh_host),
+                )
+                .unwrap_or_else(|| {
+                    bitfun_core::service::remote_ssh::workspace_state::WorkspaceSessionIdentity {
+                        hostname: entry.ssh_host.clone(),
+                        logical_workspace_path: entry.remote_root.clone(),
+                        remote_connection_id: Some(entry.connection_id.clone()),
+                    }
+                });
+                Some(WorkspaceBinding::new_remote(
+                    None,
+                    PathBuf::from(path),
+                    entry.connection_id,
+                    entry.connection_name,
+                    identity,
+                ))
+            } else {
+                Some(WorkspaceBinding::new(None, PathBuf::from(path)))
+            }
+        }
+        None => None,
+    };
+
+    let workspace_services = match workspace.as_ref() {
+        Some(binding) if binding.is_remote() => {
+            let connection_id = binding.connection_id().map(str::to_string);
+            match (connection_id, get_remote_workspace_manager()) {
+                (Some(connection_id), Some(manager)) => {
+                    match (
+                        manager.get_file_service().await,
+                        manager.get_ssh_manager().await,
+                    ) {
+                        (Some(file_service), Some(ssh_manager)) => Some(remote_workspace_services(
+                            connection_id,
+                            file_service,
+                            ssh_manager,
+                            binding.root_path_string(),
+                        )),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }
+        }
+        Some(binding) => Some(local_workspace_services(binding.root_path_string())),
+        None => None,
+    };
 
     ToolUseContext {
         tool_call_id: None,
         agent_type: None,
         session_id: None,
         dialog_turn_id: None,
-        workspace: normalized_workspace_path
-            .map(|path| WorkspaceBinding::new(None, PathBuf::from(path))),
+        workspace,
+        unlocked_collapsed_tools: Vec::new(),
         custom_data: HashMap::new(),
         computer_use_host: None,
         cancellation_token: None,
         runtime_tool_restrictions: Default::default(),
-        workspace_services: None,
+        workspace_services,
+    }
+}
+
+fn to_dynamic_mcp_tool_info(
+    info: bitfun_core::agentic::tools::framework::DynamicMcpToolInfo,
+) -> DynamicMcpToolInfo {
+    DynamicMcpToolInfo {
+        server_id: info.server_id,
+        server_name: info.server_name,
+        tool_name: info.tool_name,
+    }
+}
+
+fn to_dynamic_tool_info(
+    info: bitfun_core::agentic::tools::framework::DynamicToolInfo,
+) -> DynamicToolInfo {
+    DynamicToolInfo {
+        provider_id: info.provider_id,
+        provider_kind: info.provider_kind,
+        mcp: info.mcp.map(to_dynamic_mcp_tool_info),
+    }
+}
+
+async fn build_tool_info(tool: &Arc<dyn bitfun_core::agentic::tools::framework::Tool>) -> ToolInfo {
+    let description = tool
+        .description()
+        .await
+        .unwrap_or_else(|_| "No description available".to_string());
+
+    ToolInfo {
+        name: tool.name().to_string(),
+        description,
+        input_schema: tool.input_schema_for_model().await,
+        is_readonly: tool.is_readonly(),
+        is_concurrency_safe: tool.is_concurrency_safe(None),
+        needs_permissions: tool.needs_permissions(None),
+        dynamic_info: tool.dynamic_tool_info().map(to_dynamic_tool_info),
     }
 }
 
@@ -145,19 +267,7 @@ pub async fn get_all_tools_info() -> Result<Vec<ToolInfo>, String> {
     let mut tool_infos = Vec::new();
 
     for tool in tools {
-        let description = tool
-            .description()
-            .await
-            .unwrap_or_else(|_| "No description available".to_string());
-
-        tool_infos.push(ToolInfo {
-            name: tool.name().to_string(),
-            description,
-            input_schema: tool.input_schema_for_model().await,
-            is_readonly: tool.is_readonly(),
-            is_concurrency_safe: tool.is_concurrency_safe(None),
-            needs_permissions: tool.needs_permissions(None),
-        });
+        tool_infos.push(build_tool_info(&tool).await);
     }
 
     Ok(tool_infos)
@@ -172,43 +282,19 @@ pub async fn get_readonly_tools_info() -> Result<Vec<ToolInfo>, String> {
     let mut tool_infos = Vec::new();
 
     for tool in tools {
-        let description = tool
-            .description()
-            .await
-            .unwrap_or_else(|_| "No description available".to_string());
-
-        tool_infos.push(ToolInfo {
-            name: tool.name().to_string(),
-            description,
-            input_schema: tool.input_schema_for_model().await,
-            is_readonly: tool.is_readonly(),
-            is_concurrency_safe: tool.is_concurrency_safe(None),
-            needs_permissions: tool.needs_permissions(None),
-        });
+        tool_infos.push(build_tool_info(&tool).await);
     }
 
     Ok(tool_infos)
 }
 
 #[tauri::command]
-pub async fn get_tool_info(tool_name: String) -> Result<Option<ToolInfo>, String> {
+pub async fn get_tool_info(request: GetToolInfoRequest) -> Result<Option<ToolInfo>, String> {
     let tools = get_all_tools().await;
 
     for tool in tools {
-        if tool.name() == tool_name {
-            let description = tool
-                .description()
-                .await
-                .unwrap_or_else(|_| "No description available".to_string());
-
-            return Ok(Some(ToolInfo {
-                name: tool.name().to_string(),
-                description,
-                input_schema: tool.input_schema_for_model().await,
-                is_readonly: tool.is_readonly(),
-                is_concurrency_safe: tool.is_concurrency_safe(None),
-                needs_permissions: tool.needs_permissions(None),
-            }));
+        if tool.name() == request.tool_name {
+            return Ok(Some(build_tool_info(&tool).await));
         }
     }
 
@@ -229,7 +315,7 @@ pub async fn validate_tool_input(
                 request.workspace_path.as_deref(),
             )?;
 
-            let context = build_tool_context(request.workspace_path.as_deref());
+            let context = build_tool_context(request.workspace_path.as_deref()).await;
 
             let validation_result = tool.validate_input(&request.input, Some(&context)).await;
 
@@ -260,7 +346,7 @@ pub async fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecution
                 request.workspace_path.as_deref(),
             )?;
 
-            let context = build_tool_context(request.workspace_path.as_deref());
+            let context = build_tool_context(request.workspace_path.as_deref()).await;
 
             let validation_result = tool.validate_input(&request.input, Some(&context)).await;
             if !validation_result.result {
@@ -327,19 +413,6 @@ pub async fn execute_tool(request: ToolExecutionRequest) -> Result<ToolExecution
     }
 
     Err(format!("Tool '{}' not found", request.tool_name))
-}
-
-#[tauri::command]
-pub async fn is_tool_enabled(tool_name: String) -> Result<Option<bool>, String> {
-    let tools = get_all_tools().await;
-
-    for tool in tools {
-        if tool.name() == tool_name {
-            return Ok(Some(tool.is_enabled().await));
-        }
-    }
-
-    Ok(None)
 }
 
 #[tauri::command]

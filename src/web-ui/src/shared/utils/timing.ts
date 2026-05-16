@@ -99,3 +99,32 @@ export async function measureAsyncAndLog<T>(
   logDuration(logger, message, result.durationMs, options);
   return result;
 }
+
+/**
+ * Wrap a promise with a timeout that rejects after `ms` milliseconds.
+ * The optional `cleanup` callback runs when the timeout fires, allowing
+ * callers to abort in-flight work (e.g. remove DOM nodes, abort requests).
+ *
+ * @param promise - The promise to wrap
+ * @param ms - Timeout in milliseconds
+ * @param label - Label for error messages (e.g. 'domToPng capture')
+ * @param cleanup - Optional callback invoked when timeout fires
+ * @returns Promise that resolves/rejects with the original promise, or rejects on timeout
+ */
+export function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+  cleanup?: () => void,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        cleanup?.();
+        reject(new Error(`${label} timed out after ${ms}ms`));
+      }, ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}

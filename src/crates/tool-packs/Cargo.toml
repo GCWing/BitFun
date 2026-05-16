@@ -1,0 +1,18 @@
+[package]
+name = "bitfun-tool-packs"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun concrete tool-pack owner crate"
+
+[lib]
+name = "bitfun_tool_packs"
+crate-type = ["rlib"]
+
+[features]
+default = []
+basic = []
+git = []
+mcp = []
+computer-use = []
+product-full = ["basic", "git", "mcp", "computer-use"]

@@ -4,15 +4,17 @@ import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
   ExecuteToolRequest,
+  GetToolInfoRequest,
   ValidateToolInputRequest
 } from './tauri-commands';
 import { createLogger } from '@/shared/utils/logger';
+import type { ToolInfo } from '@/shared/types/agent-api';
 
 const log = createLogger('ToolAPI');
 
 export class ToolAPI {
    
-  async getAllToolsInfo(): Promise<any[]> {
+  async getAllToolsInfo(): Promise<ToolInfo[]> {
     try {
       return await api.invoke('get_all_tools_info');
     } catch (error) {
@@ -21,10 +23,11 @@ export class ToolAPI {
   }
 
    
-  async getToolInfo(toolName: string): Promise<any> {
+  async getToolInfo(toolName: string): Promise<ToolInfo | null> {
     try {
+      const request: GetToolInfoRequest = { toolName };
       return await api.invoke('get_tool_info', { 
-        request: { toolName } 
+        request
       });
     } catch (error) {
       throw createTauriCommandError('get_tool_info', error, { toolName });
@@ -54,17 +57,6 @@ export class ToolAPI {
       });
     } catch (error) {
       throw createTauriCommandError('execute_tool', error, request);
-    }
-  }
-
-   
-  async isToolEnabled(toolName: string): Promise<boolean> {
-    try {
-      return await api.invoke('is_tool_enabled', { 
-        request: { toolName } 
-      });
-    } catch (error) {
-      throw createTauriCommandError('is_tool_enabled', error, { toolName });
     }
   }
 
@@ -108,16 +100,6 @@ export class ToolAPI {
         error, 
         request
       );
-    }
-  }
-
-  async cancelToolExecution(abortControllerId: string): Promise<any> {
-    try {
-      return await api.invoke('cancel_tool_execution', { 
-        request: { abortControllerId } 
-      });
-    } catch (error) {
-      throw createTauriCommandError('cancel_tool_execution', error, { abortControllerId });
     }
   }
 

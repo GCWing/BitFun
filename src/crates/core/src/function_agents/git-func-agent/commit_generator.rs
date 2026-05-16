@@ -71,9 +71,13 @@ impl CommitGenerator {
             ai_analysis.commit_type, ai_analysis.confidence
         );
 
-        let changes_summary = Self::build_changes_summary(&status, &changed_files);
+        let changes_summary = super::utils::build_changes_summary_from_paths(
+            &changed_files,
+            status.staged.len(),
+            status.unstaged.len(),
+        );
 
-        let full_message = Self::assemble_full_message(
+        let full_message = super::utils::assemble_commit_message(
             &ai_analysis.title,
             &ai_analysis.body,
             &ai_analysis.breaking_changes,
@@ -105,72 +109,5 @@ impl CommitGenerator {
 
         debug!("Got staged diff: length={} chars", diff.len());
         Ok(diff)
-    }
-
-    fn build_changes_summary(
-        status: &crate::service::git::GitStatus,
-        changed_files: &[String],
-    ) -> ChangesSummary {
-        let total_additions = status.staged.iter().map(|_| 10u32).sum::<u32>()
-            + status.unstaged.iter().map(|_| 10u32).sum::<u32>();
-        let total_deletions = status.staged.iter().map(|_| 5u32).sum::<u32>()
-            + status.unstaged.iter().map(|_| 5u32).sum::<u32>();
-
-        let file_changes: Vec<FileChange> = changed_files
-            .iter()
-            .map(|path| {
-                let file_type = super::utils::infer_file_type(path);
-                FileChange {
-                    path: path.clone(),
-                    change_type: FileChangeType::Modified, // Simplified handling
-                    additions: 10,
-                    deletions: 5,
-                    file_type,
-                }
-            })
-            .collect();
-
-        let affected_modules: Vec<String> = changed_files
-            .iter()
-            .filter_map(|path| super::utils::extract_module_name(path))
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .take(3)
-            .collect();
-
-        let change_patterns = super::utils::detect_change_patterns(&file_changes);
-
-        ChangesSummary {
-            total_additions,
-            total_deletions,
-            files_changed: changed_files.len() as u32,
-            file_changes,
-            affected_modules,
-            change_patterns,
-        }
-    }
-
-    fn assemble_full_message(
-        title: &str,
-        body: &Option<String>,
-        footer: &Option<String>,
-    ) -> String {
-        let mut parts = vec![title.to_string()];
-
-        if let Some(body_text) = body {
-            if !body_text.is_empty() {
-                parts.push(String::new());
-                parts.push(body_text.clone());
-            }
-        }
-
-        if let Some(footer_text) = footer {
-            if !footer_text.is_empty() {
-                parts.push(String::new());
-                parts.push(footer_text.clone());
-            }
-        }
-
-        parts.join("\n")
     }
 }

@@ -1,6 +1,12 @@
 import type { AIModelConfig, ReasoningMode } from '../types';
+import { getProviderTemplateId } from '../services/modelConfigs';
 
 export const DEFAULT_REASONING_MODE: ReasoningMode = 'default';
+
+const DEEPSEEK_REASONING_EFFORT_MODELS = new Set([
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
+]);
 
 export function getEffectiveReasoningMode(
   config?: Pick<AIModelConfig, 'reasoning_mode'> | null
@@ -29,4 +35,19 @@ export function supportsAnthropicAdaptive(modelName?: string): boolean {
 
 export function supportsAnthropicThinkingBudget(modelName?: string): boolean {
   return (modelName || '').trim().toLowerCase().startsWith('claude');
+}
+
+export function supportsDeepSeekReasoningEffort(
+  config?: Partial<Pick<AIModelConfig, 'name' | 'base_url' | 'model_name'>> | null
+): boolean {
+  const normalizedModelName = (config?.model_name || '').trim().toLowerCase();
+  if (DEEPSEEK_REASONING_EFFORT_MODELS.has(normalizedModelName)) {
+    return true;
+  }
+
+  return getProviderTemplateId({
+    name: config?.name,
+    base_url: config?.base_url,
+    model_name: config?.model_name,
+  }) === 'deepseek';
 }

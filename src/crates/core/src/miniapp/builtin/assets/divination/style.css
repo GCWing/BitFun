@@ -23,14 +23,20 @@ body, html { margin: 0; padding: 0; height: 100%; }
   --d-text: #f3e8ff;
   --d-text-soft: #c4b5fd;
   --d-text-mute: #8b7fa8;
+  /* Serif theme — keep elegant Latin serifs; for Chinese characters fall back to
+     Songti on macOS / SimSun on Windows (both are the platform default Chinese serif,
+     consistent with the divination cardstock look). */
   --d-serif: ui-serif, "Cormorant Garamond", "Cormorant", "EB Garamond",
-             "Noto Serif SC", "Songti SC", "Source Han Serif SC", Georgia, serif;
-  --d-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+             "Noto Serif SC", "Source Han Serif SC", "Songti SC", STSong,
+             "STZhongsong", SimSun, "宋体", Georgia, "Times New Roman", serif;
+  --d-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "PingFang SC",
+            "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
+            "Helvetica Neue", Helvetica, Arial, sans-serif);
 }
 
 body {
   font-family: var(--d-sans);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--d-text);
   background: var(--d-bg-deep);
   overflow: hidden;
@@ -145,7 +151,7 @@ button { font-family: inherit; cursor: pointer; }
   display: flex; align-items: center; gap: 12px;
   font-family: var(--d-serif);
   font-weight: 500;
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: 5px;
   color: var(--d-gold-bright);
   text-shadow: 0 0 14px rgba(240,198,116,0.28);
@@ -155,7 +161,7 @@ button { font-family: inherit; cursor: pointer; }
 .header__title svg { color: var(--d-gold); filter: drop-shadow(0 0 6px rgba(212,175,55,0.45)); }
 .header__date {
   font-family: var(--d-serif);
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 3px;
   color: var(--d-gold);
   font-variant-numeric: tabular-nums;
@@ -208,7 +214,7 @@ button { font-family: inherit; cursor: pointer; }
 .draw-stage__subtitle {
   margin: 6px 0 0;
   font-family: var(--d-serif);
-  font-size: 12.5px;
+  font-size: 13.5px;
   letter-spacing: 3px;
   color: var(--d-text-soft);
   animation: greetingFade 1.6s ease both .2s;
@@ -216,7 +222,7 @@ button { font-family: inherit; cursor: pointer; }
 .draw-stage__tip {
   margin: 0;
   font-family: var(--d-serif);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 1.5px;
   color: var(--d-text-mute);
   text-align: center;
@@ -310,13 +316,13 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 15px;
 }
 .sigil-ring__rune--outer { opacity: 0.75; }
 .sigil-ring__rune--inner {
   width: 70%; height: 70%;
   left: 15%; top: 15%;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 10px;
   opacity: 0.55;
   animation-duration: 110s;
@@ -635,7 +641,7 @@ button { font-family: inherit; cursor: pointer; }
 .card-front__top {
   display: flex; align-items: center; justify-content: space-between;
   font-family: var(--d-serif);
-  font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+  font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
   color: var(--d-gold);
   position: relative; z-index: 1;
   padding: 0 2px;
@@ -648,7 +654,7 @@ button { font-family: inherit; cursor: pointer; }
   padding: 3px 12px;
   border-radius: 999px;
   letter-spacing: 2px;
-  font-size: 9.5px;
+  font-size: 10.5px;
   text-transform: uppercase;
   font-family: var(--d-serif);
 }
@@ -707,7 +713,7 @@ button { font-family: inherit; cursor: pointer; }
   text-align: center;
   color: rgba(255,255,255,0.80);
   font-family: var(--d-serif);
-  font-size: 11.5px;
+  font-size: 12.5px;
   letter-spacing: 5px;
   margin: 0 0 18px;
   position: relative; z-index: 1;
@@ -726,7 +732,7 @@ button { font-family: inherit; cursor: pointer; }
   text-align: center;
   font-family: var(--d-serif);
   font-style: italic;
-  font-size: 13px;
+  font-size: 14px;
   color: rgba(255,255,255,0.92);
   line-height: 1.7;
   margin: 6px 0 0;
@@ -747,7 +753,7 @@ button { font-family: inherit; cursor: pointer; }
 .card-front__insight {
   text-align: center;
   font-family: var(--d-serif);
-  font-size: 11.5px;
+  font-size: 12.5px;
   letter-spacing: 0.6px;
   color: rgba(240,198,116,0.85);
   line-height: 1.6;
@@ -758,7 +764,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .card-front__insight-label {
   display: block;
-  font-size: 9.5px;
+  font-size: 10.5px;
   letter-spacing: 4px;
   color: var(--d-gold);
   opacity: 0.85;
@@ -795,7 +801,7 @@ button { font-family: inherit; cursor: pointer; }
  * Implemented with flex: title group on the left, hairline rule fills rest. */
 .panel__title {
   font-family: var(--d-serif);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--d-gold);
   text-transform: uppercase;
   letter-spacing: 6px;
@@ -877,7 +883,7 @@ button { font-family: inherit; cursor: pointer; }
 .suit li::before {
   position: absolute;
   left: 2px; top: 12px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 .panel--good .suit li::before {
@@ -893,7 +899,7 @@ button { font-family: inherit; cursor: pointer; }
   content: '✕';
   color: var(--d-bad);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* ── Lucky omens ─ even three columns on top, mantra below as a hero quote */
@@ -932,7 +938,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .lucky__label {
   font-family: var(--d-serif);
-  font-size: 9.5px;
+  font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 4px;
   color: var(--d-gold);
@@ -962,7 +968,7 @@ button { font-family: inherit; cursor: pointer; }
   flex-shrink: 0;
 }
 .lucky__value--mantra {
-  font-size: 13px;
+  font-size: 14px;
   font-style: italic;
   font-weight: 400;
   color: var(--d-text-soft);
@@ -1045,7 +1051,7 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: 8px;
   border: 1px solid rgba(212,175,55,0.45);
   font-family: var(--d-serif);
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 1.5px;
   box-shadow: 0 10px 30px -8px rgba(0,0,0,0.55), 0 0 24px rgba(212,175,55,0.18);
   animation: toastIn .25s ease;
@@ -1077,15 +1083,15 @@ button { font-family: inherit; cursor: pointer; }
   .card-spread { min-height: 220px; padding: 18px 12px 32px; }
   .draw-stage__greeting { font-size: 22px; letter-spacing: 8px; padding-left: 8px; }
   .draw-stage__subtitle { font-size: 12.5px; letter-spacing: 2px; }
-  .sigil-ring__rune { font-size: 12px; letter-spacing: 11px; }
-  .sigil-ring__rune--inner { font-size: 10px; letter-spacing: 8px; }
+  .sigil-ring__rune { font-size: 13px; letter-spacing: 11px; }
+  .sigil-ring__rune--inner { font-size: 11px; letter-spacing: 8px; }
 }
 @media (max-width: 460px) {
   .card-pick { --w: 110px; --h: 162px; margin: 0 -50px; border-radius: 11px; }
   .card-pick__symbol { font-size: 38px; }
   .card-spread { min-height: 200px; }
-  .sigil-ring__rune { font-size: 11px; letter-spacing: 8px; }
-  .sigil-ring__rune--inner { font-size: 9px; letter-spacing: 6px; }
+  .sigil-ring__rune { font-size: 12px; letter-spacing: 8px; }
+  .sigil-ring__rune--inner { font-size: 10px; letter-spacing: 6px; }
 }
 
 /* ── Light theme adaptation ─────────────────────────────────────────────

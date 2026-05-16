@@ -5,7 +5,8 @@
 .processing-indicator {
   width: 100%;
   max-width: 1200px; /* Relaxed max width for larger screens */
-  margin: 0 auto 1rem auto; /* Center horizontally */
+  /* Keep below the Virtuoso footer spacer; tight margin avoids a tall “dead” band above the input. */
+  margin: 0 auto 0.35rem auto;
   padding: 0 3rem;
   box-sizing: border-box;
 

@@ -246,9 +246,3 @@
   stroke-dasharray: none;
   filter: var(--mermaid-highlight-glow);
 }
-
-/// Interactive element styles
-@mixin mermaid-interactive {
-  cursor: pointer;
-  transition: all var(--mermaid-transition-duration) var(--mermaid-transition-easing);
-}

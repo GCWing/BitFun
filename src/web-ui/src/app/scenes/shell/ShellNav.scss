@@ -91,6 +91,9 @@
     position: fixed;
     min-width: 220px;
     max-width: min(320px, calc(100vw - 32px));
+    max-height: min(560px, calc(100vh - 16px));
+    overflow-x: hidden;
+    overflow-y: auto;
     padding: 6px;
     border: 1px solid var(--border-subtle);
     border-radius: 10px;

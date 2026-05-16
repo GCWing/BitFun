@@ -174,17 +174,6 @@ export class AIApi {
       throw createTauriCommandError('refresh_cli_credential', error, { kind });
     }
   }
-
-  async fixMermaidCode(request: { sourceCode: string; errorMessage: string }): Promise<string> {
-    try {
-      return await api.invoke('fix_mermaid_code', { 
-        request 
-      });
-    } catch (error) {
-      throw createTauriCommandError('fix_mermaid_code', error, request);
-    }
-  }
 }
-
 
 export const aiApi = new AIApi();

@@ -10,6 +10,8 @@ interface DialogCompletionNotificationInput {
 
 interface DialogCompletionNotificationCopyInput {
   sessionTitle?: string | null;
+  success?: boolean | null;
+  finishReason?: string | null;
   t: (key: string, options?: Record<string, unknown>) => string;
 }
 
@@ -41,14 +43,23 @@ export function shouldSendDialogCompletionNotification({
 
 export function buildDialogCompletionNotificationCopy({
   sessionTitle,
+  success,
+  finishReason,
   t,
 }: DialogCompletionNotificationCopyInput): { title: string; body: string } {
   const trimmedTitle = sessionTitle?.trim();
+  const failed = success === false;
+  const options = {
+    sessionTitle: trimmedTitle,
+    finishReason,
+  };
 
   return {
-    title: t('notify.dialogCompletedTitle'),
+    title: failed
+      ? t('notify.dialogFailedTitle')
+      : t('notify.dialogCompletedTitle'),
     body: trimmedTitle
-      ? t('notify.dialogCompletedWithSession', { sessionTitle: trimmedTitle })
-      : t('notify.dialogCompletedFallback'),
+      ? t(failed ? 'notify.dialogFailedWithSession' : 'notify.dialogCompletedWithSession', options)
+      : t(failed ? 'notify.dialogFailedFallback' : 'notify.dialogCompletedFallback', options),
   };
 }

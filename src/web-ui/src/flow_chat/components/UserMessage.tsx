@@ -6,6 +6,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { File, Folder, Code, Image, Terminal, GitBranch, Link, FileText } from 'lucide-react';
 import { Tag } from '@/component-library';
+import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { SnapshotRollbackButton } from './SnapshotRollbackButton';
 import './UserMessage.scss';
 
@@ -170,11 +171,14 @@ export const UserMessage: React.FC<UserMessageProps> = React.memo(({
   }, [messageContent, isExpanded]);
   
   const toggleExpand = (e: React.MouseEvent) => {
+    if (shouldIgnoreCardToggleClick(e, contentRef.current)) {
+      return;
+    }
+
     if (!hasOverflow && !isExpanded) {
       return;
     }
     e.stopPropagation();
-    e.preventDefault();
     setIsExpanded(prev => !prev);
   };
   

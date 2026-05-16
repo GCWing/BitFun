@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Cpu, ChevronDown, Check, Sparkles } from 'lucide-react';
+import { Brain, ChevronDown, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -19,6 +19,7 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig } from '@/infrastructure/config/types';
 import { Tooltip } from '@/component-library';
 import { FlowChatStore } from '../store/FlowChatStore';
+import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
 import { createLogger } from '@/shared/utils/logger';
 import './ModelSelector.scss';
 
@@ -130,6 +131,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [acpOptions, setAcpOptions] = useState<AcpSessionOptions | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const acpRestoreToastShownRef = useRef<string | null>(null);
+  const acpOptionsRef = useRef<AcpSessionOptions | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const activeSession = sessionId ? FlowChatStore.getInstance().getState().sessions.get(sessionId) : undefined;
@@ -188,6 +191,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       return;
     }
 
+    const shouldShowRestoreToast = !acpOptionsRef.current && acpRestoreToastShownRef.current !== sessionId;
+    if (shouldShowRestoreToast) {
+      acpRestoreToastShownRef.current = sessionId;
+      window.dispatchEvent(new CustomEvent('bitfun:acp-session-creation', {
+        detail: { phase: 'start', clientId: acpClientId, action: 'restore' },
+      }));
+    }
+
     try {
       const options = await ACPClientAPI.getSessionOptions({
         sessionId,
@@ -200,6 +211,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     } catch (error) {
       log.warn('Failed to load ACP session model options', { sessionId, acpClientId, error });
       setAcpOptions(null);
+    } finally {
+      if (shouldShowRestoreToast) {
+        window.dispatchEvent(new CustomEvent('bitfun:acp-session-creation', {
+          detail: { phase: 'finish', clientId: acpClientId, action: 'restore' },
+        }));
+      }
     }
   }, [
     activeSession?.config.workspacePath,
@@ -210,6 +227,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     isAcpSession,
     sessionId,
   ]);
+
+  useEffect(() => {
+    acpOptionsRef.current = null;
+    acpRestoreToastShownRef.current = null;
+    setAcpOptions(null);
+  }, [sessionId]);
+
+  useEffect(() => {
+    acpOptionsRef.current = acpOptions;
+  }, [acpOptions]);
 
   useEffect(() => {
     loadAcpOptions();
@@ -360,6 +387,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       if (sessionId) {
         const store = FlowChatStore.getInstance();
         store.updateSessionModelName(sessionId, modelId);
+        const maxContextTokens = await getModelMaxTokens(modelId, currentMode);
+        store.updateSessionMaxContextTokens(sessionId, maxContextTokens);
         const session = store.getState().sessions.get(sessionId);
         if (!session?.isTransient) {
           await agentAPI.updateSessionModel({
@@ -430,7 +459,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             }}
             disabled={loading}
           >
-            <Cpu size={10} className="bitfun-model-selector__icon" />
             <span className="bitfun-model-selector__name">
               {getModelDisplayLabel(acpCurrentModel, currentAcpModelId)}
             </span>
@@ -500,12 +528,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           onClick={() => setDropdownOpen(!dropdownOpen)}
           disabled={loading}
         >
-          <Cpu size={10} className="bitfun-model-selector__icon" />
           <span className="bitfun-model-selector__name">
             {getModelDisplayLabel(currentModel, t('modelSelector.autoModel'))}
           </span>
           {currentModel?.enableThinking && (
-            <Sparkles size={9} className="bitfun-model-selector__thinking-icon" />
+            <Brain size={9} className="bitfun-model-selector__thinking-icon" />
           )}
           {currentModel?.reasoningEffort && (
             <span className="bitfun-model-selector__effort-badge">
@@ -610,7 +637,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       <span className="bitfun-model-selector__option-name">
                         {model.modelName}
                         {model.enableThinking && (
-                          <Sparkles size={10} className="bitfun-model-selector__option-thinking" />
+                          <Brain size={10} className="bitfun-model-selector__option-thinking" />
                         )}
                       </span>
                     </div>

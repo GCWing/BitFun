@@ -88,6 +88,9 @@ pub struct CompressionPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CompressionEntry {
+    Contract {
+        contract: CompressionContract,
+    },
     ModelSummary {
         text: String,
     },
@@ -99,6 +102,75 @@ pub enum CompressionEntry {
         #[serde(skip_serializing_if = "Option::is_none")]
         todo: Option<CompressedTodoSnapshot>,
     },
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompressionContract {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub touched_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verification_commands: Vec<CompressionContractItem>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocking_failures: Vec<CompressionContractItem>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_statuses: Vec<CompressionContractItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompressionContractItem {
+    pub target: String,
+    pub status: String,
+    pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<String>,
+}
+
+impl CompressionContract {
+    pub fn is_empty(&self) -> bool {
+        self.touched_files.is_empty()
+            && self.verification_commands.is_empty()
+            && self.blocking_failures.is_empty()
+            && self.subagent_statuses.is_empty()
+    }
+
+    pub fn render_for_model(&self) -> String {
+        let mut lines = vec![
+            "Compaction contract: preserve these factual fields when continuing the task."
+                .to_string(),
+        ];
+
+        if !self.touched_files.is_empty() {
+            lines.push("Touched files:".to_string());
+            for file in &self.touched_files {
+                lines.push(format!("- {}", file));
+            }
+        }
+
+        render_contract_items(
+            &mut lines,
+            "Verification commands:",
+            &self.verification_commands,
+        );
+        render_contract_items(&mut lines, "Blocking failures:", &self.blocking_failures);
+        render_contract_items(&mut lines, "Subagent statuses:", &self.subagent_statuses);
+
+        lines.join("\n")
+    }
+}
+
+fn render_contract_items(lines: &mut Vec<String>, title: &str, items: &[CompressionContractItem]) {
+    if items.is_empty() {
+        return;
+    }
+
+    lines.push(title.to_string());
+    for item in items {
+        let mut rendered = format!("- {} [{}]: {}", item.target, item.status, item.summary);
+        if let Some(error_kind) = item.error_kind.as_ref() {
+            rendered.push_str(&format!(" ({})", error_kind));
+        }
+        lines.push(rendered);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -243,20 +315,11 @@ impl From<Message> for AIMessage {
                     Some(
                         tool_calls
                             .into_iter()
-                            .map(|tc| {
-                                // Convert serde_json::Value to HashMap
-                                let arguments = if let serde_json::Value::Object(map) = tc.arguments
-                                {
-                                    map.into_iter().collect()
-                                } else {
-                                    std::collections::HashMap::new()
-                                };
-
-                                AIToolCall {
-                                    id: tc.tool_id,
-                                    name: tc.tool_name,
-                                    arguments,
-                                }
+                            .map(|tc| AIToolCall {
+                                id: tc.tool_id,
+                                name: tc.tool_name,
+                                arguments: tc.arguments,
+                                raw_arguments: tc.raw_arguments,
                             })
                             .collect(),
                     )
@@ -273,7 +336,7 @@ impl From<Message> for AIMessage {
                 Self {
                     role: "assistant".to_string(),
                     content,
-                    reasoning_content: reasoning_content.filter(|r| !r.is_empty()),
+                    reasoning_content,
                     thinking_signature: thinking_signature.clone(),
                     tool_calls: converted_tool_calls,
                     tool_call_id: None,
@@ -525,9 +588,15 @@ impl Message {
 
                 for tool_call in tool_calls {
                     total += TokenCounter::estimate_tokens(&tool_call.tool_name);
-                    if let Ok(json_str) = serde_json::to_string(&tool_call.arguments) {
-                        total += TokenCounter::estimate_tokens(&json_str);
-                    }
+                    let serialized_arguments = tool_call
+                        .raw_arguments
+                        .clone()
+                        .filter(|raw| serde_json::from_str::<serde_json::Value>(raw).is_ok())
+                        .unwrap_or_else(|| {
+                            serde_json::to_string(&tool_call.arguments)
+                                .unwrap_or_else(|_| "{}".to_string())
+                        });
+                    total += TokenCounter::estimate_tokens(&serialized_arguments);
                     total += 10;
                 }
             }
@@ -610,20 +679,59 @@ impl Display for MessageContent {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::Message;
+    use crate::util::types::Message as AIMessage;
+
+    #[test]
+    fn preserves_empty_reasoning_content_for_provider_replay() {
+        let msg = Message::assistant_with_reasoning(Some(String::new()), String::new(), vec![])
+            .with_thinking_signature(Some("sig_1".to_string()));
+
+        let ai_msg = AIMessage::from(msg);
+
+        assert_eq!(ai_msg.reasoning_content.as_deref(), Some(""));
+        assert_eq!(ai_msg.thinking_signature.as_deref(), Some("sig_1"));
+    }
+}
+
 // ============ Tool Calls and Results ============
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ToolCall {
     pub tool_id: String,
     pub tool_name: String,
     pub arguments: serde_json::Value,
+    /// Original provider-emitted argument JSON, preserved for replay stability when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_arguments: Option<String>,
     /// Record whether tool parameters are valid
+    #[serde(default)]
     pub is_error: bool,
+    /// True when the raw JSON arguments were truncated mid-stream and we
+    /// successfully repaired them. Downstream consumers can flag this to the
+    /// model so it understands the content may be incomplete.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub recovered_from_truncation: bool,
 }
 
 impl ToolCall {
     pub fn is_valid(&self) -> bool {
         !self.tool_id.is_empty() && !self.tool_name.is_empty() && !self.is_error
+    }
+}
+
+impl From<bitfun_agent_stream::ToolCall> for ToolCall {
+    fn from(tool_call: bitfun_agent_stream::ToolCall) -> Self {
+        Self {
+            tool_id: tool_call.tool_id,
+            tool_name: tool_call.tool_name,
+            arguments: tool_call.arguments,
+            raw_arguments: tool_call.raw_arguments,
+            is_error: tool_call.is_error,
+            recovered_from_truncation: tool_call.recovered_from_truncation,
+        }
     }
 }
 
@@ -642,17 +750,11 @@ pub struct ToolResult {
 
 impl From<ToolCall> for AIToolCall {
     fn from(tc: ToolCall) -> Self {
-        // Convert serde_json::Value to HashMap
-        let arguments = if let serde_json::Value::Object(map) = &tc.arguments {
-            map.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-        } else {
-            std::collections::HashMap::new()
-        };
-
         Self {
             id: tc.tool_id.clone(),
             name: tc.tool_name.clone(),
-            arguments,
+            arguments: tc.arguments,
+            raw_arguments: tc.raw_arguments,
         }
     }
 }

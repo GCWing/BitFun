@@ -1,3 +1,5 @@
+@use '../components/modern/SmoothHeightCollapse.scss';
+
 /**
  * Common tool card styles
  * Provides unified card appearance and interaction effects
@@ -32,8 +34,8 @@
   }
   
   /* Divider when body below header: success expanded panel or failed error panel */
-  &:has(> .base-tool-card-expanded),
-  &:has(> .base-tool-card-error) {
+  &:has(> .base-tool-card-expanded-collapse:not(.smooth-height-collapse--closed)),
+  &:has(> .base-tool-card-error-collapse:not(.smooth-height-collapse--closed)) {
     .base-tool-card-header::after {
       content: '';
       position: absolute;
@@ -192,7 +194,8 @@
   padding: var(--tool-card-expanded-pad-y) var(--tool-card-expanded-pad-x);
   background: transparent;
   position: relative;
-  animation: expandDown 0.2s ease-out;
+  opacity: 1;
+  transform: none;
   box-sizing: border-box;
 }
 

@@ -403,6 +403,7 @@ pub fn ok_result_with_context(
 
 /// Same as [`ok_result_with_context`] plus traceability fields for `matched_node_idx` /
 /// `matched_via`. New code should prefer this entry point.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[allow(clippy::too_many_arguments)]
 pub fn ok_result_with_context_full(
     gx: f64,

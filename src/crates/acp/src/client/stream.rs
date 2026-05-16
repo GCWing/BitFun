@@ -160,6 +160,10 @@ fn acp_tool_call_events(tool_call: ToolCall) -> Vec<AcpClientStreamEvent> {
                 ),
                 result_for_assistant: None,
                 duration_ms: 0,
+                queue_wait_ms: None,
+                preflight_ms: None,
+                confirmation_wait_ms: None,
+                execution_ms: None,
             }));
         }
         ToolCallStatus::Failed => {
@@ -167,6 +171,11 @@ fn acp_tool_call_events(tool_call: ToolCall) -> Vec<AcpClientStreamEvent> {
                 tool_id,
                 tool_name,
                 error: acp_tool_error_text(tool_call.raw_output, tool_call.content),
+                duration_ms: None,
+                queue_wait_ms: None,
+                preflight_ms: None,
+                confirmation_wait_ms: None,
+                execution_ms: None,
             }));
         }
         ToolCallStatus::Pending | ToolCallStatus::InProgress => {}
@@ -197,6 +206,10 @@ fn acp_tool_call_update_event(update: ToolCallUpdate) -> Option<AcpClientStreamE
                 ),
                 result_for_assistant: None,
                 duration_ms: 0,
+                queue_wait_ms: None,
+                preflight_ms: None,
+                confirmation_wait_ms: None,
+                execution_ms: None,
             }))
         }
         Some(ToolCallStatus::Failed) => {
@@ -207,6 +220,11 @@ fn acp_tool_call_update_event(update: ToolCallUpdate) -> Option<AcpClientStreamE
                     update.fields.raw_output,
                     update.fields.content.unwrap_or_default(),
                 ),
+                duration_ms: None,
+                queue_wait_ms: None,
+                preflight_ms: None,
+                confirmation_wait_ms: None,
+                execution_ms: None,
             }))
         }
         Some(ToolCallStatus::InProgress) | Some(ToolCallStatus::Pending) | Some(_) => {

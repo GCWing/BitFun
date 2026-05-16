@@ -40,6 +40,7 @@ const MiniAppGalleryView: React.FC = () => {
   const apps = useMiniAppStore((state) => state.apps);
   const loading = useMiniAppStore((state) => state.loading);
   const runningWorkerIds = useMiniAppStore((state) => state.runningWorkerIds);
+  const customizingAppIds = useMiniAppStore((state) => state.customizingAppIds);
   const setApps = useMiniAppStore((state) => state.setApps);
   const setLoading = useMiniAppStore((state) => state.setLoading);
   const setRunningWorkerIds = useMiniAppStore((state) => state.setRunningWorkerIds);
@@ -55,6 +56,7 @@ const MiniAppGalleryView: React.FC = () => {
 
   const openTabIds = useMemo(() => new Set(openTabs.map((tab) => tab.id)), [openTabs]);
   const runningIdSet = useMemo(() => new Set(runningWorkerIds), [runningWorkerIds]);
+  const customizingIdSet = useMemo(() => new Set(customizingAppIds), [customizingAppIds]);
 
   const runningApps = useMemo(
     () =>
@@ -209,6 +211,7 @@ const MiniAppGalleryView: React.FC = () => {
             app={app}
             index={index}
             isRunning={runningIdSet.has(app.id)}
+            isCustomizing={customizingIdSet.has(app.id)}
             onOpenDetails={setSelectedApp}
             onOpen={handleOpenApp}
             onDelete={handleDeleteRequest}
@@ -252,6 +255,7 @@ const MiniAppGalleryView: React.FC = () => {
                   app={app}
                   index={index}
                   isRunning
+                  isCustomizing={customizingIdSet.has(app.id)}
                   onOpenDetails={setSelectedApp}
                   onOpen={handleOpenApp}
                   onDelete={handleDeleteRequest}

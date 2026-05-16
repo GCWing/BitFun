@@ -8,6 +8,9 @@ import { i18nService } from '@/infrastructure/i18n';
 export { BaseToolCard } from './BaseToolCard';
 export type { BaseToolCardProps } from './BaseToolCard';
 
+export { ToolProcessingDots } from './ToolProcessingDots';
+export type { ToolProcessingDotsProps, ToolProcessingDotsSize } from './ToolProcessingDots';
+
 export { SnapshotCard } from './SnapshotCard';
 export type { SnapshotCardProps } from './SnapshotCard';
 

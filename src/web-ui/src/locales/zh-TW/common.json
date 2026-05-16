@@ -297,6 +297,7 @@
       "copyPathFailed": "複製路徑失敗",
       "createSessionFailed": "新建會話失敗",
       "creatingAcpSession": "正在啟動 {{agentName}} 會話...",
+      "restoringAcpSession": "正在恢復 {{agentName}} 會話...",
       "initSessionFailed": "初始化 AGENTS.md 會話失敗",
       "worktreeCreated": "已創建 worktree",
       "worktreeCreatedAndOpened": "已創建並打開 worktree",
@@ -485,10 +486,45 @@
     "commit": "提交",
     "branch": "分支",
     "copyright": "© 2025 BitFun. All rights reserved.",
-    "openSource": "開源軟件",
-    "openSourceDesc": "BitFun 使用了以下開源組件：",
-    "openSourceFootnote": "點擊組件名稱可打開其官方頁面獲取更多資訊。",
-    "userAgreement": "用戶協議"
+    "updateSectionTitle": "應用更新",
+    "updateSectionHint": "保持 BitFun 為最新版本，以取得修復與新功能。"
+  },
+  "update": {
+    "checkForUpdates": "檢查更新",
+    "checking": "正在檢查…",
+    "noUpdate": "目前已是最新版本。",
+    "checkFailed": "檢查更新失敗。",
+    "availableTitle": "發現新版本",
+    "availableSubtitle": "有新版本可供安裝。",
+    "currentVersion": "目前版本",
+    "latestVersion": "最新版本",
+    "releaseNotes": "更新說明",
+    "later": "稍後",
+    "skipVersion": "跳過此版本",
+    "cancel": "取消",
+    "install": "下載並安裝",
+    "backgroundInstall": "背景下載",
+    "downloadingTitle": "正在下載更新",
+    "downloadFailedTitle": "無法完成更新",
+    "installedTitle": "更新已安裝",
+    "installedMessage": "更新已安裝。重啟 BitFun 後即可使用新版本。",
+    "progressPercent": "{{percent}}%",
+    "progressUnknown": "正在下載…",
+    "backgroundDownloading": "正在背景下載",
+    "backgroundDownloadHint": "下載完成後會提示重啟，期間可以繼續使用 BitFun。",
+    "restartHint": "安裝完成後需要重啟應用。",
+    "restartNow": "立即重啟",
+    "restartLater": "稍後",
+    "desktopOnly": "僅桌面客戶端支援應用內更新。",
+    "errors": {
+      "unknown": "出了點問題，請稍後再試。",
+      "network": "無法連接更新伺服器，請檢查網絡後重試。",
+      "signature": "更新包校驗未通過。若持續出現，請到官網下載最新安裝包。",
+      "noUpdateAvailable": "目前沒有可用的更新包，請稍後再試。",
+      "notFound": "伺服器上未找到更新信息，發布可能尚未完成。",
+      "tls": "無法與更新伺服器建立安全連接。",
+      "generic": "更新失敗：{{detail}}"
+    }
   },
   "actions": {
     "confirm": "確認",
@@ -775,7 +811,6 @@
     "fileBrowser": "文件瀏覽器",
     "editor": "編輯器",
     "markdown": "Markdown",
-    "mermaidChart": "Mermaid 圖表",
     "settings": "設置",
     "settingsWithSection": "設置 - {{section}}"
   },
@@ -817,7 +852,6 @@
     "skills": "技能",
     "miniApps": "小應用",
     "browser": "瀏覽器",
-    "mermaidEditor": "Mermaid 圖表",
     "insights": "洞察",
     "assistant": "助理",
     "shell": "Shell",
@@ -1008,6 +1042,15 @@
     "dialogCompleted": "AI 助手已完成任務。",
     "dialogCompletedTitle": "BitFun 任務已完成",
     "dialogCompletedWithSession": "「{{sessionTitle}}」已完成，可以回到 BitFun 查看結果。",
-    "dialogCompletedFallback": "有一個 BitFun 會話已完成，可以回到應用查看結果。"
+    "dialogCompletedFallback": "有一個 BitFun 會話已完成，可以回到應用查看結果。",
+    "dialogFailedTitle": "BitFun 任務已中斷",
+    "dialogFailedWithSession": "「{{sessionTitle}}」已異常停止，可以回到 BitFun 查看原因。",
+    "dialogFailedFallback": "有一個 BitFun 會話已異常停止，可以回到應用查看原因。"
+  },
+  "closeDialog": {
+    "title": "關閉 BitFun",
+    "message": "請選擇關閉操作：退出程式將完全停止執行，最小化到托盤可保持背景執行隨時喚回。",
+    "quit": "退出程式",
+    "minimizeToTray": "最小化到托盤"
   }
 }

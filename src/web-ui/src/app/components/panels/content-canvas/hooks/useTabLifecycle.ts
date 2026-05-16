@@ -246,7 +246,7 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
         targetGroup,
         enableSplitView,
       } = event.detail;
-      
+
       const content: PanelContent = {
         type,
         title,

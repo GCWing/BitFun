@@ -4,9 +4,10 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Search, File, FolderOpen, ChevronDown, ChevronUp, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Search, File, FolderOpen, ChevronDown, ChevronUp, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { BaseToolCard, BaseToolCardProps } from '../BaseToolCard';
+import { ToolProcessingDots } from '../ToolProcessingDots';
 import './SearchCard.scss';
 
 export interface SearchCardProps extends Omit<BaseToolCardProps, 'toolName' | 'displayName'> {
@@ -98,7 +99,7 @@ export const SearchCard: React.FC<SearchCardProps> = ({
       case 'error':
         return <XCircle className="search-card__status-error" size={12} />;
       default:
-        return <Clock className="search-card__status-pending" size={12} />;
+        return <ToolProcessingDots className="search-card__status-pending" size={12} />;
     }
   };
 

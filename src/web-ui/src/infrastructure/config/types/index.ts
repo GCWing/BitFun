@@ -31,6 +31,7 @@ export type BackendLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'o
 
 export interface AppLoggingConfig {
   level: BackendLogLevel;
+  include_sensitive_diagnostics: boolean;
 }
 
 // Reserved; legacy `default_mode` in saved JSON is ignored by the app.
@@ -81,6 +82,8 @@ export interface AIExperienceConfig {
 
   /** Whether to enable flashgrep-backed accelerated workspace search for local workspaces. */
   enable_workspace_search: boolean;
+  /** User-defined quick actions shown in the post-coding actions menu. */
+  quick_actions?: Array<{ id: string; label: string; prompt: string; enabled: boolean }>;
 }
 
 export type ModelCapability =
@@ -177,7 +180,7 @@ export interface AIConfig {
   agent_models: Record<string, string>;
   func_agent_models: Record<string, string>;
   mode_configs: Record<string, StoredModeConfigItem>;
-  subagent_configs: Record<string, SubAgentConfigItem>;
+  agent_subagent_overrides: AgentSubagentOverrideConfig;
   proxy: ProxyConfig;
   debug_mode_config: DebugModeConfig;
   request_timeout: number;
@@ -192,14 +195,13 @@ export interface AIConfig {
   tool_confirmation_timeout_secs?: number | null;
   skip_tool_confirmation?: boolean;
   computer_use_enabled?: boolean;
-  max_rounds?: number;
+  browser_control_preferred_browser?: string;
 }
 
 export interface StoredModeConfigItem {
   mode_id: string;
   added_tools: string[];
   removed_tools: string[];
-  enabled: boolean;
   disabled_user_skills?: string[];
   enabled_user_skills?: string[];
 }
@@ -207,15 +209,14 @@ export interface StoredModeConfigItem {
 export interface ModeConfigItem {
   mode_id: string;
   enabled_tools: string[];
-  enabled: boolean;
   default_tools: string[];
   disabled_user_skills?: string[];
   enabled_user_skills?: string[];
 }
 
-export interface SubAgentConfigItem {
-  enabled: boolean;
-}
+export type AgentSubagentOverrideState = 'enabled' | 'disabled';
+export type ParentSubagentOverrideConfig = Record<string, AgentSubagentOverrideState>;
+export type AgentSubagentOverrideConfig = Record<string, ParentSubagentOverrideConfig>;
 
 export type SkillLevel = 'user' | 'project';
 
@@ -236,10 +237,23 @@ export interface SkillInfo {
 }
 
 export interface ModeSkillInfo extends SkillInfo {
-  /** True when this skill key is explicitly disabled in the current mode config. */
+  /** True when this skill is enabled before any mode-specific override is applied. */
+  defaultEnabled: boolean;
+  /** True when this skill remains enabled after all mode-specific overrides are applied. */
+  effectiveEnabled: boolean;
+  /** Backward-compatible inverse of `effectiveEnabled`. */
   disabledByMode: boolean;
   /** True when this skill is the one actually selected at runtime after disable + priority resolution. */
   selectedForRuntime: boolean;
+  /** The most specific rule that decided the effective state. */
+  stateReason:
+    | 'project_default_enabled'
+    | 'disabled_by_project_override'
+    | 'custom_user_default_enabled'
+    | 'builtin_policy_enabled'
+    | 'builtin_policy_disabled'
+    | 'enabled_by_user_override'
+    | 'disabled_by_user_override';
 }
 
 export interface SkillMarketItem {
@@ -543,6 +557,7 @@ export interface RuntimeLoggingInfo {
   sessionLogDir: string;
   appLogPath: string;
   aiLogPath: string;
+  flashgrepLogPath: string;
   webviewLogPath: string;
 }
 

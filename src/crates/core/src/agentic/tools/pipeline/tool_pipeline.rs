@@ -6,6 +6,7 @@
 use super::state_manager::ToolStateManager;
 use super::types::*;
 use crate::agentic::core::{ToolCall, ToolExecutionState, ToolResult as ModelToolResult};
+use crate::agentic::deep_review::tool_context;
 use crate::agentic::events::types::ToolEventData;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{ToolResult as FrameworkToolResult, ToolUseContext};
@@ -15,7 +16,7 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use dashmap::DashMap;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 use tokio::sync::{oneshot, RwLock as TokioRwLock};
@@ -26,6 +27,23 @@ use tokio_util::sync::CancellationToken;
 struct ToolBatch {
     task_ids: Vec<String>,
     is_concurrent: bool,
+}
+
+/// Number of *consecutive* identical tool calls (same name + deep-equal
+/// arguments) tolerated before the pipeline blocks further attempts as a
+/// detected loop. The (N+1)-th identical call is the one that gets blocked.
+const TOOL_CALL_LOOP_THRESHOLD: usize = 3;
+
+/// Cap on per-session recent tool call history. Bounded so a long-lived
+/// session does not accumulate unbounded memory; only the tail of the window
+/// participates in loop detection anyway.
+const TOOL_CALL_HISTORY_WINDOW: usize = 10;
+
+/// Snapshot of a recently attempted tool call, used to detect agent loops.
+#[derive(Debug, Clone)]
+struct RecentToolCall {
+    tool_name: String,
+    arguments: serde_json::Value,
 }
 
 /// Convert framework::ToolResult to core::ToolResult
@@ -42,11 +60,12 @@ fn convert_tool_result(
             result_for_assistant,
             image_attachments,
         } => {
-            // If the tool does not provide result_for_assistant, generate default friendly description
-            let assistant_text = result_for_assistant.or_else(|| {
-                // Generate natural language description based on data
-                generate_default_assistant_text(tool_name, &data)
-            });
+            // If the tool does not provide result_for_assistant, pass the full
+            // structured result through to the model. Summaries like
+            // "completed successfully" can hide fields the model needs for the
+            // next decision.
+            let assistant_text =
+                result_for_assistant.or_else(|| serialize_result_for_assistant(tool_name, &data));
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -59,8 +78,7 @@ fn convert_tool_result(
             }
         }
         FrameworkToolResult::Progress { content, .. } => {
-            // Progress message also generates friendly text
-            let assistant_text = generate_default_assistant_text(tool_name, &content);
+            let assistant_text = serialize_result_for_assistant(tool_name, &content);
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -73,8 +91,7 @@ fn convert_tool_result(
             }
         }
         FrameworkToolResult::StreamChunk { data, .. } => {
-            // Streaming data block also generates friendly text
-            let assistant_text = generate_default_assistant_text(tool_name, &data);
+            let assistant_text = serialize_result_for_assistant(tool_name, &data);
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -89,103 +106,17 @@ fn convert_tool_result(
     }
 }
 
-/// Generate default tool result description
-fn generate_default_assistant_text(tool_name: &str, data: &serde_json::Value) -> Option<String> {
-    // Check if data is null or empty
-    if data.is_null() {
-        return Some(format!(
-            "Tool {} completed, but no result returned.",
-            tool_name
-        ));
-    }
-
-    // If it is an empty object or empty array
-    if (data.is_object() && data.as_object().is_some_and(|o| o.is_empty()))
-        || (data.is_array() && data.as_array().is_some_and(|a| a.is_empty()))
-    {
-        return Some(format!(
-            "Tool {} completed, returned empty result.",
-            tool_name
-        ));
-    }
-
-    // Try to extract common fields to generate description
-    if let Some(obj) = data.as_object() {
-        // Check if there is a success field
-        if let Some(success) = obj.get("success").and_then(|v| v.as_bool()) {
-            if success {
-                if let Some(message) = obj.get("message").and_then(|v| v.as_str()) {
-                    return Some(format!(
-                        "Tool {} completed successfully: {}",
-                        tool_name, message
-                    ));
-                }
-                return Some(format!("Tool {} completed successfully.", tool_name));
-            } else {
-                if let Some(error) = obj.get("error").and_then(|v| v.as_str()) {
-                    return Some(format!(
-                        "Tool {} completed with error: {}",
-                        tool_name, error
-                    ));
-                }
-                return Some(format!("Tool {} completed with error.", tool_name));
-            }
-        }
-
-        // Check if there is a result/data/content field
-        for key in &["result", "data", "content", "output"] {
-            if let Some(value) = obj.get(*key) {
-                if let Some(text) = value.as_str() {
-                    if !text.is_empty() && text.len() < 500 {
-                        return Some(format!("Tool {} completed, returned: {}", tool_name, text));
-                    }
-                }
-            }
-        }
-
-        // If there are multiple fields, provide field list
-        let field_names: Vec<&str> = obj.keys().take(5).map(|s| s.as_str()).collect();
-        if !field_names.is_empty() {
-            return Some(format!(
-                "Tool {} completed, returned data with the following fields: {}",
-                tool_name,
-                field_names.join(", ")
-            ));
-        }
-    }
-
-    // If it is a string, return directly (but limit length)
-    if let Some(text) = data.as_str() {
-        if !text.is_empty() {
-            if text.len() <= 500 {
-                return Some(format!("Tool {} completed: {}", tool_name, text));
-            } else {
-                return Some(format!(
-                    "Tool {} completed, returned {} characters of text result.",
-                    tool_name,
-                    text.len()
-                ));
-            }
-        }
-    }
-
-    // If it is a number or boolean
-    if data.is_number() || data.is_boolean() {
-        return Some(format!("Tool {} completed, returned: {}", tool_name, data));
-    }
-
-    // Default: simply describe data type
-    Some(format!(
-        "Tool {} completed, returned {} type of result.",
-        tool_name,
-        if data.is_object() {
-            "object"
-        } else if data.is_array() {
-            "array"
-        } else {
-            "data"
-        }
-    ))
+fn serialize_result_for_assistant(tool_name: &str, data: &serde_json::Value) -> Option<String> {
+    serde_json::to_string_pretty(data)
+        .or_else(|_| serde_json::to_string(data))
+        .ok()
+        .filter(|text| !text.trim().is_empty())
+        .or_else(|| {
+            Some(format!(
+                "Tool {} returned no serializable result.",
+                tool_name
+            ))
+        })
 }
 
 /// Convert core::ToolResult to framework::ToolResult
@@ -203,10 +134,113 @@ fn elapsed_ms_since(time: SystemTime) -> u64 {
         .unwrap_or(0)
 }
 
+/// Maximum length of `provided_arguments` echoed back to the model in a tool
+/// error result. Larger payloads are truncated with an ellipsis marker so the
+/// signal remains actionable without bloating the prompt.
+const TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES: usize = 1024;
+
+const USER_STEERING_INTERRUPTED_MESSAGE: &str = "Tool execution skipped because the user sent a new steering message for the running turn. Stop the remaining old tool plan and handle the new user message next.";
+
+fn truncate_arguments_preview(value: &serde_json::Value) -> String {
+    let raw = serde_json::to_string(value).unwrap_or_default();
+    if raw.len() <= TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES {
+        return raw;
+    }
+    // Truncate at a UTF-8 char boundary then append an ellipsis marker.
+    let mut cut = TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES;
+    while cut > 0 && !raw.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    format!("{}…[truncated, total {} bytes]", &raw[..cut], raw.len())
+}
+
+fn truncate_raw_arguments_preview(raw: &str) -> String {
+    if raw.len() <= TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES {
+        return raw.to_string();
+    }
+    let mut cut = TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES;
+    while cut > 0 && !raw.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    format!("{}…[truncated, total {} bytes]", &raw[..cut], raw.len())
+}
+
+fn classify_tool_error(error: &BitFunError) -> &'static str {
+    match error {
+        BitFunError::Validation(_) => "invalid_arguments",
+        BitFunError::Cancelled(_) => "cancelled",
+        BitFunError::Timeout(_) => "timeout",
+        BitFunError::NotFound(_) => "not_found",
+        _ => "execution_error",
+    }
+}
+
 fn build_error_execution_result(
     task_id: &str,
     task: Option<ToolTask>,
     error: &BitFunError,
+) -> ToolExecutionResult {
+    let (tool_id, tool_name, execution_time_ms, provided_arguments) = if let Some(task) = task {
+        let preview = task
+            .tool_call
+            .raw_arguments
+            .as_deref()
+            .map(truncate_raw_arguments_preview)
+            .unwrap_or_else(|| truncate_arguments_preview(&task.tool_call.arguments));
+        (
+            task.tool_call.tool_id,
+            task.tool_call.tool_name,
+            elapsed_ms_since(task.created_at),
+            Some(preview),
+        )
+    } else {
+        warn!("Task not found in state manager: {}", task_id);
+        (task_id.to_string(), "unknown".to_string(), 0, None)
+    };
+    let error_message = error.to_string();
+    let category = classify_tool_error(error);
+
+    let mut result_json = serde_json::json!({
+        "error": error_message,
+        "category": category,
+        "tool_name": tool_name,
+        "message": format!("Tool '{}' failed ({}): {}", tool_name, category, error_message),
+    });
+    if let Some(args_preview) = provided_arguments.as_ref() {
+        result_json["provided_arguments"] = serde_json::Value::String(args_preview.clone());
+    }
+
+    let assistant_text = if let Some(args_preview) = provided_arguments.as_ref() {
+        format!(
+            "Tool '{}' failed ({}): {}\nProvided arguments: {}",
+            tool_name, category, error_message, args_preview
+        )
+    } else {
+        format!(
+            "Tool '{}' failed ({}): {}",
+            tool_name, category, error_message
+        )
+    };
+
+    ToolExecutionResult {
+        tool_id: tool_id.clone(),
+        tool_name: tool_name.clone(),
+        result: ModelToolResult {
+            tool_id,
+            tool_name,
+            result: result_json,
+            result_for_assistant: Some(assistant_text),
+            is_error: true,
+            duration_ms: Some(execution_time_ms),
+            image_attachments: None,
+        },
+        execution_time_ms,
+    }
+}
+
+fn build_user_steering_interrupted_result(
+    task_id: &str,
+    task: Option<ToolTask>,
 ) -> ToolExecutionResult {
     let (tool_id, tool_name, execution_time_ms) = if let Some(task) = task {
         (
@@ -215,22 +249,26 @@ fn build_error_execution_result(
             elapsed_ms_since(task.created_at),
         )
     } else {
-        warn!("Task not found in state manager: {}", task_id);
+        warn!(
+            "Task not found while building steering-interrupted result: {}",
+            task_id
+        );
         (task_id.to_string(), "unknown".to_string(), 0)
     };
-    let error_message = error.to_string();
 
     ToolExecutionResult {
         tool_id: tool_id.clone(),
         tool_name: tool_name.clone(),
         result: ModelToolResult {
             tool_id,
-            tool_name,
+            tool_name: tool_name.clone(),
             result: serde_json::json!({
-                "error": error_message,
-                "message": format!("Tool execution failed: {}", error_message)
+                "status": "skipped",
+                "category": "user_steering_interrupted",
+                "tool_name": tool_name,
+                "message": USER_STEERING_INTERRUPTED_MESSAGE,
             }),
-            result_for_assistant: Some(format!("Tool execution failed: {}", error_message)),
+            result_for_assistant: Some(USER_STEERING_INTERRUPTED_MESSAGE.to_string()),
             is_error: true,
             duration_ms: Some(execution_time_ms),
             image_attachments: None,
@@ -267,10 +305,44 @@ pub struct ToolPipeline {
     confirmation_channels: Arc<DashMap<String, oneshot::Sender<ConfirmationResponse>>>,
     /// Cancellation token management (tool_id -> CancellationToken)
     cancellation_tokens: Arc<DashMap<String, CancellationToken>>,
+    /// Per-session ring buffer of recent tool calls for loop detection.
+    /// Keyed by session_id; entries store (tool_name, arguments) so that
+    /// "same tool with deep-equal arguments" can be recognized across rounds.
+    recent_tool_calls: Arc<DashMap<String, VecDeque<RecentToolCall>>>,
     computer_use_host: Option<ComputerUseHostRef>,
 }
 
 impl ToolPipeline {
+    fn validate_collapsed_tool_usage(task: &ToolTask) -> BitFunResult<()> {
+        let tool_name = task.tool_call.tool_name.as_str();
+        if tool_name == "GetToolSpec" {
+            return Ok(());
+        }
+
+        if !task
+            .context
+            .collapsed_tools
+            .iter()
+            .any(|collapsed| collapsed == tool_name)
+        {
+            return Ok(());
+        }
+
+        if task
+            .context
+            .unlocked_collapsed_tools
+            .iter()
+            .any(|loaded| loaded == tool_name)
+        {
+            return Ok(());
+        }
+
+        Err(BitFunError::Validation(format!(
+            "Tool '{}' is collapsed. Call GetToolSpec first with {{\"tool_name\":\"{}\"}} to read its full usage instructions and input schema, then try again.",
+            tool_name, tool_name
+        )))
+    }
+
     pub fn new(
         tool_registry: Arc<TokioRwLock<ToolRegistry>>,
         state_manager: Arc<ToolStateManager>,
@@ -281,12 +353,91 @@ impl ToolPipeline {
             state_manager,
             confirmation_channels: Arc::new(DashMap::new()),
             cancellation_tokens: Arc::new(DashMap::new()),
+            recent_tool_calls: Arc::new(DashMap::new()),
             computer_use_host,
         }
     }
 
+    /// Check whether this tool call forms a loop (the last
+    /// `TOOL_CALL_LOOP_THRESHOLD` consecutive calls in this session all had
+    /// the same name AND deep-equal arguments). Always records the call into
+    /// the per-session history so that persistent loops continue to register.
+    /// Returns `true` if this call should be blocked.
+    fn check_and_record_tool_call(
+        &self,
+        session_id: &str,
+        tool_name: &str,
+        arguments: &serde_json::Value,
+    ) -> bool {
+        let mut entry = self
+            .recent_tool_calls
+            .entry(session_id.to_string())
+            .or_default();
+        let history = entry.value_mut();
+
+        // Count *consecutive* matches from the tail. A non-matching call
+        // anywhere in the window resets the streak.
+        let identical_priors = history
+            .iter()
+            .rev()
+            .take(TOOL_CALL_LOOP_THRESHOLD)
+            .take_while(|past| past.tool_name == tool_name && &past.arguments == arguments)
+            .count();
+        let is_loop = identical_priors >= TOOL_CALL_LOOP_THRESHOLD;
+
+        history.push_back(RecentToolCall {
+            tool_name: tool_name.to_string(),
+            arguments: arguments.clone(),
+        });
+        while history.len() > TOOL_CALL_HISTORY_WINDOW {
+            history.pop_front();
+        }
+
+        is_loop
+    }
+
+    /// Drop the loop-detection history for a session that is ending. Bounded
+    /// memory either way (max 10 entries per session) but this prevents
+    /// long-lived processes from accumulating stale sessions.
+    pub fn clear_session_tool_call_history(&self, session_id: &str) {
+        self.recent_tool_calls.remove(session_id);
+    }
+
     pub fn computer_use_host(&self) -> Option<ComputerUseHostRef> {
         self.computer_use_host.clone()
+    }
+
+    fn should_interrupt_for_steering(&self, context: &ToolExecutionContext) -> bool {
+        context
+            .steering_interrupt
+            .as_ref()
+            .map(|interrupt| interrupt.should_interrupt())
+            .unwrap_or(false)
+    }
+
+    async fn build_steering_interrupted_results(
+        &self,
+        task_ids: impl IntoIterator<Item = String>,
+    ) -> Vec<ToolExecutionResult> {
+        let mut results = Vec::new();
+        for task_id in task_ids {
+            let task = self.state_manager.get_task(&task_id);
+            self.state_manager
+                .update_state(
+                    &task_id,
+                    ToolExecutionState::Cancelled {
+                        reason: USER_STEERING_INTERRUPTED_MESSAGE.to_string(),
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
+                    },
+                )
+                .await;
+            results.push(build_user_steering_interrupted_result(&task_id, task));
+        }
+        results
     }
 
     /// Execute multiple tool calls using partitioned mixed scheduling.
@@ -356,15 +507,6 @@ impl ToolPipeline {
             tool_names.join(", ")
         );
 
-        if batches.len() == 1 {
-            let batch = &batches[0];
-            if batch.is_concurrent {
-                return self.execute_parallel(batch.task_ids.clone()).await;
-            } else {
-                return self.execute_sequential(batch.task_ids.clone()).await;
-            }
-        }
-
         debug!(
             "Partitioned {} tools into {} batches for mixed execution",
             task_ids.len(),
@@ -372,7 +514,28 @@ impl ToolPipeline {
         );
 
         let mut all_results = Vec::with_capacity(task_ids.len());
-        for (batch_idx, batch) in batches.into_iter().enumerate() {
+        let mut batch_iter = batches.into_iter().enumerate().peekable();
+        while let Some((batch_idx, batch)) = batch_iter.next() {
+            let batch_context = batch
+                .task_ids
+                .first()
+                .and_then(|task_id| self.state_manager.get_task(task_id))
+                .map(|task| task.context);
+            if batch_context
+                .as_ref()
+                .is_some_and(|context| self.should_interrupt_for_steering(context))
+            {
+                let remaining_task_ids = batch
+                    .task_ids
+                    .into_iter()
+                    .chain(batch_iter.flat_map(|(_, batch)| batch.task_ids.into_iter()));
+                all_results.extend(
+                    self.build_steering_interrupted_results(remaining_task_ids)
+                        .await,
+                );
+                break;
+            }
+
             debug!(
                 "Executing batch {}: {} tool(s), concurrent={}",
                 batch_idx,
@@ -454,7 +617,21 @@ impl ToolPipeline {
     ) -> BitFunResult<Vec<ToolExecutionResult>> {
         let mut results = Vec::new();
 
-        for task_id in task_ids {
+        let mut task_iter = task_ids.into_iter().peekable();
+        while let Some(task_id) = task_iter.next() {
+            let task = self.state_manager.get_task(&task_id);
+            if task
+                .as_ref()
+                .is_some_and(|task| self.should_interrupt_for_steering(&task.context))
+            {
+                let remaining_task_ids = std::iter::once(task_id).chain(task_iter);
+                results.extend(
+                    self.build_steering_interrupted_results(remaining_task_ids)
+                        .await,
+                );
+                break;
+            }
+
             match self.execute_single_tool(task_id.clone()).await {
                 Ok(result) => results.push(result),
                 Err(e) => {
@@ -487,6 +664,7 @@ impl ToolPipeline {
         let tool_name = task.tool_call.tool_name.clone();
         let tool_args = task.tool_call.arguments.clone();
         let tool_is_error = task.tool_call.is_error;
+        let recovered_from_truncation = task.tool_call.recovered_from_truncation;
         let queue_wait_ms = elapsed_ms_since(task.created_at);
         let mut confirmation_wait_ms = 0;
 
@@ -495,20 +673,81 @@ impl ToolPipeline {
             tool_name, tool_id, queue_wait_ms
         );
 
+        if recovered_from_truncation {
+            warn!(
+                "Tool '{}' arguments were recovered from a truncated stream (tool_id={}, session_id={}). Executing with patched arguments — content may be incomplete.",
+                tool_name, tool_id, task.context.session_id
+            );
+        }
+
         if tool_name.is_empty() || tool_is_error {
+            let raw_arguments_preview = task
+                .tool_call
+                .raw_arguments
+                .as_deref()
+                .map(truncate_raw_arguments_preview);
             let error_msg = if tool_name.is_empty() && tool_is_error {
                 "Missing valid tool name and arguments are invalid JSON.".to_string()
             } else if tool_name.is_empty() {
                 "Missing valid tool name.".to_string()
+            } else if recovered_from_truncation {
+                format!(
+                    "Tool arguments were truncated by the model (likely hit max_tokens). Refusing to execute a partial '{}' call. Increase max_tokens, split the work into smaller calls, or retry.",
+                    tool_name
+                )
             } else {
                 "Arguments are invalid JSON.".to_string()
             };
+            let error_msg = if let Some(raw_arguments_preview) = raw_arguments_preview {
+                format!("{error_msg} Raw arguments: {raw_arguments_preview}")
+            } else {
+                error_msg
+            };
+
             self.state_manager
                 .update_state(
                     &tool_id,
                     ToolExecutionState::Failed {
                         error: error_msg.clone(),
                         is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
+                    },
+                )
+                .await;
+
+            return Err(BitFunError::Validation(error_msg));
+        }
+
+        // Loop detection: refuse to execute the same tool call repeatedly with
+        // identical arguments. Triggered on the (THRESHOLD + 1)-th consecutive
+        // identical call within the per-session sliding window.
+        if self.check_and_record_tool_call(&task.context.session_id, &tool_name, &tool_args) {
+            let error_msg = format!(
+                "Tool-call loop blocked: '{}' was already called {} times in a row in this session with identical arguments. Refusing to execute this {}th identical call. Issue a different tool call, or stop tool-calling and respond to the user. If you wrote a file recently and want to continue it, its full content is already visible in your earlier tool_use message — use Edit with `old_string` taken from the end of that content; do not Read the file again.",
+                tool_name,
+                TOOL_CALL_LOOP_THRESHOLD,
+                TOOL_CALL_LOOP_THRESHOLD + 1
+            );
+            warn!(
+                "Tool-call loop blocked: tool_name={}, tool_id={}, session_id={}, threshold={}",
+                tool_name, tool_id, task.context.session_id, TOOL_CALL_LOOP_THRESHOLD
+            );
+
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Failed {
+                        error: error_msg.clone(),
+                        is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                 )
                 .await;
@@ -534,6 +773,11 @@ impl ToolPipeline {
                     ToolExecutionState::Failed {
                         error: error_msg.clone(),
                         is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                 )
                 .await;
@@ -555,6 +799,33 @@ impl ToolPipeline {
                     ToolExecutionState::Failed {
                         error: error_msg,
                         is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
+                    },
+                )
+                .await;
+
+            return Err(err.into());
+        }
+
+        if let Err(err) = Self::validate_collapsed_tool_usage(&task) {
+            let error_msg = err.to_string();
+            warn!("Collapsed tool usage validation failed: {}", error_msg);
+
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Failed {
+                        error: error_msg,
+                        is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                 )
                 .await;
@@ -589,6 +860,11 @@ impl ToolPipeline {
                     ToolExecutionState::Failed {
                         error: error_msg.clone(),
                         is_retryable: false,
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                 )
                 .await;
@@ -611,6 +887,7 @@ impl ToolPipeline {
         debug!("Executing tool: tool_name={}", tool_name);
 
         let is_streaming = tool.supports_streaming();
+        let preflight_ms = elapsed_ms_u64(start_time);
 
         let needs_confirmation =
             task.options.confirm_before_run && tool.needs_permissions(Some(&tool_args));
@@ -671,6 +948,11 @@ impl ToolPipeline {
                             &tool_id,
                             ToolExecutionState::Cancelled {
                                 reason: format!("User rejected: {}", reason),
+                                duration_ms: Some(elapsed_ms_u64(start_time)),
+                                queue_wait_ms: Some(queue_wait_ms),
+                                preflight_ms: Some(preflight_ms),
+                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
+                                execution_ms: None,
                             },
                         )
                         .await;
@@ -689,6 +971,11 @@ impl ToolPipeline {
                             &tool_id,
                             ToolExecutionState::Cancelled {
                                 reason: "Confirmation channel closed".to_string(),
+                                duration_ms: Some(elapsed_ms_u64(start_time)),
+                                queue_wait_ms: Some(queue_wait_ms),
+                                preflight_ms: Some(preflight_ms),
+                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
+                                execution_ms: None,
                             },
                         )
                         .await;
@@ -703,6 +990,11 @@ impl ToolPipeline {
                             &tool_id,
                             ToolExecutionState::Cancelled {
                                 reason: "Confirmation timeout".to_string(),
+                                duration_ms: Some(elapsed_ms_u64(start_time)),
+                                queue_wait_ms: Some(queue_wait_ms),
+                                preflight_ms: Some(preflight_ms),
+                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
+                                execution_ms: None,
                             },
                         )
                         .await;
@@ -726,6 +1018,11 @@ impl ToolPipeline {
                     &tool_id,
                     ToolExecutionState::Cancelled {
                         reason: "Tool was cancelled before execution".to_string(),
+                        duration_ms: Some(elapsed_ms_u64(start_time)),
+                        queue_wait_ms: Some(queue_wait_ms),
+                        preflight_ms: Some(preflight_ms),
+                        confirmation_wait_ms: Some(confirmation_wait_ms),
+                        execution_ms: None,
                     },
                 )
                 .await;
@@ -772,12 +1069,33 @@ impl ToolPipeline {
                 let mut tool_result = tool_result;
                 tool_result.duration_ms = Some(duration_ms);
 
+                // The tool call succeeded with arguments that we patched
+                // because the model's output was truncated mid-stream. Tell
+                // the model so it can decide whether the partial write needs
+                // to be continued or regenerated.
+                if recovered_from_truncation {
+                    let original = tool_result.result_for_assistant.unwrap_or_default();
+                    let notice = format!(
+                        "[Your previous {} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file was written with the partial content. The full truncated content — including the exact stopping point — is visible in the `input` of your previous tool_use message, so you do NOT need to read the file again. To finish it, issue ONE Edit call where `old_string` is the final unique substring of your truncated content and `new_string` is that same substring plus the continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens). Do NOT call Read on this file and do NOT rewrite the whole file with Write.]\n\nOriginal tool result follows.\n\n",
+                        tool_name
+                    );
+                    tool_result.result_for_assistant = Some(if original.is_empty() {
+                        notice.trim_end().to_string()
+                    } else {
+                        format!("{notice}{original}")
+                    });
+                }
+
                 self.state_manager
                     .update_state(
                         &tool_id,
                         ToolExecutionState::Completed {
                             result: convert_to_framework_result(&tool_result),
                             duration_ms,
+                            queue_wait_ms: Some(queue_wait_ms),
+                            preflight_ms: Some(preflight_ms),
+                            confirmation_wait_ms: Some(confirmation_wait_ms),
+                            execution_ms: Some(execution_ms),
                         },
                     )
                     .await;
@@ -810,6 +1128,11 @@ impl ToolPipeline {
                             &tool_id,
                             ToolExecutionState::Cancelled {
                                 reason: reason.clone(),
+                                duration_ms: Some(elapsed_ms_u64(start_time)),
+                                queue_wait_ms: Some(queue_wait_ms),
+                                preflight_ms: Some(preflight_ms),
+                                confirmation_wait_ms: Some(confirmation_wait_ms),
+                                execution_ms: Some(execution_ms),
                             },
                         )
                         .await;
@@ -837,6 +1160,11 @@ impl ToolPipeline {
                         ToolExecutionState::Failed {
                             error: error_msg.clone(),
                             is_retryable,
+                            duration_ms: Some(elapsed_ms_u64(start_time)),
+                            queue_wait_ms: Some(queue_wait_ms),
+                            preflight_ms: Some(preflight_ms),
+                            confirmation_wait_ms: Some(confirmation_wait_ms),
+                            execution_ms: Some(execution_ms),
                         },
                     )
                     .await;
@@ -961,6 +1289,7 @@ impl ToolPipeline {
             session_id: Some(task.context.session_id.clone()),
             dialog_turn_id: Some(task.context.dialog_turn_id.clone()),
             workspace: task.context.workspace.clone(),
+            unlocked_collapsed_tools: task.context.unlocked_collapsed_tools.clone(),
             custom_data: {
                 let mut map = HashMap::new();
 
@@ -990,6 +1319,20 @@ impl ToolPipeline {
                         );
                     }
                 }
+                let deep_review_parent_context =
+                    task.context
+                        .subagent_parent_info
+                        .as_ref()
+                        .map(|parent_info| tool_context::DeepReviewToolParentContext {
+                            tool_call_id: parent_info.tool_call_id.as_str(),
+                            session_id: parent_info.session_id.as_str(),
+                            dialog_turn_id: parent_info.dialog_turn_id.as_str(),
+                        });
+                tool_context::append_tool_use_context_data(
+                    &task.context.context_vars,
+                    deep_review_parent_context,
+                    &mut map,
+                );
 
                 map
             },
@@ -1086,6 +1429,11 @@ impl ToolPipeline {
                 tool_id,
                 ToolExecutionState::Cancelled {
                     reason: reason.clone(),
+                    duration_ms: None,
+                    queue_wait_ms: None,
+                    preflight_ms: None,
+                    confirmation_wait_ms: None,
+                    execution_ms: None,
                 },
             )
             .await;
@@ -1212,11 +1560,145 @@ impl ToolPipeline {
                     tool_id,
                     ToolExecutionState::Cancelled {
                         reason: format!("User rejected: {}", reason),
+                        duration_ms: None,
+                        queue_wait_ms: None,
+                        preflight_ms: None,
+                        confirmation_wait_ms: None,
+                        execution_ms: None,
                     },
                 )
                 .await;
 
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    fn test_tool_task(tool_id: &str, tool_name: &str) -> ToolTask {
+        ToolTask::new(
+            ToolCall {
+                tool_id: tool_id.to_string(),
+                tool_name: tool_name.to_string(),
+                arguments: json!({ "path": "src/main.rs" }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+            ToolExecutionContext {
+                session_id: "session_1".to_string(),
+                dialog_turn_id: "turn_1".to_string(),
+                agent_type: "agent".to_string(),
+                workspace: None,
+                context_vars: HashMap::new(),
+                subagent_parent_info: None,
+                collapsed_tools: Vec::new(),
+                unlocked_collapsed_tools: Vec::new(),
+                allowed_tools: Vec::new(),
+                runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+                steering_interrupt: None,
+                workspace_services: None,
+            },
+            ToolExecutionOptions::default(),
+        )
+    }
+
+    #[test]
+    fn steering_interrupted_result_preserves_tool_call_identity() {
+        let task = test_tool_task("tool_1", "Read");
+        let result = build_user_steering_interrupted_result("tool_1", Some(task));
+
+        assert_eq!(result.tool_id, "tool_1");
+        assert_eq!(result.tool_name, "Read");
+        assert!(result.result.is_error);
+        assert_eq!(
+            result.result.result["category"],
+            serde_json::Value::String("user_steering_interrupted".to_string())
+        );
+        assert_eq!(
+            result.result.result_for_assistant.as_deref(),
+            Some(USER_STEERING_INTERRUPTED_MESSAGE)
+        );
+    }
+
+    #[test]
+    fn error_result_prefers_raw_arguments_preview_when_available() {
+        let mut task = test_tool_task("tool_1", "Git");
+        task.tool_call.arguments = json!({});
+        task.tool_call.raw_arguments = Some("{\"operation\":\"log\"".to_string());
+
+        let result = build_error_execution_result(
+            "tool_1",
+            Some(task),
+            &BitFunError::Validation("Arguments are invalid JSON.".to_string()),
+        );
+
+        assert_eq!(
+            result.result.result["provided_arguments"],
+            serde_json::Value::String("{\"operation\":\"log\"".to_string())
+        );
+        assert!(result
+            .result
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Provided arguments: {\"operation\":\"log\""));
+    }
+
+    #[test]
+    fn fallback_assistant_text_preserves_full_structured_result() {
+        let result = convert_tool_result(
+            FrameworkToolResult::Result {
+                data: json!({
+                    "success": false,
+                    "exit_code": 1,
+                    "working_directory": "/private/tmp",
+                    "output": "ERR_PNPM_NO_PKG_MANIFEST"
+                }),
+                result_for_assistant: None,
+                image_attachments: None,
+            },
+            "tool_1",
+            "Bash",
+        );
+
+        let assistant_text = result.result_for_assistant.unwrap_or_default();
+        assert!(assistant_text.contains("\"success\": false"));
+        assert!(assistant_text.contains("\"exit_code\": 1"));
+        assert!(assistant_text.contains("\"working_directory\": \"/private/tmp\""));
+        assert!(!assistant_text.contains("completed with error"));
+    }
+
+    #[test]
+    fn collapsed_tool_requires_tool_catalog_unlock() {
+        let mut task = test_tool_task("tool_1", "WebFetch");
+        task.context.collapsed_tools = vec!["WebFetch".to_string()];
+
+        let err = ToolPipeline::validate_collapsed_tool_usage(&task)
+            .expect_err("collapsed tool should require GetToolSpec unlock");
+
+        assert!(err
+            .to_string()
+            .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}"));
+    }
+
+    #[test]
+    fn tool_catalog_rejects_reloading_already_unlocked_tool() {
+        let mut task = test_tool_task("tool_1", "GetToolSpec");
+        task.tool_call.arguments = json!({ "tool_name": "WebFetch" });
+        task.context.unlocked_collapsed_tools = vec!["WebFetch".to_string()];
+
+        let result = ToolPipeline::validate_collapsed_tool_usage(&task);
+
+        assert!(
+            result.is_ok(),
+            "GetToolSpec duplicate-load validation moved into GetToolSpec itself"
+        );
     }
 }

@@ -32,15 +32,23 @@ impl EventSubscriber for TokenUsageSubscriber {
             output_tokens,
             total_tokens,
             is_subagent,
+            cached_tokens,
+            token_details,
             ..
         } = event
         {
             let output = output_tokens.unwrap_or(0);
-            let cached = 0;
 
             debug!(
-                "Recording token usage: model={}, session={}, turn={}, input={}, output={}, total={}, is_subagent={}",
-                model_id, session_id, turn_id, input_tokens, output, total_tokens, is_subagent
+                "Recording token usage: model={}, session={}, turn={}, input={}, output={}, total={}, cached_available={}, is_subagent={}",
+                model_id,
+                session_id,
+                turn_id,
+                input_tokens,
+                output,
+                total_tokens,
+                cached_tokens.is_some(),
+                is_subagent
             );
 
             if let Err(e) = self
@@ -51,7 +59,8 @@ impl EventSubscriber for TokenUsageSubscriber {
                     turn_id.clone(),
                     *input_tokens as u32,
                     output as u32,
-                    cached,
+                    cached_tokens.map(|value| value as u32),
+                    token_details.clone(),
                     *is_subagent,
                 )
                 .await

@@ -15,6 +15,13 @@ impl AcpRemoteSessionStrategy {
             Self::Resume => "resume",
         }
     }
+
+    pub(super) fn startup_phase_name(self) -> &'static str {
+        match self {
+            Self::New => "session creation",
+            Self::Load | Self::Resume => "session restore",
+        }
+    }
 }
 
 pub(super) fn preferred_resume_strategies(

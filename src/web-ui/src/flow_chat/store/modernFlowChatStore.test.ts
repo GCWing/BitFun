@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { FlowTextItem, FlowToolItem, ModelRound, Session } from '../types/flow-chat';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { FlowTextItem, FlowToolItem, FlowUserSteeringItem, ModelRound, Session } from '../types/flow-chat';
 
 vi.mock('./FlowChatStore', () => ({
   flowChatStore: {
@@ -11,10 +11,10 @@ vi.mock('./FlowChatStore', () => ({
 }));
 
 vi.mock('../tool-cards', () => ({
-  isCollapsibleTool: (toolName: string) => ['Read', 'LS', 'Grep', 'Glob', 'WebSearch', 'Bash'].includes(toolName),
+  isCollapsibleTool: (toolName: string) => ['Read', 'LS', 'Grep', 'Glob', 'WebSearch', 'Bash', 'Git'].includes(toolName),
   READ_TOOL_NAMES: new Set(['Read']),
   SEARCH_TOOL_NAMES: new Set(['Grep', 'Glob', 'WebSearch']),
-  COMMAND_TOOL_NAMES: new Set(['Bash']),
+  COMMAND_TOOL_NAMES: new Set(['Bash', 'Git']),
 }));
 
 import { sessionToVirtualItems } from './modernFlowChatStore';
@@ -32,20 +32,46 @@ function makeTextItem(id: string, content: string): FlowTextItem {
 }
 
 function makeReadTool(id: string): FlowToolItem {
+  return makeTool(id, 'Read');
+}
+
+function makeTool(
+  id: string,
+  toolName: string,
+  status: FlowToolItem['status'] = 'completed',
+  endTime?: number,
+): FlowToolItem {
   return {
     id,
     type: 'tool',
-    toolName: 'Read',
+    toolName,
     timestamp: 1001,
-    status: 'completed',
+    status,
     toolCall: {
       id,
       input: { file_path: 'src/main.rs' },
     },
-    toolResult: {
-      result: 'file contents',
-      success: true,
-    },
+    ...(status === 'completed'
+      ? {
+          toolResult: {
+            result: 'file contents',
+            success: true,
+          },
+        }
+      : {}),
+    ...(endTime !== undefined ? { endTime } : {}),
+  };
+}
+
+function makeSteeringItem(id: string, content = 'Steer now'): FlowUserSteeringItem {
+  return {
+    id: `steering_${id}`,
+    type: 'user-steering',
+    steeringId: id,
+    content,
+    roundIndex: 0,
+    timestamp: 1100,
+    status: 'pending',
   };
 }
 
@@ -90,6 +116,10 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 }
 
 describe('sessionToVirtualItems explore grouping', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('groups normal rounds containing only collapsible tools and narrative', () => {
     const session = makeSession({ sessionId: 'normal-session' });
 
@@ -133,5 +163,306 @@ describe('sessionToVirtualItems explore grouping', () => {
     const items = sessionToVirtualItems(session);
 
     expect(items.map(item => item.type)).toEqual(['user-message', 'model-round']);
+  });
+
+  it('does not render a stopped indicator for non-complete finish reasons', () => {
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [makeRound()],
+        status: 'completed',
+        startTime: 900,
+        finishReason: 'interrupted',
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+  });
+
+  it('keeps trailing explore groups expanded while the turn is still processing', () => {
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [makeRound({ id: 'round-1', isStreaming: false, isComplete: true })],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+    expect(items[1]).toMatchObject({
+      type: 'explore-group',
+      data: {
+        wasCutByCritical: false,
+      },
+    });
+  });
+
+  it('keeps the active collapsible tool visible after a collapsed explore group', () => {
+    const session = makeSession({
+      sessionId: 'active-tool-session',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'active-tool-session',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [
+          makeRound({ id: 'round-1', isStreaming: false, isComplete: true }),
+          makeRound({
+            id: 'round-2',
+            items: [makeTool('tool-2', 'Read', 'running')],
+            isStreaming: true,
+            isComplete: false,
+            status: 'streaming',
+          }),
+        ],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
+    expect(items[1]).toMatchObject({
+      type: 'explore-group',
+      data: {
+        groupId: 'round-1',
+        wasCutByCritical: true,
+      },
+    });
+    expect(items[2]).toMatchObject({
+      type: 'model-round',
+      data: {
+        id: 'round-2',
+      },
+    });
+  });
+
+  it('keeps a just-completed collapsible tool as a model round before merging it', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_200);
+    const session = makeSession({
+      sessionId: 'just-completed-tool-session',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'just-completed-tool-session',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [
+          makeRound({ id: 'round-1', isStreaming: false, isComplete: true }),
+          makeRound({
+            id: 'round-2',
+            items: [makeTool('tool-2', 'Read', 'completed', 10_000)],
+            isStreaming: false,
+            isComplete: true,
+            status: 'completed',
+          }),
+        ],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
+    expect(items[2]).toMatchObject({
+      type: 'model-round',
+      data: {
+        id: 'round-2',
+      },
+    });
+  });
+
+  it('keeps the same explore group id when a completed trailing tool is merged in', () => {
+    const baseTurn = {
+      id: 'turn-1',
+      sessionId: 'stable-group-session',
+      userMessage: {
+        id: 'user-1',
+        content: 'Help',
+        timestamp: 900,
+      },
+      modelRounds: [
+        makeRound({ id: 'round-1', isStreaming: false, isComplete: true }),
+        makeRound({
+          id: 'round-2',
+          items: [makeTool('tool-2', 'Read', 'running')],
+          isStreaming: true,
+          isComplete: false,
+          status: 'streaming',
+        }),
+      ],
+      status: 'processing' as const,
+      startTime: 900,
+    };
+    const activeSession = makeSession({
+      sessionId: 'stable-group-session',
+      dialogTurns: [baseTurn],
+    });
+    const completedSession = makeSession({
+      sessionId: 'stable-group-session-completed',
+      dialogTurns: [{
+        ...baseTurn,
+        sessionId: 'stable-group-session-completed',
+        modelRounds: [
+          baseTurn.modelRounds[0],
+          makeRound({
+            id: 'round-2',
+            items: [makeTool('tool-2', 'Read', 'completed')],
+            isStreaming: false,
+            isComplete: true,
+            status: 'completed',
+          }),
+        ],
+      }],
+    });
+
+    const activeItems = sessionToVirtualItems(activeSession);
+    const completedItems = sessionToVirtualItems(completedSession);
+
+    expect(activeItems[1]).toMatchObject({
+      type: 'explore-group',
+      data: {
+        groupId: 'round-1',
+      },
+    });
+    expect(completedItems[1]).toMatchObject({
+      type: 'explore-group',
+      data: {
+        groupId: 'round-1',
+        allItems: [
+          expect.objectContaining({ id: 'text-1' }),
+          expect.objectContaining({ id: 'tool-1' }),
+          expect.objectContaining({ id: 'tool-2' }),
+        ],
+      },
+    });
+  });
+
+  it('auto-collapses completed trailing explore groups', () => {
+    const session = makeSession();
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items[1]).toMatchObject({
+      type: 'explore-group',
+      data: {
+        wasCutByCritical: true,
+      },
+    });
+  });
+
+  it('auto-collapses non-trailing explore groups during an active turn', () => {
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [
+          makeRound({ id: 'round-1' }),
+          makeRound({
+            id: 'round-2',
+            items: [makeTool('tool-2', 'TodoWrite')],
+          }),
+          makeRound({
+            id: 'round-3',
+            isStreaming: true,
+            isComplete: false,
+            status: 'streaming',
+          }),
+        ],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+    const exploreGroups = items.filter(item => item.type === 'explore-group');
+
+    expect(exploreGroups).toHaveLength(2);
+    expect(exploreGroups[0]).toMatchObject({
+      data: {
+        wasCutByCritical: true,
+      },
+    });
+    expect(exploreGroups[1]).toMatchObject({
+      data: {
+        wasCutByCritical: false,
+      },
+    });
+  });
+
+  it('renders user steering as a top-level user message item', () => {
+    const steeringItem = makeSteeringItem('steer-1', 'Handle this queued request now');
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Initial request',
+          timestamp: 900,
+        },
+        modelRounds: [
+          makeRound({ id: 'round-1' }),
+          makeRound({
+            id: 'round-2',
+            items: [steeringItem],
+            isStreaming: true,
+            isComplete: false,
+            status: 'streaming',
+          }),
+        ],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual([
+      'user-message',
+      'explore-group',
+      'user-steering-message',
+    ]);
+    expect(items[2]).toMatchObject({
+      type: 'user-steering-message',
+      data: {
+        id: 'user_steering_steer-1',
+        content: 'Handle this queued request now',
+        timestamp: 1100,
+      },
+      turnId: 'turn-1',
+      steeringId: 'steer-1',
+      steeringStatus: 'pending',
+    });
   });
 });

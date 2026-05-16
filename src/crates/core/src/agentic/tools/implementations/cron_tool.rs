@@ -1,7 +1,7 @@
 use super::util::normalize_path;
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
 use crate::service::{
@@ -583,6 +583,14 @@ Schedule schema:
 Patch schema for "update":
 - Same fields as "job", but every field is optional."#
             .to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "Manage scheduled jobs for agent sessions.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

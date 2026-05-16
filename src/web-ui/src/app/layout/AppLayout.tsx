@@ -12,6 +12,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef, useContext } 
 import { LoaderCircle } from 'lucide-react';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { useWindowControls } from '../hooks/useWindowControls';
+import { isWindowFullscreenShortcut } from '../hooks/windowFullscreenShortcut';
 import { useAssistantBootstrap } from '../hooks/useAssistantBootstrap';
 import { useApp } from '../hooks/useApp';
 import { useSceneStore } from '../stores/sceneStore';
@@ -29,7 +30,11 @@ import { AboutDialog } from '../components/AboutDialog';
 import { MCPInteractionDialog } from '../components/MCPInteractionDialog/MCPInteractionDialog';
 import { WorkspaceManager } from '../../tools/workspace';
 import { workspaceAPI } from '@/infrastructure/api';
+import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
+import { confirmDialog } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
+import { DailyAppUpdateGate } from '@/infrastructure/update';
 import { useI18n } from '@/infrastructure/i18n';
 import { WorkspaceKind } from '@/shared/types';
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
@@ -47,6 +52,13 @@ interface AppLayoutProps {
 interface AcpSessionCreationEventDetail {
   phase?: 'start' | 'finish';
   clientId?: string;
+  action?: 'create' | 'restore';
+}
+
+interface WindowModeHint {
+  id: number;
+  title: string;
+  detail: string;
 }
 
 const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
@@ -69,11 +81,54 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
   const { isToolbarMode } = useToolbarModeContext();
   const { ensureForWorkspace: ensureAssistantBootstrapForWorkspace } = useAssistantBootstrap();
+  const isMacOS = useMemo(() => {
+    return isMacOSDesktopRuntime();
+  }, []);
 
-  const { handleMinimize, handleMaximize, handleClose, isMaximized, canUseNativeWindowControls } =
+  const {
+    handleMinimize,
+    handleMaximize,
+    handleToggleFullscreen,
+    handleClose,
+    isMaximized,
+    isFullscreen,
+    canUseNativeWindowControls,
+  } =
     useWindowControls({ isToolbarMode });
 
   const { state, switchLeftPanelTab, toggleLeftPanel, toggleRightPanel } = useApp();
+  const [windowModeHint, setWindowModeHint] = useState<WindowModeHint | null>(null);
+  const windowModeHintTimerRef = useRef<number | null>(null);
+
+  const showWindowFullscreenHint = useCallback((enteredFullscreen: boolean) => {
+    if (windowModeHintTimerRef.current) {
+      window.clearTimeout(windowModeHintTimerRef.current);
+    }
+
+    const shortcut = isMacOS ? 'Control+Command+F' : 'F11';
+    setWindowModeHint({
+      id: Date.now(),
+      title: t(enteredFullscreen
+        ? 'appLayout.windowFullscreenEntered'
+        : 'appLayout.windowFullscreenExited'),
+      detail: t(enteredFullscreen
+        ? 'appLayout.windowFullscreenExitHint'
+        : 'appLayout.windowFullscreenEnterHint', { shortcut }),
+    });
+
+    windowModeHintTimerRef.current = window.setTimeout(() => {
+      setWindowModeHint(null);
+      windowModeHintTimerRef.current = null;
+    }, 2200);
+  }, [isMacOS, t]);
+
+  useEffect(() => {
+    return () => {
+      if (windowModeHintTimerRef.current) {
+        window.clearTimeout(windowModeHintTimerRef.current);
+      }
+    };
+  }, []);
 
   // ── Load user keybinding overrides from config on startup ────────────────
   useEffect(() => {
@@ -97,6 +152,32 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!canUseNativeWindowControls || isToolbarMode) return;
+
+    const handleSystemFullscreenShortcut = (event: KeyboardEvent) => {
+      if (!isWindowFullscreenShortcut(event)) return;
+
+      // OS fullscreen is a platform window command, not the app's maximize
+      // shortcut and not an internal panel fullscreen action. Use a raw
+      // listener because ShortcutManager intentionally maps Ctrl to Cmd on
+      // macOS for "mod" shortcuts, while system fullscreen requires the exact
+      // Control+Command+F chord.
+      event.preventDefault();
+      event.stopPropagation();
+      void handleToggleFullscreen().then((enteredFullscreen) => {
+        if (typeof enteredFullscreen === 'boolean') {
+          showWindowFullscreenHint(enteredFullscreen);
+        }
+      });
+    };
+
+    window.addEventListener('keydown', handleSystemFullscreenShortcut, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', handleSystemFullscreenShortcut, { capture: true });
+    };
+  }, [canUseNativeWindowControls, handleToggleFullscreen, isToolbarMode, showWindowFullscreenHint]);
   const activeSceneId = useSceneStore(s => s.activeTabId);
   const isAgentScene = activeSceneId === 'session';
   const isWelcomeScene = activeSceneId === 'welcome';
@@ -122,7 +203,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showWorkspaceStatus, setShowWorkspaceStatus] = useState(false);
-  const [pendingAcpSessionClients, setPendingAcpSessionClients] = useState<string[]>([]);
+  const [pendingAcpSessionClients, setPendingAcpSessionClients] = useState<Array<{
+    clientId: string;
+    action: 'create' | 'restore';
+  }>>([]);
   const handleOpenProject = useCallback(async () => {
     try {
       const selected = await workspaceAPI.open_oh_file_dialog();
@@ -162,10 +246,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   }, [handleNewProject, handleOpenProject]);
 
   // macOS native menubar events (previously in TitleBar)
-  const isMacOS = useMemo(() => {
-    return isMacOSDesktopRuntime();
-  }, []);
-
   useEffect(() => {
     if (!isMacOS) return;
     let unlistenFns: Array<() => void> = [];
@@ -293,26 +373,86 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     t,
   ]);
 
-  // Save in-progress conversations on window close
+  // When the user hides the main window (tray / macOS dock), the app keeps running.
+  // `saveAllInProgressTurns` settles in-flight dialog turns for disk persistence, which
+  // clears Agent companion desktop bubbles until the next chat update—so only run it
+  // immediately before we actually exit the process.
   React.useEffect(() => {
     let unlistenFn: (() => void) | null = null;
+    let handlingClose = false;
 
     const setupWindowCloseListener = async () => {
       if (!canUseNativeWindowControls) return;
 
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        const currentWindow = getCurrentWindow();
+        // Both macOS and Windows/Linux: Rust intercepts the native close request
+        // and emits this event. We decide hide vs quit; persist interrupted turns only on quit.
+        const [{ listen }, { invoke }] = await Promise.all([
+          import('@tauri-apps/api/event'),
+          import('@tauri-apps/api/core'),
+        ]);
 
-        unlistenFn = await currentWindow.onCloseRequested(async (event: { preventDefault: () => void }) => {
+        const persistInterruptedTurnsForExit = async () => {
           try {
-            event.preventDefault();
-            const flowChatManager = FlowChatManager.getInstance();
-            await flowChatManager.saveAllInProgressTurns();
-            await currentWindow.close();
+            await FlowChatManager.getInstance().saveAllInProgressTurns();
           } catch (error) {
-            log.error('Failed to save conversations, closing anyway', error);
-            await currentWindow.close();
+            log.error('Failed to save conversations before quit', error);
+          }
+        };
+
+        unlistenFn = await listen('bitfun_main_window_close_requested', async () => {
+          if (handlingClose) return;
+          handlingClose = true;
+
+          if (isMacOS) {
+            // macOS always hides to keep the app alive in the dock.
+            try {
+              await invoke('hide_main_window_after_close_request');
+            } catch (error) {
+              log.error('Failed to hide main window after close request', error);
+            }
+            handlingClose = false;
+            return;
+          }
+
+          // Windows / Linux: read the user's close-button preference.
+          let behavior: CloseBehavior = 'quit';
+          try {
+            behavior = (await configManager.getConfig<CloseBehavior>('app.close_button_behavior')) ?? 'quit';
+          } catch {
+            // Fall back to quit if config cannot be read.
+          }
+
+          try {
+            if (behavior === 'minimize_to_tray') {
+              await systemAPI.minimizeToTray();
+            } else if (behavior === 'ask') {
+              const shouldQuit = await confirmDialog({
+                title: tCommon('closeDialog.title'),
+                message: tCommon('closeDialog.message'),
+                confirmText: tCommon('closeDialog.quit'),
+                cancelText: tCommon('closeDialog.minimizeToTray'),
+                showCancel: true,
+              });
+              if (shouldQuit) {
+                await persistInterruptedTurnsForExit();
+                await systemAPI.quitApp();
+              } else {
+                await systemAPI.minimizeToTray();
+              }
+            } else {
+              // quit
+              await persistInterruptedTurnsForExit();
+              await systemAPI.quitApp();
+            }
+          } catch (error) {
+            log.error('Failed to handle close request', { behavior, error });
+            try {
+              await persistInterruptedTurnsForExit();
+              await systemAPI.quitApp();
+            } catch { /* ignore */ }
+          } finally {
+            handlingClose = false;
           }
         });
       } catch (error) {
@@ -322,7 +462,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
     setupWindowCloseListener();
     return () => { if (unlistenFn) unlistenFn(); };
-  }, [canUseNativeWindowControls]);
+  }, [canUseNativeWindowControls, isMacOS, tCommon]);
 
   // Handle switch-to-files-panel event
   React.useEffect(() => {
@@ -437,11 +577,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<AcpSessionCreationEventDetail>).detail;
       const clientId = detail?.clientId?.trim() || 'ACP';
+      const action = detail?.action === 'restore' ? 'restore' : 'create';
       if (detail?.phase === 'start') {
-        setPendingAcpSessionClients(prev => [...prev, clientId]);
+        setPendingAcpSessionClients(prev => [...prev, { clientId, action }]);
       } else if (detail?.phase === 'finish') {
         setPendingAcpSessionClients(prev => {
-          const index = prev.indexOf(clientId);
+          const index = prev.findIndex(item => item.clientId === clientId && item.action === action);
           if (index === -1) return prev;
           return prev.filter((_, currentIndex) => currentIndex !== index);
         });
@@ -480,14 +621,35 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     'bitfun-app-layout',
     isMacOS ? 'bitfun-app-layout--macos' : '',
     className,
+    isFullscreen ? 'bitfun-app-layout--window-fullscreen' : '',
     isTransitioning ? 'bitfun-app-layout--transitioning' : '',
   ].filter(Boolean).join(' ');
 
-  if (isToolbarMode) return <ToolbarMode />;
+  if (isToolbarMode) {
+    return (
+      <>
+        <DailyAppUpdateGate />
+        <ToolbarMode />
+      </>
+    );
+  }
 
   return (
     <>
+      <DailyAppUpdateGate />
       <div className={containerClassName} data-testid="app-layout">
+        {windowModeHint && (
+          <div
+            key={windowModeHint.id}
+            className="bitfun-window-mode-hint"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="bitfun-window-mode-hint__title">{windowModeHint.title}</span>
+            <span className="bitfun-window-mode-hint__detail">{windowModeHint.detail}</span>
+          </div>
+        )}
+
         {/* Main content — always render WorkspaceBody; WelcomeScene in viewport handles no-workspace state */}
         <main className="bitfun-app-main-workspace" data-testid="app-main-content">
           <WorkspaceBody
@@ -506,9 +668,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           <div className="bitfun-app-acp-session-loading" role="status" aria-live="polite">
             <LoaderCircle size={18} className="bitfun-app-acp-session-loading__spinner" />
             <span>
-              {tCommon('nav.workspaces.creatingAcpSession', {
-                agentName: pendingAcpSessionClients[pendingAcpSessionClients.length - 1],
-              })}
+              {pendingAcpSessionClients[pendingAcpSessionClients.length - 1].action === 'restore'
+                ? tCommon('nav.workspaces.restoringAcpSession', {
+                  agentName: pendingAcpSessionClients[pendingAcpSessionClients.length - 1].clientId,
+                })
+                : tCommon('nav.workspaces.creatingAcpSession', {
+                  agentName: pendingAcpSessionClients[pendingAcpSessionClients.length - 1].clientId,
+                })}
             </span>
           </div>
         )}

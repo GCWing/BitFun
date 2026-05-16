@@ -2,8 +2,6 @@
 pub enum RequestContextSection {
     WorkspaceInstructions,
     WorkspaceMemoryFiles,
-    AIRules,
-    AIMemories,
     ProjectLayout,
 }
 
@@ -21,8 +19,6 @@ impl RequestContextPolicy {
         Self::new(vec![
             RequestContextSection::WorkspaceInstructions,
             RequestContextSection::WorkspaceMemoryFiles,
-            RequestContextSection::AIRules,
-            RequestContextSection::AIMemories,
             RequestContextSection::ProjectLayout,
         ])
     }
@@ -31,8 +27,6 @@ impl RequestContextPolicy {
         Self::new(vec![
             RequestContextSection::WorkspaceInstructions,
             RequestContextSection::WorkspaceMemoryFiles,
-            RequestContextSection::AIRules,
-            RequestContextSection::AIMemories,
         ])
     }
 
@@ -53,8 +47,6 @@ impl RequestContextPolicy {
 
     pub fn has_override_sections(&self) -> bool {
         self.includes(RequestContextSection::WorkspaceMemoryFiles)
-            || self.includes(RequestContextSection::AIRules)
-            || self.includes(RequestContextSection::AIMemories)
     }
 }
 

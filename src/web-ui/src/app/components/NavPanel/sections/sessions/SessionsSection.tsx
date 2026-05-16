@@ -36,6 +36,7 @@ import {
   deriveSessionReviewActivity,
   isReviewActivityBlocking,
 } from '@/flow_chat/utils/sessionReviewActivity';
+import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import './SessionsSection.scss';
 
 /** Top-level parent sessions shown at each expand step (children still nest under visible parents). */
@@ -122,6 +123,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set());
   const editInputRef = useRef<HTMLInputElement>(null);
   const sessionMenuPopoverRef = useRef<HTMLDivElement>(null);
+  const sessionMenuAnchorRef = useRef<HTMLButtonElement>(null);
 
   // Subscribe to state machine changes for running status
   useEffect(() => {
@@ -174,6 +176,41 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [openMenuSessionId]);
+
+  const updateSessionMenuPosition = useCallback(() => {
+    const anchor = sessionMenuAnchorRef.current;
+    if (!anchor || !openMenuSessionId) return;
+    const rect = anchor.getBoundingClientRect();
+    const viewportPadding = 8;
+    const gap = 4;
+    const fallbackWidth = 160;
+    const fallbackHeight = 96;
+
+    const apply = () => {
+      const menuEl = sessionMenuPopoverRef.current;
+      const w = menuEl?.offsetWidth ?? fallbackWidth;
+      const h = menuEl?.offsetHeight ?? fallbackHeight;
+      setSessionMenuPosition(computeFixedPopoverPosition(rect, w, h, gap, viewportPadding));
+    };
+
+    apply();
+    requestAnimationFrame(apply);
+  }, [openMenuSessionId]);
+
+  useEffect(() => {
+    if (!openMenuSessionId) return;
+
+    updateSessionMenuPosition();
+
+    const handleViewportChange = () => updateSessionMenuPosition();
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+    };
+  }, [openMenuSessionId, updateSessionMenuPosition]);
 
   // Clear unread completion mark after the switched session renders
   useEffect(() => {
@@ -349,13 +386,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       }
       const btn = e.currentTarget as HTMLElement;
       const rect = btn.getBoundingClientRect();
-      const viewportPadding = 8;
-      const estimatedWidth = 160;
-      const maxLeft = window.innerWidth - estimatedWidth - viewportPadding;
-      setSessionMenuPosition({
-        top: Math.max(viewportPadding, rect.bottom + 4),
-        left: Math.max(viewportPadding, Math.min(rect.left, maxLeft)),
-      });
+      const { top, left } = computeFixedPopoverPosition(rect, 160, 96, 4, 8);
+      setSessionMenuPosition({ top, left });
       setOpenMenuSessionId(sessionId);
     },
     [openMenuSessionId]
@@ -616,6 +648,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   >
                     <button
                       type="button"
+                      ref={openMenuSessionId === session.sessionId ? sessionMenuAnchorRef : undefined}
                       className={`bitfun-nav-panel__inline-item-action-btn${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
                       onClick={e => handleMenuOpen(e, session.sessionId)}
                     >

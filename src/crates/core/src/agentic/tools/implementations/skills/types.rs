@@ -76,18 +76,36 @@ impl SkillInfo {
     }
 }
 
+/// The most specific rule that determined a skill's availability in a mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModeSkillStateReason {
+    ProjectDefaultEnabled,
+    DisabledByProjectOverride,
+    CustomUserDefaultEnabled,
+    BuiltinPolicyEnabled,
+    BuiltinPolicyDisabled,
+    EnabledByUserOverride,
+    DisabledByUserOverride,
+}
+
 /// Skill information annotated for a specific mode.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModeSkillInfo {
     #[serde(flatten)]
     pub skill: SkillInfo,
-    /// True when this skill is currently disabled for the mode after applying
-    /// defaults plus user/project overrides.
+    /// Whether this skill is enabled by default before user/project overrides.
+    pub default_enabled: bool,
+    /// Whether this skill is effectively enabled after applying all overrides.
+    pub effective_enabled: bool,
+    /// Backward-compatible inverse of `effective_enabled`.
     pub disabled_by_mode: bool,
     /// True when this skill is the one actually selected for runtime after applying
     /// mode disables and same-name priority resolution.
     pub selected_for_runtime: bool,
+    /// The rule that ultimately decided the effective state of this skill.
+    pub state_reason: ModeSkillStateReason,
 }
 
 /// Skill data (contains content, for execution)

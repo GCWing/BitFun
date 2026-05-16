@@ -147,11 +147,14 @@ impl TokenUsageService {
         turn_id: String,
         input_tokens: u32,
         output_tokens: u32,
-        cached_tokens: u32,
+        cached_tokens: Option<u32>,
+        token_details: Option<serde_json::Value>,
         is_subagent: bool,
     ) -> Result<()> {
         let now = Utc::now();
         let total_tokens = input_tokens + output_tokens;
+        let cached_tokens_available = cached_tokens.is_some();
+        let cached_tokens = cached_tokens.unwrap_or(0);
 
         let record = TokenUsageRecord {
             model_id: model_id.clone(),
@@ -161,7 +164,9 @@ impl TokenUsageService {
             input_tokens,
             output_tokens,
             cached_tokens,
+            cached_tokens_available,
             total_tokens,
+            token_details,
             is_subagent,
         };
 

@@ -12,9 +12,9 @@
  */
 
 import React, { useMemo, memo, useRef, useEffect, useState, useCallback, useDeferredValue } from 'react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { getPrismLanguage } from '@/infrastructure/language-detection';
 import { useTheme } from '@/infrastructure/theme';
+import { loadPrismSyntaxHighlighter } from '@/shared/utils/syntaxHighlighterLoader';
 import { buildCodePreviewPrismStyle, CODE_PREVIEW_FONT_FAMILY } from './codePreviewPrismTheme';
 import './CodePreview.scss';
 
@@ -63,6 +63,7 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
 }) => {
   const { isLight } = useTheme();
   const prismStyle = useMemo(() => buildCodePreviewPrismStyle(isLight), [isLight]);
+  const [SyntaxHighlighter, setSyntaxHighlighter] = useState<React.ComponentType<any> | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const prevContentLengthRef = useRef(0);
@@ -73,7 +74,51 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
   // tokenization runs during browser idle time.
   const deferredContent = useDeferredValue(content);
 
+  // Prism tokenizes the *entire* string synchronously. For large streaming files
+  // (e.g. 500-line SCSS) this blocks the main thread for 50-150 ms per 100 ms
+  // batch flush. Since the streaming preview shows at most 4 visible lines
+  // (maxHeight ≈ 88 px), we only need to tokenize the tail of the buffer.
+  // After streaming ends, the full content is restored for the completed view.
+  const STREAMING_TAIL_LINES = 60; // generous tail – more than enough for any maxHeight
+  const displayContentInfo = useMemo(() => {
+    if (!isStreaming) {
+      return { content: deferredContent, startingLineNumber: 1 };
+    }
+
+    const lines = deferredContent.split('\n');
+    if (lines.length <= STREAMING_TAIL_LINES) {
+      return { content: deferredContent, startingLineNumber: 1 };
+    }
+
+    const startingLineNumber = lines.length - STREAMING_TAIL_LINES + 1;
+    return {
+      content: lines.slice(-STREAMING_TAIL_LINES).join('\n'),
+      startingLineNumber,
+    };
+  }, [isStreaming, deferredContent]);
+
+  const displayContent = displayContentInfo.content;
+
   const [highlightedLine, setHighlightedLine] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadPrismSyntaxHighlighter()
+      .then((component) => {
+        if (!cancelled) {
+          setSyntaxHighlighter(() => component);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSyntaxHighlighter(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   
   const detectedLanguage = useMemo(() => {
     if (language) return language;
@@ -102,7 +147,8 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
   }, [onLineClick, filePath]);
   
   const lineProps = useCallback((lineNumber: number): React.HTMLProps<HTMLElement> => {
-    const isHighlighted = highlightedLine === lineNumber;
+    const actualLineNumber = displayContentInfo.startingLineNumber + lineNumber - 1;
+    const isHighlighted = highlightedLine === actualLineNumber;
     return {
       style: {
         display: 'block',
@@ -112,10 +158,10 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
         paddingLeft: '3px',
         transition: 'background-color 0.15s ease, border-color 0.15s ease',
       },
-      onClick: () => handleLineClick(lineNumber),
+      onClick: () => handleLineClick(actualLineNumber),
       className: isHighlighted ? 'code-line--highlighted' : '',
     };
-  }, [highlightedLine, handleLineClick]);
+  }, [highlightedLine, handleLineClick, displayContentInfo.startingLineNumber]);
   
   if (!content) {
     return (
@@ -136,38 +182,61 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
         className="code-preview__content"
         style={containerStyle}
       >
-        <SyntaxHighlighter
-          language={detectedLanguage}
-          style={prismStyle}
-          showLineNumbers={showLineNumbers}
-          wrapLines={true}
-          wrapLongLines={true}
-          lineProps={lineProps}
-          customStyle={{
-            margin: 0,
-            padding: 0,
-            background: 'transparent',
-            overflow: 'visible',
-          }}
-          codeTagProps={{
-            style: {
-              fontFamily: CODE_PREVIEW_FONT_FAMILY,
-              fontSize: '12px',
-              lineHeight: '1.6',
-              fontWeight: 400,
-            }
-          }}
-          lineNumberStyle={{
-            minWidth: '2.5em',
-            paddingRight: '1em',
-            textAlign: 'right',
-            userSelect: 'none',
-            color: 'var(--color-text-muted, #666)',
-            opacity: isLight ? 0.88 : 0.6,
-          }}
-        >
-          {deferredContent}
-        </SyntaxHighlighter>
+        {SyntaxHighlighter ? (
+          <SyntaxHighlighter
+            language={detectedLanguage}
+            style={prismStyle}
+            showLineNumbers={showLineNumbers}
+            startingLineNumber={displayContentInfo.startingLineNumber}
+            wrapLines={true}
+            wrapLongLines={true}
+            lineProps={lineProps}
+            customStyle={{
+              margin: 0,
+              padding: 0,
+              background: 'transparent',
+              overflow: 'visible',
+            }}
+            codeTagProps={{
+              style: {
+                fontFamily: CODE_PREVIEW_FONT_FAMILY,
+                fontSize: '12px',
+                lineHeight: '1.6',
+                fontWeight: 400,
+              }
+            }}
+            lineNumberStyle={{
+              minWidth: '2.5em',
+              paddingRight: '1em',
+              textAlign: 'right',
+              userSelect: 'none',
+              color: 'var(--color-text-muted, #666)',
+              opacity: isLight ? 0.88 : 0.6,
+            }}
+          >
+            {displayContent}
+          </SyntaxHighlighter>
+        ) : (
+          <pre className="code-preview__plain" aria-label="Code preview">
+            <code>
+              {displayContent.split('\n').map((line, index) => {
+                const lineNumber = displayContentInfo.startingLineNumber + index;
+                return (
+                  <span
+                    key={`${lineNumber}-${index}`}
+                    className={`code-preview__plain-line${highlightedLine === lineNumber ? ' code-preview__plain-line--highlighted' : ''}`}
+                    onClick={() => handleLineClick(lineNumber)}
+                  >
+                    {showLineNumbers && (
+                      <span className="code-preview__plain-line-number">{lineNumber}</span>
+                    )}
+                    <span className="code-preview__plain-line-content">{line || '\u00A0'}</span>
+                  </span>
+                );
+              })}
+            </code>
+          </pre>
+        )}
         
         {/* Streaming cursor indicator */}
         {isStreaming && (

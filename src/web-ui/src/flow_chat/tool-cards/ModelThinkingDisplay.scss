@@ -11,11 +11,10 @@
 
 /* Minimal, borderless layout.
  * WebKit (Tauri/macOS) baseline-quirk fix:
- * — Force `.flow-thinking-item` to be a block flex row with explicit
- *   line-height so the row height is exactly text rhythm (14px × 1.65 ≈ 23px),
- *   regardless of inherited line-height from ancestors.
- * — Make the chevron SVG `display: block` and the label use simple `display:
- *   inline` so no inline-flex baseline can pull the line box taller. */
+ * — Collapsed summary uses `--flowchat-font-size-sm` + line-height 1.5 to match
+ *   `.explore-region--collapsible` (e.g. “执行了 N 个命令”).
+ * — Make the chevron SVG `display: block` and the label simple `inline` flow
+ *   so flex `align-items: center` stays stable. */
 .flow-thinking-item {
   padding: 0;
   /* Match `.flow-text-block` and the tool wrappers so flow items share one visual gap. */
@@ -25,21 +24,22 @@
    * items and card content share the same left edge. */
   border: 1px solid transparent;
   box-sizing: border-box;
-  font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height, 1.62);
+  /* Collapsed summary line: match `.explore-region--collapsible` (e.g. command count). */
+  font-size: var(--flowchat-font-size-sm);
+  line-height: 1.5;
   transition: padding 0.2s ease;
 }
 
 .thinking-collapsed-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   padding: 0;
   border-radius: 4px;
   cursor: pointer;
   background: transparent;
-  font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height, 1.62);
+  font-size: var(--flowchat-font-size-sm);
+  line-height: 1.5;
 
   &:hover {
     .thinking-label {
@@ -62,11 +62,11 @@
   }
 
   .thinking-label {
-    font-size: var(--flowchat-font-size-base);
+    font-size: var(--flowchat-font-size-sm);
     font-weight: normal;
     color: var(--text-tertiary, #6b7280);
     opacity: 0.8;
-    line-height: var(--flowchat-text-line-height, 1.62);
+    line-height: 1.5;
   }
 }
 
@@ -430,63 +430,3 @@
   }
 }
 
-/* Streaming indicator with ink fade */
-.thinking-content--has-content {
-  -webkit-mask-image: linear-gradient(
-    90deg,
-    #000 0%,
-    #000 50%,
-    rgba(0, 0, 0, 0.7) 70%,
-    rgba(0, 0, 0, 0.4) 85%,
-    rgba(0, 0, 0, 0.15) 100%
-  );
-  mask-image: linear-gradient(
-    90deg,
-    #000 0%,
-    #000 50%,
-    rgba(0, 0, 0, 0.7) 70%,
-    rgba(0, 0, 0, 0.4) 85%,
-    rgba(0, 0, 0, 0.15) 100%
-  );
-  animation: thinking-ink-fade-pulse 2s ease-in-out infinite;
-}
-
-/* Ink fade pulse animation */
-@keyframes thinking-ink-fade-pulse {
-  0%, 100% {
-    -webkit-mask-image: linear-gradient(
-      90deg,
-      #000 0%,
-      #000 50%,
-      rgba(0, 0, 0, 0.7) 70%,
-      rgba(0, 0, 0, 0.4) 85%,
-      rgba(0, 0, 0, 0.15) 100%
-    );
-    mask-image: linear-gradient(
-      90deg,
-      #000 0%,
-      #000 50%,
-      rgba(0, 0, 0, 0.7) 70%,
-      rgba(0, 0, 0, 0.4) 85%,
-      rgba(0, 0, 0, 0.15) 100%
-    );
-  }
-  50% {
-    -webkit-mask-image: linear-gradient(
-      90deg,
-      #000 0%,
-      #000 55%,
-      rgba(0, 0, 0, 0.75) 75%,
-      rgba(0, 0, 0, 0.5) 90%,
-      rgba(0, 0, 0, 0.25) 100%
-    );
-    mask-image: linear-gradient(
-      90deg,
-      #000 0%,
-      #000 55%,
-      rgba(0, 0, 0, 0.75) 75%,
-      rgba(0, 0, 0, 0.5) 90%,
-      rgba(0, 0, 0, 0.25) 100%
-    );
-  }
-}

@@ -88,55 +88,12 @@ impl AIWorkStateService {
         git_diff: &str,
         language: &Language,
     ) -> String {
-        // AI instruction for response language (not user-facing)
-        let lang_instruction = match language {
-            Language::Chinese => "Please respond in Chinese.",
-            Language::English => "Please respond in English.",
-        };
-
-        // Build Git state section
-        let git_state_section = if let Some(git) = git_state {
-            let mut section = format!(
-                "## Git Status\n\n- Current branch: {}\n- Unstaged files: {}\n- Staged files: {}\n- Unpushed commits: {}\n",
-                git.current_branch, git.unstaged_files, git.staged_files, git.unpushed_commits
-            );
-
-            if !git.modified_files.is_empty() {
-                section.push_str("\nModified files:\n");
-                for file in git.modified_files.iter().take(10) {
-                    section.push_str(&format!("  - {} ({:?})\n", file.path, file.change_type));
-                }
-            }
-            section
-        } else {
-            String::new()
-        };
-
-        // Build Git diff section
-        let git_diff_section = if !git_diff.is_empty() {
-            let max_diff_length = 8000;
-            if git_diff.len() > max_diff_length {
-                let truncated_diff = git_diff
-                    .char_indices()
-                    .take_while(|(idx, _)| *idx < max_diff_length)
-                    .map(|(_, c)| c)
-                    .collect::<String>();
-                format!(
-                    "## Code Changes (Git Diff)\n\n{}\n\n... (diff content too long, truncated, total length: {} characters)\n",
-                    truncated_diff, git_diff.len()
-                )
-            } else {
-                format!("## Code Changes (Git Diff)\n\n{}", git_diff)
-            }
-        } else {
-            String::new()
-        };
-
-        // Use template replacement
-        WORK_STATE_ANALYSIS_PROMPT
-            .replace("{lang_instruction}", lang_instruction)
-            .replace("{git_state_section}", &git_state_section)
-            .replace("{git_diff_section}", &git_diff_section)
+        super::utils::build_complete_analysis_prompt(
+            WORK_STATE_ANALYSIS_PROMPT,
+            git_state,
+            git_diff,
+            language,
+        )
     }
 
     fn parse_complete_analysis(&self, response: &str) -> AgentResult<AIGeneratedAnalysis> {
@@ -158,144 +115,39 @@ impl AIWorkStateService {
             AgentError::internal_error(format!("Failed to parse complete analysis response: {}", e))
         })?;
 
-        let summary = parsed["summary"]
-            .as_str()
-            .unwrap_or("You were working on development, with multiple files modified.")
-            .to_string();
+        let parsed_analysis = super::utils::parse_complete_analysis_value(&parsed);
 
-        let ongoing_work = Vec::new();
-
-        let mut predicted_actions =
-            if let Some(actions_array) = parsed["predicted_actions"].as_array() {
-                self.parse_predicted_actions_from_value(actions_array)?
-            } else {
-                Vec::new()
-            };
-
-        if predicted_actions.len() < 3 {
+        if parsed_analysis.predicted_actions_count < 3 {
             warn!(
                 "AI generated insufficient predicted actions ({}), adding defaults",
-                predicted_actions.len()
+                parsed_analysis.predicted_actions_count
             );
-            while predicted_actions.len() < 3 {
-                predicted_actions.push(PredictedAction {
-                    description: "Continue current development".to_string(),
-                    priority: ActionPriority::Medium,
-                    icon: String::new(),
-                    is_reminder: false,
-                });
-            }
-        } else if predicted_actions.len() > 3 {
+        } else if parsed_analysis.predicted_actions_count > 3 {
             warn!(
                 "AI generated too many predicted actions ({}), truncating to 3",
-                predicted_actions.len()
+                parsed_analysis.predicted_actions_count
             );
-            predicted_actions.truncate(3);
         }
 
-        let mut quick_actions = if let Some(actions_array) = parsed["quick_actions"].as_array() {
-            self.parse_quick_actions_from_value(actions_array)?
-        } else {
-            Vec::new()
-        };
-
-        if quick_actions.len() < 6 {
+        if parsed_analysis.quick_actions_count < 6 {
             // Don't fill defaults here, frontend has its own defaultActions with i18n support
             warn!(
                 "AI generated insufficient quick actions ({}), frontend will use defaults",
-                quick_actions.len()
+                parsed_analysis.quick_actions_count
             );
-        } else if quick_actions.len() > 6 {
+        } else if parsed_analysis.quick_actions_count > 6 {
             warn!(
                 "AI generated too many quick actions ({}), truncating to 6",
-                quick_actions.len()
+                parsed_analysis.quick_actions_count
             );
-            quick_actions.truncate(6);
         }
 
         debug!(
             "Parsing completed: predicted_actions={}, quick_actions={}",
-            predicted_actions.len(),
-            quick_actions.len()
+            parsed_analysis.analysis.predicted_actions.len(),
+            parsed_analysis.analysis.quick_actions.len()
         );
 
-        Ok(AIGeneratedAnalysis {
-            summary,
-            ongoing_work,
-            predicted_actions,
-            quick_actions,
-        })
-    }
-
-    fn parse_predicted_actions_from_value(
-        &self,
-        actions_array: &[serde_json::Value],
-    ) -> AgentResult<Vec<PredictedAction>> {
-        let mut actions = Vec::new();
-
-        for action_value in actions_array {
-            let description = action_value["description"]
-                .as_str()
-                .unwrap_or("Continue current work")
-                .to_string();
-
-            let priority_str = action_value["priority"].as_str().unwrap_or("Medium");
-
-            let priority = match priority_str {
-                "High" => ActionPriority::High,
-                "Low" => ActionPriority::Low,
-                _ => ActionPriority::Medium,
-            };
-
-            let icon = action_value["icon"].as_str().unwrap_or("").to_string();
-
-            let is_reminder = action_value["is_reminder"].as_bool().unwrap_or(false);
-
-            actions.push(PredictedAction {
-                description,
-                priority,
-                icon,
-                is_reminder,
-            });
-        }
-
-        Ok(actions)
-    }
-
-    fn parse_quick_actions_from_value(
-        &self,
-        actions_array: &[serde_json::Value],
-    ) -> AgentResult<Vec<QuickAction>> {
-        let mut quick_actions = Vec::new();
-
-        for action_value in actions_array {
-            let title = action_value["title"]
-                .as_str()
-                .unwrap_or("Quick Action")
-                .to_string();
-
-            let command = action_value["command"].as_str().unwrap_or("").to_string();
-
-            let icon = action_value["icon"].as_str().unwrap_or("").to_string();
-
-            let action_type_str = action_value["action_type"].as_str().unwrap_or("Custom");
-
-            let action_type = match action_type_str {
-                "Continue" => QuickActionType::Continue,
-                "ViewStatus" => QuickActionType::ViewStatus,
-                "Commit" => QuickActionType::Commit,
-                "Visualize" => QuickActionType::Visualize,
-                _ => QuickActionType::Custom,
-            };
-
-            quick_actions.push(QuickAction {
-                title,
-                command,
-                icon,
-                action_type,
-            });
-        }
-
-        Ok(quick_actions)
+        Ok(parsed_analysis.analysis)
     }
 }

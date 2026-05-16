@@ -117,7 +117,6 @@ pub(super) async fn build_session_config_options(
         .get_modes_info()
         .await
         .into_iter()
-        .filter(|info| info.enabled)
         .collect::<Vec<_>>();
     let current_mode_id = preferred_mode_id
         .and_then(|preferred| {

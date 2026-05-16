@@ -1,0 +1,165 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.quick-actions-config {
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-6;
+  }
+
+  // ── List ────────────────────────────────────────────────────────────────
+  &__list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  // ── Empty state ─────────────────────────────────────────────────────────
+  &__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 32px 16px;
+    color: var(--color-text-muted);
+    text-align: center;
+
+    p {
+      margin: 0;
+      font-size: var(--font-size-sm);
+    }
+  }
+
+  &__empty-icon {
+    opacity: 0.35;
+  }
+
+  // ── Action row ──────────────────────────────────────────────────────────
+  &__row {
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background var(--motion-fast) var(--easing-standard);
+
+    &:last-child { border-bottom: none; }
+
+    &:hover {
+      background: var(--element-bg-hover);
+
+      .quick-actions-config__row-controls {
+        opacity: 1;
+      }
+    }
+  }
+
+  &__row-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+  }
+
+  &__row-body {
+    min-width: 0;
+    padding: 0 12px;
+  }
+
+  &__row-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary);
+    line-height: 1.4;
+  }
+
+  &__row-prompt {
+    margin-top: 2px;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+  }
+
+  &__row-controls {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity var(--motion-fast) var(--easing-standard);
+  }
+
+  &__delete-btn {
+    &:hover { color: var(--color-error, #ef4444); }
+  }
+
+  // ── Modal body ──────────────────────────────────────────────────────────
+  // Modal `contentInset` only adds horizontal padding; offset from title bar + bottom edge here.
+  &__modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-4;
+    padding-block: $size-gap-4 $size-gap-3;
+  }
+
+  &__modal-icon-preview {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  &__modal-action-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  &__modal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__modal-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium, 500);
+    color: var(--color-text-primary);
+  }
+
+  &__modal-textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 80px;
+  }
+
+  &__modal-hint {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  &__modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: $size-gap-2;
+    margin-top: $size-gap-3;
+    padding-top: $size-gap-3;
+    border-top: 1px solid var(--border-subtle);
+  }
+}

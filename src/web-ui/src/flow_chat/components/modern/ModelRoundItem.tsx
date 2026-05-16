@@ -20,8 +20,10 @@ import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { ExportImageButton } from './ExportImageButton';
 import { ForkSessionButton } from './ForkSessionButton';
+import { buildModelRoundItemGroups, COMPLETED_TOOL_TRANSIENT_MS } from './modelRoundItemGrouping';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
+import { SmoothHeightCollapse } from './SmoothHeightCollapse';
 import './ModelRoundItem.scss';
 import './SubagentItems.scss';
 
@@ -31,15 +33,7 @@ interface ModelRoundItemProps {
   round: ModelRound;
   turnId: string;
   isLastRound?: boolean;
-}
-
-function hasActiveStreamingNarrative(items: FlowItem[]): boolean {
-  return items.some(item => {
-    if (item.type !== 'text' && item.type !== 'thinking') return false;
-    const maybeStreaming = item as { isStreaming?: boolean; status?: string };
-    return maybeStreaming.isStreaming === true &&
-      (maybeStreaming.status === 'streaming' || maybeStreaming.status === 'running');
-  });
+  isTurnComplete?: boolean;
 }
 
 function useTaskCollapsed(toolId: string): boolean {
@@ -107,7 +101,7 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
 });
 
 export const ModelRoundItem = React.memo<ModelRoundItemProps>(
-  ({ round, turnId, isLastRound = false }) => {
+  ({ round, turnId, isLastRound = false, isTurnComplete = false }) => {
     const { t } = useTranslation('flow-chat');
     const { sessionId } = useFlowChatContext();
     const [copied, setCopied] = useState(false);
@@ -136,132 +130,44 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       [round.items]
     );
     
-    type ItemGroup = 
-      | { type: 'explore'; items: FlowItem[]; isLast: boolean }
-      | { type: 'critical'; item: FlowItem }
-      | { type: 'subagent'; parentTaskToolId: string; items: FlowItem[] };
-    
+    const latestCompletedToolEndTime = useMemo(() => {
+      return sortedItems.reduce((latest, item) => {
+        if (item.type !== 'tool' || item.status !== 'completed') return latest;
+        const endTime = (item as FlowToolItem).endTime;
+        return typeof endTime === 'number' ? Math.max(latest, endTime) : latest;
+      }, 0);
+    }, [sortedItems]);
+    const [transientNowMs, setTransientNowMs] = useState(() => Date.now());
+
+    useEffect(() => {
+      if (latestCompletedToolEndTime <= 0) return;
+
+      const remainingMs = latestCompletedToolEndTime + COMPLETED_TOOL_TRANSIENT_MS - Date.now();
+      if (remainingMs <= 0) {
+        setTransientNowMs(Date.now());
+        return;
+      }
+
+      setTransientNowMs(Date.now());
+      const timeoutId = window.setTimeout(() => {
+        setTransientNowMs(Date.now());
+      }, remainingMs);
+
+      return () => window.clearTimeout(timeoutId);
+    }, [latestCompletedToolEndTime]);
+
     // Group items in two passes:
     // 1) group subagent items
     // 2) group normal items into explore/critical via anchor tool
     const groupedItems = useMemo(() => {
-      const deferExploreGrouping =
-        round.renderHints?.disableExploreGrouping === true ||
-        (round.isStreaming && hasActiveStreamingNarrative(sortedItems));
-      const intermediateGroups: Array<{ type: 'normal', item: FlowItem } | { type: 'subagent', parentTaskToolId: string, items: FlowItem[] }> = [];
-      let currentSubagentGroup: { parentTaskToolId: string, items: FlowItem[] } | null = null;
-      
-      for (const item of sortedItems) {
-        const isSubagentItemFlag = (item as any).isSubagentItem === true;
-        const parentTaskToolId = (item as any).parentTaskToolId;
-        
-        if (isSubagentItemFlag && parentTaskToolId) {
-          if (currentSubagentGroup && currentSubagentGroup.parentTaskToolId === parentTaskToolId) {
-            currentSubagentGroup.items.push(item);
-          } else {
-            if (currentSubagentGroup) {
-              intermediateGroups.push({ type: 'subagent', ...currentSubagentGroup });
-            }
-            currentSubagentGroup = { parentTaskToolId, items: [item] };
-          }
-        } else {
-          if (currentSubagentGroup) {
-            intermediateGroups.push({ type: 'subagent', ...currentSubagentGroup });
-            currentSubagentGroup = null;
-          }
-          intermediateGroups.push({ type: 'normal', item });
-        }
-      }
-      
-      if (currentSubagentGroup) {
-        intermediateGroups.push({ type: 'subagent', ...currentSubagentGroup });
-      }
-      
-      // Core idea: text/thinking collapse is decided by the next "anchor tool".
-      // - Anchor tool = look forward, skip text/thinking, take the first tool.
-      // - If anchor tool is collapsible -> collapse text/thinking with the tool.
-      // - If anchor tool is critical -> show text/thinking with the tool.
-      
-      const finalGroups: ItemGroup[] = [];
-      let exploreBuffer: FlowItem[] = [];
-      let pendingBuffer: FlowItem[] = [];
-      
-      const normalItems: FlowItem[] = [];
-      for (let i = 0; i < intermediateGroups.length; i++) {
-        if (intermediateGroups[i].type === 'normal') {
-          normalItems.push((intermediateGroups[i] as any).item);
-        }
-      }
-      
-      const flushExploreBuffer = (isLast: boolean) => {
-        if (exploreBuffer.length > 0) {
-          finalGroups.push({ type: 'explore', items: [...exploreBuffer], isLast });
-          exploreBuffer = [];
-        }
-      };
-      
-      const flushPendingAsCritical = () => {
-        for (const item of pendingBuffer) {
-          finalGroups.push({ type: 'critical', item });
-        }
-        pendingBuffer = [];
-      };
-      
-      let normalItemIndex = 0;
-      
-      for (let i = 0; i < intermediateGroups.length; i++) {
-        const group = intermediateGroups[i];
-        const isLastGroup = i === intermediateGroups.length - 1;
-        
-        if (group.type === 'subagent') {
-          flushExploreBuffer(false);
-          flushPendingAsCritical();
-          finalGroups.push(group);
-        } else {
-          const item = group.item;
-          const isLastNormalItem = normalItemIndex === normalItems.length - 1;
-          
-          if (item.type === 'text' || item.type === 'thinking') {
-            pendingBuffer.push(item);
-            
-            if (isLastNormalItem) {
-              flushExploreBuffer(false);
-              flushPendingAsCritical();
-            }
-          } else if (item.type === 'tool') {
-            const toolName = (item as FlowToolItem).toolName;
-            const isExploreTool = isCollapsibleTool(toolName);
-            
-            if (isExploreTool) {
-              if (deferExploreGrouping) {
-                flushExploreBuffer(false);
-                flushPendingAsCritical();
-                finalGroups.push({ type: 'critical', item });
-                normalItemIndex++;
-                continue;
-              }
-              exploreBuffer.push(...pendingBuffer, item);
-              pendingBuffer = [];
-              
-              if (isLastNormalItem || isLastGroup) {
-                flushExploreBuffer(true);
-              }
-            } else {
-              flushExploreBuffer(false);
-              flushPendingAsCritical();
-              finalGroups.push({ type: 'critical', item });
-            }
-          }
-          
-          normalItemIndex++;
-        }
-      }
-      
-      flushExploreBuffer(true);
-      flushPendingAsCritical();
-      
-      return finalGroups;
-    }, [round.isStreaming, round.renderHints?.disableExploreGrouping, sortedItems]);
+      return buildModelRoundItemGroups({
+        items: sortedItems,
+        isStreaming: round.isStreaming,
+        disableExploreGrouping: round.renderHints?.disableExploreGrouping === true,
+        isCollapsibleTool,
+        nowMs: transientNowMs,
+      });
+    }, [round.isStreaming, round.renderHints?.disableExploreGrouping, sortedItems, transientNowMs]);
 
     const extractDialogTurnContent = useCallback(() => {
       const flowChatStore = FlowChatStore.getInstance();
@@ -424,7 +330,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           }
         })}
         
-        {isLastRound && hasContent && !round.isStreaming && (
+        {isTurnComplete && isLastRound && hasContent && !round.isStreaming && (
           <div className="model-round-item__footer">
             <ForkSessionButton sessionId={sessionId} turnId={turnId} />
 
@@ -453,7 +359,9 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     // In complete state, compare items array reference to detect tool state changes.
     return (
       prev.round.id === next.round.id &&
-      prev.round.items === next.round.items
+      prev.round.items === next.round.items &&
+      prev.isLastRound === next.isLastRound &&
+      prev.isTurnComplete === next.isTurnComplete
     );
   }
 );
@@ -561,21 +469,23 @@ const SubagentItemsContainer = React.memo<SubagentItemsContainerProps>(({
 
   return (
     <div className={`subagent-items-wrapper ${isCollapsed ? 'subagent-items-wrapper--collapsed' : 'subagent-items-wrapper--expanded'}`}>
-      <div
-        ref={containerRef}
-        className={`subagent-items-container ${isCollapsed ? 'subagent-items-container--collapsed' : 'subagent-items-container--expanded'}`}
-        data-parent-tool-id={parentTaskToolId}
-      >
-        {items.map((item, idx) => (
-          <SubagentItemRenderer
-            key={item.id}
-            item={item}
-            turnId={turnId}
-            roundId={roundId}
-            isLastItem={idx === items.length - 1}
-          />
-        ))}
-      </div>
+      <SmoothHeightCollapse isOpen={!isCollapsed} className="subagent-items-collapse">
+        <div
+          ref={containerRef}
+          className={`subagent-items-container ${isCollapsed ? 'subagent-items-container--collapsed' : 'subagent-items-container--expanded'}`}
+          data-parent-tool-id={parentTaskToolId}
+        >
+          {items.map((item, idx) => (
+            <SubagentItemRenderer
+              key={item.id}
+              item={item}
+              turnId={turnId}
+              roundId={roundId}
+              isLastItem={idx === items.length - 1}
+            />
+          ))}
+        </div>
+      </SmoothHeightCollapse>
     </div>
   );
 });
@@ -655,17 +565,17 @@ const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundI
     sessionId,
   } = useFlowChatContext();
   
-  const handleConfirm = useCallback(async (toolId: string, updatedInput?: any) => {
+  const handleConfirm = useCallback(async (toolId: string, updatedInput?: any, permissionOptionId?: string, approve?: boolean) => {
     if (onToolConfirm) {
-      await onToolConfirm(toolId, updatedInput);
+      await onToolConfirm(toolId, updatedInput, permissionOptionId, approve);
     }
   }, [onToolConfirm]);
   
-  const handleReject = useCallback(async () => {
+  const handleReject = useCallback(async (toolId: string, permissionOptionId?: string) => {
     if (onToolReject) {
-      await onToolReject(item.id);
+      await onToolReject(toolId, permissionOptionId);
     }
-  }, [onToolReject, item.id]);
+  }, [onToolReject]);
   
   const handleOpenInEditor = useCallback((filePath: string) => {
     if (onFileViewRequest) {
@@ -695,15 +605,17 @@ const SubagentItemRenderer = React.memo<{ item: FlowItem; turnId: string; roundI
     
     case 'tool':
       return (
-        <FlowToolCard
-          toolItem={item as FlowToolItem}
-          onConfirm={handleConfirm}
-          onReject={handleReject}
-          onOpenInEditor={handleOpenInEditor}
-          onOpenInPanel={handleOpenInPanel}
-          sessionId={sessionId}
-          turnId={turnId}
-        />
+        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+          <FlowToolCard
+            toolItem={item as FlowToolItem}
+            onConfirm={handleConfirm}
+            onReject={handleReject}
+            onOpenInEditor={handleOpenInEditor}
+            onOpenInPanel={handleOpenInPanel}
+            sessionId={sessionId}
+            turnId={turnId}
+          />
+        </div>
       );
 
     default:
@@ -782,19 +694,27 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, turnId, isLas
         <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} isLastItem={isLastItem} />
       );
     
-    case 'tool':
+    case 'tool': {
+      const toolItem = item as FlowToolItem;
+      const isCompletedTool = toolItem.status === 'completed';
+      const toolClassName = [
+        'flowchat-flow-item',
+        'flowchat-flow-item--tool-transition',
+        isCompletedTool ? 'flowchat-flow-item--tool-completed' : 'flowchat-flow-item--tool-active',
+      ].join(' ');
+
       return wrapContent(
-        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+        <div className={toolClassName} data-flow-item-id={item.id} data-flow-item-type="tool">
           <FlowToolCard
-            toolItem={item as FlowToolItem}
-            onConfirm={async (toolId: string, updatedInput?: any) => {
+            toolItem={toolItem}
+            onConfirm={async (toolId: string, updatedInput?: any, permissionOptionId?: string, approve?: boolean) => {
               if (onToolConfirm) {
-                await onToolConfirm(toolId, updatedInput);
+                await onToolConfirm(toolId, updatedInput, permissionOptionId, approve);
               }
             }}
-            onReject={async () => {
+            onReject={async (_toolId: string, permissionOptionId?: string) => {
               if (onToolReject) {
-                await onToolReject(item.id);
+                await onToolReject(item.id, permissionOptionId);
               }
             }}
             onOpenInEditor={(filePath: string) => {
@@ -813,6 +733,7 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, turnId, isLas
           />
         </div>
       );
+    }
 
     default:
       return null;

@@ -210,6 +210,11 @@ impl PathManager {
         }
     }
 
+    /// Get BitFun-managed built-in skills directory under the user skills root.
+    pub fn builtin_skills_dir(&self) -> PathBuf {
+        self.user_skills_dir().join(".system")
+    }
+
     /// Get cache root directory: ~/.config/bitfun/cache/
     pub fn cache_root(&self) -> PathBuf {
         self.user_root.join("cache")
@@ -304,6 +309,12 @@ impl PathManager {
             .join("mode_skills.json")
     }
 
+    /// Get project subagent overrides file: {project}/.bitfun/config/agent_subagents.json
+    pub fn project_agent_subagents_file(&self, workspace_path: &Path) -> PathBuf {
+        self.project_internal_config_dir(workspace_path)
+            .join("agent_subagents.json")
+    }
+
     /// Get project agent directory: {project}/.bitfun/agents/
     pub fn project_agents_dir(&self, workspace_path: &Path) -> PathBuf {
         self.project_root(workspace_path).join("agents")
@@ -332,12 +343,6 @@ impl PathManager {
     /// Get project memory directory: ~/.bitfun/projects/<workspace-slug>/memory/
     pub fn project_memory_dir(&self, workspace_path: &Path) -> PathBuf {
         self.project_runtime_root(workspace_path).join("memory")
-    }
-
-    /// Get project AI memories file: ~/.bitfun/projects/<workspace-slug>/ai_memories.json
-    pub fn project_ai_memories_file(&self, workspace_path: &Path) -> PathBuf {
-        self.project_runtime_root(workspace_path)
-            .join("ai_memories.json")
     }
 
     fn project_runtime_slug(&self, workspace_path: &Path) -> String {

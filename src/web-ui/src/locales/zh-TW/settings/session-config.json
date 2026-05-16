@@ -1,6 +1,12 @@
 {
-  "title": "會話配置",
-  "subtitle": "會話相關 AI 功能與工具執行行為",
+  "personalizationPage": {
+    "title": "個性化",
+    "subtitle": "會話標題自動生成、Agent 夥伴"
+  },
+  "permissionsPage": {
+    "title": "權限管理",
+    "subtitle": "加速工作區搜尋、工具執行、Computer use、瀏覽器控制與偵錯模式"
+  },
   "features": {
     "sessionTitle": {
       "title": "會話標題自動生成",
@@ -19,9 +25,7 @@
       "displayDesktopDesc": "在軟體外顯示為置頂的無邊框小視窗，可拖動。",
       "petLabel": "夥伴形象",
       "petDescription": "選擇預置形象，或導入從 petdex.crafter.run 下載的 Petdex zip。",
-      "defaultPet": "默認小熊貓",
       "petPlaceholder": "選擇夥伴形象",
-      "groupBuiltin": "內置",
       "groupPreset": "預置",
       "groupImported": "已導入",
       "import": "導入",
@@ -64,7 +68,7 @@
   },
   "browserControl": {
     "sectionTitle": "瀏覽器控制",
-    "sectionDescription": "複用你的默認瀏覽器，保留登錄態、Cookie 和擴展。",
+    "sectionDescription": "選擇瀏覽器並啟用 CDP 控制。",
     "desktopOnly": "瀏覽器控制僅在 BitFun 桌面應用中可用。",
     "status": "連接狀態",
     "statusDesc": "",
@@ -103,10 +107,6 @@
   },
   "loading": {
     "text": "加載配置中..."
-  },
-  "maxRounds": {
-    "label": "最大對話輪次",
-    "description": "單次對話中 AI 的最大執行輪次，達到後會暫停。複雜任務可適當提高。"
   },
   "messages": {
     "saveSuccess": "設置已保存",

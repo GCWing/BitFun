@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::AsyncReadExt;
 
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 
 /// LogTool - log viewing and analysis tool
@@ -185,6 +185,14 @@ Usage examples:
    Log(action="read", log_path="/var/log/app.log")
 
 The tool will return the log content or analysis results that you can use to diagnose issues."#.to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "Read and analyze log files for debugging and monitoring.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

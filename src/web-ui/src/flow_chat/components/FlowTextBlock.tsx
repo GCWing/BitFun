@@ -82,7 +82,6 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   const isActivelyStreaming = textItem.isStreaming &&
     (textItem.status === 'streaming' || textItem.status === 'running') &&
     isContentGrowing;
-  const hasContent = content.length > 0;
 
   if (textItem.runtimeStatus) {
     const hints = i18n.language.startsWith('zh') ? processingHintsZh : processingHintsEn;
@@ -110,7 +109,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
           }}
         />
       ) : (
-        <div className={`text-content ${isActivelyStreaming && hasContent ? 'text-content--streaming' : ''}`}>
+        <div className="text-content">
           {displayContent}
         </div>
       )}

@@ -40,9 +40,7 @@ impl TokenCounter {
         if let Some(tool_calls) = &message.tool_calls {
             for tool_call in tool_calls {
                 total += Self::estimate_tokens(&tool_call.name);
-                if let Ok(json_str) = serde_json::to_string(&tool_call.arguments) {
-                    total += Self::estimate_tokens(&json_str);
-                }
+                total += Self::estimate_tokens(&tool_call.serialized_arguments());
                 total += 10;
             }
         }

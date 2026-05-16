@@ -4,7 +4,7 @@ pub mod errors;
 pub mod front_matter_markdown;
 pub mod json_extract;
 pub mod plain_output;
-pub mod process_manager;
+pub use bitfun_services_core::process_manager;
 pub mod timing;
 pub mod token_counter;
 pub mod types;

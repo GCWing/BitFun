@@ -10,11 +10,19 @@
 }
 
 .subagent-items-wrapper--collapsed {
-  display: none;
+  pointer-events: none;
 }
 
 .subagent-items-wrapper--expanded {
   display: block;
+}
+
+.subagent-items-collapse {
+  overflow: hidden;
+}
+
+.subagent-items-collapse.smooth-height-collapse--open {
+  overflow: visible;
 }
 
 // Subagent container for items under the same parent task.
@@ -94,10 +102,25 @@
   display: block;
 
   &.subagent-item--collapsed {
-    display: none;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transform: translateY(-2px);
+    transition:
+      max-height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.18s ease,
+      transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
   }
 
   &.subagent-item--expanded {
-    display: block;
+    max-height: 520px;
+    opacity: 1;
+    overflow: visible;
+    transform: translateY(0);
+    transition:
+      max-height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.18s ease,
+      transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }

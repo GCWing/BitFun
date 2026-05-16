@@ -56,10 +56,12 @@ body, html { margin: 0; padding: 0; height: 100%; }
   --rx-shadow-card: 0 1px 0 rgba(255,255,255,0.025) inset, 0 4px 14px -8px rgba(0,0,0,0.55);
   --rx-shadow-elevated: 0 1px 0 rgba(255,255,255,0.035) inset, 0 16px 32px -18px rgba(0,0,0,0.7);
 
-  --rx-mono: var(--bitfun-font-mono, ui-monospace, "SFMono-Regular", "JetBrains Mono",
-              Menlo, "Cascadia Code", Consolas, "Liberation Mono", monospace);
+  --rx-mono: var(--bitfun-font-mono, "JetBrains Mono", "FiraCode", ui-monospace, "SFMono-Regular",
+              "SF Mono", Menlo, Monaco, "Cascadia Mono", "Cascadia Code", Consolas,
+              "Liberation Mono", "Courier New", monospace);
   --rx-sans: var(--bitfun-font-sans, -apple-system, BlinkMacSystemFont, "SF Pro Text",
-              "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif);
+              "PingFang SC", "Hiragino Sans GB", "Segoe UI", "Microsoft YaHei UI",
+              "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif);
 
   --rx-dur: 200ms;
   --rx-ease: cubic-bezier(.2,.8,.2,1);
@@ -83,7 +85,7 @@ body, html { margin: 0; padding: 0; height: 100%; }
 
 body {
   font-family: var(--rx-sans);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--rx-text);
   background: var(--rx-bg);
 }
@@ -132,7 +134,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 .brand__text { min-width: 0; }
 .brand__title {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--rx-text);
   letter-spacing: 0.1px;
@@ -143,7 +145,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 .brand__subtitle {
   margin: 2px 0 0;
   font-family: var(--rx-mono);
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--rx-text-mute);
   white-space: nowrap;
   overflow: hidden;
@@ -152,7 +154,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 
 .status {
   font-family: var(--rx-mono);
-  font-size: 11px;
+  font-size: 12px;
   padding: 5px 12px;
   border-radius: 999px;
   background: var(--rx-surface);
@@ -225,7 +227,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   align-items: center;
   gap: 8px;
   font-family: var(--rx-sans);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--rx-text-soft);
   margin: 0 0 11px;
   font-weight: 600;
@@ -235,7 +237,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 .hint {
   margin-left: auto;
   font-family: var(--rx-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--rx-text-mute);
   font-weight: 400;
   white-space: nowrap;
@@ -276,7 +278,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   outline: none;
   color: var(--rx-text);
   font-family: var(--rx-mono);
-  font-size: 14px;
+  font-size: 15px;
   padding: 6px 0;
   caret-color: var(--rx-accent);
 }
@@ -290,7 +292,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   background: var(--rx-surface-2);
   color: var(--rx-text-mute);
   font-family: var(--rx-mono);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -309,7 +311,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 .pattern-error {
   margin-top: 8px;
   font-family: var(--rx-mono);
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--rx-error);
   padding: 8px 12px;
   background: color-mix(in srgb, var(--rx-error) 8%, transparent);
@@ -338,7 +340,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 }
 .match-count {
   font-family: var(--rx-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--rx-text-mute);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -350,7 +352,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   padding: 5px 10px;
   border-radius: 5px;
   font-family: var(--rx-sans);
-  font-size: 11.5px;
+  font-size: 12.5px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -379,7 +381,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   width: 100%; height: 100%;
   padding: 12px 14px;
   font-family: var(--rx-mono);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
@@ -455,7 +457,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 .empty {
   color: var(--rx-text-dim);
   font-family: var(--rx-mono);
-  font-size: 11.5px;
+  font-size: 12.5px;
   padding: 18px 6px;
   text-align: center;
 }
@@ -490,12 +492,12 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   color: var(--rx-match);
   font-family: var(--rx-mono);
   font-weight: 600;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-variant-numeric: tabular-nums;
 }
 .match__loc {
   font-family: var(--rx-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--rx-text-mute);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -505,7 +507,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 }
 .match__text {
   font-family: var(--rx-mono);
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--rx-text);
   white-space: nowrap;
   overflow: hidden;
@@ -515,7 +517,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 .match__text--empty { color: var(--rx-text-dim); font-style: italic; }
 .match__more {
   font-family: var(--rx-mono);
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--rx-group);
   background: color-mix(in srgb, var(--rx-group) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--rx-group) 36%, transparent);
@@ -535,7 +537,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   padding-top: 6px;
   border-top: 1px dashed var(--rx-border-strong);
   font-family: var(--rx-mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 .match__group-tag {
   color: var(--rx-group);
@@ -561,7 +563,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   border: 1px solid var(--rx-border-strong);
   color: var(--rx-text);
   font-family: var(--rx-mono);
-  font-size: 13px;
+  font-size: 14px;
   padding: 9px 12px;
   border-radius: 5px;
   outline: none;
@@ -582,7 +584,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   border: 1px solid var(--rx-border);
   border-left: 2px solid var(--rx-accent);
   font-family: var(--rx-mono);
-  font-size: 12px;
+  font-size: 13px;
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--rx-text-soft);
@@ -628,14 +630,14 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 .lib-item:focus-visible { outline: 2px solid var(--rx-accent); outline-offset: 1px; }
 .lib-item__name {
   font-family: var(--rx-sans);
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--rx-text);
   margin-bottom: 3px;
   font-weight: 500;
 }
 .lib-item__pattern {
   font-family: var(--rx-mono);
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--rx-text-mute);
   word-break: break-all;
   line-height: 1.45;
@@ -645,7 +647,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 .ref { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .ref li {
   font-family: var(--rx-sans);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--rx-text-soft);
   line-height: 1.6;
 }
@@ -656,7 +658,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   border-radius: 3px;
   font-family: var(--rx-mono);
   color: var(--rx-accent-strong);
-  font-size: 11px;
+  font-size: 12px;
   margin-right: 2px;
 }
 

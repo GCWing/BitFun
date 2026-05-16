@@ -237,27 +237,6 @@
     line-height: var(--flowchat-text-line-height, 1.62);
     white-space: pre-wrap;
     word-wrap: break-word;
-    
-    // Streaming output uses an ink seep effect
-    &--streaming {
-      -webkit-mask-image: linear-gradient(
-        90deg,
-        #000 0%,
-        #000 50%,
-        rgba(0, 0, 0, 0.7) 70%,
-        rgba(0, 0, 0, 0.4) 85%,
-        rgba(0, 0, 0, 0.15) 100%
-      );
-      mask-image: linear-gradient(
-        90deg,
-        #000 0%,
-        #000 50%,
-        rgba(0, 0, 0, 0.7) 70%,
-        rgba(0, 0, 0, 0.4) 85%,
-        rgba(0, 0, 0, 0.15) 100%
-      );
-      animation: ink-fade-pulse 2s ease-in-out infinite;
-    }
   }
   
   &.streaming {
@@ -319,46 +298,6 @@
   .flow-text-block .markdown-renderer .inline-code:hover {
     background: transparent;
     border: none;
-  }
-}
-
-/* Ink seep pulse animation */
-@keyframes ink-fade-pulse {
-  0%, 100% {
-    -webkit-mask-image: linear-gradient(
-      90deg,
-      #000 0%,
-      #000 50%,
-      rgba(0, 0, 0, 0.7) 70%,
-      rgba(0, 0, 0, 0.4) 85%,
-      rgba(0, 0, 0, 0.15) 100%
-    );
-    mask-image: linear-gradient(
-      90deg,
-      #000 0%,
-      #000 50%,
-      rgba(0, 0, 0, 0.7) 70%,
-      rgba(0, 0, 0, 0.4) 85%,
-      rgba(0, 0, 0, 0.15) 100%
-    );
-  }
-  50% {
-    -webkit-mask-image: linear-gradient(
-      90deg,
-      #000 0%,
-      #000 55%,
-      rgba(0, 0, 0, 0.75) 75%,
-      rgba(0, 0, 0, 0.5) 90%,
-      rgba(0, 0, 0, 0.25) 100%
-    );
-    mask-image: linear-gradient(
-      90deg,
-      #000 0%,
-      #000 55%,
-      rgba(0, 0, 0, 0.75) 75%,
-      rgba(0, 0, 0, 0.5) 90%,
-      rgba(0, 0, 0, 0.25) 100%
-    );
   }
 }
 

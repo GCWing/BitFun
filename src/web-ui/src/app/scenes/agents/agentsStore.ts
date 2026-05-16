@@ -20,6 +20,7 @@ export interface AgentWithCapabilities extends SubagentInfo {
   iconKey?: string;
   /** Distinguishes primary agent mode from sub-agent */
   agentKind?: AgentKind;
+  visibleSubagentCount?: number;
 }
 
 export const CAPABILITY_COLORS: Record<CapabilityCategory, string> = {
@@ -51,8 +52,6 @@ interface AgentsStoreState {
   openCreateAgent: () => void;
   openEditAgent: (agentId: string) => void;
   openReviewTeam: () => void;
-  agentSoloEnabled: Record<string, boolean>;
-  setAgentSoloEnabled: (agentId: string, enabled: boolean) => void;
 }
 
 export const useAgentsStore = create<AgentsStoreState>((set) => ({
@@ -82,12 +81,4 @@ export const useAgentsStore = create<AgentsStoreState>((set) => ({
     agentEditorMode: 'create',
     editingAgentId: null,
   }),
-  agentSoloEnabled: {},
-  setAgentSoloEnabled: (agentId, enabled) =>
-    set((s) => ({
-      agentSoloEnabled: {
-        ...s.agentSoloEnabled,
-        [agentId]: enabled,
-      },
-    })),
 }));

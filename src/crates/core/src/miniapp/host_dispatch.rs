@@ -26,23 +26,13 @@ use crate::miniapp::permission_policy::resolve_policy;
 use crate::miniapp::types::MiniAppPermissions;
 use crate::util::errors::{BitFunError, BitFunResult};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+pub use bitfun_product_domains::miniapp::host_routing::is_host_primitive;
+use bitfun_product_domains::miniapp::host_routing::{
+    command_basename_allowed, command_basename_for_allowlist, host_allowed_by_allowlist,
+};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-
-/// Namespaces handled by the host-side dispatch (no Worker required).
-const HOST_NAMESPACES: &[&str] = &["fs", "shell", "os", "net"];
-
-/// Returns true when `method` belongs to a namespace served by the host directly.
-///
-/// `storage.*` is intentionally excluded: it is routed through `MiniAppManager` from the
-/// command layer so it can share locking with the rest of the app.
-pub fn is_host_primitive(method: &str) -> bool {
-    method
-        .split_once('.')
-        .map(|(ns, _)| HOST_NAMESPACES.contains(&ns))
-        .unwrap_or(false)
-}
 
 /// Dispatch a framework-primitive RPC on the host.
 ///
@@ -139,6 +129,15 @@ fn arg_path(params: &Value, key: &str) -> BitFunResult<PathBuf> {
         .and_then(|v| v.as_str())
         .map(PathBuf::from)
         .ok_or_else(|| BitFunError::parse(format!("missing param: {}", key)))
+}
+
+fn resolve_shell_program(command: &str) -> PathBuf {
+    let has_path_separator = command.contains('/') || command.contains('\\');
+    if has_path_separator {
+        return PathBuf::from(command);
+    }
+
+    which::which(command).unwrap_or_else(|_| PathBuf::from(command))
 }
 
 async fn dispatch_fs(policy: &Value, name: &str, params: &Value) -> BitFunResult<Value> {
@@ -329,18 +328,29 @@ async fn dispatch_shell(
             name
         )));
     }
+    // Two input shapes are supported:
+    //   1. `{ command: "git status" }` — runs through the platform shell (sh -c / cmd /C).
+    //   2. `{ args: ["git", "rev-parse", "--is-inside-work-tree"] }` — spawns the program
+    //      directly with no shell. This is the cross-platform safe form: callers no longer
+    //      need to worry about per-shell quoting (single quotes from sh do not work under
+    //      cmd.exe on Windows, which previously broke `builtin-coding-selfie` git scans).
+    let argv: Option<Vec<String>> = params.get("args").and_then(|v| v.as_array()).map(|a| {
+        a.iter()
+            .filter_map(|x| x.as_str().map(str::to_string))
+            .collect()
+    });
     let command = params
         .get("command")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .trim()
         .to_string();
-    if command.is_empty() {
+    if argv.as_ref().map(|a| a.is_empty()).unwrap_or(true) && command.is_empty() {
         return Err(BitFunError::parse("empty command"));
     }
 
-    // Allowlist check: take the program name (basename of the first whitespace-
-    // separated token, sans extension) and require it to be in `policy.shell.allow`.
+    // Allowlist check: take the program name (basename of the first token, sans
+    // extension) and require it to be in `policy.shell.allow`.
     let allow: Vec<String> = policy
         .get("shell")
         .and_then(|v| v.get("allow"))
@@ -351,13 +361,12 @@ async fn dispatch_shell(
                 .collect()
         })
         .unwrap_or_default();
-    let first_token = command.split_whitespace().next().unwrap_or("");
-    let base = Path::new(first_token)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or(first_token)
-        .to_lowercase();
-    if !allow.is_empty() && !allow.iter().any(|a| a.to_lowercase() == base) {
+    let first_token = match argv.as_ref() {
+        Some(a) => a.first().map(String::as_str).unwrap_or(""),
+        None => command.split_whitespace().next().unwrap_or(""),
+    };
+    let base = command_basename_for_allowlist(first_token);
+    if !command_basename_allowed(&allow, &base) {
         return Err(deny(format!("Command not in allowlist: {}", base)));
     }
 
@@ -374,17 +383,26 @@ async fn dispatch_shell(
         .and_then(|v| v.as_u64())
         .unwrap_or(30_000);
 
-    #[cfg(target_os = "windows")]
-    let mut cmd = {
-        let mut c = crate::util::process_manager::create_tokio_command("cmd");
-        c.args(["/C", &command]);
+    let mut cmd = if let Some(argv) = argv.as_ref() {
+        let program = resolve_shell_program(&argv[0]);
+        let mut c = crate::util::process_manager::create_tokio_command(program.as_os_str());
+        if argv.len() > 1 {
+            c.args(&argv[1..]);
+        }
         c
-    };
-    #[cfg(not(target_os = "windows"))]
-    let mut cmd = {
-        let mut c = crate::util::process_manager::create_tokio_command("sh");
-        c.args(["-c", &command]);
-        c
+    } else {
+        #[cfg(target_os = "windows")]
+        {
+            let mut c = crate::util::process_manager::create_tokio_command("cmd");
+            c.args(["/C", &command]);
+            c
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut c = crate::util::process_manager::create_tokio_command("sh");
+            c.args(["-c", &command]);
+            c
+        }
     };
     cmd.current_dir(&cwd);
     // Match worker_host.js: never let git prompt for credentials, force C locale so
@@ -469,12 +487,7 @@ async fn dispatch_net(policy: &Value, name: &str, params: &Value) -> BitFunResul
                 .collect()
         })
         .unwrap_or_default();
-    if !allow.is_empty()
-        && !allow.iter().any(|a| a == "*")
-        && !allow
-            .iter()
-            .any(|a| host == *a || host.ends_with(&format!(".{}", a)))
-    {
+    if !host_allowed_by_allowlist(&allow, &host) {
         return Err(deny(format!("Domain not in allowlist: {}", host)));
     }
 
@@ -516,4 +529,56 @@ async fn dispatch_net(policy: &Value, name: &str, params: &Value) -> BitFunResul
         "headers": Value::Object(headers_out),
         "body": body,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::miniapp::types::{MiniAppPermissions, ShellPermissions};
+
+    #[test]
+    fn command_basename_allows_windows_git_executable_paths() {
+        assert_eq!(
+            command_basename_for_allowlist(r"C:\Program Files\Git\cmd\git.exe"),
+            "git"
+        );
+        assert_eq!(command_basename_for_allowlist("git.exe"), "git");
+        assert_eq!(command_basename_for_allowlist("/usr/bin/git"), "git");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn host_shell_exec_runs_git_with_workspace_cwd() {
+        let workspace_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let perms = MiniAppPermissions {
+            shell: Some(ShellPermissions {
+                allow: Some(vec!["git".to_string()]),
+            }),
+            ..Default::default()
+        };
+
+        let result = dispatch_host(
+            &perms,
+            "builtin-coding-selfie",
+            workspace_dir,
+            Some(workspace_dir),
+            &[],
+            "shell.exec",
+            json!({
+                "args": ["git", "rev-parse", "--is-inside-work-tree"],
+                "cwd": workspace_dir.to_string_lossy(),
+                "timeout": 8000,
+            }),
+        )
+        .await
+        .expect("git rev-parse should run in the repository workspace");
+
+        assert_eq!(
+            result
+                .get("stdout")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .trim(),
+            "true"
+        );
+    }
 }

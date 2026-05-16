@@ -56,7 +56,12 @@ function resolveToolContext(toolId: string): ResolvedToolContext {
 }
 
 export function useFlowChatToolActions() {
-  const handleToolConfirm = useCallback(async (toolId: string, updatedInput?: any) => {
+  const handleToolConfirm = useCallback(async (
+    toolId: string,
+    updatedInput?: any,
+    permissionOptionId?: string,
+    approve = true,
+  ) => {
     try {
       const { sessionId, toolItem, turnId } = resolveToolContext(toolId);
 
@@ -68,8 +73,8 @@ export function useFlowChatToolActions() {
       const finalInput = updatedInput || toolItem.toolCall?.input;
 
       flowChatStore.updateModelRoundItem(sessionId, turnId, toolId, {
-        userConfirmed: true,
-        status: 'confirmed',
+        userConfirmed: approve,
+        status: approve ? 'confirmed' : 'cancelled',
         toolCall: {
           ...toolItem.toolCall,
           input: finalInput,
@@ -80,7 +85,8 @@ export function useFlowChatToolActions() {
       if (acpPermission?.permissionId) {
         await ACPClientAPI.submitPermissionResponse({
           permissionId: acpPermission.permissionId,
-          approve: true,
+          approve,
+          optionId: permissionOptionId,
         });
         return;
       }
@@ -98,7 +104,7 @@ export function useFlowChatToolActions() {
     }
   }, []);
 
-  const handleToolReject = useCallback(async (toolId: string) => {
+  const handleToolReject = useCallback(async (toolId: string, permissionOptionId?: string) => {
     try {
       const { sessionId, toolItem, turnId } = resolveToolContext(toolId);
 
@@ -117,6 +123,7 @@ export function useFlowChatToolActions() {
         await ACPClientAPI.submitPermissionResponse({
           permissionId: acpPermission.permissionId,
           approve: false,
+          optionId: permissionOptionId,
         });
         return;
       }

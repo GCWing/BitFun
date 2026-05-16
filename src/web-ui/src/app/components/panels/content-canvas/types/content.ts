@@ -15,7 +15,6 @@ export const FILE_VIEWER_TYPES: PanelContentType[] = [
   'code-editor',
   'markdown-viewer',
   'markdown-editor',
-  'mermaid-editor',
   'text-viewer',
   'file-viewer',
   'image-viewer',

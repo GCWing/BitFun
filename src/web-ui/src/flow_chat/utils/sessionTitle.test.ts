@@ -233,6 +233,26 @@ describe('sessionTitle', () => {
     ).toBe(2);
   });
 
+  it('keeps remote workspace counters stable across legacy and portless connection ids', () => {
+    const sessions = [
+      counterSession({
+        sessionId: 'legacy-remote-code-2',
+        workspacePath: '/repo',
+        remoteConnectionId: 'ssh-user@host-a:22',
+        remoteSshHost: undefined,
+        titleI18nParams: { count: 2 },
+      }),
+    ];
+
+    expect(
+      getNextDefaultSessionTitleCount(sessions, {
+        mode: 'code',
+        workspacePath: '/repo',
+        remoteConnectionId: 'ssh-user@host-a',
+      }),
+    ).toBe(3);
+  });
+
   it('ignores child sessions when choosing a main session title count', () => {
     const sessions = [
       counterSession({

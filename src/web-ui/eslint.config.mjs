@@ -20,7 +20,6 @@ export default tseslint.config(
       'src/component-library/preview/**',
       'src/shared/context-system/core/types/**',
       'src/shared/context-menu-system/examples/**',
-      'src/tools/mermaid-editor/examples/**',
     ],
   },
   {

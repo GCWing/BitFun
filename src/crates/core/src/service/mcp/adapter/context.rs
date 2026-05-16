@@ -6,110 +6,13 @@ use super::resource::ResourceAdapter;
 use crate::service::mcp::protocol::{MCPResource, MCPResourceContent};
 use crate::service::mcp::server::MCPServerManager;
 use crate::util::errors::{BitFunError, BitFunResult};
+pub use bitfun_services_integrations::mcp::adapter::{
+    MCPContextEnhancer as ContextEnhancer, MCPContextEnhancerConfig as ContextEnhancerConfig,
+};
 use log::{debug, info, warn};
 use serde_json::{json, Value};
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-/// Context enhancer configuration.
-#[derive(Debug, Clone)]
-pub struct ContextEnhancerConfig {
-    pub min_relevance: f64,    // Minimum relevance score (0-1)
-    pub max_resources: usize,  // Max number of resources
-    pub max_total_size: usize, // Max total size (bytes)
-    pub enable_caching: bool,  // Enable caching
-}
-
-impl Default for ContextEnhancerConfig {
-    fn default() -> Self {
-        Self {
-            min_relevance: 0.3,
-            max_resources: 10,
-            max_total_size: 100 * 1024, // 100KB
-            enable_caching: true,
-        }
-    }
-}
-
-/// Context enhancer.
-pub struct ContextEnhancer {
-    config: ContextEnhancerConfig,
-}
-
-impl ContextEnhancer {
-    /// Creates a new context enhancer.
-    pub fn new(config: ContextEnhancerConfig) -> Self {
-        Self { config }
-    }
-
-    /// Enhances context.
-    pub async fn enhance(
-        &self,
-        query: &str,
-        resources: Vec<(MCPResource, MCPResourceContent)>,
-    ) -> BitFunResult<Value> {
-        let scored_resources = resources
-            .into_iter()
-            .map(|(r, c)| {
-                let score = ResourceAdapter::calculate_relevance(&r, query);
-                (r, c, score)
-            })
-            .filter(|(_, _, score)| *score >= self.config.min_relevance)
-            .collect::<Vec<_>>();
-
-        let mut sorted = scored_resources;
-        sorted.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(Ordering::Equal));
-
-        let mut selected = Vec::new();
-        let mut total_size = 0;
-
-        for (resource, content, score) in sorted {
-            // Only include text content in model context; skip blob-only (binary) resources
-            let content_size = content.content.as_ref().map_or(0, |s| s.len());
-
-            if selected.len() >= self.config.max_resources {
-                break;
-            }
-
-            if total_size + content_size > self.config.max_total_size {
-                break;
-            }
-
-            // Skip resources with no text content (e.g. video/blob-only)
-            if content_size == 0 {
-                continue;
-            }
-
-            selected.push((resource, content, score));
-            total_size += content_size;
-        }
-
-        let context_blocks: Vec<Value> = selected
-            .into_iter()
-            .map(|(r, c, score)| {
-                let mut block = ResourceAdapter::to_context_block(&r, Some(&c));
-                if let Some(obj) = block.as_object_mut() {
-                    obj.insert("relevance_score".to_string(), json!(score));
-                }
-                block
-            })
-            .collect();
-
-        Ok(json!({
-            "type": "mcp_context",
-            "resources": context_blocks,
-            "total_size": total_size,
-            "query": query,
-        }))
-    }
-}
-
-impl Default for ContextEnhancer {
-    fn default() -> Self {
-        Self::new(ContextEnhancerConfig::default())
-    }
-}
 
 /// MCP context provider.
 pub struct MCPContextProvider {

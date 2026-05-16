@@ -1,18 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ArrowRight,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Download,
   Filter,
   FolderOpen,
+  Layers,
   Package,
   Plus,
   Puzzle,
   ShieldAlert,
-  Sparkles,
-  Store,
+  ShieldCheck,
   Trash2,
   TrendingUp,
+  User,
+  Zap,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge, Button, ConfirmDialog, Input, Modal, Search, Select } from '@/component-library';
@@ -27,15 +31,31 @@ import { getCardGradient } from '@/shared/utils/cardGradients';
 import { useInstalledSkills } from './hooks/useInstalledSkills';
 import { useSkillMarket } from './hooks/useSkillMarket';
 import SkillCard from './components/SkillCard';
+import SkillsSuiteView from './components/SkillsSuiteView';
 import './SkillsScene.scss';
-import { useSkillsSceneStore } from './skillsSceneStore';
+import { useSkillsSceneStore, type InstalledFilter } from './skillsSceneStore';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
 
 const log = createLogger('SkillsScene');
 
-const SKILLS_SOURCE_URL = 'https://skills.sh';
+type SkillTab = 'installed' | 'discover';
 
-const INSTALLED_PAGE_SIZE = 10;
+const INSTALLED_PAGE_SIZE = 12;
+
+interface CategoryInfo {
+  id: InstalledFilter;
+  icon: React.ReactNode;
+  labelKey: string;
+  descKey: string;
+}
+
+const CATEGORIES: CategoryInfo[] = [
+  { id: 'all', icon: <Layers size={15} strokeWidth={1.6} />, labelKey: 'filters.all', descKey: 'categories.all' },
+  { id: 'builtin', icon: <ShieldCheck size={15} strokeWidth={1.6} />, labelKey: 'filters.builtin', descKey: 'categories.builtin' },
+  { id: 'user', icon: <User size={15} strokeWidth={1.6} />, labelKey: 'filters.user', descKey: 'categories.user' },
+  { id: 'project', icon: <FolderOpen size={15} strokeWidth={1.6} />, labelKey: 'filters.project', descKey: 'categories.project' },
+  { id: 'suite', icon: <Zap size={15} strokeWidth={1.6} />, labelKey: 'filters.suite', descKey: 'categories.suite' },
+];
 
 const SkillsScene: React.FC = () => {
   const { t } = useTranslation('scenes/skills');
@@ -54,8 +74,10 @@ const SkillsScene: React.FC = () => {
     toggleAddForm,
   } = useSkillsSceneStore();
 
+  const [activeTab, setActiveTab] = useState<SkillTab>('installed');
   const [deleteTarget, setDeleteTarget] = useState<SkillInfo | null>(null);
   const [installedListPage, setInstalledListPage] = useState(0);
+  const [installedSearch, setInstalledSearch] = useState('');
   const [selectedDetail, setSelectedDetail] = useState<
     | { type: 'installed'; skill: SkillInfo }
     | { type: 'market'; skill: SkillMarketItem }
@@ -63,7 +85,7 @@ const SkillsScene: React.FC = () => {
   >(null);
 
   const installed = useInstalledSkills({
-    searchQuery: searchDraft,
+    searchQuery: installedSearch,
     activeFilter: installedFilter,
   });
 
@@ -75,7 +97,7 @@ const SkillsScene: React.FC = () => {
   const market = useSkillMarket({
     searchQuery: marketQuery,
     installedSkillNames,
-    pageSize: 6,
+    pageSize: 15,
     onInstalledChanged: async () => {
       await installed.loadSkills(true);
     },
@@ -118,9 +140,13 @@ const SkillsScene: React.FC = () => {
   const selectedInstalledSkill = selectedDetail?.type === 'installed' ? selectedDetail.skill : null;
   const selectedMarketSkill = selectedDetail?.type === 'market' ? selectedDetail.skill : null;
 
-  const installedFiltered = hideDuplicates
-    ? installed.filteredSkills.filter((s) => !s.isShadowed)
-    : installed.filteredSkills;
+  const installedFiltered = useMemo(() => {
+    const list = hideDuplicates
+      ? installed.filteredSkills.filter((s) => !s.isShadowed)
+      : installed.filteredSkills;
+    return list;
+  }, [hideDuplicates, installed.filteredSkills]);
+
   const installedTotalPages = Math.max(
     1,
     Math.ceil(installedFiltered.length / INSTALLED_PAGE_SIZE),
@@ -133,338 +159,413 @@ const SkillsScene: React.FC = () => {
 
   useEffect(() => {
     setInstalledListPage(0);
-  }, [installedFilter, searchDraft]);
+  }, [installedFilter, installedSearch, hideDuplicates]);
 
   useEffect(() => {
     setInstalledListPage((p) => Math.min(p, Math.max(0, installedTotalPages - 1)));
   }, [installedTotalPages]);
 
-  const marketSkeletonGrid = (keyPrefix: string) => (
-    <div className="skills-split__skeleton-grid" aria-busy="true" aria-label={t('list.loading')}>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div
-          key={`${keyPrefix}-${i}`}
-          className="skills-split__skeleton-card"
-          style={{ '--card-index': i } as React.CSSProperties}
-        />
-      ))}
-    </div>
-  );
-
   return (
     <div className="bitfun-skills-scene">
-      {/* ── Two-column split layout ── */}
-      <div className="skills-split">
-
-        {/* ══ LEFT: market skills ══ */}
-        <div className="skills-split__left">
-          {/* Sticky header */}
-          <div className="skills-split__left-header">
-            <div className="skills-split__left-title-row">
-              <div className="skills-split__left-identity">
-                <h1 className="skills-split__title">{t('page.title')}</h1>
-                <p className="skills-split__subtitle">{t('page.subtitle')}</p>
-              </div>
-            </div>
-
-            <div className="skills-split__toolbar">
-              <Search
-                className="skills-split__search"
-                value={searchDraft}
-                onChange={setSearchDraft}
-                onSearch={submitMarketQuery}
-                onClear={submitMarketQuery}
-                placeholder={t('page.searchPlaceholder')}
-                size="large"
-                clearable
-                enterToSearch
-              />
-            </div>
-          </div>
-
-          {/* Market body — fixed display, no scroll */}
-          <div className="skills-split__left-body">
-            <div className="skills-split__section-head">
-              <span className="skills-split__section-title">{t('market.title')}</span>
-              <span className="skills-split__section-sub">
-                {t('market.subtitlePrefix')}
-                {' '}
-                <a href={SKILLS_SOURCE_URL} target="_blank" rel="noreferrer">skills.sh</a>
-                {t('market.subtitleSuffix')}
-              </span>
-            </div>
-
-            {/* Market loading — skeleton grid */}
-            {market.marketLoading && marketSkeletonGrid('mkt-init')}
-
-            {/* Market error */}
-            {!market.marketLoading && market.marketError && (
-              <div className="skills-split__empty skills-split__empty--error">
-                <Store size={28} strokeWidth={1.5} />
-                <span>{market.marketError}</span>
-              </div>
-            )}
-
-            {/* Pagination fetch — same skeleton as initial load */}
-            {!market.marketLoading && !market.marketError && market.loadingMore && marketSkeletonGrid('mkt-page')}
-
-            {/* Market empty */}
-            {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length === 0 && (
-              <div className="skills-split__empty">
-                <Store size={28} strokeWidth={1.5} />
-                <span>{marketQuery ? t('market.empty.noMatch') : t('market.empty.noSkills')}</span>
-              </div>
-            )}
-
-            {/* Market cards grid — 3×2, 6 per page */}
-            {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length > 0 && (
-              <div className="skills-split__market-grid">
-                {market.marketSkills.map((skill, index) => {
-                  const isInstalled = installedSkillNames.has(skill.name);
-                  return (
-                    <SkillCard
-                      key={skill.installId}
-                      name={skill.name}
-                      description={skill.description}
-                      index={index}
-                      accentSeed={skill.installId}
-                      iconKind="market"
-                      badges={isInstalled ? (
-                        <Badge variant="success">
-                          <CheckCircle2 size={11} />
-                          {t('market.item.installed')}
-                        </Badge>
-                      ) : null}
-                      meta={(
-                        <span className="bitfun-skills-scene__market-meta">
-                          <TrendingUp size={12} />
-                          {skill.installs ?? 0}
-                        </span>
-                      )}
-                      onOpenDetails={() => setSelectedDetail({ type: 'market', skill })}
-                    />
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Pagination */}
-            {!market.marketLoading && !market.marketError && (market.totalPages > 1 || market.hasMore) && (
-              <div className="skills-split__pagination">
-                <button
-                  type="button"
-                  className="skills-split__page-btn"
-                  onClick={market.goToPrevPage}
-                  disabled={market.currentPage === 0 || market.loadingMore}
-                  aria-label={t('market.pagination.prev')}
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <span className="skills-split__page-info">
-                  {market.hasMore
-                    ? t('market.pagination.infoMore', { current: market.currentPage + 1 })
-                    : t('market.pagination.info', { current: market.currentPage + 1, total: market.totalPages })}
-                </span>
-                <button
-                  type="button"
-                  className="skills-split__page-btn"
-                  onClick={() => void market.goToNextPage()}
-                  disabled={(!market.hasMore && market.currentPage >= market.totalPages - 1) || market.loadingMore}
-                  aria-label={t('market.pagination.next')}
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ══ RIGHT: installed skills ══ */}
-        <div className="skills-split__right">
-          <div className="skills-split__right-frame">
-            {/* Right header */}
-            <div className="skills-split__right-header">
-              <span className="skills-split__right-title">{t('installed.titleAll')}</span>
-              <div className="skills-split__right-toolbar">
-                <div className="skills-split__filter-bar">
-                  {([
-                    ['all', installed.counts.all],
-                    ['user', installed.counts.user],
-                    ['project', installed.counts.project],
-                  ] as const).map(([filter, count]) => (
-                    <button
-                      key={filter}
-                      type="button"
-                      className={[
-                        'skills-split__filter-chip',
-                        installedFilter === filter && 'is-active',
-                      ].filter(Boolean).join(' ')}
-                      onClick={() => setInstalledFilter(filter)}
-                    >
-                      <span>{t(`filters.${filter}`)}</span>
-                      <span className="skills-split__filter-count">{count}</span>
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className={[
-                      'skills-split__filter-chip',
-                      hideDuplicates && 'is-active',
-                    ].filter(Boolean).join(' ')}
-                    onClick={() => setHideDuplicates(!hideDuplicates)}
-                  >
-                    <Filter size={13} />
-                    <span>{t('toolbar.hideDuplicates')}</span>
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="skills-split__add-btn"
-                  onClick={toggleAddForm}
-                >
-                  <Plus size={13} />
-                  <span>{t('toolbar.addTooltip')}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Scrollable installed body */}
-            <div className="skills-split__right-body">
-              {/* Loading — row skeletons */}
-              {installed.loading && (
-                <div className="skills-split__skeleton-list" aria-busy="true" aria-label={t('list.loading')}>
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <div
-                      key={`ins-sk-${i}`}
-                      className="skills-split__skeleton-row"
-                      style={{ '--row-index': i } as React.CSSProperties}
-                    >
-                      <div className="skills-split__skeleton-row-avatar" />
-                      <div className="skills-split__skeleton-row-lines">
-                        <div className="skills-split__skeleton-line skills-split__skeleton-line--title" />
-                        <div className="skills-split__skeleton-line skills-split__skeleton-line--desc" />
-                      </div>
-                      <div className="skills-split__skeleton-row-tail">
-                        <div className="skills-split__skeleton-pill" />
-                        <div className="skills-split__skeleton-icon" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Error */}
-              {!installed.loading && installed.error && (
-                <div className="skills-split__empty skills-split__empty--error">
-                  <Package size={24} strokeWidth={1.5} />
-                  <span>{installed.error}</span>
-                </div>
-              )}
-
-              {/* Empty */}
-              {!installed.loading && !installed.error && installedFiltered.length === 0 && (
-                <div className="skills-split__empty">
-                  <Sparkles size={24} strokeWidth={1.5} />
-                  <span>
-                    {installed.skills.length === 0
-                      ? t('list.empty.noSkills')
-                      : t('list.empty.noMatch')}
-                  </span>
-                </div>
-              )}
-
-              {/* Installed rows */}
-              {!installed.loading && !installed.error && pagedInstalledSkills.map((skill, index) => (
-              <div
-                key={skill.key}
-                className={[
-                  'skills-split__installed-row',
-                  skill.isShadowed && 'is-shadowed',
-                ].filter(Boolean).join(' ')}
-                style={{ '--row-index': index } as React.CSSProperties}
-                onClick={() => setSelectedDetail({ type: 'installed', skill })}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setSelectedDetail({ type: 'installed', skill });
-                  }
-                }}
-                aria-label={skill.name}
-              >
-                <div className="skills-split__row-icon">
-                  <Puzzle size={14} strokeWidth={1.6} />
-                </div>
-                <div className="skills-split__row-body">
-                  <span className="skills-split__row-name">{skill.name}</span>
-                  {skill.description?.trim() && (
-                    <span className="skills-split__row-desc">{skill.description}</span>
-                  )}
-                </div>
-                <div
-                  className="skills-split__row-end"
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
-                >
-                  {skill.isShadowed && (
-                    <span title={t('list.item.shadowedTooltip')}>
-                      <Badge variant="warning">
-                        <ShieldAlert size={11} />
-                        {t('list.item.shadowed')}
-                      </Badge>
-                    </span>
-                  )}
-                  <Badge variant={skill.level === 'user' ? 'info' : 'purple'}>
-                    {skill.level === 'user' ? t('list.item.user') : t('list.item.project')}
-                  </Badge>
-                  <button
-                    type="button"
-                    className="skills-split__row-delete"
-                    onClick={() => setDeleteTarget(skill)}
-                    aria-label={t('list.item.deleteTooltip')}
-                    title={t('list.item.deleteTooltip')}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-              ))}
-            </div>
-
-            {!installed.loading && !installed.error && installedFiltered.length > 0 && installedTotalPages > 1 && (
-              <div className="skills-split__pagination skills-split__pagination--installed">
-                <button
-                  type="button"
-                  className="skills-split__page-btn"
-                  onClick={() => setInstalledListPage((p) => Math.max(0, p - 1))}
-                  disabled={currentInstalledPage === 0}
-                  aria-label={t('market.pagination.prev')}
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <span className="skills-split__page-info">
-                  {t('market.pagination.info', {
-                    current: currentInstalledPage + 1,
-                    total: installedTotalPages,
-                  })}
-                </span>
-                <button
-                  type="button"
-                  className="skills-split__page-btn"
-                  onClick={() => setInstalledListPage((p) => Math.min(installedTotalPages - 1, p + 1))}
-                  disabled={currentInstalledPage >= installedTotalPages - 1}
-                  aria-label={t('market.pagination.next')}
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            )}
-          </div>
+      <div className="skills-tabs-bar">
+        <div className="skills-tabs-bar__tabs">
+          <button
+            type="button"
+            className={`skills-tabs-bar__tab ${activeTab === 'installed' ? 'is-active' : ''}`}
+            onClick={() => setActiveTab('installed')}
+          ><span>{t('installed.titleAll')}</span></button>
+          <span className="skills-tabs-bar__divider" />
+          <button
+            type="button"
+            className={`skills-tabs-bar__tab ${activeTab === 'discover' ? 'is-active' : ''}`}
+            onClick={() => setActiveTab('discover')}
+          ><span>{t('market.title')}</span></button>
         </div>
       </div>
 
-      {/* ── Detail modal ── */}
+      <div className="skills-page">
+
+        {activeTab === 'installed' && (
+          <div className="skills-installed">
+            <aside className="skills-sidebar">
+              <div className="skills-sidebar__header">
+                <h2 className="skills-sidebar__title">{t('installed.titleAll')}</h2>
+              </div>
+              <nav className="skills-sidebar__nav">
+                {CATEGORIES.map((cat) => {
+                  const count = installed.counts[cat.id];
+                  const isEmpty = count === 0;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      className={`skills-sidebar__item ${installedFilter === cat.id ? 'is-active' : ''} ${isEmpty ? 'is-empty' : ''}`}
+                      onClick={() => setInstalledFilter(cat.id)}
+                    >
+                      <span className="skills-sidebar__item-icon">{cat.icon}</span>
+                      <span className="skills-sidebar__item-label">{t(cat.labelKey)}</span>
+                      <span className="skills-sidebar__item-count">{isEmpty ? '—' : count}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+              <div className="skills-sidebar__footer">
+                <p className="skills-sidebar__hint">
+                  {t(CATEGORIES.find((c) => c.id === installedFilter)?.descKey ?? 'categories.all')}
+                </p>
+              </div>
+            </aside>
+
+            <div className="skills-main">
+              {installedFilter === 'suite' ? (
+                <SkillsSuiteView />
+              ) : (
+                <>
+                  <div className="skills-main__toolbar">
+                    <Search
+                      className="skills-main__toolbar-search"
+                      value={installedSearch}
+                      onChange={setInstalledSearch}
+                      onClear={() => setInstalledSearch('')}
+                      placeholder={t('toolbar.searchPlaceholder')}
+                      size="small"
+                      clearable
+                    />
+                    <button
+                      type="button"
+                      className={`skills-main__chip-btn${hideDuplicates ? ' is-active' : ''}`}
+                      onClick={() => setHideDuplicates(!hideDuplicates)}
+                    >
+                      <Filter size={13} />
+                      <span>{t('toolbar.hideDuplicates')}</span>
+                    </button>
+                    <button type="button" className="skills-main__add-btn" onClick={toggleAddForm}>
+                      <Plus size={13} />
+                      <span>{t('toolbar.addTooltip')}</span>
+                    </button>
+                  </div>
+
+                  {installed.loading && (
+                    <div className="skills-main__loading" aria-busy="true" aria-label={t('list.loading')}>
+                      {Array.from({ length: 8 }).map((_, i) => (
+                        <div
+                          key={`ins-sk-${i}`}
+                          className="skills-card-skeleton"
+                          style={{ '--card-index': i } as React.CSSProperties}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {!installed.loading && installed.error && (
+                    <div className="skills-main__empty skills-main__empty--error">
+                      <Package size={28} strokeWidth={1.2} />
+                      <span>{installed.error}</span>
+                    </div>
+                  )}
+
+                  {!installed.loading && !installed.error && installedFiltered.length === 0 && (
+                    <div className="skills-main__empty">
+                      <Package size={28} strokeWidth={1.2} />
+                      <span>
+                        {installed.skills.length === 0
+                          ? t('list.empty.noSkills')
+                          : t('list.empty.noMatch')}
+                      </span>
+                    </div>
+                  )}
+
+                  {!installed.loading && !installed.error && (
+                    <>
+                      <div className="skills-main__grid">
+                        {pagedInstalledSkills.map((skill, index) => (
+                          <div
+                            key={skill.key}
+                            className={[
+                              'skills-card',
+                              skill.isShadowed && 'is-shadowed',
+                            ].filter(Boolean).join(' ')}
+                            style={{ '--card-index': index } as React.CSSProperties}
+                            onClick={() => setSelectedDetail({ type: 'installed', skill })}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedDetail({ type: 'installed', skill });
+                              }
+                            }}
+                            aria-label={skill.name}
+                          >
+                            <div className="skills-card__top">
+                              <div className="skills-card__icon">
+                                <Puzzle size={18} strokeWidth={1.6} />
+                              </div>
+                              <div className="skills-card__info">
+                                <span className="skills-card__name">{skill.name}</span>
+                                {skill.description?.trim() && (
+                                  <span className="skills-card__desc">{skill.description}</span>
+                                )}
+                              </div>
+                              {skill.isBuiltin && (
+                                <Badge variant="accent">
+                                  <ShieldCheck size={11} />
+                                  {t('list.item.builtin')}
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="skills-card__meta">
+                              {skill.isShadowed && (
+                                <span title={t('list.item.shadowedTooltip')}>
+                                  <Badge variant="warning">
+                                    <ShieldAlert size={11} />
+                                    {t('list.item.shadowed')}
+                                  </Badge>
+                                </span>
+                              )}
+                              <Badge
+                                variant={skill.level === 'user' ? 'info' : 'purple'}
+                              >
+                                {skill.level === 'user'
+                                  ? <User size={11} />
+                                  : <FolderOpen size={11} />}
+                                {skill.level === 'user' ? t('list.item.user') : t('list.item.project')}
+                              </Badge>
+                              {skill.path && (
+                                <button
+                                  type="button"
+                                  className="skills-card__path"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRevealSkillPath(skill.path);
+                                  }}
+                                  title={skill.path}
+                                >
+                                  {skill.path}
+                                </button>
+                              )}
+                            </div>
+
+                            <div
+                              className="skills-card__actions"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            >
+                              <Button
+                                variant="ghost"
+                                size="small"
+                                onClick={() => setSelectedDetail({ type: 'installed', skill })}
+                              >
+                                <span>{t('list.item.detail')}</span>
+                                <ArrowRight size={12} />
+                              </Button>
+                              {!skill.isBuiltin && (
+                                <button
+                                  type="button"
+                                  className="skills-card__delete"
+                                  onClick={() => setDeleteTarget(skill)}
+                                  aria-label={t('list.item.deleteTooltip')}
+                                  title={t('list.item.deleteTooltip')}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {installedFiltered.length > 0 && installedTotalPages > 1 && (
+                        <div className="skills-installed__pagination">
+                          <button
+                            type="button"
+                            className="skills-installed__page-btn"
+                            onClick={() => setInstalledListPage((p) => Math.max(0, p - 1))}
+                            disabled={currentInstalledPage === 0}
+                            aria-label={t('market.pagination.prev')}
+                          >
+                            <ChevronLeft size={14} />
+                          </button>
+                          <span className="skills-installed__page-info">
+                            {t('market.pagination.info', {
+                              current: currentInstalledPage + 1,
+                              total: installedTotalPages,
+                            })}
+                          </span>
+                          <button
+                            type="button"
+                            className="skills-installed__page-btn"
+                            onClick={() => setInstalledListPage((p) => Math.min(installedTotalPages - 1, p + 1))}
+                            disabled={currentInstalledPage >= installedTotalPages - 1}
+                            aria-label={t('market.pagination.next')}
+                          >
+                            <ChevronRight size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'discover' && (
+          <div className="skills-discover">
+            <div className="skills-discover__hero">
+              <div className="skills-discover__hero-content">
+                <h1 className="skills-discover__title">{t('market.title')}</h1>
+                <p className="skills-discover__subtitle">
+                  {t('market.subtitle')}
+                </p>
+                <div className="skills-discover__search-wrapper">
+                  <Search
+                    className="skills-discover__search"
+                    value={searchDraft}
+                    onChange={setSearchDraft}
+                    onSearch={submitMarketQuery}
+                    onClear={submitMarketQuery}
+                    placeholder={t('market.searchPlaceholder')}
+                    size="medium"
+                    clearable
+                    enterToSearch
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="skills-discover__content">
+              {market.marketLoading && (
+                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')}>
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <div
+                      key={`mkt-sk-${i}`}
+                      className="skills-discover__skeleton-card"
+                      style={{ '--card-index': i } as React.CSSProperties}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {!market.marketLoading && market.marketError && (
+                <div className="skills-discover__empty skills-discover__empty--error">
+                  <Package size={28} strokeWidth={1.5} />
+                  <span>{market.marketError}</span>
+                </div>
+              )}
+
+              {!market.marketLoading && !market.marketError && market.loadingMore && (
+                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')}>
+                  {Array.from({ length: 12 }).map((_, i) => (
+                    <div
+                      key={`mkt-page-sk-${i}`}
+                      className="skills-discover__skeleton-card"
+                      style={{ '--card-index': i } as React.CSSProperties}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length === 0 && (
+                <div className="skills-discover__empty">
+                  <Package size={28} strokeWidth={1.5} />
+                  <span>{marketQuery ? t('market.empty.noMatch') : t('market.empty.noSkills')}</span>
+                </div>
+              )}
+
+              {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length > 0 && (
+                <>
+                  {marketQuery && (
+                    <div className="skills-discover__results-info">
+                      <span>
+                        {t('market.resultsInfo', { query: marketQuery, count: market.totalLoaded })}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="skills-discover__grid">
+                    {market.marketSkills.map((skill, index) => {
+                      const isInstalled = installedSkillNames.has(skill.name);
+                      const isDownloading = market.downloadingPackage === skill.installId;
+                      return (
+                        <SkillCard
+                          key={skill.installId}
+                          name={skill.name}
+                          description={skill.description}
+                          index={index}
+                          accentSeed={skill.installId}
+                          iconKind="market"
+                          badges={isInstalled ? (
+                            <Badge variant="success">
+                              <CheckCircle2 size={11} />
+                              {t('market.item.installed')}
+                            </Badge>
+                          ) : null}
+                          meta={(
+                            <span className="bitfun-skills-scene__market-meta">
+                              <TrendingUp size={12} />
+                              {skill.installs ?? 0}
+                            </span>
+                          )}
+                          actions={[
+                            {
+                              id: 'download',
+                              icon: isInstalled ? <CheckCircle2 size={13} /> : <Download size={13} />,
+                              ariaLabel: isInstalled ? t('market.item.installed') : t('market.item.downloadProject'),
+                              title: isDownloading
+                                ? t('market.item.downloading')
+                                : (isInstalled ? t('market.item.installedTooltip') : t('market.item.downloadProject')),
+                              disabled:
+                                isDownloading
+                                || !market.hasWorkspace
+                                || market.isRemoteWorkspace
+                                || isInstalled,
+                              tone: isInstalled ? 'success' : 'primary',
+                              onClick: () => void market.handleDownload(skill, 'project'),
+                            },
+                          ]}
+                          onOpenDetails={() => setSelectedDetail({ type: 'market', skill })}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {(market.totalPages > 1 || market.hasMore) && (
+                    <div className="skills-discover__pagination">
+                      <button
+                        type="button"
+                        className="skills-discover__page-btn"
+                        onClick={market.goToPrevPage}
+                        disabled={market.currentPage === 0 || market.loadingMore}
+                        aria-label={t('market.pagination.prev')}
+                      >
+                        <ChevronLeft size={14} />
+                      </button>
+                      <span className="skills-discover__page-info">
+                        {market.hasMore
+                          ? t('market.pagination.infoMore', { current: market.currentPage + 1 })
+                          : t('market.pagination.info', { current: market.currentPage + 1, total: market.totalPages })}
+                      </span>
+                      <button
+                        type="button"
+                        className="skills-discover__page-btn"
+                        onClick={() => void market.goToNextPage()}
+                        disabled={(!market.hasMore && market.currentPage >= market.totalPages - 1) || market.loadingMore}
+                        aria-label={t('market.pagination.next')}
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       <GalleryDetailModal
         isOpen={Boolean(selectedDetail)}
         onClose={() => setSelectedDetail(null)}
@@ -486,6 +587,9 @@ const SkillsScene: React.FC = () => {
                 </Badge>
               </span>
             )}
+            <Badge variant={selectedInstalledSkill.isBuiltin ? 'accent' : 'success'}>
+              {selectedInstalledSkill.isBuiltin ? t('list.item.builtin') : t('list.item.userInstalled')}
+            </Badge>
             <Badge variant={selectedInstalledSkill.level === 'user' ? 'info' : 'purple'}>
               {selectedInstalledSkill.level === 'user' ? t('list.item.user') : t('list.item.project')}
             </Badge>
@@ -503,7 +607,7 @@ const SkillsScene: React.FC = () => {
             {selectedMarketSkill.installs ?? 0}
           </span>
         ) : null}
-        actions={selectedInstalledSkill ? (
+        actions={selectedInstalledSkill && !selectedInstalledSkill.isBuiltin ? (
           <Button
             variant="danger"
             size="small"
@@ -603,7 +707,6 @@ const SkillsScene: React.FC = () => {
         ) : null}
       </GalleryDetailModal>
 
-      {/* ── Add skill modal ── */}
       <Modal
         isOpen={isAddFormOpen}
         onClose={() => {
@@ -631,7 +734,7 @@ const SkillsScene: React.FC = () => {
 
           {installed.formLevel === 'project' && installed.hasWorkspace ? (
             <div className="bitfun-skills-scene__form-hint">
-              {t('form.level.currentWorkspace', { path: installed.workspacePath })}
+              {t('form.level.selectedProjectPath', { path: installed.workspacePath })}
             </div>
           ) : null}
 
@@ -707,7 +810,6 @@ const SkillsScene: React.FC = () => {
         </div>
       </Modal>
 
-      {/* ── Delete confirm ── */}
       <ConfirmDialog
         isOpen={Boolean(deleteTarget)}
         onClose={() => setDeleteTarget(null)}

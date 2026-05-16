@@ -29,6 +29,13 @@ pub async fn computer_use_get_status(
 
 #[tauri::command]
 pub async fn computer_use_request_permissions() -> Result<(), String> {
+    #[cfg(not(target_env = "ohos"))]
+    {
+        let host = DesktopComputerUseHost::new();
+        host.prompt_for_missing_permissions();
+        Ok(())
+    }
+    #[cfg(target_env = "ohos")]
     Err("computer_use_request_permissions error".to_string())
 }
 

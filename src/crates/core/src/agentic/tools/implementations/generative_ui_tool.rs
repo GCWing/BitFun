@@ -1,6 +1,8 @@
 //! GenerativeUI tool — renders LLM-generated HTML/SVG widgets.
 
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::agentic::tools::framework::{
+    Tool, ToolExposure, ToolResult, ToolUseContext, ValidationResult,
+};
 use crate::service::config::get_global_config_service;
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
@@ -141,6 +143,23 @@ impl GenerativeUITool {
                 spacing_4: "16px",
                 shadow_base: "0 4px 12px rgba(0, 0, 0, 0.8)",
                 style_notes: "neon cyber tooling, black surfaces, glowing cyan accents, still compact and workbench-first",
+            }),
+            "bitfun-tokyo-night" => Some(ThemePromptSnapshot {
+                id: "bitfun-tokyo-night",
+                theme_type: "dark",
+                bg_primary: "#1a1b26",
+                bg_secondary: "#16161e",
+                bg_scene: "#1a1b26",
+                text_primary: "#c0caf5",
+                text_muted: "#787c99",
+                accent_500: "#7aa2f7",
+                accent_600: "#6183bb",
+                border_base: "rgba(54, 59, 84, 0.60)",
+                element_base: "rgba(122, 162, 247, 0.11)",
+                radius_base: "6px",
+                spacing_4: "16px",
+                shadow_base: "0 4px 12px rgba(0, 0, 0, 0.48)",
+                style_notes: "Tokyo Night indigo night, soft blue accent and violet secondary highlights, calm IDE mood",
             }),
             "bitfun-china-style" => Some(ThemePromptSnapshot {
                 id: "bitfun-china-style",
@@ -313,6 +332,14 @@ Input rules:
             description.push_str(&theme_context);
         }
         Ok(description)
+    }
+
+    fn short_description(&self) -> String {
+        "Render visual HTML or SVG widgets in chat. Use when charts, visual structure, or lightweight interaction would communicate information more clearly and efficiently than plain text.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {

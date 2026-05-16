@@ -11,6 +11,7 @@ import { i18nService } from '@/infrastructure/i18n';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
+import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import type { FlowChatContext, SessionConfig } from './types';
 import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
 import {
@@ -22,6 +23,80 @@ import {
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
+
+const normalizeOptional = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const hostFromSshConnectionId = (connectionId: string | undefined): string | undefined => {
+  const trimmed = connectionId?.trim();
+  if (!trimmed) return undefined;
+  const match = trimmed.match(/^ssh-[^@]+@(.+?)(?::\d+)?$/);
+  return match?.[1]?.trim().toLowerCase() || undefined;
+};
+
+const remotePathsMatch = (left: string | undefined, right: string | undefined): boolean => {
+  const leftNorm = normalizeOptional(left);
+  const rightNorm = normalizeOptional(right);
+  if (!leftNorm || !rightNorm) return false;
+  return normalizeRemoteWorkspacePath(leftNorm) === normalizeRemoteWorkspacePath(rightNorm);
+};
+
+const currentWorkspaceMatchesSessionScope = (
+  current: WorkspaceInfo | null | undefined,
+  storedConnectionId: string | undefined,
+  storedSshHost: string | undefined,
+  workspacePath: string
+): current is WorkspaceInfo => {
+  if (current?.workspaceKind !== WorkspaceKind.Remote || !current.connectionId) {
+    return false;
+  }
+  if (!remotePathsMatch(current.rootPath, workspacePath)) {
+    return false;
+  }
+
+  const currentHost = normalizeOptional(current.sshHost)?.toLowerCase()
+    || hostFromSshConnectionId(current.connectionId);
+  const storedHost = normalizeOptional(storedSshHost)?.toLowerCase()
+    || hostFromSshConnectionId(storedConnectionId);
+  if (currentHost && storedHost) {
+    return currentHost === storedHost;
+  }
+
+  const storedConnection = normalizeOptional(storedConnectionId);
+  return !storedConnection || storedConnection === current.connectionId;
+};
+
+/// Resolve the effective connection_id for a session, preferring the
+/// current workspace's connection when the stored ID may be stale
+/// (e.g. after the user changed the SSH port).
+const resolveEffectiveConnectionId = (
+  storedConnectionId: string | undefined,
+  storedSshHost: string | undefined,
+  workspacePath: string
+): string | undefined => {
+  const current = workspaceManager.getState().currentWorkspace;
+  if (currentWorkspaceMatchesSessionScope(current, storedConnectionId, storedSshHost, workspacePath)) {
+    return current.connectionId;
+  }
+  return storedConnectionId;
+};
+
+const resolveEffectiveSshHost = (
+  storedSshHost: string | undefined,
+  storedConnectionId: string | undefined,
+  workspacePath: string
+): string | undefined => {
+  const current = workspaceManager.getState().currentWorkspace;
+  if (
+    currentWorkspaceMatchesSessionScope(current, storedConnectionId, storedSshHost, workspacePath)
+    && current.sshHost?.trim()
+  ) {
+    return current.sshHost.trim() || undefined;
+  }
+  return storedSshHost;
+};
 
 async function hydrateHistoricalSession(
   context: FlowChatContext,
@@ -42,12 +117,27 @@ async function hydrateHistoricalSession(
 
     const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
 
+    // Prefer the current workspace's connection info over the session's
+    // stored values.  When the user changes the SSH port the session's
+    // remoteConnectionId becomes stale; the active workspace always
+    // carries the up-to-date connection_id.
+    const effectiveConnectionId = resolveEffectiveConnectionId(
+      session.remoteConnectionId,
+      session.remoteSshHost,
+      workspacePath
+    );
+    const effectiveSshHost = resolveEffectiveSshHost(
+      session.remoteSshHost,
+      session.remoteConnectionId,
+      workspacePath
+    );
+
     await context.flowChatStore.loadSessionHistory(
       sessionId,
       workspacePath,
       undefined,
-      session.remoteConnectionId,
-      session.remoteSshHost
+      effectiveConnectionId,
+      effectiveSshHost
     );
   })();
 
@@ -180,32 +270,73 @@ function requireSessionWorkspacePath(
 /**
  * Get model's maximum token count
  */
-export async function getModelMaxTokens(modelName?: string): Promise<number> {
+function findEnabledModel(models: AIModelConfig[], modelRef: string | null | undefined): AIModelConfig | null {
+  const value = modelRef?.trim();
+  if (!value) return null;
+  return models.find(model =>
+    model.enabled !== false
+    && (model.id === value || model.name === value || model.model_name === value)
+  ) ?? null;
+}
+
+function resolveModelForContextWindow(
+  modelRef: string | null | undefined,
+  models: AIModelConfig[],
+  defaultModels: DefaultModelsConfig,
+): AIModelConfig | null {
+  const value = modelRef?.trim();
+  if (!value) return null;
+
+  if (value === 'primary') {
+    return findEnabledModel(models, defaultModels.primary);
+  }
+
+  if (value === 'fast') {
+    return findEnabledModel(models, defaultModels.fast) ?? findEnabledModel(models, defaultModels.primary);
+  }
+
+  if (value === 'auto' || value === 'default') {
+    return null;
+  }
+
+  return findEnabledModel(models, value);
+}
+
+export async function getModelMaxTokens(modelName?: string, agentType?: string): Promise<number> {
   try {
     const configManager = await import('@/infrastructure/config/services/ConfigManager').then(m => m.configManager);
-    const models = await configManager.getConfig<any[]>('ai.models') || [];
+    const [modelsConfig, defaultModelsConfig, agentModelsConfig] = await Promise.all([
+      configManager.getConfig<AIModelConfig[]>('ai.models'),
+      configManager.getConfig<DefaultModelsConfig>('ai.default_models'),
+      configManager.getConfig<Record<string, string>>('ai.agent_models'),
+    ]);
+    const models = modelsConfig || [];
+    const defaultModels = defaultModelsConfig || {};
+    const agentModels = agentModelsConfig || {};
     
-    if (modelName) {
-      const model = models.find(m => m.name === modelName || m.id === modelName);
-      if (model?.context_window) {
-        return model.context_window;
-      }
+    const explicitModel = resolveModelForContextWindow(modelName, models, defaultModels);
+    if (explicitModel?.context_window) {
+      return explicitModel.context_window;
+    }
+
+    const agentModel = resolveModelForContextWindow(
+      agentType ? agentModels[agentType] : undefined,
+      models,
+      defaultModels,
+    );
+    if (agentModel?.context_window) {
+      return agentModel.context_window;
+    }
+
+    const primaryModel = resolveModelForContextWindow('primary', models, defaultModels);
+    if (primaryModel?.context_window) {
+      return primaryModel.context_window;
     }
     
-    const defaultModels = await configManager.getConfig<Record<string, string>>('ai.default_models');
-    const primaryModelId = defaultModels?.primary;
-    
-    if (primaryModelId) {
-      const primaryModel = models.find(m => m.id === primaryModelId);
-      if (primaryModel?.context_window) {
-        return primaryModel.context_window;
-      }
-    }
-    
-    log.debug('Model context_window config not found, using default', { modelName });
+    log.debug('Model context_window config not found, using default', { modelName, agentType });
     return 128128;
   } catch (error) {
-    log.warn('Failed to get model max tokens', { modelName, error });
+    log.warn('Failed to get model max tokens', { modelName, agentType, error });
     return 128128;
   }
 }
@@ -262,7 +393,7 @@ export async function createChatSession(
     );
     const sessionName = titleDescriptor.text;
     
-    const maxContextTokens = await getModelMaxTokens(config.modelName);
+    const maxContextTokens = await getModelMaxTokens(config.modelName, agentType);
 
     const mergedConfig: SessionConfig = {
       ...config,
@@ -492,6 +623,20 @@ export async function ensureBackendSession(
   const latestSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
   const workspacePath = requireSessionWorkspacePath(latestSession.workspacePath, sessionId);
 
+  // Resolve effective connection info: prefer the current workspace's
+  // connection_id over the session's stored value.  When the user changes
+  // the SSH port the session's remoteConnectionId becomes stale.
+  const effectiveConnectionId = resolveEffectiveConnectionId(
+    latestSession.remoteConnectionId,
+    latestSession.remoteSshHost,
+    workspacePath
+  );
+  const effectiveSshHost = resolveEffectiveSshHost(
+    latestSession.remoteSshHost,
+    latestSession.remoteConnectionId,
+    workspacePath
+  );
+
   const isHistoricalSession = latestSession.isHistorical === true;
   const isFirstTurn = latestSession.dialogTurns.length <= 1;
   const needsBackendSetup = isHistoricalSession || isFirstTurn;
@@ -515,8 +660,8 @@ export async function ensureBackendSession(
     await agentAPI.ensureCoordinatorSession({
       sessionId,
       workspacePath,
-      remoteConnectionId: latestSession.remoteConnectionId,
-      remoteSshHost: latestSession.remoteSshHost,
+      remoteConnectionId: effectiveConnectionId,
+      remoteSshHost: effectiveSshHost,
     });
     clearHistoricalFlag();
   } catch (e: any) {
@@ -537,14 +682,14 @@ export async function ensureBackendSession(
         `Session ${sessionId.slice(0, 8)}`,
       agentType: latestSession.mode || 'agentic',
       workspacePath,
-      remoteConnectionId: latestSession.remoteConnectionId,
-      remoteSshHost: latestSession.remoteSshHost,
+      remoteConnectionId: effectiveConnectionId,
+      remoteSshHost: effectiveSshHost,
       config: {
         modelName: latestSession.config.modelName || 'auto',
         enableTools: true,
         safeMode: true,
-        remoteConnectionId: latestSession.remoteConnectionId,
-        remoteSshHost: latestSession.remoteSshHost,
+        remoteConnectionId: effectiveConnectionId,
+        remoteSshHost: effectiveSshHost,
       }
     });
     clearHistoricalFlag();
@@ -586,4 +731,3 @@ export async function retryCreateBackendSession(
     }
   });
 }
-

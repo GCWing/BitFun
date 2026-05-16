@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::HashSet;
 
 impl MCPServerManager {
     pub(super) async fn refresh_resources_catalog(
@@ -26,8 +27,9 @@ impl MCPServerManager {
         }
 
         let count = resources.len();
-        let mut cache = self.resource_catalog_cache.write().await;
-        cache.insert(server_id.to_string(), resources);
+        self.catalog_cache
+            .replace_resources(server_id, resources)
+            .await;
         Ok(count)
     }
 
@@ -56,8 +58,7 @@ impl MCPServerManager {
         }
 
         let count = prompts.len();
-        let mut cache = self.prompt_catalog_cache.write().await;
-        cache.insert(server_id.to_string(), prompts);
+        self.catalog_cache.replace_prompts(server_id, prompts).await;
         Ok(count)
     }
 
@@ -86,22 +87,12 @@ impl MCPServerManager {
 
     /// Returns cached MCP resources for a server.
     pub async fn get_cached_resources(&self, server_id: &str) -> Vec<MCPResource> {
-        self.resource_catalog_cache
-            .read()
-            .await
-            .get(server_id)
-            .cloned()
-            .unwrap_or_default()
+        self.catalog_cache.get_resources(server_id).await
     }
 
     /// Returns cached MCP prompts for a server.
     pub async fn get_cached_prompts(&self, server_id: &str) -> Vec<MCPPrompt> {
-        self.prompt_catalog_cache
-            .read()
-            .await
-            .get(server_id)
-            .cloned()
-            .unwrap_or_default()
+        self.catalog_cache.get_prompts(server_id).await
     }
 
     /// Refreshes resources catalog cache for one server.

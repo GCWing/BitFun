@@ -15,6 +15,9 @@ import type {
   SessionTitleGeneratedEvent,
   SessionModelAutoMigratedEvent,
   ImageAnalysisEvent,
+  ModelRoundCompletedEvent,
+  UserSteeringInjectedEvent,
+  DeepReviewQueueStateChangedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -30,8 +33,10 @@ export interface AgenticEventCallbacks {
   onImageAnalysisCompleted?: (event: ImageAnalysisEvent) => void;
   onDialogTurnStarted?: (event: AgenticEvent) => void;
   onModelRoundStarted?: (event: AgenticEvent) => void;
+  onModelRoundCompleted?: (event: ModelRoundCompletedEvent) => void;
   onTextChunk?: (event: TextChunkEvent) => void;
   onToolEvent?: (event: ToolEvent) => void;
+  onDeepReviewQueueStateChanged?: (event: DeepReviewQueueStateChangedEvent) => void;
   onDialogTurnCompleted?: (event: AgenticEvent) => void;
   onDialogTurnFailed?: (event: AgenticEvent) => void;
   onDialogTurnCancelled?: (event: AgenticEvent) => void;
@@ -41,6 +46,7 @@ export interface AgenticEventCallbacks {
   onContextCompressionFailed?: (event: AgenticEvent) => void;
   onSessionTitleGenerated?: (event: SessionTitleGeneratedEvent) => void;
   onSessionModelAutoMigrated?: (event: SessionModelAutoMigratedEvent) => void;
+  onUserSteeringInjected?: (event: UserSteeringInjectedEvent) => void;
 }
 
 export class AgenticEventListener {
@@ -112,6 +118,14 @@ export class AgenticEventListener {
         this.unlistenFunctions.push(unlisten);
       }
 
+      if (callbacks.onModelRoundCompleted) {
+        const unlisten = agentAPI.onModelRoundCompleted((event) => {
+          logger.debug('Model round completed:', event);
+          callbacks.onModelRoundCompleted?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
       if (callbacks.onTextChunk) {
         const unlisten = agentAPI.onTextChunk((event) => {
           callbacks.onTextChunk?.(event);
@@ -122,6 +136,14 @@ export class AgenticEventListener {
       if (callbacks.onToolEvent) {
         const unlisten = agentAPI.onToolEvent((event) => {
           callbacks.onToolEvent?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onDeepReviewQueueStateChanged) {
+        const unlisten = agentAPI.onDeepReviewQueueStateChanged((event) => {
+          logger.debug('Deep Review queue state changed:', event);
+          callbacks.onDeepReviewQueueStateChanged?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }
@@ -190,9 +212,17 @@ export class AgenticEventListener {
         this.unlistenFunctions.push(unlisten);
       }
 
+      if (callbacks.onUserSteeringInjected) {
+        const unlisten = agentAPI.onUserSteeringInjected((event) => {
+          logger.debug('User steering injected:', event);
+          callbacks.onUserSteeringInjected?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
       if (callbacks.onSessionModelAutoMigrated) {
         const unlisten = agentAPI.onSessionModelAutoMigrated((event) => {
-          logger.warn('Session model auto-migrated', event);
+          logger.debug('Session model auto-migrated', event);
           callbacks.onSessionModelAutoMigrated?.(event);
         });
         this.unlistenFunctions.push(unlisten);
@@ -233,4 +263,3 @@ export class AgenticEventListener {
 }
 
 export const agenticEventListener = new AgenticEventListener();
-

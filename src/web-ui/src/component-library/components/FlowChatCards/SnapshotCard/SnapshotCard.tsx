@@ -4,9 +4,10 @@
  */
 
 import React from 'react';
-import { CheckCircle, XCircle, Maximize2, FileText, Loader2, Clock } from 'lucide-react';
+import { CheckCircle, XCircle, Maximize2, FileText, Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { BaseToolCard, BaseToolCardProps } from '../BaseToolCard';
+import { ToolProcessingDots } from '../ToolProcessingDots';
 import './SnapshotCard.scss';
 
 export interface SnapshotCardProps extends Omit<BaseToolCardProps, 'toolName' | 'displayName'> {
@@ -71,7 +72,7 @@ export const SnapshotCard: React.FC<SnapshotCardProps> = ({
       case 'error':
         return <XCircle className="snapshot-card__status-error" size={12} />;
       default:
-        return <Clock className="snapshot-card__status-pending" size={12} />;
+        return <ToolProcessingDots className="snapshot-card__status-pending" size={12} />;
     }
   };
 
