@@ -265,11 +265,19 @@ async function initializeAfterRender(): Promise<void> {
   await fontPreferenceService.initialize();
   log.info('Font preference initialized at startup');
 
-  const { configManager } = await import('./infrastructure/config/services/ConfigManager');
-  await configManager.getConfig('editor');
-  log.info('Editor configuration preloaded');
-
   const initResults = await Promise.allSettled([
+    (async () => {
+      const { backgroundTaskScheduler } = await import('./shared/utils/backgroundTaskScheduler');
+      backgroundTaskScheduler.schedule(async () => {
+        const { configManager } = await import('./infrastructure/config/services/ConfigManager');
+        await configManager.getConfig('editor');
+        log.info('Editor configuration preloaded');
+      }, {
+        idle: true,
+        inFlightKey: 'startup:editor-config-preload',
+        priority: 'low',
+      });
+    })(),
     (async () => {
       const { installFrontendLogLevelConfigWatcher } = await import('./infrastructure/config/services/FrontendLogLevelSync');
       await installFrontendLogLevelConfigWatcher();
@@ -294,23 +302,20 @@ async function initializeAfterRender(): Promise<void> {
       registerNotificationContextMenu();
     })(),
     (async () => {
-      const { MonacoManager } = await import('./tools/editor');
-      await MonacoManager.initialize();
-
-      const { monacoThemeSync } = await import('./infrastructure/theme/integrations/MonacoThemeSync');
-      await monacoThemeSync.initialize();
-      log.info('Monaco theme sync initialized');
+      const { scheduleMonacoStartupWarmup } = await import('./tools/editor/services/MonacoStartupWarmup');
+      scheduleMonacoStartupWarmup();
     })(),
   ]);
 
   initResults.forEach((result, index) => {
     const names = [
+      'EditorConfigPreload',
       'LogLevelConfigWatcher',
       'DefaultContextTypes',
       'RecommendationProviders',
       'Tools',
       'ContextMenu',
-      'Editors',
+      'EditorWarmup',
     ];
     if (result.status === 'rejected') {
       log.warn('Initialization failed', { module: names[index], error: result.reason });

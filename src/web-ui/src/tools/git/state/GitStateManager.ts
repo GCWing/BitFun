@@ -329,9 +329,17 @@ export class GitStateManager {
     silent: boolean
   ): Promise<void> {
     const existingLock = this.refreshLocks.get(repositoryPath);
-    if (existingLock && !force) {
-      await existingLock;
-      return;
+    if (existingLock) {
+      if (!force) {
+        await existingLock;
+        return;
+      }
+      try {
+        await existingLock;
+      } catch {
+        // A force refresh after a failed in-flight refresh should still get a
+        // chance to rebuild fresh state.
+      }
     }
 
     const startedAt = nowMs();
@@ -377,7 +385,7 @@ export class GitStateManager {
 
 
         if (layersToRefresh.includes('basic') || layersToRefresh.includes('status')) {
-          await this.refreshBasicAndStatus(repositoryPath);
+          await this.refreshBasicAndStatus(repositoryPath, layersToRefresh);
         }
 
         if (layersToRefresh.includes('detailed')) {
@@ -446,7 +454,10 @@ export class GitStateManager {
   /**
    * Refresh basic + status layers.
    */
-  private async refreshBasicAndStatus(repositoryPath: string): Promise<void> {
+  private async refreshBasicAndStatus(
+    repositoryPath: string,
+    layersToRefresh: GitStateLayer[]
+  ): Promise<void> {
     try {
       const isRepo = await gitAPI.isGitRepository(repositoryPath);
 
@@ -461,6 +472,17 @@ export class GitStateManager {
           unstaged: [],
           untracked: [],
           conflicts: [],
+        });
+        return;
+      }
+
+      const shouldRefreshStatus = layersToRefresh.includes('status');
+      if (!shouldRefreshStatus) {
+        const repository = await gitAPI.getRepository(repositoryPath);
+        this.updateState(repositoryPath, {
+          isRepository: true,
+          currentBranch: repository.current_branch || repository.branch || null,
+          hasChanges: Boolean(repository.has_changes),
         });
         return;
       }

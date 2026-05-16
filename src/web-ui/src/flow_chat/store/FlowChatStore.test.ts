@@ -251,6 +251,71 @@ describe('FlowChatStore historical session hydration state', () => {
     });
   });
 
+  it('loads model config once while processing multiple persisted sessions', async () => {
+    configManagerMock.getConfig.mockImplementation(async (path: string) => {
+      if (path === 'ai.models') return [{ id: 'primary-model', context_window: 256000 }];
+      if (path === 'ai.default_models') return { primary: 'primary-model' };
+      return undefined;
+    });
+    apiMocks.listSessions.mockResolvedValueOnce([
+      {
+        sessionId: 'history-1',
+        title: 'Saved session 1',
+        agentType: 'agentic',
+        createdAt: 10,
+        lastActiveAt: 20,
+      },
+      {
+        sessionId: 'history-2',
+        title: 'Saved session 2',
+        agentType: 'agentic',
+        createdAt: 11,
+        lastActiveAt: 21,
+      },
+    ]);
+
+    await flowChatStore.initializeFromDisk('D:/workspace/BitFun');
+
+    const configPaths = configManagerMock.getConfig.mock.calls.map(([path]) => path);
+    expect(configPaths.filter(path => path === 'ai.models')).toHaveLength(1);
+    expect(configPaths.filter(path => path === 'ai.default_models')).toHaveLength(1);
+    expect(flowChatStore.getState().sessions.get('history-1')?.maxContextTokens).toBe(256000);
+    expect(flowChatStore.getState().sessions.get('history-2')?.maxContextTokens).toBe(256000);
+  });
+
+  it('skips one bad metadata entry without dropping the rest of the session list', async () => {
+    apiMocks.listSessions.mockResolvedValueOnce([
+      {
+        sessionId: 'bad-1',
+        title: 'Bad session',
+        agentType: 'agentic',
+        createdAt: 10,
+        lastActiveAt: 20,
+      },
+      {
+        sessionId: 'good-1',
+        title: 'Good session',
+        agentType: 'agentic',
+        createdAt: 11,
+        lastActiveAt: 21,
+      },
+    ]);
+    stateMachineManagerMock.getOrCreate.mockImplementation((sessionId: string) => {
+      if (sessionId === 'bad-1') {
+        throw new Error('bad metadata');
+      }
+      return {};
+    });
+
+    await flowChatStore.initializeFromDisk('D:/workspace/BitFun');
+
+    expect(flowChatStore.getState().sessions.has('bad-1')).toBe(false);
+    expect(flowChatStore.getState().sessions.get('good-1')).toMatchObject({
+      sessionId: 'good-1',
+      historyState: 'metadata-only',
+    });
+  });
+
   it('marks historical sessions hydrating while turns are loading and ready after completion', async () => {
     const turns = createDeferred<any[]>();
     apiMocks.restoreSession.mockResolvedValueOnce(undefined);

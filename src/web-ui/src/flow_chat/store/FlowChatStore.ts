@@ -1747,35 +1747,53 @@ export class FlowChatStore {
       startupTrace.markPhase('session_metadata_list_loaded', { remote, sessionCount });
 
       const { stateMachineManager } = await import('../state-machine');
-      sessions.forEach(metadata => {
-        stateMachineManager.getOrCreate(metadata.sessionId);
-      });
-      
+
+      let models: any[] = [];
+      let defaultModels: Record<string, string> = {};
+      try {
+        const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
+        const [modelsResult, defaultModelsResult] = await Promise.allSettled([
+          configManager.getConfig<any[]>('ai.models'),
+          configManager.getConfig<Record<string, string>>('ai.default_models'),
+        ]);
+
+        if (modelsResult.status === 'fulfilled' && Array.isArray(modelsResult.value)) {
+          models = modelsResult.value;
+        }
+        if (
+          defaultModelsResult.status === 'fulfilled' &&
+          defaultModelsResult.value &&
+          typeof defaultModelsResult.value === 'object'
+        ) {
+          defaultModels = defaultModelsResult.value;
+        }
+      } catch (error) {
+        log.warn('Failed to load model config for session metadata, using defaults', { error });
+      }
+
       const processSession = async (metadata: any) => {
-        const existingSession = this.state.sessions.get(metadata.sessionId);
-        if (existingSession) {
-          return;
-        }
-        if (isLegacyPersistedBtwSession(metadata)) {
-          return;
-        }
-        
-        let maxContextTokens = 128128;
         try {
-          const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
-          const models = await configManager.getConfig<any[]>('ai.models') || [];
-          
+          const existingSession = this.state.sessions.get(metadata.sessionId);
+          if (existingSession) {
+            return;
+          }
+          if (isLegacyPersistedBtwSession(metadata)) {
+            return;
+          }
+
+          stateMachineManager.getOrCreate(metadata.sessionId);
+
+          let maxContextTokens = 128128;
           if (metadata.modelName) {
             const model = models.find((m: any) => m.name === metadata.modelName || m.id === metadata.modelName);
             if (model?.context_window) {
               maxContextTokens = model.context_window;
             }
           }
-          
+
           if (maxContextTokens === 128128) {
-            const defaultModels = await configManager.getConfig<Record<string, string>>('ai.default_models');
             const primaryModelId = defaultModels?.primary;
-            
+
             if (primaryModelId) {
               const primaryModel = models.find((m: any) => m.id === primaryModelId);
               if (primaryModel?.context_window) {
@@ -1783,71 +1801,74 @@ export class FlowChatStore {
               }
             }
           }
-        } catch (error) {
-          log.warn('Failed to get model context window size, using default', { sessionId: metadata.sessionId, error });
-        }
-        
-        const relationship = deriveSessionRelationshipFromMetadata(metadata);
-        const lastFinishedAt = deriveLastFinishedAtFromMetadata(metadata);
-        const titleState = deriveSessionTitleStateFromMetadata(metadata);
-        const hasDynamicDefaultTitle = titleState.titleSource === 'i18n';
 
-        this.setState(prev => {
-          if (prev.sessions.has(metadata.sessionId)) {
-            return prev;
-          }
-          
-          const rawAgentType = metadata.agentType || 'agentic';
-          const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
-          
-          if (rawAgentType !== validatedAgentType) {
-            log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
-          }
-          
-          const session: Session = {
-            sessionId: metadata.sessionId,
-            title: titleState.title,
-            titleSource: titleState.titleSource,
-            titleI18nKey: titleState.titleI18nKey,
-            titleI18nParams: titleState.titleI18nParams,
-            titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
-            dialogTurns: [],
-            status: 'idle',
-            config: {
-              agentType: validatedAgentType,
-              modelName: metadata.modelName,
-            },
-            createdAt: metadata.createdAt,
-            lastActiveAt: metadata.lastActiveAt,
-            lastFinishedAt,
-            error: null,
-            isHistorical: true,
-            historyState: 'metadata-only',
-            todos: (metadata as any).todos || [],
-            maxContextTokens,
-            mode: validatedAgentType,
-            workspacePath: (metadata as any).workspacePath || workspacePath,
-            remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
-            remoteSshHost:
-              metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
-            parentSessionId: relationship.parentSessionId,
-            sessionKind: relationship.sessionKind,
-            btwThreads: [],
-            btwOrigin: relationship.btwOrigin,
-            hasUnreadCompletion: metadata.unreadCompletion,
-            needsUserAttention: metadata.needsUserAttention,
-            deepReviewRunManifest: metadata.deepReviewRunManifest,
-            isTransient: false,
-          };
-          
-          const newSessions = new Map(prev.sessions);
-          newSessions.set(metadata.sessionId, session);
-          
-          return {
-            ...prev,
-            sessions: newSessions,
-          };
-        });
+          const relationship = deriveSessionRelationshipFromMetadata(metadata);
+          const lastFinishedAt = deriveLastFinishedAtFromMetadata(metadata);
+          const titleState = deriveSessionTitleStateFromMetadata(metadata);
+          const hasDynamicDefaultTitle = titleState.titleSource === 'i18n';
+
+          this.setState(prev => {
+            if (prev.sessions.has(metadata.sessionId)) {
+              return prev;
+            }
+
+            const rawAgentType = metadata.agentType || 'agentic';
+            const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+
+            if (rawAgentType !== validatedAgentType) {
+              log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
+            }
+
+            const session: Session = {
+              sessionId: metadata.sessionId,
+              title: titleState.title,
+              titleSource: titleState.titleSource,
+              titleI18nKey: titleState.titleI18nKey,
+              titleI18nParams: titleState.titleI18nParams,
+              titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
+              dialogTurns: [],
+              status: 'idle',
+              config: {
+                agentType: validatedAgentType,
+                modelName: metadata.modelName,
+              },
+              createdAt: metadata.createdAt,
+              lastActiveAt: metadata.lastActiveAt,
+              lastFinishedAt,
+              error: null,
+              isHistorical: true,
+              historyState: 'metadata-only',
+              todos: (metadata as any).todos || [],
+              maxContextTokens,
+              mode: validatedAgentType,
+              workspacePath: (metadata as any).workspacePath || workspacePath,
+              remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
+              remoteSshHost:
+                metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
+              parentSessionId: relationship.parentSessionId,
+              sessionKind: relationship.sessionKind,
+              btwThreads: [],
+              btwOrigin: relationship.btwOrigin,
+              hasUnreadCompletion: metadata.unreadCompletion,
+              needsUserAttention: metadata.needsUserAttention,
+              deepReviewRunManifest: metadata.deepReviewRunManifest,
+              isTransient: false,
+            };
+
+            const newSessions = new Map(prev.sessions);
+            newSessions.set(metadata.sessionId, session);
+
+            return {
+              ...prev,
+              sessions: newSessions,
+            };
+          });
+        } catch (error) {
+          log.warn('Failed to process persisted session metadata', {
+            sessionId: metadata?.sessionId,
+            error,
+          });
+        }
       };
       
       await Promise.all(sessions.map(processSession));
