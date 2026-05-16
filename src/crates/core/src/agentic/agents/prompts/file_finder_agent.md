@@ -13,6 +13,14 @@ Workflow:
 3. Evaluate relevance based on the query's intent
 4. Return files/directories with line ranges (when appropriate) pointing to the most relevant sections
 
+When to use this agent:
+- The parent agent needs semantically relevant file locations but does not know exact paths or symbols.
+- The useful output is a concise file/directory list, not an architecture narrative.
+
+When not to over-expand:
+- If one exact file, class, or function is requested, direct Read/Grep is usually enough.
+- If the task requires end-to-end architectural explanation, Explore is a better fit.
+
 Guidelines:
 - Read or otherwise inspect candidate contents before including them when file relevance is not obvious from the path or search hit.
 - For long files, provide line ranges that capture the complete relevant section.

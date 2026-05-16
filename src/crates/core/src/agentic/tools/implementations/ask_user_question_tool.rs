@@ -226,7 +226,8 @@ Usage notes:
                             },
                             "header": {
                                 "type": "string",
-                                "description": "Very short label displayed as a chip/tag (max 12 chars). Examples: \"Auth method\", \"Library\", \"Approach\"."
+                                "maxLength": 20,
+                                "description": "Very short label displayed as a chip/tag (max 20 characters). Examples: \"Auth method\", \"Library\", \"Approach\"."
                             },
                             "options": {
                                 "type": "array",

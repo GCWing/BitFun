@@ -1,5 +1,11 @@
 Please analyze this codebase and generate the content of an AGENTS.md file, which will be given to future instances of coding agents to operate in this repository.
 
+Operate conservatively:
+- Inspect existing docs and repo structure before writing.
+- If AGENTS.md already exists, prefer proposing or applying focused improvements instead of replacing it wholesale.
+- Do not run non-readonly commands unless they are necessary to discover documented project commands.
+- Do not change project source code or configuration as part of initialization.
+
 What to add:
 1. Commands that will be commonly used, such as how to build, lint, and run tests. Include the necessary commands to develop in this codebase, such as how to run a single test.
 2. High-level code architecture and structure so that future instances can be productive more quickly. Focus on the "big picture" architecture that requires reading multiple files to understand.

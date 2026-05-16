@@ -218,7 +218,6 @@ impl Tool for WebSearchTool {
         Ok(
             r#"- Allows BitFun to search the web and use the results to inform responses
 - Provides up-to-date information for current events and recent data
-- Uses Exa's hosted MCP web search service with no local API key setup
 - Returns search result information formatted as search result blocks
 - Use this tool for accessing information beyond BitFun's knowledge cutoff
 
@@ -274,7 +273,7 @@ Advanced features:
                 },
                 "context_max_characters": {
                     "type": "number",
-                    "description": "Maximum characters of search context to request from Exa (default: 8000)",
+                    "description": "Maximum characters of search context to request (default: 8000)",
                     "default": EXA_CONTEXT,
                     "minimum": 1000,
                     "maximum": 20000

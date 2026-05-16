@@ -812,14 +812,10 @@ When the workspace is opened over Remote SSH, Git runs on the **server** (see to
 ## Commit Message Guidelines
 
 When creating commits, use this format for the commit message:
-- Start with a concise summary (50 chars or less)
-- Leave a blank line after the summary
-- Add detailed description if needed
-- End with:
-  
-  Generated with BitFun
-
-  Co-Authored-By: BitFun"#.to_string())
+- Start with a concise summary, preferably 50 characters or less
+- Leave a blank line after the summary when adding a body
+- Add a body only when it helps explain the rationale, scope, or verification
+- Do not add generated-by or co-author footers unless the user or repository convention asks for them"#.to_string())
     }
 
     async fn description_with_context(
