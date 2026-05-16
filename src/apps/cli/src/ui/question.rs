@@ -494,7 +494,7 @@ fn render_question_page(
                 tab_spans.push(Span::styled(
                     format!(" {} ", qd.header),
                     Style::default()
-                        .fg(theme.background)
+                        .fg(theme.selection_foreground())
                         .bg(theme.primary)
                         .add_modifier(Modifier::BOLD),
                 ));
@@ -514,7 +514,7 @@ fn render_question_page(
             tab_spans.push(Span::styled(
                 " Confirm ",
                 Style::default()
-                    .fg(theme.background)
+                    .fg(theme.selection_foreground())
                     .bg(theme.primary)
                     .add_modifier(Modifier::BOLD),
             ));
@@ -692,7 +692,7 @@ fn render_confirm_page(
     tab_spans.push(Span::styled(
         " Confirm ",
         Style::default()
-            .fg(theme.background)
+            .fg(theme.selection_foreground())
             .bg(theme.primary)
             .add_modifier(Modifier::BOLD),
     ));

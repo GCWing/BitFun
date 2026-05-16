@@ -366,7 +366,7 @@ async fn shutdown_mcp_servers() {
 
 /// Run the full interactive TUI flow: loading screen → startup page → chat
 async fn run_interactive(
-    config: CliConfig,
+    _config: CliConfig,
     default_agent: String,
     _workspace_str: String,
 ) -> Result<()> {
@@ -412,6 +412,7 @@ async fn run_interactive(
     let agent_type = startup_page.agent_type().to_string();
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
+    let config = startup_page.config().clone();
     let mut chat_mode = ChatMode::new(config, agent_type, workspace, &agentic_system);
     if let Some(session_id) = restore_session_id {
         chat_mode = chat_mode.with_restore_session(session_id);

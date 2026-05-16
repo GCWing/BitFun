@@ -6,7 +6,7 @@
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::{Alignment, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
     Frame,
@@ -178,7 +178,7 @@ impl ModelSelectorState {
             .highlight_style(
                 Style::default()
                     .bg(theme.primary)
-                    .fg(Color::White)
+                    .fg(theme.selection_foreground())
                     .add_modifier(Modifier::BOLD),
             );
 

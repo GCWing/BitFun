@@ -1,11 +1,15 @@
 /// Theme and style definitions
 
-use ratatui::style::{Color, Modifier, Style};
-use std::io::{IsTerminal, Read};
 use std::collections::{HashMap, HashSet};
+use std::io::IsTerminal;
 use std::path::Path;
 use std::time::{Duration, Instant};
+
 use once_cell::sync::Lazy;
+use ratatui::style::{Color, Modifier, Style};
+
+#[cfg(unix)]
+use std::io::Read;
 
 #[derive(Debug, Clone)]
 pub struct Theme {
@@ -21,6 +25,7 @@ pub struct Theme {
     // Panel backgrounds (inspired by opencode theme)
     pub background_panel: Color,
     pub background_element: Color,
+    pub input_background: Color,
 
     // Diff colors
     pub diff_added_fg: Color,
@@ -261,6 +266,7 @@ impl Theme {
 
             background_panel: Color::Rgb(30, 38, 55),
             background_element: Color::Rgb(40, 50, 70),
+            input_background: Color::Rgb(40, 50, 70),
 
             diff_added_fg: Color::Rgb(34, 197, 94),
             diff_removed_fg: Color::Rgb(239, 68, 68),
@@ -293,6 +299,7 @@ impl Theme {
 
             background_panel: Color::Reset,
             background_element: Color::Reset,
+            input_background: Color::Reset,
 
             diff_added_fg: Color::Green,
             diff_removed_fg: Color::Red,
@@ -325,6 +332,7 @@ impl Theme {
 
             background_panel: Color::Rgb(243, 244, 246),
             background_element: Color::Rgb(229, 231, 235),
+            input_background: Color::Rgb(229, 231, 235),
 
             diff_added_fg: Color::Rgb(22, 163, 74),
             diff_removed_fg: Color::Rgb(220, 38, 38),
@@ -357,6 +365,7 @@ impl Theme {
 
             background_panel: Color::Reset,
             background_element: Color::Reset,
+            input_background: Color::Reset,
 
             diff_added_fg: Color::Green,
             diff_removed_fg: Color::Red,
@@ -389,6 +398,7 @@ impl Theme {
 
             background_panel: Color::Reset,
             background_element: Color::Reset,
+            input_background: Color::Reset,
 
             diff_added_fg: Color::Reset,
             diff_removed_fg: Color::Reset,
@@ -423,6 +433,8 @@ impl Theme {
                 self.border = to_ansi16(self.border);
                 self.background_panel = to_ansi16(self.background_panel);
                 self.background_element = to_ansi16(self.background_element);
+                // Keep the startup input panel as the preset-defined RGB color.
+                // Otherwise subtle dark theme variants collapse to the same ANSI black/blue.
                 self.diff_added_fg = to_ansi16(self.diff_added_fg);
                 self.diff_removed_fg = to_ansi16(self.diff_removed_fg);
                 self.diff_added_bg = to_ansi16(self.diff_added_bg);
@@ -457,6 +469,11 @@ impl Theme {
             border: resolved.border.unwrap_or(fallback.border),
             background_panel: resolved.background_panel.unwrap_or(fallback.background_panel),
             background_element: resolved.background_element.unwrap_or(fallback.background_element),
+            input_background: resolved.input_background.unwrap_or(
+                resolved
+                    .background_element
+                    .unwrap_or(fallback.input_background),
+            ),
             diff_added_fg: resolved.diff_added_fg.unwrap_or(fallback.diff_added_fg),
             diff_removed_fg: resolved.diff_removed_fg.unwrap_or(fallback.diff_removed_fg),
             diff_added_bg: resolved.diff_added_bg.unwrap_or(fallback.diff_added_bg),
@@ -496,6 +513,47 @@ impl Theme {
             StyleKind::DiffLineNumber => Style::default().fg(self.diff_line_number),
         }
     }
+
+    pub fn selection_foreground(&self) -> Color {
+        readable_foreground_for(self.primary)
+    }
+}
+
+fn readable_foreground_for(background: Color) -> Color {
+    match background {
+        Color::Reset => Color::Reset,
+        Color::Black | Color::Red | Color::Green | Color::Blue | Color::Magenta | Color::DarkGray => {
+            Color::White
+        }
+        Color::Yellow
+        | Color::Gray
+        | Color::LightRed
+        | Color::LightGreen
+        | Color::LightYellow
+        | Color::LightBlue
+        | Color::LightMagenta
+        | Color::LightCyan
+        | Color::White
+        | Color::Cyan => Color::Black,
+        Color::Indexed(idx) => readable_foreground_for(idx_to_ansi16(idx)),
+        Color::Rgb(r, g, b) => {
+            let lum = relative_luminance(r, g, b);
+            if lum > 0.36 { Color::Black } else { Color::White }
+        }
+    }
+}
+
+fn relative_luminance(r: u8, g: u8, b: u8) -> f64 {
+    fn channel(v: u8) -> f64 {
+        let v = v as f64 / 255.0;
+        if v <= 0.03928 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
 }
 
 fn to_ansi16(c: Color) -> Color {
@@ -679,45 +737,45 @@ static BUILTIN_OPENCODE_THEMES: Lazy<HashMap<&'static str, OpencodeThemeJson>> =
 
     HashMap::from([
         parse(
-            "cursor",
+            "bitfun-cyber",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/cursor.json"
+                "/themes/presets/bitfun-cyber.json"
             )),
         ),
         parse(
-            "everforest",
+            "bitfun-dark",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/everforest.json"
+                "/themes/presets/bitfun-dark.json"
             )),
         ),
         parse(
-            "github",
+            "bitfun-ink-night",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/github.json"
+                "/themes/presets/bitfun-ink-night.json"
             )),
         ),
         parse(
-            "one-dark",
+            "bitfun-light",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/one-dark.json"
+                "/themes/presets/bitfun-light.json"
             )),
         ),
         parse(
-            "opencode",
+            "bitfun-midnight",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/opencode.json"
+                "/themes/presets/bitfun-midnight.json"
             )),
         ),
         parse(
-            "tokyonight",
+            "bitfun-tokyo-night",
             include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/themes/presets/tokyonight.json"
+                "/themes/presets/bitfun-tokyo-night.json"
             )),
         ),
     ])
@@ -745,6 +803,7 @@ struct ResolvedTokens {
     border: Option<Color>,
     background_panel: Option<Color>,
     background_element: Option<Color>,
+    input_background: Option<Color>,
     diff_added_fg: Option<Color>,
     diff_removed_fg: Option<Color>,
     diff_added_bg: Option<Color>,
@@ -774,6 +833,7 @@ fn resolve_opencode_theme(json: &OpencodeThemeJson, appearance: Appearance) -> a
     tokens.border = resolve_key(json, &defs, "border", mode)?;
     tokens.background_panel = resolve_key(json, &defs, "backgroundPanel", mode)?;
     tokens.background_element = resolve_key(json, &defs, "backgroundElement", mode)?;
+    tokens.input_background = resolve_key(json, &defs, "inputBackground", mode)?;
 
     tokens.diff_added_fg = resolve_key(json, &defs, "diffAdded", mode)?;
     tokens.diff_removed_fg = resolve_key(json, &defs, "diffRemoved", mode)?;
@@ -844,6 +904,17 @@ fn resolve_color_string(
             let g = u8::from_str_radix(&hex[2..4], 16)?;
             let b = u8::from_str_radix(&hex[4..6], 16)?;
             return Ok(Color::Rgb(r, g, b));
+        } else if hex.len() == 8 {
+            let r = u8::from_str_radix(&hex[0..2], 16)?;
+            let g = u8::from_str_radix(&hex[2..4], 16)?;
+            let b = u8::from_str_radix(&hex[4..6], 16)?;
+            let a = u8::from_str_radix(&hex[6..8], 16)?;
+            let base = if mode == "light" { 255 } else { 0 };
+            return Ok(Color::Rgb(
+                blend_alpha_channel(r, a, base),
+                blend_alpha_channel(g, a, base),
+                blend_alpha_channel(b, a, base),
+            ));
         }
     }
 
@@ -860,4 +931,51 @@ fn resolve_color_string(
     }
 
     anyhow::bail!("Theme color reference \"{}\" not found", t)
+}
+
+fn blend_alpha_channel(fg: u8, alpha: u8, bg: u8) -> u8 {
+    let fg = fg as u16;
+    let alpha = alpha as u16;
+    let bg = bg as u16;
+    (((fg * alpha) + (bg * (255 - alpha)) + 127) / 255) as u8
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builtin_themes_resolve_for_dark_and_light() {
+        for id in builtin_theme_ids() {
+            let json = builtin_theme_json(&id).expect("built-in theme id should resolve");
+            Theme::dark()
+                .apply_opencode_theme_json(json, Appearance::Dark)
+                .unwrap_or_else(|err| panic!("failed to resolve dark theme {id}: {err}"));
+            Theme::light()
+                .apply_opencode_theme_json(json, Appearance::Light)
+                .unwrap_or_else(|err| panic!("failed to resolve light theme {id}: {err}"));
+        }
+    }
+
+    #[test]
+    fn eight_digit_hex_colors_are_supported() {
+        let json = serde_json::from_str::<OpencodeThemeJson>(
+            r##"{
+                "theme": {
+                    "primary": { "dark": "#ffffff80", "light": "#00000080" }
+                }
+            }"##,
+        )
+        .unwrap();
+
+        let dark = Theme::dark()
+            .apply_opencode_theme_json(&json, Appearance::Dark)
+            .unwrap();
+        let light = Theme::light()
+            .apply_opencode_theme_json(&json, Appearance::Light)
+            .unwrap();
+
+        assert_eq!(dark.primary, Color::Rgb(128, 128, 128));
+        assert_eq!(light.primary, Color::Rgb(127, 127, 127));
+    }
 }

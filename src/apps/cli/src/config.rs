@@ -73,7 +73,7 @@ impl Default for UiConfig {
     fn default() -> Self {
         Self {
             theme: "dark".to_string(),
-            theme_id: "cursor".to_string(),
+            theme_id: "bitfun-dark".to_string(),
             show_tips: true,
             animation: true,
             color_scheme: "default".to_string(),

@@ -448,12 +448,18 @@ impl McpAddDialogState {
                 // Selector
                 let type_area = Rect { x: inner.x, y: inner.y + row, width: inner.width, height: 1 };
                 let local_style = if self.server_type == ServerType::Local {
-                    Style::default().fg(Color::White).bg(theme.primary).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(theme.selection_foreground())
+                        .bg(theme.primary)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     theme.style(StyleKind::Muted)
                 };
                 let remote_style = if self.server_type == ServerType::Remote {
-                    Style::default().fg(Color::White).bg(theme.primary).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(theme.selection_foreground())
+                        .bg(theme.primary)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     theme.style(StyleKind::Muted)
                 };

@@ -9,9 +9,10 @@ use super::skill_selector::{SkillItem, SkillSelectorAction, SkillSelectorState};
 use super::subagent_selector::{SubagentItem, SubagentSelectorAction, SubagentSelectorState};
 use super::text_input::{TextInput, TextInputStyle};
 use super::theme::{
-    builtin_theme_json, resolve_appearance, resolve_effective_color_scheme, EffectiveColorScheme,
-    Theme,
+    builtin_theme_ids, builtin_theme_json, resolve_appearance, resolve_effective_color_scheme,
+    Appearance, EffectiveColorScheme, Theme,
 };
+use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use crate::commands::STARTUP_COMMAND_SPECS;
 use crate::config::CliConfig;
 /// Startup page module
@@ -26,9 +27,9 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifier
 use ratatui::{
     backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Paragraph},
     Frame, Terminal,
 };
 use std::sync::Arc;
@@ -57,6 +58,7 @@ pub enum PopupType {
     SessionSelector,
     SkillSelector,
     SubagentSelector,
+    ThemeSelector,
     ProviderSelector,
     ModelConfigForm,
 }
@@ -133,6 +135,7 @@ const TIPS: &[&str] = &[
     "Use /sessions to list and continue previous conversations",
     "Press Ctrl+O to expand/collapse tool output",
     "Use /skills to browse and execute available skills",
+    "Use /theme to switch the CLI theme",
     "Use /acp to copy editor setup commands for ACP hosts",
     "Press Up/Down to cycle through input history",
     "Use /new to start a fresh conversation session",
@@ -144,6 +147,8 @@ pub struct StartupPage {
     text_input: TextInput,
     /// Theme
     theme: Theme,
+    /// CLI config, including persisted theme preference.
+    config: CliConfig,
     /// Current tip text
     tip: &'static str,
 
@@ -159,8 +164,10 @@ pub struct StartupPage {
     session_selector: SessionSelectorState,
     skill_selector: SkillSelectorState,
     subagent_selector: SubagentSelectorState,
+    theme_selector: ThemeSelectorState,
     provider_selector: ProviderSelectorState,
     model_config_form: ModelConfigFormState,
+    theme_preview_original: Option<Theme>,
 
     // ── System context ──
     coordinator: Arc<ConversationCoordinator>,
@@ -222,6 +229,7 @@ impl StartupPage {
         let mut page = Self {
             text_input: TextInput::new(),
             theme,
+            config,
             tip: TIPS[tip_index],
             command_menu: CommandMenuState::new(),
             command_palette: CommandPaletteState::new(),
@@ -230,8 +238,10 @@ impl StartupPage {
             session_selector: SessionSelectorState::new(),
             skill_selector: SkillSelectorState::new(),
             subagent_selector: SubagentSelectorState::new(),
+            theme_selector: ThemeSelectorState::new(),
             provider_selector: ProviderSelectorState::new(),
             model_config_form: ModelConfigFormState::new(),
+            theme_preview_original: None,
             coordinator,
             agent_type: default_agent,
             model_display_name: String::new(),
@@ -266,6 +276,11 @@ impl StartupPage {
         }
     }
 
+    /// Get the current CLI config after startup-page edits.
+    pub fn config(&self) -> &CliConfig {
+        &self.config
+    }
+
     fn workspace_path_buf(&self) -> std::path::PathBuf {
         self.workspace()
             .map(std::path::PathBuf::from)
@@ -281,6 +296,7 @@ impl StartupPage {
             || self.session_selector.is_visible()
             || self.skill_selector.is_visible()
             || self.subagent_selector.is_visible()
+            || self.theme_selector.is_visible()
             || self.provider_selector.is_visible()
             || self.model_config_form.is_visible()
     }
@@ -376,6 +392,11 @@ impl StartupPage {
                     if let PaletteAction::Execute(id) = action {
                         let _ = self.handle_palette_action(&id);
                     }
+                } else if self.theme_selector.captures_mouse(&mouse) {
+                    self.theme_selector.handle_mouse_event(&mouse);
+                    if let Some(selected) = self.theme_selector.selected_item().cloned() {
+                        self.preview_theme_selection(&selected);
+                    }
                 } else if self.provider_selector.captures_mouse(&mouse) {
                     if let Some(selection) = self.provider_selector.handle_mouse_event(&mouse) {
                         self.handle_provider_selection(selection);
@@ -399,6 +420,10 @@ impl StartupPage {
 
     fn render(&mut self, frame: &mut Frame) {
         let size = frame.area();
+        frame.render_widget(
+            Block::default().style(Style::default().bg(self.theme.background)),
+            size,
+        );
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -429,6 +454,7 @@ impl StartupPage {
         self.session_selector.render(frame, size, &self.theme);
         self.skill_selector.render(frame, size, &self.theme);
         self.subagent_selector.render(frame, size, &self.theme);
+        self.theme_selector.render(frame, size, &self.theme);
         self.provider_selector.render(frame, size, &self.theme);
         self.model_config_form.render_mut(frame, size, &self.theme);
 
@@ -492,6 +518,7 @@ impl StartupPage {
 
     fn render_input(&mut self, frame: &mut Frame, area: Rect) {
         let highlight_color = self.theme.primary;
+        let input_bg = self.input_background();
 
         // Split: 2 cols for left bar, rest for content
         let h_chunks = Layout::default()
@@ -504,9 +531,14 @@ impl StartupPage {
 
         // Left bar: full-height ┃
         let bar_lines: Vec<Line> = (0..area.height)
-            .map(|_| Line::from(Span::styled(" ┃", Style::default().fg(highlight_color))))
+            .map(|_| {
+                Line::from(Span::styled(
+                    " ┃",
+                    Style::default().fg(highlight_color).bg(input_bg),
+                ))
+            })
             .collect();
-        let bar = Paragraph::new(bar_lines);
+        let bar = Paragraph::new(bar_lines).style(Style::default().bg(input_bg));
         frame.render_widget(bar, h_chunks[0]);
 
         // Content area with background
@@ -514,7 +546,7 @@ impl StartupPage {
 
         // Fill background
         let bg = Paragraph::new(vec![Line::from(""); content_area.height as usize])
-            .style(Style::default().bg(self.theme.background_element));
+            .style(Style::default().bg(input_bg));
         frame.render_widget(bg, content_area);
 
         // Inner content with padding
@@ -540,8 +572,8 @@ impl StartupPage {
             first_line_prefix: "",
             continuation_prefix: "",
             placeholder: "Ask anything... or type / for commands".to_string(),
-            text_style: Style::default().fg(Color::White),
-            placeholder_style: Style::default().fg(self.theme.muted),
+            text_style: Style::default().fg(self.theme.command_text).bg(input_bg),
+            placeholder_style: Style::default().fg(self.theme.muted).bg(input_bg),
         };
         self.text_input.render(frame, text_area, &style, true);
 
@@ -567,6 +599,10 @@ impl StartupPage {
             };
             frame.render_widget(Paragraph::new(agent_line), agent_area);
         }
+    }
+
+    fn input_background(&self) -> ratatui::style::Color {
+        self.theme.input_background
     }
 
     fn render_tip_or_status(&self, frame: &mut Frame, area: Rect) {
@@ -633,12 +669,12 @@ impl StartupPage {
             ];
 
             let colors = [
-                Color::Rgb(255, 0, 100),
-                Color::Rgb(255, 100, 0),
-                Color::Rgb(255, 200, 0),
-                Color::Rgb(100, 255, 0),
-                Color::Rgb(0, 255, 200),
-                Color::Rgb(100, 100, 255),
+                self.theme.primary,
+                self.theme.info,
+                self.theme.success,
+                self.theme.warning,
+                self.theme.error,
+                self.theme.muted,
             ];
 
             for (i, line) in logo.iter().enumerate() {
@@ -659,11 +695,11 @@ impl StartupPage {
             ];
 
             let colors = [
-                Color::Cyan,
-                Color::Blue,
-                Color::Magenta,
-                Color::Red,
-                Color::Yellow,
+                self.theme.primary,
+                self.theme.info,
+                self.theme.success,
+                self.theme.warning,
+                self.theme.error,
             ];
 
             for (i, line) in logo.iter().enumerate() {
@@ -680,14 +716,14 @@ impl StartupPage {
         lines.push(Line::from(Span::styled(
             "AI agent-driven command-line programming assistant",
             Style::default()
-                .fg(Color::Gray)
+                .fg(self.theme.muted)
                 .add_modifier(Modifier::ITALIC),
         )));
 
         let version = format!("v{}", env!("CARGO_PKG_VERSION"));
         lines.push(Line::from(Span::styled(
             version,
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(self.theme.muted),
         )));
 
         let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
@@ -722,6 +758,32 @@ impl StartupPage {
         }
 
         // ── Selector popups intercept all keys when active ──
+
+        if self.theme_selector.is_visible() {
+            match key.code {
+                KeyCode::Up => {
+                    self.theme_selector.move_up();
+                    if let Some(selected) = self.theme_selector.selected_item().cloned() {
+                        self.preview_theme_selection(&selected);
+                    }
+                }
+                KeyCode::Down => {
+                    self.theme_selector.move_down();
+                    if let Some(selected) = self.theme_selector.selected_item().cloned() {
+                        self.preview_theme_selection(&selected);
+                    }
+                }
+                KeyCode::Enter => {
+                    if let Some(selected) = self.theme_selector.confirm_selection() {
+                        self.theme_selector.hide();
+                        self.apply_theme_selection(&selected);
+                    }
+                }
+                KeyCode::Esc => self.navigate_back(),
+                _ => {}
+            }
+            return None;
+        }
 
         if self.model_selector.is_visible() {
             match key.code {
@@ -1001,6 +1063,10 @@ impl StartupPage {
                 self.push_current_popup_to_stack();
                 self.provider_selector.show();
             }
+            // Appearance group
+            "theme" => {
+                self.show_theme_selector();
+            }
             // Agent group
             "switch_agent" => {
                 self.show_agent_selector();
@@ -1045,6 +1111,9 @@ impl StartupPage {
             }
             "/models" => {
                 self.show_model_selector();
+            }
+            "/theme" => {
+                self.show_theme_selector();
             }
             "/connect" => {
                 self.push_current_popup_to_stack();
@@ -1113,6 +1182,9 @@ impl StartupPage {
         } else if self.subagent_selector.is_visible() {
             self.popup_stack.push(PopupType::SubagentSelector);
             self.subagent_selector.hide();
+        } else if self.theme_selector.is_visible() {
+            self.popup_stack.push(PopupType::ThemeSelector);
+            self.theme_selector.hide();
         } else if self.provider_selector.is_visible() {
             self.popup_stack.push(PopupType::ProviderSelector);
             self.provider_selector.hide();
@@ -1550,6 +1622,113 @@ impl StartupPage {
         }
     }
 
+    fn show_theme_selector(&mut self) {
+        let themes = self.list_available_themes();
+        if themes.is_empty() {
+            self.status = Some("No themes available.".to_string());
+            return;
+        }
+
+        self.push_current_popup_to_stack();
+        self.begin_theme_preview();
+        self.theme_selector
+            .show(themes, Some(self.config.ui.theme_id.clone()));
+        if let Some(selected) = self.theme_selector.selected_item().cloned() {
+            self.preview_theme_selection(&selected);
+        }
+    }
+
+    fn list_available_themes(&self) -> Vec<ThemeItem> {
+        let mut themes: Vec<ThemeItem> = builtin_theme_ids()
+            .into_iter()
+            .map(|id| ThemeItem { id })
+            .collect();
+
+        themes.sort_by(|a, b| a.id.to_ascii_lowercase().cmp(&b.id.to_ascii_lowercase()));
+        themes.dedup_by(|a, b| a.id == b.id);
+        themes
+    }
+
+    fn current_base_theme(&self) -> (Theme, Appearance, EffectiveColorScheme) {
+        let appearance = resolve_appearance(&self.config.ui.theme);
+        let scheme = resolve_effective_color_scheme(&self.config.ui.color_scheme);
+        let base_is_light = appearance.is_light();
+        let base = match (base_is_light, scheme) {
+            (_, EffectiveColorScheme::Monochrome) => Theme::monochrome(),
+            (true, EffectiveColorScheme::Ansi16) => Theme::light_ansi16(),
+            (true, EffectiveColorScheme::Truecolor) => Theme::light(),
+            (false, EffectiveColorScheme::Ansi16) => Theme::dark_ansi16(),
+            (false, EffectiveColorScheme::Truecolor) => Theme::dark(),
+        };
+
+        (base, appearance, scheme)
+    }
+
+    fn resolve_theme_by_id(
+        &self,
+        base: Theme,
+        appearance: Appearance,
+        scheme: EffectiveColorScheme,
+        id: &str,
+    ) -> Theme {
+        if scheme == EffectiveColorScheme::Monochrome {
+            return Theme::monochrome();
+        }
+
+        let id = id.trim();
+        if id.is_empty() {
+            return base;
+        }
+
+        if let Some(json) = builtin_theme_json(id) {
+            return base
+                .apply_opencode_theme_json(json, appearance)
+                .unwrap_or(base)
+                .with_effective_scheme(scheme);
+        }
+
+        base
+    }
+
+    fn begin_theme_preview(&mut self) {
+        if self.theme_preview_original.is_none() {
+            self.theme_preview_original = Some(self.theme.clone());
+        }
+    }
+
+    fn cancel_theme_preview(&mut self) {
+        if let Some(original) = self.theme_preview_original.take() {
+            self.theme = original;
+        }
+    }
+
+    fn preview_theme_selection(&mut self, theme: &ThemeItem) {
+        self.begin_theme_preview();
+        let (base, appearance, scheme) = self.current_base_theme();
+        self.theme = self.resolve_theme_by_id(base, appearance, scheme, &theme.id);
+        self.status = Some(format!(
+            "Preview theme: {} (Enter apply, Esc cancel)",
+            theme.id
+        ));
+    }
+
+    fn apply_theme_selection(&mut self, theme: &ThemeItem) {
+        let (base, appearance, scheme) = self.current_base_theme();
+        self.config.ui.theme_id = theme.id.clone();
+
+        match self.config.save() {
+            Ok(()) => {
+                self.status = Some(format!("Theme set to: {}", theme.id));
+            }
+            Err(e) => {
+                self.status = Some(format!("Failed to save config: {}", e));
+            }
+        }
+
+        self.theme = self.resolve_theme_by_id(base, appearance, scheme, &theme.id);
+        self.theme_preview_original = None;
+    }
+
     fn show_skill_selector(&mut self) {
         self.push_current_popup_to_stack();
         self.skill_selector.show_menu();
@@ -1860,6 +2039,9 @@ impl StartupPage {
             self.skill_selector.hide();
         } else if self.subagent_selector.is_visible() {
             self.subagent_selector.hide();
+        } else if self.theme_selector.is_visible() {
+            self.theme_selector.hide();
+            self.cancel_theme_preview();
         } else if self.provider_selector.is_visible() {
             self.provider_selector.hide();
         } else if self.model_config_form.is_visible() {
@@ -1875,6 +2057,7 @@ impl StartupPage {
                 PopupType::SessionSelector => self.session_selector.reshow(),
                 PopupType::SkillSelector => self.skill_selector.reshow(),
                 PopupType::SubagentSelector => self.subagent_selector.reshow(),
+                PopupType::ThemeSelector => self.theme_selector.reshow(),
                 PopupType::ProviderSelector => self.provider_selector.reshow(),
                 PopupType::ModelConfigForm => self.model_config_form.reshow(),
             }
@@ -1889,6 +2072,8 @@ impl StartupPage {
         self.session_selector.hide();
         self.skill_selector.hide();
         self.subagent_selector.hide();
+        self.theme_selector.hide();
+        self.cancel_theme_preview();
         self.provider_selector.hide();
         self.model_config_form.hide();
         self.popup_stack.clear();

@@ -6,7 +6,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
@@ -79,6 +79,13 @@ pub fn default_palette_items() -> Vec<PaletteItem> {
             description: "Add a new AI model configuration".into(),
             group: "Models".into(),
         },
+        // Appearance group
+        PaletteItem {
+            id: "theme".into(),
+            label: "Theme".into(),
+            description: "Switch UI theme".into(),
+            group: "Appearance".into(),
+        },
         // Agent group
         PaletteItem {
             id: "switch_agent".into(),
@@ -122,6 +129,12 @@ fn build_suggested_items() -> Vec<PaletteItem> {
             id: "switch_agent".into(),
             label: "Switch agent".into(),
             description: "Switch agent mode".into(),
+            group: "Suggested".into(),
+        },
+        PaletteItem {
+            id: "theme".into(),
+            label: "Theme".into(),
+            description: "Switch UI theme".into(),
             group: "Suggested".into(),
         },
         PaletteItem {
@@ -655,14 +668,16 @@ impl CommandPaletteState {
                     let label_style = if is_selected {
                         Style::default()
                             .bg(theme.primary)
-                            .fg(Color::White)
+                            .fg(theme.selection_foreground())
                             .add_modifier(Modifier::BOLD)
                     } else {
                         theme.style(StyleKind::Primary)
                     };
 
                     let desc_style = if is_selected {
-                        Style::default().bg(theme.primary).fg(Color::White)
+                        Style::default()
+                            .bg(theme.primary)
+                            .fg(theme.selection_foreground())
                     } else {
                         theme.style(StyleKind::Muted)
                     };

@@ -85,6 +85,10 @@ pub const STARTUP_COMMAND_SPECS: &[CommandSpec] = &[
         description: "Select model for all modes",
     },
     CommandSpec {
+        name: "/theme",
+        description: "Switch UI theme",
+    },
+    CommandSpec {
         name: "/connect",
         description: "Add a new AI model configuration",
     },

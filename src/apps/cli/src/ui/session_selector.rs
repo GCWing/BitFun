@@ -326,7 +326,7 @@ impl SessionSelectorState {
             .highlight_style(
                 Style::default()
                     .bg(theme.primary)
-                    .fg(Color::White)
+                    .fg(theme.selection_foreground())
                     .add_modifier(Modifier::BOLD),
             );
 
