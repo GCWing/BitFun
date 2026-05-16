@@ -3,10 +3,18 @@
  * Principle: fetch config from the theme system, avoid hard-coded colors.
  */
 
-import mermaid from 'mermaid';
 import { getMermaidConfig, setupThemeListener, MERMAID_THEME_CHANGE_EVENT, getThemeType } from '../theme/mermaidTheme';
 
 export { MERMAID_THEME_CHANGE_EVENT };
+
+type MermaidRuntime = typeof import('mermaid')['default'];
+
+let mermaidRuntimePromise: Promise<MermaidRuntime> | null = null;
+
+function loadMermaidRuntime(): Promise<MermaidRuntime> {
+  mermaidRuntimePromise ??= import('mermaid').then((module) => module.default);
+  return mermaidRuntimePromise;
+}
 
 export class MermaidService {
   private static instance: MermaidService;
@@ -30,8 +38,9 @@ export class MermaidService {
     });
   }
 
-  /** Initialize Mermaid before each render. */
-  private initializeMermaid(): void {
+  /** Load and initialize Mermaid before each render. */
+  private async initializeMermaid(): Promise<MermaidRuntime> {
+    const mermaid = await loadMermaidRuntime();
     const config = getMermaidConfig();
     
     mermaid.initialize({
@@ -41,12 +50,14 @@ export class MermaidService {
       fontSize: 13,
       ...config,
     } as any);
+
+    return mermaid;
   }
 
   /** Render a Mermaid diagram. */
   public async renderDiagram(sourceCode: string): Promise<string> {
     // Reinitialize per render to ensure correct theme.
-    this.initializeMermaid();
+    const mermaid = await this.initializeMermaid();
 
     try {
       if (!sourceCode.trim()) {
@@ -69,6 +80,7 @@ export class MermaidService {
   public async validateSourceCode(sourceCode: string): Promise<boolean> {
     try {
       if (!sourceCode.trim()) return false;
+      const mermaid = await this.initializeMermaid();
       await mermaid.parse(sourceCode);
       return true;
     } catch {
@@ -85,6 +97,7 @@ export class MermaidService {
       if (!sourceCode.trim()) {
         return { valid: false, error: 'Source code is empty' };
       }
+      const mermaid = await this.initializeMermaid();
       await mermaid.parse(sourceCode);
       return { valid: true };
     } catch (error) {
