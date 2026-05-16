@@ -407,63 +407,36 @@ Available agents and the tools they have access to:
 
 When using the Task tool, you must specify `subagent_type` as a top-level tool argument to select which agent type to use. Do not put `subagent_type`, `description`, `workspace_path`, `model_id`, or `timeout_seconds` inside the prompt string.
 
-When NOT to use the Task tool:
-- If you want to read a specific file path, use the Read or Glob tool instead of the Task tool, to find the match more quickly
-- If you are searching for a specific class definition like "class Foo", use the Glob tool instead, to find the match more quickly
-- If you are searching for code within a specific file or set of 2-3 files, use the Read tool instead of the Task tool, to find the match more quickly
-- For subagent_type=Explore: do not use it for simple lookups above; reserve it for broad or multi-area exploration where many tool rounds would be needed
-- Other tasks that are not related to the agent descriptions above
-
+When to use the Task tool:
+- Delegate when a specialized subagent or separate context is likely to improve coverage, independence, or parallelism.
+- Use direct tools instead for focused lookups, known paths, single symbols, or code that can be inspected in a few reads/searches.
+- For Explore, prefer it for broad or multi-area exploration where many search/read rounds would otherwise be needed.
 
 Usage notes:
-- Always include a short description (3-5 words) summarizing what the agent will do
-- Provide clear, detailed prompt so the agent can work autonomously and return exactly the information you need.
+- Include a short description summarizing what the agent will do.
+- Provide a clear prompt so the agent can work autonomously and return the information you need.
 - If 'workspace_path' is omitted, the task inherits the current workspace by default.
-- The 'workspace_path' parameter must still be provided explicitly for the Explore and FileFinder agent.
+- Provide 'workspace_path' when the selected agent requires an explicit workspace, such as Explore or FileFinder.
 - Use 'model_id' when a caller needs a specific model or model slot for the subagent. Omit it to use the agent default.
 - Use 'timeout_seconds' when you need a hard deadline for the subagent. Omit it or set it to 0 to disable the timeout.
-- For DeepReview only, set 'retry' to true when re-dispatching a reviewer after that same reviewer returned partial_timeout or an explicit transient capacity failure in the current turn. Retry calls must include retry_coverage with source_packet_id, source_status, covered_files, and a smaller retry_scope_files list. Do not set 'auto_retry' unless this is a backend-owned automatic retry admitted by Review Team settings.
-- Launch multiple agents concurrently whenever possible, to maximize performance; to do that, use a single message with multiple tool calls
+- For DeepReview only, set 'retry' to true when re-dispatching a reviewer after that same reviewer returned partial_timeout or an explicit transient capacity failure in the current turn. Retry calls must include retry_coverage with source_packet_id, source_status, covered_files, and a smaller retry_scope_files list. Do not set 'auto_retry' unless this is a backend-owned automatic retry admitted by Review Team settings; model-issued retry decisions should omit it or set it to false. Example retry_coverage: {{ "source_packet_id": "reviewer-123", "source_status": "partial_timeout", "covered_files": ["src/main.rs"], "retry_scope_files": ["src/parser.rs"] }}.
+- Launch independent agents concurrently when that improves coverage or latency; send parallel Task calls in a single assistant message.
 - When the agent is done, it will return a single message back to you.
-- The agent's outputs should generally be trusted
-- Clearly tell the agent whether you expect it to write code or just to do research (search, file reads, web fetches, etc.), since it is not aware of the user's intent
-- If the agent description mentions that it should be used proactively, then you should try your best to use it without the user having to ask for it first. Use your judgement.
-- If the user specifies that they want you to run agents "in parallel", you MUST send a single message with multiple Task tool calls. For example, if you need to launch both a code-reviewer agent and a test-runner agent in parallel, send a single message with both tool calls.
+- Treat subagent outputs as useful evidence, but verify details yourself before making edits or final claims that depend on exact code.
+- Clearly tell the agent whether you expect it to write code or just to do research (search, file reads, web fetches, etc.), since it is not aware of the user's intent.
+- If the agent description mentions proactive use, consider it when relevant and use your judgement.
+- If the user explicitly asks to run agents in parallel, send the independent Task calls together in one message.
 
 Example usage:
 
-<example_agent_descriptions>
-"code-reviewer": use this agent after you are done writing a signficant piece of code
-"greeting-responder": use this agent when to respond to user greetings with a friendly joke
-</example_agent_description>
-
 <example>
-user: "Please write a function that checks if a number is prime"
-assistant: Sure let me write a function that checks if a number is prime
-assistant: First let me use the Write tool to write a function that checks if a number is prime
-assistant: I'm going to use the Write tool to write the following code:
-<code>
-function isPrime(n) {{
-  if (n <= 1) return false
-  for (let i = 2; i * i <= n; i++) {{
-    if (n % i === 0) return false
-  }}
-  return true
-}}
-</code>
-<commentary>
-Since a signficant piece of code was written and the task was completed, now use the code-reviewer agent to review the code
-</commentary>
-assistant: Now let me use the code-reviewer agent to review the code
-assistant: Uses the Task tool to launch the code-reviewer agent 
+user: "Map how authentication flows through this monorepo"
+assistant: Uses the Task tool with subagent_type="Explore" because this is a broad, multi-area architecture investigation. The prompt asks for a read-only survey, key files, and a concise call-flow summary.
 </example>
 
 <example>
-user: "Hello"
-<commentary>
-Since the user is greeting, use the greeting-responder agent to respond with a friendly joke
-</commentary>
-assistant: "I'm going to use the Task tool to launch the greeting-responder agent"
+user: "Find the files that implement export formatting"
+assistant: Uses the Task tool with subagent_type="FileFinder" because the exact filenames are unknown and semantic file discovery is useful. The parent agent reads the returned files before proposing edits.
 </example>"#,
             agent_descriptions
         )
