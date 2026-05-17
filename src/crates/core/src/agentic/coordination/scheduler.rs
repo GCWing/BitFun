@@ -15,8 +15,9 @@ use super::turn_outcome::{TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus
 use crate::agentic::core::{PromptEnvelope, SessionState};
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{
-    DialogRoundPreemptSource, DialogRoundSteeringSource, SessionRoundYieldFlags,
-    SessionSteeringBuffer, SteeringMessage,
+    DialogRoundInjectionSource, DialogRoundPreemptSource, RoundInjection,
+    RoundInjectionKind, RoundInjectionTarget, SessionRoundInjectionBuffer,
+    SessionRoundYieldFlags,
 };
 use crate::agentic::session::SessionManager;
 use dashmap::DashMap;
@@ -163,9 +164,9 @@ pub struct DialogScheduler {
     outcome_tx: mpsc::Sender<(String, TurnOutcome)>,
     /// When a user submits while `Processing`, engine yields after the current model round.
     round_yield_flags: Arc<SessionRoundYieldFlags>,
-    /// Per-session FIFO buffer of user "steering" messages drained at round boundaries
+    /// Per-session FIFO buffer of round injections drained at round boundaries
     /// by the engine and injected into the running dialog turn.
-    steering_buffer: Arc<SessionSteeringBuffer>,
+    round_injection_buffer: Arc<SessionRoundInjectionBuffer>,
 }
 
 /// Outcome of [`DialogScheduler::submit_steering`].
@@ -200,7 +201,7 @@ impl DialogScheduler {
             suppressed_cancelled_replies: Arc::new(DashMap::new()),
             outcome_tx,
             round_yield_flags: Arc::new(SessionRoundYieldFlags::default()),
-            steering_buffer: Arc::new(SessionSteeringBuffer::default()),
+            round_injection_buffer: Arc::new(SessionRoundInjectionBuffer::default()),
         });
 
         let scheduler_for_handler = Arc::clone(&scheduler);
@@ -221,9 +222,9 @@ impl DialogScheduler {
         self.round_yield_flags.clone()
     }
 
-    /// Pass to [`ConversationCoordinator::set_round_steering_source`](super::coordinator::ConversationCoordinator::set_round_steering_source).
-    pub fn steering_monitor(&self) -> Arc<dyn DialogRoundSteeringSource> {
-        self.steering_buffer.clone()
+    /// Pass to [`ConversationCoordinator::set_round_injection_source`](super::coordinator::ConversationCoordinator::set_round_injection_source).
+    pub fn round_injection_monitor(&self) -> Arc<dyn DialogRoundInjectionSource> {
+        self.round_injection_buffer.clone()
     }
 
     /// Submit a user "steering" message into the currently running dialog turn.
@@ -265,21 +266,22 @@ impl DialogScheduler {
 
         let steering_id = Uuid::new_v4().to_string();
         let display = display_content.unwrap_or_else(|| content.clone());
-        let message = SteeringMessage {
+        let message = RoundInjection {
             id: steering_id.clone(),
-            turn_id: turn_id.clone(),
+            kind: RoundInjectionKind::UserSteering,
+            target: RoundInjectionTarget::ExactTurn(turn_id.clone()),
             content,
             display_content: display,
             created_at: SystemTime::now(),
         };
 
-        self.steering_buffer.push(&session_id, message);
+        self.round_injection_buffer.push(&session_id, message);
         info!(
             "Steering message buffered: session_id={}, turn_id={}, steering_id={}, pending={}",
             session_id,
             turn_id,
             steering_id,
-            self.steering_buffer.pending_count(&session_id)
+            self.round_injection_buffer.pending_count(&session_id)
         );
 
         Ok(DialogSteerOutcome::Buffered {
@@ -287,6 +289,61 @@ impl DialogScheduler {
             turn_id,
             steering_id,
         })
+    }
+
+    /// Deliver a completed background subagent result back to the parent
+    /// session. If the session is currently processing, inject the result into
+    /// the running turn at the next model-round boundary. Otherwise, start a
+    /// new turn immediately so the result is handled without waiting for an
+    /// unrelated future message.
+    pub async fn deliver_background_subagent_result(
+        &self,
+        session_id: String,
+        agent_type: String,
+        workspace_path: Option<String>,
+        content: String,
+        display_content: Option<String>,
+        user_message_metadata: Option<serde_json::Value>,
+    ) -> Result<(), String> {
+        let display = display_content.unwrap_or_else(|| content.clone());
+        let state = self
+            .session_manager
+            .get_session(&session_id)
+            .map(|s| s.state.clone());
+
+        match state {
+            Some(SessionState::Processing { .. }) => {
+                let injection_id = Uuid::new_v4().to_string();
+                self.round_injection_buffer.push(
+                    &session_id,
+                    RoundInjection {
+                        id: injection_id,
+                        kind: RoundInjectionKind::BackgroundSubagentResult,
+                        target: RoundInjectionTarget::CurrentRunningTurn,
+                        content,
+                        display_content: display,
+                        created_at: SystemTime::now(),
+                    },
+                );
+                Ok(())
+            }
+            _ => {
+                self.submit(
+                    session_id,
+                    content,
+                    Some(display),
+                    None,
+                    agent_type,
+                    workspace_path,
+                    DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
+                    None,
+                    user_message_metadata,
+                    None,
+                )
+                .await
+                .map(|_| ())
+            }
+        }
     }
 
     fn user_message_may_preempt(policy: &DialogSubmissionPolicy) -> bool {
@@ -715,7 +772,7 @@ Status: {status}"
             // outcome is processed (race window between turn finalize and the
             // next turn starting). Targeting by turn_id keeps those alive.
             let _drained = self
-                .steering_buffer
+                .round_injection_buffer
                 .drain_for_turn(&session_id, outcome.turn_id());
             let suppressed_cancelled_reply =
                 self.take_suppressed_cancelled_reply(&session_id, outcome.turn_id());

@@ -18,6 +18,7 @@ use crate::agentic::image_analysis::{
     build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
     ImageLimits,
 };
+use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
 use crate::agentic::tools::{
     resolve_tool_manifest, ResolvedToolManifest, SubagentParentInfo, ToolRuntimeRestrictions,
@@ -1857,8 +1858,8 @@ impl ExecutionEngine {
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
-                steering_interrupt: context.round_steering.as_ref().map(|source| {
-                    crate::agentic::round_preempt::DialogRoundSteeringInterrupt::new(
+                steering_interrupt: context.round_injection.as_ref().map(|source| {
+                    crate::agentic::round_preempt::DialogRoundInjectionInterrupt::new(
                         context.session_id.clone(),
                         context.dialog_turn_id.clone(),
                         Arc::clone(source),
@@ -2096,26 +2097,28 @@ impl ExecutionEngine {
             // contrast with the `round_preempt` path below which finalizes the turn so a
             // queued *new turn* can take over. If the model wanted to finish but the user
             // steered, we keep the turn running so the steering message gets a response.
-            let mut steering_injected = false;
-            if let Some(steer) = context.round_steering.as_ref() {
-                let pending = steer.take_pending(&context.session_id, &context.dialog_turn_id);
+            let mut injection_applied = false;
+            if let Some(source) = context.round_injection.as_ref() {
+                let pending = source.take_pending(&context.session_id, &context.dialog_turn_id);
                 if !pending.is_empty() {
                     info!(
-                        "Injecting {} user steering message(s) at round boundary: session_id={}, dialog_turn_id={}, round_index={}",
+                        "Injecting {} round message(s) at round boundary: session_id={}, dialog_turn_id={}, round_index={}",
                         pending.len(),
                         context.session_id,
                         context.dialog_turn_id,
                         round_index
                     );
-                    for steering_msg in pending {
-                        // Wrap the steering content in a system_reminder envelope so the
-                        // model treats it as an out-of-band course correction layered on
-                        // top of the running task, not as a brand-new top-level instruction
-                        // that supersedes everything before it. Matches Codex CLI semantics.
-                        let wrapped = format!(
-                            "<system_reminder>\nThe user sent a new message while this turn was running. You have just finished the previous atomic action; handle this new user message now as the current direction, while preserving the existing conversation and task context. Do not ignore it or wait for a separate future turn.\n\nNew user message:\n{}\n</system_reminder>",
-                            steering_msg.content
-                        );
+                    for injection in pending {
+                        let wrapped = match injection.kind {
+                            RoundInjectionKind::UserSteering => format!(
+                                "<system_reminder>\nThe user sent a new message while this turn was running. You have just finished the previous atomic action; handle this new user message now as the current direction, while preserving the existing conversation and task context. Do not ignore it or wait for a separate future turn.\n\nNew user message:\n{}\n</system_reminder>",
+                                injection.content
+                            ),
+                            RoundInjectionKind::BackgroundSubagentResult => format!(
+                                "<system_reminder>\nA background subagent has finished and returned new information while this turn was running. Incorporate it into your current work immediately when relevant. Do not wait for a separate future turn.\n\nBackground subagent result:\n{}\n</system_reminder>",
+                                injection.content
+                            ),
+                        };
                         let user_msg = Message::user(wrapped);
                         messages.push(user_msg.clone());
                         if let Err(e) = self
@@ -2131,15 +2134,15 @@ impl ExecutionEngine {
                                 session_id: context.session_id.clone(),
                                 turn_id: context.dialog_turn_id.clone(),
                                 round_index,
-                                steering_id: steering_msg.id,
-                                content: steering_msg.content,
-                                display_content: steering_msg.display_content,
+                                steering_id: injection.id,
+                                content: injection.content,
+                                display_content: injection.display_content,
                                 subagent_parent_info: event_subagent_parent_info.clone(),
                             },
                             EventPriority::Normal,
                         )
                         .await;
-                        steering_injected = true;
+                        injection_applied = true;
                     }
                 }
             }
@@ -2158,7 +2161,7 @@ impl ExecutionEngine {
             //   (write the answer), and continue.
             // - Model emitted nothing at all     -> partial recovery / truncation.
             //   Retrying without new context will not help, so end the turn.
-            if steering_injected {
+            if injection_applied {
                 // fall through to next round so the model can respond to the steering
             } else if !round_result.has_more_rounds {
                 if round_result.had_assistant_text {

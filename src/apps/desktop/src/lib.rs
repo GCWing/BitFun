@@ -1177,7 +1177,7 @@ async fn init_agentic_system() -> anyhow::Result<(
         coordination::DialogScheduler::new(coordinator.clone(), session_manager.clone());
     coordinator.set_scheduler_notifier(scheduler.outcome_sender());
     coordinator.set_round_preempt_source(scheduler.preempt_monitor());
-    coordinator.set_round_steering_source(scheduler.steering_monitor());
+    coordinator.set_round_injection_source(scheduler.round_injection_monitor());
     coordination::set_global_scheduler(scheduler.clone());
 
     let cron_service =

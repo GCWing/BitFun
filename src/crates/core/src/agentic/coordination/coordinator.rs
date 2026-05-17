@@ -17,7 +17,7 @@ use crate::agentic::fork_agent::{
     ForkAgentContextSnapshot, ForkAgentExecutionRequest, ForkAgentExecutionResult,
 };
 use crate::agentic::image_analysis::ImageContextData;
-use crate::agentic::round_preempt::{DialogRoundPreemptSource, DialogRoundSteeringSource};
+use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
@@ -97,6 +97,11 @@ impl SubagentResult {
     pub fn ledger_event_id(&self) -> Option<&str> {
         self.ledger_event_id.as_deref()
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct BackgroundSubagentStartResult {
+    pub background_task_id: String,
 }
 
 struct HiddenSubagentExecutionRequest {
@@ -304,7 +309,7 @@ pub struct ConversationCoordinator {
     /// Round-boundary yield (same source as scheduler's yield flags); injected after construction
     round_preempt_source: OnceLock<Arc<dyn DialogRoundPreemptSource>>,
     /// Round-boundary user steering source (mid-turn user message injection); injected after construction
-    round_steering_source: OnceLock<Arc<dyn DialogRoundSteeringSource>>,
+    round_injection_source: OnceLock<Arc<dyn DialogRoundInjectionSource>>,
     /// In-flight dialog turn tracker per session, used to serialize cancel→start
     /// transitions so a new turn never starts touching the in-memory message
     /// list while the previous (cancelled) turn's spawn task is still draining.
@@ -754,7 +759,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             subagent_timeout_registry: Arc::new(RwLock::new(HashMap::new())),
             scheduler_notify_tx: OnceLock::new(),
             round_preempt_source: OnceLock::new(),
-            round_steering_source: OnceLock::new(),
+            round_injection_source: OnceLock::new(),
             active_turns_per_session: Arc::new(DashMap::new()),
         }
     }
@@ -770,10 +775,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let _ = self.round_preempt_source.set(source);
     }
 
-    /// Wire round-boundary user-steering source (typically the scheduler's
-    /// [`SessionSteeringBuffer`](crate::agentic::round_preempt::SessionSteeringBuffer)).
-    pub fn set_round_steering_source(&self, source: Arc<dyn DialogRoundSteeringSource>) {
-        let _ = self.round_steering_source.set(source);
+    /// Wire round-boundary injection source (typically the scheduler's
+    /// [`SessionRoundInjectionBuffer`](crate::agentic::round_preempt::SessionRoundInjectionBuffer)).
+    pub fn set_round_injection_source(&self, source: Arc<dyn DialogRoundInjectionSource>) {
+        let _ = self.round_injection_source.set(source);
     }
 
     /// Dynamically adjust a running subagent's timeout.
@@ -1963,7 +1968,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services,
             round_preempt: self.round_preempt_source.get().cloned(),
-            round_steering: self.round_steering_source.get().cloned(),
+            round_injection: self.round_injection_source.get().cloned(),
             recover_partial_on_cancel: false,
         };
 
@@ -3076,7 +3081,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             // Subagents are autonomous; user steering is targeted at top-level
             // dialog turns only. Leave None so we don't intercept buffer entries
             // that belong to a different (parent) session/turn.
-            round_steering: None,
+            round_injection: None,
             recover_partial_on_cancel: true,
         };
 
@@ -3686,6 +3691,116 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             timeout_seconds,
         )
         .await
+    }
+
+    pub async fn start_background_subagent(
+        &self,
+        agent_type: String,
+        task_description: String,
+        subagent_parent_info: SubagentParentInfo,
+        workspace_path: Option<String>,
+        context: Option<HashMap<String, String>>,
+        model_id: Option<String>,
+        timeout_seconds: Option<u64>,
+    ) -> BitFunResult<BackgroundSubagentStartResult> {
+        let workspace_path = workspace_path.ok_or_else(|| {
+            BitFunError::Validation(
+                "workspace_path is required when creating a background subagent session"
+                    .to_string(),
+            )
+        })?;
+        let model_id = model_id
+            .map(|model_id| model_id.trim().to_string())
+            .filter(|model_id| !model_id.is_empty());
+        let parent_session = self
+            .session_manager
+            .get_session(&subagent_parent_info.session_id)
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!(
+                    "Parent session not found: {}",
+                    subagent_parent_info.session_id
+                ))
+            })?;
+        let parent_agent_type = parent_session.agent_type.clone();
+        let parent_workspace_path = parent_session.config.workspace_path.clone();
+        let background_task_id = format!("bg-subagent-{}", uuid::Uuid::new_v4());
+        let background_task_id_for_delivery = background_task_id.clone();
+        let request = HiddenSubagentExecutionRequest {
+            session_name: format!("Subagent: {}", task_description),
+            agent_type: agent_type.clone(),
+            session_config: Self::build_session_config_for_workspace(workspace_path, model_id)
+                .await,
+            initial_messages: vec![Message::user(task_description.clone())],
+            created_by: Some(format!("session-{}", subagent_parent_info.session_id)),
+            subagent_parent_info: Some(subagent_parent_info.clone()),
+            context: context.unwrap_or_default(),
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+        };
+        let coordinator = get_global_coordinator().ok_or_else(|| {
+            BitFunError::service("Coordinator not initialized".to_string())
+        })?;
+
+        tokio::spawn(async move {
+            let delivery_text = match coordinator
+                .execute_hidden_subagent_internal(request, None, timeout_seconds)
+                .await
+            {
+                Ok(result) => {
+                    if result.is_partial_timeout() {
+                        format!(
+                            "Background subagent '{}' timed out with partial result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>",
+                            agent_type, result.text
+                        )
+                    } else {
+                        format!(
+                            "Background subagent '{}' completed successfully:\n<result>\n{}\n</result>",
+                            agent_type, result.text
+                        )
+                    }
+                }
+                Err(error) => {
+                    format!(
+                        "Background subagent '{}' failed before producing a final result.\nError: {}",
+                        agent_type, error
+                    )
+                }
+            };
+
+            let metadata = serde_json::json!({
+                "kind": "background_subagent_result",
+                "backgroundTaskId": background_task_id_for_delivery,
+                "subagentType": agent_type,
+            });
+
+            if let Some(scheduler) = super::scheduler::get_global_scheduler() {
+                if let Err(error) = scheduler
+                    .deliver_background_subagent_result(
+                        subagent_parent_info.session_id.clone(),
+                        parent_agent_type,
+                        parent_workspace_path,
+                        delivery_text,
+                        Some(task_description),
+                        Some(metadata),
+                    )
+                    .await
+                {
+                    warn!(
+                        "Failed to deliver background subagent result: background_task_id={}, parent_session_id={}, error={}",
+                        background_task_id_for_delivery,
+                        subagent_parent_info.session_id,
+                        error
+                    );
+                }
+            } else {
+                warn!(
+                    "Scheduler not initialized; background subagent result dropped: background_task_id={}, parent_session_id={}",
+                    background_task_id_for_delivery,
+                    subagent_parent_info.session_id
+                );
+            }
+        });
+
+        Ok(BackgroundSubagentStartResult { background_task_id })
     }
 
     /// Clean up subagent session resources
