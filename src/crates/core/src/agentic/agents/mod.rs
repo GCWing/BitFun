@@ -25,7 +25,7 @@ pub use definitions::review::{
 };
 pub use definitions::shared::ReadonlySubagent;
 pub use definitions::subagents::{
-    ComputerUseMode, ExploreAgent, FileFinderAgent, ResearchSpecialistAgent,
+    ComputerUseMode, ExploreAgent, FileFinderAgent, GeneralPurposeAgent, ResearchSpecialistAgent,
 };
 use indexmap::IndexMap;
 pub use prompt_builder::{
