@@ -225,6 +225,12 @@ pub struct DialogTurnData {
     #[serde(default, alias = "turn_kind")]
     pub kind: DialogTurnKind,
 
+    /// Agent type used for this turn when it represents a user dialog.
+    /// Maintenance/local utility turns leave this empty so they do not affect
+    /// mode-transition reminder semantics.
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "agent_type")]
+    pub agent_type: Option<String>,
+
     /// User message
     #[serde(alias = "user_message")]
     pub user_message: UserMessageData,
@@ -706,6 +712,7 @@ impl DialogTurnData {
             turn_id,
             turn_index,
             session_id,
+            None,
             user_message,
         )
     }
@@ -716,6 +723,7 @@ impl DialogTurnData {
         turn_id: String,
         turn_index: usize,
         session_id: String,
+        agent_type: Option<String>,
         user_message: UserMessageData,
     ) -> Self {
         let now = std::time::SystemTime::now()
@@ -729,6 +737,7 @@ impl DialogTurnData {
             session_id,
             timestamp: now,
             kind,
+            agent_type,
             user_message,
             model_rounds: Vec::new(),
             start_time: now,

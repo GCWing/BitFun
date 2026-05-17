@@ -1126,6 +1126,39 @@ impl SessionManager {
         Ok(())
     }
 
+    fn derive_last_user_dialog_agent_type_from_turns(
+        turns: &[DialogTurnData],
+        fallback_agent_type: Option<&str>,
+    ) -> Option<String> {
+        // New turns persist their mode on the turn itself. For older persisted
+        // sessions that predate this field, fall back to the session default
+        // only when at least one surviving user dialog turn exists.
+        turns
+            .iter()
+            .rev()
+            .find(|turn| turn.kind == DialogTurnKind::UserDialog)
+            .and_then(|turn| {
+                turn.agent_type
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(ToOwned::to_owned)
+            })
+            .or_else(|| {
+                if turns
+                    .iter()
+                    .any(|turn| turn.kind == DialogTurnKind::UserDialog)
+                {
+                    fallback_agent_type
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(ToOwned::to_owned)
+                } else {
+                    None
+                }
+            })
+    }
+
     /// Update session model id (in-memory + persistence)
     pub async fn update_session_model_id(
         &self,
@@ -1559,6 +1592,10 @@ impl SessionManager {
             .iter()
             .map(|turn| turn.turn_id.clone())
             .collect();
+        session.last_user_dialog_agent_type = Self::derive_last_user_dialog_agent_type_from_turns(
+            &persisted_turns,
+            Some(session.agent_type.as_str()),
+        );
         let mut latest_turn_index: Option<usize> = None;
         let context_snapshot_started_at = Instant::now();
         let mut messages = match self
@@ -1715,12 +1752,34 @@ impl SessionManager {
         // 2) Restore the in-memory context cache.
         self.context_store.replace_context(session_id, messages);
 
+        let last_user_dialog_agent_type = if target_turn == 0 {
+            None
+        } else {
+            let surviving_turns = self
+                .persistence_manager
+                .load_session_turns(workspace_path, session_id)
+                .await?;
+            let kept_turns = surviving_turns
+                .into_iter()
+                .take(target_turn)
+                .collect::<Vec<_>>();
+            let fallback_agent_type = self
+                .sessions
+                .get(session_id)
+                .map(|session| session.agent_type.clone());
+            Self::derive_last_user_dialog_agent_type_from_turns(
+                &kept_turns,
+                fallback_agent_type.as_deref(),
+            )
+        };
+
         // 3) Truncate session turn list & persist
         // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
         let session_snapshot = if let Some(mut session) = self.sessions.get_mut(session_id) {
             if session.dialog_turn_ids.len() > target_turn {
                 session.dialog_turn_ids.truncate(target_turn);
             }
+            session.last_user_dialog_agent_type = last_user_dialog_agent_type;
             session.state = SessionState::Idle;
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
@@ -1813,6 +1872,7 @@ impl SessionManager {
         &self,
         session_id: &str,
         kind: DialogTurnKind,
+        agent_type: Option<String>,
         user_input: String,
         turn_id: Option<String>,
         context_message: Option<Message>,
@@ -1836,6 +1896,9 @@ impl SessionManager {
 
         if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.dialog_turn_ids.push(turn_id.clone());
+            if kind == DialogTurnKind::UserDialog {
+                session.last_user_dialog_agent_type = agent_type.clone();
+            }
             session.state = SessionState::Processing {
                 current_turn_id: turn_id.clone(),
                 phase: processing_phase,
@@ -1855,6 +1918,11 @@ impl SessionManager {
                 turn_id.clone(),
                 turn_index,
                 session_id.to_string(),
+                if kind == DialogTurnKind::UserDialog {
+                    agent_type.clone()
+                } else {
+                    None
+                },
                 UserMessageData {
                     id: format!("{}-user", turn_id),
                     content: user_input,
@@ -1891,6 +1959,7 @@ impl SessionManager {
     pub async fn start_dialog_turn(
         &self,
         session_id: &str,
+        agent_type: String,
         user_input: String,
         turn_id: Option<String>,
         image_contexts: Option<Vec<ImageContextData>>,
@@ -1909,6 +1978,7 @@ impl SessionManager {
             .start_persisted_turn(
                 session_id,
                 DialogTurnKind::UserDialog,
+                Some(agent_type),
                 user_input,
                 turn_id,
                 Some(user_message),
@@ -1934,6 +2004,7 @@ impl SessionManager {
             .start_persisted_turn(
                 session_id,
                 DialogTurnKind::ManualCompaction,
+                None,
                 display_message,
                 turn_id,
                 None,
@@ -3239,7 +3310,7 @@ mod tests {
             .expect("session should create");
 
         for index in 0..3 {
-            let turn = DialogTurnData::new(
+            let mut turn = DialogTurnData::new(
                 format!("turn-{index}"),
                 index,
                 session.session_id.clone(),
@@ -3250,6 +3321,11 @@ mod tests {
                     metadata: None,
                 },
             );
+            turn.agent_type = Some(if index == 0 {
+                "agentic".to_string()
+            } else {
+                "Plan".to_string()
+            });
             persistence_manager
                 .save_dialog_turn(workspace.path(), &turn)
                 .await
@@ -3266,6 +3342,7 @@ mod tests {
                 "turn-1".to_string(),
                 "turn-2".to_string(),
             ];
+            active.last_user_dialog_agent_type = Some("Plan".to_string());
         }
         persistence_manager
             .save_turn_context_snapshot(
@@ -3300,6 +3377,7 @@ mod tests {
             .expect("turns should load");
         assert_eq!(turns.len(), 1);
         assert_eq!(turns[0].user_message.content, "prompt 0");
+        assert_eq!(turns[0].agent_type.as_deref(), Some("agentic"));
         assert!(persistence_manager
             .load_turn_context_snapshot(workspace.path(), &session.session_id, 1)
             .await
@@ -3312,6 +3390,10 @@ mod tests {
             .await
             .expect("session should restore");
         assert_eq!(restored.dialog_turn_ids, vec!["turn-0".to_string()]);
+        assert_eq!(
+            restored.last_user_dialog_agent_type.as_deref(),
+            Some("agentic")
+        );
         assert_eq!(
             manager
                 .context_store
@@ -3326,6 +3408,63 @@ mod tests {
             .expect("metadata should load")
             .expect("metadata should exist");
         assert_eq!(metadata.turn_count, 1);
+    }
+
+    #[tokio::test]
+    async fn rollback_to_empty_history_clears_last_user_dialog_agent_type() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Rollback empty history".to_string(),
+                "Plan".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        let mut turn = DialogTurnData::new(
+            "turn-0".to_string(),
+            0,
+            session.session_id.clone(),
+            UserMessageData {
+                id: "turn-0-user".to_string(),
+                content: "plan prompt".to_string(),
+                timestamp: 0,
+                metadata: None,
+            },
+        );
+        turn.agent_type = Some("Plan".to_string());
+        persistence_manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+
+        {
+            let mut active = manager
+                .sessions
+                .get_mut(&session.session_id)
+                .expect("session should be active");
+            active.dialog_turn_ids = vec!["turn-0".to_string()];
+            active.last_user_dialog_agent_type = Some("Plan".to_string());
+        }
+
+        manager
+            .rollback_context_to_turn_start(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("rollback should succeed");
+
+        let active = manager
+            .get_session(&session.session_id)
+            .expect("session should remain in memory");
+        assert_eq!(active.agent_type, "Plan");
+        assert_eq!(active.last_user_dialog_agent_type, None);
     }
 
     #[tokio::test]
@@ -3384,6 +3523,7 @@ mod tests {
                 "turn-2".to_string(),
                 1,
                 "session-1".to_string(),
+                None,
                 UserMessageData {
                     id: "user-2".to_string(),
                     content: "/compact".to_string(),
@@ -3396,6 +3536,7 @@ mod tests {
                 "turn-3".to_string(),
                 2,
                 "session-1".to_string(),
+                None,
                 UserMessageData {
                     id: "user-3".to_string(),
                     content: "# Session Usage Report".to_string(),

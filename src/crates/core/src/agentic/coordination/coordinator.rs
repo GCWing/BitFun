@@ -969,6 +969,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         turn_id: &str,
         turn_index: usize,
+        agent_type: &str,
         user_input: &str,
         workspace_path: &str,
         // Pre-resolved on-disk session storage path (mirror dir for remote workspaces).
@@ -1063,6 +1064,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 metadata: user_message_metadata,
             },
         );
+        turn_data.agent_type = Some(agent_type.to_string());
         turn_data.status = status;
         turn_data.end_time = Some(now_ms);
         turn_data.duration_ms = Some(now_ms.saturating_sub(turn_data.start_time));
@@ -1138,6 +1140,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     async fn wrap_user_input(
         &self,
         agent_type: &str,
+        previous_agent_type: Option<&str>,
         user_input: String,
         workspace: Option<&WorkspaceBinding>,
     ) -> BitFunResult<String> {
@@ -1150,7 +1153,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let current_agent = agent_registry
             .get_agent(agent_type, workspace.map(|binding| binding.root_path()))
             .ok_or_else(|| BitFunError::NotFound(format!("Agent not found: {}", agent_type)))?;
-        let system_reminder = current_agent.get_system_reminder(0).await?;
+        let system_reminder = current_agent
+            .get_system_reminder(previous_agent_type, workspace)
+            .await?;
 
         let mut wrapped_user_input = if has_prompt_markup(&user_input) {
             user_input
@@ -1558,6 +1563,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         };
 
+        let previous_agent_type = session.last_user_dialog_agent_type.clone();
         let requested_agent_type = agent_type.trim().to_string();
         let provisional_agent_type = if !requested_agent_type.is_empty() {
             requested_agent_type.clone()
@@ -1795,6 +1801,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let wrapped_user_input = self
             .wrap_user_input(
                 &effective_agent_type,
+                previous_agent_type
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty()),
                 user_input,
                 session_workspace.as_ref(),
             )
@@ -1819,6 +1829,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .start_dialog_turn(
                 &session_id,
+                effective_agent_type.clone(),
                 wrapped_user_input.clone(),
                 turn_id,
                 image_contexts,
@@ -2087,7 +2098,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
 
             let workspace_turn_status = match execution_engine
-                .execute_dialog_turn(effective_agent_type_clone, messages, execution_context)
+                .execute_dialog_turn(
+                    effective_agent_type_clone.clone(),
+                    messages,
+                    execution_context,
+                )
                 .await
             {
                 Ok(execution_result) => {
@@ -2310,6 +2325,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         &session_id_clone,
                         &turn_id_clone,
                         turn_index,
+                        &effective_agent_type_clone,
                         &user_input_for_workspace,
                         wp,
                         session_storage_path_for_finalize.as_deref(),

@@ -1748,6 +1748,7 @@ mod tests {
             session_id: "session-1".to_string(),
             timestamp: 1_000 + turn_index as u64,
             kind,
+            agent_type: None,
             user_message: UserMessageData {
                 id: format!("user-{}", turn_index),
                 content: "hidden from report".to_string(),

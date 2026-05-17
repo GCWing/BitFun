@@ -50,6 +50,10 @@ struct StoredSessionStateFile {
     schema_version: u32,
     config: SessionConfig,
     snapshot_session_id: Option<String>,
+    // Derived runtime cache for reminder semantics. The source of truth lives
+    // on persisted dialog turns via `DialogTurnData.agent_type`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_user_dialog_agent_type: Option<String>,
     compression_state: CompressionState,
     runtime_state: SessionState,
 }
@@ -1775,6 +1779,7 @@ impl PersistenceManager {
             schema_version: SESSION_STORAGE_SCHEMA_VERSION,
             config: session.config.clone(),
             snapshot_session_id: session.snapshot_session_id.clone(),
+            last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),
             compression_state: session.compression_state.clone(),
             runtime_state: Self::sanitize_runtime_state(&session.state),
         };
@@ -1844,6 +1849,9 @@ impl PersistenceManager {
             session_id: metadata.session_id.clone(),
             session_name: metadata.session_name.clone(),
             agent_type: metadata.agent_type.clone(),
+            last_user_dialog_agent_type: stored_state
+                .as_ref()
+                .and_then(|value| value.last_user_dialog_agent_type.clone()),
             created_by: metadata.created_by.clone(),
             kind: metadata.session_kind,
             snapshot_session_id: stored_state
@@ -1879,6 +1887,7 @@ impl PersistenceManager {
                     ..Default::default()
                 },
                 snapshot_session_id: None,
+                last_user_dialog_agent_type: None,
                 compression_state: CompressionState::default(),
                 runtime_state: SessionState::Idle,
             });
