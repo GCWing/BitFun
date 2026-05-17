@@ -847,7 +847,7 @@ When creating commits, use this format for the commit message:
             "properties": {
                 "operation": {
                     "type": "string",
-                    "description": "Required Git subcommand to perform. Use the bare subcommand only, such as \"status\", \"diff\", \"log\", \"add\", or \"commit\". Do not send a raw command like \"git status\", do not omit this field, and do not place the subcommand in args.",
+                    "description": "Required Git subcommand to perform. Use the bare subcommand only, such as \"status\", \"diff\", \"log\", \"add\", or \"commit\". Do not send a raw command like \"git status\". Do not omit this field, and do not place the subcommand in args.",
                     "enum": ALLOWED_OPERATIONS
                 },
                 "args": {
