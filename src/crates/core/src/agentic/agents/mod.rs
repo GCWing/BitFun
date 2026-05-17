@@ -17,7 +17,8 @@ use async_trait::async_trait;
 pub use definitions::custom::{CustomSubagent, CustomSubagentKind};
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent, InitAgent};
 pub use definitions::modes::{
-    AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, PlanMode, TeamMode,
+    AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
+    TeamMode,
 };
 pub use definitions::review::{
     ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,
@@ -73,8 +74,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "TerminalControl".to_string(),
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
-        "CreatePlan".to_string(),
-        "Log".to_string(),
     ]
 }
 

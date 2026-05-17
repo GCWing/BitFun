@@ -271,6 +271,7 @@ pub struct RemoteModelCatalogPollDelta {
 pub fn resolve_remote_agent_type(mobile_type: Option<&str>) -> &'static str {
     match mobile_type {
         Some("code") | Some("agentic") | Some("Agentic") => "agentic",
+        Some("multitask") | Some("Multitask") => "Multitask",
         Some("cowork") | Some("Cowork") => "Cowork",
         Some("plan") | Some("Plan") => "Plan",
         Some("debug") | Some("Debug") => "debug",

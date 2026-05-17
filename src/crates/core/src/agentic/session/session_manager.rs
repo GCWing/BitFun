@@ -2873,6 +2873,7 @@ mod tests {
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::SessionContextStore;
     use crate::infrastructure::PathManager;
+    use crate::service::remote_ssh::workspace_state::local_workspace_roots_equal;
     use crate::service::session::{
         DialogTurnData, ModelRoundData, ToolCallData, ToolItemData, ToolResultData, UserMessageData,
     };
@@ -3487,8 +3488,9 @@ mod tests {
             manager
                 .session_workspace_index
                 .get(&session.session_id)
-                .map(|entry| entry.clone()),
-            Some(workspace.path().to_path_buf())
+                .as_deref()
+                .map(|entry| local_workspace_roots_equal(entry, workspace.path())),
+            Some(true)
         );
 
         manager

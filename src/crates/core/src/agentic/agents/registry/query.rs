@@ -115,11 +115,12 @@ impl AgentRegistry {
             let order = |id: &str| -> u8 {
                 match id {
                     "agentic" => 0,
-                    "Cowork" => 1,
-                    "Plan" => 2,
-                    "debug" => 3,
-                    "DeepResearch" => 4,
-                    "Team" => 5,
+                    "Multitask" => 1,
+                    "Cowork" => 2,
+                    "Plan" => 3,
+                    "debug" => 4,
+                    "DeepResearch" => 5,
+                    "Team" => 6,
                     _ => 99,
                 }
             };

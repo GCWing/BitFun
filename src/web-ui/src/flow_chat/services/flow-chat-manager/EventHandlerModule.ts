@@ -105,6 +105,23 @@ export function isAppWindowFocused(): boolean {
   return document.visibilityState === 'visible' && document.hasFocus();
 }
 
+function resolveDialogTurnDisplayContent(
+  userInput: unknown,
+  originalUserInput: unknown,
+  _userMessageMetadata: unknown,
+): string {
+  const cleanedUserInput = cleanRemoteUserInput(typeof userInput === 'string' ? userInput : '');
+  const cleanedOriginalUserInput = cleanRemoteUserInput(
+    typeof originalUserInput === 'string' ? originalUserInput : ''
+  );
+
+  return cleanedOriginalUserInput || cleanedUserInput;
+}
+
+export const __test_only__ = {
+  resolveDialogTurnDisplayContent,
+};
+
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
   const activeSessionId = FlowChatStore.getInstance().getState().activeSessionId;
   return sessionId !== activeSessionId || !isAppWindowFocused();
@@ -1269,9 +1286,11 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
         mimeType: img.mime_type,
       }))
     : undefined;
-  const displayContent = originalUserInput
-    ? cleanRemoteUserInput(originalUserInput)
-    : cleanRemoteUserInput(userInput || '');
+  const displayContent = resolveDialogTurnDisplayContent(
+    userInput,
+    originalUserInput,
+    userMessageMetadata,
+  );
   const turnKind =
     userMessageMetadata?.kind === 'manual_compaction' ? 'manual_compaction' : 'user_dialog';
 

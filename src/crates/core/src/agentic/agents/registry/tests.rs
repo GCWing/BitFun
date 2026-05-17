@@ -71,6 +71,7 @@ fn insert_project_subagent(registry: &AgentRegistry, workspace: &Path, id: &str,
 fn top_level_modes_default_to_auto() {
     for agent_type in [
         "agentic",
+        "Multitask",
         "Cowork",
         "Plan",
         "debug",
@@ -358,6 +359,7 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
         "ABuiltin",
         "Explore",
         "FileFinder",
+        "GeneralPurpose",
         "zBuiltin",
         "AProject",
         "zProject",

@@ -4,8 +4,8 @@ use crate::agentic::agents::{
     Agent, AgenticMode, ArchitectureReviewerAgent, BusinessLogicReviewerAgent, ClawMode,
     CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode, DeepResearchMode, DeepReviewAgent,
     ExploreAgent, FileFinderAgent, FrontendReviewerAgent, GeneralPurposeAgent, GenerateDocAgent,
-    InitAgent, PerformanceReviewerAgent, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent,
-    ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
+    InitAgent, MultitaskMode, PerformanceReviewerAgent, PlanMode, ResearchSpecialistAgent,
+    ReviewFixerAgent, ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
 };
 use std::sync::Arc;
 
@@ -30,6 +30,11 @@ pub fn builtin_agent_specs() -> Vec<BuiltinAgentSpec> {
         },
         BuiltinAgentSpec {
             factory: || Arc::new(DebugMode::new()),
+            category: AgentCategory::Mode,
+            visibility_policy: SubagentVisibilityPolicy::default(),
+        },
+        BuiltinAgentSpec {
+            factory: || Arc::new(MultitaskMode::new()),
             category: AgentCategory::Mode,
             visibility_policy: SubagentVisibilityPolicy::default(),
         },

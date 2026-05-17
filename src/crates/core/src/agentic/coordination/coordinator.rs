@@ -104,6 +104,34 @@ pub struct BackgroundSubagentStartResult {
     pub background_task_id: String,
 }
 
+fn format_background_subagent_delivery_text(
+    background_task_id: &str,
+    agent_type: &str,
+    outcome: Result<&SubagentResult, &BitFunError>,
+) -> String {
+    match outcome {
+        Ok(result) => {
+            if result.is_partial_timeout() {
+                format!(
+                    "Background subagent '{}' (background_task_id='{}') completed with partial timeout result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>",
+                    agent_type, background_task_id, result.text
+                )
+            } else {
+                format!(
+                    "Background subagent '{}' (background_task_id='{}') completed successfully:\n<result>\n{}\n</result>",
+                    agent_type, background_task_id, result.text
+                )
+            }
+        }
+        Err(error) => {
+            format!(
+                "Background subagent '{}' (background_task_id='{}') failed before producing a final result.\nError: {}",
+                agent_type, background_task_id, error
+            )
+        }
+    }
+}
+
 struct HiddenSubagentExecutionRequest {
     session_name: String,
     agent_type: String,
@@ -1162,22 +1190,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .get_system_reminder(previous_agent_type, workspace)
             .await?;
 
-        let mut wrapped_user_input = if has_prompt_markup(&user_input) {
-            user_input
+        if has_prompt_markup(&user_input) {
+            if system_reminder.is_empty() {
+                Ok(user_input)
+            } else {
+                let mut envelope = PromptEnvelope::new();
+                envelope.push_system_reminder(system_reminder);
+                envelope.push_user_query(user_input);
+                Ok(envelope.render())
+            }
         } else {
             let mut envelope = PromptEnvelope::new();
-            envelope.push_user_query(user_input);
-            envelope.render()
-        };
-        if !system_reminder.is_empty() {
-            let mut envelope = PromptEnvelope::new();
-            envelope.push_system_reminder(system_reminder);
-            if !wrapped_user_input.is_empty() {
-                wrapped_user_input.push('\n');
+            if !system_reminder.is_empty() {
+                envelope.push_system_reminder(system_reminder);
             }
-            wrapped_user_input.push_str(&envelope.render());
+            envelope.push_user_query(user_input);
+            Ok(envelope.render())
         }
-        Ok(wrapped_user_input)
     }
 
     pub async fn ensure_assistant_bootstrap(
@@ -3745,31 +3774,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .execute_hidden_subagent_internal(request, None, timeout_seconds)
                 .await
             {
-                Ok(result) => {
-                    if result.is_partial_timeout() {
-                        format!(
-                            "Background subagent '{}' timed out with partial result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>",
-                            agent_type, result.text
-                        )
-                    } else {
-                        format!(
-                            "Background subagent '{}' completed successfully:\n<result>\n{}\n</result>",
-                            agent_type, result.text
-                        )
-                    }
-                }
-                Err(error) => {
-                    format!(
-                        "Background subagent '{}' failed before producing a final result.\nError: {}",
-                        agent_type, error
-                    )
-                }
+                Ok(result) => format_background_subagent_delivery_text(
+                    &background_task_id_for_delivery,
+                    &agent_type,
+                    Ok(&result),
+                ),
+                Err(error) => format_background_subagent_delivery_text(
+                    &background_task_id_for_delivery,
+                    &agent_type,
+                    Err(&error),
+                ),
             };
 
             let metadata = serde_json::json!({
                 "kind": "background_subagent_result",
                 "backgroundTaskId": background_task_id_for_delivery,
                 "subagentType": agent_type,
+                "taskDescription": task_description,
             });
 
             if let Some(scheduler) = super::scheduler::get_global_scheduler() {
@@ -3779,7 +3800,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         parent_agent_type,
                         parent_workspace_path,
                         delivery_text,
-                        Some(task_description),
+                        None,
                         Some(metadata),
                     )
                     .await
@@ -4382,6 +4403,46 @@ mod tests {
         assert_eq!(normalize_subagent_max_concurrency(0), 1);
         assert_eq!(normalize_subagent_max_concurrency(5), 5);
         assert_eq!(normalize_subagent_max_concurrency(usize::MAX), 64);
+    }
+
+    #[test]
+    fn background_subagent_delivery_text_includes_background_task_id() {
+        let completed = super::SubagentResult::completed("done".to_string());
+        let completed_text = super::format_background_subagent_delivery_text(
+            "bg-subagent-123",
+            "GeneralPurpose",
+            Ok(&completed),
+        );
+        assert!(completed_text.contains(
+            "Background subagent 'GeneralPurpose' (background_task_id='bg-subagent-123') completed successfully:"
+        ));
+        assert!(completed_text.contains("<result>\n"));
+        assert!(!completed_text.contains("background_task_id=\"bg-subagent-123\""));
+
+        let partial = super::SubagentResult::partial_timeout(
+            "partial".to_string(),
+            "timeout".to_string(),
+        );
+        let partial_text = super::format_background_subagent_delivery_text(
+            "bg-subagent-456",
+            "GeneralPurpose",
+            Ok(&partial),
+        );
+        assert!(partial_text.contains(
+            "Background subagent 'GeneralPurpose' (background_task_id='bg-subagent-456') completed with partial timeout result:"
+        ));
+        assert!(partial_text.contains("<partial_result status=\"partial_timeout\">\n"));
+        assert!(!partial_text.contains("background_task_id=\"bg-subagent-456\""));
+
+        let failed_text = super::format_background_subagent_delivery_text(
+            "bg-subagent-789",
+            "GeneralPurpose",
+            Err(&crate::util::errors::BitFunError::tool("boom".to_string())),
+        );
+        assert!(failed_text.contains(
+            "Background subagent 'GeneralPurpose' (background_task_id='bg-subagent-789') failed before producing a final result."
+        ));
+        assert!(failed_text.contains("Error:"));
     }
 
     #[test]

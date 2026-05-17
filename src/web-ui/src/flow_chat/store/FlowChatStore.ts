@@ -52,7 +52,16 @@ import { sessionBelongsToWorkspaceNavRow } from '../utils/sessionOrdering';
 import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 
 const log = createLogger('FlowChatStore');
-const VALID_AGENT_TYPES = new Set(['agentic', 'debug', 'Plan', 'Cowork', 'Claw', 'Team', 'DeepResearch']);
+const VALID_AGENT_TYPES = new Set([
+  'agentic',
+  'Multitask',
+  'debug',
+  'Plan',
+  'Cowork',
+  'Claw',
+  'Team',
+  'DeepResearch',
+]);
 const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
 
 interface MetadataListRequest {

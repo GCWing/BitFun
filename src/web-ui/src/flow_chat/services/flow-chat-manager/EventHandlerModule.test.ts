@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { normalizeSubagentParentInfo } from './subagentParentInfo';
 import {
+  __test_only__,
   formatDialogErrorForNotification,
   handleDialogTurnComplete,
   handleSessionStateChanged,
@@ -71,6 +72,28 @@ describe('normalizeSubagentParentInfo', () => {
       dialogTurnId: 'turn',
       toolCallId: 'tool',
     });
+  });
+});
+
+describe('resolveDialogTurnDisplayContent', () => {
+  it('prefers original user input for ordinary turns', () => {
+    expect(
+      __test_only__.resolveDialogTurnDisplayContent(
+        '<user_query>\nwrapped runtime content\n</user_query>',
+        'Original human message',
+        { kind: 'user_dialog' },
+      ),
+    ).toBe('Original human message');
+  });
+
+  it('still prefers original user input when metadata is background_subagent_result', () => {
+    expect(
+      __test_only__.resolveDialogTurnDisplayContent(
+        'Delivered result text',
+        'Display content chosen by backend',
+        { kind: 'background_subagent_result' },
+      ),
+    ).toBe('Display content chosen by backend');
   });
 });
 

@@ -351,7 +351,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   /** Code session: modes switchable on top of default agentic */
   const incrementalCodeModes = useMemo(
-    () => switchableModes.filter(m => m.id === 'Plan' || m.id === 'debug' || m.id === 'DeepResearch' || m.id === 'Team'),
+    () =>
+      switchableModes.filter(
+        m => m.id !== 'agentic'
+      ),
     [switchableModes]
   );
 
