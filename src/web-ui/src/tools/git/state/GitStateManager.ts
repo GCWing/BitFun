@@ -478,11 +478,12 @@ export class GitStateManager {
 
       const shouldRefreshStatus = layersToRefresh.includes('status');
       if (!shouldRefreshStatus) {
-        const repository = await gitAPI.getRepository(repositoryPath);
+        const repository = await gitAPI.getRepositoryBasic(repositoryPath);
+        const currentState = this.getOrCreateState(repositoryPath);
         this.updateState(repositoryPath, {
           isRepository: true,
           currentBranch: repository.current_branch || repository.branch || null,
-          hasChanges: Boolean(repository.has_changes),
+          hasChanges: currentState.hasChanges,
         });
         return;
       }

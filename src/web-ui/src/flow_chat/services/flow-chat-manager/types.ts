@@ -23,6 +23,8 @@ export interface FlowChatContext {
   }>;
   /** In-flight historical session hydration: sessionId -> promise */
   pendingHistoryLoads: Map<string, Promise<void>>;
+  /** In-flight backend context restore for view-restored historical sessions. */
+  pendingContextRestores?: Map<string, Promise<void>>;
   /** Content buffers: sessionId -> (roundId -> content) */
   contentBuffers: Map<string, Map<string, string>>;
   /** Active text items: sessionId -> (roundId -> textItemId) */

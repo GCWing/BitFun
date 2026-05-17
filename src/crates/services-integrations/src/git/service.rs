@@ -58,6 +58,31 @@ impl GitService {
         })
     }
 
+    /// Gets lightweight repository information without scanning worktree status.
+    pub async fn get_repository_basic<P: AsRef<Path>>(path: P) -> Result<GitRepository, GitError> {
+        let repo =
+            Repository::open(&path).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+
+        let current_branch = get_current_branch(&repo)?;
+        let is_bare = repo.is_bare();
+        let path_str = path.as_ref().to_string_lossy().to_string();
+        let name = path
+            .as_ref()
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        Ok(GitRepository {
+            path: path_str,
+            name,
+            current_branch,
+            is_bare,
+            has_changes: false,
+            remotes: Vec::new(),
+        })
+    }
+
     /// Gets repository status.
     pub async fn get_status<P: AsRef<Path>>(path: P) -> Result<GitStatus, GitError> {
         let repo =

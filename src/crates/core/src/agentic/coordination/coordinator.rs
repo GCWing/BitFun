@@ -2468,6 +2468,28 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    /// Restore session and return the persisted turns read during restore.
+    pub async fn restore_session_with_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_session_with_turns(workspace_path, session_id)
+            .await
+    }
+
+    /// Restore only the UI-visible persisted session view.
+    pub async fn restore_session_view(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_session_view(workspace_path, session_id)
+            .await
+    }
+
     /// List all sessions
     pub async fn list_sessions(&self, workspace_path: &Path) -> BitFunResult<Vec<SessionSummary>> {
         self.session_manager.list_sessions(workspace_path).await

@@ -53,6 +53,7 @@ function App() {
   const mountTimeRef = useRef(Date.now());
   const mainWindowShownRef = useRef(false);
   const interactiveShellReadyRef = useRef(false);
+  const [interactiveShellReady, setInteractiveShellReady] = useState(false);
 
   // Once the workspace finishes loading, wait for the remaining min-display
   // time and then begin the exit animation.
@@ -110,6 +111,7 @@ function App() {
     }
     interactiveShellReadyRef.current = true;
     startupTrace.markPhase('interactive_shell_ready');
+    setInteractiveShellReady(true);
   }, [workspaceLoading]);
 
   // If the early reveal path fails, keep the old post-splash show as a retry.
@@ -179,24 +181,71 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!isTauriRuntime()) return;
+    if (!isTauriRuntime() || !interactiveShellReady) return;
 
+    let disposed = false;
+    let startupSyncHandle: { promise: Promise<void>; cancel: () => void } | null = null;
     const emitCurrentAgentCompanionActivity = () => {
+      if (disposed) {
+        return;
+      }
       void emitAgentCompanionActivity(buildAgentCompanionActivity());
     };
 
     void aiExperienceConfigService.getSettingsAsync().then(async settings => {
-      await syncAgentCompanionDesktopWindow(settings);
-      emitCurrentAgentCompanionActivity();
-      window.setTimeout(emitCurrentAgentCompanionActivity, 250);
+      if (disposed) {
+        return;
+      }
+
+      const { backgroundTaskScheduler, BackgroundTaskCancelledError } = await import('@/shared/utils/backgroundTaskScheduler');
+      if (disposed) {
+        return;
+      }
+
+      startupTrace.markPhase('agent_companion_sync_scheduled', {
+        source: 'startup_idle',
+      });
+      startupSyncHandle = backgroundTaskScheduler.schedule(async signal => {
+        if (signal.aborted || disposed) {
+          return;
+        }
+        startupTrace.markPhase('agent_companion_sync_start', {
+          source: 'startup_idle',
+        });
+        await syncAgentCompanionDesktopWindow(settings);
+        if (signal.aborted || disposed) {
+          return;
+        }
+        emitCurrentAgentCompanionActivity();
+        window.setTimeout(emitCurrentAgentCompanionActivity, 250);
+        startupTrace.markPhase('agent_companion_sync_end', {
+          source: 'startup_idle',
+        });
+      }, {
+        idle: true,
+        inFlightKey: 'agent-companion:startup-sync',
+        priority: 'low',
+      });
+
+      startupSyncHandle.promise.catch(error => {
+        if (!disposed && !(error instanceof BackgroundTaskCancelledError)) {
+          log.warn('Initial Agent companion sync task failed', error);
+        }
+      });
     });
-    return aiExperienceConfigService.addChangeListener(settings => {
+
+    const removeSettingsListener = aiExperienceConfigService.addChangeListener(settings => {
       void syncAgentCompanionDesktopWindow(settings).then(() => {
         emitCurrentAgentCompanionActivity();
         window.setTimeout(emitCurrentAgentCompanionActivity, 250);
       });
     });
-  }, []);
+    return () => {
+      disposed = true;
+      startupSyncHandle?.cancel();
+      removeSettingsListener();
+    };
+  }, [interactiveShellReady]);
 
   useEffect(() => subscribeAgentCompanionActivity(activity => {
     void emitAgentCompanionActivity(activity);

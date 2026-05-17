@@ -20,6 +20,42 @@ import { sanitizeErrorForLog, sanitizeLogValue, sanitizeTextForLog } from '../lo
 
 const log = createLogger('ApiClient');
 const sanitizeForLog = sanitizeLogValue;
+const LARGE_SESSION_RESPONSE_ESTIMATE_MAX_BYTES = 32 * 1024 * 1024;
+
+function responseEstimateMaxBytes(command: string): number | undefined {
+  return command === 'restore_session_view' ||
+    command === 'restore_session_with_turns' ||
+    command === 'load_session_turns'
+    ? LARGE_SESSION_RESPONSE_ESTIMATE_MAX_BYTES
+    : undefined;
+}
+
+function isOptionalConfigNotFoundCommand(config: TauriCommandConfig, error: unknown): boolean {
+  if (config.command !== 'get_config') {
+    return false;
+  }
+
+  const requestPayload = config.args?.request;
+  if (!requestPayload || typeof requestPayload !== 'object') {
+    return false;
+  }
+
+  if (!(requestPayload as Record<string, unknown>).skipRetryOnNotFound) {
+    return false;
+  }
+
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const normalized = errorMessage.toLowerCase();
+  return normalized.includes('not found') && normalized.includes('config path');
+}
+
+function isOptionalConfigNotFound(request: ApiRequest, error: unknown): boolean {
+  if (request.type !== 'tauri') {
+    return false;
+  }
+
+  return isOptionalConfigNotFoundCommand(request.config as TauriCommandConfig, error);
+}
 
 export class ApiClient implements IApiClient {
   private config: ApiConfig;
@@ -172,7 +208,10 @@ export class ApiClient implements IApiClient {
         
         const durationMs = elapsedMs(startedAt);
         const responseEstimateStartedAt = nowMs();
-        const responseBytes = estimateJsonBytes(response.data);
+        const responseBytes = estimateJsonBytes(
+          response.data,
+          responseEstimateMaxBytes(traceCommand)
+        );
         const responseEstimateDurationMs = elapsedMs(responseEstimateStartedAt);
         startupTrace.recordApiCall({
           type: request.type,
@@ -202,19 +241,22 @@ export class ApiClient implements IApiClient {
         this.activeRequests.delete(request.id);
       }
     } catch (error) {
-      this.updateStats({ failedRequests: this.stats.failedRequests + 1 });
+      const optionalConfigNotFound = isOptionalConfigNotFound(request, error);
+      this.updateStats(optionalConfigNotFound
+        ? { successfulRequests: this.stats.successfulRequests + 1 }
+        : { failedRequests: this.stats.failedRequests + 1 });
       startupTrace.recordApiCall({
         type: request.type,
         command: traceCommand,
         durationMs: elapsedMs(startedAt),
-        outcome: 'failure',
+        outcome: optionalConfigNotFound ? 'success' : 'failure',
         requestBytes,
         payloadEstimateDurationMs: requestPayloadEstimateDurationMs,
         remote,
       });
 
       
-      if (request.retryCount < (request.config.retries || this.config.retries)) {
+      if (!optionalConfigNotFound && request.retryCount < (request.config.retries || this.config.retries)) {
         const delay = (request.config.retryDelay || this.config.retryDelay) * Math.pow(2, request.retryCount);
         
         
@@ -233,7 +275,7 @@ export class ApiClient implements IApiClient {
       }
 
 
-      if (this.config.enableLogging) {
+      if (this.config.enableLogging && !optionalConfigNotFound) {
         log.error('Request failed after retries', {
           requestId: request.id,
           retryCount: request.retryCount,
@@ -264,20 +306,23 @@ export class ApiClient implements IApiClient {
       const isExpectedError = errorMessage.includes('not found') || 
                              errorMessage.includes('Config path') ||
                              errorMessage.includes('Configuration error');
+      const optionalConfigNotFound = isOptionalConfigNotFoundCommand(config, error);
       
       
-      if (isExpectedError && this.config.enableLogging) {
-        log.debug('Command returned expected result', {
-          command: config.command,
-          message: sanitizeTextForLog(errorMessage)
-        });
-      } else {
-        log.error('Command failed', {
-          command: config.command,
-          args: sanitizeForLog(config.args),
-          error: sanitizeTextForLog(errorMessage),
-          rawError: sanitizeErrorForLog(error)
-        });
+      if (this.config.enableLogging) {
+        if (isExpectedError && !optionalConfigNotFound) {
+          log.debug('Command returned expected result', {
+            command: config.command,
+            message: sanitizeTextForLog(errorMessage)
+          });
+        } else if (!isExpectedError) {
+          log.error('Command failed', {
+            command: config.command,
+            args: sanitizeForLog(config.args),
+            error: sanitizeTextForLog(errorMessage),
+            rawError: sanitizeErrorForLog(error)
+          });
+        }
       }
       
       throw this.createApiError('COMMAND_FAILED', errorMessage, error);

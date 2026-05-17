@@ -239,6 +239,11 @@ export type SessionHistoryState =
   | 'ready'
   | 'failed';
 
+export type SessionContextRestoreState =
+  | 'ready'
+  | 'pending'
+  | 'failed';
+
 // Session state.
 export interface Session {
   sessionId: string;
@@ -280,6 +285,13 @@ export interface Session {
    * - 'failed': hydrate failed and the UI should offer retry instead of showing a new session.
    */
   historyState?: SessionHistoryState;
+
+  /**
+   * Backend runtime-context lifecycle for sessions restored through the fast
+   * history view path. Turns may be visible while model context is still loaded
+   * lazily; message sending must ensure this becomes 'ready' first.
+   */
+  contextRestoreState?: SessionContextRestoreState;
   
   todos?: TodoItem[];
   

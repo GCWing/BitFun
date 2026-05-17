@@ -14,13 +14,18 @@ import {
   ImageAnalysisResult,
   AnyFlowItem,
   SessionConfig,
+  SessionContextRestoreState,
   SessionHistoryState,
 } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
-import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
+import {
+  isRemoteTraceContext,
+  markPhaseAfterAnimationFrames,
+  startupTrace,
+} from '@/shared/utils/startupTrace';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
-import type { LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
+import type { DialogTurnData, LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
 import {
   deriveLastFinishedAtFromMetadata,
   deriveSessionRelationshipFromMetadata,
@@ -48,6 +53,41 @@ import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 
 const log = createLogger('FlowChatStore');
 const VALID_AGENT_TYPES = new Set(['agentic', 'debug', 'Plan', 'Cowork', 'Claw', 'Team', 'DeepResearch']);
+const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
+
+interface MetadataListRequest {
+  promise: Promise<void>;
+  completedAtMs?: number;
+  cleanupTimer?: ReturnType<typeof setTimeout>;
+}
+
+function isUnsupportedTauriCommandError(error: unknown, command: string): boolean {
+  const anyError = error as any;
+  const originalError = anyError?.context?.originalError;
+  const messageParts = [
+    anyError?.message,
+    typeof originalError === 'string' ? originalError : originalError?.message,
+  ].filter((part): part is string => typeof part === 'string');
+  const normalizedMessage = messageParts.join(' ').toLowerCase();
+  const normalizedCommand = command.toLowerCase();
+  const contextCommand =
+    typeof anyError?.context?.command === 'string'
+      ? anyError.context.command.toLowerCase()
+      : '';
+  const mentionsCommand =
+    contextCommand === normalizedCommand ||
+    normalizedMessage.includes(normalizedCommand);
+
+  if (!mentionsCommand) {
+    return false;
+  }
+
+  return normalizedMessage.includes('unknown command') ||
+    normalizedMessage.includes('command not found') ||
+    (normalizedMessage.includes('command') && normalizedMessage.includes('not found')) ||
+    normalizedMessage.includes('not registered') ||
+    normalizedMessage.includes('is not a function');
+}
 
 function isValidPersistedAgentType(agentType: string): boolean {
   return VALID_AGENT_TYPES.has(agentType) || agentType.startsWith('acp:');
@@ -58,6 +98,8 @@ export class FlowChatStore {
   private state: FlowChatState;
   private listeners: Set<(state: FlowChatState) => void> = new Set();
   private silentMode = false;
+  private metadataListRequests = new Map<string, MetadataListRequest>();
+  private unsupportedRestoreCommands = new Set<string>();
   private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | 'interrupted' | undefined) => void;
 
   private constructor() {
@@ -102,6 +144,18 @@ export class FlowChatStore {
 
   public getState(): FlowChatState {
     return this.state;
+  }
+
+  private getMetadataListRequestKey(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+  ): string {
+    return JSON.stringify([
+      workspacePath,
+      remoteConnectionId || '',
+      remoteSshHost || '',
+    ]);
   }
 
   public setState(updater: (prevState: FlowChatState) => FlowChatState): void {
@@ -1734,17 +1788,93 @@ export class FlowChatStore {
   public async initializeFromDisk(
     workspacePath: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    traceSource = 'unknown'
   ): Promise<void> {
+    const requestKey = this.getMetadataListRequestKey(workspacePath, remoteConnectionId, remoteSshHost);
+    const existingRequest = this.metadataListRequests.get(requestKey);
+    const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
+    if (existingRequest) {
+      const completedAtMs = existingRequest.completedAtMs;
+      const isRecentCompletedRequest =
+        completedAtMs !== undefined &&
+        elapsedMs(completedAtMs) <= METADATA_LIST_RECENT_DEDUPE_TTL_MS;
+
+      if (completedAtMs === undefined || isRecentCompletedRequest) {
+        startupTrace.markPhase('session_metadata_list_deduped', {
+          remote,
+          source: traceSource,
+          dedupeState: completedAtMs === undefined ? 'in-flight' : 'recent',
+        });
+        return existingRequest.promise;
+      }
+
+      if (existingRequest.cleanupTimer) {
+        clearTimeout(existingRequest.cleanupTimer);
+      }
+      this.metadataListRequests.delete(requestKey);
+    }
+
+    let succeeded = false;
+    const loadPromise = this.initializeFromDiskUncached(
+      workspacePath,
+      remoteConnectionId,
+      remoteSshHost,
+      traceSource,
+    ).then(result => {
+      succeeded = result;
+    });
+
+    const request: MetadataListRequest = { promise: loadPromise };
+    this.metadataListRequests.set(requestKey, request);
+
+    loadPromise.finally(() => {
+      const currentRequest = this.metadataListRequests.get(requestKey);
+      if (currentRequest !== request) {
+        return;
+      }
+
+      if (!succeeded) {
+        this.metadataListRequests.delete(requestKey);
+        return;
+      }
+
+      request.completedAtMs = nowMs();
+      request.cleanupTimer = setTimeout(() => {
+        if (this.metadataListRequests.get(requestKey) === request) {
+          this.metadataListRequests.delete(requestKey);
+        }
+      }, METADATA_LIST_RECENT_DEDUPE_TTL_MS);
+    });
+
+    return loadPromise;
+  }
+
+  private async initializeFromDiskUncached(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+    traceSource = 'unknown'
+  ): Promise<boolean> {
     const traceStartedAt = nowMs();
     const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
+    const metadataListTraceId = `metadata-${Math.random().toString(36).slice(2, 8)}`;
     let sessionCount = 0;
-    startupTrace.markPhase('session_metadata_list_start', { remote });
+    startupTrace.markPhase('session_metadata_list_start', {
+      remote,
+      source: traceSource,
+      metadataListTraceId,
+    });
     try {
       const { sessionAPI } = await import('@/infrastructure/api');
       const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost);
       sessionCount = sessions.length;
-      startupTrace.markPhase('session_metadata_list_loaded', { remote, sessionCount });
+      startupTrace.markPhase('session_metadata_list_loaded', {
+        remote,
+        source: traceSource,
+        metadataListTraceId,
+        sessionCount,
+      });
 
       const { stateMachineManager } = await import('../state-machine');
 
@@ -1874,16 +2004,22 @@ export class FlowChatStore {
       await Promise.all(sessions.map(processSession));
       startupTrace.markPhase('session_metadata_list_end', {
         remote,
+        source: traceSource,
+        metadataListTraceId,
         sessionCount,
         durationMs: elapsedMs(traceStartedAt),
       });
+      return true;
     } catch (error) {
       startupTrace.markPhase('session_metadata_list_failed', {
         remote,
+        source: traceSource,
+        metadataListTraceId,
         sessionCount,
         durationMs: elapsedMs(traceStartedAt),
       });
       log.error('Failed to load persisted sessions', error);
+      return false;
     }
   }
 
@@ -1907,6 +2043,29 @@ export class FlowChatStore {
     });
   }
 
+  public setSessionContextRestoreState(
+    sessionId: string,
+    contextRestoreState: SessionContextRestoreState
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session || session.contextRestoreState === contextRestoreState) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        contextRestoreState,
+      });
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+  }
+
   /**
    * Lazy load session history (convert historical data to FlowChat format)
    */
@@ -1919,7 +2078,8 @@ export class FlowChatStore {
   ): Promise<void> {
     const traceStartedAt = nowMs();
     const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
-    startupTrace.markPhase('historical_session_hydrate_start', { remote });
+    const sessionTraceId = `${sessionId.slice(0, 8)}-${Math.random().toString(36).slice(2, 8)}`;
+    startupTrace.markPhase('historical_session_hydrate_start', { remote, sessionTraceId });
     this.setSessionHistoryState(sessionId, 'hydrating');
     try {
       const { stateMachineManager } = await import('../state-machine');
@@ -1928,30 +2088,138 @@ export class FlowChatStore {
       const existingSession = this.state.sessions.get(sessionId);
       const isAcpSession = existingSession?.mode?.startsWith('acp:') ||
         existingSession?.config.agentType?.startsWith('acp:');
+      let turns: DialogTurnData[] | undefined;
+      let contextRestoreState: SessionContextRestoreState = 'ready';
       if (!isAcpSession) {
+        const restoreStartedAt = nowMs();
+        startupTrace.markPhase('historical_session_restore_start', { remote, sessionTraceId });
         try {
           const { agentAPI } = await import('@/infrastructure/api');
-          await agentAPI.restoreSession(sessionId, workspacePath, remoteConnectionId, remoteSshHost);
+          const restoreWithTurnsOrSession = async (): Promise<void> => {
+            if (
+              typeof agentAPI.restoreSessionWithTurns === 'function' &&
+              !this.unsupportedRestoreCommands.has('restore_session_with_turns')
+            ) {
+              try {
+                const restored = await agentAPI.restoreSessionWithTurns(
+                  sessionId,
+                  workspacePath,
+                  remoteConnectionId,
+                  remoteSshHost,
+                  sessionTraceId
+                );
+                turns = restored.turns;
+                contextRestoreState = 'ready';
+                return;
+              } catch (error) {
+                if (!isUnsupportedTauriCommandError(error, 'restore_session_with_turns')) {
+                  throw error;
+                }
+                this.unsupportedRestoreCommands.add('restore_session_with_turns');
+                startupTrace.markPhase('historical_session_restore_fallback', {
+                  remote,
+                  sessionTraceId,
+                  from: 'restore_session_with_turns',
+                  to: 'restore_session',
+                  reason: 'unsupported-command',
+                });
+              }
+            }
+
+            await agentAPI.restoreSession(
+              sessionId,
+              workspacePath,
+              remoteConnectionId,
+              remoteSshHost,
+              sessionTraceId
+            );
+            contextRestoreState = 'ready';
+          };
+
+          if (
+            typeof agentAPI.restoreSessionView === 'function' &&
+            !this.unsupportedRestoreCommands.has('restore_session_view')
+          ) {
+            try {
+              const restored = await agentAPI.restoreSessionView(
+                sessionId,
+                workspacePath,
+                remoteConnectionId,
+                remoteSshHost,
+                sessionTraceId
+              );
+              turns = restored.turns;
+              contextRestoreState =
+                restored.contextRestoreState === 'ready' ? 'ready' : 'pending';
+            } catch (error) {
+              if (!isUnsupportedTauriCommandError(error, 'restore_session_view')) {
+                throw error;
+              }
+              this.unsupportedRestoreCommands.add('restore_session_view');
+              startupTrace.markPhase('historical_session_restore_fallback', {
+                remote,
+                sessionTraceId,
+                from: 'restore_session_view',
+                to: 'restore_session_with_turns',
+                reason: 'unsupported-command',
+              });
+              await restoreWithTurnsOrSession();
+            }
+          } else {
+            await restoreWithTurnsOrSession();
+          }
+          startupTrace.markPhase('historical_session_restore_end', {
+            remote,
+            sessionTraceId,
+            turnCount: Array.isArray(turns) ? turns.length : 0,
+            contextRestoreState,
+            durationMs: elapsedMs(restoreStartedAt),
+          });
         } catch (error) {
+          contextRestoreState = 'pending';
+          startupTrace.markPhase('historical_session_restore_failed', {
+            remote,
+            sessionTraceId,
+            durationMs: elapsedMs(restoreStartedAt),
+          });
           log.warn('Backend session restore failed (may be new session)', { sessionId, error });
         }
       }
       
-      const { sessionAPI } = await import('@/infrastructure/api');
-      const turns = await sessionAPI.loadSessionTurns(
-        sessionId,
-        workspacePath,
-        limit,
-        remoteConnectionId,
-        remoteSshHost
-      );
+      if (!turns) {
+        const turnsLoadStartedAt = nowMs();
+        startupTrace.markPhase('historical_session_turns_load_start', { remote, sessionTraceId });
+        const { sessionAPI } = await import('@/infrastructure/api');
+        turns = await sessionAPI.loadSessionTurns(
+          sessionId,
+          workspacePath,
+          limit,
+          remoteConnectionId,
+          remoteSshHost
+        );
+        startupTrace.markPhase('historical_session_turns_load_end', {
+          remote,
+          sessionTraceId,
+          turnCount: Array.isArray(turns) ? turns.length : 0,
+          durationMs: elapsedMs(turnsLoadStartedAt),
+        });
+      }
       startupTrace.markPhase('historical_session_turns_loaded', {
         remote,
+        sessionTraceId,
         turnCount: Array.isArray(turns) ? turns.length : 0,
       });
       
+      const convertStartedAt = nowMs();
       const dialogTurns = this.convertToDialogTurns(turns);
+      startupTrace.markPhase('historical_session_convert_end', {
+        remote,
+        sessionTraceId,
+        turnCount: dialogTurns.length,
+        durationMs: elapsedMs(convertStartedAt),
+      });
       
+      const stateCommitStartedAt = nowMs();
       this.setState(prev => {
         const session = prev.sessions.get(sessionId);
         if (!session) return prev;
@@ -1961,6 +2229,7 @@ export class FlowChatStore {
           dialogTurns,
           isHistorical: false,
           historyState: 'ready' as const,
+          contextRestoreState,
           error: null,
         };
         
@@ -1972,12 +2241,26 @@ export class FlowChatStore {
           sessions: newSessions,
         };
       });
+      startupTrace.markPhase('historical_session_state_commit_end', {
+        remote,
+        sessionTraceId,
+        turnCount: dialogTurns.length,
+        durationMs: elapsedMs(stateCommitStartedAt),
+      });
+      markPhaseAfterAnimationFrames(startupTrace, 'historical_session_after_state_commit_frame', {
+        remote,
+        sessionTraceId,
+        turnCount: dialogTurns.length,
+      }, {
+        frameCount: 2,
+      });
       
       // Reset state machine to IDLE after loading history
       // This handles the case where restoreSession triggered events that left the state machine in PROCESSING
       stateMachineManager.reset(sessionId);
       startupTrace.markPhase('historical_session_hydrate_end', {
         remote,
+        sessionTraceId,
         turnCount: dialogTurns.length,
         durationMs: elapsedMs(traceStartedAt),
       });
@@ -2000,6 +2283,7 @@ export class FlowChatStore {
       });
       startupTrace.markPhase('historical_session_hydrate_failed', {
         remote,
+        sessionTraceId,
         durationMs: elapsedMs(traceStartedAt),
       });
       log.error('Failed to load session history', { sessionId, error });

@@ -655,31 +655,86 @@ export async function ensureBackendSession(
 
   const isHistoricalSession = latestSession.isHistorical === true;
   const isFirstTurn = latestSession.dialogTurns.length <= 1;
-  const needsBackendSetup = isHistoricalSession || isFirstTurn;
+  const requiresContextRestore =
+    latestSession.contextRestoreState === 'pending' ||
+    latestSession.contextRestoreState === 'failed';
+  const needsBackendSetup = isHistoricalSession || isFirstTurn || requiresContextRestore;
   /** Avoid createSession when historical data is already loaded but backend files are missing (e.g. new SSH connection id). */
   const allowRecreateOnCoordinatorFailure =
-    needsBackendSetup && !(isHistoricalSession && session.dialogTurns.length > 1);
+    needsBackendSetup &&
+    !requiresContextRestore &&
+    !(isHistoricalSession && session.dialogTurns.length > 1);
 
-  const clearHistoricalFlag = () => {
-    if (!isHistoricalSession) return;
+  const markBackendContextReady = () => {
+    if (!isHistoricalSession && !requiresContextRestore) return;
     context.flowChatStore.setState(prev => {
       const newSessions = new Map(prev.sessions);
       const sess = newSessions.get(sessionId);
       if (sess) {
-        newSessions.set(sessionId, { ...sess, isHistorical: false, historyState: 'ready' });
+        newSessions.set(sessionId, {
+          ...sess,
+          isHistorical: false,
+          historyState: 'ready',
+          contextRestoreState: 'ready',
+        });
       }
       return { ...prev, sessions: newSessions };
     });
   };
 
-  try {
+  const markBackendContextFailed = () => {
+    if (!requiresContextRestore) return;
+    context.flowChatStore.setState(prev => {
+      const newSessions = new Map(prev.sessions);
+      const sess = newSessions.get(sessionId);
+      if (sess) {
+        newSessions.set(sessionId, { ...sess, contextRestoreState: 'failed' });
+      }
+      return { ...prev, sessions: newSessions };
+    });
+  };
+
+  const ensureCoordinator = async () => {
     await agentAPI.ensureCoordinatorSession({
       sessionId,
       workspacePath,
       remoteConnectionId: effectiveConnectionId,
       remoteSshHost: effectiveSshHost,
     });
-    clearHistoricalFlag();
+    markBackendContextReady();
+  };
+
+  if (requiresContextRestore) {
+    if (!context.pendingContextRestores) {
+      context.pendingContextRestores = new Map();
+    }
+    const restoreKey = [
+      sessionId,
+      workspacePath,
+      effectiveConnectionId ?? '',
+      effectiveSshHost ?? '',
+    ].join('\u001f');
+    const existingRestore = context.pendingContextRestores.get(restoreKey);
+    if (existingRestore) {
+      await existingRestore;
+      return;
+    }
+
+    const restorePromise = ensureCoordinator().catch(error => {
+      markBackendContextFailed();
+      throw error;
+    }).finally(() => {
+      if (context.pendingContextRestores?.get(restoreKey) === restorePromise) {
+        context.pendingContextRestores.delete(restoreKey);
+      }
+    });
+    context.pendingContextRestores.set(restoreKey, restorePromise);
+    await restorePromise;
+    return;
+  }
+
+  try {
+    await ensureCoordinator();
   } catch (e: any) {
     if (!allowRecreateOnCoordinatorFailure) {
       const raw = typeof e?.message === 'string' ? e.message : String(e);
@@ -708,7 +763,7 @@ export async function ensureBackendSession(
         remoteSshHost: effectiveSshHost,
       }
     });
-    clearHistoricalFlag();
+    markBackendContextReady();
   }
 }
 

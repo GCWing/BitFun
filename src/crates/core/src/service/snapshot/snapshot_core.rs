@@ -8,7 +8,7 @@ use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,13 +113,26 @@ impl SnapshotCore {
     }
 
     pub async fn initialize(&mut self) -> SnapshotResult<()> {
+        let total_started_at = Instant::now();
         info!("Initializing operation history system");
 
+        let snapshot_system_started_at = Instant::now();
         self.snapshot_system.initialize().await?;
+        debug!(
+            "Operation history initialize step completed: step=file_snapshot_system duration_ms={}",
+            snapshot_system_started_at.elapsed().as_millis()
+        );
+
+        let sessions_started_at = Instant::now();
         self.load_all_sessions().await?;
+        debug!(
+            "Operation history initialize step completed: step=load_sessions duration_ms={}",
+            sessions_started_at.elapsed().as_millis()
+        );
         info!(
-            "Operation history system initialized: loaded_sessions={}",
-            self.sessions.len()
+            "Operation history system initialized: loaded_sessions={} duration_ms={}",
+            self.sessions.len(),
+            total_started_at.elapsed().as_millis()
         );
         Ok(())
     }
@@ -897,6 +910,7 @@ impl SnapshotCore {
     }
 
     async fn load_all_sessions(&mut self) -> SnapshotResult<()> {
+        let started_at = Instant::now();
         if !self.sessions_dir.exists() {
             return Ok(());
         }
@@ -928,7 +942,11 @@ impl SnapshotCore {
                 ),
             }
         }
-        debug!("Loaded {} session files", loaded);
+        debug!(
+            "Loaded session files: count={} duration_ms={}",
+            loaded,
+            started_at.elapsed().as_millis()
+        );
         self.rebuild_operation_index();
         Ok(())
     }

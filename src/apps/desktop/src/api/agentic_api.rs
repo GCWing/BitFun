@@ -1,6 +1,6 @@
 //! Agentic API
 
-use log::warn;
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, State};
@@ -19,6 +19,7 @@ use bitfun_core::agentic::deep_review_policy::{
 };
 use bitfun_core::agentic::image_analysis::ImageContextData;
 use bitfun_core::agentic::tools::image_context::get_image_context;
+use bitfun_core::service::session::DialogTurnData;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionRequest {
@@ -157,6 +158,161 @@ pub struct SessionResponse {
     pub created_at: u64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreSessionWithTurnsResponse {
+    pub session: SessionResponse,
+    pub turns: Vec<DialogTurnData>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreSessionViewResponse {
+    pub session: SessionResponse,
+    pub turns: Vec<DialogTurnData>,
+    pub context_restore_state: String,
+}
+
+#[derive(Debug, Default)]
+struct RestoreTurnPayloadStats {
+    tool_result_count: usize,
+    raw_result_string_chars: usize,
+    result_for_assistant_chars: usize,
+    largest_raw_result_chars: usize,
+    largest_raw_result_path: String,
+    top_raw_results: Vec<RestoreToolOutputStats>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RestoreToolOutputStats {
+    tool_name: String,
+    path: String,
+    raw_result_string_chars: usize,
+    result_for_assistant_chars: usize,
+}
+
+#[derive(Debug, Default)]
+struct JsonStringStats {
+    total_chars: usize,
+    largest_chars: usize,
+    largest_path: String,
+}
+
+fn collect_json_string_stats(value: &serde_json::Value, path: &str, stats: &mut JsonStringStats) {
+    match value {
+        serde_json::Value::String(text) => {
+            let char_count = text.chars().count();
+            stats.total_chars += char_count;
+            if char_count > stats.largest_chars {
+                stats.largest_chars = char_count;
+                stats.largest_path = path.to_string();
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                collect_json_string_stats(item, &format!("{}[{}]", path, index), stats);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (key, item) in map {
+                let next_path = if path.is_empty() {
+                    key.to_string()
+                } else {
+                    format!("{}.{}", path, key)
+                };
+                collect_json_string_stats(item, &next_path, stats);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn push_top_raw_result(stats: &mut RestoreTurnPayloadStats, result: RestoreToolOutputStats) {
+    if result.raw_result_string_chars == 0 {
+        return;
+    }
+    stats.top_raw_results.push(result);
+    stats.top_raw_results.sort_by(|left, right| {
+        right
+            .raw_result_string_chars
+            .cmp(&left.raw_result_string_chars)
+            .then_with(|| left.tool_name.cmp(&right.tool_name))
+    });
+    stats.top_raw_results.truncate(3);
+}
+
+fn format_top_raw_results(results: &[RestoreToolOutputStats]) -> String {
+    results
+        .iter()
+        .map(|item| {
+            format!(
+                "{}:{}:{}:{}",
+                item.tool_name,
+                item.raw_result_string_chars,
+                item.result_for_assistant_chars,
+                item.path
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+fn restore_turn_payload_stats(turns: &[DialogTurnData]) -> RestoreTurnPayloadStats {
+    let mut stats = RestoreTurnPayloadStats::default();
+    for turn in turns {
+        for (round_index, round) in turn.model_rounds.iter().enumerate() {
+            for (tool_index, tool) in round.tool_items.iter().enumerate() {
+                let Some(result) = tool.tool_result.as_ref() else {
+                    continue;
+                };
+                stats.tool_result_count += 1;
+                let assistant_chars = result
+                    .result_for_assistant
+                    .as_deref()
+                    .map(|text| text.chars().count())
+                    .unwrap_or(0);
+                stats.result_for_assistant_chars += assistant_chars;
+                let mut json_stats = JsonStringStats::default();
+                collect_json_string_stats(
+                    &result.result,
+                    &format!(
+                        "turn[{}].round[{}].tool[{}].{}",
+                        turn.turn_index, round_index, tool_index, tool.tool_name
+                    ),
+                    &mut json_stats,
+                );
+                stats.raw_result_string_chars += json_stats.total_chars;
+                if json_stats.largest_chars > stats.largest_raw_result_chars {
+                    stats.largest_raw_result_chars = json_stats.largest_chars;
+                    stats.largest_raw_result_path = json_stats.largest_path.clone();
+                }
+                push_top_raw_result(
+                    &mut stats,
+                    RestoreToolOutputStats {
+                        tool_name: tool.tool_name.clone(),
+                        path: json_stats.largest_path,
+                        raw_result_string_chars: json_stats.total_chars,
+                        result_for_assistant_chars: assistant_chars,
+                    },
+                );
+            }
+        }
+    }
+    stats
+}
+
+fn omit_assistant_only_tool_results_for_session_view(turns: &mut [DialogTurnData]) {
+    for turn in turns {
+        for round in &mut turn.model_rounds {
+            for tool in &mut round.tool_items {
+                if let Some(result) = tool.tool_result.as_mut() {
+                    result.result_for_assistant = None;
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CancelDialogTurnRequest {
@@ -248,6 +404,8 @@ pub struct RestoreSessionRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub trace_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -880,6 +1038,140 @@ pub async fn restore_session(
 }
 
 #[tauri::command]
+pub async fn restore_session_view(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
+    request: RestoreSessionRequest,
+) -> Result<RestoreSessionViewResponse, String> {
+    let started_at = std::time::Instant::now();
+    let trace_id = request.trace_id.as_deref().unwrap_or("none");
+    debug!(
+        "restore_session_view request received: trace_id={}, session_id={}",
+        trace_id, request.session_id
+    );
+    let path_started_at = std::time::Instant::now();
+    let effective_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
+    debug!(
+        "restore_session_view storage path resolved: trace_id={}, session_id={}, duration_ms={}",
+        trace_id,
+        request.session_id,
+        path_started_at.elapsed().as_millis()
+    );
+
+    let (session, mut turns) = coordinator
+        .restore_session_view(&effective_path, &request.session_id)
+        .await
+        .map_err(|e| format!("Failed to restore session view: {}", e))?;
+
+    if log::log_enabled!(log::Level::Debug) {
+        let payload_stats = restore_turn_payload_stats(&turns);
+        if payload_stats.raw_result_string_chars >= 1024 * 1024
+            || payload_stats.result_for_assistant_chars >= 1024 * 1024
+        {
+            debug!(
+                "restore_session_view payload diagnostics: trace_id={}, session_id={}, turn_count={}, tool_result_count={}, raw_result_string_chars={}, result_for_assistant_chars={}, largest_raw_result_chars={}, largest_raw_result_path={}, top_raw_results={}",
+                trace_id,
+                request.session_id,
+                turns.len(),
+                payload_stats.tool_result_count,
+                payload_stats.raw_result_string_chars,
+                payload_stats.result_for_assistant_chars,
+                payload_stats.largest_raw_result_chars,
+                payload_stats.largest_raw_result_path,
+                format_top_raw_results(&payload_stats.top_raw_results)
+            );
+        }
+    }
+
+    omit_assistant_only_tool_results_for_session_view(&mut turns);
+
+    debug!(
+        "restore_session_view completed: trace_id={}, session_id={}, turn_count={}, context_restore_state=pending, duration_ms={}",
+        trace_id,
+        request.session_id,
+        turns.len(),
+        started_at.elapsed().as_millis()
+    );
+
+    Ok(RestoreSessionViewResponse {
+        session: session_to_response(session),
+        turns,
+        context_restore_state: "pending".to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn restore_session_with_turns(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
+    request: RestoreSessionRequest,
+) -> Result<RestoreSessionWithTurnsResponse, String> {
+    let started_at = std::time::Instant::now();
+    let trace_id = request.trace_id.as_deref().unwrap_or("none");
+    debug!(
+        "restore_session_with_turns request received: trace_id={}, session_id={}",
+        trace_id, request.session_id
+    );
+    let path_started_at = std::time::Instant::now();
+    let effective_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
+    debug!(
+        "restore_session_with_turns storage path resolved: trace_id={}, session_id={}, duration_ms={}",
+        trace_id,
+        request.session_id,
+        path_started_at.elapsed().as_millis()
+    );
+    let (session, turns) = coordinator
+        .restore_session_with_turns(&effective_path, &request.session_id)
+        .await
+        .map_err(|e| format!("Failed to restore session: {}", e))?;
+
+    if log::log_enabled!(log::Level::Debug) {
+        let payload_stats = restore_turn_payload_stats(&turns);
+        if payload_stats.raw_result_string_chars >= 1024 * 1024
+            || payload_stats.result_for_assistant_chars >= 1024 * 1024
+        {
+            debug!(
+                "restore_session_with_turns payload diagnostics: trace_id={}, session_id={}, turn_count={}, tool_result_count={}, raw_result_string_chars={}, result_for_assistant_chars={}, largest_raw_result_chars={}, largest_raw_result_path={}, top_raw_results={}",
+                trace_id,
+                request.session_id,
+                turns.len(),
+                payload_stats.tool_result_count,
+                payload_stats.raw_result_string_chars,
+                payload_stats.result_for_assistant_chars,
+                payload_stats.largest_raw_result_chars,
+                payload_stats.largest_raw_result_path,
+                format_top_raw_results(&payload_stats.top_raw_results)
+            );
+        }
+    }
+
+    debug!(
+        "restore_session_with_turns completed: trace_id={}, session_id={}, turn_count={}, duration_ms={}",
+        trace_id,
+        request.session_id,
+        turns.len(),
+        started_at.elapsed().as_millis()
+    );
+
+    Ok(RestoreSessionWithTurnsResponse {
+        session: session_to_response(session),
+        turns,
+    })
+}
+
+#[tauri::command]
 pub async fn list_sessions(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     app_state: State<'_, AppState>,
@@ -1057,5 +1349,168 @@ fn system_time_to_unix_secs(time: std::time::SystemTime) -> u64 {
             warn!("Failed to convert SystemTime to unix timestamp: {}", err);
             0
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitfun_core::service::session::{
+        ModelRoundData, ToolCallData, ToolItemData, ToolResultData, TurnStatus, UserMessageData,
+    };
+    use serde_json::json;
+
+    fn tool_item(
+        tool_name: &str,
+        result: serde_json::Value,
+        assistant: Option<&str>,
+    ) -> ToolItemData {
+        ToolItemData {
+            id: format!("tool-{}", tool_name),
+            tool_name: tool_name.to_string(),
+            tool_call: ToolCallData {
+                id: format!("call-{}", tool_name),
+                input: json!({}),
+            },
+            tool_result: Some(ToolResultData {
+                result,
+                success: true,
+                result_for_assistant: assistant.map(str::to_string),
+                error: None,
+                duration_ms: Some(1),
+            }),
+            ai_intent: None,
+            start_time: 1,
+            end_time: Some(2),
+            duration_ms: Some(1),
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: None,
+            order_index: None,
+            is_subagent_item: None,
+            parent_task_tool_id: None,
+            subagent_session_id: None,
+            subagent_model_id: None,
+            subagent_model_alias: None,
+            status: None,
+            interruption_reason: None,
+        }
+    }
+
+    #[test]
+    fn restore_turn_payload_stats_tracks_largest_outputs_without_contents() {
+        let turn = DialogTurnData {
+            turn_id: "turn-1".to_string(),
+            turn_index: 0,
+            session_id: "session-1".to_string(),
+            timestamp: 1,
+            kind: Default::default(),
+            user_message: UserMessageData {
+                id: "user-1".to_string(),
+                content: "hello".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+            model_rounds: vec![ModelRoundData {
+                id: "round-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                round_index: 0,
+                timestamp: 1,
+                text_items: vec![],
+                tool_items: vec![
+                    tool_item("Read", json!({ "content": "abc" }), Some("assistant")),
+                    tool_item("Bash", json!({ "output": "x".repeat(20) }), Some("short")),
+                ],
+                thinking_items: vec![],
+                start_time: 1,
+                end_time: Some(2),
+                duration_ms: Some(1),
+                provider_id: None,
+                model_id: None,
+                model_alias: None,
+                first_chunk_ms: None,
+                first_visible_output_ms: None,
+                stream_duration_ms: None,
+                attempt_count: None,
+                failure_category: None,
+                token_details: None,
+                status: "completed".to_string(),
+            }],
+            start_time: 1,
+            end_time: Some(2),
+            duration_ms: Some(1),
+            status: TurnStatus::Completed,
+        };
+
+        let stats = restore_turn_payload_stats(&[turn]);
+
+        assert_eq!(stats.tool_result_count, 2);
+        assert_eq!(stats.raw_result_string_chars, 23);
+        assert_eq!(stats.result_for_assistant_chars, 14);
+        assert_eq!(stats.largest_raw_result_chars, 20);
+        assert_eq!(stats.top_raw_results.len(), 2);
+        assert_eq!(stats.top_raw_results[0].tool_name, "Bash");
+        assert_eq!(stats.top_raw_results[0].raw_result_string_chars, 20);
+        assert_eq!(stats.top_raw_results[0].result_for_assistant_chars, 5);
+        assert_eq!(stats.top_raw_results[1].tool_name, "Read");
+        assert_eq!(stats.top_raw_results[1].raw_result_string_chars, 3);
+        assert!(!stats.top_raw_results[0].path.contains(&"x".repeat(20)));
+    }
+
+    #[test]
+    fn omit_assistant_only_tool_results_preserves_visible_results() {
+        let mut turns = vec![DialogTurnData {
+            turn_id: "turn-1".to_string(),
+            turn_index: 0,
+            session_id: "session-1".to_string(),
+            timestamp: 1,
+            kind: Default::default(),
+            user_message: UserMessageData {
+                id: "user-1".to_string(),
+                content: "hello".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+            model_rounds: vec![ModelRoundData {
+                id: "round-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                round_index: 0,
+                timestamp: 1,
+                text_items: vec![],
+                tool_items: vec![tool_item(
+                    "Bash",
+                    json!({ "output": "visible output" }),
+                    Some("assistant-only payload"),
+                )],
+                thinking_items: vec![],
+                start_time: 1,
+                end_time: Some(2),
+                duration_ms: Some(1),
+                provider_id: None,
+                model_id: None,
+                model_alias: None,
+                first_chunk_ms: None,
+                first_visible_output_ms: None,
+                stream_duration_ms: None,
+                attempt_count: None,
+                failure_category: None,
+                token_details: None,
+                status: "completed".to_string(),
+            }],
+            start_time: 1,
+            end_time: Some(2),
+            duration_ms: Some(1),
+            status: TurnStatus::Completed,
+        }];
+
+        omit_assistant_only_tool_results_for_session_view(&mut turns);
+
+        let tool_result = turns[0].model_rounds[0].tool_items[0]
+            .tool_result
+            .as_ref()
+            .expect("tool result should remain present");
+        assert_eq!(tool_result.result["output"], "visible output");
+        assert_eq!(tool_result.result_for_assistant, None);
     }
 }

@@ -26,6 +26,12 @@ export interface StartupTraceOptions {
   maxPhaseEvents?: number;
 }
 
+export interface DeferredAnimationFrameTraceOptions {
+  frameCount?: number;
+  now?: NowFn;
+  requestAnimationFrame?: (callback: (time: number) => void) => number;
+}
+
 interface CommandAggregate {
   command: string;
   count: number;
@@ -368,3 +374,42 @@ export function createStartupTrace(options: StartupTraceOptions = {}): StartupTr
 }
 
 export const startupTrace = createStartupTrace();
+
+export function markPhaseAfterAnimationFrames(
+  trace: StartupTrace,
+  phase: string,
+  data?: TraceData,
+  options: DeferredAnimationFrameTraceOptions = {}
+): void {
+  const frameCount = Math.max(1, Math.floor(options.frameCount ?? 2));
+  const now = options.now ?? (() => globalThis.performance?.now?.() ?? Date.now());
+  const requestFrame = options.requestAnimationFrame ?? globalThis.requestAnimationFrame?.bind(globalThis);
+  const startedAt = now();
+
+  if (!requestFrame) {
+    trace.markPhase(phase, {
+      ...(data ?? {}),
+      frameCount: 0,
+      durationMs: 0,
+    });
+    return;
+  }
+
+  let remainingFrames = frameCount;
+  const scheduleNextFrame = () => {
+    requestFrame(() => {
+      remainingFrames -= 1;
+      if (remainingFrames <= 0) {
+        trace.markPhase(phase, {
+          ...(data ?? {}),
+          frameCount,
+          durationMs: roundDurationMs(now() - startedAt),
+        });
+        return;
+      }
+      scheduleNextFrame();
+    });
+  };
+
+  scheduleNextFrame();
+}

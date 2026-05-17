@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ensureBackendSession, switchChatSession } from './SessionModule';
 import type { Session } from '../../types/flow-chat';
 
@@ -97,12 +97,17 @@ function createContext(session: Session) {
     context: {
       flowChatStore,
       pendingHistoryLoads: new Map<string, Promise<void>>(),
+      pendingContextRestores: new Map<string, Promise<void>>(),
     } as any,
     flowChatStore,
   };
 }
 
 describe('SessionModule historical session coordination', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('switches to a historical session immediately while hydrating in the background', async () => {
     const load = createDeferred<void>();
     const { context, flowChatStore } = createContext(createSession());
@@ -135,5 +140,49 @@ describe('SessionModule historical session coordination', () => {
 
     expect(agentApiMocks.ensureCoordinatorSession).toHaveBeenCalledTimes(1);
     expect(agentApiMocks.createSession).not.toHaveBeenCalled();
+  });
+
+  it('restores pending backend context for a view-restored session before send', async () => {
+    const { context } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [{ id: 'turn-1' } as any],
+    } as any));
+    agentApiMocks.ensureCoordinatorSession.mockResolvedValueOnce(undefined);
+
+    await ensureBackendSession(context, 'history-1');
+
+    expect(agentApiMocks.ensureCoordinatorSession).toHaveBeenCalledTimes(1);
+    expect(agentApiMocks.createSession).not.toHaveBeenCalled();
+    expect(context.flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      contextRestoreState: 'ready',
+    });
+  });
+
+  it('dedupes concurrent backend context restore for a view-restored session', async () => {
+    const { context } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [{ id: 'turn-1' } as any],
+    } as any));
+    const restore = createDeferred<void>();
+    agentApiMocks.ensureCoordinatorSession.mockReturnValueOnce(restore.promise);
+
+    const firstEnsure = ensureBackendSession(context, 'history-1');
+    const secondEnsure = ensureBackendSession(context, 'history-1');
+    await Promise.resolve();
+
+    expect(agentApiMocks.ensureCoordinatorSession).toHaveBeenCalledTimes(1);
+
+    restore.resolve();
+    await Promise.all([firstEnsure, secondEnsure]);
+
+    expect(agentApiMocks.createSession).not.toHaveBeenCalled();
+    expect(context.pendingContextRestores.size).toBe(0);
+    expect(context.flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      contextRestoreState: 'ready',
+    });
   });
 });

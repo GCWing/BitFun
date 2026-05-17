@@ -4,6 +4,7 @@ import {
   estimateJsonBytes,
   isRemoteTraceContext,
   isRemoteTraceRequest,
+  markPhaseAfterAnimationFrames,
 } from './startupTrace';
 import type { LoggerLike } from './timing';
 
@@ -220,6 +221,50 @@ describe('startupTrace', () => {
 
     expect(logger.debug).not.toHaveBeenCalled();
     expect(logger.info).not.toHaveBeenCalled();
+  });
+
+  it('marks deferred phases only after the requested animation frames', () => {
+    const logger = createTestLogger();
+    let now = 100;
+    const callbacks: Array<(time: number) => void> = [];
+    const trace = createStartupTrace({
+      logger,
+      traceId: 'trace-test',
+      now: () => now,
+    });
+
+    markPhaseAfterAnimationFrames(trace, 'historical_session_first_paint', {
+      sessionTraceId: 'session-trace',
+      remote: false,
+    }, {
+      frameCount: 2,
+      now: () => now,
+      requestAnimationFrame: callback => {
+        callbacks.push(callback);
+        return callbacks.length;
+      },
+    });
+
+    expect(logger.debug).not.toHaveBeenCalled();
+    expect(callbacks).toHaveLength(1);
+
+    now = 116;
+    callbacks.shift()?.(now);
+    expect(logger.debug).not.toHaveBeenCalled();
+    expect(callbacks).toHaveLength(1);
+
+    now = 132;
+    callbacks.shift()?.(now);
+
+    expect(logger.debug).toHaveBeenCalledTimes(1);
+    const [, payload] = logger.debug.mock.calls[0];
+    expect(payload).toMatchObject({
+      traceId: 'trace-test',
+      phase: 'historical_session_first_paint',
+      sessionTraceId: 'session-trace',
+      remote: false,
+      durationMs: 32,
+    });
   });
 
   it('uses the desktop injected trace id when available', () => {

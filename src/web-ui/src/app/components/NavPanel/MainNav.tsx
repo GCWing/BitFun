@@ -177,10 +177,16 @@ const MainNav: React.FC<MainNavProps> = ({
         void flowChatStore.initializeFromDisk(
           workspace.rootPath,
           workspace.connectionId ?? undefined,
-          workspace.sshHost ?? undefined
+          workspace.sshHost ?? undefined,
+          'main_nav_opened_remote_workspace'
         );
       } else {
-        void flowChatStore.initializeFromDisk(workspace.rootPath);
+        void flowChatStore.initializeFromDisk(
+          workspace.rootPath,
+          undefined,
+          undefined,
+          'main_nav_opened_local_workspace'
+        );
       }
     });
   }, [openedWorkspacesList]);

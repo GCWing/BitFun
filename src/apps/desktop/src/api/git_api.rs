@@ -11,7 +11,7 @@ use bitfun_core::service::git::{
     GitBranch, GitCommit, GitOperationResult, GitRepository, GitStatus,
 };
 use bitfun_core::service::remote_ssh::{lookup_remote_connection, normalize_remote_workspace_path};
-use log::{error, info};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -586,6 +586,66 @@ pub async fn git_get_repository(
             );
             format!("Failed to get Git repository info: {}", e)
         })
+}
+
+#[tauri::command]
+pub async fn git_get_repository_basic(
+    state: State<'_, AppState>,
+    request: GitRepositoryRequest,
+) -> Result<GitRepository, String> {
+    let started_at = std::time::Instant::now();
+    let result = if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+        let current_branch = execute_remote_git_success(
+            &state,
+            &target,
+            &["branch".to_string(), "--show-current".to_string()],
+        )
+        .await
+        .map(|s| {
+            let branch = s.trim();
+            if branch.is_empty() {
+                "HEAD".to_string()
+            } else {
+                branch.to_string()
+            }
+        })?;
+
+        let name = target
+            .repository_path
+            .rsplit('/')
+            .find(|part| !part.is_empty())
+            .unwrap_or("/")
+            .to_string();
+
+        Ok(GitRepository {
+            path: target.repository_path,
+            name,
+            current_branch,
+            is_bare: false,
+            has_changes: false,
+            remotes: Vec::new(),
+        })
+    } else {
+        GitService::get_repository_basic(&request.repository_path)
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to get basic Git repository info: path={}, error={}",
+                    request.repository_path, e
+                );
+                format!("Failed to get basic Git repository info: {}", e)
+            })
+    };
+
+    let duration_ms = started_at.elapsed().as_millis();
+    if duration_ms >= 80 {
+        debug!(
+            "Git basic repository lookup completed: path={}, duration_ms={}",
+            request.repository_path, duration_ms
+        );
+    }
+
+    result
 }
 
 #[tauri::command]

@@ -2,6 +2,7 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
+import type { DialogTurnData } from '@/shared/types/session-history';
 import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
 
 
@@ -81,6 +82,17 @@ export interface SessionInfo {
   state: string;
   turnCount: number;
   createdAt: number;
+}
+
+export interface RestoreSessionWithTurnsResponse {
+  session: SessionInfo;
+  turns: DialogTurnData[];
+}
+
+export interface RestoreSessionViewResponse {
+  session: SessionInfo;
+  turns: DialogTurnData[];
+  contextRestoreState: 'ready' | 'pending';
 }
 
 export interface EnsureAssistantBootstrapRequest {
@@ -359,14 +371,47 @@ export class AgentAPI {
     sessionId: string,
     workspacePath: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    traceId?: string
   ): Promise<SessionInfo> {
     try {
       return await api.invoke<SessionInfo>('restore_session', {
-        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost },
+        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost, traceId },
       });
     } catch (error) {
       throw createTauriCommandError('restore_session', error, { sessionId, workspacePath });
+    }
+  }
+
+  async restoreSessionWithTurns(
+    sessionId: string,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+    traceId?: string
+  ): Promise<RestoreSessionWithTurnsResponse> {
+    try {
+      return await api.invoke<RestoreSessionWithTurnsResponse>('restore_session_with_turns', {
+        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost, traceId },
+      });
+    } catch (error) {
+      throw createTauriCommandError('restore_session_with_turns', error, { sessionId, workspacePath });
+    }
+  }
+
+  async restoreSessionView(
+    sessionId: string,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+    traceId?: string
+  ): Promise<RestoreSessionViewResponse> {
+    try {
+      return await api.invoke<RestoreSessionViewResponse>('restore_session_view', {
+        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost, traceId },
+      });
+    } catch (error) {
+      throw createTauriCommandError('restore_session_view', error, { sessionId, workspacePath });
     }
   }
 

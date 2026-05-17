@@ -17,14 +17,14 @@ use crate::service::session::{
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{BitFunError, BitFunResult};
-use log::{info, warn};
+use log::{debug, info, warn};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::fs;
 use tokio::sync::Mutex;
 
@@ -58,6 +58,83 @@ struct StoredTurnContextSnapshotFile {
     session_id: String,
     turn_index: usize,
     messages: Vec<Message>,
+}
+
+#[derive(Debug, Default)]
+struct ContextSnapshotPayloadStats {
+    tool_result_count: usize,
+    raw_result_string_chars: usize,
+    result_for_assistant_chars: usize,
+    largest_raw_result_chars: usize,
+    largest_raw_result_path: String,
+}
+
+fn collect_json_string_stats(
+    value: &serde_json::Value,
+    path: &str,
+    total: &mut usize,
+    largest: &mut (usize, String),
+) {
+    match value {
+        serde_json::Value::String(text) => {
+            let char_count = text.chars().count();
+            *total += char_count;
+            if char_count > largest.0 {
+                *largest = (char_count, path.to_string());
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                collect_json_string_stats(item, &format!("{}[{}]", path, index), total, largest);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (key, item) in map {
+                let next_path = if path.is_empty() {
+                    key.to_string()
+                } else {
+                    format!("{}.{}", path, key)
+                };
+                collect_json_string_stats(item, &next_path, total, largest);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn context_snapshot_payload_stats(messages: &[Message]) -> ContextSnapshotPayloadStats {
+    let mut stats = ContextSnapshotPayloadStats::default();
+    for (message_index, message) in messages.iter().enumerate() {
+        let MessageContent::ToolResult {
+            tool_name,
+            result,
+            result_for_assistant,
+            ..
+        } = &message.content
+        else {
+            continue;
+        };
+
+        stats.tool_result_count += 1;
+        if let Some(text) = result_for_assistant.as_deref() {
+            stats.result_for_assistant_chars += text.chars().count();
+        }
+
+        let mut raw_chars = 0usize;
+        let mut largest = (0usize, String::new());
+        collect_json_string_stats(
+            result,
+            &format!("message[{}].{}", message_index, tool_name),
+            &mut raw_chars,
+            &mut largest,
+        );
+        stats.raw_result_string_chars += raw_chars;
+        if largest.0 > stats.largest_raw_result_chars {
+            stats.largest_raw_result_chars = largest.0;
+            stats.largest_raw_result_path = largest.1;
+        }
+    }
+    stats
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -322,10 +399,22 @@ impl PersistenceManager {
         &self,
         path: &Path,
     ) -> BitFunResult<Option<T>> {
-        if !path.exists() {
-            return Ok(None);
-        }
+        let started_at = Instant::now();
+        let metadata_started_at = Instant::now();
+        let metadata = match fs::metadata(path).await {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+            Err(error) => {
+                return Err(BitFunError::io(format!(
+                    "Failed to read JSON metadata {}: {}",
+                    path.display(),
+                    error
+                )));
+            }
+        };
+        let metadata_duration = metadata_started_at.elapsed();
 
+        let read_started_at = Instant::now();
         let content = fs::read_to_string(path).await.map_err(|e| {
             BitFunError::io(format!(
                 "Failed to read JSON file {}: {}",
@@ -333,7 +422,9 @@ impl PersistenceManager {
                 e
             ))
         })?;
+        let read_duration = read_started_at.elapsed();
 
+        let parse_started_at = Instant::now();
         let value = serde_json::from_str::<T>(&content).map_err(|e| {
             BitFunError::Deserialization(format!(
                 "Failed to deserialize JSON file {}: {}",
@@ -341,6 +432,21 @@ impl PersistenceManager {
                 e
             ))
         })?;
+        let parse_duration = parse_started_at.elapsed();
+        let total_duration = started_at.elapsed();
+
+        if total_duration >= Duration::from_millis(80) || metadata.len() >= 1024 * 1024 {
+            debug!(
+                "Read JSON file: path={} type={} size_bytes={} metadata_duration_ms={} read_duration_ms={} parse_duration_ms={} total_duration_ms={}",
+                path.display(),
+                std::any::type_name::<T>(),
+                metadata.len(),
+                metadata_duration.as_millis(),
+                read_duration.as_millis(),
+                parse_duration.as_millis(),
+                total_duration.as_millis()
+            );
+        }
 
         Ok(Some(value))
     }
@@ -1521,12 +1627,15 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
+        let started_at = Instant::now();
         let dir = self.snapshots_dir(workspace_path, session_id);
         if !dir.exists() {
             return Ok(None);
         }
 
+        let scan_started_at = Instant::now();
         let mut latest: Option<usize> = None;
+        let mut snapshot_file_count = 0usize;
         let mut rd = fs::read_dir(&dir)
             .await
             .map_err(|e| BitFunError::io(format!("Failed to read snapshots directory: {}", e)))?;
@@ -1547,20 +1656,44 @@ impl PersistenceManager {
                 continue;
             };
             if let Ok(index) = index_str.parse::<usize>() {
+                snapshot_file_count += 1;
                 latest = Some(latest.map(|value| value.max(index)).unwrap_or(index));
             }
         }
+        let scan_duration = scan_started_at.elapsed();
 
         let Some(turn_index) = latest else {
             return Ok(None);
         };
 
+        let load_started_at = Instant::now();
         let Some(messages) = self
             .load_turn_context_snapshot(workspace_path, session_id, turn_index)
             .await?
         else {
             return Ok(None);
         };
+        let load_duration = load_started_at.elapsed();
+        let total_duration = started_at.elapsed();
+
+        if total_duration >= Duration::from_millis(80) || snapshot_file_count >= 10 {
+            let payload_stats = context_snapshot_payload_stats(&messages);
+            debug!(
+                "Loaded latest context snapshot: session_id={} turn_index={} snapshot_file_count={} scan_duration_ms={} load_duration_ms={} total_duration_ms={} message_count={} tool_result_count={} raw_result_string_chars={} result_for_assistant_chars={} largest_raw_result_chars={} largest_raw_result_path={}",
+                session_id,
+                turn_index,
+                snapshot_file_count,
+                scan_duration.as_millis(),
+                load_duration.as_millis(),
+                total_duration.as_millis(),
+                messages.len(),
+                payload_stats.tool_result_count,
+                payload_stats.raw_result_string_chars,
+                payload_stats.result_for_assistant_chars,
+                payload_stats.largest_raw_result_chars,
+                payload_stats.largest_raw_result_path
+            );
+        }
 
         Ok(Some((turn_index, messages)))
     }
@@ -1639,6 +1772,18 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Session> {
+        let (session, _) = self
+            .load_session_with_turns(workspace_path, session_id)
+            .await?;
+        Ok(session)
+    }
+
+    /// Load session and return the persisted turns read while rebuilding the session header.
+    pub async fn load_session_with_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
         let metadata = self
             .load_session_metadata(workspace_path, session_id)
             .await?
@@ -1678,7 +1823,8 @@ impl PersistenceManager {
         let created_at = Self::unix_ms_to_system_time(metadata.created_at);
         let last_activity_at = Self::unix_ms_to_system_time(metadata.last_active_at);
 
-        Ok(Session {
+        let dialog_turn_ids = turns.iter().map(|turn| turn.turn_id.clone()).collect();
+        let session = Session {
             session_id: metadata.session_id.clone(),
             session_name: metadata.session_name.clone(),
             agent_type: metadata.agent_type.clone(),
@@ -1687,14 +1833,16 @@ impl PersistenceManager {
             snapshot_session_id: stored_state
                 .and_then(|value| value.snapshot_session_id)
                 .or(metadata.snapshot_session_id.clone()),
-            dialog_turn_ids: turns.into_iter().map(|turn| turn.turn_id).collect(),
+            dialog_turn_ids,
             state: runtime_state,
             config,
             compression_state,
             created_at,
             updated_at: last_activity_at,
             last_activity_at,
-        })
+        };
+
+        Ok((session, turns))
     }
 
     /// Save session state
@@ -1845,11 +1993,13 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Vec<DialogTurnData>> {
+        let started_at = Instant::now();
         let turns_dir = self.turns_dir(workspace_path, session_id);
         if !turns_dir.exists() {
             return Ok(Vec::new());
         }
 
+        let scan_started_at = Instant::now();
         let mut indexed_paths = Vec::new();
         let mut entries = fs::read_dir(&turns_dir)
             .await
@@ -1877,8 +2027,11 @@ impl PersistenceManager {
         }
 
         indexed_paths.sort_by_key(|(index, _)| *index);
+        let scan_duration = scan_started_at.elapsed();
 
+        let read_started_at = Instant::now();
         let mut turns = Vec::with_capacity(indexed_paths.len());
+        let turn_file_count = indexed_paths.len();
         for (_, path) in indexed_paths {
             if let Some(file) = self
                 .read_json_optional::<StoredDialogTurnFile>(&path)
@@ -1886,6 +2039,19 @@ impl PersistenceManager {
             {
                 turns.push(file.turn);
             }
+        }
+        let read_duration = read_started_at.elapsed();
+        let total_duration = started_at.elapsed();
+        if total_duration >= Duration::from_millis(80) || turn_file_count >= 50 {
+            debug!(
+                "Loaded session turns: session_id={} turn_count={} turn_file_count={} scan_duration_ms={} read_duration_ms={} total_duration_ms={}",
+                session_id,
+                turns.len(),
+                turn_file_count,
+                scan_duration.as_millis(),
+                read_duration.as_millis(),
+                total_duration.as_millis()
+            );
         }
 
         Ok(turns)
@@ -2252,8 +2418,8 @@ impl PersistenceManager {
 
 #[cfg(test)]
 mod tests {
-    use super::PersistenceManager;
-    use crate::agentic::core::SessionKind;
+    use super::{context_snapshot_payload_stats, PersistenceManager};
+    use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
     use crate::infrastructure::PathManager;
     use crate::service::session::{
         DialogTurnData, SessionMetadata, SessionTranscriptExportOptions, UserMessageData,
@@ -2372,6 +2538,76 @@ mod tests {
             .expect("transcript file should be readable");
         assert!(transcript.contains("## Turn 0"));
         assert!(transcript.contains("hello transcript"));
+    }
+
+    #[tokio::test]
+    async fn load_session_with_turns_returns_session_and_persisted_turns() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+            .expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Load once".to_string(),
+            "agent".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+
+        let user_message = UserMessageData {
+            id: "user-1".to_string(),
+            content: "hello once".to_string(),
+            timestamp: 0,
+            metadata: None,
+        };
+        let mut turn =
+            DialogTurnData::new("turn-1".to_string(), 0, session_id.clone(), user_message);
+        turn.mark_completed();
+        manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+
+        let (loaded_session, loaded_turns) = manager
+            .load_session_with_turns(workspace.path(), &session_id)
+            .await
+            .expect("session and turns should load together");
+
+        assert_eq!(loaded_session.dialog_turn_ids, vec!["turn-1".to_string()]);
+        assert_eq!(loaded_turns.len(), 1);
+        assert_eq!(loaded_turns[0].turn_id, "turn-1");
+    }
+
+    #[test]
+    fn context_snapshot_payload_stats_counts_tool_result_payloads_without_contents() {
+        let messages = vec![
+            Message::assistant("hello".to_string()),
+            Message::tool_result(ToolResult {
+                tool_id: "tool-1".to_string(),
+                tool_name: "Bash".to_string(),
+                result: serde_json::json!({ "output": "x".repeat(40) }),
+                result_for_assistant: Some("assistant summary".to_string()),
+                is_error: false,
+                duration_ms: Some(1),
+                image_attachments: None,
+            }),
+        ];
+
+        let stats = context_snapshot_payload_stats(&messages);
+
+        assert_eq!(stats.tool_result_count, 1);
+        assert_eq!(stats.raw_result_string_chars, 40);
+        assert_eq!(stats.result_for_assistant_chars, 17);
+        assert_eq!(stats.largest_raw_result_chars, 40);
+        assert_eq!(stats.largest_raw_result_path, "message[1].Bash.output");
+        assert!(!stats.largest_raw_result_path.contains(&"x".repeat(40)));
     }
 
     #[tokio::test]

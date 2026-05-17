@@ -62,6 +62,7 @@ export class FlowChatManager {
       }),
       pendingTurnCompletions: new Map(),
       pendingHistoryLoads: new Map(),
+      pendingContextRestores: new Map(),
       contentBuffers: new Map(),
       activeTextItems: new Map(),
       saveDebouncers: new Map(),
@@ -112,7 +113,8 @@ export class FlowChatManager {
       await this.context.flowChatStore.initializeFromDisk(
         workspacePath,
         remoteConnectionId,
-        remoteSshHost
+        remoteSshHost,
+        'flow_chat_manager'
       );
 
       const sessionMatchesWorkspace = (session: {

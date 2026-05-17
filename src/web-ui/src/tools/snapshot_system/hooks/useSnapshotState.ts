@@ -5,6 +5,8 @@ import { SnapshotEventBus, SNAPSHOT_EVENTS } from '../core/SnapshotEventBus';
 import { DiffDisplayEngine, CompactDiffResult, FullDiffResult } from '../core/DiffDisplayEngine';
 import SnapshotLazyLoader from '../core/SnapshotLazyLoader';
 import { createLogger } from '@/shared/utils/logger';
+import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { shouldRefreshSnapshotForSession } from './snapshotRefreshPolicy';
 
 const log = createLogger('useSnapshotState');
 
@@ -37,6 +39,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
 
   // Track the active session to avoid applying stale events after session switches.
   const activeSessionIdRef = useRef<string | undefined>(sessionId);
+  const refreshGenerationRef = useRef(0);
 
   const stateManager = SnapshotStateManager.getInstance();
   const eventBus = SnapshotEventBus.getInstance();
@@ -45,23 +48,57 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
   const refreshSession = useCallback(async () => {
     if (!sessionId) return;
 
+    const session = flowChatStore.getState().sessions.get(sessionId);
+    if (!shouldRefreshSnapshotForSession(session)) {
+      refreshGenerationRef.current += 1;
+      setLoading(false);
+      setError(null);
+      setSessionState(null);
+      setFiles([]);
+      return;
+    }
+
+    const refreshGeneration = refreshGenerationRef.current + 1;
+    refreshGenerationRef.current = refreshGeneration;
+
     setLoading(true);
     setError(null);
     
     try {
       await SnapshotLazyLoader.ensureInitialized();
+
+      if (
+        refreshGenerationRef.current !== refreshGeneration ||
+        activeSessionIdRef.current !== sessionId ||
+        !shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))
+      ) {
+        return;
+      }
       
       await stateManager.refreshSessionState(sessionId);
+
+      if (
+        refreshGenerationRef.current !== refreshGeneration ||
+        activeSessionIdRef.current !== sessionId ||
+        !shouldRefreshSnapshotForSession(flowChatStore.getState().sessions.get(sessionId))
+      ) {
+        return;
+      }
+
       const newSessionState = stateManager.getSessionState(sessionId);
       const newFiles = stateManager.getSessionFiles(sessionId);
       
       setSessionState(newSessionState);
       setFiles(newFiles);
     } catch (err) {
-      log.error('Failed to refresh session state', { sessionId, error: err });
-      setError(t('snapshotSystem.errors.refreshSessionFailed'));
+      if (refreshGenerationRef.current === refreshGeneration && activeSessionIdRef.current === sessionId) {
+        log.error('Failed to refresh session state', { sessionId, error: err });
+        setError(t('snapshotSystem.errors.refreshSessionFailed'));
+      }
     } finally {
-      setLoading(false);
+      if (refreshGenerationRef.current === refreshGeneration && activeSessionIdRef.current === sessionId) {
+        setLoading(false);
+      }
     }
   }, [sessionId, stateManager, t]);
 
@@ -192,6 +229,7 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
     }
 
     activeSessionIdRef.current = sessionId;
+    refreshGenerationRef.current += 1;
     setFiles([]);
     setSessionState(null);
 
@@ -221,11 +259,36 @@ export const useSnapshotState = (sessionId?: string): UseSnapshotStateReturn => 
       }
     });
 
-    refreshSession();
+    let canRefresh = shouldRefreshSnapshotForSession(
+      flowChatStore.getState().sessions.get(sessionId)
+    );
+
+    if (canRefresh) {
+      refreshSession();
+    }
+
+    const unsubscribeFlowChat = flowChatStore.subscribe((state) => {
+      const nextCanRefresh = shouldRefreshSnapshotForSession(state.sessions.get(sessionId));
+      if (nextCanRefresh && !canRefresh) {
+        canRefresh = true;
+        refreshSession();
+        return;
+      }
+
+      if (!nextCanRefresh && canRefresh) {
+        canRefresh = false;
+        refreshGenerationRef.current += 1;
+        setLoading(false);
+        setFiles([]);
+        setSessionState(null);
+      }
+    });
 
     return () => {
+      refreshGenerationRef.current += 1;
       unsubscribeSession();
       unsubscribeFile();
+      unsubscribeFlowChat();
     };
   }, [sessionId, stateManager, refreshSession]);
 

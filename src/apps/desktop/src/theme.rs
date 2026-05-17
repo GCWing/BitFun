@@ -1,11 +1,13 @@
 //! Theme System
 
 use std::sync::{OnceLock, RwLock};
+use std::time::Instant;
 
 use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::config::types::GlobalConfig;
 use dark_light::Mode;
 use log::{debug, error, warn};
+use tauri::webview::PageLoadEvent;
 use tauri::{Manager, WebviewUrl};
 
 const AGENT_COMPANION_WINDOW_LABEL: &str = "agent-companion-pet";
@@ -300,7 +302,6 @@ impl ThemeConfig {
                         document.body.style.backgroundColor = '{bg_primary}';
                     }}
                     
-                    console.log('[Theme] Pre-injected theme: {id}');
                     return true;
                 }}
                 
@@ -335,9 +336,14 @@ impl ThemeConfig {
 }
 
 pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str) {
+    let total_started_at = Instant::now();
     let theme = ThemeConfig::load_from_config();
     let bg_color = theme.to_tauri_color();
     let init_script = theme.generate_init_script(startup_trace_id);
+    debug!(
+        "Main window creation step completed: step=prepare_theme duration_ms={}",
+        total_started_at.elapsed().as_millis()
+    );
 
     let main_url = if cfg!(debug_assertions) {
         match "http://localhost:1422".parse() {
@@ -350,6 +356,11 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
     } else {
         WebviewUrl::App("index.html".into())
     };
+    let main_url_kind = match &main_url {
+        WebviewUrl::External(_) => "external",
+        WebviewUrl::App(_) => "app",
+        _ => "other",
+    };
 
     #[allow(unused_mut)]
     let mut builder = tauri::WebviewWindowBuilder::new(app_handle, "main", main_url)
@@ -360,7 +371,24 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
         .visible(false)
         .background_color(bg_color)
         .accept_first_mouse(true)
-        .initialization_script(&init_script);
+        .initialization_script(&init_script)
+        .on_page_load({
+            let startup_trace_id = startup_trace_id.to_string();
+            let total_started_at = total_started_at;
+            move |_window, payload| {
+                let event = match payload.event() {
+                    PageLoadEvent::Started => "started",
+                    PageLoadEvent::Finished => "finished",
+                };
+                debug!(
+                    "Main window page load event: trace_id={}, event={}, url={}, since_create_start_ms={}",
+                    startup_trace_id,
+                    event,
+                    payload.url(),
+                    total_started_at.elapsed().as_millis()
+                );
+            }
+        });
 
     // Keep HTML5 drag-and-drop working inside the webview for desktop UI drag targets.
     builder = builder.disable_drag_drop_handler();
@@ -379,8 +407,15 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
         builder = builder.decorations(false);
     }
 
+    let build_started_at = Instant::now();
     match builder.build() {
         Ok(window) => {
+            debug!(
+                "Main window creation step completed: step=build url_kind={} duration_ms={} total_duration_ms={}",
+                main_url_kind,
+                build_started_at.elapsed().as_millis(),
+                total_started_at.elapsed().as_millis()
+            );
             #[cfg(any(debug_assertions, feature = "devtools"))]
             {
                 if std::env::var("BITFUN_OPEN_DEVTOOLS")
@@ -395,7 +430,11 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
             let _ = window;
         }
         Err(e) => {
-            error!("Failed to create main window: {}", e);
+            error!(
+                "Failed to create main window: error={} duration_ms={}",
+                e,
+                total_started_at.elapsed().as_millis()
+            );
         }
     }
 }
@@ -563,7 +602,9 @@ fn resize_agent_companion_window(
 
 #[tauri::command]
 pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(), String> {
+    let started_at = Instant::now();
     let _guard = agent_companion_window_ops().lock().await;
+    debug!("Agent companion window show requested");
 
     // Reuse any existing window: never destroy here. A previous implementation destroyed
     // whenever `is_visible` was false, which raced with another `show` that had built the
@@ -578,6 +619,10 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
             error!("Failed to show Agent companion window: {}", e);
             format!("Failed to show Agent companion window: {}", e)
         })?;
+        debug!(
+            "Agent companion window reused: total_duration_ms={}",
+            started_at.elapsed().as_millis()
+        );
         return Ok(());
     }
 
@@ -601,21 +646,52 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
         .shadow(false)
         .visible(false)
         .accept_first_mouse(true)
-        .background_color(tauri::window::Color(0, 0, 0, 0));
+        .background_color(tauri::window::Color(0, 0, 0, 0))
+        .on_page_load({
+            let started_at = started_at;
+            move |_window, payload| {
+                let event = match payload.event() {
+                    PageLoadEvent::Started => "started",
+                    PageLoadEvent::Finished => "finished",
+                };
+                debug!(
+                    "Agent companion window page load event: event={}, url={}, since_show_request_ms={}",
+                    event,
+                    payload.url(),
+                    started_at.elapsed().as_millis()
+                );
+            }
+        });
 
     builder = builder.disable_drag_drop_handler();
 
+    let build_started_at = Instant::now();
     let window = builder.build().map_err(|e| {
-        error!("Failed to create Agent companion window: {}", e);
+        error!(
+            "Failed to create Agent companion window: error={} duration_ms={}",
+            e,
+            build_started_at.elapsed().as_millis()
+        );
         format!("Failed to create Agent companion window: {}", e)
     })?;
+    debug!(
+        "Agent companion window creation step completed: step=build duration_ms={} total_duration_ms={}",
+        build_started_at.elapsed().as_millis(),
+        started_at.elapsed().as_millis()
+    );
 
     position_agent_companion_window(&app, &window);
 
+    let show_started_at = Instant::now();
     window.show().map_err(|e| {
         error!("Failed to show Agent companion window: {}", e);
         format!("Failed to show Agent companion window: {}", e)
     })?;
+    debug!(
+        "Agent companion window shown: show_duration_ms={} total_duration_ms={}",
+        show_started_at.elapsed().as_millis(),
+        started_at.elapsed().as_millis()
+    );
 
     Ok(())
 }
@@ -661,23 +737,34 @@ pub async fn hide_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
 
 #[tauri::command]
 pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    let total_started_at = Instant::now();
     if let Some(main_window) = app.get_webview_window("main") {
         #[cfg(target_os = "windows")]
         {
             // Work around Windows startup flicker: avoid creating the native window
             // in maximized mode, and maximize it right before showing instead.
+            let step_started_at = Instant::now();
             main_window.maximize().map_err(|e| {
                 error!("Failed to maximize main window: {}", e);
                 format!("Failed to maximize main window: {}", e)
             })?;
+            debug!(
+                "Main window show step completed: step=maximize duration_ms={}",
+                step_started_at.elapsed().as_millis()
+            );
 
             tokio::time::sleep(std::time::Duration::from_millis(150)).await;
         }
 
+        let step_started_at = Instant::now();
         main_window.show().map_err(|e| {
             error!("Failed to show main window: {}", e);
             format!("Failed to show main window: {}", e)
         })?;
+        debug!(
+            "Main window show step completed: step=show duration_ms={}",
+            step_started_at.elapsed().as_millis()
+        );
 
         #[cfg(target_os = "macos")]
         {
@@ -685,14 +772,23 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
             crate::mark_main_window_hidden_on_macos(false);
         }
 
+        let step_started_at = Instant::now();
         main_window.set_focus().map_err(|e| {
             error!("Failed to focus main window: {}", e);
             format!("Failed to focus main window: {}", e)
         })?;
+        debug!(
+            "Main window show step completed: step=focus duration_ms={}",
+            step_started_at.elapsed().as_millis()
+        );
     } else {
         error!("Main window not found");
         return Err("Main window not found".to_string());
     }
 
+    debug!(
+        "Main window shown: total_duration_ms={}",
+        total_started_at.elapsed().as_millis()
+    );
     Ok(())
 }

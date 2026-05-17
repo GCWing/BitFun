@@ -3,6 +3,7 @@ import { GitStateManager } from './GitStateManager';
 
 const gitApiMocks = vi.hoisted(() => ({
   isGitRepository: vi.fn(),
+  getRepositoryBasic: vi.fn(),
   getRepository: vi.fn(),
   getStatus: vi.fn(),
   getBranches: vi.fn(),
@@ -60,6 +61,14 @@ describe('GitStateManager refresh performance guards', () => {
     manager.setCacheConfig({ basic: 0, status: 0, detailed: 0 });
 
     gitApiMocks.isGitRepository.mockResolvedValue(true);
+    gitApiMocks.getRepositoryBasic.mockResolvedValue({
+      path: repositoryPath,
+      name: 'BitFun',
+      current_branch: 'main',
+      is_bare: false,
+      has_changes: false,
+      remotes: [],
+    });
     gitApiMocks.getRepository.mockResolvedValue({
       path: repositoryPath,
       name: 'BitFun',
@@ -97,12 +106,13 @@ describe('GitStateManager refresh performance guards', () => {
     await refresh;
 
     expect(gitApiMocks.isGitRepository).toHaveBeenCalledTimes(1);
-    expect(gitApiMocks.getRepository).toHaveBeenCalledTimes(1);
+    expect(gitApiMocks.getRepositoryBasic).toHaveBeenCalledTimes(1);
+    expect(gitApiMocks.getRepository).not.toHaveBeenCalled();
     expect(gitApiMocks.getStatus).not.toHaveBeenCalled();
     expect(manager.getState(repositoryPath)).toMatchObject({
       isRepository: true,
       currentBranch: 'main',
-      hasChanges: true,
+      hasChanges: false,
     });
   });
 
