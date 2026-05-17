@@ -2,7 +2,6 @@
 ///
 /// Full-screen overlay popup that displays all available models
 /// and allows the user to select one.
-
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::{Alignment, Rect},
@@ -194,12 +193,10 @@ impl ModelSelectorState {
             height: 1.min(area.y + area.height - popup_area.y - popup_area.height),
         };
         if hint_area.height > 0 {
-            let hint = Paragraph::new(Line::from(vec![
-                Span::styled(
-                    " Selecting a model will apply to all modes ",
-                    theme.style(StyleKind::Info),
-                ),
-            ]))
+            let hint = Paragraph::new(Line::from(vec![Span::styled(
+                " Selecting a model will apply to all modes ",
+                theme.style(StyleKind::Info),
+            )]))
             .alignment(Alignment::Center);
             frame.render_widget(hint, hint_area);
         }

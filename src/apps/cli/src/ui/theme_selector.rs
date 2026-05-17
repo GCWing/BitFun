@@ -1,7 +1,6 @@
 /// Theme selector popup for choosing a UI theme
 ///
 /// Overlay popup that displays all available themes and allows the user to select one.
-
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,

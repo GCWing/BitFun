@@ -4,20 +4,20 @@
 
 .bitfun-cowork-example-cards {
   border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 12px 14px 12px 0;
-  margin-bottom: 10px;
+  border-radius: calc(var(--flowchat-card-radius, 8px) + 2px);
+  padding: var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem) 0;
+  margin-bottom: var(--flowchat-card-gap, 0.42rem);
 
   &__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: var(--flowchat-control-gap, 0.5rem);
+    margin-bottom: var(--flowchat-card-gap, 0.42rem);
   }
 
   &__title {
-    font-size: 13px;
+    font-size: var(--flowchat-font-size-sm);
     font-weight: 600;
     color: var(--color-text-primary);
   }
@@ -25,13 +25,13 @@
   &__header-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
   }
 
   &__grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
+    gap: var(--flowchat-control-gap, 0.5rem);
   }
 
   &__card {
@@ -40,14 +40,14 @@
     min-height: 86px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 10px 10px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
+    padding: var(--flowchat-card-expanded-pad-x, 0.625rem);
   }
 
   &__card-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--flowchat-control-gap, 0.5rem);
   }
 
   &__card-icon {
@@ -64,16 +64,16 @@
   }
 
   &__card-title {
-    font-size: 13px;
+    font-size: var(--flowchat-font-size-sm);
     font-weight: 600;
     color: var(--color-text-primary);
-    line-height: 1.2;
+    line-height: var(--flowchat-compact-line-height, 1.32);
   }
 
   &__card-desc {
-    font-size: 12px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-secondary);
-    line-height: 1.35;
+    line-height: var(--flowchat-support-line-height, 1.45);
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;

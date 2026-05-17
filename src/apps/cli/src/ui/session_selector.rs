@@ -3,7 +3,6 @@
 /// Overlay popup that displays all available sessions
 /// and allows the user to select one to switch to.
 /// Supports switching and deleting current-project sessions.
-
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
@@ -307,7 +306,10 @@ impl SessionSelectorState {
                     spans.push(Span::styled(format!("  [{}]", short_ws), workspace_style));
                 }
 
-                spans.push(Span::styled(format!("  {}", session.last_activity), time_style));
+                spans.push(Span::styled(
+                    format!("  {}", session.last_activity),
+                    time_style,
+                ));
 
                 let line = Line::from(spans);
                 ListItem::new(line)

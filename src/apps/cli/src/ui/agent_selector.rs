@@ -2,7 +2,6 @@
 ///
 /// Overlay popup that displays all available agent modes
 /// and allows the user to select one to switch to.
-
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,

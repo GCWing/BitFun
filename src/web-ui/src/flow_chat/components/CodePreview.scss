@@ -76,8 +76,8 @@
     white-space: pre-wrap;
     word-break: break-word;
     font-family: var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace);
-    font-size: 12px;
-    line-height: 1.6;
+    font-size: var(--flowchat-font-size-sm);
+    line-height: var(--flowchat-code-line-height, 1.52);
 
     code {
       display: block;
@@ -130,7 +130,7 @@
     justify-content: center;
     min-height: 60px;
     color: var(--color-text-muted, #888);
-    font-size: 12px;
+    font-size: var(--flowchat-font-size-sm);
     font-style: italic;
   }
   

@@ -1,7 +1,7 @@
-use crate::client::AIClient;
 use crate::client::utils::{
     build_request_body_subset, is_trim_custom_request_body_mode, merge_json_value,
 };
+use crate::client::AIClient;
 use reqwest::RequestBuilder;
 
 pub(crate) fn apply_header_policy<F>(

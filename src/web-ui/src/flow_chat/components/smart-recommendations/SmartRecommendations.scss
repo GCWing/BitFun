@@ -18,7 +18,7 @@
   }
 
   &__title {
-    font-size: 13px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 600;
     color: var(--color-text-primary);
   }
@@ -56,7 +56,7 @@
     border-radius: 6px;
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
-    font-size: 13px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;

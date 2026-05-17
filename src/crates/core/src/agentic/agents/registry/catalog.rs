@@ -2,9 +2,9 @@ use super::types::AgentCategory;
 use super::visibility::SubagentVisibilityPolicy;
 use crate::agentic::agents::{
     Agent, AgenticMode, ArchitectureReviewerAgent, BusinessLogicReviewerAgent, ClawMode,
-    CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode, DeepResearchMode,
-    DeepReviewAgent, ExploreAgent, FileFinderAgent, FrontendReviewerAgent, GenerateDocAgent,
-    InitAgent, PerformanceReviewerAgent, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent,
+    CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode, DeepResearchMode, DeepReviewAgent,
+    ExploreAgent, FileFinderAgent, FrontendReviewerAgent, GenerateDocAgent, InitAgent,
+    PerformanceReviewerAgent, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent,
     ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
 };
 use std::sync::Arc;

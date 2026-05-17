@@ -12,8 +12,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  line-height: var(--flowchat-support-line-height, 1.45);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.06);
@@ -155,13 +155,13 @@
 
   &__status-title {
     font-weight: 600;
-    font-size: 13px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--color-text-primary);
   }
 
   &__error-message {
     margin-left: auto;
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--color-error, #ef4444);
     max-width: 50%;
     overflow: hidden;
@@ -185,7 +185,7 @@
     background: transparent;
     border: none;
     color: var(--color-text-primary);
-    font-size: 13px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 500;
     cursor: pointer;
     transition: background 0.2s;
@@ -232,7 +232,7 @@
     width: 100%;
     text-align: left;
     transition: background 0.2s;
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--color-text-primary);
     border-radius: 6px;
 
@@ -268,7 +268,7 @@
   }
 
   &__remediation-group-count {
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-muted);
     font-variant-numeric: tabular-nums;
   }
@@ -338,17 +338,17 @@
     border-radius: 4px;
     background: var(--element-bg-subtle);
     color: var(--color-text-muted);
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
-    line-height: 1.3;
+    line-height: var(--flowchat-compact-line-height, 1.32);
     vertical-align: text-bottom;
   }
 
   &__remediation-text {
     flex: 1;
     min-width: 0;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
     color: var(--color-text-secondary);
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -371,11 +371,11 @@
 
   &__remediation-tradeoffs {
     display: block;
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     color: var(--color-text-muted);
     font-style: italic;
     margin-top: 2px;
-    line-height: 1.4;
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 
   &__decision-toggle {
@@ -385,7 +385,7 @@
     border: none;
     background: none;
     color: var(--color-accent-500, #60a5fa);
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     cursor: pointer;
     opacity: 0.8;
     transition: opacity 0.15s ease;
@@ -415,8 +415,8 @@
       border-radius: 4px;
       background: none;
       color: var(--color-text-secondary);
-      font-size: 11px;
-      line-height: 1.45;
+      font-size: var(--flowchat-font-size-xs);
+      line-height: var(--flowchat-support-line-height, 1.45);
       cursor: pointer;
       text-align: left;
       transition: background-color 0.12s ease;
@@ -439,8 +439,8 @@
 
   &__decision-option-marker {
     flex-shrink: 0;
-    font-size: 10px;
-    line-height: 1.45;
+    font-size: var(--flowchat-font-size-xxs);
+    line-height: var(--flowchat-support-line-height, 1.45);
     color: var(--color-text-muted);
   }
 
@@ -455,7 +455,7 @@
     align-items: center;
     padding: 1px 6px;
     border-radius: 4px;
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
     color: var(--color-accent-500, #60a5fa);
     background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 12%, transparent);
@@ -466,9 +466,9 @@
 
   /* Hint texts */
   &__remediation-hint {
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-muted);
-    line-height: 1.5;
+    line-height: var(--flowchat-support-line-height, 1.45);
     padding: 0 2px;
   }
 
@@ -484,7 +484,7 @@
       color-mix(in srgb, var(--color-warning, #f59e0b) 10%, var(--color-bg-secondary)) 0%,
       color-mix(in srgb, var(--color-warning, #f59e0b) 4%, var(--color-bg-secondary)) 100%
     );
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--color-text-secondary);
     box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent);
   }
@@ -519,15 +519,15 @@
 
   &__decision-gate-title {
     color: var(--color-text-primary);
-    font-size: 13px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 650;
   }
 
   &__decision-gate-desc {
     margin-top: 2px;
     color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 
   &__decision-gate-items {
@@ -549,7 +549,7 @@
   &__decision-question {
     color: var(--color-text-primary);
     font-weight: 600;
-    line-height: 1.45;
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 
   &__decision-plan,
@@ -557,8 +557,8 @@
   &__decision-gate-note,
   &__decision-gate-warning {
     color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 
   &__decision-tradeoffs {
@@ -582,8 +582,8 @@
     border-radius: 6px;
     background: transparent;
     color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
     text-align: left;
     cursor: pointer;
     transition:
@@ -623,7 +623,7 @@
     flex-direction: column;
     gap: 6px;
     color: var(--color-text-secondary);
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   }
 
   &__decision-gate-supplement textarea {
@@ -635,8 +635,8 @@
     border-radius: 7px;
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
     resize: vertical;
 
     &::placeholder {
@@ -676,7 +676,7 @@
   }
 
   &__no-issues-text {
-    font-size: 13px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--color-text-secondary);
   }
 
@@ -697,7 +697,7 @@
 
   &__fix-done-text {
     color: var(--color-text-secondary);
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   }
 
   /* Custom instructions */
@@ -716,7 +716,7 @@
     background: transparent;
     border: 1px solid transparent;
     color: var(--color-text-muted);
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     cursor: pointer;
     transition: background 0.2s, border-color 0.2s, color 0.2s;
     width: fit-content;
@@ -735,8 +735,8 @@
     border: 1px solid var(--border-base);
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
     resize: vertical;
     min-height: 52px;
     max-height: 120px;
@@ -787,7 +787,7 @@
     padding: 8px 10px;
     border-radius: 6px;
     background: var(--element-bg-subtle);
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--color-text-secondary);
     margin-bottom: 8px;
   }
@@ -805,7 +805,7 @@
     padding: 6px 10px;
     border-radius: 6px;
     background: var(--element-bg-subtle);
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   }
 
   &__progress-text {
@@ -879,7 +879,7 @@
     border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 24%, var(--border-base));
     background: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, transparent);
     color: var(--color-text-secondary);
-    line-height: 1.35;
+    line-height: var(--flowchat-compact-line-height, 1.32);
   }
 
   &__capacity-queue-reviewers {
@@ -891,7 +891,7 @@
 
   &__capacity-queue-reviewers-title {
     color: var(--color-text-secondary);
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 600;
   }
 
@@ -911,7 +911,7 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--color-bg-primary) 72%, transparent);
     color: var(--color-text-secondary);
-    line-height: 1.35;
+    line-height: var(--flowchat-compact-line-height, 1.32);
   }
 
   &__capacity-queue-reviewer-name {
@@ -921,7 +921,7 @@
 
   &__capacity-queue-reviewer-meta {
     color: var(--color-text-muted);
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   }
 
   &__capacity-queue-actions {
@@ -940,7 +940,7 @@
     padding: 8px 12px;
     border-radius: 8px;
     background: var(--element-bg-subtle);
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   }
 
   &__partial-count {
@@ -956,7 +956,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     padding: 2px 6px;
     border-radius: 4px;
     transition: background 0.2s;
@@ -977,7 +977,7 @@
   }
 
   &__partial-section {
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--color-text-secondary);
   }
 
@@ -993,7 +993,7 @@
   &__partial-text {
     margin: 4px 0;
     color: var(--color-text-secondary);
-    line-height: 1.4;
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 
   /* Error attribution */
@@ -1003,7 +1003,7 @@
     gap: 10px;
     padding: 9px 12px;
     border-radius: 8px;
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     border: 1px solid var(--border-subtle, var(--border-base));
     background: color-mix(in srgb, var(--color-bg-secondary) 82%, transparent);
 
@@ -1042,7 +1042,7 @@
   &__attribution-message {
     flex: 1 1 auto;
     color: var(--color-text-secondary);
-    line-height: 1.45;
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 
   /* Recovery plan */
@@ -1066,7 +1066,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--color-text-secondary);
   }
 
@@ -1096,7 +1096,7 @@
   }
 
   &__degradation-title {
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 600;
     color: var(--color-text-primary);
   }
@@ -1125,13 +1125,13 @@
   }
 
   &__degradation-label {
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 500;
     color: var(--color-text-primary);
   }
 
   &__degradation-desc {
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-muted);
   }
 

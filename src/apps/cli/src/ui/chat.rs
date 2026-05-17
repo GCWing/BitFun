@@ -9,4 +9,3 @@ include!("chat/input.rs");
 include!("chat/popups.rs");
 include!("chat/scroll.rs");
 include!("chat/mouse.rs");
-

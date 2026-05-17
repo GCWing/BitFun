@@ -2,15 +2,14 @@
 ///
 /// Single command execution mode (non-interactive).
 /// Consumes core events directly from EventQueue.
-
 use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use bitfun_events::AgenticEvent;
 
+use crate::agent::{agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter, Agent};
 use crate::config::CliConfig;
-use crate::agent::{Agent, core_adapter::CoreAgentAdapter, agentic_system::AgenticSystem};
 
 pub struct ExecMode {
     #[allow(dead_code)]
@@ -87,7 +86,10 @@ impl ExecMode {
 
         println!("Thinking...");
 
-        let _turn_id = self.agent.send_message(self.message.clone(), &self.agent_type).await?;
+        let _turn_id = self
+            .agent
+            .send_message(self.message.clone(), &self.agent_type)
+            .await?;
 
         // Consume events from EventQueue until turn completes
         let mut total_tool_calls = 0usize;
@@ -103,7 +105,12 @@ impl ExecMode {
                 // Only process events for our session
                 if event.session_id() != Some(&session_id) {
                     // Check if this is a subagent event whose parent is in our session
-                    if let AgenticEvent::ToolEvent { tool_event, subagent_parent_info, .. } = event {
+                    if let AgenticEvent::ToolEvent {
+                        tool_event,
+                        subagent_parent_info,
+                        ..
+                    } = event
+                    {
                         if subagent_parent_info
                             .as_ref()
                             .map(|info| info.session_id.as_str())
@@ -125,7 +132,9 @@ impl ExecMode {
                                         .unwrap_or_else(|| result.to_string());
                                     println!("   [subagent] {} ✓ {}", tool_name, summary);
                                 }
-                                ToolEventData::Failed { tool_name, error, .. } => {
+                                ToolEventData::Failed {
+                                    tool_name, error, ..
+                                } => {
                                     println!("   [subagent] {} ✗ {}", tool_name, error);
                                 }
                                 _ => {}
@@ -184,10 +193,7 @@ impl ExecMode {
                         println!("\n");
                         println!("Execution complete");
                         if total_tool_calls > 0 {
-                            println!(
-                                "\nTool call statistics: {} tools invoked",
-                                total_tool_calls
-                            );
+                            println!("\nTool call statistics: {} tools invoked", total_tool_calls);
                         }
                         // Break out of the event loop
                         self.output_patch_if_needed();

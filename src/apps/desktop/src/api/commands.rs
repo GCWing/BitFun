@@ -1810,24 +1810,22 @@ pub async fn cleanup_invalid_workspaces(
 }
 
 async fn prune_unrecoverable_remote_workspaces(state: &State<'_, AppState>) -> usize {
-    let saved_connection_ids: std::collections::HashSet<String> = match state
-        .get_ssh_manager_async()
-        .await
-    {
-        Ok(manager) => manager
-            .get_saved_connections()
-            .await
-            .into_iter()
-            .map(|connection| connection.id)
-            .collect(),
-        Err(error) => {
-            warn!(
-                "Skipping remote workspace cleanup because SSH manager is unavailable: {}",
-                error
-            );
-            return 0;
-        }
-    };
+    let saved_connection_ids: std::collections::HashSet<String> =
+        match state.get_ssh_manager_async().await {
+            Ok(manager) => manager
+                .get_saved_connections()
+                .await
+                .into_iter()
+                .map(|connection| connection.id)
+                .collect(),
+            Err(error) => {
+                warn!(
+                    "Skipping remote workspace cleanup because SSH manager is unavailable: {}",
+                    error
+                );
+                return 0;
+            }
+        };
 
     let workspaces = state.workspace_service.list_workspace_infos().await;
     let mut removed = 0usize;
@@ -1860,7 +1858,11 @@ async fn prune_unrecoverable_remote_workspaces(state: &State<'_, AppState>) -> u
                 .await;
         }
 
-        match state.workspace_service.remove_workspace(&workspace.id).await {
+        match state
+            .workspace_service
+            .remove_workspace(&workspace.id)
+            .await
+        {
             Ok(()) => {
                 removed += 1;
                 info!(
@@ -1873,8 +1875,7 @@ async fn prune_unrecoverable_remote_workspaces(state: &State<'_, AppState>) -> u
             Err(error) => {
                 warn!(
                     "Failed to remove unrecoverable remote workspace: workspace_id={}, error={}",
-                    workspace.id,
-                    error
+                    workspace.id, error
                 );
             }
         }

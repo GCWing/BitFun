@@ -32,15 +32,15 @@
 .review-session-summary-card__summary {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  line-height: var(--flowchat-text-line-height, 1.58);
 }
 
 .review-session-summary-card__section-label {
   display: inline-flex;
   margin-bottom: 6px;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -53,8 +53,8 @@
     margin: 0;
     padding-left: 16px;
     color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 }
 
@@ -65,7 +65,7 @@
   border-radius: 8px;
   background: var(--element-bg-soft);
   color: var(--color-text-primary);
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   cursor: pointer;
 
   &:hover {

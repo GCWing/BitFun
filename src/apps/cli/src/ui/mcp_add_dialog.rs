@@ -5,7 +5,6 @@
 /// Step 3: Enter command (local) or URL (remote)
 ///
 /// Enter advances to next step, Esc goes back or cancels.
-
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::Rect,
@@ -23,10 +22,7 @@ pub enum McpAddAction {
     /// No action, dialog consumed the key
     None,
     /// User completed all steps — returns name + generated JSON config string
-    Confirm {
-        name: String,
-        config_json: String,
-    },
+    Confirm { name: String, config_json: String },
     /// User cancelled (Esc on step 1)
     Cancel,
 }
@@ -295,7 +291,8 @@ impl McpAddDialogState {
                     format!(r#"{{"type":"stdio","command":"{}"}}"#, value)
                 } else {
                     let cmd = parts[0];
-                    let args: Vec<String> = parts[1..].iter().map(|s| format!("\"{}\"", s)).collect();
+                    let args: Vec<String> =
+                        parts[1..].iter().map(|s| format!("\"{}\"", s)).collect();
                     format!(
                         r#"{{"type":"stdio","command":"{}","args":[{}]}}"#,
                         cmd,
@@ -378,7 +375,12 @@ impl McpAddDialogState {
         // ── Render completed steps as read-only summary ──
 
         if self.step == Step::ServerType || self.step == Step::CommandOrUrl {
-            let name_area = Rect { x: inner.x, y: inner.y + row, width: inner.width, height: 1 };
+            let name_area = Rect {
+                x: inner.x,
+                y: inner.y + row,
+                width: inner.width,
+                height: 1,
+            };
             let name_line = Line::from(vec![
                 Span::styled("\u{2713} ", theme.style(StyleKind::Success)),
                 Span::styled("Name: ", theme.style(StyleKind::Muted)),
@@ -392,11 +394,16 @@ impl McpAddDialogState {
         }
 
         if self.step == Step::CommandOrUrl {
-            let type_area = Rect { x: inner.x, y: inner.y + row, width: inner.width, height: 1 };
-                let type_label = match self.server_type {
-                    ServerType::Local => "local (stdio)",
-                    ServerType::Remote => "remote (streamable-http)",
-                };
+            let type_area = Rect {
+                x: inner.x,
+                y: inner.y + row,
+                width: inner.width,
+                height: 1,
+            };
+            let type_label = match self.server_type {
+                ServerType::Local => "local (stdio)",
+                ServerType::Remote => "remote (streamable-http)",
+            };
             let type_line = Line::from(vec![
                 Span::styled("\u{2713} ", theme.style(StyleKind::Success)),
                 Span::styled("Type: ", theme.style(StyleKind::Muted)),
@@ -414,7 +421,12 @@ impl McpAddDialogState {
         match self.step {
             Step::Name => {
                 // Prompt
-                let prompt_area = Rect { x: inner.x, y: inner.y + row, width: inner.width, height: 1 };
+                let prompt_area = Rect {
+                    x: inner.x,
+                    y: inner.y + row,
+                    width: inner.width,
+                    height: 1,
+                };
                 let prompt_line = Line::from(Span::styled(
                     "Enter MCP server name (used as identifier):",
                     theme.style(StyleKind::Info),
@@ -423,7 +435,12 @@ impl McpAddDialogState {
                 row += 1;
 
                 // Input
-                let input_area = Rect { x: inner.x, y: inner.y + row, width: inner.width, height: 1 };
+                let input_area = Rect {
+                    x: inner.x,
+                    y: inner.y + row,
+                    width: inner.width,
+                    height: 1,
+                };
                 let line = render_input_line(
                     "  > ",
                     &self.name_buf,
@@ -437,7 +454,12 @@ impl McpAddDialogState {
             }
             Step::ServerType => {
                 // Prompt
-                let prompt_area = Rect { x: inner.x, y: inner.y + row, width: inner.width, height: 1 };
+                let prompt_area = Rect {
+                    x: inner.x,
+                    y: inner.y + row,
+                    width: inner.width,
+                    height: 1,
+                };
                 let prompt_line = Line::from(Span::styled(
                     "Select MCP server type:",
                     theme.style(StyleKind::Info),
@@ -446,7 +468,12 @@ impl McpAddDialogState {
                 row += 1;
 
                 // Selector
-                let type_area = Rect { x: inner.x, y: inner.y + row, width: inner.width, height: 1 };
+                let type_area = Rect {
+                    x: inner.x,
+                    y: inner.y + row,
+                    width: inner.width,
+                    height: 1,
+                };
                 let local_style = if self.server_type == ServerType::Local {
                     Style::default()
                         .fg(theme.selection_foreground())
@@ -474,7 +501,12 @@ impl McpAddDialogState {
             }
             Step::CommandOrUrl => {
                 // Prompt
-                let prompt_area = Rect { x: inner.x, y: inner.y + row, width: inner.width, height: 1 };
+                let prompt_area = Rect {
+                    x: inner.x,
+                    y: inner.y + row,
+                    width: inner.width,
+                    height: 1,
+                };
                 let (prompt_text, placeholder) = match self.server_type {
                     ServerType::Local => (
                         "Enter command to run the MCP server:",
@@ -485,15 +517,18 @@ impl McpAddDialogState {
                         "https://example.com/mcp",
                     ),
                 };
-                let prompt_line = Line::from(Span::styled(
-                    prompt_text,
-                    theme.style(StyleKind::Info),
-                ));
+                let prompt_line =
+                    Line::from(Span::styled(prompt_text, theme.style(StyleKind::Info)));
                 frame.render_widget(Paragraph::new(prompt_line), prompt_area);
                 row += 1;
 
                 // Input
-                let input_area = Rect { x: inner.x, y: inner.y + row, width: inner.width, height: 1 };
+                let input_area = Rect {
+                    x: inner.x,
+                    y: inner.y + row,
+                    width: inner.width,
+                    height: 1,
+                };
                 let line = render_input_line(
                     "  > ",
                     &self.value_buf,
@@ -511,8 +546,14 @@ impl McpAddDialogState {
 
         if let Some(ref err) = self.error {
             if inner.y + row < inner.y + inner.height {
-                let err_area = Rect { x: inner.x, y: inner.y + row, width: inner.width, height: 1 };
-                let err_line = Line::from(Span::styled(err.as_str(), theme.style(StyleKind::Error)));
+                let err_area = Rect {
+                    x: inner.x,
+                    y: inner.y + row,
+                    width: inner.width,
+                    height: 1,
+                };
+                let err_line =
+                    Line::from(Span::styled(err.as_str(), theme.style(StyleKind::Error)));
                 frame.render_widget(Paragraph::new(err_line), err_area);
                 row += 1;
             }
@@ -521,7 +562,12 @@ impl McpAddDialogState {
         // ── Hint line ──
 
         if inner.y + row < inner.y + inner.height {
-            let hint_area = Rect { x: inner.x, y: inner.y + row, width: inner.width, height: 1 };
+            let hint_area = Rect {
+                x: inner.x,
+                y: inner.y + row,
+                width: inner.width,
+                height: 1,
+            };
             let hint_text = match self.step {
                 Step::Name => "Enter: Next  Esc: Cancel",
                 Step::ServerType => "\u{2190}\u{2192}/Tab: Switch  Enter: Next  Esc: Back",
@@ -579,11 +625,17 @@ fn render_input_line<'a>(
 
     // Empty buffer: show placeholder with cursor at start
     if buffer.is_empty() {
-        let placeholder_display: String = placeholder.chars().take(field_width.saturating_sub(1)).collect();
+        let placeholder_display: String = placeholder
+            .chars()
+            .take(field_width.saturating_sub(1))
+            .collect();
         return Line::from(vec![
             Span::styled(label, label_style),
             Span::styled(" ", Style::default().fg(Color::Black).bg(Color::White)),
-            Span::styled(placeholder_display, theme.style(StyleKind::Muted).add_modifier(Modifier::DIM)),
+            Span::styled(
+                placeholder_display,
+                theme.style(StyleKind::Muted).add_modifier(Modifier::DIM),
+            ),
         ]);
     }
 
@@ -605,7 +657,11 @@ fn render_input_line<'a>(
     let cursor_char: String = visible_chars.chars().skip(cursor_in_view).take(1).collect();
     let after: String = visible_chars.chars().skip(cursor_in_view + 1).collect();
 
-    let cursor_display = if cursor_char.is_empty() { " ".to_string() } else { cursor_char };
+    let cursor_display = if cursor_char.is_empty() {
+        " ".to_string()
+    } else {
+        cursor_char
+    };
 
     let has_more_left = scroll > 0;
     let has_more_right = scroll + field_width < total_chars;
@@ -620,7 +676,10 @@ fn render_input_line<'a>(
         spans.push(Span::styled(before, text_style));
     }
 
-    spans.push(Span::styled(cursor_display, Style::default().fg(Color::Black).bg(Color::White)));
+    spans.push(Span::styled(
+        cursor_display,
+        Style::default().fg(Color::Black).bg(Color::White),
+    ));
 
     if has_more_right {
         let after_len = after.chars().count();

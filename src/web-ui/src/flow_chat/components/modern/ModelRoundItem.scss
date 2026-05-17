@@ -7,7 +7,7 @@
    * round transitions all read as one continuous, evenly-spaced text column.
    */
   margin-bottom: 0;
-  padding: 0 3rem;
+  padding: 0 var(--flowchat-content-inline-pad, 3rem);
   animation: fadeIn 0.4s ease;
   position: relative;
 
@@ -23,15 +23,15 @@
   }
 
   @media (max-width: 768px) {
-    padding: 0 1.5rem;
+    padding: 0 var(--flowchat-content-inline-pad-mobile, 1.5rem);
   }
 }
 
 .model-round-item__header {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 0.35rem;
-  padding: 0 0.5rem;
+  margin-bottom: var(--flowchat-inline-gap, 0.35rem);
+  padding: 0 var(--flowchat-control-gap, 0.5rem);
 }
 
 // Action button container (bottom-right of last round).
@@ -39,9 +39,9 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.4rem;
-  padding: 0.35rem 0;
-  margin-top: 0.35rem;
+  gap: var(--flowchat-inline-gap, 0.35rem);
+  padding: var(--flowchat-inline-gap, 0.35rem) 0;
+  margin-top: var(--flowchat-inline-gap, 0.35rem);
 }
 
 .model-round-item__action-btn {
@@ -157,13 +157,13 @@
     opacity: 1;
     transform: translateY(0);
     max-height: 96px;
-    margin-bottom: 0.35rem;
+    margin-bottom: var(--flowchat-flow-item-gap, 0.42rem);
   }
   55% {
     opacity: 0.72;
     transform: translateY(-1px);
     max-height: 96px;
-    margin-bottom: 0.35rem;
+    margin-bottom: var(--flowchat-flow-item-gap, 0.42rem);
   }
   100% {
     opacity: 0;
@@ -184,6 +184,6 @@
 .flowchat-flow-item.flowchat-flow-item--focused {
   outline: 2px solid var(--border-accent);
   outline-offset: 2px;
-  border-radius: 12px;
+  border-radius: var(--flowchat-card-radius, 8px);
   box-shadow: var(--glow-shadow-blue);
 }

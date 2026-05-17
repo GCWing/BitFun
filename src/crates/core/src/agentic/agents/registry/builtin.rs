@@ -1,10 +1,8 @@
 use super::types::AgentEntry;
 use super::visibility::SubagentVisibilityPolicy;
 use super::AgentRegistry;
-use crate::agentic::agents::{
-    Agent, AgentCategory, SubAgentSource,
-};
 use crate::agentic::agents::registry::catalog::builtin_agent_specs;
+use crate::agentic::agents::{Agent, AgentCategory, SubAgentSource};
 use log::error;
 use std::collections::HashMap;
 use std::sync::Arc;

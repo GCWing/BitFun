@@ -1,5 +1,4 @@
 /// Slash command menu rendering and state
-
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
@@ -37,7 +36,12 @@ impl CommandMenuState {
         self.update_with_commands(input, cursor, COMMAND_SPECS);
     }
 
-    pub fn update_with_commands(&mut self, input: &str, cursor: usize, commands: &'static [CommandSpec]) {
+    pub fn update_with_commands(
+        &mut self,
+        input: &str,
+        cursor: usize,
+        commands: &'static [CommandSpec],
+    ) {
         if self.suppressed && input == self.last_input {
             return;
         }
@@ -111,16 +115,20 @@ impl CommandMenuState {
             return;
         }
 
-        let items: Vec<ListItem> = self.items.iter().map(|spec| {
-            let name_style = theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD);
-            let desc_style = theme.style(StyleKind::Muted);
-            let line = Line::from(vec![
-                Span::styled(spec.name, name_style),
-                Span::raw(" - "),
-                Span::styled(spec.description, desc_style),
-            ]);
-            ListItem::new(line)
-        }).collect();
+        let items: Vec<ListItem> = self
+            .items
+            .iter()
+            .map(|spec| {
+                let name_style = theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD);
+                let desc_style = theme.style(StyleKind::Muted);
+                let line = Line::from(vec![
+                    Span::styled(spec.name, name_style),
+                    Span::raw(" - "),
+                    Span::styled(spec.description, desc_style),
+                ]);
+                ListItem::new(line)
+            })
+            .collect();
 
         let desired_height = (items.len() as u16).saturating_add(2);
         let height = desired_height.min(area.height);

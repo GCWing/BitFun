@@ -1,4 +1,3 @@
-pub mod types;
 mod availability;
 mod builtin;
 pub mod catalog;
@@ -7,17 +6,14 @@ mod custom_loader;
 mod query;
 mod resolution;
 mod support;
-pub mod visibility;
 #[cfg(test)]
 mod tests;
+pub mod types;
+pub mod visibility;
 
-use super::{
-    Agent,
-};
 use self::types::AgentEntry;
-use self::types::{
-    AgentCategory, SubAgentSource,
-};
+use self::types::{AgentCategory, SubAgentSource};
+use super::Agent;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

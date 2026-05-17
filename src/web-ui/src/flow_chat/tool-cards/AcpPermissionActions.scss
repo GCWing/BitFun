@@ -2,24 +2,24 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 2px;
+  gap: 0.125rem;
   flex-shrink: 0;
 }
 
 .acp-permission-actions--text {
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--flowchat-inline-gap, 0.35rem);
 }
 
 .acp-permission-actions__text-button {
   min-height: 26px;
-  padding: 0 10px;
+  padding: 0 var(--flowchat-card-expanded-pad-x, 0.625rem);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-surface, transparent);
   color: var(--color-text);
-  font-size: 12px;
-  line-height: 1;
+  font-size: var(--flowchat-font-size-sm);
+  line-height: var(--flowchat-compact-line-height, 1.32);
   cursor: pointer;
   white-space: nowrap;
 }

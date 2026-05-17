@@ -132,8 +132,10 @@ pub async fn resolve_tool_manifest(
 
     for tool in &visible_tools.collapsed_tools {
         let description = format!(
-            "{} [This tool is collapsed. Call `GetToolSpec` first with {{\"tool_name\":\"{}\"}} before using it.]",
+            "{} [This tool is collapsed. Do not call `{}` directly yet. First call `GetToolSpec` with {{\"tool_name\":\"{}\"}} to load its full description and input schema, then retry `{}` using the returned schema.]",
             tool.short_description(),
+            tool.name(),
+            tool.name(),
             tool.name()
         );
 
@@ -142,8 +144,17 @@ pub async fn resolve_tool_manifest(
             description,
             parameters: json!({
                 "type": "object",
-                "properties": {},
-                "additionalProperties": true
+                "additionalProperties": false,
+                "properties": {
+                    "tool_name": {
+                        "type": "string",
+                        "description": format!(
+                            "Do not supply {} arguments here while the tool is collapsed. Use GetToolSpec with {{\"tool_name\":\"{}\"}} first.",
+                            tool.name(),
+                            tool.name()
+                        )
+                    }
+                }
             }),
         });
     }
@@ -255,9 +266,13 @@ mod tests {
             .iter()
             .find(|tool| tool.name == "WebFetch")
             .expect("WebFetch stub should exist");
-        assert!(stub.description.contains("Call `GetToolSpec` first"));
+        assert!(stub.description.contains("First call `GetToolSpec`"));
         assert_eq!(stub.parameters["type"], json!("object"));
-        assert_eq!(stub.parameters["additionalProperties"], json!(true));
+        assert_eq!(stub.parameters["additionalProperties"], json!(false));
+        assert!(stub.parameters["properties"]["tool_name"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("{\"tool_name\":\"WebFetch\"}"));
     }
 
     #[tokio::test]
@@ -309,13 +324,18 @@ mod tests {
             .expect("collapsed WebFetch stub");
         assert!(web_fetch
             .description
-            .contains("Call `GetToolSpec` first with {\"tool_name\":\"WebFetch\"}"));
+            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
         assert_eq!(
             web_fetch.parameters,
             json!({
                 "type": "object",
-                "properties": {},
-                "additionalProperties": true
+                "additionalProperties": false,
+                "properties": {
+                    "tool_name": {
+                        "type": "string",
+                        "description": "Do not supply WebFetch arguments here while the tool is collapsed. Use GetToolSpec with {\"tool_name\":\"WebFetch\"} first."
+                    }
+                }
             })
         );
     }

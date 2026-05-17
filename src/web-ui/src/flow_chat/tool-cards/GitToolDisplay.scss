@@ -32,7 +32,7 @@
   .compact-card-content .tool-command-preview.tool-command-preview--compact {
     font-family: var(--tool-compact-summary-font);
     font-size: var(--flowchat-font-size-sm);
-    line-height: 1.5;
+    line-height: var(--flowchat-support-line-height, 1.45);
     font-weight: normal;
     color: var(--color-text-muted);
   }
@@ -45,7 +45,7 @@
   .output-summary {
     font-family: var(--tool-compact-summary-font);
     font-size: var(--flowchat-font-size-sm);
-    line-height: 1.5;
+    line-height: var(--flowchat-support-line-height, 1.45);
     font-weight: normal;
     color: var(--tool-card-text-secondary);
   }
@@ -57,7 +57,7 @@
   margin-left: -8px;
   margin-right: -8px;
   margin-bottom: -8px;
-  padding: 6px 8px;
+  padding: var(--flowchat-card-tight-pad-y, 0.375rem) var(--flowchat-card-tight-pad-x, 0.5rem);
   border-radius: 0 0 6px 6px;
 }
 
@@ -66,7 +66,7 @@
   margin-left: -12px;
   margin-right: -12px;
   margin-bottom: -12px;
-  padding: 6px 12px;
+  padding: var(--flowchat-card-tight-pad-y, 0.375rem) var(--flowchat-card-pad-x, 0.75rem);
 }
 
 /* ========== Fix scrollbar visibility on card hover ========== */
@@ -112,14 +112,14 @@
   }
 
   .git-output-summary-inline {
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--tool-card-text-secondary, var(--color-text-muted));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     flex: 1 1 0;
     min-width: 0;
-    margin-left: 6px;
+    margin-left: var(--flowchat-inline-gap, 0.35rem);
     font-family: var(--tool-card-font-mono);
     opacity: 0.7;
   }
@@ -133,24 +133,24 @@
   .git-header-extra {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     min-width: 0;
   }
 
   .git-hover-actions {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
   }
 
   .git-confirm-actions {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
   }
 
   .output-summary {
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--tool-card-text-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -164,7 +164,7 @@
     align-items: center;
     
     .error-text {
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       color: rgba(239, 68, 68, 0.9);
       font-weight: 600;
     }
@@ -185,30 +185,30 @@
   }
 
   .git-result-output + .git-result-footer {
-    margin-top: 6px;
+    margin-top: var(--flowchat-card-gap, 0.45rem);
     border-top: 1px solid var(--border-subtle);
   }
 
   .git-stderr-block {
-    margin-top: 8px;
+    margin-top: var(--flowchat-card-gap, 0.45rem);
   }
 
   .git-output-label {
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     font-weight: 600;
     color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    margin-bottom: 4px;
+    margin-bottom: var(--flowchat-inline-gap, 0.35rem);
   }
 
   .git-output-block {
     margin: 0;
-    padding: 8px 10px;
+    padding: var(--flowchat-code-block-pad-y, 0.55rem) var(--flowchat-code-block-pad-x, 0.75rem);
     background: var(--color-bg-scene);
     border-radius: 4px;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--flowchat-code-font-size, 0.92em);
+    line-height: var(--flowchat-code-line-height, 1.52);
     color: var(--color-text-secondary);
     white-space: pre-wrap;
     word-break: break-word;
@@ -235,15 +235,15 @@
     display: flex;
     align-items: center;
     align-content: center;
-    gap: 6px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     flex-wrap: wrap;
-    line-height: 1.2;
+    line-height: var(--flowchat-compact-line-height, 1.32);
     background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
     box-sizing: border-box;
   }
 
   .git-result-label {
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     font-weight: 600;
     color: var(--color-text-muted);
     text-transform: uppercase;
@@ -252,24 +252,24 @@
 
   .git-result-value {
     font-family: var(--tool-card-font-mono);
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-primary);
     flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: 1.2;
+    line-height: var(--flowchat-compact-line-height, 1.32);
   }
 
   .git-exit-code {
     display: inline-flex;
     align-items: center;
     padding: 0;
-    font-size: 9px;
+    font-size: var(--flowchat-font-size-xxs);
     font-weight: 600;
     font-family: var(--tool-card-font-mono);
-    line-height: 1.2;
+    line-height: var(--flowchat-compact-line-height, 1.32);
     margin-left: auto;
     background: transparent;
 
@@ -283,21 +283,22 @@
   }
 
   .git-execution-time {
-    font-size: 9px;
+    font-size: var(--flowchat-font-size-xxs);
     color: var(--color-text-muted);
     font-family: var(--tool-card-font-mono);
-    line-height: 1.2;
+    line-height: var(--flowchat-compact-line-height, 1.32);
   }
 
   .error-content {
-    padding: 12px 16px;
+    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     background: rgba(239, 68, 68, 0.05);
     border-top: 1px solid rgba(239, 68, 68, 0.2);
 
     .error-message {
       color: rgba(239, 68, 68, 0.9);
-      font-size: 13px;
-      margin-bottom: 8px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      line-height: var(--flowchat-support-line-height, 1.45);
+      margin-bottom: var(--flowchat-card-gap, 0.45rem);
       font-family: var(--tool-card-font-mono);
       white-space: pre-wrap;
       word-break: break-word;
@@ -306,8 +307,8 @@
     .error-meta {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 12px;
+      gap: var(--flowchat-inline-gap, 0.35rem);
+      font-size: var(--flowchat-font-size-xs);
       color: var(--tool-card-text-secondary);
 
       .error-separator {
@@ -356,4 +357,3 @@
     }
   }
 }
-

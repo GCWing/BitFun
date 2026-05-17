@@ -19,7 +19,9 @@ use crate::agentic::image_analysis::{
     ImageLimits,
 };
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
-use crate::agentic::tools::{resolve_tool_manifest, ResolvedToolManifest, SubagentParentInfo, ToolRuntimeRestrictions};
+use crate::agentic::tools::{
+    resolve_tool_manifest, ResolvedToolManifest, SubagentParentInfo, ToolRuntimeRestrictions,
+};
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -516,8 +518,7 @@ impl ExecutionEngine {
                 continue;
             }
 
-            let Some(tool_name) = result.get("tool_name").and_then(|v| v.as_str())
-            else {
+            let Some(tool_name) = result.get("tool_name").and_then(|v| v.as_str()) else {
                 continue;
             };
 

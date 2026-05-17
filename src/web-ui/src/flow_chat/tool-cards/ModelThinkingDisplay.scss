@@ -11,7 +11,7 @@
 
 /* Minimal, borderless layout.
  * WebKit (Tauri/macOS) baseline-quirk fix:
- * — Collapsed summary uses `--flowchat-font-size-sm` + line-height 1.5 to match
+ * — Collapsed summary uses `--flowchat-font-size-sm` + shared support line-height to match
  *   `.explore-region--collapsible` (e.g. “执行了 N 个命令”).
  * — Make the chevron SVG `display: block` and the label simple `inline` flow
  *   so flex `align-items: center` stays stable. */
@@ -26,20 +26,20 @@
   box-sizing: border-box;
   /* Collapsed summary line: match `.explore-region--collapsible` (e.g. command count). */
   font-size: var(--flowchat-font-size-sm);
-  line-height: 1.5;
+  line-height: var(--flowchat-support-line-height, 1.45);
   transition: padding 0.2s ease;
 }
 
 .thinking-collapsed-header {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--flowchat-inline-gap, 0.35rem);
   padding: 0;
   border-radius: 4px;
   cursor: pointer;
   background: transparent;
   font-size: var(--flowchat-font-size-sm);
-  line-height: 1.5;
+  line-height: var(--flowchat-support-line-height, 1.45);
 
   &:hover {
     .thinking-label {
@@ -66,7 +66,7 @@
     font-weight: normal;
     color: var(--text-tertiary, #6b7280);
     opacity: 0.8;
-    line-height: 1.5;
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 }
 
@@ -92,13 +92,13 @@
 
 .thinking-content {
   font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height, 1.62);
+  line-height: var(--flowchat-text-line-height, 1.58);
   /* Match FlowChat body text (sans); mono stack + generic monospace yields Songti-like CJK on Windows. */
   font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
     sans-serif);
   word-break: break-word;
   color: var(--tool-card-text-muted);
-  padding: 8px 10px;
+  padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -194,169 +194,50 @@
   --markdown-font-mono: var(--tool-card-font-mono);
   --markdown-font-heading: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI',
     'Microsoft YaHei', sans-serif);
-  /* Match flow-text-block: compact block gap, smaller list-item gap. */
-  --markdown-block-gap: 0.5em;
-  --markdown-paragraph-gap: 0.25em;
+  --markdown-font-size: var(--flowchat-font-size-base);
+  --markdown-font-size-sm: var(--flowchat-font-size-sm);
+  --markdown-code-font-size: var(--flowchat-font-size-xs);
+  --markdown-line-height: var(--flowchat-text-line-height, 1.58);
+  --markdown-block-gap: var(--flowchat-markdown-block-gap, 0.58em);
+  --markdown-paragraph-gap: var(--flowchat-markdown-paragraph-gap, 0.28em);
 
   font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
     sans-serif);
   font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height, 1.62);
+  line-height: var(--flowchat-text-line-height, 1.58);
   color: var(--tool-card-text-muted);
   animation: none;
 
-  /* Headings: same size as body, just bold. */
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
-      sans-serif);
-    font-weight: 600;
+  h1, h2, h3, h4, h5, h6,
+  strong {
     color: var(--tool-card-text-secondary);
-    font-size: var(--flowchat-font-size-base) !important;
-    line-height: var(--flowchat-text-line-height, 1.62) !important;
-    letter-spacing: normal;
-    border: none;
-    padding: 0;
   }
 
   p,
   ol,
   ul,
-  li {
-    font-size: var(--flowchat-font-size-base);
-    line-height: var(--flowchat-text-line-height, 1.62);
+  li,
+  blockquote,
+  .custom-blockquote {
     color: var(--tool-card-text-muted);
-  }
-
-  p,
-  ol,
-  ul {
-    margin-top: 0;
-    margin-bottom: 0;
-  }
-
-  > * + * {
-    margin-top: var(--markdown-block-gap);
-  }
-
-  p + p,
-  p + h1,
-  p + h2,
-  p + h3,
-  p + h4,
-  p + h5,
-  p + h6,
-  h1 + p,
-  h2 + p,
-  h3 + p,
-  h4 + p,
-  h5 + p,
-  h6 + p {
-    margin-top: var(--markdown-paragraph-gap);
-  }
-
-  /* List item gap (smaller than block gap, but visible). */
-  li + li {
-    margin-top: 0.35em;
-  }
-
-  /* Tight rhythm WITHIN a list item. */
-  li > * + * {
-    margin-top: 0.15em;
-  }
-
-  /* Loose-list <li><p>...</p></li>: collapse the inner <p>. */
-  li > p {
-    display: inline;
-  }
-
-  /* Pin list marker size to body em so ul/ol items share the same line box height
-   * as paragraphs (global Markdown.scss otherwise makes ul markers 1.2em + bold).
-   * Safari < 17 ignores `::marker` font-size, so also draw our own bullet for ul. */
-  ul > li::marker,
-  ol > li::marker {
-    font-size: 1em !important;
-    font-weight: normal !important;
-  }
-
-  ul {
-    list-style: none;
-    padding-left: 1.25rem;
-  }
-
-  ul > li {
-    position: relative;
-  }
-
-  ul > li::before {
-    content: '';
-    position: absolute;
-    left: -0.85rem;
-    top: 0.65em;
-    width: 0.32em;
-    height: 0.32em;
-    border-radius: 50%;
-    background: currentColor;
-    opacity: 0.55;
-  }
-
-  strong {
-    font-weight: 600;
-    color: var(--tool-card-text-secondary);
   }
 
   em {
     color: var(--tool-card-text-muted);
   }
 
-  a,
-  .file-link,
-  .visualization-link,
-  .tab-link {
-    color: var(--flowchat-link-color, #60a5fa);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  a:hover,
-  .file-link:hover,
-  .visualization-link:hover,
-  .tab-link:hover {
-    color: var(--flowchat-link-hover-color, #93c5fd);
-  }
-
-  a .inline-code,
-  .file-link .inline-code,
-  .visualization-link .inline-code,
-  .tab-link .inline-code {
-    color: inherit !important;
-  }
-
-  ul,
-  ol {
-    padding-left: 1.25rem;
-  }
-
   hr {
-    border: none;
-    border-top: 1px solid color-mix(in srgb, var(--tool-card-text-muted) 25%, transparent);
+    background: color-mix(in srgb, var(--tool-card-text-muted) 25%, transparent);
   }
 
   blockquote,
   .custom-blockquote {
-    padding: 0.25rem 0 0.25rem 0.6rem;
     border-left: 2px solid color-mix(in srgb, var(--tool-card-text-muted) 35%, transparent);
-    color: var(--tool-card-text-muted);
     background: transparent;
-  }
-
-  blockquote p {
-    color: inherit;
   }
 
   .inline-code {
     font-family: var(--tool-card-font-mono);
-    font-size: 0.85em;
-    padding: 0.1em 0.2em;
     border-radius: 0;
     background: transparent;
     border: none;
@@ -376,13 +257,13 @@
 
   .code-block-lang {
     font-size: 0.6rem;
-    line-height: 1.15;
+    line-height: var(--flowchat-compact-line-height, 1.32);
   }
 
   .code-block-wrapper pre[class*='language-'],
   .code-block-wrapper pre[style] {
-    font-size: 11px !important;
-    line-height: 1.4 !important;
+    font-size: var(--flowchat-font-size-xs) !important;
+    line-height: var(--flowchat-support-line-height, 1.45) !important;
     border-radius: 6px !important;
   }
 
@@ -429,4 +310,3 @@
     background: color-mix(in srgb, var(--tool-card-text-muted) 5%, transparent);
   }
 }
-

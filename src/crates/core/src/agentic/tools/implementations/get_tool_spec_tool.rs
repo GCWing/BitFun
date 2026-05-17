@@ -4,8 +4,8 @@ use crate::agentic::agents::get_agent_registry;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::resolve_visible_tools;
 use crate::agentic::tools::registry::get_global_tool_registry;
+use crate::agentic::tools::resolve_visible_tools;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use log::debug;
@@ -30,13 +30,19 @@ impl GetToolSpecTool {
         format!(
             r#"Read usage instructions for additional tools.
 
-You have access to an additional tools listed below.
+You have access to the additional tools listed below. These tools are collapsed:
+their names may appear in the tool list, but you must not call them directly
+until you have loaded their definition with GetToolSpec.
 
 <collapsed_tools>
 {}
 </collapsed_tools>
 
-Before using one of these tools, first call GetToolSpec with its exact tool name to read its full description and input schema.
+Before using one of these tools, first call GetToolSpec with its exact tool name
+to read its full description and input schema. If a direct call to a collapsed
+tool fails with a message like "Tool 'Git' is collapsed", make the next tool
+call `GetToolSpec` with `{{"tool_name":"Git"}}`, then retry the real tool after
+reading the returned schema.
 
 After reading the returned definition, call the real tool directly using its own name.
 
@@ -74,7 +80,7 @@ Example:
         if let Some(context) = context {
             if let Ok(collapsed_tools) = self.get_contextual_collapsed_tools(context).await {
                 for tool in collapsed_tools {
-                    entries.push(format!("- {}", tool.name()));
+                    entries.push(format!("- {}: {}", tool.name(), tool.short_description()));
                 }
             }
         } else {
@@ -136,7 +142,9 @@ Example:
             .description_with_context(Some(context))
             .await
             .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
-        let input_schema = tool.input_schema_for_model_with_context(Some(context)).await;
+        let input_schema = tool
+            .input_schema_for_model_with_context(Some(context))
+            .await;
 
         Ok(json!({
             "tool_name": tool_name,
@@ -181,7 +189,7 @@ impl Tool for GetToolSpecTool {
             "properties": {
                 "tool_name": {
                     "type": "string",
-                    "description": "The exact tool name to read details for."
+                    "description": "Exact collapsed tool name to load, using the tool's canonical casing from the catalog (for example, \"Git\"). Do not pass a command such as \"git status\" or an operation such as \"status\" here."
                 }
             }
         })
@@ -358,10 +366,7 @@ mod tests {
             .await;
 
         assert!(description.contains(&format!("- {}: Concise catalog entry.", tool_name)));
-        assert!(!description.contains(&format!(
-            "- {}: Verbose description first line.",
-            tool_name
-        )));
+        assert!(!description.contains(&format!("- {}: Verbose description first line.", tool_name)));
     }
 
     #[tokio::test]

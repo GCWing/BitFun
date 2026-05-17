@@ -108,8 +108,10 @@ impl SubagentVisibilityPolicy {
 
         match self.exposure {
             BuiltinSubagentExposure::Public => true,
-            BuiltinSubagentExposure::Restricted | BuiltinSubagentExposure::Hidden => normalized_parent
-                .is_some_and(|parent| self.allowed_parent_agent_ids.contains(parent)),
+            BuiltinSubagentExposure::Restricted | BuiltinSubagentExposure::Hidden => {
+                normalized_parent
+                    .is_some_and(|parent| self.allowed_parent_agent_ids.contains(parent))
+            }
         }
     }
 }

@@ -1,9 +1,9 @@
+use crate::agentic::agents::AgentToolPolicyOverrides;
 use crate::agentic::deep_review_policy::{
     REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
     REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE,
     REVIEW_JUDGE_AGENT_TYPE,
 };
-use crate::agentic::agents::AgentToolPolicyOverrides;
 use crate::agentic::tools::framework::ToolExposure;
 use crate::define_readonly_subagent_with_overrides;
 

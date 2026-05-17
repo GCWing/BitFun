@@ -392,7 +392,9 @@ mod tests {
         assert_eq!(meta["permissions"]["notifications"]["system"], true);
         assert!(meta["permissions"]["fs"]["read"]
             .as_array()
-            .is_some_and(|read| read.iter().any(|value| value.as_str() == Some("{workspace}"))));
+            .is_some_and(|read| read
+                .iter()
+                .any(|value| value.as_str() == Some("{workspace}"))));
         assert!(meta["permissions"]["shell"]["allow"]
             .as_array()
             .is_some_and(|allow| allow.iter().any(|value| value.as_str() == Some("gh"))));
@@ -457,7 +459,9 @@ mod tests {
         assert!(app.css.contains("pr-listen-switch"));
         assert!(app.css.contains("pr-token-details"));
         assert!(app.css.contains("pr-text-btn"));
-        assert!(!app.ui_js.contains("value=\"${esc(state.volatile.sessionTokens"));
+        assert!(!app
+            .ui_js
+            .contains("value=\"${esc(state.volatile.sessionTokens"));
         assert!(!app.css.contains("background: #0f1114"));
         assert!(!app.css.contains("background: rgba(23, 25, 28"));
     }
@@ -473,7 +477,9 @@ mod tests {
         assert!(app.ui_js.contains("function restoreReviewWorkspaceScroll"));
         assert!(app.ui_js.contains("function render(options = {})"));
         assert!(app.ui_js.contains("options.preserveReviewWorkspaceScroll"));
-        assert!(app.ui_js.contains("render({ preserveReviewWorkspaceScroll: true })"));
+        assert!(app
+            .ui_js
+            .contains("render({ preserveReviewWorkspaceScroll: true })"));
     }
 
     #[test]
@@ -484,9 +490,13 @@ mod tests {
             .expect("PR Review must be delivered as a built-in MiniApp");
 
         assert!(app.ui_js.contains("function buildReviewOperations"));
-        assert!(app.ui_js.contains("Do not create a general summary comment"));
+        assert!(app
+            .ui_js
+            .contains("Do not create a general summary comment"));
         assert!(app.ui_js.contains("summaryComment only when"));
-        assert!(!app.ui_js.contains("id: `summary-${snapshot.headSha || Date.now()}`"));
+        assert!(!app
+            .ui_js
+            .contains("id: `summary-${snapshot.headSha || Date.now()}`"));
         assert!(app.ui_js.contains("function renderDraftStateChip"));
         assert!(app.ui_js.contains("pr-overview-fold"));
         assert!(app.css.contains(".pr-chip.is-draft"));

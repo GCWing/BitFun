@@ -75,7 +75,7 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.06);
       flex-direction: row;
       align-items: center;
-      gap: 8px;
+      gap: var(--flowchat-control-gap, 0.5rem);
       
       &:hover {
         background: rgba(25, 25, 40, 0.38);
@@ -141,7 +141,7 @@
         max-height: 28px !important;
         max-width: 100%;
         font-size: var(--flowchat-font-size-base);
-        line-height: 28px;
+        line-height: var(--flowchat-support-line-height, 1.45);
         overflow: hidden;
         padding: 0 !important;
         margin: 0 auto;
@@ -152,7 +152,7 @@
           display: block;
           color: color-mix(in srgb, var(--color-text-muted) 52%, transparent);
           font-size: var(--flowchat-font-size-base);
-          line-height: 28px;
+          line-height: var(--flowchat-support-line-height, 1.45);
           text-align: center;
           width: 100%;
         }
@@ -164,10 +164,10 @@
         inset: 0;
         align-items: center;
         justify-content: center;
-        gap: 6px;
+        gap: var(--flowchat-inline-gap, 0.35rem);
         width: 100%;
         font-size: var(--flowchat-font-size-sm);
-        line-height: 28px;
+        line-height: var(--flowchat-support-line-height, 1.45);
         color: color-mix(in srgb, var(--color-text-muted) 48%, transparent);
         white-space: nowrap;
         pointer-events: none;
@@ -209,7 +209,7 @@
       .bitfun-chat-input__actions-right {
         display: flex !important;
         align-items: center;
-        gap: 8px;
+        gap: var(--flowchat-control-gap, 0.5rem);
       }
 
       .bitfun-chat-input__space-hint {
@@ -338,9 +338,9 @@
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
-    gap: 4px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     font-size: var(--flowchat-font-size-sm);
-    line-height: 24px;
+    line-height: var(--flowchat-support-line-height, 1.45);
     color: var(--color-text-muted);
     opacity: 0.72;
     white-space: nowrap;
@@ -406,7 +406,7 @@
     }
   }
 
-  gap: $size-gap-3;
+  gap: var(--flowchat-control-gap, #{$size-gap-2});
 
   /* Queue sits directly above the input card; keep this pair tighter than other stacked blocks. */
   > .bitfun-pending-queue-panel + .bitfun-chat-input__container {
@@ -414,11 +414,11 @@
   }
 
   &__recommendations {
-    margin-bottom: 8px;
+    margin-bottom: var(--flowchat-card-gap, 0.42rem);
   }
 
   &__cowork-examples {
-    margin-bottom: 8px;
+    margin-bottom: var(--flowchat-card-gap, 0.42rem);
   }
   
   & > * {
@@ -430,7 +430,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: $size-gap-2;
+    gap: var(--flowchat-card-gap, #{$size-gap-2});
     justify-content: center;
 
     .session-file-modifications-bar {
@@ -454,8 +454,8 @@
     gap: 0;
     pointer-events: auto;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 12px 8px 0;
+    border-radius: calc(var(--flowchat-card-radius, 8px) + 4px);
+    padding: var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-y, 0.5rem) 0;
     background: var(--color-bg-scene);
     backdrop-filter: blur(16px) saturate(1.2);
     -webkit-backdrop-filter: blur(16px) saturate(1.2);
@@ -506,9 +506,9 @@
   &__target-switcher {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 0.125rem;
     padding-bottom: 7px;
-    margin-bottom: 1px;
+    margin-bottom: 0.06rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     animation: bitfun-chat-input-fade-in 0.1s ease-out;
   }
@@ -517,8 +517,8 @@
     font-size: var(--flowchat-font-size-xxs);
     color: var(--color-text-muted);
     font-weight: 400;
-    padding: 2px 8px 2px 0;
-    margin-right: 4px;
+    padding: 0.12rem var(--flowchat-card-expanded-pad-y, 0.5rem) 0.12rem 0;
+    margin-right: var(--flowchat-inline-gap, 0.35rem);
     flex-shrink: 0;
     letter-spacing: 0.02em;
     opacity: 0.72;
@@ -527,8 +527,8 @@
   &__target-tab {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
+    padding: 0.12rem var(--flowchat-card-expanded-pad-y, 0.5rem);
     border: none;
     background: transparent;
     color: var(--color-text-muted);
@@ -638,9 +638,9 @@
   &__image-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 6px;
-    padding: 2px 0;
+    gap: var(--flowchat-inline-gap, 0.35rem);
+    margin-bottom: var(--flowchat-inline-gap, 0.35rem);
+    padding: 0.12rem 0;
   }
 
   &__image-chip {
@@ -768,9 +768,9 @@
   &__agent-capsule {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
+    gap: 0.125rem;
     max-width: 148px;
-    padding: 2px 4px 2px 10px;
+    padding: 0.12rem 0.25rem 0.12rem var(--flowchat-card-expanded-pad-x, 0.625rem);
     border-radius: 999px;
     border: none;
     font-size: var(--flowchat-font-size-xxs);
@@ -821,14 +821,14 @@
   }
 
   &__agent-boost-empty {
-    padding: 12px 14px;
+    padding: var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-tertiary);
     text-align: center;
-    line-height: 1.35;
+    line-height: var(--flowchat-support-line-height, 1.45);
 
     &--inline {
-      padding: 8px 12px 10px;
+      padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
       text-align: left;
     }
   }
@@ -846,10 +846,10 @@
   &__boost-context-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--flowchat-control-gap, 0.5rem);
     width: 100%;
     margin: 0;
-    padding: 8px 12px;
+    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     background: transparent;
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-secondary);
@@ -892,10 +892,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--flowchat-control-gap, 0.5rem);
     width: 100%;
     margin: 0;
-    padding: 8px 12px;
+    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     background: transparent;
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-secondary);
@@ -907,7 +907,7 @@
   &__boost-submenu-trigger-main {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--flowchat-control-gap, 0.5rem);
     min-width: 0;
   }
 
@@ -979,8 +979,8 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 14px 12px;
+    gap: var(--flowchat-control-gap, 0.5rem);
+    padding: var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-muted);
   }
@@ -1010,9 +1010,9 @@
   &__boost-submenu-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--flowchat-control-gap, 0.5rem);
     width: 100%;
-    padding: 5px 8px;
+    padding: 0.32rem var(--flowchat-card-expanded-pad-y, 0.5rem);
     border-radius: 4px;
     background: transparent;
     font-size: var(--flowchat-font-size-xs);
@@ -1038,14 +1038,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
-    line-height: 1.35;
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 
   &__boost-submenu-manage {
     flex-shrink: 0;
     width: 100%;
     margin: 0;
-    padding: 8px 10px 10px;
+    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     border-top: 1px solid var(--border-subtle);
     background: transparent;
     font-size: var(--flowchat-font-size-xxs);
@@ -1080,7 +1080,7 @@
     display: inline-flex;
     align-items: center;
     font-weight: 500;
-    line-height: 1;
+    line-height: var(--flowchat-compact-line-height, 1.32);
     vertical-align: middle;
   }
   
@@ -1111,7 +1111,7 @@
   }
   
   &__mode-option {
-    padding: 7px 12px;
+    padding: var(--flowchat-inline-gap, 0.35rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-secondary);
     cursor: pointer;
@@ -1119,7 +1119,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--flowchat-control-gap, 0.5rem);
     
     &:hover:not(&--disabled) {
       background: rgba(255, 255, 255, 0.04);
@@ -1183,14 +1183,14 @@
   }
   
   &__mode-submenu-trigger {
-    padding: 7px 12px;
+    padding: var(--flowchat-inline-gap, 0.35rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-secondary);
     cursor: pointer;
     transition: all 0.15s ease;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     
     &:hover {
       background: rgba(255, 255, 255, 0.04);
@@ -1257,7 +1257,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 2px 5px;
+    padding: 0.12rem 0.32rem;
     border-radius: 3px;
     background: var(--color-warning-bg);
     color: var(--color-warning);
@@ -1307,7 +1307,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     border-bottom: 1px solid var(--border-subtle);
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
@@ -1350,8 +1350,8 @@
   &__slash-command-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 7px 12px;
+    gap: var(--flowchat-control-gap, 0.5rem);
+    padding: var(--flowchat-inline-gap, 0.35rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     cursor: pointer;
     transition: all 0.15s ease;
     
@@ -1386,7 +1386,7 @@
   
   &__slash-command-current {
     font-size: var(--flowchat-font-size-xxs);
-    padding: 2px 5px;
+    padding: 0.12rem 0.32rem;
     border-radius: 3px;
     background: rgba(100, 140, 255, 0.15);
     color: rgba(140, 180, 255, 0.9);
@@ -1394,7 +1394,7 @@
   }
   
   &__slash-command-empty {
-    padding: 16px 12px;
+    padding: var(--size-gap-4, 16px) var(--flowchat-card-expanded-pad-x, 0.625rem);
     text-align: center;
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-tertiary);
@@ -1855,4 +1855,3 @@
     transform: translateY(0);
   }
 }
-

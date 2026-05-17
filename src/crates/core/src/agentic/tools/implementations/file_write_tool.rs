@@ -1,10 +1,10 @@
-use crate::agentic::tools::ToolPathOperation;
 use crate::agentic::tools::framework::{
     Tool, ToolPathResolution, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::path::Path;
 use tokio::fs;
 
@@ -114,9 +114,9 @@ impl FileWriteTool {
 #[cfg(test)]
 mod tests {
     use super::FileWriteTool;
-    use crate::agentic::WorkspaceBinding;
-    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
     use serde_json::json;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -204,12 +204,10 @@ mod tests {
         assert_eq!(data["success"], true);
         assert_eq!(data["bytes_written"], 0);
         assert_eq!(data["status"], "already_exists_same_content");
-        assert!(
-            result_for_assistant
-                .as_deref()
-                .unwrap_or_default()
-                .contains("do not call Write for this path again")
-        );
+        assert!(result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("do not call Write for this path again"));
     }
 
     #[tokio::test]

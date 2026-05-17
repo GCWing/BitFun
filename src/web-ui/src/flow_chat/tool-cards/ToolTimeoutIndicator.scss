@@ -1,18 +1,18 @@
 .tool-timeout-indicator {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--flowchat-inline-gap, 0.35rem);
 }
 
 .duration-text {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--flowchat-inline-gap, 0.35rem);
   color: var(--tool-card-text-secondary, var(--color-text-secondary, #9ca3af));
-  font-size: 12px;
+  font-size: var(--flowchat-font-size-xs);
   font-weight: 600;
   letter-spacing: 0.01em;
-  line-height: 1.2;
+  line-height: var(--flowchat-compact-line-height, 1.32);
 
   svg {
     flex-shrink: 0;
@@ -82,19 +82,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: var(--flowchat-inline-gap, 0.35rem);
   height: 22px;
-  padding: 0 6px;
+  padding: 0 var(--flowchat-inline-gap, 0.35rem);
   border: 1px solid var(--border-subtle, rgba(100, 116, 139, 0.12));
   border-radius: 4px;
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
   font-weight: 500;
   letter-spacing: 0.01em;
-  line-height: 1;
+  line-height: var(--flowchat-compact-line-height, 1.32);
   transition: all 0.15s ease;
 
   svg {
@@ -128,11 +128,11 @@
 .timeout-extend-popover {
   position: absolute;
   right: 0;
-  top: calc(100% + 4px);
+  top: calc(100% + var(--flowchat-inline-gap, 0.35rem));
   z-index: 10;
   width: max-content;
   max-width: 150px;
-  padding: 4px 0;
+  padding: var(--flowchat-inline-gap, 0.35rem) 0;
   border-radius: 6px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--border-base);
@@ -142,10 +142,10 @@
 .timeout-extend-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--flowchat-inline-gap, 0.35rem);
   width: 100%;
-  padding: 6px 12px;
-  font-size: 12px;
+  padding: var(--flowchat-control-pad-y, 0.35rem) var(--flowchat-control-pad-x, 0.75rem);
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   color: var(--color-text-primary);
   cursor: pointer;
   background: transparent;

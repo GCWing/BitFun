@@ -13,11 +13,8 @@ pub(crate) mod citation_renumber;
 use crate::agentic::tools::framework::ToolExposure;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use indexmap::IndexMap;
 pub use definitions::custom::{CustomSubagent, CustomSubagentKind};
-pub use definitions::hidden::{
-    CodeReviewAgent, DeepReviewAgent, GenerateDocAgent, InitAgent,
-};
+pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent, InitAgent};
 pub use definitions::modes::{
     AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, PlanMode, TeamMode,
 };
@@ -25,18 +22,16 @@ pub use definitions::review::{
     ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,
     PerformanceReviewerAgent, ReviewFixerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
 };
+pub use definitions::shared::ReadonlySubagent;
 pub use definitions::subagents::{
     ComputerUseMode, ExploreAgent, FileFinderAgent, ResearchSpecialistAgent,
 };
-pub use definitions::shared::ReadonlySubagent;
+use indexmap::IndexMap;
 pub use prompt_builder::{
     PromptBuilder, PromptBuilderContext, RemoteExecutionHints, RequestContextPolicy,
     RequestContextSection,
 };
-pub use registry::{get_agent_registry, AgentRegistry, CustomSubagentDetail};
-pub use registry::catalog::{
-    builtin_agent_specs, BuiltinAgentSpec,
-};
+pub use registry::catalog::{builtin_agent_specs, BuiltinAgentSpec};
 pub use registry::types::{
     AgentCategory, AgentInfo, AgentToolPolicy, CustomSubagentConfig, SubAgentSource,
     SubagentListScope, SubagentQueryContext, SubagentStateReason,
@@ -44,6 +39,7 @@ pub use registry::types::{
 pub use registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
+pub use registry::{get_agent_registry, AgentRegistry, CustomSubagentDetail};
 use std::any::Any;
 
 // Include embedded prompts generated at compile time

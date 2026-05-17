@@ -2,7 +2,6 @@
 ///
 /// Uses `syntect` for syntax analysis and `syntect-tui` to convert
 /// highlighted output into ratatui `Span`s.
-
 use once_cell::sync::Lazy;
 use ratatui::{
     style::Style,
@@ -10,7 +9,7 @@ use ratatui::{
 };
 use syntect::{
     easy::HighlightLines,
-    highlighting::{ThemeSet, Style as SyntectStyle},
+    highlighting::{Style as SyntectStyle, ThemeSet},
     parsing::SyntaxSet,
     util::LinesWithEndings,
 };
@@ -152,7 +151,10 @@ pub fn highlight_code_with_line_numbers<'a>(
     for (i, line_str) in LinesWithEndings::from(content).enumerate() {
         let line_num = i + 1;
         let mut spans = vec![
-            Span::styled(format!("{:>width$}", line_num, width = num_width), line_num_style),
+            Span::styled(
+                format!("{:>width$}", line_num, width = num_width),
+                line_num_style,
+            ),
             Span::styled(" \u{2502} ", separator_style), // │
         ];
 

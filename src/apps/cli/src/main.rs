@@ -1,24 +1,23 @@
 /// BitFun CLI
-/// 
+///
 /// Command-line interface version, supports:
 /// - Interactive TUI
 /// - Single command execution
 /// - Batch task processing
-
 mod acp_cli;
-mod config;
+mod agent;
 #[allow(dead_code)]
 mod chat_state;
 mod commands;
-mod ui;
+mod config;
 mod modes;
-mod agent;
 mod prompts;
+mod ui;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::OnceLock;
 
 use config::CliConfig;
 use modes::chat::ChatMode;
@@ -61,7 +60,7 @@ pub fn get_mcp_service() -> Option<&'static std::sync::Arc<bitfun_core::service:
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
-    
+
     /// Enable verbose logging
     #[arg(short, long, global = true)]
     verbose: bool,
@@ -75,39 +74,39 @@ enum Commands {
         #[arg(short, long, default_value = "agentic")]
         agent: String,
     },
-    
+
     /// Execute single command
     Exec {
         /// User message
         message: String,
-        
+
         /// Agent type
         #[arg(short, long, default_value = "agentic")]
         agent: String,
-        
+
         /// Output git diff patch after execution (for SWE-bench evaluation)
         /// Without path outputs to terminal, with path saves to file
         /// Example: --output-patch or --output-patch ./result.patch
         #[arg(long, num_args = 0..=1, default_missing_value = "-")]
         output_patch: Option<String>,
-        
+
         /// Tool execution requires confirmation (default: no confirmation to avoid blocking non-interactive mode)
         #[arg(long)]
         confirm: bool,
     },
-    
+
     /// Session management
     Sessions {
         #[command(subcommand)]
         action: SessionAction,
     },
-    
+
     /// Configuration management
     Config {
         #[command(subcommand)]
         action: ConfigAction,
     },
-    
+
     /// Health check
     Health,
 
@@ -313,10 +312,10 @@ async fn initialize_core_services(
             Ok(mcp_service) => {
                 let mcp_service = std::sync::Arc::new(mcp_service);
                 MCP_SERVICE.set(mcp_service.clone()).ok();
-                
+
                 // Mark as in progress
                 get_mcp_init_status().store(1, Ordering::Relaxed);
-                
+
                 // Background async initialization
                 tokio::spawn(async move {
                     let result = mcp_service.server_manager().initialize_all().await;
@@ -345,9 +344,7 @@ async fn initialize_core_services(
 /// Restore original tool confirmation setting
 async fn restore_tool_confirmation(original: bool) {
     if let Ok(svc) = bitfun_core::service::config::get_global_config_service().await {
-        let _ = svc
-            .set_config("ai.skip_tool_confirmation", original)
-            .await;
+        let _ = svc.set_config("ai.skip_tool_confirmation", original).await;
     }
 }
 
@@ -380,8 +377,7 @@ async fn run_interactive(
     let workspace = setup_workspace();
 
     // 3. Initialize core services
-    let (agentic_system, original_skip_confirmation) =
-        initialize_core_services(true).await?;
+    let (agentic_system, original_skip_confirmation) = initialize_core_services(true).await?;
 
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
@@ -435,7 +431,7 @@ async fn run_interactive(
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    
+
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
     let is_acp_command = matches!(cli.command, Some(Commands::Acp { .. }));
     let is_acp_serve = matches!(
@@ -454,22 +450,19 @@ async fn main() -> Result<()> {
     } else {
         tracing::Level::INFO
     };
-    
+
     if is_tui_mode {
         use std::fs::OpenOptions;
-        
-        let log_dir = CliConfig::config_dir().ok()
+
+        let log_dir = CliConfig::config_dir()
+            .ok()
             .map(|d| d.join("logs"))
             .unwrap_or_else(|| std::env::temp_dir().join("bitfun-cli"));
-        
+
         std::fs::create_dir_all(&log_dir).ok();
         let log_file = log_dir.join("bitfun-cli.log");
-        
-        if let Ok(file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(log_file) 
-        {
+
+        if let Ok(file) = OpenOptions::new().create(true).append(true).open(log_file) {
             tracing_subscriber::fmt()
                 .with_max_level(log_level)
                 .with_writer(move || file.try_clone().unwrap())
@@ -495,7 +488,7 @@ async fn main() -> Result<()> {
             .with_target(false)
             .init();
     }
-    
+
     let config = CliConfig::load().unwrap_or_else(|e| {
         if !is_tui_mode {
             eprintln!("Warning: Failed to load config: {}", e);
@@ -503,28 +496,33 @@ async fn main() -> Result<()> {
         }
         CliConfig::default()
     });
-    
+
     match cli.command {
         Some(Commands::Chat { agent }) => {
             // Interactive mode with startup page, scoped to the current directory.
             run_interactive(config, agent, ".".to_string()).await?;
         }
-        
-        Some(Commands::Exec { message, agent, output_patch, confirm }) => {
+
+        Some(Commands::Exec {
+            message,
+            agent,
+            output_patch,
+            confirm,
+        }) => {
             let workspace_path_resolved = std::env::current_dir().ok();
-            
+
             if let Some(ref ws_path) = workspace_path_resolved {
                 tracing::info!("Workspace path set: {:?}", ws_path);
             }
-            
+
             let skip_confirmation = !confirm;
             let (agentic_system, original_skip_confirmation) =
                 initialize_core_services(skip_confirmation).await?;
-            
+
             let mut exec_mode = ExecMode::new(
-                config, 
-                message, 
-                agent, 
+                config,
+                message,
+                agent,
                 &agentic_system,
                 workspace_path_resolved,
                 output_patch,
@@ -536,15 +534,15 @@ async fn main() -> Result<()> {
 
             run_result?;
         }
-        
+
         Some(Commands::Sessions { action }) => {
             handle_session_action(action).await?;
         }
-        
+
         Some(Commands::Config { action }) => {
             handle_config_action(action, &config)?;
         }
-        
+
         Some(Commands::Health) => {
             println!("BitFun CLI is running normally");
             println!("Version: {}", env!("CARGO_PKG_VERSION"));
@@ -599,23 +597,21 @@ async fn main() -> Result<()> {
 
         Some(Commands::Acp {
             action: Some(AcpAction::Clients { action }),
-        }) => {
-            match action {
-                AcpClientsAction::List => acp_cli::list_external_clients().await?,
-                AcpClientsAction::Doctor => {
-                    if !acp_cli::doctor_external_clients().await? {
-                        std::process::exit(1);
-                    }
+        }) => match action {
+            AcpClientsAction::List => acp_cli::list_external_clients().await?,
+            AcpClientsAction::Doctor => {
+                if !acp_cli::doctor_external_clients().await? {
+                    std::process::exit(1);
                 }
-                AcpClientsAction::Enable { client, permission } => {
-                    acp_cli::enable_external_client(client, permission).await?;
-                }
-                AcpClientsAction::Disable { client_id } => {
-                    acp_cli::disable_external_client(&client_id).await?;
-                }
-                AcpClientsAction::Config => acp_cli::print_external_client_config().await?,
             }
-        }
+            AcpClientsAction::Enable { client, permission } => {
+                acp_cli::enable_external_client(client, permission).await?;
+            }
+            AcpClientsAction::Disable { client_id } => {
+                acp_cli::disable_external_client(&client_id).await?;
+            }
+            AcpClientsAction::Config => acp_cli::print_external_client_config().await?,
+        },
 
         Some(Commands::Acp {
             action:
@@ -629,7 +625,7 @@ async fn main() -> Result<()> {
         }) => {
             acp_cli::run_external_client(client, prompt, workspace, timeout, permission).await?;
         }
-        
+
         None => {
             // Default: interactive TUI with startup page
             let workspace_str = ".".to_string();
@@ -638,7 +634,7 @@ async fn main() -> Result<()> {
             run_interactive(config, default_agent, workspace_str).await?;
         }
     }
-    
+
     Ok(())
 }
 
@@ -653,8 +649,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
         .expect("Failed to initialize agentic system");
 
     let coordinator = agentic_system.coordinator.clone();
-    let workspace_path = std::env::current_dir()
-        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let workspace_path = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
     match action {
         SessionAction::List => {
@@ -676,7 +671,8 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
 
             for (i, info) in sessions.iter().enumerate() {
                 let last_updated = {
-                    let duration = info.last_activity_at
+                    let duration = info
+                        .last_activity_at
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default();
                     let secs = duration.as_secs() as i64;
@@ -729,21 +725,31 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                         bitfun_core::agentic::core::message::MessageContent::Text(text) => {
                             text.lines().next().unwrap_or("").to_string()
                         }
-                        bitfun_core::agentic::core::message::MessageContent::Multimodal { text, images } => {
+                        bitfun_core::agentic::core::message::MessageContent::Multimodal {
+                            text,
+                            images,
+                        } => {
                             if text.is_empty() {
                                 format!("[{} images]", images.len())
                             } else {
                                 text.lines().next().unwrap_or("").to_string()
                             }
                         }
-                        bitfun_core::agentic::core::message::MessageContent::Mixed { text, tool_calls, .. } => {
+                        bitfun_core::agentic::core::message::MessageContent::Mixed {
+                            text,
+                            tool_calls,
+                            ..
+                        } => {
                             if text.is_empty() {
                                 format!("[{} tool calls]", tool_calls.len())
                             } else {
                                 text.lines().next().unwrap_or("").to_string()
                             }
                         }
-                        bitfun_core::agentic::core::message::MessageContent::ToolResult { tool_name, .. } => {
+                        bitfun_core::agentic::core::message::MessageContent::ToolResult {
+                            tool_name,
+                            ..
+                        } => {
                             format!("[Tool result: {}]", tool_name)
                         }
                     };
@@ -787,7 +793,7 @@ fn handle_config_action(action: ConfigAction, config: &CliConfig) -> Result<()> 
             println!();
             println!("Config file: {:?}", CliConfig::config_path()?);
         }
-        
+
         ConfigAction::Edit => {
             let config_path = CliConfig::config_path()?;
             println!("Config file location: {:?}", config_path);
@@ -797,13 +803,13 @@ fn handle_config_action(action: ConfigAction, config: &CliConfig) -> Result<()> 
             println!("  or");
             println!("  code {:?}", config_path);
         }
-        
+
         ConfigAction::Reset => {
             let default_config = CliConfig::default();
             default_config.save()?;
             println!("Reset to default configuration");
         }
     }
-    
+
     Ok(())
 }

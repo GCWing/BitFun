@@ -269,10 +269,8 @@ impl Default for SkillTool {
 #[cfg(test)]
 mod tests {
     use super::SkillTool;
-    use crate::agentic::tools::implementations::skills::{
-        registry::SkillRegistry, SkillLocation,
-    };
     use crate::agentic::tools::framework::{Tool, ToolResult};
+    use crate::agentic::tools::implementations::skills::{registry::SkillRegistry, SkillLocation};
     use crate::agentic::workspace::{
         WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
         WorkspaceServices, WorkspaceShell,
@@ -457,18 +455,18 @@ Use the remote project skill.
 
         async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
             match path {
-                "/remote/project/.bitfun/skills/z-last/SKILL.md" => Ok(
-                    "---\nname: z-last\ndescription: last\n---\n\nz\n".to_string(),
-                ),
-                "/remote/project/.bitfun/skills/a-first/SKILL.md" => Ok(
-                    "---\nname: A-First\ndescription: first\n---\n\na\n".to_string(),
-                ),
-                "/remote/project/.bitfun/skills/dup-one/SKILL.md" => Ok(
-                    "---\nname: dup\ndescription: dup one\n---\n\none\n".to_string(),
-                ),
-                "/remote/project/.bitfun/skills/dup-two/SKILL.md" => Ok(
-                    "---\nname: dup\ndescription: dup two\n---\n\ntwo\n".to_string(),
-                ),
+                "/remote/project/.bitfun/skills/z-last/SKILL.md" => {
+                    Ok("---\nname: z-last\ndescription: last\n---\n\nz\n".to_string())
+                }
+                "/remote/project/.bitfun/skills/a-first/SKILL.md" => {
+                    Ok("---\nname: A-First\ndescription: first\n---\n\na\n".to_string())
+                }
+                "/remote/project/.bitfun/skills/dup-one/SKILL.md" => {
+                    Ok("---\nname: dup\ndescription: dup one\n---\n\none\n".to_string())
+                }
+                "/remote/project/.bitfun/skills/dup-two/SKILL.md" => {
+                    Ok("---\nname: dup\ndescription: dup two\n---\n\ntwo\n".to_string())
+                }
                 _ => anyhow::bail!("not found: {}", path),
             }
         }

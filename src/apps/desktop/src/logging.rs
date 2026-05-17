@@ -5,12 +5,12 @@ use chrono::Local;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::{
-    OnceLock,
     atomic::{AtomicU8, Ordering},
+    OnceLock,
 };
 use std::thread;
-use tauri::{Runtime, plugin::TauriPlugin};
-use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy, fern};
+use tauri::{plugin::TauriPlugin, Runtime};
+use tauri_plugin_log::{fern, RotationStrategy, Target, TargetKind, TimezoneStrategy};
 
 const SESSION_DIR_PATTERN: &str = r"^\d{8}T\d{6}$";
 const MAX_LOG_SESSIONS: usize = 10;

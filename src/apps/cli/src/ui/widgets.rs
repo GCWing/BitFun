@@ -1,5 +1,4 @@
 /// Custom TUI widgets
-
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
@@ -33,7 +32,12 @@ impl Spinner {
 pub fn render_info_popup(frame: &mut Frame, area: Rect, message: &str, accent: Color) {
     let lines: Vec<Line> = message
         .lines()
-        .map(|l| Line::from(Span::styled(l.to_string(), Style::default().fg(Color::White))))
+        .map(|l| {
+            Line::from(Span::styled(
+                l.to_string(),
+                Style::default().fg(Color::White),
+            ))
+        })
         .collect();
 
     let line_count = lines.len() as u16;
@@ -44,7 +48,9 @@ pub fn render_info_popup(frame: &mut Frame, area: Rect, message: &str, accent: C
         .unwrap_or(20);
 
     // +2 for border, +2 for padding; +1 for hint line below popup
-    let popup_width = (max_line_width + 4).min(area.width.saturating_sub(4)).max(30);
+    let popup_width = (max_line_width + 4)
+        .min(area.width.saturating_sub(4))
+        .max(30);
     let popup_height = (line_count + 2).min(area.height.saturating_sub(3));
 
     let popup_x = area.x + (area.width.saturating_sub(popup_width)) / 2;

@@ -1,16 +1,15 @@
 /// Markdown rendering utilities
-
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
-use pulldown_cmark::{Alignment, Event, Options, Parser, Tag, TagEnd, HeadingLevel};
+use pulldown_cmark::{Alignment, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use ratatui::{
     style::{Modifier, Style},
     text::{Line, Span},
 };
-use unicode_width::{UnicodeWidthStr, UnicodeWidthChar};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use super::theme::{Theme, StyleKind};
+use super::theme::{StyleKind, Theme};
 
 /// Markdown renderer with built-in cache for parsed results.
 /// Avoids re-parsing the same markdown content on every frame.
@@ -23,7 +22,10 @@ pub struct MarkdownRenderer {
 
 impl MarkdownRenderer {
     pub fn new(theme: Theme) -> Self {
-        Self { theme, cache: HashMap::new() }
+        Self {
+            theme,
+            cache: HashMap::new(),
+        }
     }
 
     /// Compute a cache key from content and width
@@ -49,21 +51,21 @@ impl MarkdownRenderer {
     pub fn clear_cache(&mut self) {
         self.cache.clear();
     }
-    
+
     pub fn render(&self, markdown: &str, width: usize) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
         let mut current_line_spans: Vec<Span<'static>> = Vec::new();
-        
+
         // Style stack
         let mut style_stack: Vec<StyleModifier> = Vec::new();
         let mut list_level: usize = 0;
         let mut in_code_block = false;
         let mut code_block_lang = String::new();
         let wrap_width = if width > 0 { width } else { 80 };
-        
+
         // Table state
         let mut table_state = TableState::new();
-        
+
         // Flush current_line_spans into `lines`, wrapping at `wrap_width`.
         // Headings skip wrapping.
         let flush_with_wrap = |spans: &mut Vec<Span<'static>>,
@@ -83,106 +85,106 @@ impl MarkdownRenderer {
 
         let options = Options::all();
         let parser = Parser::new_ext(markdown, options);
-        
+
         for event in parser {
             match event {
-                Event::Start(tag) => {
-                    match tag {
-                        Tag::Heading { level, .. } => {
-                            flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
-                            lines.push(Line::from(""));
-                            
-                            let prefix = match level {
-                                HeadingLevel::H1 => "# ",
-                                HeadingLevel::H2 => "## ",
-                                HeadingLevel::H3 => "### ",
-                                HeadingLevel::H4 => "#### ",
-                                HeadingLevel::H5 => "##### ",
-                                HeadingLevel::H6 => "###### ",
-                            };
-                            current_line_spans.push(Span::styled(
-                                prefix.to_string(),
-                                self.theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD)
-                            ));
-                            
-                            style_stack.push(StyleModifier::Heading);
-                        }
-                        Tag::Paragraph => {}
-                        Tag::BlockQuote(_) => {
-                            current_line_spans.push(Span::styled(
-                                "\u{2502} ".to_string(),
-                                self.theme.style(StyleKind::Muted)
-                            ));
-                            style_stack.push(StyleModifier::Quote);
-                        }
-                        Tag::CodeBlock(kind) => {
-                            in_code_block = true;
-                            if let pulldown_cmark::CodeBlockKind::Fenced(lang) = kind {
-                                code_block_lang = lang.to_string();
-                            }
-                            flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
-                            lines.push(Line::from(""));
-                            
-                            if !code_block_lang.is_empty() {
-                                current_line_spans.push(Span::styled(
-                                    format!("```{}", code_block_lang),
-                                    self.theme.style(StyleKind::Muted)
-                                ));
-                                lines.push(Line::from(std::mem::take(&mut current_line_spans)));
-                            }
-                        }
-                        Tag::List(_) => {
-                            list_level += 1;
-                            if list_level == 1 {
-                                flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
-                            }
-                        }
-                        Tag::Item => {
-                            flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
-                            let indent = "  ".repeat(list_level.saturating_sub(1));
-                            current_line_spans.push(Span::raw(indent));
-                            current_line_spans.push(Span::styled(
-                                "\u{2022} ".to_string(),
-                                self.theme.style(StyleKind::Primary)
-                            ));
-                        }
-                        Tag::Strong => {
-                            style_stack.push(StyleModifier::Bold);
-                        }
-                        Tag::Emphasis => {
-                            style_stack.push(StyleModifier::Italic);
-                        }
-                        Tag::Link { .. } => {
-                            style_stack.push(StyleModifier::Link);
-                        }
-                        Tag::Image { .. } => {
-                            current_line_spans.push(Span::styled(
-                                "[Image]".to_string(),
-                                self.theme.style(StyleKind::Info)
-                            ));
-                        }
-                        Tag::Table(alignment) => {
-                            flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
-                            lines.push(Line::from(""));
-                            table_state.start_table(alignment.into_iter().collect());
-                        }
-                        Tag::TableHead => {
-                            table_state.is_header = true;
-                            table_state.start_row();
-                        }
-                        Tag::TableRow => {
-                            table_state.start_row();
-                        }
-                        Tag::TableCell => {
-                            table_state.start_cell();
-                            if table_state.is_header {
-                                style_stack.push(StyleModifier::TableHeader);
-                            }
-                        }
-                        _ => {}
+                Event::Start(tag) => match tag {
+                    Tag::Heading { level, .. } => {
+                        flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
+                        lines.push(Line::from(""));
+
+                        let prefix = match level {
+                            HeadingLevel::H1 => "# ",
+                            HeadingLevel::H2 => "## ",
+                            HeadingLevel::H3 => "### ",
+                            HeadingLevel::H4 => "#### ",
+                            HeadingLevel::H5 => "##### ",
+                            HeadingLevel::H6 => "###### ",
+                        };
+                        current_line_spans.push(Span::styled(
+                            prefix.to_string(),
+                            self.theme
+                                .style(StyleKind::Primary)
+                                .add_modifier(Modifier::BOLD),
+                        ));
+
+                        style_stack.push(StyleModifier::Heading);
                     }
-                }
-                
+                    Tag::Paragraph => {}
+                    Tag::BlockQuote(_) => {
+                        current_line_spans.push(Span::styled(
+                            "\u{2502} ".to_string(),
+                            self.theme.style(StyleKind::Muted),
+                        ));
+                        style_stack.push(StyleModifier::Quote);
+                    }
+                    Tag::CodeBlock(kind) => {
+                        in_code_block = true;
+                        if let pulldown_cmark::CodeBlockKind::Fenced(lang) = kind {
+                            code_block_lang = lang.to_string();
+                        }
+                        flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
+                        lines.push(Line::from(""));
+
+                        if !code_block_lang.is_empty() {
+                            current_line_spans.push(Span::styled(
+                                format!("```{}", code_block_lang),
+                                self.theme.style(StyleKind::Muted),
+                            ));
+                            lines.push(Line::from(std::mem::take(&mut current_line_spans)));
+                        }
+                    }
+                    Tag::List(_) => {
+                        list_level += 1;
+                        if list_level == 1 {
+                            flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
+                        }
+                    }
+                    Tag::Item => {
+                        flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
+                        let indent = "  ".repeat(list_level.saturating_sub(1));
+                        current_line_spans.push(Span::raw(indent));
+                        current_line_spans.push(Span::styled(
+                            "\u{2022} ".to_string(),
+                            self.theme.style(StyleKind::Primary),
+                        ));
+                    }
+                    Tag::Strong => {
+                        style_stack.push(StyleModifier::Bold);
+                    }
+                    Tag::Emphasis => {
+                        style_stack.push(StyleModifier::Italic);
+                    }
+                    Tag::Link { .. } => {
+                        style_stack.push(StyleModifier::Link);
+                    }
+                    Tag::Image { .. } => {
+                        current_line_spans.push(Span::styled(
+                            "[Image]".to_string(),
+                            self.theme.style(StyleKind::Info),
+                        ));
+                    }
+                    Tag::Table(alignment) => {
+                        flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
+                        lines.push(Line::from(""));
+                        table_state.start_table(alignment.into_iter().collect());
+                    }
+                    Tag::TableHead => {
+                        table_state.is_header = true;
+                        table_state.start_row();
+                    }
+                    Tag::TableRow => {
+                        table_state.start_row();
+                    }
+                    Tag::TableCell => {
+                        table_state.start_cell();
+                        if table_state.is_header {
+                            style_stack.push(StyleModifier::TableHeader);
+                        }
+                    }
+                    _ => {}
+                },
+
                 Event::End(tag_end) => {
                     match tag_end {
                         TagEnd::Heading(_) => {
@@ -194,7 +196,12 @@ impl MarkdownRenderer {
                         }
                         TagEnd::Paragraph => {
                             if !in_code_block && !table_state.in_table {
-                                flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
+                                flush_with_wrap(
+                                    &mut current_line_spans,
+                                    &mut lines,
+                                    wrap_width,
+                                    true,
+                                );
                                 lines.push(Line::from(""));
                             }
                         }
@@ -212,7 +219,7 @@ impl MarkdownRenderer {
                             if !code_block_lang.is_empty() {
                                 lines.push(Line::from(Span::styled(
                                     "```".to_string(),
-                                    self.theme.style(StyleKind::Muted)
+                                    self.theme.style(StyleKind::Muted),
                                 )));
                                 code_block_lang.clear();
                             }
@@ -221,7 +228,12 @@ impl MarkdownRenderer {
                         TagEnd::List(_) => {
                             list_level = list_level.saturating_sub(1);
                             if list_level == 0 {
-                                flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
+                                flush_with_wrap(
+                                    &mut current_line_spans,
+                                    &mut lines,
+                                    wrap_width,
+                                    true,
+                                );
                                 lines.push(Line::from(""));
                             }
                         }
@@ -265,10 +277,10 @@ impl MarkdownRenderer {
                         _ => {}
                     }
                 }
-                
+
                 Event::Text(text) => {
                     let style = self.compute_style(&style_stack, in_code_block);
-                    
+
                     if in_code_block {
                         for line in text.lines() {
                             // Code blocks preserve style but still wrap to viewport width.
@@ -285,82 +297,90 @@ impl MarkdownRenderer {
                         current_line_spans.push(Span::styled(text.to_string(), style));
                     }
                 }
-                
+
                 Event::Code(code) => {
-                    let span = Span::styled(
-                        format!("`{}`", code),
-                        self.theme.style(StyleKind::Success)
-                    );
+                    let span =
+                        Span::styled(format!("`{}`", code), self.theme.style(StyleKind::Success));
                     if table_state.in_cell {
                         table_state.push_span(span);
                     } else {
                         current_line_spans.push(span);
                     }
                 }
-                
+
                 Event::SoftBreak | Event::HardBreak => {
                     if !in_code_block && !table_state.in_table {
                         flush_with_wrap(&mut current_line_spans, &mut lines, wrap_width, true);
                     }
                 }
-                
+
                 Event::Rule => {
                     let rule_w = wrap_width.min(60);
                     lines.push(Line::from(Span::styled(
                         "\u{2500}".repeat(rule_w),
-                        self.theme.style(StyleKind::Muted)
+                        self.theme.style(StyleKind::Muted),
                     )));
                 }
-                
+
                 _ => {}
             }
         }
-        
+
         // Process remaining spans with wrapping
         if !current_line_spans.is_empty() {
             wrap_spans_to_lines(current_line_spans, wrap_width, &mut lines);
         }
-        
+
         // Remove trailing empty lines
-        while lines.last().map_or(false, |line| line.spans.is_empty() || 
-            (line.spans.len() == 1 && line.spans[0].content.is_empty())) {
+        while lines.last().map_or(false, |line| {
+            line.spans.is_empty() || (line.spans.len() == 1 && line.spans[0].content.is_empty())
+        }) {
             lines.pop();
         }
-        
+
         lines
     }
-    
+
     fn compute_style(&self, stack: &[StyleModifier], in_code_block: bool) -> Style {
         let mut style = Style::default();
-        
+
         if in_code_block {
             return self.theme.style(StyleKind::Success);
         }
-        
+
         for modifier in stack {
             style = match modifier {
                 StyleModifier::Bold => style.add_modifier(Modifier::BOLD),
                 StyleModifier::Italic => style.add_modifier(Modifier::ITALIC),
-                StyleModifier::Heading => self.theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
+                StyleModifier::Heading => self
+                    .theme
+                    .style(StyleKind::Primary)
+                    .add_modifier(Modifier::BOLD),
                 StyleModifier::Quote => style.fg(self.theme.muted),
-                StyleModifier::Link => self.theme.style(StyleKind::Info).add_modifier(Modifier::UNDERLINED),
-                StyleModifier::TableHeader => self.theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
+                StyleModifier::Link => self
+                    .theme
+                    .style(StyleKind::Info)
+                    .add_modifier(Modifier::UNDERLINED),
+                StyleModifier::TableHeader => self
+                    .theme
+                    .style(StyleKind::Primary)
+                    .add_modifier(Modifier::BOLD),
             };
         }
-        
+
         style
     }
-    
+
     pub fn has_markdown_syntax(text: &str) -> bool {
-        text.contains("**") ||
-        text.contains("__") ||
-        text.contains("*") ||
-        text.contains("_") ||
-        text.contains("`") ||
-        text.contains("#") ||
-        text.contains("[") ||
-        text.contains(">") ||
-        text.contains("```")
+        text.contains("**")
+            || text.contains("__")
+            || text.contains("*")
+            || text.contains("_")
+            || text.contains("`")
+            || text.contains("#")
+            || text.contains("[")
+            || text.contains(">")
+            || text.contains("```")
     }
 }
 
@@ -373,7 +393,10 @@ fn wrap_spans_to_lines(spans: Vec<Span<'static>>, max_width: usize, out: &mut Ve
         return;
     }
 
-    let total_width: usize = spans.iter().map(|s| UnicodeWidthStr::width(s.content.as_ref())).sum();
+    let total_width: usize = spans
+        .iter()
+        .map(|s| UnicodeWidthStr::width(s.content.as_ref()))
+        .sum();
     if total_width <= max_width {
         out.push(Line::from(spans));
         return;

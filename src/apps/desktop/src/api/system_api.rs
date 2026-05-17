@@ -428,12 +428,12 @@ pub async fn toggle_main_window_fullscreen(
         return Err("Main window not found".to_string());
     };
 
-    let current_fullscreen = window.is_fullscreen().map_err(|error| {
-        format!("Failed to read main window fullscreen state: {}", error)
-    })?;
-    let current_maximized = window.is_maximized().map_err(|error| {
-        format!("Failed to read main window maximize state: {}", error)
-    })?;
+    let current_fullscreen = window
+        .is_fullscreen()
+        .map_err(|error| format!("Failed to read main window fullscreen state: {}", error))?;
+    let current_maximized = window
+        .is_maximized()
+        .map_err(|error| format!("Failed to read main window maximize state: {}", error))?;
     let restore_maximized_after_fullscreen = *main_window_fullscreen_restore_maximized()
         .lock()
         .map_err(|_| "Main window fullscreen restore state is unavailable".to_string())?;
@@ -459,11 +459,7 @@ pub async fn toggle_main_window_fullscreen(
             .map_err(|_| "Main window fullscreen restore state is unavailable".to_string())? =
             transition.next_restore_maximized_after_fullscreen;
 
-        return Ok(read_main_window_fullscreen_response(
-            &window,
-            true,
-            false,
-        ));
+        return Ok(read_main_window_fullscreen_response(&window, true, false));
     }
 
     window

@@ -5,6 +5,7 @@
 .modern-flowchat-container.flow-chat-typography {
   font-family: var(--font-sans, var(--font-family-sans, inherit));
   font-size: var(--flowchat-font-size-base);
+  line-height: var(--flowchat-text-line-height, 1.58);
 }
 
 .modern-flowchat-container {
@@ -38,7 +39,7 @@
   
   &__input {
     flex-shrink: 0;
-    padding: 1rem;
+    padding: var(--flowchat-card-expanded-pad-x, 0.625rem);
     background: var(--color-surface, #1e1e1e);
     border-top: 1px solid var(--color-border, #3a3a3a);
   }
@@ -52,8 +53,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  padding: 32px;
+  gap: var(--flowchat-control-gap, 0.5rem);
+  padding: var(--size-gap-8, 32px);
   color: var(--color-text-secondary);
   text-align: center;
 }
@@ -88,15 +89,15 @@
 .history-session-placeholder__title {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: 16px;
+  font-size: var(--flowchat-font-size-xl);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: var(--flowchat-support-line-height, 1.45);
 }
 
 .history-session-placeholder__description {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--flowchat-font-size-sm);
+  line-height: var(--flowchat-support-line-height, 1.45);
 }
 
 .history-session-placeholder__retry {
@@ -104,14 +105,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 0 12px;
+  gap: var(--flowchat-inline-gap, 0.35rem);
+  padding: 0 var(--size-gap-3, 12px);
   border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
   border-radius: 6px;
   color: var(--color-text-primary);
   background: var(--color-surface-hover, rgba(255, 255, 255, 0.06));
   font: inherit;
-  font-size: 13px;
+  font-size: var(--flowchat-font-size-sm);
   cursor: pointer;
 }
 

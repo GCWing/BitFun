@@ -230,13 +230,11 @@ mod tests {
             vault.load("ssh-root@example.com").await.unwrap().as_deref(),
             Some("secret")
         );
-        assert!(
-            vault
-                .load("ssh-root@example.com:22")
-                .await
-                .unwrap()
-                .is_none()
-        );
+        assert!(vault
+            .load("ssh-root@example.com:22")
+            .await
+            .unwrap()
+            .is_none());
 
         let _ = tokio::fs::remove_dir_all(&dir).await;
     }

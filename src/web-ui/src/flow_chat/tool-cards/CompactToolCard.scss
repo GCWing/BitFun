@@ -14,7 +14,7 @@
   width: 100%;
   box-sizing: border-box;
   font-size: var(--flowchat-font-size-base);
-  line-height: 1.65;
+  line-height: var(--flowchat-support-line-height, 1.45);
 }
 
 .compact-tool-card-wrapper--dense-command {
@@ -67,20 +67,20 @@
 .flowchat-tool-wrapper {
   margin: 0 0 0.35rem 0;
   font-size: var(--flowchat-font-size-base);
-  line-height: 1.65;
+  line-height: var(--flowchat-support-line-height, 1.45);
 }
 
 .flow-tool-card-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--flowchat-inline-gap, 0.35rem);
 }
 
 .flow-tool-card-note {
   margin-left: 1.5rem;
   color: var(--color-text-secondary);
   font-size: 0.82em;
-  line-height: 1.45;
+  line-height: var(--flowchat-support-line-height, 1.45);
   opacity: 0.84;
 }
 
@@ -322,13 +322,13 @@
   margin-bottom: 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
 }
 
 .compact-detail-inline-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
   white-space: nowrap;
 }
 
@@ -370,7 +370,7 @@
   align-items: center;
   gap: 6px;
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 600;
   cursor: pointer;
   margin-bottom: 4px;
@@ -395,15 +395,15 @@
 
 .compact-expanded-result-snippet {
   color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 1.65;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  line-height: var(--flowchat-text-line-height, 1.58);
   margin-bottom: 4px;
   padding-left: 18px;
 }
 
 .compact-expanded-result-url {
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
   font-family: var(--tool-card-font-mono);
   padding-left: 18px;
   overflow: hidden;
@@ -421,8 +421,8 @@
     padding: 10px;
     color: var(--color-text-primary);
     font-family: var(--tool-card-font-mono);
-    font-size: 11px;
-    line-height: 1.65;
+    font-size: var(--flowchat-font-size-xs);
+    line-height: var(--flowchat-text-line-height, 1.58);
     white-space: pre-wrap;
     word-break: break-word;
     overflow-x: auto;
@@ -452,4 +452,3 @@
     opacity: 0.25;
   }
 }
-

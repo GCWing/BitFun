@@ -239,7 +239,6 @@ impl ToolRegistry {
         );
         self.inner.get_all_tools()
     }
-
 }
 
 #[async_trait::async_trait]

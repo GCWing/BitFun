@@ -72,7 +72,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   color: var(--color-text-secondary);
 }
 
@@ -99,7 +99,7 @@
   padding: 8px 12px;
   border: none;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -214,7 +214,7 @@
   transition: all 0.2s ease;
   white-space: nowrap;
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   border: 1px solid transparent;
 }
 
@@ -231,11 +231,11 @@
 
 .file-tab .file-name {
   font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
 }
 
 .file-tab .file-status {
-  font-size: 10px;
+  font-size: var(--flowchat-font-size-xxs);
 }
 
 .file-tab .file-status[data-status="pending"] {
@@ -299,7 +299,7 @@
 }
 
 .file-details .file-path-full {
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
   color: rgba(255, 255, 255, 0.5);
   font-family: 'Monaco', 'Menlo', monospace;
   overflow: hidden;
@@ -321,7 +321,7 @@
   padding: 6px 10px;
   border: none;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -430,12 +430,12 @@
   }
 
   .session-stats {
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   }
 
   .header-btn {
     padding: 6px 8px;
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   }
 
   .file-navigation {
@@ -447,11 +447,11 @@
   }
 
   .file-details .file-name {
-    font-size: 13px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   }
 
   .file-details .file-path-full {
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
   }
 
   /* Hide file status text on small screens */
@@ -500,7 +500,7 @@
   color: #7096c4;
   padding: 2px 6px;
   border-radius: 10px;
-  font-size: 10px;
+  font-size: var(--flowchat-font-size-xxs);
   font-weight: 600;
   border: 1px solid rgba(112, 150, 196, 0.3);
 }

@@ -298,14 +298,26 @@ impl SkillSelectorState {
         match self.screen {
             SkillSelectorScreen::Menu => vec![
                 ListItem::new(Line::from(vec![
-                    Span::styled("List skills", theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "List skills",
+                        theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("  "),
-                    Span::styled("Show skills available to the current mode", theme.style(StyleKind::Muted)),
+                    Span::styled(
+                        "Show skills available to the current mode",
+                        theme.style(StyleKind::Muted),
+                    ),
                 ])),
                 ListItem::new(Line::from(vec![
-                    Span::styled("Enable/disable skills", theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "Enable/disable skills",
+                        theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("  "),
-                    Span::styled("Toggle all discovered skills for this mode", theme.style(StyleKind::Muted)),
+                    Span::styled(
+                        "Toggle all discovered skills for this mode",
+                        theme.style(StyleKind::Muted),
+                    ),
                 ])),
             ],
             SkillSelectorScreen::List => self
@@ -360,7 +372,10 @@ impl SkillSelectorState {
         spans.push(Span::styled(format!("[{}] ", level_marker), level_style));
         spans.push(Span::styled(skill.name.clone(), name_style));
         if !status.is_empty() {
-            spans.push(Span::styled(status.to_string(), theme.style(StyleKind::Muted)));
+            spans.push(Span::styled(
+                status.to_string(),
+                theme.style(StyleKind::Muted),
+            ));
         }
         spans.push(Span::raw("  "));
         spans.push(Span::styled(skill.description.clone(), desc_style));

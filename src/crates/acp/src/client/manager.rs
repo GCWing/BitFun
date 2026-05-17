@@ -572,29 +572,30 @@ impl AcpClientService {
             connection_for_task.sessions.clear();
         });
 
-        let (cx, agent_capabilities) =
-            match tokio::time::timeout(CLIENT_STARTUP_TIMEOUT, cx_rx).await {
-                Ok(Ok(result)) => result,
-                Ok(Err(_)) => {
-                    connect_task.abort();
-                    self.cleanup_failed_startup(connection_id).await;
-                    return Err(BitFunError::service(format!(
-                        "ACP client '{}' exited before initialization completed",
-                        client_id
-                    )));
-                }
-                Err(_) => {
-                    warn!(
+        let (cx, agent_capabilities) = match tokio::time::timeout(CLIENT_STARTUP_TIMEOUT, cx_rx)
+            .await
+        {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => {
+                connect_task.abort();
+                self.cleanup_failed_startup(connection_id).await;
+                return Err(BitFunError::service(format!(
+                    "ACP client '{}' exited before initialization completed",
+                    client_id
+                )));
+            }
+            Err(_) => {
+                warn!(
                         "ACP client startup timed out during initialize: id={} connection_id={} timeout_secs={}",
                         client_id,
                         connection_id,
                         CLIENT_STARTUP_TIMEOUT_SECS
                     );
-                    connect_task.abort();
-                    self.cleanup_failed_startup(connection_id).await;
-                    return Err(startup_timeout_error(client_id, "initialize"));
-                }
-            };
+                connect_task.abort();
+                self.cleanup_failed_startup(connection_id).await;
+                return Err(startup_timeout_error(client_id, "initialize"));
+            }
+        };
         *connection.connection.write().await = Some(cx);
         *connection.agent_capabilities.write().await = Some(agent_capabilities);
         *connection.status.write().await = AcpClientStatus::Running;
@@ -1307,10 +1308,7 @@ impl AcpClientService {
             Err(_) => {
                 warn!(
                     "ACP client startup timed out: id={} connection_id={} phase={} timeout_secs={}",
-                    client.client_id,
-                    client.id,
-                    phase,
-                    CLIENT_STARTUP_TIMEOUT_SECS
+                    client.client_id, client.id, phase, CLIENT_STARTUP_TIMEOUT_SECS
                 );
                 self.cleanup_failed_startup(&client.id).await;
                 Err(agent_client_protocol::util::internal_error(
@@ -1979,9 +1977,7 @@ fn startup_timeout_error_message(client_id: &str, phase: &str) -> String {
 }
 
 fn is_startup_timeout_error(error: &BitFunError) -> bool {
-    error
-        .to_string()
-        .contains(STARTUP_TIMEOUT_ERROR_PREFIX)
+    error.to_string().contains(STARTUP_TIMEOUT_ERROR_PREFIX)
 }
 
 fn select_permission_by_kind(

@@ -22,7 +22,7 @@
     }
 
     .turn-count {
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       color: #6b7280;
       background: #f3f4f6;
       padding: 4px 8px;
@@ -75,7 +75,7 @@
       border-radius: 4px;
 
       .files-label {
-        font-size: 12px;
+        font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
         color: #6b7280;
         font-weight: 500;
         display: block;
@@ -87,14 +87,14 @@
         padding-left: 16px;
 
         .file-item {
-          font-size: 12px;
+          font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
           color: #374151;
           margin: 2px 0;
           font-family: 'Monaco', 'Consolas', monospace;
         }
 
         .file-item-more {
-          font-size: 12px;
+          font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
           color: #6b7280;
           font-style: italic;
           list-style: none;
@@ -104,7 +104,7 @@
     }
 
     .turn-item-time {
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
       color: #9ca3af;
       margin-top: 8px;
     }
@@ -128,7 +128,7 @@
     font-size: 14px;
 
     &.hint {
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       color: #9ca3af;
     }
   }

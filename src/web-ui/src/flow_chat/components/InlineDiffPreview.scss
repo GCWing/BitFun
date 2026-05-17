@@ -10,7 +10,7 @@
   width: 100%;
   background: transparent;
   font-family: var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace);
-  font-size: 12px;
+  font-size: var(--flowchat-font-size-sm);
   font-weight: 400;
   
   &__content {
@@ -43,7 +43,7 @@
     justify-content: center;
     min-height: 60px;
     color: var(--color-text-muted, #888);
-    font-size: 12px;
+    font-size: var(--flowchat-font-size-sm);
     font-style: italic;
   }
   
@@ -57,7 +57,7 @@
   display: flex;
   align-items: stretch;
   min-height: 22px;
-  line-height: 1.6;
+  line-height: var(--flowchat-code-line-height, 1.52);
   cursor: pointer;
   transition: background-color 0.15s ease;
   
@@ -115,7 +115,7 @@
   &--separator {
     background: var(--color-bg-tertiary, rgba(255, 255, 255, 0.02));
     justify-content: center;
-    padding: 4px 0;
+    padding: var(--flowchat-inline-gap, 0.35rem) 0;
     cursor: default;
     
     &:hover {
@@ -128,7 +128,7 @@
     
     .diff-line__content--separator {
       color: var(--color-text-muted, #888);
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
       font-style: italic;
       text-align: center;
     }
@@ -139,7 +139,7 @@
     align-items: center;
     flex-shrink: 0;
     padding: 0 8px;
-    gap: 2px;
+    gap: 0.125rem;
     background: var(--color-bg-secondary, rgba(255, 255, 255, 0.03));
     user-select: none;
     border-right: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.05));
@@ -161,7 +161,7 @@
     text-align: right;
     color: var(--color-text-muted, #666);
     opacity: 0.6;
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
 
     &--original {
       border-right: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));

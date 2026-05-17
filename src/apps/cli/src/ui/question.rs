@@ -7,7 +7,6 @@
 /// - Multiple questions: Tab/Shift+Tab to switch, Confirm page at the end
 /// - Custom "Other" input: type your own answer
 /// - Number shortcuts: 1-9 to quick-pick
-
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -17,7 +16,7 @@ use ratatui::{
     Frame,
 };
 
-use super::theme::{Theme, StyleKind};
+use super::theme::{StyleKind, Theme};
 
 // ============ Data Types ============
 
@@ -72,21 +71,35 @@ impl QuestionPrompt {
         let mut questions = Vec::new();
 
         for q in questions_val {
-            let question = q.get("question").and_then(|v| v.as_str())
-                .unwrap_or("").to_string();
-            let header = q.get("header").and_then(|v| v.as_str())
-                .unwrap_or("").to_string();
-            let multi_select = q.get("multiSelect").and_then(|v| v.as_bool())
+            let question = q
+                .get("question")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let header = q
+                .get("header")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let multi_select = q
+                .get("multiSelect")
+                .and_then(|v| v.as_bool())
                 .or_else(|| q.get("multi_select").and_then(|v| v.as_bool()))
                 .unwrap_or(false);
 
             let mut options = Vec::new();
             if let Some(opts) = q.get("options").and_then(|v| v.as_array()) {
                 for opt in opts {
-                    let label = opt.get("label").and_then(|v| v.as_str())
-                        .unwrap_or("").to_string();
-                    let description = opt.get("description").and_then(|v| v.as_str())
-                        .unwrap_or("").to_string();
+                    let label = opt
+                        .get("label")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let description = opt
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
                     options.push(QuestionOption { label, description });
                 }
             }
@@ -164,19 +177,25 @@ impl QuestionPrompt {
             let q = &self.questions[i];
             // Replace "Other" with actual custom input
             let custom = &self.custom_inputs[i];
-            let processed: Vec<String> = answer_list.iter().map(|a| {
-                if a == "Other" && !custom.is_empty() {
-                    custom.clone()
-                } else {
-                    a.clone()
-                }
-            }).collect();
+            let processed: Vec<String> = answer_list
+                .iter()
+                .map(|a| {
+                    if a == "Other" && !custom.is_empty() {
+                        custom.clone()
+                    } else {
+                        a.clone()
+                    }
+                })
+                .collect();
 
             if q.multi_select {
                 map.insert(
                     i.to_string(),
                     serde_json::Value::Array(
-                        processed.into_iter().map(serde_json::Value::String).collect(),
+                        processed
+                            .into_iter()
+                            .map(serde_json::Value::String)
+                            .collect(),
                     ),
                 );
             } else {
@@ -272,12 +291,8 @@ impl QuestionPrompt {
     /// Handle keys on the confirm/review page
     fn handle_confirm_key(&mut self, key: KeyEvent) -> QuestionAction {
         match (key.code, key.modifiers) {
-            (KeyCode::Enter, _) => {
-                QuestionAction::Submit(self.build_answers_payload())
-            }
-            (KeyCode::Esc, _) => {
-                QuestionAction::Reject
-            }
+            (KeyCode::Enter, _) => QuestionAction::Submit(self.build_answers_payload()),
+            (KeyCode::Esc, _) => QuestionAction::Reject,
             // Navigate back to questions
             (KeyCode::Left, _) | (KeyCode::Char('h'), KeyModifiers::NONE) => {
                 self.current_tab = self.questions.len().saturating_sub(1);
@@ -353,9 +368,7 @@ impl QuestionPrompt {
             }
 
             // Select / toggle
-            (KeyCode::Enter, _) => {
-                self.select_current_option()
-            }
+            (KeyCode::Enter, _) => self.select_current_option(),
 
             // Number shortcuts (1-9)
             (KeyCode::Char(c), KeyModifiers::NONE) if c.is_ascii_digit() && c != '0' => {
@@ -432,12 +445,7 @@ pub fn render_question_overlay(
 }
 
 /// Render a single question page with options
-fn render_question_page(
-    frame: &mut Frame,
-    prompt: &QuestionPrompt,
-    theme: &Theme,
-    area: Rect,
-) {
+fn render_question_page(frame: &mut Frame, prompt: &QuestionPrompt, theme: &Theme, area: Rect) {
     let q = match prompt.current_question() {
         Some(q) => q,
         None => return,
@@ -445,7 +453,9 @@ fn render_question_page(
 
     // Calculate overlay height: header(1) + question(2) + options + other + hint(2) + padding
     let options_count = q.options.len() + 1; // +1 for "Other"
-    let description_lines: usize = q.options.iter()
+    let description_lines: usize = q
+        .options
+        .iter()
         .map(|o| if o.description.is_empty() { 0 } else { 1 })
         .sum();
     let tab_line = if prompt.tab_count() > 1 { 2 } else { 0 };
@@ -501,9 +511,11 @@ fn render_question_page(
             } else {
                 tab_spans.push(Span::styled(
                     format!(" {} ", qd.header),
-                    Style::default().fg(
-                        if is_answered { theme.success } else { theme.muted }
-                    ),
+                    Style::default().fg(if is_answered {
+                        theme.success
+                    } else {
+                        theme.muted
+                    }),
                 ));
             }
         }
@@ -526,7 +538,11 @@ fn render_question_page(
     }
 
     // Question text
-    let multi_hint = if q.multi_select { " (select all that apply)" } else { "" };
+    let multi_hint = if q.multi_select {
+        " (select all that apply)"
+    } else {
+        ""
+    };
     lines.push(Line::from(Span::styled(
         format!("{}{}", q.question, multi_hint),
         Style::default().add_modifier(Modifier::BOLD),
@@ -553,9 +569,17 @@ fn render_question_page(
         };
 
         let marker = if q.multi_select {
-            if is_picked { "[\u{2713}]" } else { "[ ]" }
+            if is_picked {
+                "[\u{2713}]"
+            } else {
+                "[ ]"
+            }
         } else {
-            if is_picked { "(\u{2022})" } else { "( )" }
+            if is_picked {
+                "(\u{2022})"
+            } else {
+                "( )"
+            }
         };
 
         lines.push(Line::from(vec![
@@ -592,15 +616,27 @@ fn render_question_page(
     };
 
     let other_marker = if q.multi_select {
-        if is_other_picked { "[\u{2713}]" } else { "[ ]" }
+        if is_other_picked {
+            "[\u{2713}]"
+        } else {
+            "[ ]"
+        }
     } else {
-        if is_other_picked { "(\u{2022})" } else { "( )" }
+        if is_other_picked {
+            "(\u{2022})"
+        } else {
+            "( )"
+        }
     };
 
     lines.push(Line::from(vec![
         Span::styled(
             format!("{}. ", other_idx + 1),
-            if is_other_active { theme.style(StyleKind::Primary) } else { theme.style(StyleKind::Muted) },
+            if is_other_active {
+                theme.style(StyleKind::Primary)
+            } else {
+                theme.style(StyleKind::Muted)
+            },
         ),
         Span::styled(format!("{} ", other_marker), other_style),
         Span::styled("Type your own answer", other_style),
@@ -639,15 +675,11 @@ fn render_question_page(
 }
 
 /// Render the confirm/review page (multi-question)
-fn render_confirm_page(
-    frame: &mut Frame,
-    prompt: &QuestionPrompt,
-    theme: &Theme,
-    area: Rect,
-) {
+fn render_confirm_page(frame: &mut Frame, prompt: &QuestionPrompt, theme: &Theme, area: Rect) {
     let content_height = 3 + prompt.questions.len(); // title + blank + questions + padding
     let tab_line = 2;
-    let overlay_height = ((content_height + tab_line) as u16 + 4).min(area.height.saturating_sub(2));
+    let overlay_height =
+        ((content_height + tab_line) as u16 + 4).min(area.height.saturating_sub(2));
 
     let overlay_area = Rect {
         x: area.x,
@@ -660,10 +692,7 @@ fn render_confirm_page(
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(3),
-            Constraint::Length(2),
-        ])
+        .constraints([Constraint::Min(3), Constraint::Length(2)])
         .split(overlay_area);
 
     let content_block = Block::default()
@@ -685,7 +714,11 @@ fn render_confirm_page(
         let is_answered = !prompt.answers[i].is_empty();
         tab_spans.push(Span::styled(
             format!(" {} ", qd.header),
-            Style::default().fg(if is_answered { theme.success } else { theme.muted }),
+            Style::default().fg(if is_answered {
+                theme.success
+            } else {
+                theme.muted
+            }),
         ));
     }
     tab_spans.push(Span::raw("  "));
@@ -711,13 +744,16 @@ fn render_confirm_page(
         let answer_list = &prompt.answers[i];
         let custom = &prompt.custom_inputs[i];
 
-        let display_answers: Vec<String> = answer_list.iter().map(|a| {
-            if a == "Other" && !custom.is_empty() {
-                custom.clone()
-            } else {
-                a.clone()
-            }
-        }).collect();
+        let display_answers: Vec<String> = answer_list
+            .iter()
+            .map(|a| {
+                if a == "Other" && !custom.is_empty() {
+                    custom.clone()
+                } else {
+                    a.clone()
+                }
+            })
+            .collect();
 
         let answered = !display_answers.is_empty();
         let value_text = if answered {
@@ -730,7 +766,11 @@ fn render_confirm_page(
             Span::styled(format!("{}: ", q.header), theme.style(StyleKind::Muted)),
             Span::styled(
                 value_text,
-                if answered { Style::default() } else { theme.style(StyleKind::Error) },
+                if answered {
+                    Style::default()
+                } else {
+                    theme.style(StyleKind::Error)
+                },
             ),
         ]));
     }
@@ -739,8 +779,7 @@ fn render_confirm_page(
     frame.render_widget(paragraph, inner);
 
     // Hint bar
-    let hint_block = Block::default()
-        .style(Style::default().bg(theme.background_element));
+    let hint_block = Block::default().style(Style::default().bg(theme.background_element));
     frame.render_widget(hint_block, chunks[1]);
 
     let hint = Paragraph::new(Line::from(vec![
@@ -757,14 +796,8 @@ fn render_confirm_page(
 }
 
 /// Render the hint bar for question pages
-fn render_question_hint_bar(
-    frame: &mut Frame,
-    area: Rect,
-    theme: &Theme,
-    prompt: &QuestionPrompt,
-) {
-    let hint_block = Block::default()
-        .style(Style::default().bg(theme.background_element));
+fn render_question_hint_bar(frame: &mut Frame, area: Rect, theme: &Theme, prompt: &QuestionPrompt) {
+    let hint_block = Block::default().style(Style::default().bg(theme.background_element));
     frame.render_widget(hint_block, area);
 
     let mut spans = vec![Span::raw(" ")];
@@ -800,7 +833,6 @@ fn render_question_hint_bar(
     }
 
     let line = Line::from(spans);
-    let paragraph = Paragraph::new(line)
-        .style(Style::default().bg(theme.background_element));
+    let paragraph = Paragraph::new(line).style(Style::default().bg(theme.background_element));
     frame.render_widget(paragraph, area);
 }

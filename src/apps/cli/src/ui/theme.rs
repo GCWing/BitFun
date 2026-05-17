@@ -1,5 +1,4 @@
 /// Theme and style definitions
-
 use std::collections::{HashMap, HashSet};
 use std::io::IsTerminal;
 use std::path::Path;
@@ -95,7 +94,9 @@ fn terminal_supports_truecolor() -> bool {
         return false;
     }
 
-    let term = std::env::var("TERM").unwrap_or_default().to_ascii_lowercase();
+    let term = std::env::var("TERM")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     if term.is_empty() || term == "dumb" {
         return false;
     }
@@ -107,7 +108,9 @@ fn terminal_supports_truecolor() -> bool {
         return false;
     }
 
-    let colorterm = std::env::var("COLORTERM").unwrap_or_default().to_ascii_lowercase();
+    let colorterm = std::env::var("COLORTERM")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     if colorterm.contains("truecolor") || colorterm.contains("24bit") {
         return true;
     }
@@ -134,7 +137,9 @@ fn terminal_supports_truecolor() -> bool {
 pub fn resolve_appearance(preference: &str) -> Appearance {
     match preference.trim().to_ascii_lowercase().as_str() {
         "light" => Appearance::Light,
-        "auto" => detect_terminal_appearance(Duration::from_millis(250)).unwrap_or(Appearance::Dark),
+        "auto" => {
+            detect_terminal_appearance(Duration::from_millis(250)).unwrap_or(Appearance::Dark)
+        }
         _ => Appearance::Dark,
     }
 }
@@ -208,7 +213,11 @@ fn detect_terminal_appearance(timeout: Duration) -> Option<Appearance> {
 
         let (r, g, b) = parse_osc_color(color)?;
         let lum = (0.299 * r as f64 + 0.587 * g as f64 + 0.114 * b as f64) / 255.0;
-        Some(if lum > 0.5 { Appearance::Light } else { Appearance::Dark })
+        Some(if lum > 0.5 {
+            Appearance::Light
+        } else {
+            Appearance::Dark
+        })
     }
 
     #[cfg(not(unix))]
@@ -255,14 +264,14 @@ fn parse_osc_color(s: &str) -> Option<(u8, u8, u8)> {
 impl Theme {
     pub fn dark() -> Self {
         Self {
-            primary: Color::Rgb(59, 130, 246),    // blue
-            success: Color::Rgb(34, 197, 94),     // green
-            warning: Color::Rgb(251, 191, 36),    // yellow
-            error: Color::Rgb(239, 68, 68),       // red
-            info: Color::Rgb(147, 197, 253),      // light blue
-            muted: Color::Rgb(156, 163, 175),     // gray
-            background: Color::Rgb(17, 24, 39),   // dark gray background
-            border: Color::Rgb(55, 65, 81),       // border gray
+            primary: Color::Rgb(59, 130, 246),  // blue
+            success: Color::Rgb(34, 197, 94),   // green
+            warning: Color::Rgb(251, 191, 36),  // yellow
+            error: Color::Rgb(239, 68, 68),     // red
+            info: Color::Rgb(147, 197, 253),    // light blue
+            muted: Color::Rgb(156, 163, 175),   // gray
+            background: Color::Rgb(17, 24, 39), // dark gray background
+            border: Color::Rgb(55, 65, 81),     // border gray
 
             background_panel: Color::Rgb(30, 38, 55),
             background_element: Color::Rgb(40, 50, 70),
@@ -467,8 +476,12 @@ impl Theme {
             muted: resolved.muted.unwrap_or(fallback.muted),
             background: resolved.background.unwrap_or(fallback.background),
             border: resolved.border.unwrap_or(fallback.border),
-            background_panel: resolved.background_panel.unwrap_or(fallback.background_panel),
-            background_element: resolved.background_element.unwrap_or(fallback.background_element),
+            background_panel: resolved
+                .background_panel
+                .unwrap_or(fallback.background_panel),
+            background_element: resolved
+                .background_element
+                .unwrap_or(fallback.background_element),
             input_background: resolved.input_background.unwrap_or(
                 resolved
                     .background_element
@@ -480,11 +493,17 @@ impl Theme {
             diff_removed_bg: resolved.diff_removed_bg.unwrap_or(fallback.diff_removed_bg),
             block_bg: resolved.block_bg.unwrap_or(fallback.block_bg),
             block_bg_hover: resolved.block_bg_hover.unwrap_or(fallback.block_bg_hover),
-            block_border_active: resolved.block_border_active.unwrap_or(fallback.block_border_active),
+            block_border_active: resolved
+                .block_border_active
+                .unwrap_or(fallback.block_border_active),
             inline_icon: resolved.inline_icon.unwrap_or(fallback.inline_icon),
             command_text: resolved.command_text.unwrap_or(fallback.command_text),
-            diff_hunk_header: resolved.diff_hunk_header.unwrap_or(fallback.diff_hunk_header),
-            diff_line_number: resolved.diff_line_number.unwrap_or(fallback.diff_line_number),
+            diff_hunk_header: resolved
+                .diff_hunk_header
+                .unwrap_or(fallback.diff_hunk_header),
+            diff_line_number: resolved
+                .diff_line_number
+                .unwrap_or(fallback.diff_line_number),
         })
     }
 
@@ -500,8 +519,12 @@ impl Theme {
                 .fg(self.primary)
                 .add_modifier(Modifier::BOLD),
             StyleKind::Border => Style::default().fg(self.border),
-            StyleKind::DiffAdded => Style::default().fg(self.diff_added_fg).bg(self.diff_added_bg),
-            StyleKind::DiffRemoved => Style::default().fg(self.diff_removed_fg).bg(self.diff_removed_bg),
+            StyleKind::DiffAdded => Style::default()
+                .fg(self.diff_added_fg)
+                .bg(self.diff_added_bg),
+            StyleKind::DiffRemoved => Style::default()
+                .fg(self.diff_removed_fg)
+                .bg(self.diff_removed_bg),
             StyleKind::BackgroundPanel => Style::default().bg(self.background_panel),
             StyleKind::BackgroundElement => Style::default().bg(self.background_element),
             StyleKind::BlockBackground => Style::default().bg(self.block_bg),
@@ -522,9 +545,12 @@ impl Theme {
 fn readable_foreground_for(background: Color) -> Color {
     match background {
         Color::Reset => Color::Reset,
-        Color::Black | Color::Red | Color::Green | Color::Blue | Color::Magenta | Color::DarkGray => {
-            Color::White
-        }
+        Color::Black
+        | Color::Red
+        | Color::Green
+        | Color::Blue
+        | Color::Magenta
+        | Color::DarkGray => Color::White,
         Color::Yellow
         | Color::Gray
         | Color::LightRed
@@ -538,7 +564,11 @@ fn readable_foreground_for(background: Color) -> Color {
         Color::Indexed(idx) => readable_foreground_for(idx_to_ansi16(idx)),
         Color::Rgb(r, g, b) => {
             let lum = relative_luminance(r, g, b);
-            if lum > 0.36 { Color::Black } else { Color::White }
+            if lum > 0.36 {
+                Color::Black
+            } else {
+                Color::White
+            }
         }
     }
 }
@@ -671,30 +701,30 @@ pub enum StyleKind {
 pub fn tool_icon(tool_name: &str) -> &'static str {
     match tool_name {
         "Bash" | "bash_tool" | "run_terminal_cmd" => "$",
-        "Read" | "read_file" | "read_file_tool" => "\u{2192}",  // →
+        "Read" | "read_file" | "read_file_tool" => "\u{2192}", // →
         "Write" | "write_file" | "write_file_tool" => "\u{2190}", // ←
-        "Edit" | "search_replace" => "\u{2190}",                  // ←
-        "Delete" => "\u{00d7}",                                    // ×
-        "Grep" | "grep" => "\u{2731}",                             // ✱
-        "Glob" | "codebase_search" => "\u{2731}",                  // ✱
-        "LS" | "list_dir" | "ls" => "\u{2192}",                   // →
+        "Edit" | "search_replace" => "\u{2190}",               // ←
+        "Delete" => "\u{00d7}",                                // ×
+        "Grep" | "grep" => "\u{2731}",                         // ✱
+        "Glob" | "codebase_search" => "\u{2731}",              // ✱
+        "LS" | "list_dir" | "ls" => "\u{2192}",                // →
         "WebFetch" => "%",
-        "WebSearch" => "\u{25c8}",                                 // ◈
+        "WebSearch" => "\u{25c8}", // ◈
         "Task" => "#",
         "HmosCompilation" => "\u{2692}",
-        "TodoWrite" => "\u{2699}",                                 // ⚙
-        "Skill" => "\u{2192}",                                    // →
-        "Git" => "\u{2387}",                                       // ⎇
+        "TodoWrite" => "\u{2699}", // ⚙
+        "Skill" => "\u{2192}",     // →
+        "Git" => "\u{2387}",       // ⎇
         "AskUserQuestion" => "?",
-        "CreatePlan" => "\u{25b6}",                                // ▶
-        "ReadLints" => "\u{25b3}",                                 // △
-        "GetFileDiff" => "\u{00b1}",                               // ±
-        "IdeControl" => "\u{2318}",                                // ⌘
-        "MermaidInteractive" => "\u{25c7}",                        // ◇
-        "ContextCompression" => "\u{21af}",                        // ↯
-        "AnalyzeImage" => "\u{25a3}",                              // ▣
-        _ if tool_name.starts_with("mcp_") => "\u{2261}",         // ≡
-        _ => "\u{00b7}",                                           // ·
+        "CreatePlan" => "\u{25b6}",                       // ▶
+        "ReadLints" => "\u{25b3}",                        // △
+        "GetFileDiff" => "\u{00b1}",                      // ±
+        "IdeControl" => "\u{2318}",                       // ⌘
+        "MermaidInteractive" => "\u{25c7}",               // ◇
+        "ContextCompression" => "\u{21af}",               // ↯
+        "AnalyzeImage" => "\u{25a3}",                     // ▣
+        _ if tool_name.starts_with("mcp_") => "\u{2261}", // ≡
+        _ => "\u{00b7}",                                  // ·
     }
 }
 
@@ -729,7 +759,7 @@ pub fn load_opencode_theme_json(path: &Path) -> anyhow::Result<OpencodeThemeJson
 }
 
 static BUILTIN_OPENCODE_THEMES: Lazy<HashMap<&'static str, OpencodeThemeJson>> = Lazy::new(|| {
-    fn parse(id: &'static str, raw: &'static str) -> ( &'static str, OpencodeThemeJson) {
+    fn parse(id: &'static str, raw: &'static str) -> (&'static str, OpencodeThemeJson) {
         let json = serde_json::from_str::<OpencodeThemeJson>(raw)
             .unwrap_or_else(|e| panic!("Failed to parse built-in theme {}: {}", id, e));
         (id, json)
@@ -782,7 +812,10 @@ static BUILTIN_OPENCODE_THEMES: Lazy<HashMap<&'static str, OpencodeThemeJson>> =
 });
 
 pub fn builtin_theme_ids() -> Vec<String> {
-    let mut ids: Vec<String> = BUILTIN_OPENCODE_THEMES.keys().map(|k| (*k).to_string()).collect();
+    let mut ids: Vec<String> = BUILTIN_OPENCODE_THEMES
+        .keys()
+        .map(|k| (*k).to_string())
+        .collect();
     ids.sort_by(|a, b| a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()));
     ids
 }
@@ -817,8 +850,15 @@ struct ResolvedTokens {
     diff_line_number: Option<Color>,
 }
 
-fn resolve_opencode_theme(json: &OpencodeThemeJson, appearance: Appearance) -> anyhow::Result<ResolvedTokens> {
-    let mode = if appearance.is_light() { "light" } else { "dark" };
+fn resolve_opencode_theme(
+    json: &OpencodeThemeJson,
+    appearance: Appearance,
+) -> anyhow::Result<ResolvedTokens> {
+    let mode = if appearance.is_light() {
+        "light"
+    } else {
+        "dark"
+    };
     let defs = json.defs.clone().unwrap_or_default();
 
     let mut tokens = ResolvedTokens::default();

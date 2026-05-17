@@ -3,7 +3,6 @@
 /// Wraps interaction with bitfun-core's Agentic system.
 /// The Agent trait provides a thin adapter over ConversationCoordinator.
 /// Event consumption is done externally (in the chat/exec mode main loops).
-
 pub mod agentic_system;
 pub mod core_adapter;
 
@@ -31,7 +30,11 @@ pub trait Agent: Send + Sync {
     async fn restore_session(&self, session_id: &str) -> Result<()>;
 
     /// Confirm tool execution (allow once)
-    async fn confirm_tool(&self, tool_id: &str, updated_input: Option<serde_json::Value>) -> Result<()>;
+    async fn confirm_tool(
+        &self,
+        tool_id: &str,
+        updated_input: Option<serde_json::Value>,
+    ) -> Result<()>;
 
     /// Reject tool execution
     async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<()>;
