@@ -46,7 +46,6 @@ import { EditorStatusBar } from './EditorStatusBar';
 const log = createLogger('CodeEditor');
 import {
   GoToLinePopover,
-  IndentPopover,
   EncodingPopover,
   LanguagePopover,
 } from './StatusBarPopovers';
@@ -1258,23 +1257,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     if (editor && model) performJump(editor, model, line, column);
   }, [performJump]);
 
-  const handleIndentConfirm = useCallback((tabSize: number, insertSpaces: boolean) => {
-    const merged = { tab_size: tabSize, insert_spaces: insertSpaces };
-    userIndentRef.current = merged;
-    setEditorConfig((prev) => ({ ...prev, ...merged }));
-    const editor = editorRef.current;
-    if (editor) {
-      editor.updateOptions({ tabSize, insertSpaces });
-    }
-    // Async persistence, don't block UI update, don't trigger applyConfig override
-    configManager.getConfig<EditorConfigType>('editor').then((config) => {
-      const fullMerged = { ...(config || {}), ...merged };
-      return configManager.setConfig('editor', fullMerged);
-    }).catch((err) => {
-      log.warn('Failed to persist indent config', err);
-    });
-  }, []);
-
   const fetchFileMetadata = useCallback(async () => {
     const { workspaceAPI } = await import('@/infrastructure/api');
     return workspaceAPI.getFileMetadata(filePath);
@@ -2154,8 +2136,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         selectedLines={selection.lines}
         language={detectedLanguage}
         encoding={encoding}
-        tabSize={editorConfig.tab_size || 2}
-        insertSpaces={editorConfig.insert_spaces !== false}
         isReadOnly={readOnly}
         lspStatus={
           enableLsp && lspExtensionRegistry.isFileSupported(filePath)
@@ -2163,7 +2143,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
             : undefined
         }
         onPositionClick={(e) => openStatusBarPopover('position', e)}
-        onIndentClick={(e) => openStatusBarPopover('indent', e)}
         onEncodingClick={(e) => openStatusBarPopover('encoding', e)}
         onLanguageClick={(e) => openStatusBarPopover('language', e)}
       />
@@ -2174,15 +2153,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           currentLine={cursorPosition.line}
           currentColumn={cursorPosition.column}
           onConfirm={handleGoToLineConfirm}
-          onClose={closeStatusBarPopover}
-        />
-      )}
-      {statusBarPopover === 'indent' && statusBarAnchorRect && (
-        <IndentPopover
-          anchorRect={statusBarAnchorRect}
-          currentTabSize={editorConfig.tab_size || 2}
-          currentInsertSpaces={editorConfig.insert_spaces !== false}
-          onConfirm={handleIndentConfirm}
           onClose={closeStatusBarPopover}
         />
       )}
