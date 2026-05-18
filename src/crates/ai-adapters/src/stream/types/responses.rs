@@ -62,6 +62,7 @@ impl From<ResponsesUsage> for UnifiedTokenUsage {
             cached_content_token_count: usage
                 .input_tokens_details
                 .map(|details| details.cached_tokens),
+            cache_creation_token_count: None,
         }
     }
 }

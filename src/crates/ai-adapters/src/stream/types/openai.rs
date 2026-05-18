@@ -27,6 +27,7 @@ impl From<OpenAIUsage> for UnifiedTokenUsage {
             cached_content_token_count: usage
                 .prompt_tokens_details
                 .and_then(|prompt_tokens_details| prompt_tokens_details.cached_tokens),
+            cache_creation_token_count: None,
         }
     }
 }

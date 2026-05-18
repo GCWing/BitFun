@@ -61,6 +61,7 @@ impl From<Usage> for UnifiedTokenUsage {
                 (None, None) => None,
                 (read, creation) => Some(read.unwrap_or(0) + creation.unwrap_or(0)),
             },
+            cache_creation_token_count: None,
         }
     }
 }

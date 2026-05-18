@@ -104,6 +104,7 @@ impl From<GeminiUsageMetadata> for UnifiedTokenUsage {
             total_token_count: usage.total_token_count,
             reasoning_token_count,
             cached_content_token_count: usage.cached_content_token_count,
+            cache_creation_token_count: None,
         }
     }
 }

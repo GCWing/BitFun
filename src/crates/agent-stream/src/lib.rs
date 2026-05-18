@@ -1071,6 +1071,7 @@ mod tests {
             total_token_count: total_tokens,
             reasoning_token_count: None,
             cached_content_token_count: None,
+            cache_creation_token_count: None,
         }
     }
 

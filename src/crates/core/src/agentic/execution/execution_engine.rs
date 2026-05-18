@@ -2600,6 +2600,7 @@ mod tests {
             total_token_count: prompt + completion,
             reasoning_token_count: None,
             cached_content_token_count: cached,
+            cache_creation_token_count: None,
         }
     }
 
