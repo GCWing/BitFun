@@ -609,6 +609,7 @@ impl StreamProcessor {
             total_token_count: response_usage.total_token_count,
             reasoning_token_count: response_usage.reasoning_token_count,
             cached_content_token_count: response_usage.cached_content_token_count,
+            cache_creation_token_count: response_usage.cache_creation_token_count,
         });
         debug!(
             "Received token usage stats: input={}, output={}, total={}",
