@@ -7,6 +7,7 @@ use crate::util::types::Message;
  *
  * Handles AI client interaction and provides intelligent analysis for commit message generation
  */
+use bitfun_product_domains::function_agents::git_func_agent::truncate_diff_for_commit_prompt;
 use log::{debug, error, warn};
 use std::sync::Arc;
 
@@ -119,9 +120,6 @@ impl AIAnalysisService {
             max_chars
         );
 
-        let mut truncated = diff.chars().take(max_chars - 100).collect::<String>();
-        truncated.push_str("\n\n... [content truncated] ...");
-
-        truncated
+        truncate_diff_for_commit_prompt(diff, max_chars)
     }
 }

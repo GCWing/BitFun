@@ -225,6 +225,17 @@ pub fn build_commit_prompt(
         .replace("{max_title_length}", &options.max_title_length.to_string())
 }
 
+pub fn truncate_diff_for_commit_prompt(diff: &str, max_chars: usize) -> String {
+    if diff.len() <= max_chars {
+        return diff.to_string();
+    }
+
+    let keep_chars = max_chars.saturating_sub(100);
+    let mut truncated = diff.chars().take(keep_chars).collect::<String>();
+    truncated.push_str("\n\n... [content truncated] ...");
+    truncated
+}
+
 pub fn parse_commit_type_label(label: &str) -> CommitType {
     match label.to_lowercase().as_str() {
         "feat" | "feature" => CommitType::Feat,

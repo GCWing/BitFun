@@ -1,23 +1,23 @@
 #![cfg(feature = "function-agents")]
 
 use bitfun_product_domains::function_agents::{
+    Language,
     git_func_agent::{
-        assemble_commit_message, build_changes_summary_from_paths, build_commit_prompt,
-        detect_change_patterns, extract_module_name, infer_file_type, parse_commit_analysis_value,
-        parse_commit_type_label, ChangePattern, CommitFormat, CommitMessageOptions, CommitType,
-        FileChange, FileChangeType, ProjectContext,
+        ChangePattern, CommitFormat, CommitMessageOptions, CommitType, FileChange, FileChangeType,
+        ProjectContext, assemble_commit_message, build_changes_summary_from_paths,
+        build_commit_prompt, detect_change_patterns, extract_module_name, infer_file_type,
+        parse_commit_analysis_value, parse_commit_type_label, truncate_diff_for_commit_prompt,
     },
     ports::{
         CommitAiAnalysisRequest, FunctionAgentAiPort, FunctionAgentFuture, FunctionAgentGitPort,
         GitCommitSnapshot, StartchatGitSnapshot, WorkStateAiAnalysisRequest,
     },
     startchat_func_agent::{
+        ActionPriority, GitWorkState, QuickActionType, TimeOfDay, WorkStateOptions,
         build_complete_analysis_prompt, combine_git_diffs, limit_quick_actions,
         normalize_predicted_actions, parse_complete_analysis_value, parse_git_status_porcelain,
         parse_predicted_actions_from_values, parse_quick_actions_from_values, time_of_day_for_hour,
-        ActionPriority, GitWorkState, QuickActionType, TimeOfDay, WorkStateOptions,
     },
-    Language,
 };
 
 struct FunctionAgentPortStub;
@@ -154,9 +154,11 @@ fn git_function_agent_summary_helpers_preserve_commit_shape() {
     assert_eq!(summary.file_changes[0].path, "src/crates/core/lib.rs");
     assert_eq!(summary.file_changes[0].file_type, "rs");
     assert!(summary.affected_modules.contains(&"core".to_string()));
-    assert!(summary
-        .change_patterns
-        .contains(&ChangePattern::DocumentationUpdate));
+    assert!(
+        summary
+            .change_patterns
+            .contains(&ChangePattern::DocumentationUpdate)
+    );
 
     let message = assemble_commit_message(
         "feat(core): add boundary helper",
@@ -201,6 +203,17 @@ fn git_function_agent_analysis_parser_preserves_defaults_and_required_title() {
         "type": "fix"
     }));
     assert_eq!(missing_title.unwrap_err(), "Missing title field");
+}
+
+#[test]
+fn git_function_agent_diff_truncation_preserves_legacy_marker() {
+    let short = "diff --git a/lib.rs b/lib.rs";
+    assert_eq!(truncate_diff_for_commit_prompt(short, 50), short);
+
+    let long = "a".repeat(140);
+    let truncated = truncate_diff_for_commit_prompt(&long, 120);
+    assert!(truncated.starts_with(&"a".repeat(20)));
+    assert!(truncated.ends_with("\n\n... [content truncated] ..."));
 }
 
 #[test]

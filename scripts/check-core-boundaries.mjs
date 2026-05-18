@@ -1834,6 +1834,60 @@ const requiredContentRules = [
         regex: /\bpub fn versions_dir\b/,
         message: 'missing MiniApp versions directory layout helper',
       },
+      {
+        regex: /\bpub const DRAFT_JSON\b/,
+        message: 'missing MiniApp draft manifest filename contract',
+      },
+      {
+        regex: /\bpub fn draft_dir\b/,
+        message: 'missing MiniApp draft directory layout helper',
+      },
+      {
+        regex: /\bpub fn customization_path\b/,
+        message: 'missing MiniApp customization metadata path helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/miniapp/draft.rs',
+    reason:
+      'product-domains owns MiniApp draft DTO and response shape while core keeps draft filesystem IO',
+    patterns: [
+      {
+        regex: /\bpub struct MiniAppDraftManifest\b/,
+        message: 'missing MiniApp draft manifest DTO',
+      },
+      {
+        regex: /\bpub struct MiniAppDraft\b/,
+        message: 'missing MiniApp draft response DTO',
+      },
+      {
+        regex: /\bpub fn build_draft_manifest\b/,
+        message: 'missing MiniApp draft manifest helper',
+      },
+      {
+        regex: /\bpub fn build_draft_response\b/,
+        message: 'missing MiniApp draft response helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/miniapp/runtime.rs',
+    reason:
+      'product-domains owns MiniApp runtime search-plan contracts while core keeps executable lookup and version process execution',
+    patterns: [
+      {
+        regex: /\bpub fn runtime_lookup_order\b/,
+        message: 'missing MiniApp runtime lookup order contract',
+      },
+      {
+        regex: /\bpub fn candidate_executable_path\b/,
+        message: 'missing MiniApp runtime candidate executable helper',
+      },
+      {
+        regex: /\bpub fn versioned_executable_candidate\b/,
+        message: 'missing MiniApp version-manager executable helper',
+      },
     ],
   },
   {
@@ -1858,11 +1912,15 @@ const requiredContentRules = [
   {
     path: 'src/crates/product-domains/src/miniapp/customization.rs',
     reason:
-      'product-domains owns MiniApp customization metadata and permission-diff contracts while core keeps draft storage/runtime',
+      'product-domains owns MiniApp customization metadata, built-in update policy, and permission-diff contracts while core keeps draft storage/runtime',
     patterns: [
       {
         regex: /\bpub struct MiniAppCustomizationMetadata\b/,
         message: 'missing MiniApp customization metadata contract',
+      },
+      {
+        regex: /\bpub struct MiniAppDeclinedBuiltinUpdate\b/,
+        message: 'missing MiniApp declined built-in update contract',
       },
       {
         regex: /\bpub struct MiniAppPermissionDiff\b/,
@@ -1871,6 +1929,45 @@ const requiredContentRules = [
       {
         regex: /\bpub fn diff_permissions\b/,
         message: 'missing MiniApp permission diff helper',
+      },
+      {
+        regex: /\bpub fn apply_draft_customization_metadata\b/,
+        message: 'missing MiniApp customization draft-apply helper',
+      },
+      {
+        regex: /\bpub fn mark_builtin_update_available_metadata\b/,
+        message: 'missing MiniApp built-in update availability helper',
+      },
+      {
+        regex: /\bpub fn decline_builtin_update_metadata\b/,
+        message: 'missing MiniApp built-in update decline helper',
+      },
+      {
+        regex: /\bpub fn is_current_declined_builtin_update\b/,
+        message: 'missing MiniApp declined update current-state helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/manager.rs',
+    reason:
+      'core MiniApp manager must use product-domain customization metadata policy while retaining storage IO and built-in source-hash lookup',
+    patterns: [
+      {
+        regex: /\bapply_draft_customization_metadata\b/,
+        message: 'missing product-domain draft customization helper use',
+      },
+      {
+        regex: /\bmark_builtin_update_available_metadata\b/,
+        message: 'missing product-domain built-in update availability helper use',
+      },
+      {
+        regex: /\bdecline_builtin_update_metadata\b/,
+        message: 'missing product-domain built-in update decline helper use',
+      },
+      {
+        regex: /\bstorage\.load_customization_metadata\b/,
+        message: 'missing core-owned customization metadata storage IO',
       },
     ],
   },
@@ -1897,6 +1994,33 @@ const requiredContentRules = [
       {
         regex: /\bpub fn parse_commit_analysis_value\b/,
         message: 'missing Git function-agent commit analysis value parser',
+      },
+      {
+        regex: /\bpub fn truncate_diff_for_commit_prompt\b/,
+        message: 'missing Git function-agent diff truncation helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/runtime_detect.rs',
+    reason:
+      'core MiniApp runtime detection must use product-domain search-plan helpers while retaining process-backed executable/version checks',
+    patterns: [
+      {
+        regex: /\bruntime_lookup_order\b/,
+        message: 'missing product-domain runtime lookup order use',
+      },
+      {
+        regex: /\bcandidate_executable_path\b/,
+        message: 'missing product-domain candidate executable helper use',
+      },
+      {
+        regex: /\bversioned_executable_candidate\b/,
+        message: 'missing product-domain version-manager executable helper use',
+      },
+      {
+        regex: /\bget_version\b/,
+        message: 'missing core-owned version process execution',
       },
     ],
   },
@@ -2560,7 +2684,23 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/product-domains/src/miniapp/storage.rs',
-      contracts: ['MiniAppStorageLayout', 'META_JSON', 'source_file_path', 'versions_dir'],
+      contracts: [
+        'MiniAppStorageLayout',
+        'META_JSON',
+        'source_file_path',
+        'versions_dir',
+        'DRAFT_JSON',
+        'draft_dir',
+        'customization_path',
+      ],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/draft.rs',
+      contracts: ['MiniAppDraftManifest', 'MiniAppDraft', 'build_draft_manifest', 'build_draft_response'],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/runtime.rs',
+      contracts: ['runtime_lookup_order', 'candidate_executable_path', 'versioned_executable_candidate'],
     },
     {
       path: 'src/crates/product-domains/src/miniapp/host_routing.rs',
@@ -2574,8 +2714,22 @@ function runManifestParserSelfTest() {
       path: 'src/crates/product-domains/src/miniapp/customization.rs',
       contracts: [
         'MiniAppCustomizationMetadata',
+        'MiniAppDeclinedBuiltinUpdate',
         'MiniAppPermissionDiff',
         'diff_permissions',
+        'apply_draft_customization_metadata',
+        'mark_builtin_update_available_metadata',
+        'decline_builtin_update_metadata',
+        'is_current_declined_builtin_update',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/miniapp/manager.rs',
+      contracts: [
+        'apply_draft_customization_metadata',
+        'mark_builtin_update_available_metadata',
+        'decline_builtin_update_metadata',
+        'storage.load_customization_metadata',
       ],
     },
     {
@@ -2584,7 +2738,11 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/product-domains/src/function_agents/git_func_agent/utils.rs',
-      contracts: ['parse_commit_analysis_value'],
+      contracts: ['parse_commit_analysis_value', 'truncate_diff_for_commit_prompt'],
+    },
+    {
+      path: 'src/crates/core/src/miniapp/runtime_detect.rs',
+      contracts: ['runtime_lookup_order', 'candidate_executable_path', 'versioned_executable_candidate', 'get_version'],
     },
   ];
   for (const { path, contracts } of requiredContentContracts) {

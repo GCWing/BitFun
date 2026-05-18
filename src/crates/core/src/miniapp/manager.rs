@@ -8,16 +8,19 @@ use crate::miniapp::types::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_product_domains::miniapp::customization::{
-    diff_permissions, MiniAppAvailableBuiltinUpdate, MiniAppCustomizationMetadata,
-    MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind, MiniAppDeclinedBuiltinUpdate,
-    MiniAppPermissionDiff,
+    MiniAppCustomizationBaseline, MiniAppCustomizationLocalSnapshot, MiniAppCustomizationMetadata,
+    MiniAppPermissionDiff, apply_draft_customization_metadata, decline_builtin_update_metadata,
+    declined_builtin_update_needs_local_snapshot, diff_permissions,
+    is_current_declined_builtin_update, mark_builtin_update_available_metadata,
+};
+use bitfun_product_domains::miniapp::draft::{
+    MiniAppDraft, MiniAppDraftManifest, build_draft_manifest, build_draft_response,
 };
 use bitfun_product_domains::miniapp::lifecycle::{
     build_deps_revision, build_runtime_state, build_source_revision, build_worker_revision,
     ensure_runtime_state, workspace_dir_string,
 };
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -25,7 +28,6 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 static GLOBAL_MINIAPP_MANAGER: OnceLock<Arc<MiniAppManager>> = OnceLock::new();
-const MAX_DECLINED_BUILTIN_UPDATES: usize = 16;
 
 /// Initialize the global MiniAppManager (called once at startup from Tauri app_state).
 pub fn initialize_global_miniapp_manager(manager: Arc<MiniAppManager>) {
@@ -43,30 +45,6 @@ pub struct MiniAppManager {
     path_manager: Arc<crate::infrastructure::PathManager>,
     /// User-granted paths per app (for resolve_policy).
     granted_paths: RwLock<HashMap<String, Vec<PathBuf>>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MiniAppDraftManifest {
-    pub app_id: String,
-    pub draft_id: String,
-    pub source_version: u32,
-    pub status: String,
-    pub created_at: i64,
-    pub updated_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MiniAppDraft {
-    pub app_id: String,
-    pub draft_id: String,
-    pub source_version: u32,
-    pub status: String,
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub draft_root: String,
-    pub app: MiniApp,
 }
 
 impl MiniAppManager {
@@ -382,14 +360,7 @@ impl MiniAppManager {
         )?;
         ensure_runtime_state(&mut app);
 
-        let manifest = MiniAppDraftManifest {
-            app_id: app_id.to_string(),
-            draft_id,
-            source_version: app.version,
-            status: "draft".to_string(),
-            created_at: now,
-            updated_at: now,
-        };
+        let manifest = build_draft_manifest(app_id, draft_id, app.version, now);
         self.save_draft_with_manifest(app_id, app, manifest).await
     }
 
@@ -549,22 +520,12 @@ impl MiniAppManager {
         app: MiniApp,
         manifest: MiniAppDraftManifest,
     ) -> MiniAppDraft {
-        let draft_id = manifest.draft_id;
         let draft_root = self
             .storage
-            .draft_dir(app_id, &draft_id)
+            .draft_dir(app_id, &manifest.draft_id)
             .to_string_lossy()
             .to_string();
-        MiniAppDraft {
-            app_id: manifest.app_id,
-            draft_id,
-            source_version: manifest.source_version,
-            status: manifest.status,
-            created_at: manifest.created_at,
-            updated_at: manifest.updated_at,
-            draft_root,
-            app,
-        }
+        build_draft_response(draft_root, app, manifest)
     }
 
     async fn load_draft_manifest(
@@ -596,55 +557,19 @@ impl MiniAppManager {
         draft_id: &str,
         now: i64,
     ) -> BitFunResult<()> {
-        let mut metadata =
-            if let Some(existing) = self.storage.load_customization_metadata(app_id).await? {
-                existing
-            } else if let Some(builtin) = crate::miniapp::BUILTIN_APPS
-                .iter()
-                .find(|builtin| builtin.id == app_id)
-            {
-                MiniAppCustomizationMetadata {
-                    origin: MiniAppCustomizationOrigin {
-                        kind: MiniAppCustomizationOriginKind::Builtin,
-                        builtin_id: Some(builtin.id.to_string()),
-                        builtin_version: Some(builtin.version),
-                    },
-                    local_override: true,
-                    last_applied_draft_id: None,
-                    available_builtin_update: None,
-                    declined_builtin_updates: Vec::new(),
-                    updated_at: now,
-                }
-            } else {
-                MiniAppCustomizationMetadata {
-                    origin: MiniAppCustomizationOrigin {
-                        kind: MiniAppCustomizationOriginKind::UserCreated,
-                        builtin_id: None,
-                        builtin_version: None,
-                    },
-                    local_override: false,
-                    last_applied_draft_id: None,
-                    available_builtin_update: None,
-                    declined_builtin_updates: Vec::new(),
-                    updated_at: now,
-                }
-            };
-
-        if matches!(
-            metadata.origin.kind,
-            MiniAppCustomizationOriginKind::Builtin
-        ) {
-            metadata.local_override = true;
-            if let Some(builtin) = crate::miniapp::BUILTIN_APPS
-                .iter()
-                .find(|builtin| builtin.id == app_id)
-            {
-                metadata.origin.builtin_version = Some(builtin.version);
-                metadata.available_builtin_update = None;
+        let existing = self.storage.load_customization_metadata(app_id).await?;
+        let baseline = if let Some(builtin) = crate::miniapp::BUILTIN_APPS
+            .iter()
+            .find(|builtin| builtin.id == app_id)
+        {
+            MiniAppCustomizationBaseline::Builtin {
+                builtin_id: builtin.id.to_string(),
+                builtin_version: builtin.version,
             }
-        }
-        metadata.last_applied_draft_id = Some(draft_id.to_string());
-        metadata.updated_at = now;
+        } else {
+            MiniAppCustomizationBaseline::UserCreated
+        };
+        let metadata = apply_draft_customization_metadata(existing, baseline, draft_id, now);
         self.storage
             .save_customization_metadata(app_id, &metadata)
             .await
@@ -657,30 +582,23 @@ impl MiniAppManager {
         source_hash: &str,
         detected_at: i64,
     ) -> BitFunResult<bool> {
-        if let Some(mut metadata) = self.storage.load_customization_metadata(app_id).await? {
-            if self
+        if let Some(metadata) = self.storage.load_customization_metadata(app_id).await? {
+            let declined_update_current = self
                 .has_matching_declined_builtin_update(app_id, &metadata, source_hash)
-                .await?
-            {
-                if metadata.available_builtin_update.is_some() {
-                    metadata.available_builtin_update = None;
-                    self.storage
-                        .save_customization_metadata(app_id, &metadata)
-                        .await?;
-                }
-                return Ok(false);
-            }
-
-            metadata.available_builtin_update = Some(MiniAppAvailableBuiltinUpdate {
-                builtin_version,
-                source_hash: source_hash.to_string(),
-                detected_at,
-            });
-            metadata.updated_at = detected_at;
-            self.storage
-                .save_customization_metadata(app_id, &metadata)
                 .await?;
-            return Ok(true);
+            let decision = mark_builtin_update_available_metadata(
+                metadata,
+                builtin_version,
+                source_hash,
+                detected_at,
+                declined_update_current,
+            );
+            if decision.metadata_changed {
+                self.storage
+                    .save_customization_metadata(app_id, &decision.metadata)
+                    .await?;
+            }
+            return Ok(decision.should_surface_update);
         }
         Ok(false)
     }
@@ -691,24 +609,25 @@ impl MiniAppManager {
         metadata: &MiniAppCustomizationMetadata,
         source_hash: &str,
     ) -> BitFunResult<bool> {
-        let Some(record) = metadata
-            .declined_builtin_updates
-            .iter()
-            .rev()
-            .find(|record| record.source_hash == source_hash)
-        else {
-            return Ok(false);
+        let local_snapshot = if declined_builtin_update_needs_local_snapshot(metadata, source_hash)
+        {
+            self.storage
+                .load(app_id)
+                .await
+                .ok()
+                .map(|app| MiniAppCustomizationLocalSnapshot {
+                    version: app.version,
+                    updated_at: app.updated_at,
+                })
+        } else {
+            None
         };
 
-        if let (Some(record_version), Some(record_updated_at)) =
-            (record.local_app_version, record.local_app_updated_at)
-        {
-            if let Ok(app) = self.storage.load(app_id).await {
-                return Ok(app.version == record_version && app.updated_at == record_updated_at);
-            }
-        }
-
-        Ok(record.last_applied_draft_id == metadata.last_applied_draft_id)
+        Ok(is_current_declined_builtin_update(
+            metadata,
+            source_hash,
+            local_snapshot,
+        ))
     }
 
     pub async fn decline_builtin_update(
@@ -718,48 +637,26 @@ impl MiniAppManager {
         source_hash: &str,
         declined_at: i64,
     ) -> BitFunResult<Option<MiniAppCustomizationMetadata>> {
-        let Some(mut metadata) = self.storage.load_customization_metadata(app_id).await? else {
+        let Some(metadata) = self.storage.load_customization_metadata(app_id).await? else {
             return Ok(None);
         };
 
-        let app_snapshot = self
-            .storage
-            .load(app_id)
-            .await
-            .ok()
-            .map(|app| (app.version, app.updated_at));
-        let (local_app_version, local_app_updated_at) = app_snapshot
-            .map(|(version, updated_at)| (Some(version), Some(updated_at)))
-            .unwrap_or((None, None));
-
-        if let Some(record) = metadata.declined_builtin_updates.iter_mut().find(|record| {
-            record.builtin_version == builtin_version
-                && record.source_hash == source_hash
-                && record.last_applied_draft_id == metadata.last_applied_draft_id
-        }) {
-            record.declined_at = declined_at;
-            record.local_app_version = local_app_version;
-            record.local_app_updated_at = local_app_updated_at;
-        } else {
-            metadata
-                .declined_builtin_updates
-                .push(MiniAppDeclinedBuiltinUpdate {
-                    builtin_version,
-                    source_hash: source_hash.to_string(),
-                    declined_at,
-                    local_app_version,
-                    local_app_updated_at,
-                    last_applied_draft_id: metadata.last_applied_draft_id.clone(),
+        let local_snapshot =
+            self.storage
+                .load(app_id)
+                .await
+                .ok()
+                .map(|app| MiniAppCustomizationLocalSnapshot {
+                    version: app.version,
+                    updated_at: app.updated_at,
                 });
-            if metadata.declined_builtin_updates.len() > MAX_DECLINED_BUILTIN_UPDATES {
-                let remove_count =
-                    metadata.declined_builtin_updates.len() - MAX_DECLINED_BUILTIN_UPDATES;
-                metadata.declined_builtin_updates.drain(0..remove_count);
-            }
-        }
-
-        metadata.available_builtin_update = None;
-        metadata.updated_at = declined_at;
+        let metadata = decline_builtin_update_metadata(
+            metadata,
+            builtin_version,
+            source_hash,
+            declined_at,
+            local_snapshot,
+        );
         self.storage
             .save_customization_metadata(app_id, &metadata)
             .await?;

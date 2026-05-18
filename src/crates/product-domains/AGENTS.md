@@ -16,8 +16,8 @@ moves here gradually.
   service, desktop, network, process, AI, or tool-runtime dependencies.
 - This crate may own pure DTOs, enums, serialization contracts, search plans,
   command-selection decisions, host-routing string rules, storage-shape parsers,
-  small helpers, and file-shape analyzers that use `std` or feature-gated
-  lightweight dependencies only.
+  draft/metadata response shapes, small helpers, and file-shape analyzers that
+  use `std` or feature-gated lightweight dependencies only.
 - This crate may define product-domain port traits for future runtime migration,
   but concrete adapters that perform IO, process execution, AI calls, Git
   service calls, or platform integration still belong outside this crate.
@@ -30,6 +30,20 @@ moves here gradually.
 - Feature-gated additions must remain narrow. `miniapp` may use MiniApp-only
   dependencies, `function-agents` may use function-agent-only dependencies, and
   `product-full` should only aggregate existing product-domain feature groups.
+
+## Current owners
+
+- `miniapp` owns MiniApp DTOs, compiler/bridge helpers, storage and draft file
+  shapes, runtime search-plan helpers, worker install command selection,
+  lifecycle/revision helpers, host-routing string policy, customization
+  metadata policy including built-in update/decline decisions, and port traits.
+- `function-agents` owns pure function-agent DTOs, prompt assembly helpers,
+  AI-response parsing policy, diff truncation policy, local file-shape analysis,
+  and Git/AI port traits.
+- Core still owns MiniApp filesystem IO, worker process execution, host dispatch
+  execution, built-in asset seeding/source-hash lookup, `PathManager`
+  integration, function-agent Git/AI calls, prompt templates, JSON extraction,
+  and error mapping.
 
 ## Verification
 

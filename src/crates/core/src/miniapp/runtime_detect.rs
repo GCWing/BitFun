@@ -14,24 +14,24 @@
 
 use std::path::{Path, PathBuf};
 
-use bitfun_product_domains::miniapp::runtime::{candidate_dirs, version_manager_roots};
 pub use bitfun_product_domains::miniapp::runtime::{DetectedRuntime, RuntimeKind};
+use bitfun_product_domains::miniapp::runtime::{
+    candidate_dirs, candidate_executable_path, runtime_kind_for_executable, runtime_lookup_order,
+    version_manager_roots, versioned_executable_candidate,
+};
 
 /// Detect available JS runtime: Bun first, then Node.js. Returns None if neither is available.
 pub fn detect_runtime() -> Option<DetectedRuntime> {
-    if let Some(p) = find_executable("bun") {
+    for name in runtime_lookup_order() {
+        let Some(kind) = runtime_kind_for_executable(name) else {
+            continue;
+        };
+        let Some(p) = find_executable(name) else {
+            continue;
+        };
         if let Ok(version) = get_version(&p) {
             return Some(DetectedRuntime {
-                kind: RuntimeKind::Bun,
-                path: p,
-                version,
-            });
-        }
-    }
-    if let Some(p) = find_executable("node") {
-        if let Ok(version) = get_version(&p) {
-            return Some(DetectedRuntime {
-                kind: RuntimeKind::Node,
+                kind,
                 path: p,
                 version,
             });
@@ -46,7 +46,7 @@ fn find_executable(name: &str) -> Option<PathBuf> {
     }
     let home = home_dir();
     for candidate in candidate_dirs(home.as_deref()) {
-        let exe = candidate.join(name);
+        let exe = candidate_executable_path(candidate, name);
         if is_executable(&exe) {
             return Some(exe);
         }
@@ -55,7 +55,7 @@ fn find_executable(name: &str) -> Option<PathBuf> {
     for root in version_manager_roots(home.as_deref()) {
         if let Ok(read) = std::fs::read_dir(&root) {
             for entry in read.flatten() {
-                let exe = entry.path().join("bin").join(name);
+                let exe = versioned_executable_candidate(entry.path(), name);
                 if is_executable(&exe) {
                     return Some(exe);
                 }

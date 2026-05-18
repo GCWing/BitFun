@@ -2,6 +2,17 @@
 
 use bitfun_product_domains::miniapp::bridge_builder::{build_bridge_script, build_csp_content};
 use bitfun_product_domains::miniapp::compiler::compile;
+use bitfun_product_domains::miniapp::customization::{
+    MAX_DECLINED_BUILTIN_UPDATES, MiniAppCustomizationBaseline, MiniAppCustomizationLocalSnapshot,
+    MiniAppCustomizationMetadata, MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind,
+    apply_draft_customization_metadata, decline_builtin_update_metadata,
+    declined_builtin_update_needs_local_snapshot, is_current_declined_builtin_update,
+    mark_builtin_update_available_metadata,
+};
+use bitfun_product_domains::miniapp::draft::{
+    MINIAPP_DRAFT_STATUS_APPLIED, MINIAPP_DRAFT_STATUS_DRAFT, build_draft_manifest,
+    build_draft_response,
+};
 use bitfun_product_domains::miniapp::exporter::{ExportCheckResult, ExportTarget};
 use bitfun_product_domains::miniapp::host_routing::{
     command_basename_allowed, command_basename_for_allowlist, host_allowed_by_allowlist,
@@ -17,18 +28,20 @@ use bitfun_product_domains::miniapp::ports::{
     MiniAppRuntimePort,
 };
 use bitfun_product_domains::miniapp::runtime::{
-    candidate_dirs, version_manager_roots, RuntimeKind,
+    RuntimeKind, candidate_dirs, candidate_executable_path, runtime_lookup_order,
+    version_manager_roots, versioned_executable_candidate,
 };
 use bitfun_product_domains::miniapp::storage::{
-    build_package_json, parse_npm_dependencies, MiniAppStorageLayout, COMPILED_HTML, ESM_DEPS_JSON,
-    INDEX_HTML, META_JSON, PACKAGE_JSON, SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, VERSIONS_DIR,
-    WORKER_JS,
+    COMPILED_HTML, CUSTOMIZATION_JSON, DRAFT_JSON, DRAFTS_CLEANUP_MARKER, DRAFTS_CLEANUP_PREFIX,
+    DRAFTS_DIR, ESM_DEPS_JSON, INDEX_HTML, META_JSON, MiniAppStorageLayout, PACKAGE_JSON,
+    SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, VERSIONS_DIR, WORKER_JS, build_package_json,
+    parse_npm_dependencies,
 };
 use bitfun_product_domains::miniapp::types::{
     FsPermissions, MiniApp, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource, NetPermissions,
     NotificationPermissions, NpmDep,
 };
-use bitfun_product_domains::miniapp::worker::{install_command_for_runtime, InstallResult};
+use bitfun_product_domains::miniapp::worker::{InstallResult, install_command_for_runtime};
 use std::path::{Path, PathBuf};
 
 struct RuntimePortStub;
@@ -189,6 +202,11 @@ fn miniapp_storage_layout_preserves_file_shape_contract() {
     assert_eq!(COMPILED_HTML, "compiled.html");
     assert_eq!(STORAGE_JSON, "storage.json");
     assert_eq!(VERSIONS_DIR, "versions");
+    assert_eq!(DRAFTS_DIR, ".drafts");
+    assert_eq!(DRAFTS_CLEANUP_PREFIX, ".drafts.cleanup-");
+    assert_eq!(DRAFTS_CLEANUP_MARKER, ".cleanup-pending");
+    assert_eq!(DRAFT_JSON, "draft.json");
+    assert_eq!(CUSTOMIZATION_JSON, ".customization.json");
 
     assert_eq!(layout.app_dir(), root.join("app-1"));
     assert_eq!(layout.meta_path(), root.join("app-1").join(META_JSON));
@@ -201,6 +219,36 @@ fn miniapp_storage_layout_preserves_file_shape_contract() {
         root.join("app-1").join(VERSIONS_DIR).join("v3.json")
     );
     assert_eq!(layout.versions_dir(), root.join("app-1").join(VERSIONS_DIR));
+    assert_eq!(
+        layout.customization_path(),
+        root.join("app-1").join(CUSTOMIZATION_JSON)
+    );
+    assert_eq!(
+        MiniAppStorageLayout::drafts_root(&root),
+        root.join(DRAFTS_DIR)
+    );
+    assert_eq!(
+        MiniAppStorageLayout::draft_dir(&root, "app-1", "draft-1"),
+        root.join(DRAFTS_DIR).join("app-1").join("draft-1")
+    );
+    assert_eq!(
+        MiniAppStorageLayout::draft_source_dir(&root, "app-1", "draft-1"),
+        root.join(DRAFTS_DIR)
+            .join("app-1")
+            .join("draft-1")
+            .join(SOURCE_DIR)
+    );
+    assert_eq!(
+        MiniAppStorageLayout::draft_manifest_path(&root, "app-1", "draft-1"),
+        root.join(DRAFTS_DIR)
+            .join("app-1")
+            .join("draft-1")
+            .join(DRAFT_JSON)
+    );
+    assert_eq!(
+        MiniAppStorageLayout::cleanup_drafts_root(&root, "cleanup-id"),
+        root.join(".drafts.cleanup-cleanup-id")
+    );
 }
 
 #[test]
@@ -215,6 +263,18 @@ fn miniapp_runtime_search_plan_preserves_common_install_locations() {
     let roots = version_manager_roots(Some(&home));
     assert_eq!(roots[0], home.join(".nvm").join("versions").join("node"));
     assert!(roots.contains(&home.join(".fnm").join("node-versions")));
+
+    assert_eq!(runtime_lookup_order(), &["bun", "node"]);
+    assert_eq!(
+        candidate_executable_path(Path::new("/usr/local/bin"), "node"),
+        PathBuf::from("/usr/local/bin").join("node")
+    );
+    assert_eq!(
+        versioned_executable_candidate(Path::new("/home/bitfun/.nvm/versions/node/v20"), "node"),
+        PathBuf::from("/home/bitfun/.nvm/versions/node/v20")
+            .join("bin")
+            .join("node")
+    );
 }
 
 #[test]
@@ -381,6 +441,223 @@ fn miniapp_ports_keep_runtime_boundary_lightweight() {
 
     let port: &dyn MiniAppRuntimePort = &RuntimePortStub;
     let _future = port.detect_runtime();
+}
+
+#[test]
+fn miniapp_draft_contract_preserves_manifest_and_response_shape() {
+    let app = sample_miniapp_for_lifecycle(MiniAppSource::default());
+    let manifest = build_draft_manifest("app-1", "draft-1", 7, 1234);
+
+    assert_eq!(manifest.app_id, "app-1");
+    assert_eq!(manifest.draft_id, "draft-1");
+    assert_eq!(manifest.source_version, 7);
+    assert_eq!(manifest.status, MINIAPP_DRAFT_STATUS_DRAFT);
+    assert_eq!(manifest.created_at, 1234);
+    assert_eq!(manifest.updated_at, 1234);
+
+    let json = serde_json::to_value(&manifest).unwrap();
+    assert_eq!(json["appId"], "app-1");
+    assert_eq!(json["draftId"], "draft-1");
+    assert_eq!(json["sourceVersion"], 7);
+
+    let response = build_draft_response("/tmp/draft", app, manifest.clone());
+    assert_eq!(response.app_id, "app-1");
+    assert_eq!(response.draft_root, "/tmp/draft");
+    assert_eq!(response.app.id, "demo");
+
+    let mut applied = manifest;
+    applied.mark_applied(2345);
+    assert_eq!(applied.status, MINIAPP_DRAFT_STATUS_APPLIED);
+    assert_eq!(applied.updated_at, 2345);
+}
+
+#[test]
+fn miniapp_customization_apply_helper_preserves_builtin_override_policy() {
+    let metadata = apply_draft_customization_metadata(
+        None,
+        MiniAppCustomizationBaseline::Builtin {
+            builtin_id: "builtin-pr-review".to_string(),
+            builtin_version: 4,
+        },
+        "draft-1",
+        1234,
+    );
+
+    assert_eq!(
+        metadata.origin.kind,
+        MiniAppCustomizationOriginKind::Builtin
+    );
+    assert_eq!(
+        metadata.origin.builtin_id.as_deref(),
+        Some("builtin-pr-review")
+    );
+    assert_eq!(metadata.origin.builtin_version, Some(4));
+    assert!(metadata.local_override);
+    assert_eq!(metadata.last_applied_draft_id.as_deref(), Some("draft-1"));
+    assert!(metadata.available_builtin_update.is_none());
+    assert_eq!(metadata.updated_at, 1234);
+
+    let updated = apply_draft_customization_metadata(
+        Some(metadata),
+        MiniAppCustomizationBaseline::Builtin {
+            builtin_id: "builtin-pr-review".to_string(),
+            builtin_version: 5,
+        },
+        "draft-2",
+        2345,
+    );
+
+    assert_eq!(updated.origin.builtin_version, Some(5));
+    assert!(updated.local_override);
+    assert_eq!(updated.last_applied_draft_id.as_deref(), Some("draft-2"));
+    assert!(updated.available_builtin_update.is_none());
+
+    let user_created = MiniAppCustomizationMetadata {
+        origin: MiniAppCustomizationOrigin {
+            kind: MiniAppCustomizationOriginKind::UserCreated,
+            builtin_id: None,
+            builtin_version: None,
+        },
+        local_override: false,
+        last_applied_draft_id: None,
+        available_builtin_update: None,
+        declined_builtin_updates: Vec::new(),
+        updated_at: 10,
+    };
+    let user_created_update = apply_draft_customization_metadata(
+        Some(user_created),
+        MiniAppCustomizationBaseline::Builtin {
+            builtin_id: "builtin-pr-review".to_string(),
+            builtin_version: 6,
+        },
+        "draft-3",
+        3456,
+    );
+
+    assert_eq!(
+        user_created_update.origin.kind,
+        MiniAppCustomizationOriginKind::UserCreated
+    );
+    assert!(!user_created_update.local_override);
+    assert_eq!(
+        user_created_update.last_applied_draft_id.as_deref(),
+        Some("draft-3")
+    );
+    assert_eq!(user_created_update.updated_at, 3456);
+}
+
+#[test]
+fn miniapp_customization_builtin_update_policy_preserves_decline_contract() {
+    let mut metadata = apply_draft_customization_metadata(
+        None,
+        MiniAppCustomizationBaseline::Builtin {
+            builtin_id: "builtin-pr-review".to_string(),
+            builtin_version: 4,
+        },
+        "draft-1",
+        1234,
+    );
+
+    let available = mark_builtin_update_available_metadata(metadata, 5, "hash-v5", 2000, false);
+    assert!(available.should_surface_update);
+    assert!(available.metadata_changed);
+    metadata = available.metadata;
+    assert_eq!(
+        metadata
+            .available_builtin_update
+            .as_ref()
+            .unwrap()
+            .source_hash,
+        "hash-v5"
+    );
+
+    metadata = decline_builtin_update_metadata(
+        metadata,
+        5,
+        "hash-v5",
+        2100,
+        Some(MiniAppCustomizationLocalSnapshot {
+            version: 7,
+            updated_at: 2200,
+        }),
+    );
+
+    assert!(metadata.available_builtin_update.is_none());
+    assert_eq!(metadata.updated_at, 2100);
+    assert_eq!(metadata.declined_builtin_updates.len(), 1);
+    assert_eq!(
+        metadata.declined_builtin_updates[0]
+            .last_applied_draft_id
+            .as_deref(),
+        Some("draft-1")
+    );
+    assert!(declined_builtin_update_needs_local_snapshot(
+        &metadata, "hash-v5"
+    ));
+    assert!(is_current_declined_builtin_update(
+        &metadata,
+        "hash-v5",
+        Some(MiniAppCustomizationLocalSnapshot {
+            version: 7,
+            updated_at: 2200,
+        }),
+    ));
+    assert!(!is_current_declined_builtin_update(
+        &metadata,
+        "hash-v5",
+        Some(MiniAppCustomizationLocalSnapshot {
+            version: 8,
+            updated_at: 2200,
+        }),
+    ));
+
+    let suppressed =
+        mark_builtin_update_available_metadata(metadata.clone(), 5, "hash-v5", 2300, true);
+    assert!(!suppressed.should_surface_update);
+    assert!(!suppressed.metadata_changed);
+    assert!(suppressed.metadata.available_builtin_update.is_none());
+
+    let fallback = is_current_declined_builtin_update(&metadata, "hash-v5", None);
+    assert!(fallback);
+}
+
+#[test]
+fn miniapp_customization_decline_policy_updates_existing_and_trims_old_records() {
+    let mut metadata = apply_draft_customization_metadata(
+        None,
+        MiniAppCustomizationBaseline::Builtin {
+            builtin_id: "builtin-pr-review".to_string(),
+            builtin_version: 4,
+        },
+        "draft-1",
+        1000,
+    );
+
+    metadata = decline_builtin_update_metadata(metadata, 5, "hash-v5", 2000, None);
+    metadata = decline_builtin_update_metadata(metadata, 5, "hash-v5", 2500, None);
+    assert_eq!(metadata.declined_builtin_updates.len(), 1);
+    assert_eq!(metadata.declined_builtin_updates[0].declined_at, 2500);
+
+    for idx in 0..=MAX_DECLINED_BUILTIN_UPDATES {
+        metadata = decline_builtin_update_metadata(
+            metadata,
+            6 + idx as u32,
+            &format!("hash-{}", idx),
+            3000 + idx as i64,
+            None,
+        );
+    }
+
+    assert_eq!(
+        metadata.declined_builtin_updates.len(),
+        MAX_DECLINED_BUILTIN_UPDATES
+    );
+    assert!(
+        !metadata
+            .declined_builtin_updates
+            .iter()
+            .any(|record| record.source_hash == "hash-v5")
+    );
 }
 
 fn sample_miniapp_for_lifecycle(source: MiniAppSource) -> MiniApp {
