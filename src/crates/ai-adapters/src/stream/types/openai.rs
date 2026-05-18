@@ -15,18 +15,33 @@ struct OpenAIUsage {
     #[serde(default)]
     total_tokens: u32,
     prompt_tokens_details: Option<PromptTokensDetails>,
+    /// DeepSeek extension. Subset of `prompt_tokens`. Absent on non-DeepSeek
+    /// providers. Prefer this over `prompt_tokens_details.cached_tokens` when
+    /// both are present — DeepSeek-native is the authoritative source.
+    #[serde(default)]
+    prompt_cache_hit_tokens: Option<u32>,
+    /// DeepSeek extension. Equals `prompt_tokens - prompt_cache_hit_tokens`.
+    /// Deserialized so a future strict serde lint doesn't reject the payload;
+    /// not propagated (the miss count is derivable from the other two).
+    #[serde(default)]
+    #[allow(dead_code)]
+    prompt_cache_miss_tokens: Option<u32>,
 }
 
 impl From<OpenAIUsage> for UnifiedTokenUsage {
     fn from(usage: OpenAIUsage) -> Self {
+        let standard_cached = usage
+            .prompt_tokens_details
+            .and_then(|details| details.cached_tokens);
+        // DeepSeek extension wins when both present.
+        let cache_read = usage.prompt_cache_hit_tokens.or(standard_cached);
+
         Self {
             prompt_token_count: usage.prompt_tokens,
             candidates_token_count: usage.completion_tokens,
             total_token_count: usage.total_tokens,
             reasoning_token_count: None,
-            cached_content_token_count: usage
-                .prompt_tokens_details
-                .and_then(|prompt_tokens_details| prompt_tokens_details.cached_tokens),
+            cached_content_token_count: cache_read,
             cache_creation_token_count: None,
         }
     }
@@ -692,5 +707,86 @@ mod tests {
 
         assert_eq!(responses.len(), 1);
         assert!(responses[0].tool_call.is_some());
+    }
+
+    #[test]
+    fn standard_openai_cached_tokens_maps_through() {
+        let raw = r#"{
+            "id": "chatcmpl_test",
+            "created": 1,
+            "model": "gpt-test",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+                "prompt_tokens_details": { "cached_tokens": 40 }
+            }
+        }"#;
+        let data: OpenAISSEData = serde_json::from_str(raw).expect("valid openai sse data");
+        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        assert_eq!(usage.cached_content_token_count, Some(40));
+        assert_eq!(usage.cache_creation_token_count, None);
+    }
+
+    #[test]
+    fn deepseek_prompt_cache_hit_tokens_is_captured() {
+        // Pre-fix this field was silently dropped (strict serde, unknown key).
+        let raw = r#"{
+            "id": "chatcmpl_test",
+            "created": 1,
+            "model": "deepseek-chat",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+                "prompt_cache_hit_tokens": 64,
+                "prompt_cache_miss_tokens": 36
+            }
+        }"#;
+        let data: OpenAISSEData = serde_json::from_str(raw).expect("valid deepseek sse data");
+        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        assert_eq!(usage.cached_content_token_count, Some(64));
+    }
+
+    #[test]
+    fn deepseek_extension_preferred_over_standard_cached_tokens_if_both() {
+        // Defensive: if a proxy forwards both, prefer the DeepSeek-native field.
+        let raw = r#"{
+            "id": "chatcmpl_test",
+            "created": 1,
+            "model": "deepseek-chat",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+                "prompt_cache_hit_tokens": 64,
+                "prompt_tokens_details": { "cached_tokens": 0 }
+            }
+        }"#;
+        let data: OpenAISSEData = serde_json::from_str(raw).expect("valid proxy payload");
+        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        assert_eq!(usage.cached_content_token_count, Some(64));
+    }
+
+    #[test]
+    fn openai_no_cache_fields_stays_none() {
+        let raw = r#"{
+            "id": "chatcmpl_test",
+            "created": 1,
+            "model": "gpt-test",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120
+            }
+        }"#;
+        let data: OpenAISSEData = serde_json::from_str(raw).expect("valid openai sse data");
+        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        assert_eq!(usage.cached_content_token_count, None);
+        assert_eq!(usage.cache_creation_token_count, None);
     }
 }
