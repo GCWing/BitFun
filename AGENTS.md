@@ -120,15 +120,20 @@ and milestone verification gates.
 
 ### Tool ownership guardrails
 
-- `src/crates/agent-tools` owns lightweight tool contracts, pure
-  manifest/exposure contracts, and generic registry / static-provider /
-  dynamic-provider container contracts.
+- `src/crates/agent-tools` owns lightweight tool contracts, portable tool
+  context facts/provider contracts, pure manifest/exposure contracts, and
+  generic registry / static-provider / dynamic-provider container contracts.
+- `src/crates/tool-packs` may expose planned tool-pack feature-group scaffold
+  metadata, but it must not own concrete tool implementations or product
+  manifest runtime until a reviewed provider migration exists.
 - `src/crates/core/src/agentic/tools` owns product tool provider assembly
   (`static_providers.rs`), `dyn Tool` adaptation, snapshot decoration, runtime
   manifest assembly / context filtering, and on-demand tool spec discovery
   execution (`GetToolSpec`) for now.
 - Keep `ToolUseContext` and concrete tool implementations in core until a
-  reviewed port/provider design and equivalence tests exist.
+  reviewed port/provider design and equivalence tests exist. A portable
+  `ToolContextFacts` projection via `PortableToolContextProvider` may cross
+  crate boundaries, but runtime handles and service objects must stay in core.
 - Tool migrations must preserve expanded/collapsed exposure, prompt-visible
   manifests, `ToolUseContext.unlocked_collapsed_tools`, and desktop/MCP/ACP
   tool catalog behavior.

@@ -1,13 +1,13 @@
 use bitfun_agent_tools::{
-    DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, InputValidator, ToolExposure,
-    ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool, ToolPathBackend,
-    ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions, ValidationResult,
     build_collapsed_tool_stub_definition, resolve_tool_manifest_policy,
-    sort_tool_manifest_definitions,
+    sort_tool_manifest_definitions, DynamicMcpToolInfo, DynamicToolInfo, InputValidator,
+    ToolContextFacts, ToolExposure, ToolImageAttachment, ToolManifestDefinition,
+    ToolManifestPolicyTool, ToolPathBackend, ToolPathResolution, ToolRenderOptions, ToolResult,
+    ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult, GET_TOOL_SPEC_TOOL_NAME,
 };
 use bitfun_agent_tools::{
-    DynamicToolDescriptor, DynamicToolProvider, PortResult, StaticToolProvider, ToolDecorator,
-    ToolRegistry, ToolRegistryItem,
+    DynamicToolDescriptor, DynamicToolProvider, PortResult, PortableToolContextProvider,
+    StaticToolProvider, ToolDecorator, ToolRegistry, ToolRegistryItem,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -135,6 +135,69 @@ fn runtime_restrictions_keep_allow_deny_semantics_without_core_dependency() {
         not_allowed.to_string(),
         "Tool 'Bash' is not allowed by runtime restrictions"
     );
+}
+
+#[test]
+fn tool_context_facts_keep_portable_wire_shape_without_runtime_handles() {
+    let facts = ToolContextFacts {
+        tool_call_id: Some("call-1".to_string()),
+        agent_type: Some("Agentic".to_string()),
+        session_id: Some("session-1".to_string()),
+        dialog_turn_id: Some("turn-1".to_string()),
+        workspace_kind: Some(ToolWorkspaceKind::Remote),
+        workspace_root: Some("/remote/workspace".to_string()),
+        runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+    };
+
+    let value = serde_json::to_value(&facts).expect("serialize context facts");
+
+    assert_eq!(value["toolCallId"], "call-1");
+    assert_eq!(value["agentType"], "Agentic");
+    assert_eq!(value["sessionId"], "session-1");
+    assert_eq!(value["dialogTurnId"], "turn-1");
+    assert_eq!(value["workspaceKind"], "remote");
+    assert_eq!(value["workspaceRoot"], "/remote/workspace");
+    assert!(value.get("unlockedCollapsedTools").is_none());
+    assert!(value.get("computer_use_host").is_none());
+    assert!(value.get("workspace_services").is_none());
+    assert!(value.get("cancellation_token").is_none());
+
+    let round_trip: ToolContextFacts =
+        serde_json::from_value(value).expect("deserialize context facts");
+    assert_eq!(round_trip.workspace_kind, Some(ToolWorkspaceKind::Remote));
+}
+
+#[test]
+fn portable_tool_context_provider_exposes_facts_only() {
+    struct FactsOnlyProvider {
+        facts: ToolContextFacts,
+    }
+
+    impl PortableToolContextProvider for FactsOnlyProvider {
+        fn tool_context_facts(&self) -> ToolContextFacts {
+            self.facts.clone()
+        }
+    }
+
+    let provider = FactsOnlyProvider {
+        facts: ToolContextFacts {
+            tool_call_id: Some("call-2".to_string()),
+            agent_type: Some("Agentic".to_string()),
+            session_id: Some("session-2".to_string()),
+            dialog_turn_id: None,
+            workspace_kind: Some(ToolWorkspaceKind::Local),
+            workspace_root: Some("/repo/project".to_string()),
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+        },
+    };
+
+    let value =
+        serde_json::to_value(provider.tool_context_facts()).expect("serialize context facts");
+
+    assert_eq!(value["toolCallId"], "call-2");
+    assert_eq!(value["workspaceKind"], "local");
+    assert!(value.get("workspace_services").is_none());
+    assert!(value.get("unlockedCollapsedTools").is_none());
 }
 
 #[test]
@@ -362,10 +425,9 @@ fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
 
     assert_eq!(stub.name, "WebFetch");
     assert!(stub.description.contains("Fetch a URL"));
-    assert!(
-        stub.description
-            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
-    );
+    assert!(stub
+        .description
+        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
     assert_eq!(
         stub.parameters,
         json!({

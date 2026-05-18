@@ -18,7 +18,10 @@ pub mod user_input_manager;
 pub mod workspace_paths;
 pub use bitfun_agent_tools::input_validator;
 
-pub use framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+pub use framework::{
+    PortableToolContextProvider, Tool, ToolContextFacts, ToolResult, ToolUseContext,
+    ToolWorkspaceKind, ValidationResult,
+};
 pub use image_context::{ImageContextData, ImageContextProvider, ImageContextProviderRef};
 pub use input_validator::InputValidator;
 pub use manifest_resolver::{

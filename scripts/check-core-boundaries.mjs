@@ -341,6 +341,14 @@ const forbiddenContentRules = [
         regex: /\bpub struct ToolPathResolution\b/,
         message: 'core tool framework must not redefine ToolPathResolution; use bitfun-agent-tools',
       },
+      {
+        regex: /\bpub struct ToolContextFacts\b/,
+        message: 'core tool framework must not redefine ToolContextFacts; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bpub enum ToolWorkspaceKind\b/,
+        message: 'core tool framework must not redefine ToolWorkspaceKind; use bitfun-agent-tools',
+      },
     ],
   },
   {
@@ -1195,8 +1203,20 @@ const requiredContentRules = [
   },
   {
     path: 'src/crates/agent-tools/src/framework.rs',
-    reason: 'agent-tools owns generic registry and static provider installation contracts',
+    reason: 'agent-tools owns portable tool facts plus generic registry and provider contracts',
     patterns: [
+      {
+        regex: /\bpub struct ToolContextFacts\b/,
+        message: 'missing portable tool context facts contract',
+      },
+      {
+        regex: /\bpub trait PortableToolContextProvider\b/,
+        message: 'missing portable tool context provider contract',
+      },
+      {
+        regex: /\bpub enum ToolWorkspaceKind\b/,
+        message: 'missing portable workspace kind contract',
+      },
       {
         regex: /\bpub trait StaticToolProvider\b/,
         message: 'missing static tool provider contract',
@@ -1204,6 +1224,25 @@ const requiredContentRules = [
       {
         regex: /\bpub fn install_static_provider\b/,
         message: 'missing static provider registry installer',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/tool-packs/src/lib.rs',
+    reason:
+      'tool-packs must keep its feature-group scaffold explicit without owning concrete tools yet',
+    patterns: [
+      {
+        regex: /\bpub enum ToolPackFeatureGroup\b/,
+        message: 'missing tool-pack feature group scaffold',
+      },
+      {
+        regex: /\bpub fn all_feature_groups\b/,
+        message: 'missing tool-pack full feature group metadata helper',
+      },
+      {
+        regex: /\bpub fn enabled_feature_groups\b/,
+        message: 'missing tool-pack compile-time feature metadata helper',
       },
     ],
   },
@@ -1265,6 +1304,10 @@ const requiredContentRules = [
       {
         regex: /\bpub struct ToolUseContext\b/,
         message: 'missing ToolUseContext owner type',
+      },
+      {
+        regex: /\bto_tool_context_facts\b/,
+        message: 'missing portable ToolUseContext facts projection',
       },
       {
         regex: /\bunlocked_collapsed_tools\b/,
@@ -2731,7 +2774,21 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/agent-tools/src/framework.rs',
-      contracts: ['StaticToolProvider', 'install_static_provider'],
+      contracts: [
+        'ToolContextFacts',
+        'PortableToolContextProvider',
+        'ToolWorkspaceKind',
+        'StaticToolProvider',
+        'install_static_provider',
+      ],
+    },
+    {
+      path: 'src/crates/tool-packs/src/lib.rs',
+      contracts: [
+        'ToolPackFeatureGroup',
+        'all_feature_groups',
+        'enabled_feature_groups',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/tools/manifest_resolver.rs',
@@ -2749,7 +2806,12 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/agentic/tools/framework.rs',
-      contracts: ['ToolExposure', 'ToolUseContext', 'unlocked_collapsed_tools'],
+      contracts: [
+        'ToolExposure',
+        'ToolUseContext',
+        'to_tool_context_facts',
+        'unlocked_collapsed_tools',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',

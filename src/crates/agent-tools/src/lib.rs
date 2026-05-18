@@ -11,11 +11,12 @@ pub use bitfun_runtime_ports::{
     DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult, ToolDecorator,
 };
 pub use framework::{
-    DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, StaticToolProvider, ToolExposure,
+    build_collapsed_tool_stub_definition, resolve_tool_manifest_policy,
+    sort_tool_manifest_definitions, tool_manifest_sort_rank, DynamicMcpToolInfo, DynamicToolInfo,
+    PortableToolContextProvider, StaticToolProvider, ToolContextFacts, ToolExposure,
     ToolManifestDefinition, ToolManifestPolicyResolution, ToolManifestPolicyTool, ToolPathBackend,
     ToolPathOperation, ToolPathPolicy, ToolPathResolution, ToolRef, ToolRegistry, ToolRegistryItem,
-    ToolRenderOptions, ToolRestrictionError, ToolResult, ToolRuntimeRestrictions, ValidationResult,
-    build_collapsed_tool_stub_definition, resolve_tool_manifest_policy,
-    sort_tool_manifest_definitions, tool_manifest_sort_rank,
+    ToolRenderOptions, ToolRestrictionError, ToolResult, ToolRuntimeRestrictions,
+    ToolWorkspaceKind, ValidationResult, GET_TOOL_SPEC_TOOL_NAME,
 };
 pub use input_validator::InputValidator;

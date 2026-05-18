@@ -31,6 +31,36 @@ pub struct DynamicToolInfo {
     pub mcp: Option<DynamicMcpToolInfo>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolWorkspaceKind {
+    Local,
+    Remote,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolContextFacts {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dialog_turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_kind: Option<ToolWorkspaceKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_root: Option<String>,
+    #[serde(default)]
+    pub runtime_tool_restrictions: ToolRuntimeRestrictions,
+}
+
+pub trait PortableToolContextProvider: Send + Sync {
+    fn tool_context_facts(&self) -> ToolContextFacts;
+}
+
 pub const GET_TOOL_SPEC_TOOL_NAME: &str = "GetToolSpec";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
