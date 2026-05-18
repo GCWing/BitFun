@@ -106,3 +106,73 @@ impl AIAnalysisService {
         super::utils::parse_commit_analysis_value(&value).map_err(AgentError::analysis_error)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::function_agents::common::AgentErrorType;
+    use crate::util::types::AIConfig;
+    use bitfun_ai_adapters::types::ReasoningMode;
+
+    fn test_service() -> AIAnalysisService {
+        AIAnalysisService {
+            ai_client: Arc::new(AIClient::new(AIConfig {
+                name: "test".to_string(),
+                base_url: "http://127.0.0.1".to_string(),
+                request_url: "http://127.0.0.1".to_string(),
+                api_key: "test".to_string(),
+                model: "test-model".to_string(),
+                format: "openai".to_string(),
+                context_window: 8192,
+                max_tokens: None,
+                temperature: None,
+                top_p: None,
+                reasoning_mode: ReasoningMode::Default,
+                inline_think_in_text: false,
+                custom_headers: None,
+                custom_headers_mode: None,
+                skip_ssl_verify: false,
+                reasoning_effort: None,
+                thinking_budget_tokens: None,
+                custom_request_body: None,
+                custom_request_body_mode: None,
+            })),
+        }
+    }
+
+    #[test]
+    fn parse_commit_response_preserves_core_json_extraction_and_error_mapping() {
+        let service = test_service();
+        let parsed = service
+            .parse_commit_response(
+                r#"The answer is:
+```json
+{
+  "type": "refactor",
+  "title": "refactor(product-domains): add runtime baseline",
+  "body": "Keep behavior stable.",
+  "confidence": 0.91
+}
+```
+"#,
+            )
+            .unwrap();
+
+        assert_eq!(
+            parsed.title,
+            "refactor(product-domains): add runtime baseline"
+        );
+        assert_eq!(parsed.body.as_deref(), Some("Keep behavior stable."));
+        assert_eq!(parsed.confidence, 0.91);
+
+        let missing_json = service.parse_commit_response("no json here").unwrap_err();
+        assert_eq!(missing_json.error_type, AgentErrorType::AnalysisError);
+        assert_eq!(missing_json.message, "Cannot extract JSON from response");
+
+        let missing_title = service
+            .parse_commit_response(r#"{"type":"refactor","body":"missing title"}"#)
+            .unwrap_err();
+        assert_eq!(missing_title.error_type, AgentErrorType::AnalysisError);
+        assert_eq!(missing_title.message, "Missing title field");
+    }
+}

@@ -8,14 +8,13 @@ use crate::miniapp::types::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_product_domains::miniapp::customization::{
-    apply_draft_customization_metadata, decline_builtin_update_metadata,
+    MiniAppCustomizationBaseline, MiniAppCustomizationLocalSnapshot, MiniAppCustomizationMetadata,
+    MiniAppPermissionDiff, apply_draft_customization_metadata, decline_builtin_update_metadata,
     declined_builtin_update_needs_local_snapshot, diff_permissions,
     is_current_declined_builtin_update, mark_builtin_update_available_metadata,
-    MiniAppCustomizationBaseline, MiniAppCustomizationLocalSnapshot, MiniAppCustomizationMetadata,
-    MiniAppPermissionDiff,
 };
 use bitfun_product_domains::miniapp::draft::{
-    build_draft_manifest, build_draft_response, MiniAppDraft, MiniAppDraftManifest,
+    MiniAppDraft, MiniAppDraftManifest, build_draft_manifest, build_draft_response,
 };
 use bitfun_product_domains::miniapp::lifecycle::{
     apply_import_runtime_state, apply_recompile_result, apply_sync_from_fs_result,
@@ -24,8 +23,8 @@ use bitfun_product_domains::miniapp::lifecycle::{
     prepare_rollback_app, workspace_dir_string,
 };
 use bitfun_product_domains::miniapp::storage::{
-    build_import_fallbacks, MiniAppImportLayout, COMPILED_HTML, ESM_DEPS_JSON, META_JSON,
-    PACKAGE_JSON, REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON,
+    COMPILED_HTML, ESM_DEPS_JSON, META_JSON, MiniAppImportLayout, PACKAGE_JSON,
+    REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON, build_import_fallbacks,
 };
 use chrono::Utc;
 use std::collections::HashMap;
@@ -875,7 +874,13 @@ impl MiniAppManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::miniapp::types::{FsPermissions, MiniAppPermissions, MiniAppSource};
+    use crate::miniapp::types::{
+        FsPermissions, MiniAppMeta, MiniAppPermissions, MiniAppSource, NpmDep,
+    };
+    use bitfun_product_domains::miniapp::storage::{
+        COMPILED_HTML, ESM_DEPS_JSON, INDEX_HTML, PACKAGE_JSON, SOURCE_DIR, STORAGE_JSON,
+        STYLE_CSS, UI_JS, WORKER_JS,
+    };
 
     fn test_manager() -> MiniAppManager {
         let root = std::env::temp_dir().join(format!(
@@ -914,6 +919,155 @@ mod tests {
             )
             .await
             .unwrap()
+    }
+
+    async fn write_import_source(root: &std::path::Path) {
+        let source_dir = root.join(SOURCE_DIR);
+        tokio::fs::create_dir_all(&source_dir).await.unwrap();
+        let meta = MiniAppMeta {
+            id: "template-id".to_string(),
+            name: "Imported".to_string(),
+            description: "Imported app".to_string(),
+            icon: "box".to_string(),
+            category: "utility".to_string(),
+            tags: vec!["imported".to_string()],
+            version: 7,
+            created_at: 11,
+            updated_at: 12,
+            permissions: MiniAppPermissions::default(),
+            ai_context: None,
+            runtime: Default::default(),
+            i18n: None,
+        };
+        tokio::fs::write(
+            root.join(META_JSON),
+            serde_json::to_string_pretty(&meta).unwrap(),
+        )
+        .await
+        .unwrap();
+        tokio::fs::write(
+            source_dir.join(INDEX_HTML),
+            "<!DOCTYPE html><html><head></head><body><div id=\"app\"></div></body></html>",
+        )
+        .await
+        .unwrap();
+        tokio::fs::write(source_dir.join(STYLE_CSS), "body { color: blue; }")
+            .await
+            .unwrap();
+        tokio::fs::write(
+            source_dir.join(UI_JS),
+            "document.getElementById('app').textContent = 'imported';",
+        )
+        .await
+        .unwrap();
+        tokio::fs::write(source_dir.join(WORKER_JS), "")
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn runtime_preflight_preserves_recompile_sync_rollback_and_deps_state() {
+        let manager = test_manager();
+        let mut app = create_sample_app(&manager).await;
+        app.source.npm_dependencies = vec![NpmDep {
+            name: "lodash".to_string(),
+            version: "^4.17.21".to_string(),
+        }];
+        manager.storage.save(&app).await.unwrap();
+
+        let installed = manager.mark_deps_installed(&app.id).await.unwrap();
+        assert!(!installed.runtime.deps_dirty);
+        assert!(installed.runtime.worker_restart_required);
+        let cleared = manager
+            .clear_worker_restart_required(&app.id)
+            .await
+            .unwrap();
+        assert!(!cleared.runtime.worker_restart_required);
+
+        let style_path = manager
+            .path_manager()
+            .miniapp_dir(&app.id)
+            .join(SOURCE_DIR)
+            .join(STYLE_CSS);
+        tokio::fs::write(&style_path, "body { color: red; }")
+            .await
+            .unwrap();
+        let synced = manager.sync_from_fs(&app.id, "dark", None).await.unwrap();
+        assert_eq!(synced.version, app.version + 1);
+        assert_eq!(synced.source.css, "body { color: red; }");
+        assert!(synced.runtime.deps_dirty);
+        assert!(synced.runtime.worker_restart_required);
+        assert_eq!(manager.list_versions(&app.id).await.unwrap(), vec![1]);
+
+        let recompiled = manager.recompile(&app.id, "dark", None).await.unwrap();
+        assert_eq!(recompiled.version, synced.version);
+        assert_eq!(recompiled.source.css, synced.source.css);
+        assert!(recompiled.compiled_html.contains("body { color: red; }"));
+        assert!(!recompiled.runtime.ui_recompile_required);
+
+        let rolled_back = manager.rollback(&app.id, app.version).await.unwrap();
+        assert_eq!(rolled_back.version, recompiled.version + 1);
+        // sync_from_fs snapshots the source already loaded from disk; keep this
+        // boundary explicit before moving manager/runtime ownership.
+        assert_eq!(rolled_back.source.css, "body { color: red; }");
+        assert!(rolled_back.runtime.deps_dirty);
+        assert!(rolled_back.runtime.worker_restart_required);
+        assert_eq!(manager.list_versions(&app.id).await.unwrap(), vec![1, 2]);
+    }
+
+    #[tokio::test]
+    async fn import_from_path_preserves_fallback_files_recompile_and_runtime_state() {
+        let manager = test_manager();
+        let import_root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-import-source-{}",
+            uuid::Uuid::new_v4()
+        ));
+        write_import_source(&import_root).await;
+
+        let imported = manager
+            .import_from_path(import_root.clone(), None)
+            .await
+            .unwrap();
+        let app_dir = manager.path_manager().miniapp_dir(&imported.id);
+        let source_dir = app_dir.join(SOURCE_DIR);
+
+        assert_ne!(imported.id, "template-id");
+        assert_eq!(imported.name, "Imported");
+        assert_eq!(imported.version, 7);
+        assert_eq!(imported.source.css, "body { color: blue; }");
+        assert!(imported.compiled_html.contains("textContent = 'imported'"));
+        assert!(!imported.runtime.deps_dirty);
+        assert!(imported.runtime.worker_restart_required);
+        assert!(!imported.runtime.ui_recompile_required);
+
+        assert_eq!(
+            tokio::fs::read_to_string(source_dir.join(ESM_DEPS_JSON))
+                .await
+                .unwrap(),
+            "[]"
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(app_dir.join(STORAGE_JSON))
+                .await
+                .unwrap(),
+            "{}"
+        );
+        let package_json: serde_json::Value = serde_json::from_str(
+            &tokio::fs::read_to_string(app_dir.join(PACKAGE_JSON))
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(package_json["name"], format!("miniapp-{}", imported.id));
+        assert_eq!(package_json["dependencies"], serde_json::json!({}));
+        assert!(
+            tokio::fs::read_to_string(app_dir.join(COMPILED_HTML))
+                .await
+                .unwrap()
+                .contains("textContent = 'imported'")
+        );
+
+        let _ = tokio::fs::remove_dir_all(import_root).await;
     }
 
     #[tokio::test]

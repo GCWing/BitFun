@@ -3,15 +3,15 @@
 use bitfun_product_domains::miniapp::bridge_builder::{build_bridge_script, build_csp_content};
 use bitfun_product_domains::miniapp::compiler::compile;
 use bitfun_product_domains::miniapp::customization::{
+    MAX_DECLINED_BUILTIN_UPDATES, MiniAppCustomizationBaseline, MiniAppCustomizationLocalSnapshot,
+    MiniAppCustomizationMetadata, MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind,
     apply_draft_customization_metadata, decline_builtin_update_metadata,
     declined_builtin_update_needs_local_snapshot, is_current_declined_builtin_update,
-    mark_builtin_update_available_metadata, MiniAppCustomizationBaseline,
-    MiniAppCustomizationLocalSnapshot, MiniAppCustomizationMetadata, MiniAppCustomizationOrigin,
-    MiniAppCustomizationOriginKind, MAX_DECLINED_BUILTIN_UPDATES,
+    mark_builtin_update_available_metadata,
 };
 use bitfun_product_domains::miniapp::draft::{
-    build_draft_manifest, build_draft_response, MINIAPP_DRAFT_STATUS_APPLIED,
-    MINIAPP_DRAFT_STATUS_DRAFT,
+    MINIAPP_DRAFT_STATUS_APPLIED, MINIAPP_DRAFT_STATUS_DRAFT, build_draft_manifest,
+    build_draft_response,
 };
 use bitfun_product_domains::miniapp::exporter::{ExportCheckResult, ExportTarget};
 use bitfun_product_domains::miniapp::host_routing::{
@@ -30,21 +30,21 @@ use bitfun_product_domains::miniapp::ports::{
     MiniAppRuntimePort,
 };
 use bitfun_product_domains::miniapp::runtime::{
-    candidate_dirs, candidate_executable_path, runtime_lookup_order, version_manager_roots,
-    versioned_executable_candidate, RuntimeKind,
+    RuntimeKind, candidate_dirs, candidate_executable_path, runtime_lookup_order,
+    version_manager_roots, versioned_executable_candidate,
 };
 use bitfun_product_domains::miniapp::storage::{
-    build_import_fallbacks, build_package_json, parse_npm_dependencies, MiniAppImportLayout,
-    MiniAppStorageLayout, COMPILED_HTML, CUSTOMIZATION_JSON, DRAFTS_CLEANUP_MARKER,
-    DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR, DRAFT_JSON, EMPTY_ESM_DEPENDENCIES_JSON, EMPTY_STORAGE_JSON,
-    ESM_DEPS_JSON, INDEX_HTML, META_JSON, PACKAGE_JSON, PLACEHOLDER_COMPILED_HTML,
+    COMPILED_HTML, CUSTOMIZATION_JSON, DRAFT_JSON, DRAFTS_CLEANUP_MARKER, DRAFTS_CLEANUP_PREFIX,
+    DRAFTS_DIR, EMPTY_ESM_DEPENDENCIES_JSON, EMPTY_STORAGE_JSON, ESM_DEPS_JSON, INDEX_HTML,
+    META_JSON, MiniAppImportLayout, MiniAppStorageLayout, PACKAGE_JSON, PLACEHOLDER_COMPILED_HTML,
     REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, VERSIONS_DIR, WORKER_JS,
+    build_import_fallbacks, build_package_json, parse_npm_dependencies,
 };
 use bitfun_product_domains::miniapp::types::{
     FsPermissions, MiniApp, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource, NetPermissions,
     NotificationPermissions, NpmDep,
 };
-use bitfun_product_domains::miniapp::worker::{install_command_for_runtime, InstallResult};
+use bitfun_product_domains::miniapp::worker::{InstallResult, install_command_for_runtime};
 use std::path::{Path, PathBuf};
 
 struct RuntimePortStub;
@@ -759,10 +759,12 @@ fn miniapp_customization_decline_policy_updates_existing_and_trims_old_records()
         metadata.declined_builtin_updates.len(),
         MAX_DECLINED_BUILTIN_UPDATES
     );
-    assert!(!metadata
-        .declined_builtin_updates
-        .iter()
-        .any(|record| record.source_hash == "hash-v5"));
+    assert!(
+        !metadata
+            .declined_builtin_updates
+            .iter()
+            .any(|record| record.source_hash == "hash-v5")
+    );
 }
 
 fn sample_miniapp_for_lifecycle(source: MiniAppSource) -> MiniApp {

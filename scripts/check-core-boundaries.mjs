@@ -2040,6 +2040,45 @@ const requiredContentRules = [
         regex: /\bstorage\.load_customization_metadata\b/,
         message: 'missing core-owned customization metadata storage IO',
       },
+      {
+        regex: /\bruntime_preflight_preserves_recompile_sync_rollback_and_deps_state\b/,
+        message: 'missing MiniApp manager runtime preflight regression test',
+      },
+      {
+        regex: /\bimport_from_path_preserves_fallback_files_recompile_and_runtime_state\b/,
+        message: 'missing MiniApp import runtime preflight regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/function_agents/git-func-agent/ai_service.rs',
+    reason:
+      'core must continue owning Git function-agent prompt template, AI call, JSON extraction, and error mapping until AI runtime migration is reviewed',
+    patterns: [
+      {
+        regex: /\bconst COMMIT_MESSAGE_PROMPT\b/,
+        message: 'missing core-owned Git function-agent prompt template',
+      },
+      {
+        regex: /\bprepare_commit_prompt\b/,
+        message: 'missing product-domain prompt preparation helper use',
+      },
+      {
+        regex: /\bai_client\s*\.\s*send_message\b/,
+        message: 'missing core-owned function-agent AI call',
+      },
+      {
+        regex: /\bextract_json_from_ai_response\b/,
+        message: 'missing core-owned AI response JSON extraction',
+      },
+      {
+        regex: /\bAgentError::analysis_error\b/,
+        message: 'missing core-owned AI response error mapping',
+      },
+      {
+        regex: /\bparse_commit_response_preserves_core_json_extraction_and_error_mapping\b/,
+        message: 'missing Git function-agent AI response boundary regression test',
+      },
     ],
   },
   {
@@ -2122,6 +2161,10 @@ const requiredContentRules = [
       {
         regex: /\bimpl FunctionAgentGitPort for CoreFunctionAgentGitAdapter\b/,
         message: 'missing function-agent Git port adapter owner',
+      },
+      {
+        regex: /\bgit_adapter_commit_snapshot_keeps_staged_diff_and_unstaged_count_separate\b/,
+        message: 'missing function-agent Git snapshot boundary regression test',
       },
     ],
   },
@@ -2744,7 +2787,11 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/function_agents/port_adapters.rs',
-      contracts: ['CoreFunctionAgentGitAdapter', 'FunctionAgentGitPort'],
+      contracts: [
+        'CoreFunctionAgentGitAdapter',
+        'FunctionAgentGitPort',
+        'git_adapter_commit_snapshot_keeps_staged_diff_and_unstaged_count_separate',
+      ],
     },
     {
       path: 'src/crates/services-integrations/src/remote_ssh/paths.rs',
@@ -2826,6 +2873,19 @@ function runManifestParserSelfTest() {
         'MiniAppImportLayout',
         'build_import_fallbacks',
         'apply_import_runtime_state',
+        'runtime_preflight_preserves_recompile_sync_rollback_and_deps_state',
+        'import_from_path_preserves_fallback_files_recompile_and_runtime_state',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/function_agents/git-func-agent/ai_service.rs',
+      contracts: [
+        'COMMIT_MESSAGE_PROMPT',
+        'prepare_commit_prompt',
+        'send_message',
+        'extract_json_from_ai_response',
+        'AgentError::analysis_error',
+        'parse_commit_response_preserves_core_json_extraction_and_error_mapping',
       ],
     },
     {

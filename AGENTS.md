@@ -166,6 +166,8 @@ and milestone verification gates.
   keeps filesystem IO, worker runtime, built-in source-hash lookup,
   `PathManager`, Git/AI calls, prompt templates, JSON extraction, error
   mapping, and port adapters until reviewed runtime migrations exist.
+  Before moving those runtime owners, keep the core-owned MiniApp manager and
+  function-agent Git/AI boundary snapshots passing.
 - Remote-connect port baselines live in `bitfun-runtime-ports` and
   `bitfun-services-integrations`; tracker state and tracker event reduction
   belong in `bitfun-services-integrations`. Remote command/response wire DTOs,

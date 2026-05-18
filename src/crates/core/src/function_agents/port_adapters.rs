@@ -204,7 +204,11 @@ mod tests {
     async fn git_adapter_builds_commit_snapshot_from_existing_core_git_services() {
         let repo = TestTempDir::new("commit-snapshot");
         init_git_repo(repo.path());
-        fs::write(repo.path().join("Cargo.toml"), "[package]\nname = \"demo\"\n").unwrap();
+        fs::write(
+            repo.path().join("Cargo.toml"),
+            "[package]\nname = \"demo\"\n",
+        )
+        .unwrap();
         fs::create_dir_all(repo.path().join("src")).unwrap();
         fs::write(repo.path().join("src/lib.rs"), "pub fn demo() {}\n").unwrap();
         git(repo.path(), &["add", "Cargo.toml", "src/lib.rs"]);
@@ -221,6 +225,32 @@ mod tests {
         assert_eq!(snapshot.unstaged_count, 0);
         assert!(snapshot.diff_content.contains("pub fn demo()"));
         assert_eq!(snapshot.project_context.project_type, "rust-application");
+    }
+
+    #[tokio::test]
+    async fn git_adapter_commit_snapshot_keeps_staged_diff_and_unstaged_count_separate() {
+        let repo = TestTempDir::new("commit-snapshot-boundary");
+        init_git_repo(repo.path());
+        fs::write(repo.path().join("tracked.txt"), "base\n").unwrap();
+        git(repo.path(), &["add", "tracked.txt"]);
+        git(repo.path(), &["commit", "-m", "initial"]);
+
+        fs::write(repo.path().join("tracked.txt"), "base\nunstaged only\n").unwrap();
+        fs::write(repo.path().join("staged.txt"), "staged only\n").unwrap();
+        git(repo.path(), &["add", "staged.txt"]);
+
+        let adapter = CoreFunctionAgentGitAdapter::default();
+        let snapshot = adapter
+            .git_commit_snapshot(repo.path().to_string_lossy().to_string())
+            .await
+            .unwrap();
+
+        assert_eq!(snapshot.staged_paths, vec!["staged.txt".to_string()]);
+        assert_eq!(snapshot.staged_count, 1);
+        assert_eq!(snapshot.unstaged_count, 1);
+        assert!(snapshot.diff_content.contains("staged.txt"));
+        assert!(snapshot.diff_content.contains("staged only"));
+        assert!(!snapshot.diff_content.contains("unstaged only"));
     }
 
     #[tokio::test]
