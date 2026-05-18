@@ -771,4 +771,21 @@ mod tests {
             .and_then(|metadata| metadata.get("promptFeedback"))
             .is_some());
     }
+
+    #[test]
+    fn gemini_cache_creation_is_always_none() {
+        let payload = serde_json::json!({
+            "candidates": [{ "content": { "parts": [{ "text": "answer" }] } }],
+            "usageMetadata": {
+                "promptTokenCount": 100,
+                "candidatesTokenCount": 20,
+                "totalTokenCount": 120,
+                "cachedContentTokenCount": 35
+            }
+        });
+        let data: GeminiSSEData = serde_json::from_value(payload).expect("gemini payload");
+        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        assert_eq!(usage.cached_content_token_count, Some(35));
+        assert_eq!(usage.cache_creation_token_count, None);
+    }
 }
