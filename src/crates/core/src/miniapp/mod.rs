@@ -11,7 +11,7 @@ pub mod runtime_detect;
 pub mod storage;
 pub use bitfun_product_domains::miniapp::customization::{
     MiniAppAvailableBuiltinUpdate, MiniAppCustomizationMetadata, MiniAppCustomizationOrigin,
-    MiniAppCustomizationOriginKind, MiniAppPermissionDiff,
+    MiniAppCustomizationOriginKind, MiniAppDeclinedBuiltinUpdate, MiniAppPermissionDiff,
 };
 pub use bitfun_product_domains::miniapp::{bridge_builder, permission_policy, types};
 

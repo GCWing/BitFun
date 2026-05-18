@@ -12,8 +12,10 @@ const baseMetadata: MiniAppCustomizationMetadata = {
   last_applied_draft_id: 'draft-1',
   available_builtin_update: {
     builtin_version: 12,
+    source_hash: 'abc123',
     detected_at: 1710000000000,
   },
+  declined_builtin_updates: [],
   updated_at: 1710000000000,
 };
 
@@ -21,6 +23,7 @@ describe('getMiniAppBuiltinUpdateNotice', () => {
   it('returns the available bundled version for customized built-in apps', () => {
     expect(getMiniAppBuiltinUpdateNotice(baseMetadata)).toEqual({
       builtinVersion: 12,
+      sourceHash: 'abc123',
     });
   });
 

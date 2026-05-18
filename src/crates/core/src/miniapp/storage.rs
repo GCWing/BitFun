@@ -1154,6 +1154,7 @@ mod tests {
             local_override: true,
             last_applied_draft_id: Some("draft_one".to_string()),
             available_builtin_update: None,
+            declined_builtin_updates: Vec::new(),
             updated_at: 123,
         };
 

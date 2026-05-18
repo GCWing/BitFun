@@ -119,8 +119,8 @@ async fn seed_one(manager: &Arc<MiniAppManager>, app: &BuiltinApp) -> BitFunResu
     let now = Utc::now().timestamp_millis();
     match manager.load_customization_metadata(app.id).await {
         Ok(Some(metadata)) if metadata.local_override => {
-            manager
-                .mark_builtin_update_available(app.id, app.version, now)
+            let recorded = manager
+                .mark_builtin_update_available(app.id, app.version, &content_hash, now)
                 .await?;
             let marker = BuiltinInstallMarker {
                 version: app.version,
@@ -132,11 +132,19 @@ async fn seed_one(manager: &Arc<MiniAppManager>, app: &BuiltinApp) -> BitFunResu
                 &app.version.to_string(),
             )
             .await?;
-            log::info!(
-                "preserved customized builtin miniapp '{}' and recorded bundled update v{}",
-                app.id,
-                app.version
-            );
+            if recorded {
+                log::info!(
+                    "preserved customized builtin miniapp '{}' and recorded bundled update v{}",
+                    app.id,
+                    app.version
+                );
+            } else {
+                log::info!(
+                    "preserved customized builtin miniapp '{}' and skipped previously declined bundled update v{}",
+                    app.id,
+                    app.version
+                );
+            }
             return Ok(());
         }
         Ok(_) => {}
@@ -327,6 +335,18 @@ mod tests {
         Arc::new(MiniAppManager::new(path_manager))
     }
 
+    async fn write_outdated_builtin_marker(app_dir: &std::path::Path) {
+        write_builtin_install_marker(
+            &app_dir.join(BUILTIN_MARKER),
+            &BuiltinInstallMarker {
+                version: 0,
+                hash: "sha256:outdated".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
     #[tokio::test]
     async fn builtin_reseed_preserves_local_override_and_records_available_update() {
         let manager = test_manager();
@@ -350,14 +370,13 @@ mod tests {
                     local_override: true,
                     last_applied_draft_id: Some("draft-1".to_string()),
                     available_builtin_update: None,
+                    declined_builtin_updates: Vec::new(),
                     updated_at: Utc::now().timestamp_millis(),
                 },
             )
             .await
             .unwrap();
-        tokio::fs::write(app_dir.join(BUILTIN_MARKER), "0")
-            .await
-            .unwrap();
+        write_outdated_builtin_marker(&app_dir).await;
 
         seed_builtin_miniapps(&manager).await.unwrap();
 
@@ -372,11 +391,103 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(metadata.local_override);
+        let update = metadata.available_builtin_update.unwrap();
+        assert_eq!(update.builtin_version, builtin.version);
+        assert!(!update.source_hash.is_empty());
+    }
+
+    #[tokio::test]
+    async fn builtin_reseed_skips_declined_update_until_local_override_changes() {
+        let manager = test_manager();
+        let builtin = &BUILTIN_APPS[0];
+        seed_builtin_miniapps(&manager).await.unwrap();
+
+        let custom_css = "body { background: #fafafa; }";
+        let app_dir = manager.path_manager().miniapp_dir(builtin.id);
+        tokio::fs::write(app_dir.join("source").join("style.css"), custom_css)
+            .await
+            .unwrap();
+        manager
+            .save_customization_metadata(
+                builtin.id,
+                &MiniAppCustomizationMetadata {
+                    origin: MiniAppCustomizationOrigin {
+                        kind: MiniAppCustomizationOriginKind::Builtin,
+                        builtin_id: Some(builtin.id.to_string()),
+                        builtin_version: Some(builtin.version),
+                    },
+                    local_override: true,
+                    last_applied_draft_id: Some("draft-1".to_string()),
+                    available_builtin_update: None,
+                    declined_builtin_updates: Vec::new(),
+                    updated_at: Utc::now().timestamp_millis(),
+                },
+            )
+            .await
+            .unwrap();
+
+        write_outdated_builtin_marker(&app_dir).await;
+        seed_builtin_miniapps(&manager).await.unwrap();
+        let first_metadata = manager
+            .load_customization_metadata(builtin.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let first_update = first_metadata.available_builtin_update.unwrap();
+        let source_hash = first_update.source_hash.clone();
+
+        manager
+            .decline_builtin_update(builtin.id, first_update.builtin_version, &source_hash, 1234)
+            .await
+            .unwrap();
+        write_outdated_builtin_marker(&app_dir).await;
+        seed_builtin_miniapps(&manager).await.unwrap();
+
+        let declined_metadata = manager
+            .load_customization_metadata(builtin.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(declined_metadata.available_builtin_update.is_none());
+        assert_eq!(declined_metadata.declined_builtin_updates.len(), 1);
         assert_eq!(
-            metadata
+            declined_metadata.declined_builtin_updates[0].source_hash,
+            source_hash
+        );
+        let repeated_same_source = manager
+            .mark_builtin_update_available(builtin.id, builtin.version + 1, &source_hash, 5678)
+            .await
+            .unwrap();
+        assert!(!repeated_same_source);
+        let css = tokio::fs::read_to_string(app_dir.join("source").join("style.css"))
+            .await
+            .unwrap();
+        assert_eq!(css, custom_css);
+
+        tokio::fs::write(
+            app_dir.join("source").join("style.css"),
+            "body { background: #ffffff; }",
+        )
+        .await
+        .unwrap();
+        manager
+            .sync_from_fs(builtin.id, "dark", None)
+            .await
+            .unwrap();
+        write_outdated_builtin_marker(&app_dir).await;
+        seed_builtin_miniapps(&manager).await.unwrap();
+
+        let updated_metadata = manager
+            .load_customization_metadata(builtin.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            updated_metadata
                 .available_builtin_update
-                .map(|update| update.builtin_version),
-            Some(builtin.version)
+                .as_ref()
+                .map(|update| (update.builtin_version, update.source_hash.as_str())),
+            Some((builtin.version, source_hash.as_str()))
         );
     }
 

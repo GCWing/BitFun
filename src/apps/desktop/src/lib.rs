@@ -990,6 +990,7 @@ pub async fn run() {
             api::miniapp_api::miniapp_draft_host_call,
             api::miniapp_api::miniapp_draft_worker_stop,
             api::miniapp_api::miniapp_get_customization_metadata,
+            api::miniapp_api::miniapp_decline_builtin_update,
             api::miniapp_api::miniapp_ai_complete,
             api::miniapp_api::miniapp_ai_chat,
             api::miniapp_api::miniapp_ai_cancel,

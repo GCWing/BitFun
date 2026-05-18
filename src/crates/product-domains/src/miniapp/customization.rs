@@ -19,7 +19,22 @@ pub struct MiniAppCustomizationOrigin {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MiniAppAvailableBuiltinUpdate {
     pub builtin_version: u32,
+    #[serde(default)]
+    pub source_hash: String,
     pub detected_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MiniAppDeclinedBuiltinUpdate {
+    pub builtin_version: u32,
+    pub source_hash: String,
+    pub declined_at: i64,
+    #[serde(default)]
+    pub local_app_version: Option<u32>,
+    #[serde(default)]
+    pub local_app_updated_at: Option<i64>,
+    #[serde(default)]
+    pub last_applied_draft_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,7 +42,10 @@ pub struct MiniAppCustomizationMetadata {
     pub origin: MiniAppCustomizationOrigin,
     pub local_override: bool,
     pub last_applied_draft_id: Option<String>,
+    #[serde(default)]
     pub available_builtin_update: Option<MiniAppAvailableBuiltinUpdate>,
+    #[serde(default)]
+    pub declined_builtin_updates: Vec<MiniAppDeclinedBuiltinUpdate>,
     pub updated_at: i64,
 }
 
@@ -163,6 +181,7 @@ fn diff_string_list(
 
 #[cfg(test)]
 mod tests {
+    use crate::miniapp::customization::MiniAppCustomizationMetadata;
     use crate::miniapp::types::{
         AiPermissions, FsPermissions, MiniAppPermissions, NetPermissions, NodePermissions,
         ShellPermissions,
@@ -170,6 +189,28 @@ mod tests {
 
     fn empty_permissions() -> MiniAppPermissions {
         MiniAppPermissions::default()
+    }
+
+    #[test]
+    fn customization_metadata_defaults_declined_updates_for_existing_files() {
+        let metadata: MiniAppCustomizationMetadata = serde_json::from_value(serde_json::json!({
+            "origin": {
+                "kind": "builtin",
+                "builtin_id": "builtin-demo",
+                "builtin_version": 1
+            },
+            "local_override": true,
+            "last_applied_draft_id": "draft-1",
+            "available_builtin_update": {
+                "builtin_version": 2,
+                "detected_at": 123
+            },
+            "updated_at": 124
+        }))
+        .unwrap();
+
+        assert!(metadata.declined_builtin_updates.is_empty());
+        assert_eq!(metadata.available_builtin_update.unwrap().source_hash, "");
     }
 
     #[test]

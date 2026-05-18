@@ -269,6 +269,13 @@
       line-height: $line-height-relaxed;
     }
 
+    &-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: $size-gap-2;
+      margin-top: $size-gap-2;
+    }
+
     &--update {
       border-bottom-color: color-mix(in srgb, var(--color-warning) 28%, var(--border-subtle));
       background: color-mix(in srgb, var(--color-warning) 12%, var(--color-bg-subtle));
