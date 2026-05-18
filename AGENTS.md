@@ -134,7 +134,12 @@ and milestone verification gates.
 ### Latest-main runtime anchors
 
 - Agent registry migration must preserve mode-scoped subagent availability,
-  hidden/custom/review grouping, and desktop subagent API semantics.
+  hidden/custom/review grouping, desktop subagent API semantics, and CLI
+  mode-aware `/subagents` list/config behavior, including `Multitask` mode
+  and the built-in `GeneralPurpose` subagent.
+- Background subagent task delivery remains core agent-runtime behavior:
+  `Task.run_in_background` must preserve parent metadata, workspace routing,
+  running-turn injection, and idle-session follow-up turn delivery.
 - DeepResearch report finalization currently relies on the core citation
   renumber hook; do not move it without preserving `report.md`,
   `citations.md`, `display_map.json`, and rejected-citation handling.
@@ -142,6 +147,12 @@ and milestone verification gates.
   remote flashgrep fallback, and search preview/context mapping.
 - ACP timeout handling and Web operation-diff fallback are product-surface
   behavior; share facts through contracts, not UI/protocol implementation.
+- Web startup trace, deferred background scheduling, narrow tool startup, and
+  non-blocking Flow Chat history hydration are Web product-surface behavior;
+  do not move those orchestration paths into core contract crates.
+- Built-in MiniApp seeding, content-hash update markers, customization-update
+  metadata, and host dispatch execution remain core-owned runtime behavior
+  until a reviewed MiniApp runtime migration exists.
 
 ### Services/product owner closure
 

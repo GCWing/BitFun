@@ -1157,7 +1157,7 @@ const requiredContentRules = [
         message: 'missing collapsed-tool name tracking',
       },
       {
-        regex: /Call `GetToolSpec` first/,
+        regex: /First call `GetToolSpec`|Use GetToolSpec.*first/,
         message: 'missing collapsed-tool prompt stub',
       },
     ],
@@ -1289,6 +1289,155 @@ const requiredContentRules = [
       {
         regex: /\bpub enum SubagentStateReason\b/,
         message: 'missing availability reason wire contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/definitions/modes/mod.rs',
+    reason:
+      'core agent mode definitions must continue exposing Multitask mode until an approved agent-runtime migration preserves mode registration semantics',
+    patterns: [
+      {
+        regex: /\bmod multitask\b/,
+        message: 'missing Multitask mode module',
+      },
+      {
+        regex: /\bpub use multitask::MultitaskMode\b/,
+        message: 'missing Multitask mode export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/definitions/subagents/mod.rs',
+    reason:
+      'core subagent definitions must continue exposing the built-in GeneralPurpose subagent until registry ownership migration has equivalence coverage',
+    patterns: [
+      {
+        regex: /\bmod general_purpose\b/,
+        message: 'missing GeneralPurpose subagent module',
+      },
+      {
+        regex: /\bpub use general_purpose::GeneralPurposeAgent\b/,
+        message: 'missing GeneralPurpose subagent export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/registry/builtin.rs',
+    reason:
+      'core builtin registry must continue registering latest-main mode and subagent defaults until agent registry ownership migrates with API equivalence tests',
+    patterns: [
+      {
+        regex: /\bbuiltin_agent_specs\(\)/,
+        message: 'missing builtin agent spec registration source',
+      },
+      {
+        regex: /"Multitask"\s*=>\s*"auto"/,
+        message: 'missing Multitask default model mapping',
+      },
+      {
+        regex: /"GeneralPurpose"\s*=>\s*"fast"/,
+        message: 'missing GeneralPurpose default model mapping',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/implementations/task_tool.rs',
+    reason:
+      'core Task tool must continue owning background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
+    patterns: [
+      {
+        regex: /"run_in_background"/,
+        message: 'missing Task run_in_background schema flag',
+      },
+      {
+        regex: /\bstart_background_subagent\b/,
+        message: 'missing background subagent launch path',
+      },
+      {
+        regex: /\bbackground_task_id\b/,
+        message: 'missing background task id result contract',
+      },
+      {
+        regex: /Background subagent/,
+        message: 'missing assistant-visible background subagent acknowledgement',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+    reason:
+      'core scheduler must continue owning background subagent result delivery until running-turn and idle-session routing equivalence tests exist',
+    patterns: [
+      {
+        regex: /\bdeliver_background_subagent_result\b/,
+        message: 'missing background subagent delivery entry point',
+      },
+      {
+        regex: /RoundInjectionKind::BackgroundSubagentResult/,
+        message: 'missing running-turn background result injection',
+      },
+      {
+        regex: /RoundInjectionTarget::CurrentRunningTurn/,
+        message: 'missing current-turn injection target',
+      },
+      {
+        regex: /DialogTriggerSource::AgentSession/,
+        message: 'missing idle-session agent-session follow-up turn source',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/cli/src/ui/startup.rs',
+    reason:
+      'CLI mode-aware subagent management remains an app-layer product surface until agent registry migration has CLI equivalence coverage',
+    patterns: [
+      {
+        regex: /\bfn show_available_subagent_list\b/,
+        message: 'missing CLI subagent list surface',
+      },
+      {
+        regex: /\bfn show_subagent_config_selector\b/,
+        message: 'missing CLI subagent config surface',
+      },
+      {
+        regex: /\bget_subagents_for_query\b/,
+        message: 'missing CLI mode-scoped subagent query',
+      },
+      {
+        regex: /\bSubagentQueryContext\b/,
+        message: 'missing CLI subagent query context',
+      },
+      {
+        regex: /\bupdate_subagent_override\b/,
+        message: 'missing CLI subagent availability update path',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/cli/src/ui/subagent_selector.rs',
+    reason:
+      'CLI subagent selector presentation must remain app-layer UI while registry availability semantics stay in core',
+    patterns: [
+      {
+        regex: /\bpub enum SubagentSelectorAction\b/,
+        message: 'missing CLI subagent selector action contract',
+      },
+      {
+        regex: /\bpub fn show_list\b/,
+        message: 'missing CLI subagent list mode',
+      },
+      {
+        regex: /\bpub fn show_config\b/,
+        message: 'missing CLI subagent config mode',
+      },
+      {
+        regex: /\bdefault_enabled\b/,
+        message: 'missing CLI default availability display',
+      },
+      {
+        regex: /\bfn render_subagent_line\b/,
+        message: 'missing CLI subagent presentation renderer',
       },
     ],
   },
@@ -1427,6 +1576,144 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/web-ui/src/main.tsx',
+    reason:
+      'web startup scheduling and trace orchestration remain web product-surface behavior, not core contract runtime',
+    patterns: [
+      {
+        regex: /\bstartupTrace\b/,
+        message: 'missing web startup trace surface',
+      },
+      {
+        regex: /\bbackgroundTaskScheduler\b/,
+        message: 'missing deferred startup scheduler surface',
+      },
+      {
+        regex: /\binitializeAllTools\b/,
+        message: 'missing narrow tool-startup entry integration',
+      },
+      {
+        regex: /\bafter_render_start\b/,
+        message: 'missing post-render startup phase',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui/src/shared/utils/startupTrace.ts',
+    reason:
+      'web startup trace classification and redaction remain web infrastructure behavior until a telemetry contract is reviewed',
+    patterns: [
+      {
+        regex: /\bfunction sanitizeTraceData\b/,
+        message: 'missing startup trace sanitization',
+      },
+      {
+        regex: /\bexport function isRemoteTraceRequest\b/,
+        message: 'missing remote request classifier',
+      },
+      {
+        regex: /\brecordApiCall\b/,
+        message: 'missing startup API-call trace recorder',
+      },
+      {
+        regex: /\bflushSummary\b/,
+        message: 'missing bounded startup summary flush',
+      },
+      {
+        regex: /\bmarkPhaseAfterAnimationFrames\b/,
+        message: 'missing frame-delayed startup marker',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui/src/shared/utils/backgroundTaskScheduler.ts',
+    reason:
+      'web background startup scheduling remains web infrastructure behavior and must preserve dedupe/cancel semantics',
+    patterns: [
+      {
+        regex: /\bexport class BackgroundTaskScheduler\b/,
+        message: 'missing background task scheduler',
+      },
+      {
+        regex: /\binFlightKey\b/,
+        message: 'missing in-flight dedupe key',
+      },
+      {
+        regex: /\bAbortController\b/,
+        message: 'missing cancellation controller',
+      },
+      {
+        regex: /\bBackgroundTaskCancelledError\b/,
+        message: 'missing cancellation error contract',
+      },
+      {
+        regex: /\bcancelIdle\b/,
+        message: 'missing idle callback cancellation',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui/src/tools/initializeTools.ts',
+    reason:
+      'web tool startup must stay behind a narrow app-layer entry instead of importing product tools through shared contracts',
+    patterns: [
+      {
+        regex: /\bexport async function initializeAllTools\b/,
+        message: 'missing narrow tool startup entry',
+      },
+      {
+        regex: /\binitializeLsp\b/,
+        message: 'missing LSP startup initializer call',
+      },
+      {
+        regex: /\binitializeGit\b/,
+        message: 'missing Git startup initializer call',
+      },
+      {
+        regex: /does not import every tool/,
+        message: 'missing narrow startup import guard',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui/src/tools/editor/services/MonacoStartupWarmup.ts',
+    reason:
+      'Monaco startup warmup remains a deferred web-app optimization, not a core runtime dependency',
+    patterns: [
+      {
+        regex: /\bexport function scheduleMonacoStartupWarmup\b/,
+        message: 'missing deferred Monaco warmup entry',
+      },
+      {
+        regex: /\bbackgroundTaskScheduler\b/,
+        message: 'missing background scheduler integration',
+      },
+      {
+        regex: /startup:monaco-warmup/,
+        message: 'missing Monaco warmup dedupe key',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui/src/flow_chat/services/flow-chat-manager/SessionModule.ts',
+    reason:
+      'flow-chat history hydration remains web startup/product-surface behavior until a UI equivalence plan exists',
+    patterns: [
+      {
+        regex: /\bhistorical_session_hydrate_request\b/,
+        message: 'missing historical session hydrate trace',
+      },
+      {
+        regex: /Load history in the background/,
+        message: 'missing non-blocking history load contract',
+      },
+      {
+        regex: /\bhistoryState: 'ready'/,
+        message: 'missing history-ready state contract',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/miniapp/storage.rs',
     reason:
       'core must continue owning MiniApp storage runtime adapter until storage IO migration is reviewed',
@@ -1434,6 +1721,64 @@ const requiredContentRules = [
       {
         regex: /\bimpl MiniAppStoragePort for MiniAppStorage\b/,
         message: 'missing MiniApp storage port adapter owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/builtin/mod.rs',
+    reason:
+      'core must continue owning built-in MiniApp asset seeding and update markers until builtin asset runtime migration is reviewed',
+    patterns: [
+      {
+        regex: /id: "builtin-pr-review"/,
+        message: 'missing built-in PR Review MiniApp anchor',
+      },
+      {
+        regex: /\bstruct BuiltinInstallMarker\b/,
+        message: 'missing built-in MiniApp install marker',
+      },
+      {
+        regex: /\bfn builtin_content_hash\b/,
+        message: 'missing built-in MiniApp content hash policy',
+      },
+      {
+        regex: /\bfn should_seed_builtin_app\b/,
+        message: 'missing built-in MiniApp seed decision policy',
+      },
+      {
+        regex: /\bload_customization_metadata\b/,
+        message: 'missing customized built-in preservation path',
+      },
+      {
+        regex: /\bavailable_builtin_update\b/,
+        message: 'missing customized built-in update metadata path',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/host_dispatch.rs',
+    reason:
+      'core must continue owning MiniApp host-dispatch execution until host/runtime migration is reviewed',
+    patterns: [
+      {
+        regex: /\bpub async fn dispatch_host\b/,
+        message: 'missing MiniApp host dispatch entry',
+      },
+      {
+        regex: /\basync fn dispatch_fs\b/,
+        message: 'missing MiniApp fs host dispatch',
+      },
+      {
+        regex: /\basync fn dispatch_shell\b/,
+        message: 'missing MiniApp shell host dispatch',
+      },
+      {
+        regex: /\bcommand_basename_allowed\b/,
+        message: 'missing MiniApp shell allowlist policy use',
+      },
+      {
+        regex: /\bhost_allowed_by_allowlist\b/,
+        message: 'missing MiniApp net allowlist policy use',
       },
     ],
   },
@@ -2038,7 +2383,7 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/agentic/tools/manifest_resolver.rs',
-      contracts: ['resolve_tool_manifest', 'GET_TOOL_SPEC_TOOL_NAME', 'ToolExposure'],
+      contracts: ['resolve_tool_manifest', 'GET_TOOL_SPEC_TOOL_NAME', 'ToolExposure', 'First call `GetToolSpec`'],
     },
     {
       path: 'src/crates/core/src/agentic/tools/implementations/get_tool_spec_tool.rs',
@@ -2065,6 +2410,51 @@ function runManifestParserSelfTest() {
       contracts: ['SubagentQueryContext', 'SubagentListScope', 'default_enabled', 'effective_enabled', 'SubagentStateReason'],
     },
     {
+      path: 'src/crates/core/src/agentic/agents/definitions/modes/mod.rs',
+      contracts: ['mod multitask', 'MultitaskMode'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/agents/definitions/subagents/mod.rs',
+      contracts: ['mod general_purpose', 'GeneralPurposeAgent'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/agents/registry/builtin.rs',
+      contracts: ['builtin_agent_specs', 'Multitask', 'GeneralPurpose'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/implementations/task_tool.rs',
+      contracts: ['run_in_background', 'start_background_subagent', 'background_task_id', 'Background subagent'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+      contracts: [
+        'deliver_background_subagent_result',
+        'BackgroundSubagentResult',
+        'CurrentRunningTurn',
+        'AgentSession',
+      ],
+    },
+    {
+      path: 'src/apps/cli/src/ui/startup.rs',
+      contracts: [
+        'show_available_subagent_list',
+        'show_subagent_config_selector',
+        'get_subagents_for_query',
+        'SubagentQueryContext',
+        'update_subagent_override',
+      ],
+    },
+    {
+      path: 'src/apps/cli/src/ui/subagent_selector.rs',
+      contracts: [
+        'SubagentSelectorAction',
+        'show_list',
+        'show_config',
+        'default_enabled',
+        'render_subagent_line',
+      ],
+    },
+    {
       path: 'src/crates/core/src/agentic/agents/citation_renumber.rs',
       contracts: ['run_for_session_workspace', 'try_renumber_research_report', 'display_map', 'REJECTED'],
     },
@@ -2089,8 +2479,65 @@ function runManifestParserSelfTest() {
       contracts: ['openLocalDiff', 'snapshotAPI\\.getOperationDiff', 'Snapshot diff unavailable', 'localDiffContent'],
     },
     {
+      path: 'src/web-ui/src/main.tsx',
+      contracts: ['startupTrace', 'backgroundTaskScheduler', 'initializeAllTools', 'after_render_start'],
+    },
+    {
+      path: 'src/web-ui/src/shared/utils/startupTrace.ts',
+      contracts: [
+        'sanitizeTraceData',
+        'isRemoteTraceRequest',
+        'recordApiCall',
+        'flushSummary',
+        'markPhaseAfterAnimationFrames',
+      ],
+    },
+    {
+      path: 'src/web-ui/src/shared/utils/backgroundTaskScheduler.ts',
+      contracts: [
+        'BackgroundTaskScheduler',
+        'inFlightKey',
+        'AbortController',
+        'BackgroundTaskCancelledError',
+        'cancelIdle',
+      ],
+    },
+    {
+      path: 'src/web-ui/src/tools/initializeTools.ts',
+      contracts: ['initializeAllTools', 'initializeLsp', 'initializeGit', 'does not import every tool'],
+    },
+    {
+      path: 'src/web-ui/src/tools/editor/services/MonacoStartupWarmup.ts',
+      contracts: ['scheduleMonacoStartupWarmup', 'backgroundTaskScheduler', 'startup:monaco-warmup'],
+    },
+    {
+      path: 'src/web-ui/src/flow_chat/services/flow-chat-manager/SessionModule.ts',
+      contracts: ['historical_session_hydrate_request', 'Load history in the background', "historyState: 'ready'"],
+    },
+    {
       path: 'src/crates/core/src/miniapp/storage.rs',
       contracts: ['MiniAppStoragePort'],
+    },
+    {
+      path: 'src/crates/core/src/miniapp/builtin/mod.rs',
+      contracts: [
+        'builtin-pr-review',
+        'BuiltinInstallMarker',
+        'builtin_content_hash',
+        'should_seed_builtin_app',
+        'load_customization_metadata',
+        'available_builtin_update',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/miniapp/host_dispatch.rs',
+      contracts: [
+        'dispatch_host',
+        'dispatch_fs',
+        'dispatch_shell',
+        'command_basename_allowed',
+        'host_allowed_by_allowlist',
+      ],
     },
     {
       path: 'src/crates/core/src/miniapp/js_worker_pool.rs',
