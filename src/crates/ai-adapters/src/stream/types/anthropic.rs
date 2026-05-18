@@ -45,23 +45,27 @@ impl Usage {
 
 impl From<Usage> for UnifiedTokenUsage {
     fn from(value: Usage) -> Self {
-        let cache_read = value.cache_read_input_tokens.unwrap_or(0);
-        let cache_creation = value.cache_creation_input_tokens.unwrap_or(0);
-        let prompt_token_count = value.input_tokens.unwrap_or(0) + cache_read + cache_creation;
+        let cache_read = value.cache_read_input_tokens;
+        let cache_creation = value.cache_creation_input_tokens;
+
+        // prompt_token_count = total context tokens occupied (industry-standard
+        // "input tokens" metric). For Anthropic this is the three disjoint
+        // components summed; for other providers the API reports this directly.
+        let prompt_token_count = value.input_tokens.unwrap_or(0)
+            + cache_read.unwrap_or(0)
+            + cache_creation.unwrap_or(0);
         let candidates_token_count = value.output_tokens.unwrap_or(0);
+
         Self {
             prompt_token_count,
             candidates_token_count,
             total_token_count: prompt_token_count + candidates_token_count,
             reasoning_token_count: None,
-            cached_content_token_count: match (
-                value.cache_read_input_tokens,
-                value.cache_creation_input_tokens,
-            ) {
-                (None, None) => None,
-                (read, creation) => Some(read.unwrap_or(0) + creation.unwrap_or(0)),
-            },
-            cache_creation_token_count: None,
+            // cached_content_token_count = cache READS only. This is the
+            // numerator for `cache hit rate = cached / prompt`. Writes go
+            // to cache_creation_token_count below.
+            cached_content_token_count: cache_read,
+            cache_creation_token_count: cache_creation,
         }
     }
 }
@@ -209,5 +213,78 @@ pub struct AnthropicSSEErrorDetails {
 impl From<AnthropicSSEErrorDetails> for String {
     fn from(value: AnthropicSSEErrorDetails) -> Self {
         format!("{}: {}", value.error_type, value.message)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::stream::types::unified::UnifiedTokenUsage;
+
+    #[test]
+    fn cached_content_token_count_is_reads_only_not_sum() {
+        let raw = r#"{
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 30,
+            "cache_creation_input_tokens": 20
+        }"#;
+        let usage: Usage = serde_json::from_str(raw).expect("valid anthropic usage");
+        let unified: UnifiedTokenUsage = usage.into();
+
+        // cached_content_token_count must be reads only — NOT read + creation.
+        // This guarantees `cached_content / prompt` is a correct hit rate.
+        assert_eq!(unified.cached_content_token_count, Some(30));
+        assert_eq!(unified.cache_creation_token_count, Some(20));
+
+        // prompt_token_count keeps "total context" semantic (matches industry
+        // standard "input tokens" metric across providers).
+        assert_eq!(unified.prompt_token_count, 150);
+        assert_eq!(unified.candidates_token_count, 50);
+        assert_eq!(unified.total_token_count, 200);
+
+        // Hit rate computed by downstream:
+        //   30 / 150 == 20% (correct: only reads count as hits)
+        // Pre-fix this would have been wrongly 50/150 == 33%.
+    }
+
+    #[test]
+    fn absent_cache_fields_stay_none() {
+        let raw = r#"{ "input_tokens": 100, "output_tokens": 50 }"#;
+        let usage: Usage = serde_json::from_str(raw).expect("valid anthropic usage");
+        let unified: UnifiedTokenUsage = usage.into();
+        assert_eq!(unified.cached_content_token_count, None);
+        assert_eq!(unified.cache_creation_token_count, None);
+    }
+
+    #[test]
+    fn zero_cache_fields_are_some_zero_not_none() {
+        // Cache support reported but zero this call must be distinguishable
+        // from "provider did not report cache fields at all".
+        let raw = r#"{
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+        }"#;
+        let usage: Usage = serde_json::from_str(raw).expect("valid anthropic usage");
+        let unified: UnifiedTokenUsage = usage.into();
+        assert_eq!(unified.cached_content_token_count, Some(0));
+        assert_eq!(unified.cache_creation_token_count, Some(0));
+    }
+
+    #[test]
+    fn only_read_present_no_creation() {
+        let raw = r#"{
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_read_input_tokens": 30
+        }"#;
+        let usage: Usage = serde_json::from_str(raw).expect("valid anthropic usage");
+        let unified: UnifiedTokenUsage = usage.into();
+        assert_eq!(unified.cached_content_token_count, Some(30));
+        assert_eq!(unified.cache_creation_token_count, None);
+        // prompt_token_count = input + read (no creation contribution)
+        assert_eq!(unified.prompt_token_count, 130);
     }
 }
