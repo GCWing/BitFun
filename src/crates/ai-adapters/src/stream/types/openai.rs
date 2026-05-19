@@ -51,6 +51,13 @@ impl From<OpenAIUsage> for UnifiedTokenUsage {
 struct Choice {
     #[allow(dead_code)]
     index: usize,
+    /// MiniMax's last SSE frame switches to non-streaming `chat.completion`
+    /// shape and puts the content under `message` instead of `delta`. We don't
+    /// need that frame's content (earlier chunks already streamed it), but the
+    /// frame also carries the only authoritative `usage` block. Default the
+    /// field so such frames deserialize cleanly and the top-level usage flows
+    /// through.
+    #[serde(default)]
     delta: Delta,
     finish_reason: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_stringish")]
@@ -66,7 +73,7 @@ struct ReasoningDetail {
     text: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct Delta {
     #[allow(dead_code)]
     role: Option<String>,
@@ -452,6 +459,57 @@ mod tests {
         assert!(responses[0].usage.is_some());
         assert!(responses[0].text.is_none());
         assert!(responses[0].tool_call.is_none());
+    }
+
+    #[test]
+    fn parses_minimax_final_chunk_with_message_field_instead_of_delta() {
+        // MiniMax's last SSE frame uses non-streaming `chat.completion` shape:
+        // choice has `message` instead of `delta`, and the real usage lives at
+        // the top level. Pre-fix this chunk failed to deserialize (`delta` was
+        // a required field), so the real prompt/completion tokens were silently
+        // dropped. After the fix, the chunk parses cleanly and usage flows
+        // through.
+        let raw = r#"{
+            "id": "065b58b7a16cf30f1e20c8f1942efeae",
+            "created": 1779180983,
+            "model": "MiniMax-M2.7-highspeed",
+            "object": "chat.completion",
+            "choices": [{
+                "finish_reason": "stop",
+                "index": 0,
+                "message": {
+                    "content": "hi",
+                    "role": "assistant",
+                    "name": "MiniMax AI",
+                    "reasoning_content": "The user wants hi."
+                }
+            }],
+            "usage": {
+                "total_tokens": 92,
+                "prompt_tokens": 45,
+                "completion_tokens": 47,
+                "completion_tokens_details": {"reasoning_tokens": 45}
+            }
+        }"#;
+
+        let sse_data: OpenAISSEData = serde_json::from_str(raw)
+            .expect("MiniMax final chunk must deserialize even without delta");
+        let responses = sse_data.into_unified_responses();
+
+        // Critical: the usage from this chunk must propagate.
+        let usage = responses
+            .iter()
+            .find_map(|r| r.usage.as_ref())
+            .expect("usage from MiniMax final chunk must be preserved");
+        assert_eq!(usage.prompt_token_count, 45);
+        assert_eq!(usage.candidates_token_count, 47);
+        assert_eq!(usage.total_token_count, 92);
+
+        // finish_reason should also be preserved (lives at choice top level).
+        assert!(
+            responses.iter().any(|r| r.finish_reason.as_deref() == Some("stop")),
+            "finish_reason from MiniMax final chunk must be preserved"
+        );
     }
 
     #[test]

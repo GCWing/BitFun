@@ -12,6 +12,10 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 const OPENAI_CHAT_COMPLETION_CHUNK_OBJECT: &str = "chat.completion.chunk";
+/// MiniMax (and possibly other providers) close a streaming response with a
+/// non-streaming `chat.completion` frame instead of a true `chunk`. That final
+/// frame is the only one carrying authoritative usage, so we accept it too.
+const OPENAI_CHAT_COMPLETION_OBJECT: &str = "chat.completion";
 const AI_STREAM_RESPONSE_TARGET: &str = "ai::openai_stream_response";
 
 #[derive(Debug)]
@@ -42,9 +46,14 @@ impl OpenAIResponseNormalizer {
 }
 
 fn is_valid_chat_completion_chunk_weak(event_json: &Value) -> bool {
+    // Standard streaming frames use `chat.completion.chunk`. MiniMax's final
+    // SSE frame, however, switches to the non-streaming `chat.completion`
+    // shape (choice carries `message` rather than `delta`) and is the ONLY
+    // chunk that contains the authoritative usage block. Accept both — the
+    // OpenAISSEData deserialization downstream tolerates either choice shape.
     matches!(
         event_json.get("object").and_then(|value| value.as_str()),
-        Some(OPENAI_CHAT_COMPLETION_CHUNK_OBJECT)
+        Some(OPENAI_CHAT_COMPLETION_CHUNK_OBJECT) | Some(OPENAI_CHAT_COMPLETION_OBJECT)
     )
 }
 
@@ -259,6 +268,19 @@ mod tests {
             "id": "chatcmpl_test"
         });
         assert!(!is_valid_chat_completion_chunk_weak(&event));
+    }
+
+    #[test]
+    fn weak_filter_accepts_minimax_final_chat_completion_object() {
+        // MiniMax's last SSE frame uses `chat.completion` (non-streaming shape)
+        // instead of `chat.completion.chunk`. That frame carries the only
+        // authoritative usage block, so it must NOT be dropped at the gate.
+        let event = serde_json::json!({
+            "object": "chat.completion",
+            "choices": [{"finish_reason": "stop", "index": 0, "message": {}}],
+            "usage": {"prompt_tokens": 45, "completion_tokens": 47, "total_tokens": 92}
+        });
+        assert!(is_valid_chat_completion_chunk_weak(&event));
     }
 
     #[test]
