@@ -1,6 +1,7 @@
 //! MiniApp domain contracts and pure helpers.
 
 pub mod bridge_builder;
+pub mod builtin;
 pub mod compiler;
 pub mod customization;
 pub mod draft;

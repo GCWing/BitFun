@@ -1,6 +1,11 @@
 #![cfg(feature = "miniapp")]
 
 use bitfun_product_domains::miniapp::bridge_builder::{build_bridge_script, build_csp_content};
+use bitfun_product_domains::miniapp::builtin::{
+    build_builtin_package_json, builtin_content_hash, builtin_source_files,
+    should_seed_builtin_app, BuiltinInstallMarker, BuiltinMiniAppBundle, BUILTIN_INSTALL_MARKER,
+    BUILTIN_PLACEHOLDER_COMPILED_HTML, LEGACY_BUILTIN_VERSION_MARKER,
+};
 use bitfun_product_domains::miniapp::compiler::compile;
 use bitfun_product_domains::miniapp::customization::{
     apply_draft_customization_metadata, decline_builtin_update_metadata,
@@ -708,6 +713,75 @@ fn miniapp_storage_import_fallback_contract_remains_stable() {
     assert_eq!(fallbacks.storage_json, "{}");
     assert_eq!(fallbacks.compiled_html, PLACEHOLDER_COMPILED_HTML);
     assert_eq!(fallbacks.package_json, package);
+}
+
+#[test]
+fn miniapp_builtin_contract_preserves_seed_marker_and_hash_policy() {
+    let app = BuiltinMiniAppBundle {
+        id: "builtin-demo",
+        version: 2,
+        meta_json: r#"{"id":"builtin-demo"}"#,
+        html: "<!doctype html><html></html>",
+        css: "body { color: red; }",
+        ui_js: r#"console.log("ui");"#,
+        worker_js: r#"console.log("worker");"#,
+        esm_dependencies_json: "[]",
+    };
+    let content_hash = builtin_content_hash(&app);
+
+    assert_eq!(BUILTIN_INSTALL_MARKER, ".builtin-manifest.json");
+    assert_eq!(LEGACY_BUILTIN_VERSION_MARKER, ".builtin-version");
+    assert_eq!(
+        content_hash,
+        "sha256:5a2625011813ed9f39eea6875ab96047eb383ac005298ea86ce68e5ac4e79825"
+    );
+
+    assert!(should_seed_builtin_app(&app, &content_hash, None));
+    assert!(!should_seed_builtin_app(
+        &app,
+        &content_hash,
+        Some(&BuiltinInstallMarker {
+            version: 2,
+            hash: content_hash.clone(),
+        }),
+    ));
+    assert!(should_seed_builtin_app(
+        &app,
+        &content_hash,
+        Some(&BuiltinInstallMarker {
+            version: 1,
+            hash: content_hash.clone(),
+        }),
+    ));
+    assert!(should_seed_builtin_app(
+        &app,
+        &content_hash,
+        Some(&BuiltinInstallMarker {
+            version: 3,
+            hash: "sha256:old".to_string(),
+        }),
+    ));
+
+    let package = build_builtin_package_json(app.id);
+    assert_eq!(package["name"], "miniapp-builtin-demo");
+    assert_eq!(package["private"], true);
+    assert_eq!(package["dependencies"], serde_json::json!({}));
+
+    let source_files = builtin_source_files(&app);
+    assert_eq!(
+        source_files,
+        [
+            (INDEX_HTML, app.html),
+            (STYLE_CSS, app.css),
+            (UI_JS, app.ui_js),
+            (WORKER_JS, app.worker_js),
+            (ESM_DEPS_JSON, app.esm_dependencies_json),
+        ]
+    );
+    assert_eq!(
+        BUILTIN_PLACEHOLDER_COMPILED_HTML,
+        "<!DOCTYPE html><html><body>Loading...</body></html>"
+    );
 }
 
 #[test]

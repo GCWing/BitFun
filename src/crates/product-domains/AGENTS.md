@@ -37,17 +37,18 @@ moves here gradually.
   file shapes, import fallback payloads, runtime search-plan helpers, worker
   install command selection, lifecycle/revision and manager state-transition
   helpers, host-routing string policy, customization metadata policy including
-  built-in update/decline decisions, port traits, and storage-backed runtime
-  state facade logic.
+  built-in update/decline decisions, built-in bundle/hash/marker seed-decision
+  contracts, built-in source/placeholder payload contracts, port traits, and
+  storage-backed runtime state facade logic.
 - `function-agents` owns pure function-agent DTOs, prompt assembly helpers,
   commit prompt preparation, AI-response parsing policy, diff truncation policy,
   local file-shape analysis, Git/AI port traits, and port-backed runtime facade
   orchestration, including the commit-message and Startchat work-state facades
   used by core adapters.
 - Core still owns MiniApp filesystem IO, worker process execution, host dispatch
-  execution, built-in asset seeding/source-hash lookup, `PathManager`
-  integration, function-agent Git/AI service adapters, prompt templates, JSON
-  extraction, and error mapping.
+  execution, built-in asset includes/seeding, marker IO, recompile orchestration,
+  source-hash input lookup, `PathManager` integration, function-agent Git/AI
+  service adapters, prompt templates, JSON extraction, and error mapping.
 
 ## Verification
 

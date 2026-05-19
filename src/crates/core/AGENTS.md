@@ -56,6 +56,11 @@ SessionManager → Session → DialogTurn → ModelRound
   route through `bitfun-product-domains`; keep Git/AI service adapters, prompt
   templates, JSON extraction, and error mapping core-owned until a reviewed
   migration proves equivalence.
+- MiniApp built-in bundle/hash/marker seed-decision contracts may live in
+  `bitfun-product-domains`; keep bundled asset includes, filesystem writes,
+  marker IO, customization metadata IO, recompile orchestration, worker
+  process runtime, and host dispatch execution core-owned until a reviewed
+  migration proves equivalence.
 - Do not add new cross-layer references from `service` to `agentic` without a
   small port/interface boundary.
 - Do not move platform-specific logic, build-script behavior, or product
