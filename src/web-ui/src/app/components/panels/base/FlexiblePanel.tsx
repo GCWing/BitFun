@@ -713,6 +713,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                 key={sessionId}
                 sessionId={sessionId}
                 autoFocus={true}
+                supportsCopyPaste={false}
               />
             </div>
           </React.Suspense>
