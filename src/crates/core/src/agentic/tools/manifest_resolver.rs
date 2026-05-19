@@ -3,14 +3,11 @@ use crate::agentic::tools::framework::{Tool, ToolUseContext};
 use crate::agentic::tools::registry::{GET_TOOL_SPEC_TOOL_NAME, get_global_tool_registry};
 use crate::util::types::ToolDefinition;
 use bitfun_agent_tools::{
-    PromptVisibleToolManifestItem, ToolManifestDefinition,
-    build_prompt_visible_tool_manifest_definitions, build_tool_manifest_policy_tools,
-    resolve_tool_manifest_policy,
+    ContextualToolManifest, ContextualToolManifestItem, ContextualVisibleTools,
+    ToolCatalogSnapshotProvider, ToolManifestDefinition,
+    resolve_contextual_tool_manifest_from_provider, resolve_contextual_visible_tools_from_provider,
 };
-use std::collections::HashSet;
 use std::sync::Arc;
-
-type ToolRef = Arc<dyn Tool>;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedToolManifest {
@@ -21,46 +18,8 @@ pub struct ResolvedToolManifest {
 
 #[derive(Clone)]
 pub struct ResolvedVisibleTools {
-    allowed_tool_names: Vec<String>,
     pub expanded_tools: Vec<Arc<dyn Tool>>,
-    collapsed_tool_names: Vec<String>,
     pub collapsed_tools: Vec<Arc<dyn Tool>>,
-}
-
-fn build_visible_tools(
-    tool_snapshot: &[ToolRef],
-    allowed_tools: &[String],
-    exposure_overrides: &AgentToolPolicyOverrides,
-    available_tool_names: &HashSet<String>,
-) -> ResolvedVisibleTools {
-    let policy_tools = build_tool_manifest_policy_tools(tool_snapshot, available_tool_names);
-    let policy = resolve_tool_manifest_policy(
-        &policy_tools,
-        allowed_tools,
-        exposure_overrides,
-        GET_TOOL_SPEC_TOOL_NAME,
-    );
-    let expanded_tools = tools_by_name(tool_snapshot, &policy.expanded_tool_names);
-    let collapsed_tools = tools_by_name(tool_snapshot, &policy.collapsed_tool_names);
-
-    ResolvedVisibleTools {
-        allowed_tool_names: policy.allowed_tool_names,
-        expanded_tools,
-        collapsed_tool_names: policy.collapsed_tool_names,
-        collapsed_tools,
-    }
-}
-
-fn tools_by_name(tool_snapshot: &[ToolRef], tool_names: &[String]) -> Vec<ToolRef> {
-    tool_names
-        .iter()
-        .filter_map(|name| {
-            tool_snapshot
-                .iter()
-                .find(|tool| tool.name() == name)
-                .cloned()
-        })
-        .collect()
 }
 
 fn to_core_tool_definition(definition: ToolManifestDefinition) -> ToolDefinition {
@@ -71,30 +30,74 @@ fn to_core_tool_definition(definition: ToolManifestDefinition) -> ToolDefinition
     }
 }
 
+impl From<ContextualVisibleTools<dyn Tool>> for ResolvedVisibleTools {
+    fn from(value: ContextualVisibleTools<dyn Tool>) -> Self {
+        Self {
+            expanded_tools: value.expanded_tools,
+            collapsed_tools: value.collapsed_tools,
+        }
+    }
+}
+
+impl From<ContextualToolManifest<dyn Tool>> for ResolvedToolManifest {
+    fn from(value: ContextualToolManifest<dyn Tool>) -> Self {
+        Self {
+            allowed_tool_names: value.allowed_tool_names,
+            tool_definitions: value
+                .tool_definitions
+                .into_iter()
+                .map(to_core_tool_definition)
+                .collect(),
+            collapsed_tool_names: value.collapsed_tool_names,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ContextualToolManifestItem<ToolUseContext> for dyn Tool {
+    async fn is_available_in_context(&self, context: &ToolUseContext) -> bool {
+        Tool::is_available_in_context(self, Some(context)).await
+    }
+
+    async fn description_with_context(&self, context: &ToolUseContext) -> Result<String, String> {
+        Tool::description_with_context(self, Some(context))
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn input_schema_for_model_with_context(
+        &self,
+        context: &ToolUseContext,
+    ) -> serde_json::Value {
+        Tool::input_schema_for_model_with_context(self, Some(context)).await
+    }
+}
+
+struct GlobalToolRegistrySnapshotProvider;
+
+#[async_trait::async_trait]
+impl ToolCatalogSnapshotProvider<dyn Tool> for GlobalToolRegistrySnapshotProvider {
+    async fn tool_snapshot(&self) -> Vec<Arc<dyn Tool>> {
+        let registry = get_global_tool_registry();
+        let registry = registry.read().await;
+        registry.get_all_tools()
+    }
+}
+
 pub async fn resolve_visible_tools(
     allowed_tools: &[String],
     exposure_overrides: &AgentToolPolicyOverrides,
     context: &ToolUseContext,
 ) -> ResolvedVisibleTools {
-    let registry = get_global_tool_registry();
-    let tool_snapshot = {
-        let registry = registry.read().await;
-        registry.get_all_tools()
-    };
-
-    let mut available_tool_names = HashSet::new();
-    for tool in &tool_snapshot {
-        if tool.is_available_in_context(Some(context)).await {
-            available_tool_names.insert(tool.name().to_string());
-        }
-    }
-
-    build_visible_tools(
-        &tool_snapshot,
+    resolve_contextual_visible_tools_from_provider(
+        &GlobalToolRegistrySnapshotProvider,
         allowed_tools,
         exposure_overrides,
-        &available_tool_names,
+        context,
+        GET_TOOL_SPEC_TOOL_NAME,
     )
+    .await
+    .into()
 }
 
 pub async fn resolve_tool_manifest(
@@ -102,42 +105,15 @@ pub async fn resolve_tool_manifest(
     exposure_overrides: &AgentToolPolicyOverrides,
     context: &ToolUseContext,
 ) -> ResolvedToolManifest {
-    let visible_tools = resolve_visible_tools(allowed_tools, exposure_overrides, context).await;
-
-    let mut manifest_items = Vec::with_capacity(
-        visible_tools.expanded_tools.len() + visible_tools.collapsed_tools.len(),
-    );
-    for tool in &visible_tools.expanded_tools {
-        let description = tool
-            .description_with_context(Some(context))
-            .await
-            .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
-        let parameters = tool
-            .input_schema_for_model_with_context(Some(context))
-            .await;
-
-        manifest_items.push(PromptVisibleToolManifestItem::Expanded(
-            ToolManifestDefinition::new(tool.name().to_string(), description, parameters),
-        ));
-    }
-
-    for tool in &visible_tools.collapsed_tools {
-        manifest_items.push(PromptVisibleToolManifestItem::Collapsed {
-            name: tool.name().to_string(),
-            short_description: tool.short_description(),
-        });
-    }
-
-    let tool_definitions = build_prompt_visible_tool_manifest_definitions(&manifest_items);
-
-    ResolvedToolManifest {
-        allowed_tool_names: visible_tools.allowed_tool_names,
-        tool_definitions: tool_definitions
-            .into_iter()
-            .map(to_core_tool_definition)
-            .collect(),
-        collapsed_tool_names: visible_tools.collapsed_tool_names,
-    }
+    resolve_contextual_tool_manifest_from_provider(
+        &GlobalToolRegistrySnapshotProvider,
+        allowed_tools,
+        exposure_overrides,
+        context,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await
+    .into()
 }
 
 #[cfg(test)]

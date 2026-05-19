@@ -2817,6 +2817,98 @@ mod tests {
     }
 
     #[test]
+    fn collect_unlocked_collapsed_tools_dedupes_and_filters_runtime_unlocks() {
+        let unlocked = ExecutionEngine::collect_unlocked_collapsed_tools(
+            &[
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-1".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": "WebFetch",
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-2".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": "WebFetch",
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-3".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": "Git",
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-4".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": "Read",
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-5".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": "GetFileDiff",
+                    }),
+                    result_for_assistant: None,
+                    is_error: true,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-6".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": 42,
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-7".to_string(),
+                    tool_name: "Read".to_string(),
+                    result: json!({
+                        "tool_name": "GetFileDiff",
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+            ],
+            &[
+                "WebFetch".to_string(),
+                "GetFileDiff".to_string(),
+                "Git".to_string(),
+            ],
+        );
+
+        assert_eq!(unlocked, vec!["Git".to_string(), "WebFetch".to_string()]);
+    }
+
+    #[test]
     fn detects_tool_result_after_last_assistant() {
         let assistant = Message::assistant_with_tools(
             String::new(),

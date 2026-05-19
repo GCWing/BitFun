@@ -1,21 +1,21 @@
 //! Tool framework - Tool interface definition and execution context
+use crate::agentic::WorkspaceBinding;
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::session::EvidenceLedgerCheckpoint;
 use crate::agentic::tools::post_call_hooks;
 use crate::agentic::tools::restrictions::{
-    is_local_path_within_root, is_remote_posix_path_within_root, ToolPathOperation,
-    ToolRuntimeRestrictions,
+    ToolPathOperation, ToolRuntimeRestrictions, is_local_path_within_root,
+    is_remote_posix_path_within_root,
 };
 use crate::agentic::tools::workspace_paths::{
     build_bitfun_runtime_uri, is_bitfun_runtime_uri, normalize_runtime_relative_path,
     parse_bitfun_runtime_uri,
 };
 use crate::agentic::workspace::WorkspaceServices;
-use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::get_path_manager_arc;
 use crate::service::git::{GitDiffParams, GitService};
 use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
-use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
+use crate::service::{WorkspaceRuntimeContext, get_workspace_runtime_service_arc};
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
 pub use bitfun_agent_tools::{
@@ -468,10 +468,10 @@ impl PortableToolContextProvider for ToolUseContext {
 #[cfg(test)]
 mod path_resolution_tests {
     use super::ToolUseContext;
+    use crate::agentic::WorkspaceBinding;
     use crate::agentic::tools::{
         PortableToolContextProvider, ToolRuntimeRestrictions, ToolWorkspaceKind,
     };
-    use crate::agentic::WorkspaceBinding;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use std::collections::{BTreeSet, HashMap};
     use std::path::PathBuf;
@@ -547,6 +547,60 @@ mod path_resolution_tests {
     }
 
     #[test]
+    fn tool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated() {
+        let mut custom_data = HashMap::new();
+        custom_data.insert(
+            "checkpoint".to_string(),
+            serde_json::json!({ "kind": "runtime-only" }),
+        );
+
+        let context = ToolUseContext {
+            tool_call_id: Some("call-runtime".to_string()),
+            agent_type: Some("Agentic".to_string()),
+            session_id: Some("session-runtime".to_string()),
+            dialog_turn_id: Some("turn-runtime".to_string()),
+            workspace: Some(WorkspaceBinding::new(None, PathBuf::from("/repo/runtime"))),
+            unlocked_collapsed_tools: vec!["WebFetch".to_string(), "Git".to_string()],
+            custom_data,
+            computer_use_host: None,
+            cancellation_token: Some(tokio_util::sync::CancellationToken::new()),
+            runtime_tool_restrictions: ToolRuntimeRestrictions {
+                allowed_tool_names: BTreeSet::from(["Read".to_string(), "GetToolSpec".to_string()]),
+                denied_tool_names: BTreeSet::from(["Bash".to_string()]),
+                path_policy: Default::default(),
+            },
+            workspace_services: None,
+        };
+
+        let facts = PortableToolContextProvider::tool_context_facts(&context);
+
+        assert_eq!(facts.tool_call_id.as_deref(), Some("call-runtime"));
+        assert_eq!(facts.workspace_kind, Some(ToolWorkspaceKind::Local));
+        assert_eq!(facts.workspace_root.as_deref(), Some("/repo/runtime"));
+        assert!(facts.runtime_tool_restrictions.is_tool_allowed("Read"));
+        assert!(
+            facts
+                .runtime_tool_restrictions
+                .is_tool_allowed("GetToolSpec")
+        );
+        assert!(!facts.runtime_tool_restrictions.is_tool_allowed("Bash"));
+
+        let value = serde_json::to_value(&facts).expect("serialize runtime context facts");
+        for runtime_only_field in [
+            "unlockedCollapsedTools",
+            "customData",
+            "computerUseHost",
+            "cancellationToken",
+            "workspaceServices",
+        ] {
+            assert!(
+                value.get(runtime_only_field).is_none(),
+                "{runtime_only_field} must remain outside portable facts"
+            );
+        }
+    }
+
+    #[test]
     fn tool_context_facts_use_normalized_remote_workspace_identity() {
         let session_identity = workspace_session_identity(
             "/home/wsp//projects/test/",
@@ -614,12 +668,9 @@ mod path_resolution_tests {
 
     #[test]
     fn workspace_path_resolution_rejects_absolute_paths_outside_remote_workspace() {
-        let session_identity = workspace_session_identity(
-            "/home/wsp/projects/test",
-            Some("conn-1"),
-            Some("ssh.dev"),
-        )
-        .expect("remote identity");
+        let session_identity =
+            workspace_session_identity("/home/wsp/projects/test", Some("conn-1"), Some("ssh.dev"))
+                .expect("remote identity");
         let context = ToolUseContext {
             tool_call_id: None,
             agent_type: None,
@@ -872,7 +923,7 @@ mod shared_context_tests {
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::errors::BitFunResult;
     use async_trait::async_trait;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use std::collections::HashMap;
 
     struct MeasurementReadTool;

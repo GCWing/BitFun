@@ -1,18 +1,24 @@
 use bitfun_agent_tools::{
+    ContextualToolManifestItem, DynamicToolDescriptor, DynamicToolProvider,
+    GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider, StaticToolProvider,
+    StaticToolProviderGroup, ToolCatalogSnapshotProvider, ToolDecorator, ToolRegistry,
+    ToolRegistryItem,
+};
+use bitfun_agent_tools::{
     DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, GetToolSpecCollapsedToolSummary,
     GetToolSpecLoadObservation, InputValidator, PromptVisibleToolManifestItem, ToolContextFacts,
     ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
     ToolPathBackend, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
     ToolWorkspaceKind, ValidationResult, build_collapsed_tool_stub_definition,
     build_get_tool_spec_assistant_detail, build_get_tool_spec_catalog_description,
+    build_get_tool_spec_catalog_description_from_provider,
     build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
     build_get_tool_spec_duplicate_load_hint, build_prompt_visible_tool_manifest_definitions,
-    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema, resolve_tool_manifest_policy,
-    sort_tool_manifest_definitions, validate_get_tool_spec_input,
-};
-use bitfun_agent_tools::{
-    DynamicToolDescriptor, DynamicToolProvider, PortResult, PortableToolContextProvider,
-    StaticToolProvider, StaticToolProviderGroup, ToolDecorator, ToolRegistry, ToolRegistryItem,
+    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema,
+    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
+    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
+    resolve_tool_manifest_policy, sort_tool_manifest_definitions,
+    summarize_get_tool_spec_collapsed_tools, validate_get_tool_spec_input,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -685,6 +691,70 @@ impl ToolRegistryItem for RegistryMarkerTool {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ManifestTestContext {
+    agent: &'static str,
+}
+
+#[derive(Clone)]
+struct ContextualManifestTool {
+    name: String,
+    exposure: ToolExposure,
+    available_for_agent: Option<&'static str>,
+}
+
+#[async_trait::async_trait]
+impl ToolRegistryItem for ContextualManifestTool {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    async fn description(&self) -> Result<String, String> {
+        Ok(format!("{} default description", self.name))
+    }
+
+    fn short_description(&self) -> String {
+        format!("{} short description", self.name)
+    }
+
+    fn input_schema(&self) -> serde_json::Value {
+        json!({ "type": "object" })
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        self.exposure
+    }
+}
+
+#[async_trait::async_trait]
+impl ContextualToolManifestItem<ManifestTestContext> for ContextualManifestTool {
+    async fn is_available_in_context(&self, context: &ManifestTestContext) -> bool {
+        self.available_for_agent
+            .is_none_or(|agent| agent == context.agent)
+    }
+
+    async fn description_with_context(
+        &self,
+        context: &ManifestTestContext,
+    ) -> Result<String, String> {
+        Ok(format!("{} description for {}", self.name, context.agent))
+    }
+
+    async fn input_schema_for_model_with_context(
+        &self,
+        context: &ManifestTestContext,
+    ) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "agent": {
+                    "const": context.agent
+                }
+            }
+        })
+    }
+}
+
 fn registry_marker_tool(name: &str, provider_id: Option<&str>) -> Arc<RegistryMarkerTool> {
     registry_marker_tool_with_exposure(name, provider_id, ToolExposure::Expanded)
 }
@@ -699,6 +769,61 @@ fn registry_marker_tool_with_exposure(
         provider_id: provider_id.map(str::to_string),
         exposure,
     })
+}
+
+fn contextual_manifest_tool(
+    name: &str,
+    exposure: ToolExposure,
+    available_for_agent: Option<&'static str>,
+) -> Arc<ContextualManifestTool> {
+    Arc::new(ContextualManifestTool {
+        name: name.to_string(),
+        exposure,
+        available_for_agent,
+    })
+}
+
+struct ContextualManifestSnapshotProvider {
+    tools: Vec<Arc<ContextualManifestTool>>,
+}
+
+#[async_trait::async_trait]
+impl ToolCatalogSnapshotProvider<ContextualManifestTool> for ContextualManifestSnapshotProvider {
+    async fn tool_snapshot(&self) -> Vec<Arc<ContextualManifestTool>> {
+        self.tools.clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl GetToolSpecCatalogProvider<ContextualManifestTool, ManifestTestContext>
+    for ContextualManifestSnapshotProvider
+{
+    async fn collapsed_tools_for_get_tool_spec(
+        &self,
+        context: Option<&ManifestTestContext>,
+    ) -> Result<Vec<Arc<ContextualManifestTool>>, String> {
+        let tools = match context {
+            Some(context) => {
+                let mut tools = Vec::new();
+                for tool in &self.tools {
+                    if tool.default_exposure() == ToolExposure::Collapsed
+                        && tool.is_available_in_context(context).await
+                    {
+                        tools.push(tool.clone());
+                    }
+                }
+                tools
+            }
+            None => self
+                .tools
+                .iter()
+                .filter(|tool| tool.default_exposure() == ToolExposure::Collapsed)
+                .cloned()
+                .collect(),
+        };
+
+        Ok(tools)
+    }
 }
 
 struct RegistryMarkerProvider {
@@ -842,6 +967,254 @@ fn manifest_policy_tools_from_registry_snapshot_preserve_exposure_and_availabili
             },
         ]
     );
+}
+
+#[tokio::test]
+async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contract() {
+    let tools = vec![
+        contextual_manifest_tool("Read", ToolExposure::Expanded, None),
+        contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
+        contextual_manifest_tool("Git", ToolExposure::Collapsed, Some("other-agent")),
+        contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Expanded, None),
+    ];
+
+    let manifest = resolve_contextual_tool_manifest(
+        &tools,
+        &[
+            "Read".to_string(),
+            "WebFetch".to_string(),
+            "Git".to_string(),
+        ],
+        &Default::default(),
+        &ManifestTestContext { agent: "agentic" },
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await;
+
+    assert_eq!(
+        manifest.allowed_tool_names,
+        vec![
+            "Read".to_string(),
+            "WebFetch".to_string(),
+            "Git".to_string(),
+            GET_TOOL_SPEC_TOOL_NAME.to_string(),
+        ],
+        "GetToolSpec insertion must preserve the runtime allowed-list contract"
+    );
+    assert_eq!(
+        manifest.collapsed_tool_names,
+        vec!["WebFetch".to_string()],
+        "unavailable collapsed tools must not leak into the prompt-visible unlock catalog"
+    );
+    assert_eq!(
+        manifest
+            .expanded_tools
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Read", GET_TOOL_SPEC_TOOL_NAME],
+        "expanded tool handles must follow the resolved runtime policy"
+    );
+    assert_eq!(
+        manifest
+            .collapsed_tools
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["WebFetch"],
+        "collapsed tool handles must follow the resolved runtime policy"
+    );
+    assert_eq!(
+        manifest
+            .tool_definitions
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Read", "WebFetch", GET_TOOL_SPEC_TOOL_NAME],
+        "prompt-visible manifest ordering must stay stable when the owner moves"
+    );
+
+    let read = manifest
+        .tool_definitions
+        .iter()
+        .find(|tool| tool.name == "Read")
+        .expect("expanded Read manifest");
+    assert_eq!(read.description, "Read description for agentic");
+    assert_eq!(read.parameters["properties"]["agent"]["const"], "agentic");
+
+    let web_fetch = manifest
+        .tool_definitions
+        .iter()
+        .find(|tool| tool.name == "WebFetch")
+        .expect("collapsed WebFetch stub");
+    assert!(
+        web_fetch
+            .description
+            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
+    );
+    assert_eq!(web_fetch.parameters["additionalProperties"], false);
+}
+
+#[tokio::test]
+async fn contextual_manifest_resolver_accepts_snapshot_provider_boundary() {
+    let provider = ContextualManifestSnapshotProvider {
+        tools: vec![
+            contextual_manifest_tool("Read", ToolExposure::Expanded, None),
+            contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
+            contextual_manifest_tool("Git", ToolExposure::Collapsed, Some("other-agent")),
+            contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Expanded, None),
+        ],
+    };
+
+    let manifest = resolve_contextual_tool_manifest_from_provider(
+        &provider,
+        &[
+            "Read".to_string(),
+            "WebFetch".to_string(),
+            "Git".to_string(),
+        ],
+        &Default::default(),
+        &ManifestTestContext { agent: "agentic" },
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await;
+
+    assert_eq!(
+        manifest.allowed_tool_names,
+        vec![
+            "Read".to_string(),
+            "WebFetch".to_string(),
+            "Git".to_string(),
+            GET_TOOL_SPEC_TOOL_NAME.to_string(),
+        ],
+        "provider-backed resolution must preserve allowed-list semantics"
+    );
+    assert_eq!(
+        manifest
+            .tool_definitions
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Read", "WebFetch", GET_TOOL_SPEC_TOOL_NAME],
+        "provider-backed resolution must preserve prompt-visible manifest ordering"
+    );
+    assert_eq!(
+        manifest.collapsed_tool_names,
+        vec!["WebFetch".to_string()],
+        "provider-backed resolution must preserve context-aware availability filtering"
+    );
+}
+
+#[tokio::test]
+async fn get_tool_spec_detail_resolver_preserves_contextual_detail_contract() {
+    let collapsed_tools = vec![
+        contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
+        contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Collapsed, None),
+    ];
+    let context = ManifestTestContext { agent: "agentic" };
+
+    let summaries = summarize_get_tool_spec_collapsed_tools(&collapsed_tools);
+    assert_eq!(
+        summaries,
+        vec![
+            GetToolSpecCollapsedToolSummary {
+                name: "WebFetch".to_string(),
+                short_description: "WebFetch short description".to_string(),
+            },
+            GetToolSpecCollapsedToolSummary {
+                name: GET_TOOL_SPEC_TOOL_NAME.to_string(),
+                short_description: "GetToolSpec short description".to_string(),
+            },
+        ],
+        "catalog summaries must preserve collapsed tool order and short descriptions"
+    );
+
+    let detail = resolve_get_tool_spec_detail(
+        &collapsed_tools,
+        "WebFetch",
+        &context,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await
+    .expect("collapsed WebFetch detail");
+
+    assert_eq!(detail.tool_name, "WebFetch");
+    assert_eq!(detail.description, "WebFetch description for agentic");
+    assert_eq!(
+        detail.input_schema["properties"]["agent"]["const"],
+        "agentic"
+    );
+    assert_eq!(
+        detail.to_value(),
+        json!({
+            "tool_name": "WebFetch",
+            "description": "WebFetch description for agentic",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "agent": {
+                        "const": "agentic"
+                    }
+                }
+            }
+        }),
+        "detail JSON shape must stay compatible with GetToolSpec execution output"
+    );
+
+    let missing =
+        resolve_get_tool_spec_detail(&collapsed_tools, "Git", &context, GET_TOOL_SPEC_TOOL_NAME)
+            .await
+            .expect_err("missing tool should stay a validation-style error");
+    assert_eq!(
+        missing,
+        "Tool 'Git' is not an available collapsed tool in the current context"
+    );
+
+    let self_inspection = resolve_get_tool_spec_detail(
+        &collapsed_tools,
+        GET_TOOL_SPEC_TOOL_NAME,
+        &context,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await
+    .expect_err("GetToolSpec should not inspect itself");
+    assert_eq!(self_inspection, "Tool 'GetToolSpec' cannot inspect itself");
+}
+
+#[tokio::test]
+async fn get_tool_spec_catalog_provider_preserves_runtime_catalog_contract() {
+    let provider = ContextualManifestSnapshotProvider {
+        tools: vec![
+            contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
+            contextual_manifest_tool("Git", ToolExposure::Collapsed, Some("other-agent")),
+            contextual_manifest_tool("Read", ToolExposure::Expanded, None),
+        ],
+    };
+    let context = ManifestTestContext { agent: "agentic" };
+
+    let description =
+        build_get_tool_spec_catalog_description_from_provider(&provider, Some(&context)).await;
+    assert!(description.contains("- WebFetch: WebFetch short description"));
+    assert!(
+        !description.contains("- Git: Git short description"),
+        "provider-backed catalog must preserve context-aware availability filtering"
+    );
+
+    let default_description =
+        build_get_tool_spec_catalog_description_from_provider(&provider, None).await;
+    assert!(default_description.contains("- WebFetch: WebFetch short description"));
+    assert!(default_description.contains("- Git: Git short description"));
+
+    let detail = resolve_get_tool_spec_detail_from_provider(
+        &provider,
+        "WebFetch",
+        &context,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await
+    .expect("provider-backed detail");
+    assert_eq!(detail.tool_name, "WebFetch");
+    assert_eq!(detail.description, "WebFetch description for agentic");
 }
 
 #[tokio::test]

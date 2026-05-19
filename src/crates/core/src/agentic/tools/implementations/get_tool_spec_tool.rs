@@ -2,16 +2,17 @@
 
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+    Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::registry::get_global_tool_registry;
 use crate::agentic::tools::resolve_visible_tools;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_tools::{
-    GET_TOOL_SPEC_TOOL_NAME, GetToolSpecCollapsedToolSummary, build_get_tool_spec_assistant_detail,
-    build_get_tool_spec_catalog_description, build_get_tool_spec_duplicate_load_hint,
-    get_tool_spec_input_schema, validate_get_tool_spec_input,
+    GET_TOOL_SPEC_TOOL_NAME, GetToolSpecCatalogProvider, build_get_tool_spec_assistant_detail,
+    build_get_tool_spec_catalog_description_from_provider, build_get_tool_spec_duplicate_load_hint,
+    get_tool_spec_input_schema, resolve_get_tool_spec_detail_from_provider,
+    validate_get_tool_spec_input,
 };
 use log::debug;
 use serde_json::{Value, json};
@@ -19,60 +20,58 @@ use std::sync::Arc;
 
 pub struct GetToolSpecTool;
 
+struct ProductGetToolSpecCatalogProvider;
+
+#[async_trait]
+impl GetToolSpecCatalogProvider<dyn Tool, ToolUseContext> for ProductGetToolSpecCatalogProvider {
+    async fn collapsed_tools_for_get_tool_spec(
+        &self,
+        context: Option<&ToolUseContext>,
+    ) -> Result<Vec<Arc<dyn Tool>>, String> {
+        match context {
+            Some(context) => get_contextual_collapsed_tools(context)
+                .await
+                .map_err(|error| error.to_string()),
+            None => {
+                let registry = get_global_tool_registry();
+                let registry = registry.read().await;
+                Ok(registry
+                    .get_all_tools()
+                    .into_iter()
+                    .filter(|tool| tool.default_exposure() == ToolExposure::Collapsed)
+                    .collect())
+            }
+        }
+    }
+}
+
+async fn get_contextual_collapsed_tools(
+    context: &ToolUseContext,
+) -> BitFunResult<Vec<Arc<dyn Tool>>> {
+    let agent_type = context.agent_type.as_deref().ok_or_else(|| {
+        BitFunError::Validation("GetToolSpec requires agent type context".to_string())
+    })?;
+    let workspace_root = context.workspace_root();
+    let agent_registry = get_agent_registry();
+    let policy = agent_registry
+        .get_agent_tool_policy(agent_type, workspace_root)
+        .await;
+    let visible_tools =
+        resolve_visible_tools(&policy.allowed_tools, &policy.exposure_overrides, context).await;
+    Ok(visible_tools.collapsed_tools)
+}
+
 impl GetToolSpecTool {
     pub fn new() -> Self {
         Self
     }
 
-    async fn get_contextual_collapsed_tools(
-        &self,
-        context: &ToolUseContext,
-    ) -> BitFunResult<Vec<Arc<dyn Tool>>> {
-        let agent_type = context.agent_type.as_deref().ok_or_else(|| {
-            BitFunError::Validation("GetToolSpec requires agent type context".to_string())
-        })?;
-        let workspace_root = context.workspace_root();
-        let agent_registry = get_agent_registry();
-        let policy = agent_registry
-            .get_agent_tool_policy(agent_type, workspace_root)
-            .await;
-        let visible_tools =
-            resolve_visible_tools(&policy.allowed_tools, &policy.exposure_overrides, context).await;
-        Ok(visible_tools.collapsed_tools)
-    }
-
     async fn build_collapsed_tools_description(&self, context: Option<&ToolUseContext>) -> String {
-        let mut summaries = Vec::new();
-
-        if let Some(context) = context {
-            if let Ok(collapsed_tools) = self.get_contextual_collapsed_tools(context).await {
-                for tool in collapsed_tools {
-                    summaries.push(GetToolSpecCollapsedToolSummary {
-                        name: tool.name().to_string(),
-                        short_description: tool.short_description(),
-                    });
-                }
-            }
-        } else {
-            let registry = get_global_tool_registry();
-            summaries = {
-                let registry = registry.read().await;
-                registry
-                    .get_all_tools()
-                    .into_iter()
-                    .filter(|tool| {
-                        tool.default_exposure()
-                            == crate::agentic::tools::framework::ToolExposure::Collapsed
-                    })
-                    .map(|tool| GetToolSpecCollapsedToolSummary {
-                        name: tool.name().to_string(),
-                        short_description: tool.short_description(),
-                    })
-                    .collect::<Vec<_>>()
-            };
-        }
-
-        build_get_tool_spec_catalog_description(&summaries)
+        build_get_tool_spec_catalog_description_from_provider(
+            &ProductGetToolSpecCatalogProvider,
+            context,
+        )
+        .await
     }
 
     async fn build_tool_detail(
@@ -83,37 +82,15 @@ impl GetToolSpecTool {
         let context = context.ok_or_else(|| {
             BitFunError::Validation("GetToolSpec requires execution context".to_string())
         })?;
-        let collapsed_tools = self.get_contextual_collapsed_tools(context).await?;
-        let tool = collapsed_tools
-            .into_iter()
-            .find(|tool| tool.name() == tool_name)
-            .ok_or_else(|| {
-                BitFunError::Validation(format!(
-                    "Tool '{}' is not an available collapsed tool in the current context",
-                    tool_name
-                ))
-            })?;
-
-        if tool.name() == self.name() {
-            return Err(BitFunError::Validation(format!(
-                "Tool '{}' cannot inspect itself",
-                tool_name
-            )));
-        }
-
-        let description = tool
-            .description_with_context(Some(context))
-            .await
-            .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
-        let input_schema = tool
-            .input_schema_for_model_with_context(Some(context))
-            .await;
-
-        Ok(json!({
-            "tool_name": tool_name,
-            "description": description,
-            "input_schema": input_schema
-        }))
+        resolve_get_tool_spec_detail_from_provider(
+            &ProductGetToolSpecCatalogProvider,
+            tool_name,
+            context,
+            self.name(),
+        )
+        .await
+        .map(|detail| detail.to_value())
+        .map_err(BitFunError::Validation)
     }
 }
 

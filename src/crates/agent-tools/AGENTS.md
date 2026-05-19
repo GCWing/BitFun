@@ -11,15 +11,17 @@ the product tool runtime.
   crates, Tauri, Git, MCP, network clients, or CLI UI dependencies.
 - This crate may own `ToolResult`, validation DTOs, runtime restriction DTOs,
   path-resolution DTOs, generic/static/dynamic provider contracts, pure
-  manifest/exposure helpers, GetToolSpec presentation/schema helpers, and
-  `ToolContextFacts` / `PortableToolContextProvider`.
+  manifest/exposure helpers, generic contextual prompt-manifest resolver
+  contracts, generic catalog snapshot provider contracts, generic GetToolSpec
+  catalog provider/detail/summary helpers, and `ToolContextFacts` /
+  `PortableToolContextProvider`.
 - This crate may own generic provider containers such as
   `StaticToolProviderGroup`, but concrete tool construction and product runtime
   registration stay outside this crate until H1 explicitly moves an owner.
 - Do not move `ToolUseContext`, concrete tools, workspace services, cancellation
-  tokens, snapshot decoration, collapsed unlock state, runtime manifest
-  assembly, or `GetToolSpec` execution here without H1 approval and equivalence
-  tests.
+  tokens, snapshot decoration, collapsed unlock state, product registry
+  snapshot access, or `GetToolSpec` execution here without H1 approval and
+  equivalence tests.
 - Provider-specific wire serialization belongs in AI adapters, not in these
   provider-neutral contracts.
 
