@@ -10,7 +10,8 @@ use crate::agentic::core::{
     SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::events::{
-    AgenticEvent, DeepReviewQueueState, EventPriority, EventQueue, EventRouter, EventSubscriber,
+    AgenticEvent, DeepReviewQueueState, EventEnvelope, EventPriority, EventQueue, EventRouter,
+    EventSubscriber,
 };
 use crate::agentic::execution::{ContextCompactionOutcome, ExecutionContext, ExecutionEngine};
 use crate::agentic::fork_agent::{
@@ -2476,6 +2477,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     /// Remove subscriber previously added via subscribe_internal
     pub fn unsubscribe_internal(&self, subscriber_id: &str) {
         self.event_router.unsubscribe_internal(subscriber_id);
+    }
+
+    /// Route a dequeued event to internal subscribers (token usage, cron, etc.).
+    ///
+    /// CLI hosts dequeue events for UI rendering and must call this so subscribers
+    /// registered via [`Self::subscribe_internal`] receive the same envelopes.
+    pub async fn route_internal_event(&self, envelope: EventEnvelope) -> BitFunResult<()> {
+        self.event_router.route(envelope).await
     }
 
     /// Confirm tool execution
