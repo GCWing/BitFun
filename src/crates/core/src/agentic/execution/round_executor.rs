@@ -926,11 +926,36 @@ impl RoundExecutor {
                  5. Do NOT output anything outside the <bitfun_contents> tags — no explanations, no commentary, \
                  no thinking blocks, no markdown fences (```), no extra XML wrapper tags.\n\
                  6. The text between the tags must be EXACTLY what gets written to disk — raw file content only.\n\
+                 7. Do NOT output any tool_call XML, JSON tool invocations, or agent framework syntax inside the tags. \
+                 You are not calling a tool here — you are outputting raw file content.\n\
                  <bitfun_contents>\n",
                 file_path = file_path
             );
 
-            let mut content_messages = ai_messages.to_vec();
+            // Strip tool_calls and tool results from history to prevent weak models
+            // from imitating tool-call format inside the generated file content.
+            let mut content_messages: Vec<AIMessage> = ai_messages
+                .iter()
+                .filter_map(|m| {
+                    if m.role == "tool" {
+                        // Drop tool result messages entirely
+                        None
+                    } else if m.tool_calls.is_some() {
+                        // Replace assistant tool-call messages with a plain-text summary
+                        let names = m
+                            .tool_calls
+                            .as_ref()
+                            .unwrap()
+                            .iter()
+                            .map(|tc| tc.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        Some(AIMessage::assistant(format!("[called tools: {names}]")))
+                    } else {
+                        Some(m.clone())
+                    }
+                })
+                .collect();
             // Add an assistant prefill to prime the model to output content directly
             // inside the tags, reducing the chance of preamble text.
             content_messages.push(AIMessage::user(content_prompt));
