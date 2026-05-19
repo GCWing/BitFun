@@ -23,6 +23,7 @@ import { Badge, Button, ConfirmDialog, Input, Modal, Search, Select } from '@/co
 import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import { workspaceAPI } from '@/infrastructure/api';
+import { systemAPI } from '@/infrastructure/api';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useNotification } from '@/shared/notification-system';
 import { isRemoteWorkspace } from '@/shared/types';
@@ -38,6 +39,12 @@ import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefre
 
 const log = createLogger('SkillsScene');
 
+function formatDisplayPath(path: string): string {
+  return path.replace(
+    '/data/storage/el2/base/files/bitfun',
+    '/storage/Users/currentUser/appdata/el2/base/com.huawei.BitFun/files/bitfun'
+  );
+}
 type SkillTab = 'installed' | 'discover';
 
 const INSTALLED_PAGE_SIZE = 12;
@@ -667,12 +674,12 @@ const SkillsScene: React.FC = () => {
                   type="button"
                   className="bitfun-skills-scene__detail-path-btn"
                   title={t('list.item.openPathInExplorer')}
-                  onClick={() => void handleRevealSkillPath(selectedInstalledSkill.path)}
+                  onClick={() => void handleRevealSkillPath(formatDisplayPath(selectedInstalledSkill.path))}
                 >
-                  {selectedInstalledSkill.path}
+                  {formatDisplayPath(selectedInstalledSkill.path)}
                 </button>
               ) : (
-                <code className="bitfun-skills-scene__detail-value">{selectedInstalledSkill.path}</code>
+                <code className="bitfun-skills-scene__detail-value">{formatDisplayPath(selectedInstalledSkill.path)}</code>
               )}
             </div>
           </>
@@ -692,19 +699,18 @@ const SkillsScene: React.FC = () => {
           </div>
         ) : null}
 
-        {selectedMarketSkill?.url ? (
-          <div className="bitfun-skills-scene__detail-row">
-            <span className="bitfun-skills-scene__detail-label">{t('market.detail.linkLabel')}</span>
-            <a
-              href={selectedMarketSkill.url}
-              target="_blank"
-              rel="noreferrer"
-              className="bitfun-skills-scene__detail-link"
-            >
-              {selectedMarketSkill.url}
-            </a>
-          </div>
-        ) : null}
+          {selectedMarketSkill?.url ? (
+            <div className="bitfun-skills-scene__detail-row">
+              <span className="bitfun-skills-scene__detail-label">{t('market.detail.linkLabel')}</span>
+              <button
+                type="button"
+                className="bitfun-skills-scene__detail-link"
+                onClick={() => systemAPI.openExternal(selectedMarketSkill.url)}
+              >
+                {selectedMarketSkill.url}
+              </button>
+            </div>
+          ) : null}
       </GalleryDetailModal>
 
       <Modal

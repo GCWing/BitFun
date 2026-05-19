@@ -396,7 +396,7 @@ pub async fn _run() {
             {
                 let candidates = ["mobile-web/dist", "mobile-web", "dist"];
                 let mut found = false;
-                let path = PathBuf::from("/data/storage/el2/base/files/dist");
+                let path = PathBuf::from("/data/storage/el1/bundle/entry/resources/resfile/dist");
                 if path.join("index.html").exists() {
                     log::info!("Found bundled mobile-web at: {}", path.display());
                     api::remote_connect_api::set_mobile_web_resource_path(path);

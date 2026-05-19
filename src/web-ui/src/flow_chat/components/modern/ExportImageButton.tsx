@@ -2,16 +2,17 @@
  * Export dialog turns as long images.
  * Uses React rendering to match FlowChat styles.
  * Uses modern-screenshot (fork of html-to-image with better CSS var / font / CORS handling).
+ *
+ * NOTE: Temporarily disabled — the export button is hidden. Keep the export
+ * infrastructure in place for when the underlying capture/save issues are resolved.
  */
 
 import React, { useState, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Image, Loader2 } from 'lucide-react';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { notificationService } from '@/shared/notification-system';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
-import { Tooltip } from '@/component-library';
 import type { DialogTurn, FlowTextItem, FlowToolItem, FlowThinkingItem } from '../../types/flow-chat';
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
@@ -534,17 +535,13 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
     }
   }, [getDialogTurn]);
 
-  return (
-    <Tooltip content={isExporting ? i18nService.t('flow-chat:exportImage.exporting') : i18nService.t('flow-chat:exportImage.exportToImage')} placement="top">
-      <button
-        className={`model-round-item__action-btn model-round-item__export-btn ${className}`}
-        onClick={handleExport}
-        disabled={isExporting}
-      >
-        {isExporting ? <Loader2 size={14} className="spinning" /> : <Image size={14} />}
-      </button>
-    </Tooltip>
-  );
+  // Currently unused — kept for re-enable.
+  void (handleExport as unknown as React.MouseEventHandler);
+  void (isExporting as boolean);
+  void (isExportingRef as React.MutableRefObject<boolean>);
+  void (className as string);
+
+  return null;
 };
 
 ExportImageButton.displayName = 'ExportImageButton';

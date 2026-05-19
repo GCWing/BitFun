@@ -263,35 +263,64 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
     const parts = relativePath.split('/').filter(Boolean);
     if (parts.length === 0) return [];
 
+    const isUnderWorkspace = relativePath !== normalizedPath;
+
+    log.debug('Building breadcrumb segments', {
+      filePath,
+      workspacePath,
+      normalizedPath,
+      normalizedWorkspace,
+      relativePath,
+      isUnderWorkspace,
+    });
+
     const result: PathSegment[] = [];
-    
-    // Add root directory as first level
-    if (normalizedWorkspace) {
-      const rootName = normalizedWorkspace.split('/').filter(Boolean).pop() || 'root';
-      result.push({
-        name: rootName,
-        fullPath: normalizedWorkspace,
-        isFile: false,
-      });
+
+    // File under workspace: show workspace root then relative parts
+    if (isUnderWorkspace) {
+      if (normalizedWorkspace) {
+        const rootName = normalizedWorkspace.split('/').filter(Boolean).pop() || 'root';
+        result.push({
+          name: rootName,
+          fullPath: normalizedWorkspace,
+          isFile: false,
+        });
+      }
+
+      let currentPath = normalizedWorkspace || '';
+      for (let i = 0; i < parts.length; i++) {
+        currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
+        result.push({
+          name: parts[i],
+          fullPath: currentPath,
+          isFile: i === parts.length - 1,
+        });
+      }
+    } else {
+      // Absolute path outside workspace: rebuild fullPath from normalizedPath
+      // preserving leading root (e.g. '/' for Unix, '' for Windows drive letters)
+      const hasLeadingSlash = normalizedPath.startsWith('/');
+      let currentPath = hasLeadingSlash ? '/' : '';
+      for (let i = 0; i < parts.length; i++) {
+        currentPath = currentPath === '/' ? `/${parts[i]}` : currentPath ? `${currentPath}/${parts[i]}` : parts[i];
+        result.push({
+          name: parts[i],
+          fullPath: currentPath,
+          isFile: i === parts.length - 1,
+        });
+      }
     }
 
-    let currentPath = normalizedWorkspace;
-
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      currentPath = currentPath ? `${currentPath}/${part}` : part;
-      result.push({
-        name: part,
-        fullPath: currentPath,
-        isFile: i === parts.length - 1,
-      });
-    }
+    log.debug('Breadcrumb segments result', {
+      result: result.map(s => ({ name: s.name, fullPath: s.fullPath, isFile: s.isFile })),
+    });
 
     return result;
   }, [filePath, workspacePath]);
 
   // Load directory contents
   const loadDirectoryContents = useCallback(async (dirPath: string) => {
+    log.debug('Loading directory contents', { dirPath });
     setDropdownLoading(true);
     setCurrentDirPath(dirPath);
     try {
@@ -311,9 +340,10 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
           isDirectory: entry.isDirectory || false,
         }));
 
+      log.debug('Directory contents loaded', { dirPath, itemCount: items.length });
       setDropdownItems(items);
     } catch (error) {
-      log.error('Failed to load directory', error);
+      log.error('Failed to load directory', { dirPath, error: String(error) });
       setDropdownItems([]);
     } finally {
       setDropdownLoading(false);
@@ -338,6 +368,13 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
         ? segment.fullPath.substring(0, segment.fullPath.lastIndexOf('/'))
         : segment.fullPath;
       
+      log.debug('Breadcrumb segment clicked', {
+        segmentName: segment.name,
+        segmentFullPath: segment.fullPath,
+        isFile: segment.isFile,
+        resolvedDirPath: dirPath,
+      });
+      
       setInitialDirPath(dirPath);
       loadDirectoryContents(dirPath);
     }
@@ -345,6 +382,12 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
 
   // Handle dropdown item selection
   const handleDropdownSelect = useCallback(async (item: FileItem) => {
+    log.debug('Breadcrumb dropdown item selected', {
+      name: item.name,
+      path: item.path,
+      isDirectory: item.isDirectory,
+    });
+
     if (item.isDirectory) {
       loadDirectoryContents(item.path);
     } else {

@@ -405,7 +405,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             <div className="bitfun-about-dialog__dependencies-section">
               <div className="bitfun-about-dialog__sub-category">
                 <div className="bitfun-about-dialog__sub-category-header">
-                  <h3 className="bitfun-about-dialog__sub-category-title">Frontend</h3>
+                  <h3 className="bitfun-about-dialog__sub-category-title">{t('about.openSourceFrontend')}</h3>
                   <span className="bitfun-about-dialog__sub-category-count bitfun-about-dialog__sub-category-count--frontend">
                 {dependencies.filter(d => d.category === 'frontend').length}
               </span>
@@ -429,7 +429,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                     </span>
                         </div>
                         <span className="bitfun-about-dialog__dependency-tag bitfun-about-dialog__dependency-tag--frontend">
-                    FE
+                    {t('about.openSourceTagFE')}
                   </span>
                       </div>
                   ))}
@@ -440,7 +440,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             <div className="bitfun-about-dialog__dependencies-section">
               <div className="bitfun-about-dialog__sub-category">
                 <div className="bitfun-about-dialog__sub-category-header">
-                  <h3 className="bitfun-about-dialog__sub-category-title">Backend</h3>
+                  <h3 className="bitfun-about-dialog__sub-category-title">{t('about.openSourceBackend')}</h3>
                   <span className="bitfun-about-dialog__sub-category-count bitfun-about-dialog__sub-category-count--backend">
                 {dependencies.filter(d => d.category === 'backend').length}
               </span>
@@ -464,7 +464,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                     </span>
                         </div>
                         <span className="bitfun-about-dialog__dependency-tag bitfun-about-dialog__dependency-tag--backend">
-                    BE
+                    {t('about.openSourceTagBE')}
                   </span>
                       </div>
                   ))}
@@ -478,53 +478,46 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           </div>
         </Modal>
 
-        {/* User Agreement dialog */}
-        <Modal
-            isOpen={subDialog === 'userAgreement'}
-            onClose={() => setSubDialog(null)}
-            title={t('about.userAgreement')}
-            showCloseButton={true}
-            size="medium"
-        >
-          <div className="bitfun-about-dialog__sub-content">
-            <section className="bitfun-about-dialog__sub-card">
-              <h3 className="bitfun-about-dialog__sub-card-heading">
-                1. 服务使用
-              </h3>
-              <p className="bitfun-about-dialog__sub-card-text">
-                用户在使用 BitFun 服务时应遵守相关法律法规。本软件仅供合法用途使用，不得用于任何非法或未经授权的活动。
-              </p>
-            </section>
-            <section className="bitfun-about-dialog__sub-card">
-              <h3 className="bitfun-about-dialog__sub-card-heading">
-                2. 免责声明
-              </h3>
-              <p className="bitfun-about-dialog__sub-card-text">
-                本软件按"现状"提供，不提供任何明示或暗示的保证。在适用法律允许的最大范围内，开发者不承担任何损害赔偿的责任。使用风险由用户自行承担。
-              </p>
-            </section>
-            <section className="bitfun-about-dialog__sub-card">
-              <h3 className="bitfun-about-dialog__sub-card-heading">
-                3. 隐私政策
-              </h3>
-              <p className="bitfun-about-dialog__sub-card-text">
-                我们重视你的隐私。本软件可能会收集必要的使用数据以改善服务质量。详细的隐私政策请参阅官方网站。
-              </p>
-            </section>
-            <p className="bitfun-about-dialog__sub-footnote">
-              完整协议内容将在后续版本中完善。
-            </p>
-          </div>
-        </Modal>
+    {/* Privacy Agreement dialog */}
+    <Modal
+      isOpen={subDialog === 'userAgreement'}
+      onClose={() => setSubDialog(null)}
+      title={t('about.userAgreement')}
+      showCloseButton={true}
+      size="medium"
+    >
+      <div className="bitfun-about-dialog__privacy-doc">
+        <h2 className="bitfun-about-dialog__privacy-title">{t('about.privacyTitle')}</h2>
+        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyIntro')}</p>
+        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyCommitment')}</p>
 
-        <UpdateAvailableDialog
-            isOpen={manualOpen}
-            variant="manual"
-            data={manualData}
-            onLater={onManualLater}
-            onInstall={onManualInstall}
-        />
-      </>
+        <h3 className="bitfun-about-dialog__privacy-section">{t('about.privacyS1Title')}</h3>
+        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS1P1')}</p>
+        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS1P2')}</p>
+        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS1P3')}</p>
+
+        <h3 className="bitfun-about-dialog__privacy-section">{t('about.privacyS2Title')}</h3>
+        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS2P1')}</p>
+
+        <h3 className="bitfun-about-dialog__privacy-section">{t('about.privacyS3Title')}</h3>
+        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS3P1')}</p>
+        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS3P2')}</p>
+
+        <h3 className="bitfun-about-dialog__privacy-section">{t('about.privacyS4Title')}</h3>
+        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS4P1')}</p>
+        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS4P2')}</p>
+        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS4P3')}</p>
+      </div>
+    </Modal>
+
+          <UpdateAvailableDialog
+              isOpen={manualOpen}
+              variant="manual"
+              data={manualData}
+              onLater={onManualLater}
+              onInstall={onManualInstall}
+          />
+    </>
   );
 };
 
