@@ -37,6 +37,7 @@ export interface ConnectedTerminalProps {
   onClose?: () => void;
   onTitleChange?: (title: string) => void;
   onExit?: (exitCode?: number) => void;
+  supportsCopyPaste?: boolean;
 }
 
 const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
@@ -49,6 +50,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
   onClose,
   onTitleChange,
   onExit,
+  supportsCopyPaste = true,
 }) => {
   const terminalRef = useRef<TerminalRef>(null);
   const [title, setTitle] = useState<string>(initialSession?.name || 'Terminal');
@@ -412,6 +414,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
         onReady={handleTerminalReady}
         onPaste={handlePaste}
         preventShrinkBelowColsRef={preventShrinkBelowColsRef}
+        supportsCopyPaste={supportsCopyPaste}
       />
 
       {showStatusBar && session && (

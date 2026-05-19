@@ -487,6 +487,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
       successMessage={t('toolCards.terminal.commandCopied')}
       failureMessage={t('toolCards.terminal.copyCommandFailed')}
       ariaLabel={t('toolCards.terminal.copyCommand')}
+      showSuccessNotification={false}
     />
   );
 

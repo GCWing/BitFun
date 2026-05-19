@@ -130,7 +130,7 @@ export class ContextResolver {
                        `terminal-${Date.now()}`;
     const sessionId = terminalElement.getAttribute('data-session-id') || undefined;
     const isReadOnly = terminalElement.getAttribute('data-readonly') === 'true';
-
+    const supportsCopyPaste = terminalElement.getAttribute('data-supports-copy-paste') !== 'false';
     
     const selection = window.getSelection();
     const selectedText = selection?.toString() || '';
@@ -143,7 +143,8 @@ export class ContextResolver {
       sessionId,
       hasSelection,
       selectedText: hasSelection ? selectedText : undefined,
-      isReadOnly
+      isReadOnly,
+      supportsCopyPaste
     };
   }
 
