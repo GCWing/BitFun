@@ -306,6 +306,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn manifest_guard_preserves_get_tool_spec_unlock_surface_before_owner_migration() {
+        let allowed_tools = vec![
+            "Read".to_string(),
+            "WebFetch".to_string(),
+            "GetFileDiff".to_string(),
+            "Git".to_string(),
+        ];
+
+        let manifest = resolve_tool_manifest(
+            &allowed_tools,
+            &AgentToolPolicyOverrides::default(),
+            &tool_context(),
+        )
+        .await;
+
+        assert_eq!(
+            manifest.allowed_tool_names,
+            vec![
+                "Read".to_string(),
+                "WebFetch".to_string(),
+                "GetFileDiff".to_string(),
+                "Git".to_string(),
+                GET_TOOL_SPEC_TOOL_NAME.to_string(),
+            ],
+            "GetToolSpec insertion must preserve the runtime allowed-list contract"
+        );
+        assert_eq!(
+            manifest.collapsed_tool_names,
+            vec![
+                "GetFileDiff".to_string(),
+                "WebFetch".to_string(),
+                "Git".to_string()
+            ],
+            "collapsed unlock list must follow product registry snapshot order"
+        );
+        assert_eq!(
+            manifest
+                .tool_definitions
+                .iter()
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Read", "WebFetch", "GetToolSpec", "GetFileDiff", "Git"],
+            "prompt-visible definitions must keep the current discovery insertion and policy order stable"
+        );
+
+        for tool_name in ["GetFileDiff", "WebFetch", "Git"] {
+            let stub = manifest
+                .tool_definitions
+                .iter()
+                .find(|tool| tool.name == tool_name)
+                .unwrap_or_else(|| panic!("{tool_name} stub should exist"));
+            assert!(
+                stub.description.contains(&format!(
+                    "First call `GetToolSpec` with {{\"tool_name\":\"{tool_name}\"}}"
+                )),
+                "collapsed stub must point to the explicit GetToolSpec unlock flow"
+            );
+            assert_eq!(stub.parameters["type"], json!("object"));
+            assert_eq!(stub.parameters["additionalProperties"], json!(false));
+            assert_eq!(
+                stub.parameters["properties"]["tool_name"]["description"],
+                json!(format!(
+                    "Do not supply {tool_name} arguments here while the tool is collapsed. Use GetToolSpec with {{\"tool_name\":\"{tool_name}\"}} first."
+                ))
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn manifest_preserves_explicit_get_tool_spec_runtime_contract() {
         let allowed_tools = vec![GET_TOOL_SPEC_TOOL_NAME.to_string(), "WebFetch".to_string()];
 

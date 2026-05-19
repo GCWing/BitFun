@@ -223,7 +223,7 @@ mod tests {
     use crate::agentic::tools::runtime_assembly::ProductToolRuntimeAssembly;
     use crate::agentic::tools::static_providers::builtin_static_tool_providers;
     use async_trait::async_trait;
-    use bitfun_agent_tools::{DynamicToolProvider, StaticToolProvider};
+    use bitfun_agent_tools::{DynamicToolProvider, StaticToolProvider, ToolDecorator};
     use serde_json::Value;
     use serde_json::json;
     use std::sync::Arc;
@@ -313,6 +313,60 @@ mod tests {
                 }),
             }),
         })
+    }
+
+    #[derive(Debug, Clone)]
+    struct MarkerToolDecorator;
+
+    impl ToolDecorator<ToolRef> for MarkerToolDecorator {
+        fn decorate(&self, tool: ToolRef) -> ToolRef {
+            Arc::new(DecoratedMarkerTool {
+                name: tool.name().to_string(),
+                exposure: tool.default_exposure(),
+                readonly: tool.is_readonly(),
+            })
+        }
+    }
+
+    struct DecoratedMarkerTool {
+        name: String,
+        exposure: crate::agentic::tools::framework::ToolExposure,
+        readonly: bool,
+    }
+
+    #[async_trait]
+    impl Tool for DecoratedMarkerTool {
+        fn name(&self) -> &str {
+            &self.name
+        }
+
+        async fn description(&self) -> crate::util::errors::BitFunResult<String> {
+            Ok("decorated test tool".to_string())
+        }
+
+        fn short_description(&self) -> String {
+            "decorated test tool".to_string()
+        }
+
+        fn default_exposure(&self) -> crate::agentic::tools::framework::ToolExposure {
+            self.exposure
+        }
+
+        fn input_schema(&self) -> Value {
+            json!({ "type": "object" })
+        }
+
+        fn is_readonly(&self) -> bool {
+            self.readonly
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &Value,
+            _context: &ToolUseContext,
+        ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+            Ok(Vec::new())
+        }
     }
 
     #[test]
@@ -459,6 +513,36 @@ mod tests {
             assert!(
                 assistant_text.contains("snapshot system"),
                 "runtime assembly must preserve snapshot wrapping for {tool_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn product_tool_runtime_assembly_keeps_custom_decorator_provider_contract() {
+        let registry =
+            ProductToolRuntimeAssembly::with_tool_decorator(Arc::new(MarkerToolDecorator))
+                .create_registry();
+        let compatibility_registry = create_tool_registry();
+
+        assert_eq!(
+            registry.get_tool_names(),
+            compatibility_registry.get_tool_names(),
+            "custom decorator assembly must keep provider tool order stable"
+        );
+        assert_eq!(
+            registry.get_collapsed_tool_names(),
+            compatibility_registry.get_collapsed_tool_names(),
+            "custom decorator assembly must keep collapsed exposure stable"
+        );
+
+        for tool_name in ["Write", "GetToolSpec", "WebFetch"] {
+            let tool = registry
+                .get_tool(tool_name)
+                .unwrap_or_else(|| panic!("{tool_name} tool should be registered"));
+            assert_eq!(
+                tool.short_description(),
+                "decorated test tool",
+                "custom decorator must be applied while preserving provider installation"
             );
         }
     }

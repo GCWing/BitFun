@@ -1113,6 +1113,11 @@ pub fn create_tool_registry() -> ToolRegistry {
   `ToolRegistry` 只保留对 `bitfun-agent-tools` generic registry 的兼容容器和动态工具入口。
   该切片仍不迁移 `ToolUseContext`、runtime manifest assembly、`GetToolSpecTool` 执行、
   product collapsed-tool catalog 或 concrete tool implementation。
+- Tool-runtime H3 start（2026-05-19）：先补 tool runtime provider/assembly 等价保护，再评估 runtime
+  owner 外移。当前新增 custom decorator + provider assembly guard，并锁定 manifest /
+  `GetToolSpec` unlock surface 的现有顺序与 stub contract；不迁移 `ToolUseContext`、
+  runtime manifest assembly、`GetToolSpecTool` 执行、snapshot decorator port 或 concrete
+  tool implementation。
 
 **验证：**
 
@@ -1845,7 +1850,8 @@ git diff -- package.json scripts/dev.cjs scripts/desktop-tauri-build.mjs scripts
 18. 已完成：`product-domains` runtime port/facade closure。已迁入 MiniApp storage-backed runtime-state facade、built-in seed plan / marker wire helper 与 function-agent Git/AI port-backed runtime facade，并补充 focused contract tests；core 只对 MiniApp deps/restart/recompile/sync/rollback 的状态持久化委托 facade，仍保留 `PathManager` 注入、filesystem IO、worker process execution、host dispatch 执行、built-in asset seeding/source-hash lookup、prompt template、JSON extraction 和 error mapping adapter。Git commit-message 与 Startchat work-state 产品路径已通过 core-owned Git/AI adapter 接入 function-agent facade；extracted JSON string 可委托 product-domain parser，但 JSON 提取、日志与错误映射仍在 core。Startchat 接线已用 no-HEAD diff fallback、非 Git 目录空状态和 `analyze_git=false` time-info 保护旧行为，`analyzed_at` 仍由 core 在 AI 分析完成后赋值。
 19. 已合入：H1 tool runtime migration baseline。已把纯 helper 从 runtime owner 中剥离：`StaticToolProviderGroup`、registry snapshot 到 manifest policy input、generic collapsed exposure 查询、`GetToolSpec` collapsed-load 纯收集规则、prompt-visible manifest definition 组装规则和 `GetToolSpec` catalog description 组装规则可由 `bitfun-agent-tools` 拥有；完整 collapsed 工具清单、runtime context 传递和 portable facts 边界回归已作为迁移前基线。
 20. 本轮完成：H2 core-owned tool runtime assembly closure。先在 core 内部建立 `ProductToolRuntimeAssembly` 单一 owner，收敛 static provider 安装和 snapshot decorator，并保持 legacy `create_tool_registry()`、global registry、dynamic MCP tools、manifest resolver、`GetToolSpecTool` 执行、`ToolUseContext` 和 concrete tools 的行为边界不变。后续若继续外移，必须进入 port/provider 设计和等价性证明，不得把 runtime manifest assembly、product collapsed-tool catalog、snapshot decorator 或 concrete tools 混成隐式结构调整。
-21. 后续独立评估：`bitfun-core default = []`、per-product feature set、依赖版本收敛或构建收益优化；任何收益声明都需要记录 `cargo check -p bitfun-core`、workspace check 和目标 crate check 的前后数据。
+21. 当前阶段：tool-runtime H3 provider/assembly equivalence guard。先补 custom decorator、provider install、collapsed catalog、manifest / `GetToolSpec` unlock 等价保护，再决定是否迁移 `ToolUseContext`、runtime manifest assembly、snapshot decorator port 或 concrete tool implementation；本阶段不得把 concrete tool 迁移和行为语义调整混入同一提交。
+22. 后续独立评估：`bitfun-core default = []`、per-product feature set、依赖版本收敛或构建收益优化；任何收益声明都需要记录 `cargo check -p bitfun-core`、workspace check 和目标 crate check 的前后数据。
 
 冗余清理 PR 不进入上述主线序号。只有在满足 `0A.6` 的绝对等价要求时，才可以插入到相邻里程碑之间，并且不得与主线拆分 PR 混合。
 
