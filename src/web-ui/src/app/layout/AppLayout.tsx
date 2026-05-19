@@ -421,11 +421,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           }
 
           // Windows / Linux: read the user's close-button preference.
-          let behavior: CloseBehavior = 'quit';
+          let behavior: CloseBehavior = 'minimize_to_tray';
           try {
-            behavior = (await configManager.getConfig<CloseBehavior>('app.close_button_behavior')) ?? 'quit';
+            behavior = (await configManager.getConfig<CloseBehavior>('app.close_button_behavior')) ?? 'minimize_to_tray';
           } catch {
-            // Fall back to quit if config cannot be read.
+            // Fall back to minimize_to_tray if config cannot be read.
           }
 
           try {

@@ -92,7 +92,7 @@ impl ProjectConfig {
 
 /// App configuration.
 fn default_close_button_behavior() -> String {
-    "quit".to_string()
+    "minimize_to_tray".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
