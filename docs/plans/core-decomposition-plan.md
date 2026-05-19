@@ -1635,6 +1635,25 @@ P2 后产品表面契约轨道（contract-only）：
 
 `bitfun-core default = []`、per-product feature set、构建矩阵和 release 能力调整仍作为重构完成后的独立评估，不计入上述 5 个 PR。
 
+**剩余 PR 计数锁定（2026-05-19）：**
+
+后续不再每次重新口头估算“还差几次 PR”。从当前 product-domain owner-helper PR
+合入后开始，文档主线剩余固定为 4 个必需 PR；如果把 `bitfun-core default = []` /
+per-product feature matrix / 构建收益评估也算作“全部完成”，则为 4 个必需 PR + 1 个
+可选评估 PR。任何实现前必须先对照本节；若发现范围不再准确，先更新本节并说明原因，
+不得在开发过程中临时拆碎或扩张 PR 边界。
+
+| 序号 | 里程碑 | 必须完成的范围 | 不允许混入 | 退出条件 |
+|---|---|---|---|---|
+| R1 | core-types / services contract closure | `BitFunError` 剩余 concrete wrapper 处理决策、后续 shared DTO 归属校准、services-core/services-integrations 仍悬空的 port/call-site 状态复核，并把已明确 deferred/core-owned 的 checkbox 关到文档里 | runtime owner 迁移、工具实现外移、feature matrix 调整 | 文档中 Plan 3/5/6/7 的未完成项要么完成，要么显式标为 deferred/core-owned；boundary check 与最小 Rust check 通过 |
+| R2 | tool runtime owner closure | `ToolUseContext` 迁移前 port/provider 设计、tool-packs concrete implementation 是否迁移的 owner 决策、runtime manifest assembly / `GetToolSpec` 执行 owner 边界、registry/manifest 等价测试 | MiniApp/function-agent runtime、remote-connect dialog runtime、`default = []` | 完整产品 tool registry、expanded/collapsed exposure、unlock state、dynamic provider metadata、snapshot wrapper 等价可证明 |
+| R3 | product-domains runtime finalization | MiniApp runtime/manager/host/exporter/builtin 与 function-agent runtime 剩余项逐个审视；能安全外移的外移，不能外移的明确 core-owned runtime 归属与回归保护 | tool runtime owner、feature matrix、CLI/Desktop/Remote/ACP surface 行为变更 | `product-domains` 不依赖 core；core 只保留明确的 IO/process/Git/AI adapter 或 legacy facade；MiniApp/function-agent focused regression 通过 |
+| R4 | P3 facade and boundary closure | `bitfun-core` 收敛为 legacy facade + full product runtime assembly；boundary script、AGENTS、architecture/plan docs 与当前代码一致；最终确认没有悬空的“已完成错觉” | 新 runtime 外移、默认 feature 改动、构建收益宣传 | 文档主线 checklist 闭环；所有 deferred/core-owned 项有明确 owner、测试或后续评估入口 |
+| R5 | optional default feature / build-benefit evaluation | 仅在 R1-R4 后评估 `bitfun-core default = []`、per-product feature set、依赖版本收敛和构建收益 | 任何 runtime owner 迁移或产品逻辑变更 | 有 feature graph baseline、`cargo check -p bitfun-core`、workspace check 和目标 crate check 的前后数据；可选择不执行 |
+
+本节解释“为什么统计总是 4-5 个”：R1-R4 是文档主线闭环的固定剩余项；R5 是独立评估项。
+后续如果用户问“还差几次 PR”，默认回答必须引用这个口径，而不是重新发散。
+
 ### 里程碑三：facade 收敛、边界强制与可选默认轻量化评估
 
 **覆盖计划：**
