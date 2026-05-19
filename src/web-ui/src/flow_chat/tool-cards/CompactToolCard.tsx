@@ -24,6 +24,9 @@ export interface CompactToolCardProps {
   isExpanded?: boolean;
   /** Card click callback */
   onClick?: (e: React.MouseEvent) => void;
+  onMouseDown?: (e: React.MouseEvent) => void;
+  onMouseUp?: (e: React.MouseEvent) => void;
+  onMouseMove?: (e: React.MouseEvent) => void;
   /** Custom class name */
   className?: string;
   /** Whether clickable */
@@ -37,18 +40,20 @@ export interface CompactToolCardProps {
 export const CompactToolCard: React.FC<CompactToolCardProps> = ({
   status,
   isExpanded = false,
-  onClick,
+  onMouseDown,
+  onMouseUp,
+  onMouseMove,
   className = '',
   clickable = false,
   header,
   expandedContent,
 }) => {
   const handleWrapperClick = (event: React.MouseEvent) => {
-    if (!onClick || shouldIgnoreCardToggleClick(event)) {
+    if (!onMouseUp || shouldIgnoreCardToggleClick(event)) {
       return;
     }
 
-    onClick(event);
+    onMouseUp(event);
   };
 
   const loadingShimmer =
@@ -67,7 +72,7 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
         className={`compact-tool-card-wrapper--expanded-card ${className}`.trim()}
         header={header}
         expandedContent={expandedContent}
-        headerExpandAffordance={clickable || Boolean(onClick)}
+        headerExpandAffordance={clickable || Boolean(onMouseUp)}
       />
     );
   }
@@ -78,7 +83,9 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
     >
       <div
         className={`compact-tool-card status-${status} ${clickable ? 'clickable' : ''} ${isExpanded ? 'expanded' : ''}`}
-        onClick={handleWrapperClick}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={handleWrapperClick}
         style={{ cursor: clickable ? 'pointer' : 'default' }}
       >
         {header}

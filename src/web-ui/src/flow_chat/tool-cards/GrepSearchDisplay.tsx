@@ -65,13 +65,24 @@ export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
   const hasDetails = status === 'completed' && stats.matches > 0;
   const hasResultData = toolResult?.result !== undefined && toolResult?.result !== null;
 
+  const [shouldExpand, setShouldExpand] = useState(true);
+
+  const handleMouseMove = useCallback(() => {
+    setShouldExpand(false);
+  }, [applyExpandedState, hasDetails, isExpanded, onExpand, shouldExpand, setShouldExpand]);
+
+  const handleMouseDown = useCallback(() => {
+    setShouldExpand(true);
+  }, [applyExpandedState, hasDetails, isExpanded, onExpand, shouldExpand, setShouldExpand]);
+
   const handleClick = useCallback(() => {
-    if (hasDetails) {
+    if (hasDetails && shouldExpand) {
       applyExpandedState(isExpanded, !isExpanded, setIsExpanded, {
         onExpand,
       });
     }
-  }, [applyExpandedState, hasDetails, isExpanded, onExpand]);
+    setShouldExpand(true);
+  }, [applyExpandedState, hasDetails, isExpanded, onExpand, shouldExpand, setShouldExpand]);
 
   const renderContent = () => {
     if (status === 'completed') {
@@ -135,7 +146,9 @@ export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
       <CompactToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleClick}
         className="grep-search-card"
         clickable={hasDetails}
         header={

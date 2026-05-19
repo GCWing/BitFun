@@ -83,13 +83,21 @@ export const LSDisplay: React.FC<ToolCardProps> = ({
   const hasDetails = status === 'completed' && entries.length > 0;
   const hasResultData = toolResult?.result !== undefined && toolResult?.result !== null;
 
+  const [shouldExpand, setShouldExpand] = useState(true);
+  const handleMouseDown = useCallback(() => {
+    setShouldExpand(true);
+  }, [applyExpandedState, hasDetails, isExpanded, onExpand, shouldExpand, setShouldExpand]);
+
+  const handleMouseMove = useCallback(() => {
+    setShouldExpand(false);
+  }, [applyExpandedState, hasDetails, isExpanded, onExpand, shouldExpand, setShouldExpand]);
   const handleClick = useCallback(() => {
-    if (hasDetails) {
+    if (hasDetails && shouldExpand) {
       applyExpandedState(isExpanded, !isExpanded, setIsExpanded, {
         onExpand,
       });
     }
-  }, [applyExpandedState, hasDetails, isExpanded, onExpand]);
+  }, [applyExpandedState, hasDetails, isExpanded, onExpand,  shouldExpand, setShouldExpand]);
 
   const renderContent = () => {
     if (status === 'completed') {
@@ -176,7 +184,9 @@ export const LSDisplay: React.FC<ToolCardProps> = ({
       <CompactToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleClick}
         className="ls-display-card"
         clickable={hasDetails}
         header={

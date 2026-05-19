@@ -92,10 +92,23 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
     return t('toolCards.think.thinkingCharacters', { count: content.length });
   }, [content, t]);
 
+  const shouldExpand = useRef(true);
+
+  const handleMouseDown = () => {
+    shouldExpand.current = true;
+  };
+
+  const handleMouseMove = () => {
+    shouldExpand.current = false;
+  };
+
   const handleToggleClick = () => {
-    const nextExpanded = !isExpanded;
-    userToggledRef.current = true;
-    applyExpandedState(isExpanded, nextExpanded, setIsExpanded);
+    if (shouldExpand.current) {
+      const nextExpanded = !isExpanded;
+      userToggledRef.current = true;
+      applyExpandedState(isExpanded, nextExpanded, setIsExpanded);
+    }
+    shouldExpand.current = true;
   };
 
   const headerLabel = (isExpanded
@@ -113,7 +126,9 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
     <div ref={wrapperRef} data-tool-card-id={thinkingItem.id} className={wrapperClassName}>
       <div
         className="thinking-collapsed-header"
-        onClick={handleToggleClick}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleToggleClick}
       >
         <ChevronRight size={14} className="thinking-chevron" />
         <span className="thinking-label">{headerLabel}</span>

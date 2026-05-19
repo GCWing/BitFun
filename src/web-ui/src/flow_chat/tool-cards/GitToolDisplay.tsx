@@ -136,16 +136,27 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
     return t('toolCards.git.executionFailed');
   };
 
+  const [shouldExpand, setShouldExpand] = useState(true);
+
+  const handleMouseDown = useCallback(() => {
+    setShouldExpand(true);
+  }, [hasOutput, isFailed, toggleExpanded, shouldExpand, setShouldExpand]);
+
+    const handleMouseMove = useCallback(() => {
+    setShouldExpand(false);
+  }, [hasOutput, isFailed, toggleExpanded, shouldExpand, setShouldExpand]);
+
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('.tool-card-header-actions, .git-action-buttons, .terminal-header-actions')) {
       return;
     }
     
-    if (hasOutput || isFailed) {
+    if ((hasOutput || isFailed) && shouldExpand) {
       toggleExpanded();
     }
-  }, [hasOutput, isFailed, toggleExpanded]);
+    setShouldExpand(true);
+  }, [hasOutput, isFailed, toggleExpanded, shouldExpand, setShouldExpand]);
 
   const renderStatusIcon = () => {
     if (isLoading) {
@@ -417,7 +428,9 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
         <CompactToolCard
           status={status}
           isExpanded={false}
-          onClick={handleCardClick}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleCardClick}
           className="git-tool-display"
           clickable
           header={renderCompactHeader()}
