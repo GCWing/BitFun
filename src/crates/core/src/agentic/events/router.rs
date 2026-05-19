@@ -121,3 +121,56 @@ impl Default for EventRouter {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agentic::events::types::{EventEnvelope, EventPriority};
+    use bitfun_events::AgenticEvent;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct CountingSubscriber {
+        count: Arc<AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl EventSubscriber for CountingSubscriber {
+        async fn on_event(&self, event: &AgenticEvent) -> BitFunResult<()> {
+            if matches!(event, AgenticEvent::TokenUsageUpdated { .. }) {
+                self.count.fetch_add(1, Ordering::SeqCst);
+            }
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn route_dispatches_to_internal_subscribers() {
+        let router = EventRouter::new();
+        let count = Arc::new(AtomicUsize::new(0));
+        router.subscribe_internal(
+            "test-token-usage".to_string(),
+            Arc::new(CountingSubscriber {
+                count: count.clone(),
+            }),
+        );
+
+        let envelope = EventEnvelope::new(
+            AgenticEvent::TokenUsageUpdated {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                model_id: "model-1".to_string(),
+                input_tokens: 10,
+                output_tokens: Some(5),
+                total_tokens: 15,
+                max_context_tokens: None,
+                is_subagent: false,
+                cached_tokens: None,
+                token_details: None,
+            },
+            EventPriority::Normal,
+        );
+
+        router.route(envelope).await.expect("route should succeed");
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+    }
+}
