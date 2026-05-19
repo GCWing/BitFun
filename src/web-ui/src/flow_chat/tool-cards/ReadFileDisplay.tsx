@@ -2,7 +2,7 @@
  * Compact display for the read_file tool.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Check, FileText, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { IconButton } from '../../component-library';
@@ -152,6 +152,23 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     return null;
   };
 
+  const [shouldExpand, setShouldExpand] = useState(true);
+
+  const handleMouseDown = () => {
+    setShouldExpand(true);
+  }
+
+  const handleMouseMove = () => {
+    setShouldExpand(false);
+  }
+
+  const handleMouseUp = () => {
+    if (shouldExpand && canOpenFile) {
+      handleOpenInEditor();
+    }
+    setShouldExpand(true);
+  }
+
   const renderActions = () => {
     if (!showConfirmationActions) {
       return undefined;
@@ -203,7 +220,9 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     <CompactToolCard
       status={status}
       isExpanded={false}
-      onClick={() => canOpenFile && handleOpenInEditor()}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
       className="read-file-card"
       clickable={canOpenFile}
       header={

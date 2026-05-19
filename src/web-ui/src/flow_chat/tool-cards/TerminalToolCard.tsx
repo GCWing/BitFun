@@ -430,14 +430,26 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     createTerminalTab(terminalSessionId, terminalName);
   }, [terminalSessionId]);
 
+  const [shouldExpand, setShouldExpand] = useState(true);
+
+  const handleMouseDown = useCallback(() => {
+    setShouldExpand(true);
+  }, [toggleExpanded, shouldExpand, setShouldExpand]);
+
+  const handleMouseMove = useCallback(() => {
+    setShouldExpand(false);
+  }, [toggleExpanded, shouldExpand, setShouldExpand]);
+
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('.tool-card-header-actions, .terminal-action-btn, .terminal-confirm-actions')) {
       return;
     }
-
-    toggleExpanded();
-  }, [toggleExpanded]);
+    if (shouldExpand) {
+      toggleExpanded();
+    }
+    setShouldExpand(true);
+  }, [toggleExpanded, shouldExpand, setShouldExpand]);
 
   const renderLoadingStatusIcon = () => {
     if (viewState.isLoading) {
@@ -659,7 +671,9 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
         <CompactToolCard
           status={status}
           isExpanded={false}
-          onClick={handleCardClick}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleCardClick}
           className="terminal-tool-card terminal-tool-card--compact-collapsed"
           clickable
           header={renderCompactHeader()}

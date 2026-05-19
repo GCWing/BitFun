@@ -93,6 +93,7 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
   const { t } = useTranslation('flow-chat');
   const { toolCall, toolResult, status, requiresConfirmation, userConfirmed } = toolItem;
   const [isExpanded, setIsExpanded] = useState(false);
+  const [shouldExpand, setShouldExpand] = useState(true);
   const toolId = toolItem.id ?? toolCall?.id;
   const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
     toolId,
@@ -128,14 +129,25 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
     onReject?.();
   };
 
+  const handleMouseDown = useCallback(() => {
+    setShouldExpand(true);
+  }, [applyExpandedState, canExpand, isExpanded, onExpand,shouldExpand, setShouldExpand]);
+
+  const handleMouseMove = useCallback(() => {
+    setShouldExpand(false);
+  }, [applyExpandedState, canExpand, isExpanded, onExpand,shouldExpand, setShouldExpand]);
+
   const handleToggleExpand = useCallback(() => {
     if (!canExpand) return;
 
     const nextExpanded = !isExpanded;
-    applyExpandedState(isExpanded, nextExpanded, setIsExpanded, {
-      onExpand,
+    if (shouldExpand) {
+      applyExpandedState(isExpanded, nextExpanded, setIsExpanded, {
+        onExpand,
     });
-  }, [applyExpandedState, canExpand, isExpanded, onExpand]);
+    }
+    setShouldExpand(true);
+  }, [applyExpandedState, canExpand, isExpanded, onExpand, shouldExpand, setShouldExpand]);
 
   const getStatusText = () => {
     if (requiresConfirmation && !userConfirmed) {
@@ -213,7 +225,9 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
       <CompactToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={handleToggleExpand}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleToggleExpand}
         className={`default-tool-card ${showConfirmationHighlight ? 'requires-confirmation' : ''}`}
         clickable={canExpand}
           header={

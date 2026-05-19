@@ -78,13 +78,24 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
   const hasSummary = !hasResults && searchResults && searchResults.summary;
   const isExpandable = status === 'completed' && (hasResults || hasSummary);
 
+  const [shouldExpand, setShouldExpand] = useState(true);
+
+  const handleMouseDown= useCallback(() => {
+    setShouldExpand(true);
+  }, [applyExpandedState, isExpandable, isExpanded, onExpand, shouldExpand, setShouldExpand]);
+
+  const handleMouseMove = useCallback(() => {
+    setShouldExpand(false)
+  }, [applyExpandedState, isExpandable, isExpanded, onExpand, shouldExpand, setShouldExpand]);
+
   const handleClick = useCallback(() => {
-    if (isExpandable) {
+    if (isExpandable && shouldExpand) {
       applyExpandedState(isExpanded, !isExpanded, setIsExpanded, {
         onExpand,
       });
     }
-  }, [applyExpandedState, isExpandable, isExpanded, onExpand]);
+    setShouldExpand(true);
+  }, [applyExpandedState, isExpandable, isExpanded, onExpand, shouldExpand, setShouldExpand]);
 
   const renderContent = () => {
     if (status === 'completed') {
@@ -163,7 +174,9 @@ export const WebSearchCard: React.FC<ToolCardProps> = ({
       <CompactToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleClick}
         clickable={isExpandable}
         header={
           <CompactToolCardHeader

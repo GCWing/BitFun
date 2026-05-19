@@ -101,6 +101,23 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
     }
   };
 
+  const [shouldExpand, setShouldExpand] = useState(true);
+  
+  const handleMouseDown = () => {
+    setShouldExpand(true);
+  }
+  
+  const handleMouseMove = () => {
+    setShouldExpand(false);
+  }
+  
+  const handleMouseUp = () => {
+    if (shouldExpand && hasDetails) {
+      applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
+    }
+    setShouldExpand(true);
+  }
+
   const renderContent = () => {
     const label = getActionLabel();
 
@@ -261,11 +278,9 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
       <CompactToolCard
         status={status}
         isExpanded={isExpanded}
-        onClick={() => {
-          if (hasDetails) {
-            applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
-          }
-        }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         className="session-control-card"
         clickable={hasDetails}
         header={(
