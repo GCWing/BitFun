@@ -349,6 +349,27 @@ pub trait StaticToolProvider<Tool: ?Sized>: Send + Sync {
     fn tools(&self) -> Vec<ToolRef<Tool>>;
 }
 
+pub struct StaticToolProviderGroup<Tool: ?Sized> {
+    provider_id: &'static str,
+    tools: Vec<ToolRef<Tool>>,
+}
+
+impl<Tool: ?Sized> StaticToolProviderGroup<Tool> {
+    pub fn new(provider_id: &'static str, tools: Vec<ToolRef<Tool>>) -> Self {
+        Self { provider_id, tools }
+    }
+}
+
+impl<Tool: ?Sized + Send + Sync> StaticToolProvider<Tool> for StaticToolProviderGroup<Tool> {
+    fn provider_id(&self) -> &'static str {
+        self.provider_id
+    }
+
+    fn tools(&self) -> Vec<ToolRef<Tool>> {
+        self.tools.clone()
+    }
+}
+
 pub struct ToolRegistry<Tool: ToolRegistryItem + ?Sized> {
     tools: IndexMap<String, ToolRef<Tool>>,
     dynamic_tools: IndexMap<String, DynamicToolMetadata>,

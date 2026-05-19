@@ -1,16 +1,16 @@
 use bitfun_agent_tools::{
-    build_collapsed_tool_stub_definition, build_get_tool_spec_assistant_detail,
-    build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
-    build_get_tool_spec_duplicate_load_hint, get_tool_spec_input_schema,
-    resolve_tool_manifest_policy, sort_tool_manifest_definitions, validate_get_tool_spec_input,
-    DynamicMcpToolInfo, DynamicToolInfo, InputValidator, ToolContextFacts, ToolExposure,
-    ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool, ToolPathBackend,
-    ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions, ToolWorkspaceKind,
-    ValidationResult, GET_TOOL_SPEC_TOOL_NAME,
+    DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, InputValidator, ToolContextFacts,
+    ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
+    ToolPathBackend, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
+    ToolWorkspaceKind, ValidationResult, build_collapsed_tool_stub_definition,
+    build_get_tool_spec_assistant_detail, build_get_tool_spec_collapsed_tool_entry,
+    build_get_tool_spec_description, build_get_tool_spec_duplicate_load_hint,
+    get_tool_spec_input_schema, resolve_tool_manifest_policy, sort_tool_manifest_definitions,
+    validate_get_tool_spec_input,
 };
 use bitfun_agent_tools::{
     DynamicToolDescriptor, DynamicToolProvider, PortResult, PortableToolContextProvider,
-    StaticToolProvider, ToolDecorator, ToolRegistry, ToolRegistryItem,
+    StaticToolProvider, StaticToolProviderGroup, ToolDecorator, ToolRegistry, ToolRegistryItem,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -428,9 +428,10 @@ fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
 
     assert_eq!(stub.name, "WebFetch");
     assert!(stub.description.contains("Fetch a URL"));
-    assert!(stub
-        .description
-        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
+    assert!(
+        stub.description
+            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
+    );
     assert_eq!(
         stub.parameters,
         json!({
@@ -475,10 +476,12 @@ fn get_tool_spec_contract_preserves_input_schema_and_validation() {
     assert_eq!(schema["additionalProperties"], false);
     assert_eq!(schema["required"], json!(["tool_name"]));
     assert_eq!(schema["properties"]["tool_name"]["type"], "string");
-    assert!(schema["properties"]["tool_name"]["description"]
-        .as_str()
-        .unwrap_or_default()
-        .contains("canonical casing"));
+    assert!(
+        schema["properties"]["tool_name"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("canonical casing")
+    );
 
     let missing = validate_get_tool_spec_input(&json!({}));
     assert!(!missing.result);
@@ -597,6 +600,27 @@ impl StaticToolProvider<RegistryMarkerTool> for RegistryMarkerProvider {
     fn tools(&self) -> Vec<Arc<RegistryMarkerTool>> {
         self.tools.clone()
     }
+}
+
+#[test]
+fn static_tool_provider_group_preserves_provider_id_and_tool_order() {
+    let provider = StaticToolProviderGroup::new(
+        "core-basic",
+        vec![
+            registry_marker_tool("Read", None),
+            registry_marker_tool("Write", None),
+        ],
+    );
+
+    assert_eq!(provider.provider_id(), "core-basic");
+    assert_eq!(
+        provider
+            .tools()
+            .iter()
+            .map(|tool| tool.name())
+            .collect::<Vec<_>>(),
+        vec!["Read", "Write"]
+    );
 }
 
 struct RegistryMarkerDecorator;

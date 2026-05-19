@@ -1087,6 +1087,11 @@ pub fn create_tool_registry() -> ToolRegistry {
 - `Tool` trait、`ToolUseContext` 和具体工具实现仍在 core；它们直接连接 workspace service、snapshot wrapper、computer-use host、cancellation token 与 Deep Review checkpoint hook。`ToolContextFacts` / `PortableToolContextProvider` 只能作为只读事实投影，继续迁移前必须先确认 service port 方案，并补工具清单等价性测试。
 - 最新主干新增的 Deep Review shared-context / evidence-ledger checkpoint hook 仍保留在 core 的 `ToolUseContext` 中；在设计独立 tool context / event port 前，不应把 `ToolUseContext` 或 concrete tool implementation 继续外移。
 - 最新主干新增 on-demand tool spec discovery：`ToolExposure`、`GetToolSpec` 名称、collapsed prompt stub、manifest ordering 与 GetToolSpec presentation/schema 的纯契约已可由 `bitfun-agent-tools` 承载；`manifest_resolver`、collapsed-tool catalog、context-aware `description_with_context` / `input_schema_for_model_with_context`、`GetToolSpecTool` 执行以及 `ToolUseContext.unlocked_collapsed_tools` 仍会影响模型可见工具集合。该变化不推翻 PR4 的低风险结论，但把后续 tool/provider 迁移提升为高风险项，不能在 product-domain runtime 收尾中顺带执行。
+- H1 start（2026-05-19）：`StaticToolProviderGroup` 通用容器已迁入
+  `bitfun-agent-tools`，core 的 `static_providers.rs` 只负责实例化 concrete tools 并按既有
+  provider group 顺序装配。该切片不移动 concrete tool implementation、`ToolUseContext`、
+  runtime manifest assembly 或 `GetToolSpec` 执行；provider id、工具顺序与 manifest 快照由
+  `bitfun-agent-tools` contract test、core registry snapshot 和 boundary check 共同保护。
 
 **验证：**
 

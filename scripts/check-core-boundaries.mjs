@@ -1165,6 +1165,10 @@ const requiredContentRules = [
         regex: /\bpub fn sort_tool_manifest_definitions\b/,
         message: 'missing prompt-visible manifest ordering helper',
       },
+      {
+        regex: /\bpub struct StaticToolProviderGroup\b/,
+        message: 'missing generic static provider group container',
+      },
     ],
   },
   {
@@ -1227,8 +1231,8 @@ const requiredContentRules = [
         message: 'missing builtin static tool provider owner',
       },
       {
-        regex: /\bStaticToolProvider\b/,
-        message: 'missing static provider contract use',
+        regex: /\bStaticToolProviderGroup\b/,
+        message: 'missing generic static provider group contract use',
       },
       {
         regex: /core\.basic/,
@@ -3077,7 +3081,7 @@ function runManifestParserSelfTest() {
       path: 'src/crates/core/src/agentic/tools/static_providers.rs',
       contracts: [
         'builtin_static_tool_providers',
-        'StaticToolProvider',
+        'StaticToolProviderGroup',
         'core.basic',
         'core.agent',
         'core.session',
@@ -3092,6 +3096,7 @@ function runManifestParserSelfTest() {
         'PortableToolContextProvider',
         'ToolWorkspaceKind',
         'StaticToolProvider',
+        'StaticToolProviderGroup',
         'install_static_provider',
       ],
     },

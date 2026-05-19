@@ -13,6 +13,9 @@ the product tool runtime.
   path-resolution DTOs, generic/static/dynamic provider contracts, pure
   manifest/exposure helpers, GetToolSpec presentation/schema helpers, and
   `ToolContextFacts` / `PortableToolContextProvider`.
+- This crate may own generic provider containers such as
+  `StaticToolProviderGroup`, but concrete tool construction and product runtime
+  registration stay outside this crate until H1 explicitly moves an owner.
 - Do not move `ToolUseContext`, concrete tools, workspace services, cancellation
   tokens, snapshot decoration, collapsed unlock state, runtime manifest
   assembly, or `GetToolSpec` execution here without H1 approval and equivalence

@@ -2,29 +2,14 @@
 
 use crate::agentic::tools::framework::Tool;
 use crate::agentic::tools::implementations::*;
-use bitfun_agent_tools::{StaticToolProvider, ToolRef};
+use bitfun_agent_tools::StaticToolProviderGroup;
 use std::sync::Arc;
 
-pub(crate) struct CoreStaticToolProvider {
-    provider_id: &'static str,
-    tools: Vec<ToolRef<dyn Tool>>,
-}
-
-impl StaticToolProvider<dyn Tool> for CoreStaticToolProvider {
-    fn provider_id(&self) -> &'static str {
-        self.provider_id
-    }
-
-    fn tools(&self) -> Vec<ToolRef<dyn Tool>> {
-        self.tools.clone()
-    }
-}
-
-pub(crate) fn builtin_static_tool_providers() -> Vec<CoreStaticToolProvider> {
+pub(crate) fn builtin_static_tool_providers() -> Vec<StaticToolProviderGroup<dyn Tool>> {
     vec![
-        CoreStaticToolProvider {
-            provider_id: "core.basic",
-            tools: vec![
+        StaticToolProviderGroup::new(
+            "core.basic",
+            vec![
                 Arc::new(LSTool::new()),
                 Arc::new(FileReadTool::new()),
                 Arc::new(GlobTool::new()),
@@ -34,10 +19,10 @@ pub(crate) fn builtin_static_tool_providers() -> Vec<CoreStaticToolProvider> {
                 Arc::new(DeleteFileTool::new()),
                 Arc::new(BashTool::new()),
             ],
-        },
-        CoreStaticToolProvider {
-            provider_id: "core.agent",
-            tools: vec![
+        ),
+        StaticToolProviderGroup::new(
+            "core.agent",
+            vec![
                 Arc::new(TaskTool::new()),
                 Arc::new(SkillTool::new()),
                 Arc::new(AskUserQuestionTool::new()),
@@ -48,20 +33,20 @@ pub(crate) fn builtin_static_tool_providers() -> Vec<CoreStaticToolProvider> {
                 Arc::new(GetFileDiffTool::new()),
                 Arc::new(LogTool::new()),
             ],
-        },
-        CoreStaticToolProvider {
-            provider_id: "core.session",
-            tools: vec![
+        ),
+        StaticToolProviderGroup::new(
+            "core.session",
+            vec![
                 Arc::new(TerminalControlTool::new()),
                 Arc::new(SessionControlTool::new()),
                 Arc::new(SessionMessageTool::new()),
                 Arc::new(SessionHistoryTool::new()),
                 Arc::new(CronTool::new()),
             ],
-        },
-        CoreStaticToolProvider {
-            provider_id: "core.integration",
-            tools: vec![
+        ),
+        StaticToolProviderGroup::new(
+            "core.integration",
+            vec![
                 Arc::new(WebSearchTool::new()),
                 Arc::new(WebFetchTool::new()),
                 Arc::new(ListMCPResourcesTool::new()),
@@ -75,6 +60,6 @@ pub(crate) fn builtin_static_tool_providers() -> Vec<CoreStaticToolProvider> {
                 Arc::new(ComputerUseTool::new()),
                 Arc::new(PlaybookTool::new()),
             ],
-        },
+        ),
     ]
 }
