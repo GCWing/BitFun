@@ -14,9 +14,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 dirs = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 
 [features]
 default = []
-miniapp = ["dirs"]
+miniapp = ["dirs", "sha2"]
 function-agents = ["log"]
 product-full = ["miniapp", "function-agents"]

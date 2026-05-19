@@ -8,35 +8,17 @@
 use crate::miniapp::manager::MiniAppManager;
 use crate::miniapp::types::MiniAppMeta;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_product_domains::miniapp::builtin::{
+    build_builtin_package_json, builtin_content_hash, builtin_source_files,
+    should_seed_builtin_app, BuiltinInstallMarker, BuiltinMiniAppBundle, BUILTIN_INSTALL_MARKER,
+    BUILTIN_PLACEHOLDER_COMPILED_HTML, LEGACY_BUILTIN_VERSION_MARKER,
+};
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::sync::Arc;
 
-const BUILTIN_MARKER: &str = ".builtin-manifest.json";
-const LEGACY_BUILTIN_VERSION_MARKER: &str = ".builtin-version";
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-struct BuiltinInstallMarker {
-    version: u32,
-    hash: String,
-}
-
 /// A built-in MiniApp bundled with the application binary.
-#[derive(Clone, Copy)]
-pub struct BuiltinApp {
-    /// Stable id used as on-disk directory name (also exposed in the gallery).
-    pub id: &'static str,
-    /// Schema version for migration-sensitive changes. Asset changes are detected by hash.
-    pub version: u32,
-    pub meta_json: &'static str,
-    pub html: &'static str,
-    pub css: &'static str,
-    pub ui_js: &'static str,
-    pub worker_js: &'static str,
-    pub esm_dependencies_json: &'static str,
-}
+pub type BuiltinApp = BuiltinMiniAppBundle;
 
 /// All built-in apps that ship with BitFun.
 pub const BUILTIN_APPS: &[BuiltinApp] = &[
@@ -107,11 +89,11 @@ pub async fn seed_builtin_miniapps(manager: &Arc<MiniAppManager>) -> BitFunResul
 
 async fn seed_one(manager: &Arc<MiniAppManager>, app: &BuiltinApp) -> BitFunResult<()> {
     let app_dir = manager.path_manager().miniapp_dir(app.id);
-    let marker_path = app_dir.join(BUILTIN_MARKER);
+    let marker_path = app_dir.join(BUILTIN_INSTALL_MARKER);
     let content_hash = builtin_content_hash(app);
 
     if let Some(marker) = read_builtin_install_marker(&marker_path).await? {
-        if !should_seed_builtin_app_with_hash(app, &content_hash, Some(&marker)) {
+        if !should_seed_builtin_app(app, &content_hash, Some(&marker)) {
             return Ok(());
         }
     }
@@ -184,22 +166,12 @@ async fn seed_one(manager: &Arc<MiniAppManager>, app: &BuiltinApp) -> BitFunResu
         .map_err(|e| BitFunError::io(format!("write meta.json failed: {}", e)))?;
 
     // Source files (always overwrite).
-    write_file(source_dir.join("index.html"), app.html).await?;
-    write_file(source_dir.join("style.css"), app.css).await?;
-    write_file(source_dir.join("ui.js"), app.ui_js).await?;
-    write_file(source_dir.join("worker.js"), app.worker_js).await?;
-    write_file(
-        source_dir.join("esm_dependencies.json"),
-        app.esm_dependencies_json,
-    )
-    .await?;
+    for (file_name, content) in builtin_source_files(app) {
+        write_file(source_dir.join(file_name), content).await?;
+    }
 
     // package.json — overwrite with empty deps; built-in apps must not require npm install.
-    let pkg = serde_json::json!({
-        "name": format!("miniapp-{}", app.id),
-        "private": true,
-        "dependencies": {}
-    });
+    let pkg = build_builtin_package_json(app.id);
     let pkg_json = serde_json::to_string_pretty(&pkg).map_err(BitFunError::from)?;
     write_file(app_dir.join("package.json"), &pkg_json).await?;
 
@@ -212,7 +184,7 @@ async fn seed_one(manager: &Arc<MiniAppManager>, app: &BuiltinApp) -> BitFunResu
     // Placeholder compiled.html so storage::load() doesn't fail before recompile.
     write_file(
         app_dir.join("compiled.html"),
-        "<!DOCTYPE html><html><body>Loading...</body></html>",
+        BUILTIN_PLACEHOLDER_COMPILED_HTML,
     )
     .await?;
 
@@ -236,46 +208,6 @@ async fn seed_one(manager: &Arc<MiniAppManager>, app: &BuiltinApp) -> BitFunResu
         marker.hash
     );
     Ok(())
-}
-
-fn builtin_content_hash(app: &BuiltinApp) -> String {
-    let mut hasher = Sha256::new();
-    hash_builtin_asset(&mut hasher, "meta.json", app.meta_json);
-    hash_builtin_asset(&mut hasher, "index.html", app.html);
-    hash_builtin_asset(&mut hasher, "style.css", app.css);
-    hash_builtin_asset(&mut hasher, "ui.js", app.ui_js);
-    hash_builtin_asset(&mut hasher, "worker.js", app.worker_js);
-    hash_builtin_asset(
-        &mut hasher,
-        "esm_dependencies.json",
-        app.esm_dependencies_json,
-    );
-    format!("sha256:{}", hex::encode(hasher.finalize()))
-}
-
-fn hash_builtin_asset(hasher: &mut Sha256, name: &str, content: &str) {
-    hasher.update(name.as_bytes());
-    hasher.update([0u8]);
-    hasher.update(content.len().to_le_bytes());
-    hasher.update([0u8]);
-    hasher.update(content.as_bytes());
-}
-
-#[cfg(test)]
-fn should_seed_builtin_app(app: &BuiltinApp, installed: Option<&BuiltinInstallMarker>) -> bool {
-    let content_hash = builtin_content_hash(app);
-    should_seed_builtin_app_with_hash(app, &content_hash, installed)
-}
-
-fn should_seed_builtin_app_with_hash(
-    app: &BuiltinApp,
-    content_hash: &str,
-    installed: Option<&BuiltinInstallMarker>,
-) -> bool {
-    !matches!(
-        installed,
-        Some(marker) if marker.version >= app.version && marker.hash == content_hash
-    )
 }
 
 async fn read_builtin_install_marker(path: &Path) -> BitFunResult<Option<BuiltinInstallMarker>> {
@@ -337,7 +269,7 @@ mod tests {
 
     async fn write_outdated_builtin_marker(app_dir: &std::path::Path) {
         write_builtin_install_marker(
-            &app_dir.join(BUILTIN_MARKER),
+            &app_dir.join(BUILTIN_INSTALL_MARKER),
             &BuiltinInstallMarker {
                 version: 0,
                 hash: "sha256:outdated".to_string(),
@@ -849,18 +781,31 @@ mod tests {
             version: app.version,
             hash: builtin_content_hash(app),
         };
+        let content_hash = builtin_content_hash(app);
         let stale_hash_marker = BuiltinInstallMarker {
             version: app.version,
             hash: "sha256:stale".to_string(),
         };
         let older_version_marker = BuiltinInstallMarker {
             version: app.version.saturating_sub(1),
-            hash: builtin_content_hash(app),
+            hash: content_hash.clone(),
         };
 
-        assert!(!should_seed_builtin_app(app, Some(&current_marker)));
-        assert!(should_seed_builtin_app(app, Some(&stale_hash_marker)));
-        assert!(should_seed_builtin_app(app, Some(&older_version_marker)));
-        assert!(should_seed_builtin_app(app, None));
+        assert!(!should_seed_builtin_app(
+            app,
+            &content_hash,
+            Some(&current_marker)
+        ));
+        assert!(should_seed_builtin_app(
+            app,
+            &content_hash,
+            Some(&stale_hash_marker)
+        ));
+        assert!(should_seed_builtin_app(
+            app,
+            &content_hash,
+            Some(&older_version_marker)
+        ));
+        assert!(should_seed_builtin_app(app, &content_hash, None));
     }
 }

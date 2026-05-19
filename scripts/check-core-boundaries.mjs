@@ -1877,23 +1877,43 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/miniapp/builtin/mod.rs',
     reason:
-      'core must continue owning built-in MiniApp asset seeding and update markers until builtin asset runtime migration is reviewed',
+      'core must continue owning built-in MiniApp asset includes, seeding IO, marker writes, and recompilation until builtin asset runtime migration is reviewed',
     patterns: [
       {
         regex: /id: "builtin-pr-review"/,
         message: 'missing built-in PR Review MiniApp anchor',
       },
       {
-        regex: /\bstruct BuiltinInstallMarker\b/,
-        message: 'missing built-in MiniApp install marker',
+        regex: /\bBUILTIN_APPS\b/,
+        message: 'missing built-in MiniApp asset include owner',
       },
       {
-        regex: /\bfn builtin_content_hash\b/,
-        message: 'missing built-in MiniApp content hash policy',
+        regex: /\bbuiltin_content_hash\b/,
+        message: 'missing product-domain built-in MiniApp content hash use',
       },
       {
-        regex: /\bfn should_seed_builtin_app\b/,
-        message: 'missing built-in MiniApp seed decision policy',
+        regex: /\bshould_seed_builtin_app\b/,
+        message: 'missing product-domain built-in MiniApp seed decision use',
+      },
+      {
+        regex: /\bbuiltin_source_files\b/,
+        message: 'missing product-domain built-in MiniApp source payload use',
+      },
+      {
+        regex: /\bBUILTIN_PLACEHOLDER_COMPILED_HTML\b/,
+        message: 'missing product-domain built-in MiniApp placeholder payload use',
+      },
+      {
+        regex: /\bread_builtin_install_marker\b/,
+        message: 'missing core-owned built-in MiniApp marker read IO',
+      },
+      {
+        regex: /\bwrite_builtin_install_marker\b/,
+        message: 'missing core-owned built-in MiniApp marker write IO',
+      },
+      {
+        regex: /\brecompile\b/,
+        message: 'missing core-owned built-in MiniApp recompile orchestration',
       },
       {
         regex: /\bload_customization_metadata\b/,
@@ -2270,6 +2290,45 @@ const requiredContentRules = [
       {
         regex: /\bCoreFunctionAgentAiAdapter\b/,
         message: 'missing core-owned AI adapter wiring',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/miniapp/builtin.rs',
+    reason:
+      'product-domains owns pure built-in MiniApp bundle, marker, hash, and seed-decision contracts while core keeps asset seeding IO and recompilation',
+    patterns: [
+      {
+        regex: /\bpub struct BuiltinMiniAppBundle\b/,
+        message: 'missing built-in MiniApp bundle contract',
+      },
+      {
+        regex: /\bpub struct BuiltinInstallMarker\b/,
+        message: 'missing built-in MiniApp install marker contract',
+      },
+      {
+        regex: /\bpub const BUILTIN_INSTALL_MARKER\b/,
+        message: 'missing built-in MiniApp marker filename contract',
+      },
+      {
+        regex: /\bpub fn builtin_content_hash\b/,
+        message: 'missing built-in MiniApp content hash helper',
+      },
+      {
+        regex: /\bpub fn should_seed_builtin_app\b/,
+        message: 'missing built-in MiniApp seed decision helper',
+      },
+      {
+        regex: /\bpub fn builtin_source_files\b/,
+        message: 'missing built-in MiniApp source payload helper',
+      },
+      {
+        regex: /\bpub const BUILTIN_PLACEHOLDER_COMPILED_HTML\b/,
+        message: 'missing built-in MiniApp placeholder payload contract',
+      },
+      {
+        regex: /\bpub fn build_builtin_package_json\b/,
+        message: 'missing built-in MiniApp package payload helper',
       },
     ],
   },
@@ -3081,11 +3140,29 @@ function runManifestParserSelfTest() {
       path: 'src/crates/core/src/miniapp/builtin/mod.rs',
       contracts: [
         'builtin-pr-review',
-        'BuiltinInstallMarker',
+        'BUILTIN_APPS',
         'builtin_content_hash',
         'should_seed_builtin_app',
+        'builtin_source_files',
+        'BUILTIN_PLACEHOLDER_COMPILED_HTML',
+        'read_builtin_install_marker',
+        'write_builtin_install_marker',
+        'recompile',
         'load_customization_metadata',
         'available_builtin_update',
+      ],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/builtin.rs',
+      contracts: [
+        'BuiltinMiniAppBundle',
+        'BuiltinInstallMarker',
+        'BUILTIN_INSTALL_MARKER',
+        'builtin_content_hash',
+        'should_seed_builtin_app',
+        'builtin_source_files',
+        'BUILTIN_PLACEHOLDER_COMPILED_HTML',
+        'build_builtin_package_json',
       ],
     },
     {
