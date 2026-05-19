@@ -98,6 +98,7 @@ impl ExecMode {
             // Wait for events (efficient, uses Notify internally)
             event_queue.wait_for_events().await;
             let events = event_queue.dequeue_batch(20).await;
+            self.agent.route_internal_events(&events).await;
 
             for envelope in events {
                 let event = &envelope.event;
