@@ -1269,6 +1269,13 @@ fn token_details_from_usage(
             serde_json::json!(cached_tokens),
         );
     }
+    // Cache writes (Anthropic only at the moment). Disjoint from reads.
+    if let Some(creation_tokens) = usage.cache_creation_token_count {
+        details.insert(
+            "cacheCreationTokenCount".to_string(),
+            serde_json::json!(creation_tokens),
+        );
+    }
 
     (!details.is_empty()).then_some(serde_json::Value::Object(details))
 }
@@ -1763,5 +1770,51 @@ mod tests {
     fn detect_placeholder_empty_content() {
         use super::detect_placeholder_patterns;
         assert!(detect_placeholder_patterns("").is_none());
+    }
+
+    #[test]
+    fn token_details_emits_both_cache_keys_when_present() {
+        use crate::util::types::ai::GeminiUsage;
+        let usage = GeminiUsage {
+            prompt_token_count: 100,
+            candidates_token_count: 20,
+            total_token_count: 120,
+            reasoning_token_count: None,
+            cached_content_token_count: Some(30),
+            cache_creation_token_count: Some(20),
+        };
+        let details = super::token_details_from_usage(&usage).expect("details");
+        assert_eq!(details.get("cachedContentTokenCount").and_then(|v| v.as_u64()), Some(30));
+        assert_eq!(details.get("cacheCreationTokenCount").and_then(|v| v.as_u64()), Some(20));
+    }
+
+    #[test]
+    fn token_details_emits_only_read_when_creation_absent() {
+        use crate::util::types::ai::GeminiUsage;
+        let usage = GeminiUsage {
+            prompt_token_count: 100,
+            candidates_token_count: 20,
+            total_token_count: 120,
+            reasoning_token_count: None,
+            cached_content_token_count: Some(30),
+            cache_creation_token_count: None,
+        };
+        let details = super::token_details_from_usage(&usage).expect("details");
+        assert_eq!(details.get("cachedContentTokenCount").and_then(|v| v.as_u64()), Some(30));
+        assert!(details.get("cacheCreationTokenCount").is_none());
+    }
+
+    #[test]
+    fn token_details_is_none_when_no_cache_info() {
+        use crate::util::types::ai::GeminiUsage;
+        let usage = GeminiUsage {
+            prompt_token_count: 100,
+            candidates_token_count: 20,
+            total_token_count: 120,
+            reasoning_token_count: None,
+            cached_content_token_count: None,
+            cache_creation_token_count: None,
+        };
+        assert!(super::token_details_from_usage(&usage).is_none());
     }
 }
