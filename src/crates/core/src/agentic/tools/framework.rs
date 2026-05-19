@@ -283,13 +283,12 @@ impl ToolUseContext {
             self.is_remote(),
         )?;
 
-        let is_within_workspace = if self.is_remote() {
-            is_remote_posix_path_within_root(&resolved_path, &workspace_root_owned)
-        } else {
-            is_local_path_within_root(Path::new(&resolved_path), Path::new(&workspace_root_owned))?
-        };
-
-        if !is_within_workspace {
+        // Remote SSH workspaces stay contained to the opened project tree. Local desktop
+        // sessions may use any host path the OS user can access (Bash already has the same
+        // reach); optional `path_policy` roots still apply via `enforce_path_operation`.
+        if self.is_remote()
+            && !is_remote_posix_path_within_root(&resolved_path, &workspace_root_owned)
+        {
             return Err(crate::util::errors::BitFunError::tool(format!(
                 "Path '{}' resolves outside current workspace '{}': {}",
                 path, workspace_root_owned, resolved_path
@@ -603,12 +602,47 @@ mod path_resolution_tests {
     }
 
     #[test]
-    fn workspace_path_resolution_rejects_absolute_paths_outside_local_workspace() {
+    fn workspace_path_resolution_allows_absolute_paths_outside_local_workspace() {
         let context = local_context("/repo/project");
 
+        let resolved = context
+            .resolve_workspace_tool_path("/tmp/pr_body.md")
+            .expect("local sessions may resolve paths outside the workspace root");
+
+        assert_eq!(PathBuf::from(resolved), PathBuf::from("/tmp/pr_body.md"));
+    }
+
+    #[test]
+    fn workspace_path_resolution_rejects_absolute_paths_outside_remote_workspace() {
+        let session_identity = workspace_session_identity(
+            "/home/wsp/projects/test",
+            Some("conn-1"),
+            Some("ssh.dev"),
+        )
+        .expect("remote identity");
+        let context = ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new_remote(
+                None,
+                PathBuf::from("/home/wsp/projects/test"),
+                "conn-1".to_string(),
+                "Dev SSH".to_string(),
+                session_identity,
+            )),
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        };
+
         let err = context
-            .resolve_workspace_tool_path("/workspace")
-            .expect_err("placeholder absolute paths must not escape the current workspace");
+            .resolve_workspace_tool_path("/tmp/pr_body.md")
+            .expect_err("remote sessions must stay within the workspace root");
 
         assert!(err.to_string().contains("outside current workspace"));
     }
