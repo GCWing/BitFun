@@ -412,6 +412,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return () => document.removeEventListener('mousedown', onMouseDown, true);
   }, [statusBarPopover]);
 
+    useEffect(() => {
+    if (!statusBarPopover) return;
+    const handleClosePreview = () => {
+      setStatusBarPopover(null);
+      setStatusBarAnchorRect(null);
+    };
+    window.addEventListener('closePreview', handleClosePreview);
+    return () => window.removeEventListener('closePreview', handleClosePreview);
+  }, [statusBarPopover]);
+
   // Sync font/config to editor when editorConfig changes (fixes late getConfig when opening from file tree)
   useEffect(() => {
     if (!monacoReady || !editorRef.current) return;
