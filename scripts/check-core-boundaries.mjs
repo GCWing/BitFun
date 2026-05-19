@@ -1142,12 +1142,36 @@ const requiredContentRules = [
         message: 'missing pure tool manifest policy resolver',
       },
       {
+        regex: /\bfn default_exposure\b/,
+        message: 'missing generic tool exposure contract',
+      },
+      {
+        regex: /\bpub fn build_tool_manifest_policy_tools\b/,
+        message: 'missing registry snapshot to manifest policy input helper',
+      },
+      {
         regex: /\bpub fn build_collapsed_tool_stub_definition\b/,
         message: 'missing collapsed-tool prompt stub contract',
       },
       {
+        regex: /\bpub enum PromptVisibleToolManifestItem\b/,
+        message: 'missing prompt-visible manifest item contract',
+      },
+      {
+        regex: /\bpub fn build_prompt_visible_tool_manifest_definitions\b/,
+        message: 'missing prompt-visible manifest definition builder',
+      },
+      {
         regex: /\bpub fn build_get_tool_spec_description\b/,
         message: 'missing pure GetToolSpec prompt description contract',
+      },
+      {
+        regex: /\bpub struct GetToolSpecCollapsedToolSummary\b/,
+        message: 'missing pure GetToolSpec collapsed catalog summary',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_catalog_description\b/,
+        message: 'missing pure GetToolSpec catalog description builder',
       },
       {
         regex: /\bpub fn get_tool_spec_input_schema\b/,
@@ -1176,6 +1200,14 @@ const requiredContentRules = [
       {
         regex: /\bpub struct StaticToolProviderGroup\b/,
         message: 'missing generic static provider group container',
+      },
+      {
+        regex: /\bpub fn is_tool_collapsed\b/,
+        message: 'missing generic collapsed-tool registry query',
+      },
+      {
+        regex: /\bpub fn get_collapsed_tool_names\b/,
+        message: 'missing generic collapsed-tool registry catalog query',
       },
     ],
   },
@@ -1228,8 +1260,8 @@ const requiredContentRules = [
         message: 'missing collapsed-tool manifest migration baseline',
       },
       {
-        regex: /\bToolExposure::Collapsed\b/,
-        message: 'missing collapsed exposure lookup',
+        regex: /\binner\.is_tool_collapsed\b/,
+        message: 'missing collapsed exposure lookup delegation',
       },
     ],
   },
@@ -1331,12 +1363,16 @@ const requiredContentRules = [
         message: 'missing agent-tools manifest policy contract use',
       },
       {
+        regex: /\bbuild_tool_manifest_policy_tools\b/,
+        message: 'missing agent-tools manifest policy input builder delegation',
+      },
+      {
         regex: /\bcollapsed_tool_names\b/,
         message: 'missing collapsed-tool name tracking',
       },
       {
-        regex: /\bbuild_collapsed_tool_stub_definition\b/,
-        message: 'missing collapsed-tool prompt stub contract use',
+        regex: /\bbuild_prompt_visible_tool_manifest_definitions\b/,
+        message: 'missing agent-tools prompt-visible manifest builder delegation',
       },
       {
         regex: /\bmanifest_preserves_explicit_get_tool_spec_runtime_contract\b/,
@@ -1364,6 +1400,10 @@ const requiredContentRules = [
       {
         regex: /\bbuild_get_tool_spec_assistant_detail\b/,
         message: 'missing agent-tools GetToolSpec assistant detail helper delegation',
+      },
+      {
+        regex: /\bbuild_get_tool_spec_catalog_description\b/,
+        message: 'missing agent-tools GetToolSpec catalog description helper delegation',
       },
       {
         regex: /\bvalidate_get_tool_spec_input\b/,
@@ -3006,14 +3046,22 @@ function runManifestParserSelfTest() {
         'ToolExposure',
         'ToolManifestPolicyTool',
         'resolve_tool_manifest_policy',
+        'default_exposure',
+        'build_tool_manifest_policy_tools',
         'build_collapsed_tool_stub_definition',
+        'PromptVisibleToolManifestItem',
+        'build_prompt_visible_tool_manifest_definitions',
         'build_get_tool_spec_description',
+        'GetToolSpecCollapsedToolSummary',
+        'build_get_tool_spec_catalog_description',
         'get_tool_spec_input_schema',
         'validate_get_tool_spec_input',
         'build_get_tool_spec_assistant_detail',
         'GetToolSpecLoadObservation',
         'collect_loaded_collapsed_tool_names',
         'sort_tool_manifest_definitions',
+        'is_tool_collapsed',
+        'get_collapsed_tool_names',
       ],
     },
     {
@@ -3136,7 +3184,8 @@ function runManifestParserSelfTest() {
         'resolve_tool_manifest',
         'GET_TOOL_SPEC_TOOL_NAME',
         'resolve_tool_manifest_policy',
-        'build_collapsed_tool_stub_definition',
+        'build_tool_manifest_policy_tools',
+        'build_prompt_visible_tool_manifest_definitions',
         'collapsed_tool_names',
       ],
     },
@@ -3147,6 +3196,7 @@ function runManifestParserSelfTest() {
         'unlocked_collapsed_tools',
         'already_loaded',
         'build_get_tool_spec_assistant_detail',
+        'build_get_tool_spec_catalog_description',
         'validate_get_tool_spec_input',
       ],
     },

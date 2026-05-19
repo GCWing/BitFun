@@ -11,15 +11,18 @@ pub use bitfun_runtime_ports::{
     DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult, ToolDecorator,
 };
 pub use framework::{
-    DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, GetToolSpecLoadObservation,
-    PortableToolContextProvider, StaticToolProvider, StaticToolProviderGroup, ToolContextFacts,
-    ToolExposure, ToolManifestDefinition, ToolManifestPolicyResolution, ToolManifestPolicyTool,
-    ToolPathBackend, ToolPathOperation, ToolPathPolicy, ToolPathResolution, ToolRef, ToolRegistry,
-    ToolRegistryItem, ToolRenderOptions, ToolRestrictionError, ToolResult, ToolRuntimeRestrictions,
+    DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, GetToolSpecCollapsedToolSummary,
+    GetToolSpecLoadObservation, PortableToolContextProvider, PromptVisibleToolManifestItem,
+    StaticToolProvider, StaticToolProviderGroup, ToolContextFacts, ToolExposure,
+    ToolManifestDefinition, ToolManifestPolicyResolution, ToolManifestPolicyTool, ToolPathBackend,
+    ToolPathOperation, ToolPathPolicy, ToolPathResolution, ToolRef, ToolRegistry, ToolRegistryItem,
+    ToolRenderOptions, ToolRestrictionError, ToolResult, ToolRuntimeRestrictions,
     ToolWorkspaceKind, ValidationResult, build_collapsed_tool_stub_definition,
-    build_get_tool_spec_assistant_detail, build_get_tool_spec_collapsed_tool_entry,
-    build_get_tool_spec_description, build_get_tool_spec_duplicate_load_hint,
-    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema, resolve_tool_manifest_policy,
-    sort_tool_manifest_definitions, tool_manifest_sort_rank, validate_get_tool_spec_input,
+    build_get_tool_spec_assistant_detail, build_get_tool_spec_catalog_description,
+    build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
+    build_get_tool_spec_duplicate_load_hint, build_prompt_visible_tool_manifest_definitions,
+    build_tool_manifest_policy_tools, collect_loaded_collapsed_tool_names,
+    get_tool_spec_input_schema, resolve_tool_manifest_policy, sort_tool_manifest_definitions,
+    tool_manifest_sort_rank, validate_get_tool_spec_input,
 };
 pub use input_validator::InputValidator;

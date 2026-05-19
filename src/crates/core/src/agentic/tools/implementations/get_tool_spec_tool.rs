@@ -9,12 +9,12 @@ use crate::agentic::tools::resolve_visible_tools;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_tools::{
-    build_get_tool_spec_assistant_detail, build_get_tool_spec_collapsed_tool_entry,
-    build_get_tool_spec_description, build_get_tool_spec_duplicate_load_hint,
-    get_tool_spec_input_schema, validate_get_tool_spec_input, GET_TOOL_SPEC_TOOL_NAME,
+    GET_TOOL_SPEC_TOOL_NAME, GetToolSpecCollapsedToolSummary, build_get_tool_spec_assistant_detail,
+    build_get_tool_spec_catalog_description, build_get_tool_spec_duplicate_load_hint,
+    get_tool_spec_input_schema, validate_get_tool_spec_input,
 };
 use log::debug;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 
 pub struct GetToolSpecTool;
@@ -42,20 +42,20 @@ impl GetToolSpecTool {
     }
 
     async fn build_collapsed_tools_description(&self, context: Option<&ToolUseContext>) -> String {
-        let mut entries = Vec::new();
+        let mut summaries = Vec::new();
 
         if let Some(context) = context {
             if let Ok(collapsed_tools) = self.get_contextual_collapsed_tools(context).await {
                 for tool in collapsed_tools {
-                    entries.push(build_get_tool_spec_collapsed_tool_entry(
-                        tool.name(),
-                        &tool.short_description(),
-                    ));
+                    summaries.push(GetToolSpecCollapsedToolSummary {
+                        name: tool.name().to_string(),
+                        short_description: tool.short_description(),
+                    });
                 }
             }
         } else {
             let registry = get_global_tool_registry();
-            let collapsed_tools = {
+            summaries = {
                 let registry = registry.read().await;
                 registry
                     .get_all_tools()
@@ -64,25 +64,15 @@ impl GetToolSpecTool {
                         tool.default_exposure()
                             == crate::agentic::tools::framework::ToolExposure::Collapsed
                     })
-                    .map(|tool| (tool.name().to_string(), tool.short_description()))
+                    .map(|tool| GetToolSpecCollapsedToolSummary {
+                        name: tool.name().to_string(),
+                        short_description: tool.short_description(),
+                    })
                     .collect::<Vec<_>>()
             };
-
-            for (tool_name, short_description) in collapsed_tools {
-                entries.push(build_get_tool_spec_collapsed_tool_entry(
-                    &tool_name,
-                    &short_description,
-                ));
-            }
         }
 
-        let collapsed_tools_list = if entries.is_empty() {
-            "No additional tools are available.".to_string()
-        } else {
-            entries.join("\n")
-        };
-
-        build_get_tool_spec_description(&collapsed_tools_list)
+        build_get_tool_spec_catalog_description(&summaries)
     }
 
     async fn build_tool_detail(
@@ -234,14 +224,14 @@ impl Tool for GetToolSpecTool {
 #[cfg(test)]
 mod tests {
     use super::GetToolSpecTool;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::tools::framework::{
         Tool, ToolExposure, ToolResult, ToolUseContext, ValidationResult,
     };
     use crate::agentic::tools::registry::get_global_tool_registry;
-    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::errors::BitFunResult;
     use async_trait::async_trait;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -304,7 +294,9 @@ mod tests {
             .await;
 
         assert!(description.contains(&format!("- {}: Concise catalog entry.", tool_name)));
-        assert!(!description.contains(&format!("- {}: Verbose description first line.", tool_name)));
+        assert!(
+            !description.contains(&format!("- {}: Verbose description first line.", tool_name))
+        );
     }
 
     #[tokio::test]
@@ -340,9 +332,11 @@ mod tests {
 
         assert_eq!(data["tool_name"], "WebFetch");
         assert_eq!(data["already_loaded"], true);
-        assert!(result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .contains("already loaded in the current conversation"));
+        assert!(
+            result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .contains("already loaded in the current conversation")
+        );
     }
 }

@@ -152,16 +152,11 @@ impl ToolRegistry {
     }
 
     pub fn is_tool_collapsed(&self, name: &str) -> bool {
-        self.inner
-            .get_tool(name)
-            .is_some_and(|tool| tool.default_exposure() == ToolExposure::Collapsed)
+        self.inner.is_tool_collapsed(name)
     }
 
     pub fn get_collapsed_tool_names(&self) -> Vec<String> {
-        self.get_tool_names()
-            .into_iter()
-            .filter(|name| self.is_tool_collapsed(name))
-            .collect()
+        self.inner.get_collapsed_tool_names()
     }
 
     /// Get all tool names
@@ -200,6 +195,10 @@ impl ToolRegistryItem for dyn Tool {
 
     fn input_schema(&self) -> Value {
         Tool::input_schema(self)
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        Tool::default_exposure(self)
     }
 
     async fn input_schema_for_model(&self) -> Value {

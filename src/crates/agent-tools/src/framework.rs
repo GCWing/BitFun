@@ -86,6 +86,15 @@ impl ToolManifestDefinition {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum PromptVisibleToolManifestItem {
+    Expanded(ToolManifestDefinition),
+    Collapsed {
+        name: String,
+        short_description: String,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolManifestPolicyTool {
     pub name: String,
@@ -151,6 +160,23 @@ pub fn resolve_tool_manifest_policy(
     }
 }
 
+pub fn build_tool_manifest_policy_tools<Tool: ToolRegistryItem + ?Sized>(
+    tool_snapshot: &[ToolRef<Tool>],
+    available_tool_names: &HashSet<String>,
+) -> Vec<ToolManifestPolicyTool> {
+    tool_snapshot
+        .iter()
+        .map(|tool| {
+            let name = tool.name().to_string();
+            ToolManifestPolicyTool {
+                available: available_tool_names.contains(&name),
+                default_exposure: tool.default_exposure(),
+                name,
+            }
+        })
+        .collect()
+}
+
 pub fn build_collapsed_tool_stub_definition(
     tool_name: &str,
     short_description: &str,
@@ -183,6 +209,30 @@ pub fn build_get_tool_spec_collapsed_tool_entry(
     short_description: &str,
 ) -> String {
     format!("- {}: {}", tool_name, short_description)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GetToolSpecCollapsedToolSummary {
+    pub name: String,
+    pub short_description: String,
+}
+
+pub fn build_get_tool_spec_catalog_description(
+    collapsed_tools: &[GetToolSpecCollapsedToolSummary],
+) -> String {
+    let collapsed_tools_list = if collapsed_tools.is_empty() {
+        "No additional tools are available.".to_string()
+    } else {
+        collapsed_tools
+            .iter()
+            .map(|tool| {
+                build_get_tool_spec_collapsed_tool_entry(&tool.name, &tool.short_description)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    build_get_tool_spec_description(&collapsed_tools_list)
 }
 
 pub fn build_get_tool_spec_description(collapsed_tools_list: &str) -> String {
@@ -332,6 +382,23 @@ pub fn sort_tool_manifest_definitions(tool_definitions: &mut [ToolManifestDefini
     tool_definitions.sort_by_key(|tool| tool_manifest_sort_rank(&tool.name));
 }
 
+pub fn build_prompt_visible_tool_manifest_definitions(
+    items: &[PromptVisibleToolManifestItem],
+) -> Vec<ToolManifestDefinition> {
+    let mut definitions = items
+        .iter()
+        .map(|item| match item {
+            PromptVisibleToolManifestItem::Expanded(definition) => definition.clone(),
+            PromptVisibleToolManifestItem::Collapsed {
+                name,
+                short_description,
+            } => build_collapsed_tool_stub_definition(name, short_description),
+        })
+        .collect::<Vec<_>>();
+    sort_tool_manifest_definitions(&mut definitions);
+    definitions
+}
+
 #[async_trait]
 pub trait ToolRegistryItem: Send + Sync {
     fn name(&self) -> &str;
@@ -339,6 +406,10 @@ pub trait ToolRegistryItem: Send + Sync {
     async fn description(&self) -> Result<String, String>;
 
     fn input_schema(&self) -> Value;
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Expanded
+    }
 
     async fn input_schema_for_model(&self) -> Value {
         self.input_schema()
@@ -506,6 +577,21 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRegistry<Tool> {
         self.dynamic_tools
             .get(name)
             .map(|metadata| metadata.info.clone())
+    }
+
+    pub fn is_tool_collapsed(&self, name: &str) -> bool {
+        self.tools
+            .get(name)
+            .is_some_and(|tool| tool.default_exposure() == ToolExposure::Collapsed)
+    }
+
+    pub fn get_collapsed_tool_names(&self) -> Vec<String> {
+        self.tools
+            .iter()
+            .filter_map(|(name, tool)| {
+                (tool.default_exposure() == ToolExposure::Collapsed).then(|| name.clone())
+            })
+            .collect()
     }
 
     pub fn get_tool_names(&self) -> Vec<String> {

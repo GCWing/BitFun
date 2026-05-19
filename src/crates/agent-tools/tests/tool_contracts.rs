@@ -1,13 +1,14 @@
 use bitfun_agent_tools::{
-    DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, GetToolSpecLoadObservation,
-    InputValidator, ToolContextFacts, ToolExposure, ToolImageAttachment, ToolManifestDefinition,
-    ToolManifestPolicyTool, ToolPathBackend, ToolPathResolution, ToolRenderOptions, ToolResult,
-    ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult,
-    build_collapsed_tool_stub_definition, build_get_tool_spec_assistant_detail,
+    DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, GetToolSpecCollapsedToolSummary,
+    GetToolSpecLoadObservation, InputValidator, PromptVisibleToolManifestItem, ToolContextFacts,
+    ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
+    ToolPathBackend, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
+    ToolWorkspaceKind, ValidationResult, build_collapsed_tool_stub_definition,
+    build_get_tool_spec_assistant_detail, build_get_tool_spec_catalog_description,
     build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
-    build_get_tool_spec_duplicate_load_hint, collect_loaded_collapsed_tool_names,
-    get_tool_spec_input_schema, resolve_tool_manifest_policy, sort_tool_manifest_definitions,
-    validate_get_tool_spec_input,
+    build_get_tool_spec_duplicate_load_hint, build_prompt_visible_tool_manifest_definitions,
+    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema, resolve_tool_manifest_policy,
+    sort_tool_manifest_definitions, validate_get_tool_spec_input,
 };
 use bitfun_agent_tools::{
     DynamicToolDescriptor, DynamicToolProvider, PortResult, PortableToolContextProvider,
@@ -510,6 +511,44 @@ fn tool_manifest_sorting_preserves_prompt_visible_order() {
 }
 
 #[test]
+fn prompt_visible_manifest_builder_preserves_expanded_and_collapsed_contract() {
+    let definitions = build_prompt_visible_tool_manifest_definitions(&[
+        PromptVisibleToolManifestItem::Collapsed {
+            name: "WebFetch".to_string(),
+            short_description: "Fetch readable web content.".to_string(),
+        },
+        PromptVisibleToolManifestItem::Expanded(ToolManifestDefinition::new(
+            "Read",
+            "Read files from the workspace.",
+            json!({ "type": "object", "properties": { "path": { "type": "string" } } }),
+        )),
+        PromptVisibleToolManifestItem::Expanded(ToolManifestDefinition::new(
+            "Bash",
+            "Run shell commands.",
+            json!({ "type": "object", "properties": { "command": { "type": "string" } } }),
+        )),
+    ]);
+
+    assert_eq!(
+        definitions
+            .iter()
+            .map(|definition| definition.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Bash", "Read", "WebFetch"]
+    );
+    assert_eq!(definitions[0].description, "Run shell commands.");
+    assert_eq!(
+        definitions[0].parameters["properties"]["command"]["type"],
+        json!("string")
+    );
+    assert!(
+        definitions[2]
+            .description
+            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
+    );
+}
+
+#[test]
 fn get_tool_spec_contract_preserves_input_schema_and_validation() {
     let schema = get_tool_spec_input_schema();
 
@@ -560,6 +599,26 @@ fn get_tool_spec_contract_preserves_collapsed_prompt_description() {
 }
 
 #[test]
+fn get_tool_spec_catalog_description_uses_summary_entries_and_empty_fallback() {
+    let description = build_get_tool_spec_catalog_description(&[
+        GetToolSpecCollapsedToolSummary {
+            name: "Git".to_string(),
+            short_description: "Inspect the repository.".to_string(),
+        },
+        GetToolSpecCollapsedToolSummary {
+            name: "WebFetch".to_string(),
+            short_description: "Fetch readable web content.".to_string(),
+        },
+    ]);
+
+    assert!(description.contains("- Git: Inspect the repository."));
+    assert!(description.contains("- WebFetch: Fetch readable web content."));
+
+    let empty = build_get_tool_spec_catalog_description(&[]);
+    assert!(empty.contains("No additional tools are available."));
+}
+
+#[test]
 fn get_tool_spec_contract_escapes_assistant_detail_for_xml_sections() {
     let detail = build_get_tool_spec_assistant_detail(
         "Use <danger> & keep output valid.",
@@ -590,6 +649,7 @@ fn get_tool_spec_contract_preserves_duplicate_load_hint() {
 struct RegistryMarkerTool {
     name: String,
     provider_id: Option<String>,
+    exposure: ToolExposure,
 }
 
 #[async_trait::async_trait]
@@ -604,6 +664,10 @@ impl ToolRegistryItem for RegistryMarkerTool {
 
     fn input_schema(&self) -> serde_json::Value {
         json!({ "type": "object" })
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        self.exposure
     }
 
     async fn input_schema_for_model(&self) -> serde_json::Value {
@@ -622,9 +686,18 @@ impl ToolRegistryItem for RegistryMarkerTool {
 }
 
 fn registry_marker_tool(name: &str, provider_id: Option<&str>) -> Arc<RegistryMarkerTool> {
+    registry_marker_tool_with_exposure(name, provider_id, ToolExposure::Expanded)
+}
+
+fn registry_marker_tool_with_exposure(
+    name: &str,
+    provider_id: Option<&str>,
+    exposure: ToolExposure,
+) -> Arc<RegistryMarkerTool> {
     Arc::new(RegistryMarkerTool {
         name: name.to_string(),
         provider_id: provider_id.map(str::to_string),
+        exposure,
     })
 }
 
@@ -671,6 +744,7 @@ impl ToolDecorator<Arc<RegistryMarkerTool>> for RegistryMarkerDecorator {
         Arc::new(RegistryMarkerTool {
             name: format!("decorated_{}", tool.name),
             provider_id: tool.provider_id.clone(),
+            exposure: tool.exposure,
         })
     }
 }
@@ -708,6 +782,65 @@ fn generic_tool_registry_applies_decorator_to_static_provider_tools() {
     assert_eq!(
         registry.get_tool_names(),
         vec!["decorated_Read".to_string()]
+    );
+}
+
+#[test]
+fn generic_tool_registry_preserves_exposure_catalog_contract() {
+    let mut registry = ToolRegistry::new();
+    registry.register_tool(registry_marker_tool("Read", None));
+    registry.register_tool(registry_marker_tool_with_exposure(
+        "WebFetch",
+        None,
+        ToolExposure::Collapsed,
+    ));
+    registry.register_tool(registry_marker_tool_with_exposure(
+        "Git",
+        None,
+        ToolExposure::Collapsed,
+    ));
+
+    assert!(!registry.is_tool_collapsed("Read"));
+    assert!(registry.is_tool_collapsed("WebFetch"));
+    assert_eq!(
+        registry.get_collapsed_tool_names(),
+        vec!["WebFetch".to_string(), "Git".to_string()]
+    );
+}
+
+#[test]
+fn manifest_policy_tools_from_registry_snapshot_preserve_exposure_and_availability() {
+    let tools = vec![
+        registry_marker_tool("Read", None),
+        registry_marker_tool_with_exposure("WebFetch", None, ToolExposure::Collapsed),
+        registry_marker_tool_with_exposure("Git", None, ToolExposure::Collapsed),
+    ];
+    let available_tool_names = ["Read".to_string(), "Git".to_string()]
+        .into_iter()
+        .collect();
+
+    let policy_tools =
+        bitfun_agent_tools::build_tool_manifest_policy_tools(&tools, &available_tool_names);
+
+    assert_eq!(
+        policy_tools,
+        vec![
+            ToolManifestPolicyTool {
+                name: "Read".to_string(),
+                default_exposure: ToolExposure::Expanded,
+                available: true,
+            },
+            ToolManifestPolicyTool {
+                name: "WebFetch".to_string(),
+                default_exposure: ToolExposure::Collapsed,
+                available: false,
+            },
+            ToolManifestPolicyTool {
+                name: "Git".to_string(),
+                default_exposure: ToolExposure::Collapsed,
+                available: true,
+            },
+        ]
     );
 }
 

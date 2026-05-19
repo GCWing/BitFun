@@ -3,8 +3,9 @@ use crate::agentic::tools::framework::{Tool, ToolUseContext};
 use crate::agentic::tools::registry::{GET_TOOL_SPEC_TOOL_NAME, get_global_tool_registry};
 use crate::util::types::ToolDefinition;
 use bitfun_agent_tools::{
-    ToolManifestDefinition, ToolManifestPolicyTool, build_collapsed_tool_stub_definition,
-    resolve_tool_manifest_policy, sort_tool_manifest_definitions,
+    PromptVisibleToolManifestItem, ToolManifestDefinition,
+    build_prompt_visible_tool_manifest_definitions, build_tool_manifest_policy_tools,
+    resolve_tool_manifest_policy,
 };
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -32,17 +33,7 @@ fn build_visible_tools(
     exposure_overrides: &AgentToolPolicyOverrides,
     available_tool_names: &HashSet<String>,
 ) -> ResolvedVisibleTools {
-    let policy_tools = tool_snapshot
-        .iter()
-        .map(|tool| {
-            let name = tool.name().to_string();
-            ToolManifestPolicyTool {
-                available: available_tool_names.contains(&name),
-                default_exposure: tool.default_exposure(),
-                name,
-            }
-        })
-        .collect::<Vec<_>>();
+    let policy_tools = build_tool_manifest_policy_tools(tool_snapshot, available_tool_names);
     let policy = resolve_tool_manifest_policy(
         &policy_tools,
         allowed_tools,
@@ -113,7 +104,7 @@ pub async fn resolve_tool_manifest(
 ) -> ResolvedToolManifest {
     let visible_tools = resolve_visible_tools(allowed_tools, exposure_overrides, context).await;
 
-    let mut tool_definitions = Vec::with_capacity(
+    let mut manifest_items = Vec::with_capacity(
         visible_tools.expanded_tools.len() + visible_tools.collapsed_tools.len(),
     );
     for tool in &visible_tools.expanded_tools {
@@ -125,21 +116,19 @@ pub async fn resolve_tool_manifest(
             .input_schema_for_model_with_context(Some(context))
             .await;
 
-        tool_definitions.push(ToolManifestDefinition::new(
-            tool.name().to_string(),
-            description,
-            parameters,
+        manifest_items.push(PromptVisibleToolManifestItem::Expanded(
+            ToolManifestDefinition::new(tool.name().to_string(), description, parameters),
         ));
     }
 
     for tool in &visible_tools.collapsed_tools {
-        tool_definitions.push(build_collapsed_tool_stub_definition(
-            tool.name(),
-            &tool.short_description(),
-        ));
+        manifest_items.push(PromptVisibleToolManifestItem::Collapsed {
+            name: tool.name().to_string(),
+            short_description: tool.short_description(),
+        });
     }
 
-    sort_tool_manifest_definitions(&mut tool_definitions);
+    let tool_definitions = build_prompt_visible_tool_manifest_definitions(&manifest_items);
 
     ResolvedToolManifest {
         allowed_tool_names: visible_tools.allowed_tool_names,
