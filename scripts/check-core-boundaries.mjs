@@ -1286,6 +1286,10 @@ const requiredContentRules = [
         message: 'missing provider-backed GetToolSpec execution result resolver',
       },
       {
+        regex: /\bpub struct GetToolSpecRuntime\b/,
+        message: 'missing provider-backed GetToolSpec runtime facade',
+      },
+      {
         regex: /\bpub struct GetToolSpecLoadObservation\b/,
         message: 'missing pure GetToolSpec load observation contract',
       },
@@ -1332,6 +1336,10 @@ const requiredContentRules = [
       {
         regex: /\bpub async fn resolve_readonly_enabled_tools\b/,
         message: 'missing generic readonly enabled tool filter',
+      },
+      {
+        regex: /\bpub struct ToolCatalogRuntime\b/,
+        message: 'missing provider-backed tool catalog runtime facade',
       },
     ],
   },
@@ -1384,8 +1392,8 @@ const requiredContentRules = [
         message: 'missing collapsed-tool catalog owner',
       },
       {
-        regex: /\bresolve_readonly_enabled_tools\b/,
-        message: 'missing agent-tools readonly enabled filter delegation',
+        regex: /\bresolve_product_readonly_enabled_tools\b/,
+        message: 'missing product tool catalog readonly facade delegation',
       },
       {
         regex: /\bregistry_preserves_collapsed_tool_manifest_for_owner_migration\b/,
@@ -1528,24 +1536,28 @@ const requiredContentRules = [
         message: 'missing core agent policy source for contextual catalog',
       },
       {
-        regex: /\bresolve_contextual_visible_tools_from_provider\b/,
-        message: 'missing agent-tools provider-backed visible-tools resolver delegation',
+        regex: /\bToolCatalogRuntime\b/,
+        message: 'missing agent-tools product catalog runtime facade delegation',
       },
       {
-        regex: /\bresolve_contextual_tool_manifest_from_provider\b/,
-        message: 'missing agent-tools provider-backed manifest resolver delegation',
+        regex: /\bproduct_tool_catalog_runtime\b/,
+        message: 'missing product catalog runtime factory',
       },
       {
-        regex: /\bbuild_get_tool_spec_catalog_description_from_provider\b/,
-        message: 'missing agent-tools provider-backed GetToolSpec catalog delegation',
+        regex: /\bGetToolSpecRuntime\b/,
+        message: 'missing agent-tools GetToolSpec runtime facade delegation',
       },
       {
-        regex: /\bresolve_get_tool_spec_execution_result_from_provider\b/,
-        message: 'missing agent-tools provider-backed GetToolSpec execution result delegation',
+        regex: /\bproduct_get_tool_spec_runtime\b/,
+        message: 'missing product GetToolSpec runtime factory',
       },
       {
         regex: /\bresolve_product_tool_manifest\b/,
         message: 'missing product manifest facade',
+      },
+      {
+        regex: /\bresolve_product_readonly_enabled_tools\b/,
+        message: 'missing product readonly enabled tools facade',
       },
       {
         regex: /\bresolve_product_get_tool_spec_execution_result\b/,
@@ -1625,6 +1637,10 @@ const requiredContentRules = [
         regex: /\bpub async fn resolve_get_tool_spec_execution_result_from_provider\b/,
         message: 'missing provider-backed GetToolSpec execution result helper',
       },
+      {
+        regex: /\bpub struct GetToolSpecRuntime\b/,
+        message: 'missing provider-backed GetToolSpec runtime facade',
+      },
     ],
   },
   {
@@ -1680,7 +1696,7 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/tools/implementations/get_tool_spec_tool.rs',
     reason:
-      'core must continue owning GetToolSpec runtime until an approved provider migration exists',
+      'core must continue owning the GetToolSpec Tool adapter and product boundary while delegating generic runtime surface to agent-tools',
     patterns: [
       {
         regex: /\bpub struct GetToolSpecTool\b/,
@@ -1699,16 +1715,12 @@ const requiredContentRules = [
         message: 'missing core product GetToolSpec catalog facade delegation',
       },
       {
-        regex: /\bget_tool_spec_short_description\b/,
-        message: 'missing agent-tools GetToolSpec static metadata delegation',
+        regex: /\bproduct_get_tool_spec_runtime\b/,
+        message: 'missing product GetToolSpec runtime facade delegation',
       },
       {
-        regex: /\brender_get_tool_spec_tool_use_message\b/,
-        message: 'missing agent-tools GetToolSpec use-message delegation',
-      },
-      {
-        regex: /\bvalidate_get_tool_spec_input\b/,
-        message: 'missing agent-tools GetToolSpec validation helper delegation',
+        regex: /\bwith_runtime\b/,
+        message: 'missing core GetToolSpec static surface facade boundary',
       },
     ],
   },
@@ -3399,6 +3411,7 @@ function runManifestParserSelfTest() {
         'GetToolSpecExecutionError',
         'resolve_get_tool_spec_execution_plan',
         'resolve_get_tool_spec_execution_result_from_provider',
+        'GetToolSpecRuntime',
         'GetToolSpecLoadObservation',
         'collect_loaded_collapsed_tool_names',
         'sort_tool_manifest_definitions',
@@ -3488,7 +3501,7 @@ function runManifestParserSelfTest() {
         'ProductToolDecoratorRef',
         'ProductToolRuntimeAssembly',
         'get_collapsed_tool_names',
-        'resolve_readonly_enabled_tools',
+        'resolve_product_readonly_enabled_tools',
       ],
     },
     {
@@ -3524,6 +3537,7 @@ function runManifestParserSelfTest() {
         'StaticToolProvider',
         'StaticToolProviderGroup',
         'ToolRuntimeAssembly',
+        'ToolCatalogRuntime',
         'ToolDecoratorRef',
         'SnapshotToolWrapper',
         'SnapshotToolDecorator',
@@ -3534,6 +3548,7 @@ function runManifestParserSelfTest() {
         'build_get_tool_spec_detail_result',
         'resolve_get_tool_spec_execution_plan',
         'resolve_get_tool_spec_execution_result_from_provider',
+        'GetToolSpecRuntime',
       ],
     },
     {
@@ -3564,11 +3579,12 @@ function runManifestParserSelfTest() {
         'GetToolSpecCatalogProvider',
         'get_global_tool_registry',
         'get_agent_registry',
-        'resolve_contextual_visible_tools_from_provider',
-        'resolve_contextual_tool_manifest_from_provider',
-        'build_get_tool_spec_catalog_description_from_provider',
-        'resolve_get_tool_spec_execution_result_from_provider',
+        'ToolCatalogRuntime',
+        'product_tool_catalog_runtime',
+        'GetToolSpecRuntime',
+        'product_get_tool_spec_runtime',
         'resolve_product_tool_manifest',
+        'resolve_product_readonly_enabled_tools',
         'resolve_product_get_tool_spec_execution_result',
         'unlocked_collapsed_tools',
         'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
@@ -3590,11 +3606,10 @@ function runManifestParserSelfTest() {
       contracts: [
         'GetToolSpecTool',
         'build_product_get_tool_spec_catalog_description',
+        'product_get_tool_spec_runtime',
+        'with_runtime',
         'resolve_product_get_tool_spec_execution_result',
         'map_get_tool_spec_execution_error',
-        'get_tool_spec_short_description',
-        'render_get_tool_spec_tool_use_message',
-        'validate_get_tool_spec_input',
       ],
     },
     {

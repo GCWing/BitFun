@@ -1,19 +1,16 @@
 //! GetToolSpec tool implementation
 
 use crate::agentic::tools::catalog_provider::{
-    build_product_get_tool_spec_catalog_description, resolve_product_get_tool_spec_execution_result,
+    build_product_get_tool_spec_catalog_description, product_get_tool_spec_runtime,
+    resolve_product_get_tool_spec_execution_result, ProductGetToolSpecRuntime,
+    ProductToolCatalogProvider,
 };
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_agent_tools::{
-    get_tool_spec_input_schema, get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly,
-    get_tool_spec_needs_permissions, get_tool_spec_short_description,
-    render_get_tool_spec_tool_use_message, validate_get_tool_spec_input, GetToolSpecExecutionError,
-    GET_TOOL_SPEC_TOOL_NAME,
-};
+use bitfun_agent_tools::{GetToolSpecExecutionError, GET_TOOL_SPEC_TOOL_NAME};
 use serde_json::Value;
 
 pub struct GetToolSpecTool;
@@ -34,6 +31,11 @@ impl Default for GetToolSpecTool {
     }
 }
 
+fn with_runtime<Result>(operation: impl FnOnce(ProductGetToolSpecRuntime<'_>) -> Result) -> Result {
+    let provider = ProductToolCatalogProvider;
+    operation(product_get_tool_spec_runtime(&provider))
+}
+
 #[async_trait]
 impl Tool for GetToolSpecTool {
     fn name(&self) -> &str {
@@ -45,7 +47,7 @@ impl Tool for GetToolSpecTool {
     }
 
     fn short_description(&self) -> String {
-        get_tool_spec_short_description()
+        with_runtime(|runtime| runtime.short_description())
     }
 
     async fn description_with_context(
@@ -56,23 +58,23 @@ impl Tool for GetToolSpecTool {
     }
 
     fn input_schema(&self) -> Value {
-        get_tool_spec_input_schema()
+        with_runtime(|runtime| runtime.input_schema())
     }
 
     fn is_readonly(&self) -> bool {
-        get_tool_spec_is_readonly()
+        with_runtime(|runtime| runtime.is_readonly())
     }
 
     fn is_concurrency_safe(&self, input: Option<&Value>) -> bool {
-        get_tool_spec_is_concurrency_safe(input)
+        with_runtime(|runtime| runtime.is_concurrency_safe(input))
     }
 
     fn needs_permissions(&self, input: Option<&Value>) -> bool {
-        get_tool_spec_needs_permissions(input)
+        with_runtime(|runtime| runtime.needs_permissions(input))
     }
 
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
-        render_get_tool_spec_tool_use_message(input)
+        with_runtime(|runtime| runtime.render_tool_use_message(input))
     }
 
     async fn validate_input(
@@ -80,7 +82,7 @@ impl Tool for GetToolSpecTool {
         input: &Value,
         _context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        validate_get_tool_spec_input(input)
+        with_runtime(|runtime| runtime.validate_input(input))
     }
 
     async fn call_impl(

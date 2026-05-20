@@ -34,9 +34,10 @@ SessionManager → Session → DialogTurn → ModelRound
 - For tools, keep lightweight contracts, pure manifest/exposure contracts,
   generic contextual prompt-manifest resolver contracts, generic catalog
   snapshot provider contracts, generic GetToolSpec catalog provider/detail/
-  summary/static metadata/tool-use message/execution-plan/provider-backed execution-result/
+  summary/static tool surface/execution-plan/provider-backed runtime facade / execution-result/
   result-assembly helpers, and portable tool context facts/provider plus generic registry / static-provider / dynamic-provider container
-  contracts in `bitfun-agent-tools`. Generic decorator references, snapshot decorator adapters, static-provider runtime assembly, and readonly/enabled
+  contracts in `bitfun-agent-tools`. Provider-backed visible-tools / prompt-visible manifest / readonly catalog runtime facades,
+  generic decorator references, snapshot decorator adapters, static-provider runtime assembly, and readonly/enabled
   registry-snapshot filtering belong in
   `bitfun-agent-tools`; core tool runtime should keep concrete provider groups and product snapshot wrapper adapter injection in
   `runtime_assembly.rs` + `static_providers.rs`, adapt core `Tool` into

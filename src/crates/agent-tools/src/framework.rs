@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeSet, HashSet};
 use std::fmt;
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -640,6 +641,72 @@ pub async fn resolve_readonly_enabled_tools<Tool: ToolRegistryItem + ?Sized>(
     readonly_tools
 }
 
+pub struct ToolCatalogRuntime<'a, Tool: ?Sized, Context, Provider: ?Sized> {
+    provider: &'a Provider,
+    get_tool_spec_tool_name: &'a str,
+    _marker: PhantomData<fn(&Tool, &Context)>,
+}
+
+impl<'a, Tool: ?Sized, Context, Provider: ?Sized> ToolCatalogRuntime<'a, Tool, Context, Provider> {
+    pub fn new(provider: &'a Provider, get_tool_spec_tool_name: &'a str) -> Self {
+        Self {
+            provider,
+            get_tool_spec_tool_name,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, Tool, Context, Provider> ToolCatalogRuntime<'a, Tool, Context, Provider>
+where
+    Tool: ToolRegistryItem + ?Sized,
+    Provider: ToolCatalogSnapshotProvider<Tool> + ?Sized,
+{
+    pub async fn readonly_enabled_tools(&self) -> Vec<ToolRef<Tool>> {
+        let tool_snapshot = self.provider.tool_snapshot().await;
+        resolve_readonly_enabled_tools(&tool_snapshot).await
+    }
+}
+
+impl<'a, Tool, Context, Provider> ToolCatalogRuntime<'a, Tool, Context, Provider>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+    Provider: ToolCatalogSnapshotProvider<Tool> + ?Sized,
+{
+    pub async fn visible_tools(
+        &self,
+        allowed_tools: &[String],
+        exposure_overrides: &IndexMap<String, ToolExposure>,
+        context: &Context,
+    ) -> ContextualVisibleTools<Tool> {
+        resolve_contextual_visible_tools_from_provider(
+            self.provider,
+            allowed_tools,
+            exposure_overrides,
+            context,
+            self.get_tool_spec_tool_name,
+        )
+        .await
+    }
+
+    pub async fn tool_manifest(
+        &self,
+        allowed_tools: &[String],
+        exposure_overrides: &IndexMap<String, ToolExposure>,
+        context: &Context,
+    ) -> ContextualToolManifest<Tool> {
+        resolve_contextual_tool_manifest_from_provider(
+            self.provider,
+            allowed_tools,
+            exposure_overrides,
+            context,
+            self.get_tool_spec_tool_name,
+        )
+        .await
+    }
+}
+
 pub async fn resolve_get_tool_spec_detail<Tool, Context>(
     collapsed_tools: &[ToolRef<Tool>],
     tool_name: &str,
@@ -740,6 +807,88 @@ where
             .map_err(GetToolSpecExecutionError::Detail)?;
             Ok(build_get_tool_spec_detail_result(&detail))
         }
+    }
+}
+
+pub struct GetToolSpecRuntime<'a, Tool: ?Sized, Context, Provider: ?Sized> {
+    provider: &'a Provider,
+    tool_name: &'a str,
+    _marker: PhantomData<fn(&Tool, &Context)>,
+}
+
+impl<'a, Tool: ?Sized, Context, Provider: ?Sized> GetToolSpecRuntime<'a, Tool, Context, Provider> {
+    pub fn new(provider: &'a Provider, tool_name: &'a str) -> Self {
+        Self {
+            provider,
+            tool_name,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        self.tool_name
+    }
+
+    pub fn short_description(&self) -> String {
+        get_tool_spec_short_description()
+    }
+
+    pub fn input_schema(&self) -> Value {
+        get_tool_spec_input_schema()
+    }
+
+    pub fn is_readonly(&self) -> bool {
+        get_tool_spec_is_readonly()
+    }
+
+    pub fn is_concurrency_safe(&self, input: Option<&Value>) -> bool {
+        get_tool_spec_is_concurrency_safe(input)
+    }
+
+    pub fn needs_permissions(&self, input: Option<&Value>) -> bool {
+        get_tool_spec_needs_permissions(input)
+    }
+
+    pub fn render_tool_use_message(&self, input: &Value) -> String {
+        render_get_tool_spec_tool_use_message(input)
+    }
+
+    pub fn validate_input(&self, input: &Value) -> ValidationResult {
+        validate_get_tool_spec_input(input)
+    }
+}
+
+impl<'a, Tool, Context, Provider> GetToolSpecRuntime<'a, Tool, Context, Provider>
+where
+    Tool: ToolRegistryItem + ?Sized,
+    Context: Sync,
+    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
+{
+    pub async fn catalog_description(&self, context: Option<&Context>) -> String {
+        build_get_tool_spec_catalog_description_from_provider(self.provider, context).await
+    }
+}
+
+impl<'a, Tool, Context, Provider> GetToolSpecRuntime<'a, Tool, Context, Provider>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
+{
+    pub async fn execute(
+        &self,
+        input: &Value,
+        loaded_collapsed_tools: &[String],
+        context: &Context,
+    ) -> Result<ToolResult, GetToolSpecExecutionError> {
+        resolve_get_tool_spec_execution_result_from_provider(
+            self.provider,
+            input,
+            loaded_collapsed_tools,
+            context,
+            self.tool_name,
+        )
+        .await
     }
 }
 

@@ -3,17 +3,20 @@ use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseCo
 use crate::agentic::tools::registry::{get_global_tool_registry, GET_TOOL_SPEC_TOOL_NAME};
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_tools::{
-    build_get_tool_spec_catalog_description_from_provider,
-    resolve_contextual_tool_manifest_from_provider, resolve_contextual_visible_tools_from_provider,
-    resolve_get_tool_spec_execution_result_from_provider, ContextualToolManifest,
-    ContextualVisibleTools, GetToolSpecCatalogProvider, GetToolSpecExecutionError,
-    ToolCatalogSnapshotProvider,
+    ContextualToolManifest, ContextualVisibleTools, GetToolSpecCatalogProvider,
+    GetToolSpecExecutionError, GetToolSpecRuntime, ToolCatalogRuntime, ToolCatalogSnapshotProvider,
 };
 use serde_json::Value;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct ProductToolCatalogProvider;
+
+pub(crate) type ProductGetToolSpecRuntime<'a> =
+    GetToolSpecRuntime<'a, dyn Tool, ToolUseContext, ProductToolCatalogProvider>;
+
+pub(crate) type ProductToolCatalogRuntime<'a> =
+    ToolCatalogRuntime<'a, dyn Tool, ToolUseContext, ProductToolCatalogProvider>;
 
 #[async_trait::async_trait]
 impl ToolCatalogSnapshotProvider<dyn Tool> for ProductToolCatalogProvider {
@@ -63,16 +66,23 @@ impl ProductToolCatalogProvider {
         let policy = agent_registry
             .get_agent_tool_policy(agent_type, workspace_root)
             .await;
-        let visible_tools = resolve_contextual_visible_tools_from_provider(
-            self,
-            &policy.allowed_tools,
-            &policy.exposure_overrides,
-            context,
-            GET_TOOL_SPEC_TOOL_NAME,
-        )
-        .await;
+        let visible_tools = product_tool_catalog_runtime(self)
+            .visible_tools(&policy.allowed_tools, &policy.exposure_overrides, context)
+            .await;
         Ok(visible_tools.collapsed_tools)
     }
+}
+
+pub(crate) fn product_get_tool_spec_runtime(
+    provider: &ProductToolCatalogProvider,
+) -> ProductGetToolSpecRuntime<'_> {
+    GetToolSpecRuntime::new(provider, GET_TOOL_SPEC_TOOL_NAME)
+}
+
+pub(crate) fn product_tool_catalog_runtime(
+    provider: &ProductToolCatalogProvider,
+) -> ProductToolCatalogRuntime<'_> {
+    ToolCatalogRuntime::new(provider, GET_TOOL_SPEC_TOOL_NAME)
 }
 
 pub(crate) async fn resolve_product_visible_tools(
@@ -80,14 +90,10 @@ pub(crate) async fn resolve_product_visible_tools(
     exposure_overrides: &AgentToolPolicyOverrides,
     context: &ToolUseContext,
 ) -> ContextualVisibleTools<dyn Tool> {
-    resolve_contextual_visible_tools_from_provider(
-        &ProductToolCatalogProvider,
-        allowed_tools,
-        exposure_overrides,
-        context,
-        GET_TOOL_SPEC_TOOL_NAME,
-    )
-    .await
+    let provider = ProductToolCatalogProvider;
+    product_tool_catalog_runtime(&provider)
+        .visible_tools(allowed_tools, exposure_overrides, context)
+        .await
 }
 
 pub(crate) async fn resolve_product_tool_manifest(
@@ -95,20 +101,25 @@ pub(crate) async fn resolve_product_tool_manifest(
     exposure_overrides: &AgentToolPolicyOverrides,
     context: &ToolUseContext,
 ) -> ContextualToolManifest<dyn Tool> {
-    resolve_contextual_tool_manifest_from_provider(
-        &ProductToolCatalogProvider,
-        allowed_tools,
-        exposure_overrides,
-        context,
-        GET_TOOL_SPEC_TOOL_NAME,
-    )
-    .await
+    let provider = ProductToolCatalogProvider;
+    product_tool_catalog_runtime(&provider)
+        .tool_manifest(allowed_tools, exposure_overrides, context)
+        .await
+}
+
+pub(crate) async fn resolve_product_readonly_enabled_tools() -> Vec<Arc<dyn Tool>> {
+    let provider = ProductToolCatalogProvider;
+    product_tool_catalog_runtime(&provider)
+        .readonly_enabled_tools()
+        .await
 }
 
 pub(crate) async fn build_product_get_tool_spec_catalog_description(
     context: Option<&ToolUseContext>,
 ) -> String {
-    build_get_tool_spec_catalog_description_from_provider(&ProductToolCatalogProvider, context)
+    let provider = ProductToolCatalogProvider;
+    product_get_tool_spec_runtime(&provider)
+        .catalog_description(context)
         .await
 }
 
@@ -117,21 +128,17 @@ pub(crate) async fn resolve_product_get_tool_spec_execution_result(
     context: &ToolUseContext,
     get_tool_spec_tool_name: &str,
 ) -> Result<ToolResult, GetToolSpecExecutionError> {
-    resolve_get_tool_spec_execution_result_from_provider(
-        &ProductToolCatalogProvider,
-        input,
-        &context.unlocked_collapsed_tools,
-        context,
-        get_tool_spec_tool_name,
-    )
-    .await
+    let provider = ProductToolCatalogProvider;
+    GetToolSpecRuntime::new(&provider, get_tool_spec_tool_name)
+        .execute(input, &context.unlocked_collapsed_tools, context)
+        .await
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        resolve_product_get_tool_spec_execution_result, resolve_product_tool_manifest,
-        ProductToolCatalogProvider,
+        resolve_product_get_tool_spec_execution_result, resolve_product_readonly_enabled_tools,
+        resolve_product_tool_manifest, ProductToolCatalogProvider,
     };
     use crate::agentic::agents::AgentToolPolicyOverrides;
     use crate::agentic::tools::framework::ToolUseContext;
@@ -263,5 +270,25 @@ mod tests {
             .trim()
             .is_empty());
         assert_eq!(data["input_schema"]["type"], "object");
+    }
+
+    #[tokio::test]
+    async fn product_catalog_facade_resolves_readonly_enabled_tools_from_same_provider_owner() {
+        let readonly_names = resolve_product_readonly_enabled_tools()
+            .await
+            .into_iter()
+            .map(|tool| tool.name().to_string())
+            .collect::<Vec<_>>();
+        let mut expected_readonly_names = Vec::new();
+        for tool in create_tool_registry().get_all_tools() {
+            if tool.is_readonly() && tool.is_enabled().await {
+                expected_readonly_names.push(tool.name().to_string());
+            }
+        }
+
+        assert_eq!(
+            readonly_names, expected_readonly_names,
+            "product readonly catalog facade must preserve registry snapshot order"
+        );
     }
 }

@@ -1,10 +1,11 @@
 //! Tool registry
 
+use crate::agentic::tools::catalog_provider::resolve_product_readonly_enabled_tools;
 use crate::agentic::tools::framework::{DynamicToolInfo, Tool};
 use crate::util::errors::BitFunResult;
 use bitfun_agent_tools::{
-    resolve_readonly_enabled_tools, DynamicToolDescriptor, DynamicToolProvider, PortResult,
-    ToolDecoratorRef, ToolRegistry as AgentToolRegistry,
+    DynamicToolDescriptor, DynamicToolProvider, PortResult, ToolDecoratorRef,
+    ToolRegistry as AgentToolRegistry,
 };
 use log::{debug, info, trace, warn};
 use std::sync::Arc;
@@ -769,8 +770,7 @@ pub async fn get_all_tools() -> Vec<Arc<dyn Tool>> {
 
 /// Get readonly tools
 pub async fn get_readonly_tools() -> BitFunResult<Vec<Arc<dyn Tool>>> {
-    let all_tools = get_all_tools().await;
-    Ok(resolve_readonly_enabled_tools(&all_tools).await)
+    Ok(resolve_product_readonly_enabled_tools().await)
 }
 
 /// Create default tool registry - factory function

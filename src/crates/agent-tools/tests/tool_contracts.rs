@@ -13,7 +13,7 @@ use bitfun_agent_tools::{
     resolve_tool_manifest_policy, sort_tool_manifest_definitions,
     summarize_get_tool_spec_collapsed_tools, validate_get_tool_spec_input, DynamicMcpToolInfo,
     DynamicToolInfo, GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError,
-    GetToolSpecExecutionPlan, GetToolSpecLoadObservation, InputValidator,
+    GetToolSpecExecutionPlan, GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator,
     PromptVisibleToolManifestItem, ToolContextFacts, ToolExposure, ToolImageAttachment,
     ToolManifestDefinition, ToolManifestPolicyTool, ToolPathBackend, ToolPathResolution,
     ToolRenderOptions, ToolResult, ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult,
@@ -22,8 +22,8 @@ use bitfun_agent_tools::{
 use bitfun_agent_tools::{
     ContextualToolManifestItem, DynamicToolDescriptor, DynamicToolProvider,
     GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider, StaticToolProvider,
-    StaticToolProviderGroup, ToolCatalogSnapshotProvider, ToolDecorator, ToolDecoratorRef,
-    ToolRegistry, ToolRegistryItem, ToolRuntimeAssembly,
+    StaticToolProviderGroup, ToolCatalogRuntime, ToolCatalogSnapshotProvider, ToolDecorator,
+    ToolDecoratorRef, ToolRegistry, ToolRegistryItem, ToolRuntimeAssembly,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -943,11 +943,22 @@ struct ContextualManifestSnapshotProvider {
     tools: Vec<Arc<ContextualManifestTool>>,
 }
 
+struct RegistryMarkerSnapshotProvider {
+    tools: Vec<Arc<RegistryMarkerTool>>,
+}
+
 struct ErroringGetToolSpecProvider;
 
 #[async_trait::async_trait]
 impl ToolCatalogSnapshotProvider<ContextualManifestTool> for ContextualManifestSnapshotProvider {
     async fn tool_snapshot(&self) -> Vec<Arc<ContextualManifestTool>> {
+        self.tools.clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl ToolCatalogSnapshotProvider<RegistryMarkerTool> for RegistryMarkerSnapshotProvider {
+    async fn tool_snapshot(&self) -> Vec<Arc<RegistryMarkerTool>> {
         self.tools.clone()
     }
 }
@@ -1371,6 +1382,104 @@ async fn contextual_manifest_resolver_accepts_snapshot_provider_boundary() {
 }
 
 #[tokio::test]
+async fn tool_catalog_runtime_facade_owns_manifest_and_readonly_paths() {
+    let manifest_provider = ContextualManifestSnapshotProvider {
+        tools: vec![
+            contextual_manifest_tool("Read", ToolExposure::Expanded, None),
+            contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
+            contextual_manifest_tool("Git", ToolExposure::Collapsed, Some("other-agent")),
+            contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Expanded, None),
+        ],
+    };
+    let runtime = ToolCatalogRuntime::<ContextualManifestTool, ManifestTestContext, _>::new(
+        &manifest_provider,
+        GET_TOOL_SPEC_TOOL_NAME,
+    );
+
+    let visible_tools = runtime
+        .visible_tools(
+            &[
+                "Read".to_string(),
+                "WebFetch".to_string(),
+                "Git".to_string(),
+            ],
+            &Default::default(),
+            &ManifestTestContext { agent: "agentic" },
+        )
+        .await;
+    assert_eq!(
+        visible_tools.allowed_tool_names,
+        vec![
+            "Read".to_string(),
+            "WebFetch".to_string(),
+            "Git".to_string(),
+            GET_TOOL_SPEC_TOOL_NAME.to_string(),
+        ],
+        "runtime facade must preserve allowed-list insertion"
+    );
+    assert_eq!(
+        visible_tools
+            .expanded_tools
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Read", GET_TOOL_SPEC_TOOL_NAME],
+        "runtime facade must preserve expanded handle order"
+    );
+    assert_eq!(
+        visible_tools.collapsed_tool_names,
+        vec!["WebFetch".to_string()],
+        "runtime facade must preserve context-aware collapsed filtering"
+    );
+
+    let manifest = runtime
+        .tool_manifest(
+            &[
+                "Read".to_string(),
+                "WebFetch".to_string(),
+                "Git".to_string(),
+            ],
+            &Default::default(),
+            &ManifestTestContext { agent: "agentic" },
+        )
+        .await;
+    assert_eq!(
+        manifest
+            .tool_definitions
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Read", "WebFetch", GET_TOOL_SPEC_TOOL_NAME],
+        "runtime facade must preserve prompt-visible manifest order"
+    );
+
+    let readonly_provider = RegistryMarkerSnapshotProvider {
+        tools: vec![
+            registry_marker_tool_with_access("Read", None, ToolExposure::Expanded, true, true),
+            registry_marker_tool_with_access("Write", None, ToolExposure::Expanded, false, true),
+            registry_marker_tool_with_access("Disabled", None, ToolExposure::Expanded, true, false),
+            registry_marker_tool_with_access("WebFetch", None, ToolExposure::Collapsed, true, true),
+        ],
+    };
+    let readonly_runtime = ToolCatalogRuntime::<RegistryMarkerTool, ManifestTestContext, _>::new(
+        &readonly_provider,
+        GET_TOOL_SPEC_TOOL_NAME,
+    );
+    let readonly_names = readonly_runtime
+        .readonly_enabled_tools()
+        .await
+        .into_iter()
+        .map(|tool| tool.name().to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        readonly_names,
+        vec!["Read".to_string(), "WebFetch".to_string()],
+        "runtime facade must preserve readonly enabled filtering order"
+    );
+}
+
+#[tokio::test]
 async fn get_tool_spec_detail_resolver_preserves_contextual_detail_contract() {
     let collapsed_tools = vec![
         contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
@@ -1557,6 +1666,70 @@ async fn get_tool_spec_provider_execution_returns_detail_result_from_provider() 
     assert!(assistant.contains("\"agent\""));
     assert!(assistant.contains("\"agentic\""));
     assert_eq!(image_attachments, None);
+}
+
+#[tokio::test]
+async fn get_tool_spec_runtime_facade_owns_catalog_and_execution_paths() {
+    let provider = ContextualManifestSnapshotProvider {
+        tools: vec![contextual_manifest_tool(
+            "WebFetch",
+            ToolExposure::Collapsed,
+            None,
+        )],
+    };
+    let context = ManifestTestContext { agent: "agentic" };
+    let input = json!({ "tool_name": "WebFetch" });
+    let runtime = GetToolSpecRuntime::<ContextualManifestTool, ManifestTestContext, _>::new(
+        &provider,
+        GET_TOOL_SPEC_TOOL_NAME,
+    );
+
+    let description = runtime.catalog_description(Some(&context)).await;
+    assert!(description.contains("- WebFetch: WebFetch short description"));
+
+    let result = runtime
+        .execute(&input, &[], &context)
+        .await
+        .expect("collapsed tool detail should resolve through runtime facade");
+
+    let ToolResult::Result { data, .. } = result else {
+        panic!("expected normal tool result");
+    };
+    assert_eq!(data["tool_name"], "WebFetch");
+    assert_eq!(data["description"], "WebFetch description for agentic");
+    assert_eq!(
+        data["input_schema"]["properties"]["agent"]["const"],
+        "agentic"
+    );
+}
+
+#[test]
+fn get_tool_spec_runtime_facade_owns_static_tool_surface() {
+    let provider = ContextualManifestSnapshotProvider { tools: Vec::new() };
+    let runtime = GetToolSpecRuntime::<ContextualManifestTool, ManifestTestContext, _>::new(
+        &provider,
+        GET_TOOL_SPEC_TOOL_NAME,
+    );
+
+    assert_eq!(runtime.name(), GET_TOOL_SPEC_TOOL_NAME);
+    assert_eq!(
+        runtime.short_description(),
+        get_tool_spec_short_description()
+    );
+    assert_eq!(runtime.input_schema(), get_tool_spec_input_schema());
+    assert!(runtime.is_readonly());
+    assert!(runtime.is_concurrency_safe(None));
+    assert!(!runtime.needs_permissions(None));
+    assert_eq!(
+        runtime.render_tool_use_message(&json!({ "tool_name": "WebFetch" })),
+        "Reading tool spec for 'WebFetch'."
+    );
+    assert!(
+        runtime
+            .validate_input(&json!({ "tool_name": "WebFetch" }))
+            .result
+    );
+    assert!(!runtime.validate_input(&json!({})).result);
 }
 
 #[tokio::test]
