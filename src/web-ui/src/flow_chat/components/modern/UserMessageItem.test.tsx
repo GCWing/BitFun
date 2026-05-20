@@ -197,4 +197,40 @@ describe('UserMessageItem steering tag', () => {
 
     expect(container.querySelector('.user-message-item__rollback-btn')).not.toBeNull();
   });
+
+  it('hides the edit button when the panel context disables user message editing', () => {
+    activeSessionRef.current = {
+      sessionId: 'btw-session',
+      sessionKind: 'btw',
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          status: 'completed',
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider
+          value={{
+            sessionId: 'btw-session',
+            allowUserMessageRollback: true,
+            allowUserMessageEdit: false,
+          }}
+        >
+          <UserMessageItem
+            message={{
+              id: 'user-btw-1',
+              content: 'btw session question',
+              timestamp: 1000,
+            }}
+            turnId="turn-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    expect(container.querySelector('.user-message-item__edit-btn')).toBeNull();
+  });
 });

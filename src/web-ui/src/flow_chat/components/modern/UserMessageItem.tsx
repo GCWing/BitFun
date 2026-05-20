@@ -46,6 +46,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       sessionId,
       activeSessionOverride,
       allowUserMessageRollback = true,
+      allowUserMessageEdit = true,
     } = useFlowChatContext();
     const activeSessionFromStore = useActiveSession();
     const activeSession = activeSessionOverride ?? activeSessionFromStore;
@@ -95,11 +96,13 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       !isRollingBack &&
       !isEditSubmitting;
     const canEditBase =
+      allowUserMessageEdit &&
       !!resolvedSessionId &&
       turnIndex >= 0 &&
       !isSystemTriggered &&
       !steeringStatus;
     const canEdit = canEditBase && !isEditSubmitting && !isRollingBack;
+    const canShowEditAction = allowUserMessageEdit && !isFailed;
     const editDisabledReason = isSystemTriggered
       ? t('message.cannotEdit')
       : steeringStatus
@@ -436,7 +439,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
               >
                 {copied ? <Check size={14} /> : <Copy size={14} />}
               </button>
-              {!isFailed && (
+              {canShowEditAction && (
                 <Tooltip content={canEdit ? t('message.edit') : editDisabledReason}>
                   <button
                     type="button"

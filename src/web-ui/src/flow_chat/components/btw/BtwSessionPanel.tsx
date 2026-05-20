@@ -253,6 +253,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     onTabOpen: handleTabOpen,
     sessionId: childSessionId,
     activeSessionOverride: childSession ?? null,
+    allowUserMessageEdit: false,
     config: PANEL_CONFIG,
     exploreGroupStates,
     onExploreGroupToggle,
