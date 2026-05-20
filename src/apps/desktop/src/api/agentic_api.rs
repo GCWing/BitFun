@@ -19,7 +19,7 @@ use bitfun_core::agentic::deep_review_policy::{
 };
 use bitfun_core::agentic::image_analysis::ImageContextData;
 use bitfun_core::agentic::tools::image_context::get_image_context;
-use bitfun_core::service::session::DialogTurnData;
+use bitfun_core::service::session::{DialogTurnData, SessionRelationship};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
@@ -39,6 +39,10 @@ pub struct CreateSessionRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub relationship: Option<SessionRelationship>,
+    #[serde(default)]
+    pub deep_review_run_manifest: Option<serde_json::Value>,
     pub config: Option<SessionConfigDTO>,
 }
 
@@ -576,6 +580,22 @@ pub async fn create_session(
             .await
     }
     .map_err(|e| format!("Failed to create session: {}", e))?;
+
+    if let Some(relationship) = request.relationship {
+        coordinator
+            .get_session_manager()
+            .merge_session_relationship(&session.session_id, relationship)
+            .await
+            .map_err(|e| format!("Failed to persist session relationship: {}", e))?;
+    }
+
+    if let Some(run_manifest) = request.deep_review_run_manifest {
+        coordinator
+            .get_session_manager()
+            .set_session_deep_review_run_manifest(&session.session_id, Some(run_manifest))
+            .await
+            .map_err(|e| format!("Failed to persist Deep Review run manifest: {}", e))?;
+    }
 
     Ok(CreateSessionResponse {
         session_id: session.session_id,

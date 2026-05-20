@@ -1862,6 +1862,7 @@ pub fn get_global_workspace_service() -> Option<Arc<WorkspaceService>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agentic::persistence::PersistenceManager;
     use crate::infrastructure::storage::{PersistenceService, StorageOptions};
     use crate::service::session::SessionMetadata;
     use std::collections::HashMap;

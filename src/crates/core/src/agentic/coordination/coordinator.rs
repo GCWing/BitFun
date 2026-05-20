@@ -26,6 +26,7 @@ use crate::agentic::WorkspaceBinding;
 use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
+use crate::service::session::{SessionRelationship, SessionRelationshipKind};
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::workspace::{
     get_global_workspace_service, WorkspaceCreateOptions, WorkspaceKind,
@@ -132,17 +133,19 @@ fn format_background_subagent_delivery_text(
     }
 }
 
-fn build_subagent_session_custom_metadata(
+fn build_subagent_session_relationship(
     parent_info: Option<&SubagentParentInfo>,
     agent_type: &str,
-) -> serde_json::Value {
-    serde_json::json!({
-        "kind": "subagent",
-        "parentSessionId": parent_info.map(|info| info.session_id.as_str()),
-        "parentDialogTurnId": parent_info.map(|info| info.dialog_turn_id.as_str()),
-        "parentToolCallId": parent_info.map(|info| info.tool_call_id.as_str()),
-        "subagentType": agent_type,
-    })
+) -> SessionRelationship {
+    SessionRelationship {
+        kind: Some(SessionRelationshipKind::Subagent),
+        parent_session_id: parent_info.map(|info| info.session_id.clone()),
+        parent_request_id: None,
+        parent_dialog_turn_id: parent_info.map(|info| info.dialog_turn_id.clone()),
+        parent_turn_index: None,
+        parent_tool_call_id: parent_info.map(|info| info.tool_call_id.clone()),
+        subagent_type: Some(agent_type.to_string()),
+    }
 }
 
 struct HiddenSubagentExecutionRequest {
@@ -1079,6 +1082,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 snapshot_session_id: None,
                 tags: Vec::new(),
                 custom_metadata: None,
+                relationship: None,
                 todos: None,
                 deep_review_run_manifest: None,
                 deep_review_cache: None,
@@ -3034,9 +3038,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await?;
         let session_id = session.session_id.clone();
         self.session_manager
-            .merge_session_custom_metadata(
+            .persist_session_lineage(
                 &session_id,
-                build_subagent_session_custom_metadata(
+                build_subagent_session_relationship(
                     subagent_parent_info.as_ref(),
                     &agent_type,
                 ),
@@ -3593,12 +3597,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .unwrap_or("Side thread")
             .to_string();
         let child_session = self
-            .create_hidden_subagent_session(
+            .session_manager
+            .create_session_with_id_and_details(
                 Some(child_session_id.to_string()),
                 session_name,
                 snapshot.parent_agent_type.clone(),
                 snapshot.build_child_session_config(None),
                 Some(format!("session-{}", snapshot.parent_session_id)),
+                SessionKind::EphemeralChild,
             )
             .await?;
 

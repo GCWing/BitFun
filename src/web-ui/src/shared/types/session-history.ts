@@ -9,6 +9,17 @@ import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService'
 export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
 export type PersistedSessionKind = 'standard' | 'subagent';
 export type SessionTitleSource = 'text' | 'i18n';
+export type SessionRelationshipKind = 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
+
+export interface SessionRelationship {
+  kind?: SessionRelationshipKind;
+  parentSessionId?: string | null;
+  parentRequestId?: string | null;
+  parentDialogTurnId?: string | null;
+  parentTurnIndex?: number | null;
+  parentToolCallId?: string | null;
+  subagentType?: string | null;
+}
 
 export interface SessionCustomMetadata extends Record<string, unknown> {
   kind?: SessionKind;
@@ -44,6 +55,7 @@ export interface SessionMetadata {
   snapshotSessionId?: string;
   tags: string[];
   customMetadata?: SessionCustomMetadata;
+  relationship?: SessionRelationship;
   todos?: any[];
   workspacePath?: string;
   remoteConnectionId?: string;

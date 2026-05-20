@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ensureBackendSession, switchChatSession } from './SessionModule';
+import {
+  ensureBackendSession,
+  retryCreateBackendSession,
+  switchChatSession,
+} from './SessionModule';
 import type { Session } from '../../types/flow-chat';
+import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
 const agentApiMocks = vi.hoisted(() => ({
   ensureCoordinatorSession: vi.fn(),
@@ -73,6 +78,11 @@ function createSession(overrides: Partial<Session> = {}): Session {
     mode: 'agentic',
     workspacePath: 'D:/workspace/BitFun',
     sessionKind: 'normal',
+    parentSessionId: undefined,
+    parentToolCallId: undefined,
+    subagentType: undefined,
+    btwOrigin: undefined,
+    deepReviewRunManifest: undefined,
     ...overrides,
   };
 }
@@ -225,5 +235,84 @@ describe('SessionModule historical session coordination', () => {
     expect(context.flowChatStore.getState().sessions.get('history-1')).toMatchObject({
       contextRestoreState: 'ready',
     });
+  });
+
+  it('recreates child sessions with structured relationship and deep review manifest', async () => {
+    const deepReviewRunManifest = {
+      workPackets: [],
+      activeReviewers: [],
+      optionalReviewers: [],
+    } satisfies ReviewTeamRunManifest;
+    const { context } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [],
+      sessionKind: 'deep_review',
+      parentSessionId: 'parent-1',
+      btwOrigin: {
+        requestId: 'req-1',
+        parentSessionId: 'parent-1',
+        parentDialogTurnId: 'turn-9',
+        parentTurnIndex: 9,
+      },
+      deepReviewRunManifest,
+    }));
+    agentApiMocks.ensureCoordinatorSession.mockRejectedValueOnce(
+      new Error('Session metadata not found')
+    );
+    agentApiMocks.createSession.mockResolvedValueOnce(undefined);
+
+    await ensureBackendSession(context, 'history-1');
+
+    expect(agentApiMocks.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relationship: {
+          kind: 'deep_review',
+          parentSessionId: 'parent-1',
+          parentRequestId: 'req-1',
+          parentDialogTurnId: 'turn-9',
+          parentTurnIndex: 9,
+          parentToolCallId: null,
+          subagentType: null,
+        },
+        deepReviewRunManifest,
+      })
+    );
+  });
+
+  it('retries child sessions with structured subagent relationship', async () => {
+    const { context } = createContext(createSession({
+      sessionId: 'subagent-1',
+      isHistorical: false,
+      historyState: 'ready',
+      sessionKind: 'subagent',
+      parentSessionId: 'parent-1',
+      parentToolCallId: 'tool-7',
+      subagentType: 'ReviewSecurity',
+      btwOrigin: {
+        parentSessionId: 'parent-1',
+        parentDialogTurnId: 'turn-5',
+        parentTurnIndex: 5,
+      },
+    }));
+    agentApiMocks.createSession.mockResolvedValueOnce(undefined);
+
+    await retryCreateBackendSession(context, 'subagent-1');
+
+    expect(agentApiMocks.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'subagent-1',
+        relationship: {
+          kind: 'subagent',
+          parentSessionId: 'parent-1',
+          parentRequestId: null,
+          parentDialogTurnId: 'turn-5',
+          parentTurnIndex: 5,
+          parentToolCallId: 'tool-7',
+          subagentType: 'ReviewSecurity',
+        },
+      })
+    );
   });
 });

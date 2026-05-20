@@ -18,8 +18,8 @@ use crate::service::config::{
     subscribe_config_updates, ConfigUpdateEvent,
 };
 use crate::service::session::{
-    DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, TextItemData, TurnStatus,
-    UserMessageData,
+    DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
+    TextItemData, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::service::workspace::get_global_workspace_service;
@@ -225,6 +225,7 @@ impl SessionManager {
     fn should_persist_session_kind(kind: SessionKind) -> bool {
         match kind {
             SessionKind::Standard | SessionKind::Subagent => true,
+            SessionKind::EphemeralChild => false,
         }
     }
 
@@ -2006,7 +2007,12 @@ impl SessionManager {
                         state: session.state.clone(),
                     }
                 })
-                .filter(|summary| !matches!(summary.kind, SessionKind::Subagent))
+                .filter(|summary| {
+                    !matches!(
+                        summary.kind,
+                        SessionKind::Subagent | SessionKind::EphemeralChild
+                    )
+                })
                 .collect();
             Ok(summaries)
         }
@@ -2083,6 +2089,164 @@ impl SessionManager {
             (_, value) => value,
         });
 
+        self.persistence_manager
+            .save_session_metadata(&workspace_path, &metadata)
+            .await
+    }
+
+    pub async fn merge_session_relationship(
+        &self,
+        session_id: &str,
+        relationship: SessionRelationship,
+    ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(());
+        }
+
+        let workspace_path = self
+            .effective_session_workspace_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+
+        let mut metadata = match self
+            .persistence_manager
+            .load_session_metadata(&workspace_path, session_id)
+            .await?
+        {
+            Some(metadata) => metadata,
+            None => {
+                let session = self
+                    .sessions
+                    .get(session_id)
+                    .map(|value| value.clone())
+                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+                self.persistence_manager
+                    .save_session(&workspace_path, &session)
+                    .await?;
+                self.persistence_manager
+                    .load_session_metadata(&workspace_path, session_id)
+                    .await?
+                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?
+            }
+        };
+
+        metadata.relationship = Some(relationship);
+        self.persistence_manager
+            .save_session_metadata(&workspace_path, &metadata)
+            .await
+    }
+
+    pub async fn persist_session_lineage(
+        &self,
+        session_id: &str,
+        relationship: SessionRelationship,
+    ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(());
+        }
+
+        let workspace_path = self
+            .effective_session_workspace_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+
+        let mut metadata = match self
+            .persistence_manager
+            .load_session_metadata(&workspace_path, session_id)
+            .await?
+        {
+            Some(metadata) => metadata,
+            None => {
+                let session = self
+                    .sessions
+                    .get(session_id)
+                    .map(|value| value.clone())
+                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+                self.persistence_manager
+                    .save_session(&workspace_path, &session)
+                    .await?;
+                self.persistence_manager
+                    .load_session_metadata(&workspace_path, session_id)
+                    .await?
+                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?
+            }
+        };
+
+        metadata.relationship = Some(relationship);
+
+        if let Some(serde_json::Value::Object(mut custom_metadata)) = metadata.custom_metadata.take() {
+            for key in [
+                "kind",
+                "parentSessionId",
+                "parentRequestId",
+                "parentDialogTurnId",
+                "parentTurnIndex",
+                "parentToolCallId",
+                "subagentType",
+            ] {
+                custom_metadata.remove(key);
+            }
+            metadata.custom_metadata = (!custom_metadata.is_empty())
+                .then_some(serde_json::Value::Object(custom_metadata));
+        }
+
+        self.persistence_manager
+            .save_session_metadata(&workspace_path, &metadata)
+            .await
+    }
+
+    pub async fn set_session_deep_review_run_manifest(
+        &self,
+        session_id: &str,
+        deep_review_run_manifest: Option<serde_json::Value>,
+    ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(());
+        }
+
+        let workspace_path = self
+            .effective_session_workspace_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+
+        let mut metadata = match self
+            .persistence_manager
+            .load_session_metadata(&workspace_path, session_id)
+            .await?
+        {
+            Some(metadata) => metadata,
+            None => {
+                let session = self
+                    .sessions
+                    .get(session_id)
+                    .map(|value| value.clone())
+                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+                self.persistence_manager
+                    .save_session(&workspace_path, &session)
+                    .await?;
+                self.persistence_manager
+                    .load_session_metadata(&workspace_path, session_id)
+                    .await?
+                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?
+            }
+        };
+
+        metadata.deep_review_run_manifest = deep_review_run_manifest;
         self.persistence_manager
             .save_session_metadata(&workspace_path, &metadata)
             .await
@@ -3120,7 +3284,8 @@ mod tests {
     use crate::infrastructure::PathManager;
     use crate::service::remote_ssh::workspace_state::local_workspace_roots_equal;
     use crate::service::session::{
-        DialogTurnData, ModelRoundData, ToolCallData, ToolItemData, ToolResultData, UserMessageData,
+        DialogTurnData, ModelRoundData, SessionKind, SessionRelationship,
+        SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData, UserMessageData,
     };
     use dashmap::try_result::TryResult;
     use serde_json::json;
@@ -3385,6 +3550,125 @@ mod tests {
 
         assert!(matches!(restored.state, SessionState::Idle));
         assert_eq!(metadata.unread_completion, None);
+    }
+
+    #[tokio::test]
+    async fn ephemeral_child_session_is_kept_in_memory_without_persisting() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+
+        let session = manager
+            .create_session_with_id_and_details(
+                Some(Uuid::new_v4().to_string()),
+                "Side thread".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+                Some("session-parent".to_string()),
+                SessionKind::EphemeralChild,
+            )
+            .await
+            .expect("ephemeral child session should create");
+
+        assert!(manager.get_session(&session.session_id).is_some());
+        assert!(persistence_manager
+            .load_session_metadata(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata lookup should succeed")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn persist_session_lineage_updates_structured_relationship_and_clears_legacy_projection() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+
+        let session = manager
+            .create_session_with_id_and_details(
+                Some(Uuid::new_v4().to_string()),
+                "Review child".to_string(),
+                "CodeReview".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+                Some("session-parent".to_string()),
+                SessionKind::Standard,
+            )
+            .await
+            .expect("session should create");
+
+        manager
+            .merge_session_custom_metadata(
+                &session.session_id,
+                json!({
+                    "kind": "review",
+                    "parentSessionId": "stale-parent",
+                    "parentRequestId": "stale-request",
+                    "parentDialogTurnId": "stale-turn",
+                    "parentTurnIndex": 1,
+                    "parentToolCallId": "stale-tool",
+                    "subagentType": "stale-subagent",
+                    "preservedKey": "preserved-value",
+                }),
+            )
+            .await
+            .expect("legacy compatibility metadata should seed");
+
+        manager
+            .persist_session_lineage(
+                &session.session_id,
+                SessionRelationship {
+                    kind: Some(SessionRelationshipKind::DeepReview),
+                    parent_session_id: Some("parent-1".to_string()),
+                    parent_request_id: Some("request-1".to_string()),
+                    parent_dialog_turn_id: Some("turn-2".to_string()),
+                    parent_turn_index: Some(2),
+                    parent_tool_call_id: None,
+                    subagent_type: None,
+                },
+            )
+            .await
+            .expect("lineage should persist");
+
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata lookup should succeed")
+            .expect("metadata should exist");
+
+        assert_eq!(
+            metadata.relationship,
+            Some(SessionRelationship {
+                kind: Some(SessionRelationshipKind::DeepReview),
+                parent_session_id: Some("parent-1".to_string()),
+                parent_request_id: Some("request-1".to_string()),
+                parent_dialog_turn_id: Some("turn-2".to_string()),
+                parent_turn_index: Some(2),
+                parent_tool_call_id: None,
+                subagent_type: None,
+            })
+        );
+
+        let custom_metadata = metadata
+            .custom_metadata
+            .expect("non-lineage custom metadata should remain");
+        assert_eq!(custom_metadata["preservedKey"], "preserved-value");
+        assert!(custom_metadata.get("kind").is_none());
+        assert!(custom_metadata.get("parentSessionId").is_none());
+        assert!(custom_metadata.get("parentRequestId").is_none());
+        assert!(custom_metadata.get("parentDialogTurnId").is_none());
+        assert!(custom_metadata.get("parentTurnIndex").is_none());
+        assert!(custom_metadata.get("parentToolCallId").is_none());
+        assert!(custom_metadata.get("subagentType").is_none());
     }
 
     #[tokio::test]

@@ -22,6 +22,7 @@ import {
   getNextDefaultSessionTitleCount,
   resolveSessionTitle,
 } from '../../utils/sessionTitle';
+import { buildCreateSessionRelationship } from '../../utils/sessionMetadata';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
@@ -760,6 +761,8 @@ export async function ensureBackendSession(
       workspacePath,
       remoteConnectionId: effectiveConnectionId,
       remoteSshHost: effectiveSshHost,
+      relationship: buildCreateSessionRelationship(latestSession),
+      deepReviewRunManifest: latestSession.deepReviewRunManifest,
       config: {
         modelName: latestSession.config.modelName || 'auto',
         enableTools: true,
@@ -798,6 +801,8 @@ export async function retryCreateBackendSession(
     workspacePath,
     remoteConnectionId: session.remoteConnectionId,
     remoteSshHost: session.remoteSshHost,
+    relationship: buildCreateSessionRelationship(session),
+    deepReviewRunManifest: session.deepReviewRunManifest,
     config: {
       modelName: session.config.modelName || 'auto',
       enableTools: true,

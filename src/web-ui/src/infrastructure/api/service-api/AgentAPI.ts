@@ -2,8 +2,9 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
-import type { DialogTurnData } from '@/shared/types/session-history';
+import type { DialogTurnData, SessionRelationship } from '@/shared/types/session-history';
 import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
+import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
 
 
@@ -44,6 +45,8 @@ export interface CreateSessionRequest {
   remoteConnectionId?: string;
   remoteSshHost?: string;
   sessionKind?: 'standard' | 'subagent';
+  relationship?: SessionRelationship;
+  deepReviewRunManifest?: ReviewTeamRunManifest;
   config?: SessionConfig;
 }
 

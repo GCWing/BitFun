@@ -5,6 +5,35 @@ use serde::{Deserialize, Serialize};
 
 pub const SESSION_STORAGE_SCHEMA_VERSION: u32 = 2;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionRelationshipKind {
+    Btw,
+    Review,
+    DeepReview,
+    Miniapp,
+    Subagent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRelationship {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<SessionRelationshipKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_session_id")]
+    pub parent_session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_request_id")]
+    pub parent_request_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_dialog_turn_id")]
+    pub parent_dialog_turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_turn_index")]
+    pub parent_turn_index: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_tool_call_id")]
+    pub parent_tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "subagent_type")]
+    pub subagent_type: Option<String>,
+}
+
 /// Session metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -73,6 +102,16 @@ pub struct SessionMetadata {
     /// Custom metadata
     #[serde(skip_serializing_if = "Option::is_none", alias = "custom_metadata")]
     pub custom_metadata: Option<serde_json::Value>,
+
+    /// Structured child-session relationship metadata.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "relationship",
+        alias = "session_relationship",
+        alias = "sessionRelationship"
+    )]
+    pub relationship: Option<SessionRelationship>,
 
     /// Todo list (for persisting the session's todo state)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -642,6 +681,7 @@ impl SessionMetadata {
             snapshot_session_id: None,
             tags: Vec::new(),
             custom_metadata: None,
+            relationship: None,
             todos: None,
             deep_review_run_manifest: None,
             deep_review_cache: None,
@@ -680,7 +720,14 @@ impl SessionMetadata {
     }
 
     pub fn is_standard(&self) -> bool {
-        !self.is_subagent()
+        matches!(self.session_kind, SessionKind::Standard)
+    }
+
+    pub fn is_internal_hidden(&self) -> bool {
+        matches!(
+            self.session_kind,
+            SessionKind::Subagent | SessionKind::EphemeralChild
+        )
     }
 
     pub fn is_legacy_leaked_subagent_candidate(&self) -> bool {
@@ -695,7 +742,7 @@ impl SessionMetadata {
     }
 
     pub fn should_hide_from_user_lists(&self) -> bool {
-        self.is_subagent() || self.is_legacy_leaked_subagent_candidate()
+        self.is_internal_hidden() || self.is_legacy_leaked_subagent_candidate()
     }
 }
 
@@ -771,8 +818,8 @@ impl DialogTurnData {
 #[cfg(test)]
 mod tests {
     use super::{
-        DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, ToolItemData,
-        UserMessageData,
+        DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
+        SessionRelationshipKind, ToolItemData, UserMessageData,
     };
     use bitfun_core_types::SessionKind;
 
@@ -867,6 +914,31 @@ mod tests {
         assert!(!metadata.is_subagent());
         assert!(metadata.is_legacy_leaked_subagent_candidate());
         assert!(metadata.should_hide_from_user_lists());
+    }
+
+    #[test]
+    fn session_relationship_round_trips_through_metadata_contract() {
+        let mut metadata = SessionMetadata::new(
+            "session-relationship".to_string(),
+            "Review child".to_string(),
+            "CodeReview".to_string(),
+            "model".to_string(),
+        );
+        metadata.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Review),
+            parent_session_id: Some("parent-1".to_string()),
+            parent_request_id: Some("request-1".to_string()),
+            parent_dialog_turn_id: Some("turn-2".to_string()),
+            parent_turn_index: Some(2),
+            parent_tool_call_id: None,
+            subagent_type: None,
+        });
+
+        let json = serde_json::to_value(&metadata).expect("metadata should serialize");
+        let round_trip: SessionMetadata =
+            serde_json::from_value(json).expect("metadata should deserialize");
+
+        assert_eq!(round_trip.relationship, metadata.relationship);
     }
 
     #[test]

@@ -4,14 +4,14 @@
 
 use crate::agentic::core::{
     strip_prompt_markup, CompressionState, Message, MessageContent, Session, SessionConfig,
-    SessionState, SessionSummary,
+    SessionKind, SessionState, SessionSummary,
 };
 use crate::infrastructure::PathManager;
 use crate::service::remote_ssh::workspace_state::{
     resolve_workspace_session_identity, LOCAL_WORKSPACE_SSH_HOST,
 };
 use crate::service::session::{
-    DialogTurnData, SessionMetadata, SessionStatus, SessionTranscriptExport,
+    DialogTurnData, SessionMetadata, SessionRelationship, SessionRelationshipKind, SessionStatus, SessionTranscriptExport,
     SessionTranscriptExportOptions, SessionTranscriptIndexEntry, StoredSessionIndexFile,
     StoredSessionMetadataFile, ToolItemData, TranscriptLineRange, SESSION_STORAGE_SCHEMA_VERSION,
 };
@@ -240,6 +240,98 @@ pub struct PersistenceManager {
 }
 
 impl PersistenceManager {
+    fn build_session_relationship(
+        session: &Session,
+        existing: Option<&SessionMetadata>,
+    ) -> Option<SessionRelationship> {
+        let existing_relationship = existing.and_then(|value| value.relationship.clone());
+        let existing_custom_metadata = existing.and_then(|value| value.custom_metadata.as_ref());
+
+        let kind = match session.kind {
+            SessionKind::Subagent => Some(SessionRelationshipKind::Subagent),
+            SessionKind::EphemeralChild => Some(SessionRelationshipKind::Btw),
+            SessionKind::Standard => existing_relationship
+                .as_ref()
+                .and_then(|value| value.kind.clone()),
+        };
+
+        let parent_session_id = existing_relationship
+            .as_ref()
+            .and_then(|value| value.parent_session_id.clone())
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("parentSessionId"))
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            });
+        let parent_request_id = existing_relationship
+            .as_ref()
+            .and_then(|value| value.parent_request_id.clone())
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("parentRequestId"))
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            });
+        let parent_dialog_turn_id = existing_relationship
+            .as_ref()
+            .and_then(|value| value.parent_dialog_turn_id.clone())
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("parentDialogTurnId"))
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            });
+        let parent_turn_index = existing_relationship
+            .as_ref()
+            .and_then(|value| value.parent_turn_index)
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("parentTurnIndex"))
+                    .and_then(|value| value.as_u64())
+                    .map(|value| value as usize)
+            });
+        let parent_tool_call_id = existing_relationship
+            .as_ref()
+            .and_then(|value| value.parent_tool_call_id.clone())
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("parentToolCallId"))
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            });
+        let subagent_type = existing_relationship
+            .as_ref()
+            .and_then(|value| value.subagent_type.clone())
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("subagentType"))
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            });
+
+        if kind.is_none()
+            && parent_session_id.is_none()
+            && parent_request_id.is_none()
+            && parent_dialog_turn_id.is_none()
+            && parent_turn_index.is_none()
+            && parent_tool_call_id.is_none()
+            && subagent_type.is_none()
+        {
+            return None;
+        }
+
+        Some(SessionRelationship {
+            kind,
+            parent_session_id,
+            parent_request_id,
+            parent_dialog_turn_id,
+            parent_turn_index,
+            parent_tool_call_id,
+            subagent_type,
+        })
+    }
+
     pub fn new(path_manager: Arc<PathManager>) -> BitFunResult<Self> {
         Ok(Self {
             runtime_service: Arc::new(WorkspaceRuntimeService::new(path_manager.clone())),
@@ -782,6 +874,7 @@ impl PersistenceManager {
                 .or_else(|| existing.and_then(|value| value.snapshot_session_id.clone())),
             tags: existing.map(|value| value.tags.clone()).unwrap_or_default(),
             custom_metadata: existing.and_then(|value| value.custom_metadata.clone()),
+            relationship: Self::build_session_relationship(session, existing),
             todos: existing.and_then(|value| value.todos.clone()),
             deep_review_run_manifest: existing
                 .and_then(|value| value.deep_review_run_manifest.clone()),
