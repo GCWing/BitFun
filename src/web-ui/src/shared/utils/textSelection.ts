@@ -105,7 +105,26 @@ export const copyTextToClipboard = async (text: string): Promise<boolean> => {
   }
 };
 
- 
+export const readTextFromClipboard = async (): Promise<string> => {
+  try {
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      try {
+        const { systemAPI } = await import('@/infrastructure/api/service-api/SystemAPI');
+        return await systemAPI.getClipboard();
+      } catch (tauriErr) {
+        log.warn('Tauri clipboard failed, falling back to navigator.clipboard', tauriErr);
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      return await navigator.clipboard.readText();
+    }
+  } catch (error) {
+    log.warn('Failed to read clipboard', error);
+  }
+  return ''
+}
+
 export const getElementText = (element: HTMLElement): string => {
   
   if (element.tagName === 'PRE' || element.tagName === 'CODE') {

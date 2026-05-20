@@ -22,6 +22,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { nowMs } from '@/shared/utils/timing';
 import '@xterm/xterm/css/xterm.css';
+import { readTextFromClipboard } from '@/shared/utils/textSelection';
 import './Terminal.scss';
 
 const log = createLogger('Terminal');
@@ -691,7 +692,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
               }
             }
 
-            const text = await navigator.clipboard.readText();
+            const text = await readTextFromClipboard();
             if (!text) return;
 
             await pasteText(text);

@@ -915,6 +915,8 @@ pub async fn _run() {
             get_watched_paths,
             get_clipboard_files,
             paste_files,
+            get_clipboard,
+            set_clipboard,
             get_config,
             get_configs,
             computer_use_get_status,
