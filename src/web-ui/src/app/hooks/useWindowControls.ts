@@ -6,6 +6,7 @@ import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { nowMs } from '@/shared/utils/timing';
+import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
 import { useI18n } from '@/infrastructure/i18n';
 import { isMacOSDesktopRuntime, supportsNativeWindowControls } from '@/infrastructure/runtime';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -378,8 +379,8 @@ export const useWindowControls = (options?: { isToolbarMode?: boolean }) => {
         await closeWorkspace();
       }
       
-      // 2) Dispatch preview close event
-      window.dispatchEvent(new CustomEvent('closePreview'));
+      // 2) Dismiss transient overlays so the reset lands on a clean surface.
+      dismissibleLayerManager.dismissAll();
     } catch (error) {
       log.error('Failed to return to startup page', error);
     }

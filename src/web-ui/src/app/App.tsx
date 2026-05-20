@@ -1,5 +1,7 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
+import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
+import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
 import { ChatProvider, useAIInitialization } from '../infrastructure';
 import { ViewModeProvider } from '../infrastructure/contexts/ViewModeProvider';
 import { SSHRemoteProvider } from '../features/ssh-remote';
@@ -50,6 +52,7 @@ function App() {
   // Splash screen state
   const [splashVisible, setSplashVisible] = useState(true);
   const [splashExiting, setSplashExiting] = useState(false);
+  const hasAppDismissibleLayer = useHasDismissibleLayer('app');
   const mountTimeRef = useRef(Date.now());
   const mainWindowShownRef = useRef(false);
   const interactiveShellReadyRef = useRef(false);
@@ -327,8 +330,14 @@ function App() {
   useShortcut(
     'app.closePreview',
     { key: 'Escape', scope: 'app', allowInInput: true },
-    () => window.dispatchEvent(new CustomEvent('closePreview')),
-    { priority: 1, description: 'keyboard.shortcuts.app.closePreview' }
+    () => {
+      dismissibleLayerManager.dismissTop('app');
+    },
+    {
+      enabled: hasAppDismissibleLayer,
+      priority: 1,
+      description: 'keyboard.shortcuts.app.closePreview',
+    }
   );
 
   // Top SceneBar: Mod+Alt+1..9 / Mod+Alt+PageUp/PageDown

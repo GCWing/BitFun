@@ -682,6 +682,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   return (
     <div 
       className={`bitfun-terminal ${className}`}
+      data-shortcut-scope="terminal"
       data-terminal-id={terminalId}
       data-session-id={sessionId}
     >
