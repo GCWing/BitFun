@@ -159,12 +159,14 @@ impl TransportAdapter for WebSocketTransportAdapter {
             AgenticEvent::ToolEvent {
                 session_id,
                 turn_id,
+                round_id,
                 tool_event,
             } => {
                 json!({
                     "type": "tool-event",
                     "sessionId": session_id,
                     "turnId": turn_id,
+                    "roundId": round_id,
                     "toolEvent": tool_event,
                 })
             }

@@ -260,6 +260,7 @@ pub enum AgenticEvent {
     ToolEvent {
         session_id: String,
         turn_id: String,
+        round_id: String,
         tool_event: ToolEventData,
     },
 

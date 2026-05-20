@@ -93,12 +93,16 @@ async fn replays_structurally_empty_openai_reasoning_content_with_tool_call() {
         .iter()
         .filter_map(|event| match event {
             AgenticEvent::ToolEvent {
+                round_id,
                 tool_event:
                     ToolEventData::ParamsPartial {
                         tool_id, params, ..
                     },
                 ..
-            } => Some((tool_id.as_str(), params.as_str())),
+            } => {
+                assert_eq!(round_id, "round_fixture");
+                Some((tool_id.as_str(), params.as_str()))
+            },
             _ => None,
         })
         .collect();
@@ -180,9 +184,10 @@ async fn replays_structurally_empty_anthropic_thinking_with_signature_and_tool_u
         matches!(
             event,
             AgenticEvent::ToolEvent {
+                round_id,
                 tool_event: ToolEventData::EarlyDetected { tool_id, tool_name },
                 ..
-            } if tool_id == "toolu_ds_1" && tool_name == "lookup_status"
+            } if round_id == "round_fixture" && tool_id == "toolu_ds_1" && tool_name == "lookup_status"
         )
     });
     assert!(

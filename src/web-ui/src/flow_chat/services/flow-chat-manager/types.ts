@@ -76,6 +76,7 @@ export interface SubagentTextChunkData {
 export interface SubagentToolEventData {
   sessionId: string;
   turnId: string;
+  roundId: string;
   toolEvent: FlowToolEvent;
 }
 

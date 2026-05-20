@@ -1602,6 +1602,7 @@ mod tests {
             ToolExecutionContext {
                 session_id: "session_1".to_string(),
                 dialog_turn_id: "turn_1".to_string(),
+                round_id: "round_1".to_string(),
                 agent_type: "agent".to_string(),
                 workspace: None,
                 context_vars: HashMap::new(),

@@ -358,6 +358,7 @@ export interface TextChunkEventData {
 export interface ToolEventData {
   sessionId: string;
   turnId: string;
+  roundId: string;
   toolEvent: FlowToolEvent;
 }
 

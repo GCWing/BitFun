@@ -167,6 +167,7 @@ export interface TextChunkEvent extends AgenticEvent {
 }
 
 export interface ToolEvent extends AgenticEvent {
+  roundId: string;
   toolEvent: any;
 }
 

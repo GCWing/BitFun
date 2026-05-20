@@ -469,6 +469,7 @@ impl StreamProcessor {
         self.graceful_shutdown(
             ctx.session_id.clone(),
             ctx.dialog_turn_id.clone(),
+            ctx.round_id.clone(),
             ctx.tool_calls.clone(),
             reason,
         )
@@ -480,6 +481,7 @@ impl StreamProcessor {
         &self,
         session_id: String,
         turn_id: String,
+        round_id: String,
         tool_calls: Vec<ToolCall>,
         reason: String,
     ) {
@@ -529,6 +531,7 @@ impl StreamProcessor {
                     AgenticEvent::ToolEvent {
                         session_id: session_id.clone(),
                         turn_id: turn_id.clone(),
+                        round_id: round_id.clone(),
                         tool_event,
                     },
                     Some(EventPriority::High),
@@ -613,6 +616,7 @@ impl StreamProcessor {
                     AgenticEvent::ToolEvent {
                         session_id: ctx.session_id.clone(),
                         turn_id: ctx.dialog_turn_id.clone(),
+                        round_id: ctx.round_id.clone(),
                         tool_event: ToolEventData::EarlyDetected {
                             tool_id: early_detected.tool_id,
                             tool_name: early_detected.tool_name,
@@ -632,6 +636,7 @@ impl StreamProcessor {
                     AgenticEvent::ToolEvent {
                         session_id: ctx.session_id.clone(),
                         turn_id: ctx.dialog_turn_id.clone(),
+                        round_id: ctx.round_id.clone(),
                         tool_event: ToolEventData::ParamsPartial {
                             tool_id: params_partial.tool_id,
                             tool_name: params_partial.tool_name,

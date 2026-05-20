@@ -254,6 +254,7 @@ impl ToolStateManager {
         let event = AgenticEvent::ToolEvent {
             session_id: task.context.session_id,
             turn_id: task.context.dialog_turn_id,
+            round_id: task.context.round_id,
             tool_event,
         };
 
@@ -309,6 +310,7 @@ mod tests {
             ToolExecutionContext {
                 session_id: "session-1".to_string(),
                 dialog_turn_id: "turn-1".to_string(),
+                round_id: "round-1".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace: None,
                 context_vars: HashMap::new(),

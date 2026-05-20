@@ -1542,13 +1542,23 @@ function handleToolEvent(
   event: {
     sessionId: string;
     turnId?: string;
+    roundId?: string;
     toolEvent: FlowToolEvent;
   },
   onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
 ): void {
-  const { sessionId, turnId, toolEvent } = event;
+  const { sessionId, turnId, roundId, toolEvent } = event;
   if (!turnId) {
     log.debug('Tool event missing turnId', { sessionId, toolId: toolEvent.tool_id, eventType: toolEvent.event_type });
+    return;
+  }
+  if (!roundId) {
+    log.error('Tool event missing roundId (backend bug)', {
+      sessionId,
+      turnId,
+      toolId: toolEvent.tool_id,
+      eventType: toolEvent.event_type,
+    });
     return;
   }
 
@@ -1562,6 +1572,7 @@ function handleToolEvent(
   const eventData: ToolEventData = {
     sessionId,
     turnId,
+    roundId,
     toolEvent,
   };
   
@@ -1591,7 +1602,7 @@ function handleToolEvent(
     return;
   }
 
-  processToolEvent(context, sessionId, turnId, toolEvent, undefined, onTodoWriteResult);
+  processToolEvent(context, sessionId, turnId, roundId, toolEvent, undefined, onTodoWriteResult);
 }
 
 /**

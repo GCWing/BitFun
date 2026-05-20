@@ -189,6 +189,7 @@ impl TransportAdapter for TauriTransportAdapter {
             AgenticEvent::ToolEvent {
                 session_id,
                 turn_id,
+                round_id,
                 tool_event,
             } => {
                 self.app_handle.emit(
@@ -196,6 +197,7 @@ impl TransportAdapter for TauriTransportAdapter {
                     json!({
                         "sessionId": session_id,
                         "turnId": turn_id,
+                        "roundId": round_id,
                         "toolEvent": tool_event,
                     }),
                 )?;

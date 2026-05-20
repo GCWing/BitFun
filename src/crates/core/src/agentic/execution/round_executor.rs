@@ -242,6 +242,7 @@ impl RoundExecutor {
                             );
                             self.emit_failed_partial_tool_calls(
                                 &context,
+                                &round_id,
                                 &result.tool_calls,
                                 &err_msg,
                             )
@@ -255,6 +256,7 @@ impl RoundExecutor {
 
                         self.emit_failed_partial_tool_calls(
                             &context,
+                            &round_id,
                             &result.tool_calls,
                             &err_msg,
                         )
@@ -312,6 +314,7 @@ impl RoundExecutor {
                         let err_msg = "Provider returned only invalid tool arguments";
                         self.emit_failed_partial_tool_calls(
                             &context,
+                            &round_id,
                             &result.tool_calls,
                             err_msg,
                         )
@@ -556,6 +559,7 @@ impl RoundExecutor {
             .generate_write_tool_contents(
                 ai_client.clone(),
                 &context,
+                &round_id,
                 &ai_messages,
                 tool_calls,
                 &cancel_token,
@@ -574,6 +578,7 @@ impl RoundExecutor {
             let tool_context = ToolExecutionContext {
                 session_id: context.session_id.clone(),
                 dialog_turn_id: context.dialog_turn_id.clone(),
+                round_id: round_id.clone(),
                 agent_type: context.agent_type.clone(),
                 workspace: context.workspace.clone(),
                 context_vars: context.context_vars.clone(),
@@ -829,6 +834,7 @@ impl RoundExecutor {
         &self,
         ai_client: Arc<AIClient>,
         context: &RoundContext,
+        round_id: &str,
         ai_messages: &[AIMessage],
         mut tool_calls: Vec<ToolCall>,
         cancel_token: &CancellationToken,
@@ -890,6 +896,7 @@ impl RoundExecutor {
                 AgenticEvent::ToolEvent {
                     session_id: context.session_id.clone(),
                     turn_id: context.dialog_turn_id.clone(),
+                    round_id: round_id.to_string(),
                     tool_event: ToolEventData::Started {
                         tool_id: tool_id.clone(),
                         tool_name: "Write".to_string(),
@@ -997,6 +1004,7 @@ impl RoundExecutor {
                                         AgenticEvent::ToolEvent {
                                             session_id: context.session_id.clone(),
                                             turn_id: context.dialog_turn_id.clone(),
+                                            round_id: round_id.to_string(),
                                             tool_event: ToolEventData::ParamsPartial {
                                                 tool_id: tool_id.clone(),
                                                 tool_name: "Write".to_string(),
@@ -1054,6 +1062,7 @@ impl RoundExecutor {
                 AgenticEvent::ToolEvent {
                     session_id: context.session_id.clone(),
                     turn_id: context.dialog_turn_id.clone(),
+                    round_id: round_id.to_string(),
                     tool_event: ToolEventData::ParamsPartial {
                         tool_id: tool_id.clone(),
                         tool_name: "Write".to_string(),
@@ -1181,6 +1190,7 @@ impl RoundExecutor {
     async fn emit_failed_partial_tool_calls(
         &self,
         context: &RoundContext,
+        round_id: &str,
         tool_calls: &[ToolCall],
         error: &str,
     ) {
@@ -1189,6 +1199,7 @@ impl RoundExecutor {
                 AgenticEvent::ToolEvent {
                     session_id: context.session_id.clone(),
                     turn_id: context.dialog_turn_id.clone(),
+                    round_id: round_id.to_string(),
                     tool_event: ToolEventData::Failed {
                         tool_id: tool_call.tool_id.clone(),
                         tool_name: tool_call.tool_name.clone(),

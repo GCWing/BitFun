@@ -578,6 +578,7 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
     tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
         tool_event: ToolEventData::Started {
             tool_id: "tool-1".to_string(),
             tool_name: "AskUserQuestion".to_string(),
