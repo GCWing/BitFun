@@ -5,12 +5,14 @@ import { TaskToolDisplay } from './TaskToolDisplay';
 import { taskCollapseStateManager } from '../store/TaskCollapseStateManager';
 import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) =>
-      options?.defaultValue ?? String(options?.agentType ?? _key),
-  }),
+const mocks = vi.hoisted(() => ({
+  openBtwSessionInAuxPane: vi.fn(),
 }));
+
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-i18next')>();
+  return actual;
+});
 
 vi.mock('../../component-library', () => ({
   Button: ({
@@ -39,6 +41,25 @@ vi.mock('@/shared/services/reviewTeamService', () => ({
 
 vi.mock('./ToolTimeoutIndicator', () => ({
   ToolTimeoutIndicator: () => <span data-testid="tool-timeout-indicator" />,
+}));
+
+vi.mock('../services/openBtwSession', () => ({
+  openBtwSessionInAuxPane: (...args: unknown[]) => mocks.openBtwSessionInAuxPane(...args),
+}));
+
+vi.mock('../store/FlowChatStore', () => ({
+  flowChatStore: {
+    getState: () => ({
+      sessions: new Map([
+        ['parent-session', {
+          sessionId: 'parent-session',
+          workspacePath: 'D:\\workspace\\repo',
+          remoteConnectionId: 'remote-1',
+          remoteSshHost: 'host-1',
+        }],
+      ]),
+    }),
+  },
 }));
 
 let JSDOMCtor: (new (
@@ -228,5 +249,43 @@ describeWithJsdom('TaskToolDisplay', () => {
     });
 
     expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
+  });
+
+  it('opens the real subagent session in the aux pane when the task card rail is clicked', async () => {
+    const toolItem: FlowToolItem = {
+      ...reviewTaskItem('completed', 'Explore', 'Investigate task card behavior'),
+      subagentSessionId: 'subagent-session-1',
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={toolItem}
+          config={config}
+          sessionId="parent-session"
+        />,
+      );
+    });
+
+    const openButton = container.querySelector<HTMLButtonElement>('.task-header-rail__hit');
+    expect(openButton).toBeTruthy();
+
+    await act(async () => {
+      openButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mocks.openBtwSessionInAuxPane).toHaveBeenCalledWith({
+      childSessionId: 'subagent-session-1',
+      parentSessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      sessionKind: 'subagent',
+      sessionTitle: expect.any(String),
+      agentType: 'Explore',
+      parentToolCallId: 'task-call-1',
+      subagentType: 'Explore',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+      includeInternal: true,
+    });
   });
 });

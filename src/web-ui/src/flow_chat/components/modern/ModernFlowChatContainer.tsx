@@ -21,10 +21,12 @@ import { useFlowChatSync } from './useFlowChatSync';
 import { useFlowChatToolActions } from './useFlowChatToolActions';
 import { useFlowChatSearch } from './useFlowChatSearch';
 import { useVirtualItems, useActiveSession, useVisibleTurnInfo, type VisibleTurnInfo } from '../../store/modernFlowChatStore';
-import type { FlowChatConfig } from '../../types/flow-chat';
+import type { FlowChatConfig, FlowToolItem, Session } from '../../types/flow-chat';
 import type { LineRange } from '@/component-library';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { isAcpFlowSession } from '../../utils/acpSession';
+import { flowChatStore } from '../../store/FlowChatStore';
+import { openBtwSessionInAuxPane } from '../../services/openBtwSession';
 import './ModernFlowChatContainer.scss';
 
 interface ModernFlowChatContainerProps {
@@ -36,6 +38,116 @@ interface ModernFlowChatContainerProps {
   onTabOpen?: (tabInfo: any, sessionId?: string, panelType?: string) => void;
   onOpenVisualization?: (type: string, data: any) => void;
   onSwitchToChatPanel?: () => void;
+}
+
+type BackgroundSubagentSummary = {
+  sessionId: string;
+  title: string;
+  agentType?: string;
+  status: 'processing' | 'finishing';
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  parentToolCallId?: string;
+  subagentType?: string;
+};
+
+function isBackgroundTaskTool(item: FlowToolItem): boolean {
+  const input = item.toolCall?.input;
+  if (!input || typeof input !== 'object') {
+    return false;
+  }
+
+  return (input as Record<string, unknown>).run_in_background === true;
+}
+
+function readSubagentExecutionStatus(session: Session): 'processing' | 'finishing' | null {
+  const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
+  if (!latestTurn) {
+    return null;
+  }
+
+  if (
+    latestTurn.status === 'pending' ||
+    latestTurn.status === 'image_analyzing' ||
+    latestTurn.status === 'processing'
+  ) {
+    return 'processing';
+  }
+
+  if (latestTurn.status === 'finishing' || latestTurn.status === 'cancelling') {
+    return 'finishing';
+  }
+
+  return null;
+}
+
+function collectRunningBackgroundSubagents(parentSessionId: string | undefined): BackgroundSubagentSummary[] {
+  if (!parentSessionId) {
+    return [];
+  }
+
+  const { sessions } = flowChatStore.getState();
+  const parentSession = sessions.get(parentSessionId);
+  if (!parentSession) {
+    return [];
+  }
+
+  const backgroundTaskBySessionId = new Map<string, FlowToolItem>();
+  for (const turn of parentSession.dialogTurns) {
+    for (const round of turn.modelRounds) {
+      for (const item of round.items) {
+        if (
+          item.type === 'tool' &&
+          item.toolName?.toLowerCase() === 'task' &&
+          item.subagentSessionId &&
+          isBackgroundTaskTool(item as FlowToolItem)
+        ) {
+          backgroundTaskBySessionId.set(item.subagentSessionId, item as FlowToolItem);
+        }
+      }
+    }
+  }
+
+  const results: BackgroundSubagentSummary[] = [];
+  for (const session of sessions.values()) {
+    if (session.sessionKind !== 'subagent' || session.parentSessionId !== parentSessionId) {
+      continue;
+    }
+
+    const parentTask = backgroundTaskBySessionId.get(session.sessionId);
+    if (!parentTask) {
+      continue;
+    }
+
+    const status = readSubagentExecutionStatus(session);
+    if (!status) {
+      continue;
+    }
+
+    results.push({
+      sessionId: session.sessionId,
+      title: session.title?.trim() || parentTask.toolCall?.input?.description || 'Background subagent',
+      agentType: session.subagentType || parentTask.toolCall?.input?.subagent_type || parentTask.toolCall?.input?.subagentType,
+      status,
+      workspacePath: session.workspacePath,
+      remoteConnectionId: session.remoteConnectionId,
+      remoteSshHost: session.remoteSshHost,
+      parentToolCallId: session.parentToolCallId || parentTask.toolCall?.id || parentTask.id,
+      subagentType: session.subagentType || parentTask.toolCall?.input?.subagent_type || parentTask.toolCall?.input?.subagentType,
+    });
+  }
+
+  return results.sort((a, b) => {
+    const aSession = sessions.get(a.sessionId);
+    const bSession = sessions.get(b.sessionId);
+    const createdAtDiff = (aSession?.createdAt ?? 0) - (bSession?.createdAt ?? 0);
+    if (createdAtDiff !== 0) {
+      return createdAtDiff;
+    }
+
+    return a.sessionId.localeCompare(b.sessionId);
+  });
 }
 
 export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = ({
@@ -52,6 +164,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
   const [searchOpenRequest, setSearchOpenRequest] = useState(0);
+  const [backgroundSubagents, setBackgroundSubagents] = useState<BackgroundSubagentSummary[]>([]);
   const autoPinnedSessionIdRef = useRef<string | null>(null);
   const virtualListRef = useRef<VirtualMessageListRef>(null);
   const chatScopeRef = useRef<HTMLDivElement>(null);
@@ -279,6 +392,36 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     void FlowChatManager.getInstance().switchChatSession(sessionId);
   }, [activeSession?.sessionId]);
 
+  useEffect(() => {
+    const syncBackgroundSubagents = () => {
+      setBackgroundSubagents(collectRunningBackgroundSubagents(activeSession?.sessionId));
+    };
+
+    syncBackgroundSubagents();
+    return flowChatStore.subscribe(syncBackgroundSubagents);
+  }, [activeSession?.sessionId]);
+
+  const handleOpenBackgroundSubagent = useCallback((childSessionId: string) => {
+    const subagent = backgroundSubagents.find(item => item.sessionId === childSessionId);
+    if (!subagent || !activeSession?.sessionId) {
+      return;
+    }
+
+    openBtwSessionInAuxPane({
+      childSessionId,
+      parentSessionId: activeSession.sessionId,
+      workspacePath: subagent.workspacePath || activeSession.workspacePath,
+      sessionKind: 'subagent',
+      sessionTitle: subagent.title,
+      agentType: subagent.agentType,
+      parentToolCallId: subagent.parentToolCallId,
+      subagentType: subagent.subagentType,
+      remoteConnectionId: subagent.remoteConnectionId || activeSession.remoteConnectionId,
+      remoteSshHost: subagent.remoteSshHost || activeSession.remoteSshHost,
+      includeInternal: true,
+    });
+  }, [activeSession, backgroundSubagents]);
+
   useShortcut(
     'chat.stopGeneration',
     { key: 'Escape', scope: 'chat', allowInInput: true },
@@ -353,6 +496,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onSearchPrev={handleSearchPrev}
           onSearchClose={clearSearch}
           searchOpenRequest={searchOpenRequest}
+          backgroundSubagents={backgroundSubagents}
+          onOpenBackgroundSubagent={handleOpenBackgroundSubagent}
         />
 
         <div className="modern-flowchat-container__messages">

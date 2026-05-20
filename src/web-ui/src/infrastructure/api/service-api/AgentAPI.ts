@@ -151,21 +151,27 @@ export interface SubagentParentInfo {
 export interface AgenticEvent {
   sessionId: string;
   turnId?: string;
-  subagentParentInfo?: SubagentParentInfo;
   [key: string]: any;
 }
+
+export type DialogTurnStartedEvent = AgenticEvent;
 
 export interface TextChunkEvent extends AgenticEvent {
   roundId: string;
   text: string;
   contentType?: 'text' | 'thinking';
   isThinkingEnd?: boolean;
-  subagentParentInfo?: SubagentParentInfo;
 }
 
 export interface ToolEvent extends AgenticEvent {
   toolEvent: any;
-  subagentParentInfo?: SubagentParentInfo;
+}
+
+export interface SubagentSessionLinkedEvent extends AgenticEvent {
+  parentSessionId: string;
+  parentDialogTurnId: string;
+  parentToolCallId: string;
+  agentType?: string;
 }
 
 export type DeepReviewQueueStatus =
@@ -262,7 +268,6 @@ export interface CompressionEvent extends AgenticEvent {
   summarySource?: 'model' | 'local_fallback' | 'none';
   
   error?: string;                  
-  subagentParentInfo?: SubagentParentInfo;
 }
 
 
@@ -372,11 +377,19 @@ export class AgentAPI {
     workspacePath: string,
     remoteConnectionId?: string,
     remoteSshHost?: string,
-    traceId?: string
+    traceId?: string,
+    includeInternal?: boolean,
   ): Promise<SessionInfo> {
     try {
       return await api.invoke<SessionInfo>('restore_session', {
-        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost, traceId },
+        request: {
+          sessionId,
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost,
+          traceId,
+          includeInternal,
+        },
       });
     } catch (error) {
       throw createTauriCommandError('restore_session', error, { sessionId, workspacePath });
@@ -388,11 +401,19 @@ export class AgentAPI {
     workspacePath: string,
     remoteConnectionId?: string,
     remoteSshHost?: string,
-    traceId?: string
+    traceId?: string,
+    includeInternal?: boolean,
   ): Promise<RestoreSessionWithTurnsResponse> {
     try {
       return await api.invoke<RestoreSessionWithTurnsResponse>('restore_session_with_turns', {
-        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost, traceId },
+        request: {
+          sessionId,
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost,
+          traceId,
+          includeInternal,
+        },
       });
     } catch (error) {
       throw createTauriCommandError('restore_session_with_turns', error, { sessionId, workspacePath });
@@ -404,11 +425,19 @@ export class AgentAPI {
     workspacePath: string,
     remoteConnectionId?: string,
     remoteSshHost?: string,
-    traceId?: string
+    traceId?: string,
+    includeInternal?: boolean,
   ): Promise<RestoreSessionViewResponse> {
     try {
       return await api.invoke<RestoreSessionViewResponse>('restore_session_view', {
-        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost, traceId },
+        request: {
+          sessionId,
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost,
+          traceId,
+          includeInternal,
+        },
       });
     } catch (error) {
       throw createTauriCommandError('restore_session_view', error, { sessionId, workspacePath });
@@ -424,6 +453,7 @@ export class AgentAPI {
     workspacePath: string;
     remoteConnectionId?: string;
     remoteSshHost?: string;
+    includeInternal?: boolean;
   }): Promise<void> {
     try {
       await api.invoke<void>('ensure_coordinator_session', { request });
@@ -516,8 +546,8 @@ export class AgentAPI {
   }
 
    
-  onDialogTurnStarted(callback: (event: AgenticEvent) => void): () => void {
-    return api.listen<AgenticEvent>('agentic://dialog-turn-started', callback);
+  onDialogTurnStarted(callback: (event: DialogTurnStartedEvent) => void): () => void {
+    return api.listen<DialogTurnStartedEvent>('agentic://dialog-turn-started', callback);
   }
 
    
@@ -537,6 +567,15 @@ export class AgentAPI {
    
   onToolEvent(callback: (event: ToolEvent) => void): () => void {
     return api.listen<ToolEvent>('agentic://tool-event', callback);
+  }
+
+  onSubagentSessionLinked(
+    callback: (event: SubagentSessionLinkedEvent) => void
+  ): () => void {
+    return api.listen<SubagentSessionLinkedEvent>(
+      'agentic://subagent-session-linked',
+      callback
+    );
   }
 
   onDeepReviewQueueStateChanged(

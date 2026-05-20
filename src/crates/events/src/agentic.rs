@@ -114,7 +114,17 @@ pub enum AgenticEvent {
         original_user_input: Option<String>,
         /// Image metadata JSON for UI rendering (id, name, data_url, mime_type, image_path)
         user_message_metadata: Option<serde_json::Value>,
-        subagent_parent_info: Option<SubagentParentInfo>,
+    },
+
+    /// Low-frequency linking event that associates a hidden subagent session
+    /// with the parent tool call that launched it.
+    SubagentSessionLinked {
+        session_id: String,
+        parent_session_id: String,
+        parent_dialog_turn_id: String,
+        parent_tool_call_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        agent_type: Option<String>,
     },
 
     DialogTurnCompleted {
@@ -123,7 +133,6 @@ pub enum AgenticEvent {
         total_rounds: usize,
         total_tools: usize,
         duration_ms: u64,
-        subagent_parent_info: Option<SubagentParentInfo>,
         /// When set, the turn finished but the last model round was a partial
         /// recovery (stream aborted mid-way). Contains a human-readable reason.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -139,7 +148,6 @@ pub enum AgenticEvent {
     DialogTurnCancelled {
         session_id: String,
         turn_id: String,
-        subagent_parent_info: Option<SubagentParentInfo>,
     },
 
     DialogTurnFailed {
@@ -150,7 +158,6 @@ pub enum AgenticEvent {
         error_category: Option<ErrorCategory>,
         #[serde(skip_serializing_if = "Option::is_none")]
         error_detail: Option<AiErrorDetail>,
-        subagent_parent_info: Option<SubagentParentInfo>,
     },
 
     TokenUsageUpdated {
@@ -176,7 +183,6 @@ pub enum AgenticEvent {
         tokens_before: usize,
         context_window: usize,
         threshold: f32,
-        subagent_parent_info: Option<SubagentParentInfo>,
     },
 
     ContextCompressionCompleted {
@@ -190,7 +196,6 @@ pub enum AgenticEvent {
         duration_ms: u64,
         has_summary: bool,
         summary_source: String,
-        subagent_parent_info: Option<SubagentParentInfo>,
     },
 
     ContextCompressionFailed {
@@ -198,7 +203,6 @@ pub enum AgenticEvent {
         turn_id: String,
         compression_id: String,
         error: String,
-        subagent_parent_info: Option<SubagentParentInfo>,
     },
 
     ModelRoundStarted {
@@ -206,7 +210,6 @@ pub enum AgenticEvent {
         turn_id: String,
         round_id: String,
         round_index: usize,
-        subagent_parent_info: Option<SubagentParentInfo>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         model_id: Option<String>,
     },
@@ -216,7 +219,6 @@ pub enum AgenticEvent {
         turn_id: String,
         round_id: String,
         has_tool_calls: bool,
-        subagent_parent_info: Option<SubagentParentInfo>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         duration_ms: Option<u64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -244,7 +246,6 @@ pub enum AgenticEvent {
         turn_id: String,
         round_id: String,
         text: String,
-        subagent_parent_info: Option<SubagentParentInfo>,
     },
 
     ThinkingChunk {
@@ -254,21 +255,18 @@ pub enum AgenticEvent {
         content: String,
         #[serde(default)]
         is_end: bool,
-        subagent_parent_info: Option<SubagentParentInfo>,
     },
 
     ToolEvent {
         session_id: String,
         turn_id: String,
         tool_event: ToolEventData,
-        subagent_parent_info: Option<SubagentParentInfo>,
     },
 
     DeepReviewQueueStateChanged {
         session_id: String,
         turn_id: String,
         queue_state: DeepReviewQueueState,
-        subagent_parent_info: Option<SubagentParentInfo>,
     },
 
     SystemError {
@@ -288,7 +286,6 @@ pub enum AgenticEvent {
         steering_id: String,
         content: String,
         display_content: String,
-        subagent_parent_info: Option<SubagentParentInfo>,
     },
 
     /// A session's bound model has been automatically migrated because the
@@ -440,7 +437,6 @@ mod tests {
             turn_id: "turn-1".to_string(),
             round_id: "round-1".to_string(),
             has_tool_calls: false,
-            subagent_parent_info: None,
             duration_ms: Some(123),
             provider_id: Some("provider".to_string()),
             model_id: Some("model".to_string()),
@@ -467,8 +463,7 @@ mod tests {
             "session_id": "session-1",
             "turn_id": "turn-1",
             "round_id": "round-1",
-            "has_tool_calls": false,
-            "subagent_parent_info": null
+            "has_tool_calls": false
         });
 
         let event: AgenticEvent = serde_json::from_value(json).expect("legacy event");
@@ -579,7 +574,6 @@ mod tests {
                 max_queue_wait_seconds: Some(60),
                 session_concurrency_high: true,
             },
-            subagent_parent_info: None,
         };
 
         assert_eq!(event.session_id(), Some("review-session"));
@@ -601,6 +595,28 @@ mod tests {
             serialized["queue_state"]["run_elapsed_ms"],
             serde_json::Value::Null
         );
+    }
+
+    #[test]
+    fn subagent_session_linked_serializes_stable_contract() {
+        let event = AgenticEvent::SubagentSessionLinked {
+            session_id: "child-session".to_string(),
+            parent_session_id: "parent-session".to_string(),
+            parent_dialog_turn_id: "turn-1".to_string(),
+            parent_tool_call_id: "tool-1".to_string(),
+            agent_type: Some("GeneralPurpose".to_string()),
+        };
+
+        assert_eq!(event.session_id(), Some("child-session"));
+        assert_eq!(event.default_priority(), AgenticEventPriority::High);
+
+        let serialized = serde_json::to_value(event).expect("serialize event");
+        assert_eq!(serialized["type"], "SubagentSessionLinked");
+        assert_eq!(serialized["session_id"], "child-session");
+        assert_eq!(serialized["parent_session_id"], "parent-session");
+        assert_eq!(serialized["parent_dialog_turn_id"], "turn-1");
+        assert_eq!(serialized["parent_tool_call_id"], "tool-1");
+        assert_eq!(serialized["agent_type"], "GeneralPurpose");
     }
 }
 
@@ -643,6 +659,7 @@ impl AgenticEvent {
             | Self::ImageAnalysisStarted { session_id, .. }
             | Self::ImageAnalysisCompleted { session_id, .. }
             | Self::DialogTurnStarted { session_id, .. }
+            | Self::SubagentSessionLinked { session_id, .. }
             | Self::DialogTurnCompleted { session_id, .. }
             | Self::TokenUsageUpdated { session_id, .. }
             | Self::ContextCompressionStarted { session_id, .. }
@@ -672,6 +689,7 @@ impl AgenticEvent {
             Self::SessionStateChanged { .. }
             | Self::SessionTitleGenerated { .. }
             | Self::SessionModelAutoMigrated { .. }
+            | Self::SubagentSessionLinked { .. }
             | Self::DeepReviewQueueStateChanged { .. }
             | Self::ContextCompressionFailed { .. } => AgenticEventPriority::High,
 

@@ -4,10 +4,6 @@
 
 pub mod manager;
 pub mod session_branch;
-pub mod session_workspace_maintenance;
 
 pub use manager::PersistenceManager;
 pub use session_branch::{SessionBranchRequest, SessionBranchResult};
-pub use session_workspace_maintenance::{
-    SessionWorkspaceMaintenanceReport, SessionWorkspaceMaintenanceService,
-};

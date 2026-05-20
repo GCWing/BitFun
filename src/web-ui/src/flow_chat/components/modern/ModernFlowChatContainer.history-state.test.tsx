@@ -17,6 +17,10 @@ const stateMocks = vi.hoisted(() => ({
 const switchChatSessionMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
+  initReactI18next: {
+    type: '3rdParty',
+    init: () => undefined,
+  },
   useTranslation: () => ({
     t: (key: string) => {
       const labels: Record<string, string> = {

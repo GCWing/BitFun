@@ -934,7 +934,11 @@
     "searchNext": "下一个匹配结果",
     "searchClose": "关闭搜索",
     "searchOpen": "搜索消息",
-    "jumpToCurrentTurn": "跳转到第 {{turn}} 轮"
+    "jumpToCurrentTurn": "跳转到第 {{turn}} 轮",
+    "backgroundSubagents": "后台子 Agent（{{count}}）",
+    "backgroundSubagentUntitled": "后台子 Agent",
+    "subagentStatusProcessing": "运行中",
+    "subagentStatusFinishing": "收尾中"
   },
   "stickyTaskIndicator": {
     "tooltip": "跳转到当前任务"

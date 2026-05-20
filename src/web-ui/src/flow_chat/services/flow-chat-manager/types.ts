@@ -60,10 +60,6 @@ export interface FlowChatContext {
 export interface ToolEventOptions {
   /** Whether the event is from a subagent. */
   isSubagent?: boolean;
-  /** Parent tool ID. */
-  parentToolId?: string;
-  /** Subagent session ID. */
-  subagentSessionId?: string;
   /** Parent tool timestamp. */
   parentTimestamp?: number;
 }

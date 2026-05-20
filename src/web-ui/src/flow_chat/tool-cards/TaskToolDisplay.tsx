@@ -23,6 +23,8 @@ import { getReviewerContextBySubagentId } from '@/shared/services/reviewTeamServ
 import type { ReviewerContext } from '@/shared/services/reviewTeamService';
 import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
 import { AcpPermissionActions } from './AcpPermissionActions';
+import { openBtwSessionInAuxPane } from '../services/openBtwSession';
+import { flowChatStore } from '../store/FlowChatStore';
 import './TaskToolDisplay.scss';
 import './ModelThinkingDisplay.scss';
 
@@ -324,6 +326,24 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const openTaskDetailPanel = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+      if (toolItem.subagentSessionId && sessionId) {
+        const parentSession = flowChatStore.getState().sessions.get(sessionId);
+        openBtwSessionInAuxPane({
+          childSessionId: toolItem.subagentSessionId,
+          parentSessionId: sessionId,
+          workspacePath: parentSession?.workspacePath,
+          sessionKind: 'subagent',
+          sessionTitle: taskHeaderLine,
+          agentType: taskInput?.agentType,
+          parentToolCallId: toolCall?.id || toolItem.id,
+          subagentType: taskInput?.agentType,
+          remoteConnectionId: parentSession?.remoteConnectionId,
+          remoteSshHost: parentSession?.remoteSshHost,
+          includeInternal: true,
+        });
+        return;
+      }
+
       const panelData = { toolItem, taskInput, sessionId };
       const tabInfo = {
         type: 'task-detail',
@@ -337,7 +357,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
         window.dispatchEvent(new CustomEvent('agent-create-tab', { detail: tabInfo }));
       }
     },
-    [onOpenInPanel, sessionId, taskInput, toolItem, taskHeaderLine],
+    [onOpenInPanel, sessionId, taskInput, toolCall?.id, toolItem, taskHeaderLine],
   );
 
   const renderToolIcon = () => {

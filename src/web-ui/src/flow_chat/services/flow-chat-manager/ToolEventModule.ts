@@ -266,9 +266,6 @@ function handleEarlyDetected(
 ): void {
   flushPendingBatchedEvents(context);
   
-  const shouldDisplayInMainFlow = toolEvent.tool_name === 'submit_code_review' || 
-                                 toolEvent.tool_name === 'AskUserQuestion';
-  
   const preparingToolItem: FlowToolItem = {
     id: toolEvent.tool_id,
     type: 'tool',
@@ -282,35 +279,25 @@ function handleEarlyDetected(
     requiresConfirmation: false,
     isParamsStreaming: true,
     startTime: options?.parentTimestamp ? options.parentTimestamp + 2 : Date.now(),
-    ...(options?.isSubagent && !shouldDisplayInMainFlow && {
-      isSubagentItem: true,
-      parentTaskToolId: options.parentToolId,
-      subagentSessionId: options.subagentSessionId
-    })
   };
-  
-  if (options?.isSubagent && options.parentToolId && !shouldDisplayInMainFlow) {
-    store.insertModelRoundItemAfterTool(sessionId, turnId, options.parentToolId, preparingToolItem);
-    applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
-  } else {
-    let lastModelRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
-    if (!lastModelRound) {
-      const newRoundId = `round_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      lastModelRound = {
-        id: newRoundId,
-        index: 0,
-        items: [],
-        isStreaming: true,
-        isComplete: false,
-        status: 'streaming',
-        startTime: Date.now()
-      };
-      store.addModelRound(sessionId, turnId, lastModelRound);
-    }
-    
-    store.addModelRoundItem(sessionId, turnId, preparingToolItem, lastModelRound.id);
-    applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
+
+  let lastModelRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
+  if (!lastModelRound) {
+    const newRoundId = `round_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    lastModelRound = {
+      id: newRoundId,
+      index: 0,
+      items: [],
+      isStreaming: true,
+      isComplete: false,
+      status: 'streaming',
+      startTime: Date.now()
+    };
+    store.addModelRound(sessionId, turnId, lastModelRound);
   }
+
+  store.addModelRoundItem(sessionId, turnId, preparingToolItem, lastModelRound.id);
+  applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
 }
 
 /**
@@ -366,31 +353,20 @@ function handleStarted(
       status: 'running',
       requiresConfirmation: false,
       startTime: options?.parentTimestamp ? options.parentTimestamp + 2 : Date.now(),
-      ...(options?.isSubagent && {
-        isSubagentItem: true,
-        parentTaskToolId: options.parentToolId,
-        subagentSessionId: options.subagentSessionId
-      })
     };
-    
-    if (options?.isSubagent && options.parentToolId) {
-      store.insertModelRoundItemAfterTool(sessionId, turnId, options.parentToolId, toolItem);
+
+    const lastModelRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
+    if (lastModelRound) {
+      store.addModelRoundItem(sessionId, turnId, toolItem, lastModelRound.id);
       pendingTerminalSessionIds.delete(toolEvent.tool_id);
       applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
     } else {
-      const lastModelRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
-      if (lastModelRound) {
-        store.addModelRoundItem(sessionId, turnId, toolItem, lastModelRound.id);
-        pendingTerminalSessionIds.delete(toolEvent.tool_id);
-        applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
-      } else {
-        log.error('Tool Started event without ModelRound (backend bug)', {
-          sessionId,
-          turnId,
-          toolId: toolEvent.tool_id,
-          toolName: toolEvent.tool_name
-        });
-      }
+      log.error('Tool Started event without ModelRound (backend bug)', {
+        sessionId,
+        turnId,
+        toolId: toolEvent.tool_id,
+        toolName: toolEvent.tool_name
+      });
     }
   }
 }

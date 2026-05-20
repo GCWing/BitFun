@@ -336,6 +336,8 @@ export class FlowChatStore {
         remoteSshHost,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
+        parentToolCallId: relationship.parentToolCallId,
+        subagentType: relationship.subagentType,
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
         isTransient: false,
@@ -365,6 +367,8 @@ export class FlowChatStore {
       parentSessionId?: string;
       sessionKind?: SessionKind;
       btwOrigin?: Session['btwOrigin'];
+      parentToolCallId?: string;
+      subagentType?: string;
       isTransient?: boolean;
       agentBackedTransient?: boolean;
       deepReviewRunManifest?: Session['deepReviewRunManifest'];
@@ -405,6 +409,8 @@ export class FlowChatStore {
         remoteSshHost,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
+        parentToolCallId: relationship.parentToolCallId,
+        subagentType: relationship.subagentType,
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
         deepReviewRunManifest: meta?.deepReviewRunManifest,
@@ -514,7 +520,12 @@ export class FlowChatStore {
    */
   public updateSessionRelationship(
     sessionId: string,
-    updates: { parentSessionId?: string; sessionKind?: SessionKind }
+    updates: {
+      parentSessionId?: string;
+      sessionKind?: SessionKind;
+      parentToolCallId?: string;
+      subagentType?: string;
+    }
   ): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
@@ -524,11 +535,21 @@ export class FlowChatStore {
         sessionKind: updates.sessionKind ?? session.sessionKind,
         parentSessionId: updates.parentSessionId ?? session.parentSessionId,
         btwOrigin: session.btwOrigin,
+        parentToolCallId:
+          updates.parentToolCallId !== undefined
+            ? updates.parentToolCallId
+            : session.parentToolCallId,
+        subagentType:
+          updates.subagentType !== undefined
+            ? updates.subagentType
+            : session.subagentType,
       });
       const next: Session = {
         ...session,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
+        parentToolCallId: relationship.parentToolCallId,
+        subagentType: relationship.subagentType,
         btwOrigin: relationship.btwOrigin,
       };
 
@@ -1263,69 +1284,6 @@ export class FlowChatStore {
     }
   }
 
-  /**
-   * Insert new FlowItem after specified tool item (for subagent content flattening)
-   * @param sessionId Session ID
-   * @param dialogTurnId Dialog turn ID
-   * @param parentToolId Parent tool ID
-   * @param newItem New item to insert
-   */
-  public insertModelRoundItemAfterTool(sessionId: string, dialogTurnId: string, parentToolId: string, newItem: AnyFlowItem): void {
-    this.updateDialogTurn(sessionId, dialogTurnId, turn => {
-      let parentRoundIndex = -1;
-      let parentItemIndex = -1;
-      
-      for (let i = 0; i < turn.modelRounds.length; i++) {
-        const itemIndex = turn.modelRounds[i].items.findIndex((item: any) => item.id === parentToolId);
-        if (itemIndex !== -1) {
-          parentRoundIndex = i;
-          parentItemIndex = itemIndex;
-          break;
-        }
-      }
-      
-      if (parentRoundIndex === -1 || parentItemIndex === -1) {
-        log.warn('Parent tool item not found', { sessionId, dialogTurnId, parentToolId });
-        return turn;
-      }
-      
-      const targetModelRound = turn.modelRounds[parentRoundIndex];
-      
-      const existingItem = targetModelRound.items.find((item: any) => item.id === newItem.id);
-      if (existingItem) {
-        return turn;
-      }
-      
-      let insertIndex = parentItemIndex + 1;
-      
-      while (insertIndex < targetModelRound.items.length) {
-        const currentItem = targetModelRound.items[insertIndex] as any;
-        if (currentItem.parentTaskToolId === parentToolId && currentItem.isSubagentItem) {
-          insertIndex++;
-        } else {
-          break;
-        }
-      }
-      
-      const updatedItems = [
-        ...targetModelRound.items.slice(0, insertIndex),
-        newItem,
-        ...targetModelRound.items.slice(insertIndex)
-      ];
-      
-      const updatedModelRounds = [...turn.modelRounds];
-      updatedModelRounds[parentRoundIndex] = {
-        ...targetModelRound,
-        items: updatedItems
-      };
-      
-      return {
-        ...turn,
-        modelRounds: updatedModelRounds
-      };
-    });
-  }
-
   public updateModelRoundItem(sessionId: string, dialogTurnId: string, itemId: string, updates: Partial<FlowItem>): void {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => {
       let updated = false;
@@ -1998,6 +1956,8 @@ export class FlowChatStore {
                 metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
               parentSessionId: relationship.parentSessionId,
               sessionKind: relationship.sessionKind,
+              parentToolCallId: relationship.parentToolCallId,
+              subagentType: relationship.subagentType,
               btwThreads: [],
               btwOrigin: relationship.btwOrigin,
               hasUnreadCompletion: metadata.unreadCompletion,
@@ -2095,13 +2055,17 @@ export class FlowChatStore {
     workspacePath: string,
     limit?: number,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    options?: {
+      includeInternal?: boolean;
+    }
   ): Promise<void> {
     const traceStartedAt = nowMs();
     const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
     const sessionTraceId = `${sessionId.slice(0, 8)}-${Math.random().toString(36).slice(2, 8)}`;
     startupTrace.markPhase('historical_session_hydrate_start', { remote, sessionTraceId });
     this.setSessionHistoryState(sessionId, 'hydrating');
+
     try {
       const { stateMachineManager } = await import('../state-machine');
       stateMachineManager.getOrCreate(sessionId);
@@ -2137,7 +2101,8 @@ export class FlowChatStore {
                   workspacePath,
                   remoteConnectionId,
                   remoteSshHost,
-                  sessionTraceId
+                  sessionTraceId,
+                  options?.includeInternal,
                 );
                 turns = restored.turns;
                 contextRestoreState = 'ready';
@@ -2162,7 +2127,8 @@ export class FlowChatStore {
               workspacePath,
               remoteConnectionId,
               remoteSshHost,
-              sessionTraceId
+              sessionTraceId,
+              options?.includeInternal,
             );
             contextRestoreState = 'ready';
           };
@@ -2177,7 +2143,8 @@ export class FlowChatStore {
                 workspacePath,
                 remoteConnectionId,
                 remoteSshHost,
-                sessionTraceId
+                sessionTraceId,
+                options?.includeInternal,
               );
               turns = restored.turns;
               contextRestoreState =
@@ -2392,8 +2359,6 @@ export class FlowChatStore {
               timestamp: text.timestamp,
               status: normalizeRecoveredTextStatus(text.status, normalizedTurnStatus),
               orderIndex: text.orderIndex,
-              isSubagentItem: text.isSubagentItem,
-              parentTaskToolId: text.parentTaskToolId,
               subagentSessionId: text.subagentSessionId,
             })),
             ...round.toolItems.map((tool: any) => ({
@@ -2427,8 +2392,6 @@ export class FlowChatStore {
                 { preservePendingConfirmation: true },
               ),
               orderIndex: tool.orderIndex,
-              isSubagentItem: tool.isSubagentItem,
-              parentTaskToolId: tool.parentTaskToolId,
               subagentSessionId: tool.subagentSessionId,
               subagentModelId: tool.subagentModelId,
               subagentModelAlias: tool.subagentModelAlias,
@@ -2442,8 +2405,6 @@ export class FlowChatStore {
               timestamp: thinking.timestamp,
               status: normalizeRecoveredThinkingStatus(thinking.status, normalizedTurnStatus),
               orderIndex: thinking.orderIndex,
-              isSubagentItem: thinking.isSubagentItem,
-              parentTaskToolId: thinking.parentTaskToolId,
               subagentSessionId: thinking.subagentSessionId,
             })),
           ].sort((a: any, b: any) => {

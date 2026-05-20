@@ -223,7 +223,9 @@ impl SessionManager {
     }
 
     fn should_persist_session_kind(kind: SessionKind) -> bool {
-        !matches!(kind, SessionKind::Subagent)
+        match kind {
+            SessionKind::Standard | SessionKind::Subagent => true,
+        }
     }
 
     fn should_persist_session(session: &Session) -> bool {
@@ -1483,8 +1485,27 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Session> {
+        self.restore_session_internal(workspace_path, session_id, false)
+            .await
+    }
+
+    pub async fn restore_internal_session(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        self.restore_session_internal(workspace_path, session_id, true)
+            .await
+    }
+
+    async fn restore_session_internal(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        include_internal: bool,
+    ) -> BitFunResult<Session> {
         let (session, _) = self
-            .restore_session_with_turns(workspace_path, session_id)
+            .restore_session_with_turns_internal(workspace_path, session_id, include_internal)
             .await?;
         Ok(session)
     }
@@ -1496,6 +1517,25 @@ impl SessionManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        self.restore_session_view_internal(workspace_path, session_id, false)
+            .await
+    }
+
+    pub async fn restore_internal_session_view(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        self.restore_session_view_internal(workspace_path, session_id, true)
+            .await
+    }
+
+    async fn restore_session_view_internal(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        include_internal: bool,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
         let restore_started_at = Instant::now();
         let storage_path_started_at = Instant::now();
@@ -1520,7 +1560,7 @@ impl SessionManager {
             .persistence_manager
             .load_session_metadata(&session_storage_path, session_id)
             .await?
-            .is_some_and(|metadata| metadata.should_hide_from_user_lists())
+            .is_some_and(|metadata| !include_internal && metadata.should_hide_from_user_lists())
         {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
@@ -1585,6 +1625,25 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        self.restore_session_with_turns_internal(workspace_path, session_id, false)
+            .await
+    }
+
+    pub async fn restore_internal_session_with_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        self.restore_session_with_turns_internal(workspace_path, session_id, true)
+            .await
+    }
+
+    async fn restore_session_with_turns_internal(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        include_internal: bool,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
         let restore_started_at = Instant::now();
         // Check if session is already in memory
         let session_already_in_memory = self.sessions.contains_key(session_id);
@@ -1611,7 +1670,7 @@ impl SessionManager {
             .persistence_manager
             .load_session_metadata(&session_storage_path, session_id)
             .await?
-            .is_some_and(|metadata| metadata.should_hide_from_user_lists())
+            .is_some_and(|metadata| !include_internal && metadata.should_hide_from_user_lists())
         {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
@@ -1970,6 +2029,62 @@ impl SessionManager {
     ) -> BitFunResult<()> {
         self.persistence_manager
             .save_session_metadata(workspace_path, metadata)
+            .await
+    }
+
+    pub async fn merge_session_custom_metadata(
+        &self,
+        session_id: &str,
+        patch: serde_json::Value,
+    ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(());
+        }
+
+        let workspace_path = self
+            .effective_session_workspace_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+
+        let mut metadata = match self
+            .persistence_manager
+            .load_session_metadata(&workspace_path, session_id)
+            .await?
+        {
+            Some(metadata) => metadata,
+            None => {
+                let session = self
+                    .sessions
+                    .get(session_id)
+                    .map(|value| value.clone())
+                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+                self.persistence_manager
+                    .save_session(&workspace_path, &session)
+                    .await?;
+                self.persistence_manager
+                    .load_session_metadata(&workspace_path, session_id)
+                    .await?
+                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?
+            }
+        };
+
+        metadata.custom_metadata = Some(match (metadata.custom_metadata.take(), patch) {
+            (Some(serde_json::Value::Object(mut existing)), serde_json::Value::Object(patch_obj)) => {
+                for (key, value) in patch_obj {
+                    existing.insert(key, value);
+                }
+                serde_json::Value::Object(existing)
+            }
+            (_, value) => value,
+        });
+
+        self.persistence_manager
+            .save_session_metadata(&workspace_path, &metadata)
             .await
     }
 

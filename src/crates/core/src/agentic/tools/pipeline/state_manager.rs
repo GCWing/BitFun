@@ -251,12 +251,10 @@ impl ToolStateManager {
             },
         };
 
-        let event_subagent_parent_info = task.context.subagent_parent_info.map(|info| info.into());
         let event = AgenticEvent::ToolEvent {
             session_id: task.context.session_id,
             turn_id: task.context.dialog_turn_id,
             tool_event,
-            subagent_parent_info: event_subagent_parent_info,
         };
 
         let _ = self.event_queue.enqueue(event, None).await;

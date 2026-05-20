@@ -1,5 +1,4 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { normalizeSubagentParentInfo } from './subagentParentInfo';
 import {
   __test_only__,
   formatDialogErrorForNotification,
@@ -38,40 +37,6 @@ vi.mock('../../../shared/notification-system/services/NotificationService', () =
 describe('isAppWindowFocused', () => {
   it('returns true when no document is available', () => {
     expect(isAppWindowFocused()).toBe(true);
-  });
-});
-
-describe('normalizeSubagentParentInfo', () => {
-  it('normalizes snake_case subagent parent metadata from backend events', () => {
-    expect(
-      normalizeSubagentParentInfo({
-        subagent_parent_info: {
-          session_id: 'parent',
-          dialog_turn_id: 'turn',
-          tool_call_id: 'tool',
-        },
-      }),
-    ).toEqual({
-      sessionId: 'parent',
-      dialogTurnId: 'turn',
-      toolCallId: 'tool',
-    });
-  });
-
-  it('keeps camelCase subagent parent metadata intact', () => {
-    expect(
-      normalizeSubagentParentInfo({
-        subagentParentInfo: {
-          sessionId: 'parent',
-          dialogTurnId: 'turn',
-          toolCallId: 'tool',
-        },
-      }),
-    ).toEqual({
-      sessionId: 'parent',
-      dialogTurnId: 'turn',
-      toolCallId: 'tool',
-    });
   });
 });
 

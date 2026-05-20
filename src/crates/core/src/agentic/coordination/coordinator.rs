@@ -132,6 +132,19 @@ fn format_background_subagent_delivery_text(
     }
 }
 
+fn build_subagent_session_custom_metadata(
+    parent_info: Option<&SubagentParentInfo>,
+    agent_type: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "kind": "subagent",
+        "parentSessionId": parent_info.map(|info| info.session_id.as_str()),
+        "parentDialogTurnId": parent_info.map(|info| info.dialog_turn_id.as_str()),
+        "parentToolCallId": parent_info.map(|info| info.tool_call_id.as_str()),
+        "subagentType": agent_type,
+    })
+}
+
 struct HiddenSubagentExecutionRequest {
     session_name: String,
     agent_type: String,
@@ -965,7 +978,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(session)
     }
 
-    /// Create a hidden, non-persisted session that is still addressable by the UI.
+    /// Create a hidden internal subagent session that is persisted but excluded
+    /// from normal user-facing session lists.
     pub async fn create_hidden_subagent_session_with_workspace(
         &self,
         session_id: Option<String>,
@@ -1453,7 +1467,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             user_input: MANUAL_COMPACTION_COMMAND.to_string(),
             original_user_input: None,
             user_message_metadata: user_message_metadata.clone(),
-            subagent_parent_info: None,
         })
         .await;
 
@@ -1516,7 +1529,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     total_rounds: 1,
                     total_tools: 1,
                     duration_ms: outcome.duration_ms,
-                    subagent_parent_info: None,
                     partial_recovery_reason: None,
                     success: Some(true),
                     finish_reason: Some("complete".to_string()),
@@ -1554,7 +1566,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     error: error_text.clone(),
                     error_category: Some(err.error_category()),
                     error_detail: Some(err.error_detail()),
-                    subagent_parent_info: None,
                 })
                 .await;
                 Err(err)
@@ -1917,7 +1928,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 None
             },
             user_message_metadata: user_message_metadata.clone(),
-            subagent_parent_info: None,
         })
         .await;
 
@@ -2222,7 +2232,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                 AgenticEvent::DialogTurnCancelled {
                                     session_id: session_id_clone.clone(),
                                     turn_id: turn_id_clone.clone(),
-                                    subagent_parent_info: None,
                                 },
                                 Some(EventPriority::Critical),
                             )
@@ -2289,7 +2298,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                     error: error_text.clone(),
                                     error_category: Some(e.error_category()),
                                     error_detail: Some(e.error_detail()),
-                                    subagent_parent_info: None,
                                 },
                                 Some(EventPriority::Critical),
                             )
@@ -2559,6 +2567,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub async fn restore_internal_session(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        self.session_manager
+            .restore_internal_session(workspace_path, session_id)
+            .await
+    }
+
     /// Restore session and return the persisted turns read during restore.
     pub async fn restore_session_with_turns(
         &self,
@@ -2570,6 +2588,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub async fn restore_internal_session_with_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_internal_session_with_turns(workspace_path, session_id)
+            .await
+    }
+
     /// Restore only the UI-visible persisted session view.
     pub async fn restore_session_view(
         &self,
@@ -2578,6 +2606,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
         self.session_manager
             .restore_session_view(workspace_path, session_id)
+            .await
+    }
+
+    pub async fn restore_internal_session_view(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_internal_session_view(workspace_path, session_id)
             .await
     }
 
@@ -2995,6 +3033,26 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
         let session_id = session.session_id.clone();
+        self.session_manager
+            .merge_session_custom_metadata(
+                &session_id,
+                build_subagent_session_custom_metadata(
+                    subagent_parent_info.as_ref(),
+                    &agent_type,
+                ),
+            )
+            .await?;
+
+        if let Some(parent_info) = subagent_parent_info.as_ref() {
+            self.emit_event(AgenticEvent::SubagentSessionLinked {
+                session_id: session_id.clone(),
+                parent_session_id: parent_info.session_id.clone(),
+                parent_dialog_turn_id: parent_info.dialog_turn_id.clone(),
+                parent_tool_call_id: parent_info.tool_call_id.clone(),
+                agent_type: Some(agent_type.clone()),
+            })
+            .await;
+        }
 
         // Register timeout handle so it can be adjusted at runtime.
         let timeout_handle = Arc::new(SubagentTimeoutHandle {
@@ -3069,9 +3127,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
 
-        // Emit DialogTurnStarted with subagent_parent_info so the frontend can
-        // associate the subagent session ID with the parent tool (enabling the
-        // "ignore timeout" feature for deep-review subagents).
+        // Emit DialogTurnStarted after the dedicated linking event.
         let user_input_text = initial_messages
             .first()
             .map(|m| match &m.content {
@@ -3086,7 +3142,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             user_input: user_input_text,
             original_user_input: None,
             user_message_metadata: None,
-            subagent_parent_info: subagent_parent_info.clone().map(Into::into),
         })
         .await;
 
@@ -3824,9 +3879,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(BackgroundSubagentStartResult { background_task_id })
     }
 
-    /// Clean up subagent session resources
+    /// Clean up runtime-only subagent resources.
     ///
-    /// Release resources occupied by subagent session (sandbox, etc.) and delete session
+    /// Subagent sessions are now persisted so users can reopen them from the UI.
+    /// This cleanup path must only release ephemeral runtime resources such as
+    /// snapshot bookkeeping; it must not delete the persisted session itself.
     async fn cleanup_subagent_resources(&self, session_id: &str) -> BitFunResult<()> {
         let cleanup_started_at = Instant::now();
         debug!(
@@ -3867,43 +3924,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "Subagent cleanup stage completed: session_id={}, stage=snapshot_cleanup, duration_ms={}",
                 session_id,
                 stage_started_at.elapsed().as_millis()
-            );
-        }
-
-        // Delete the subagent session itself, including runtime context and persisted turn data.
-        let workspace_path = self
-            .session_manager
-            .get_session(session_id)
-            .and_then(|session| session.config.workspace_path.map(std::path::PathBuf::from));
-
-        if let Some(workspace_path) = workspace_path {
-            debug!(
-                "Subagent cleanup stage starting: session_id={}, stage=session_delete, workspace_path={}",
-                session_id,
-                workspace_path.display()
-            );
-            let stage_started_at = Instant::now();
-            if let Err(e) = self
-                .session_manager
-                .delete_session(&workspace_path, session_id)
-                .await
-            {
-                warn!(
-                    "Failed to delete subagent session: session={}, error={}",
-                    session_id, e
-                );
-            } else {
-                debug!("Subagent session deleted: session={}", session_id);
-            }
-            debug!(
-                "Subagent cleanup stage completed: session_id={}, stage=session_delete, duration_ms={}",
-                session_id,
-                stage_started_at.elapsed().as_millis()
-            );
-        } else {
-            warn!(
-                "Failed to delete subagent session because workspace_path is missing: session={}",
-                session_id
             );
         }
 
@@ -4025,7 +4045,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             session_id: session_id.to_string(),
             turn_id: turn_id.to_string(),
             queue_state,
-            subagent_parent_info: None,
         };
         let _ = self
             .event_queue

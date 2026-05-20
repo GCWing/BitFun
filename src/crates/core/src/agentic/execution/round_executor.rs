@@ -75,7 +75,6 @@ impl RoundExecutor {
         let round_started_at = Instant::now();
         let subagent_parent_info = context.subagent_parent_info.clone();
         let is_subagent = subagent_parent_info.is_some();
-        let event_subagent_parent_info = subagent_parent_info.clone().map(|info| info.into());
 
         let round_id = uuid::Uuid::new_v4().to_string();
 
@@ -100,7 +99,6 @@ impl RoundExecutor {
                 turn_id: context.dialog_turn_id.clone(),
                 round_id: round_id.clone(),
                 round_index: context.round_number,
-                subagent_parent_info: event_subagent_parent_info.clone(),
                 model_id: Some(context.model_name.clone()),
             },
             EventPriority::High,
@@ -192,7 +190,6 @@ impl RoundExecutor {
                     context.session_id.clone(),
                     context.dialog_turn_id.clone(),
                     round_id.clone(),
-                    subagent_parent_info.clone(),
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
@@ -247,7 +244,6 @@ impl RoundExecutor {
                                 &context,
                                 &result.tool_calls,
                                 &err_msg,
-                                event_subagent_parent_info.clone(),
                             )
                             .await;
                             let mut recovered = result;
@@ -261,7 +257,6 @@ impl RoundExecutor {
                             &context,
                             &result.tool_calls,
                             &err_msg,
-                            event_subagent_parent_info.clone(),
                         )
                         .await;
                         return Err(BitFunError::AIClient(format!(
@@ -319,7 +314,6 @@ impl RoundExecutor {
                             &context,
                             &result.tool_calls,
                             err_msg,
-                            event_subagent_parent_info.clone(),
                         )
                         .await;
                         return Err(BitFunError::AIClient(format!(
@@ -469,7 +463,6 @@ impl RoundExecutor {
                 turn_id: context.dialog_turn_id.clone(),
                 round_id: round_id.clone(),
                 has_tool_calls: !stream_result.tool_calls.is_empty(),
-                subagent_parent_info: event_subagent_parent_info.clone(),
                 duration_ms: Some(elapsed_ms_u64(round_started_at)),
                 provider_id: None,
                 model_id: Some(context.model_name.clone()),
@@ -566,7 +559,6 @@ impl RoundExecutor {
                 &ai_messages,
                 tool_calls,
                 &cancel_token,
-                event_subagent_parent_info.clone(),
             )
             .await?;
 
@@ -840,7 +832,6 @@ impl RoundExecutor {
         ai_messages: &[AIMessage],
         mut tool_calls: Vec<ToolCall>,
         cancel_token: &CancellationToken,
-        subagent_parent_info: Option<crate::agentic::events::SubagentParentInfo>,
     ) -> BitFunResult<Vec<ToolCall>> {
         // Find indices of Write tool calls that need content generation
         let write_indices: Vec<usize> = tool_calls
@@ -905,7 +896,6 @@ impl RoundExecutor {
                         params: tc.arguments.clone(),
                         timeout_seconds: None,
                     },
-                    subagent_parent_info: subagent_parent_info.clone(),
                 },
                 EventPriority::High,
             )
@@ -1012,7 +1002,6 @@ impl RoundExecutor {
                                                 tool_name: "Write".to_string(),
                                                 params: params.to_string(),
                                             },
-                                            subagent_parent_info: subagent_parent_info.clone(),
                                         },
                                         EventPriority::Normal,
                                     )
@@ -1070,7 +1059,6 @@ impl RoundExecutor {
                         tool_name: "Write".to_string(),
                         params: final_params.to_string(),
                     },
-                    subagent_parent_info: subagent_parent_info.clone(),
                 },
                 EventPriority::Normal,
             )
@@ -1195,7 +1183,6 @@ impl RoundExecutor {
         context: &RoundContext,
         tool_calls: &[ToolCall],
         error: &str,
-        subagent_parent_info: Option<crate::agentic::events::SubagentParentInfo>,
     ) {
         for tool_call in tool_calls {
             self.emit_event(
@@ -1212,7 +1199,6 @@ impl RoundExecutor {
                         confirmation_wait_ms: None,
                         execution_ms: None,
                     },
-                    subagent_parent_info: subagent_parent_info.clone(),
                 },
                 EventPriority::High,
             )

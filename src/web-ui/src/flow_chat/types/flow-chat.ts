@@ -16,11 +16,12 @@ export interface FlowItem {
   type: 'text' | 'tool' | 'image-analysis' | 'thinking' | 'user-steering';
   timestamp: number;
   status: 'pending' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
-  
-  // Subagent markers.
-  parentTaskToolId?: string; // Parent Task tool ID.
-  isSubagentItem?: boolean; // Whether this item is from a subagent.
-  subagentSessionId?: string; // Subagent session ID (debug only).
+
+  /**
+   * Session-scoped subagent linkage.
+   * Used by parent Task tools and subagent-targeted runtime status markers.
+   */
+  subagentSessionId?: string;
 }
 
 export interface FlowTextItem extends FlowItem {
@@ -324,6 +325,15 @@ export interface Session {
   sessionKind: SessionKind;
 
   /**
+   * For hidden subagent sessions, records which parent Task tool launched it.
+   * Helps reopen the real child session from parent task cards and header lists.
+   */
+  parentToolCallId?: string;
+
+  /** Logical subagent id / type used to launch this hidden subagent session. */
+  subagentType?: string;
+
+  /**
    * Lightweight markers for /btw threads created from this session.
    * Stored only on the parent session for quick navigation.
    */
@@ -451,6 +461,8 @@ export interface ToolCardConfig {
   primaryColor?: string;
 }
 
+export type ToolCardDisplayContext = 'default' | 'subagent-projection';
+
 export interface ToolCardProps {
   toolItem: FlowToolItem;
   config: ToolCardConfig;
@@ -462,6 +474,7 @@ export interface ToolCardProps {
   onExpand?: () => void;
   sessionId?: string;
   turnId?: string;
+  displayContext?: ToolCardDisplayContext;
   /** Callback for MCP App ui/message requests. Returns whether the message was handled successfully. */
   onMcpAppMessage?: (params: import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageParams) => Promise<import('@/infrastructure/api/service-api/MCPAPI').McpUiMessageResult>;
 }

@@ -128,6 +128,8 @@ pub struct EnsureCoordinatorSessionRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub include_internal: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -468,6 +470,8 @@ pub struct RestoreSessionRequest {
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
     #[serde(default)]
+    pub include_internal: bool,
+    #[serde(default)]
     pub trace_id: Option<String>,
 }
 
@@ -668,9 +672,12 @@ pub async fn ensure_coordinator_session(
         request.remote_ssh_host.as_deref(),
     )
     .await;
-    coordinator
-        .restore_session(&effective, session_id)
-        .await
+    let restore_result = if request.include_internal {
+        coordinator.restore_internal_session(&effective, session_id).await
+    } else {
+        coordinator.restore_session(&effective, session_id).await
+    };
+    restore_result
         .map(|_| ())
         .map_err(|e| e.to_string())
 }
@@ -1092,10 +1099,16 @@ pub async fn restore_session(
         request.remote_ssh_host.as_deref(),
     )
     .await;
-    let session = coordinator
-        .restore_session(&effective_path, &request.session_id)
-        .await
-        .map_err(|e| format!("Failed to restore session: {}", e))?;
+    let session = if request.include_internal {
+        coordinator
+            .restore_internal_session(&effective_path, &request.session_id)
+            .await
+    } else {
+        coordinator
+            .restore_session(&effective_path, &request.session_id)
+            .await
+    }
+    .map_err(|e| format!("Failed to restore session: {}", e))?;
 
     Ok(session_to_response(session))
 }
@@ -1127,10 +1140,16 @@ pub async fn restore_session_view(
         path_started_at.elapsed().as_millis()
     );
 
-    let (session, mut turns) = coordinator
-        .restore_session_view(&effective_path, &request.session_id)
-        .await
-        .map_err(|e| format!("Failed to restore session view: {}", e))?;
+    let (session, mut turns) = if request.include_internal {
+        coordinator
+            .restore_internal_session_view(&effective_path, &request.session_id)
+            .await
+    } else {
+        coordinator
+            .restore_session_view(&effective_path, &request.session_id)
+            .await
+    }
+    .map_err(|e| format!("Failed to restore session view: {}", e))?;
 
     if log::log_enabled!(log::Level::Debug) {
         let payload_stats = restore_turn_payload_stats(&turns);
@@ -1195,10 +1214,16 @@ pub async fn restore_session_with_turns(
         request.session_id,
         path_started_at.elapsed().as_millis()
     );
-    let (session, turns) = coordinator
-        .restore_session_with_turns(&effective_path, &request.session_id)
-        .await
-        .map_err(|e| format!("Failed to restore session: {}", e))?;
+    let (session, turns) = if request.include_internal {
+        coordinator
+            .restore_internal_session_with_turns(&effective_path, &request.session_id)
+            .await
+    } else {
+        coordinator
+            .restore_session_with_turns(&effective_path, &request.session_id)
+            .await
+    }
+    .map_err(|e| format!("Failed to restore session: {}", e))?;
 
     if log::log_enabled!(log::Level::Debug) {
         let payload_stats = restore_turn_payload_stats(&turns);

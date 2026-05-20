@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   findTabByMetadata: vi.fn(),
   switchToTab: vi.fn(),
   closeTab: vi.fn(),
+  addExternalSession: vi.fn(),
+  loadSessionHistory: vi.fn(),
+  updateSessionRelationship: vi.fn(),
 }));
 
 let animationFrameCallbacks: FrameRequestCallback[] = [];
@@ -75,6 +78,12 @@ vi.mock('../store/FlowChatStore', () => ({
     getState: () => ({
       sessions: new Map(),
     }),
+    addExternalSession: (...args: unknown[]) =>
+      mocks.addExternalSession(...args),
+    loadSessionHistory: (...args: unknown[]) =>
+      mocks.loadSessionHistory(...args),
+    updateSessionRelationship: (...args: unknown[]) =>
+      mocks.updateSessionRelationship(...args),
     clearSessionUnreadCompletion: (...args: unknown[]) =>
       mocks.clearSessionUnreadCompletion(...args),
   },
@@ -100,6 +109,9 @@ describe('openBtwSessionInAuxPane', () => {
     mocks.findTabByMetadata.mockReset();
     mocks.switchToTab.mockClear();
     mocks.closeTab.mockClear();
+    mocks.addExternalSession.mockClear();
+    mocks.loadSessionHistory.mockClear();
+    mocks.updateSessionRelationship.mockClear();
     vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
       animationFrameCallbacks.push(callback);
       return animationFrameCallbacks.length;

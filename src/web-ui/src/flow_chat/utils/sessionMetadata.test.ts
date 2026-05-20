@@ -49,6 +49,8 @@ describe('sessionMetadata', () => {
       sessionKind: 'normal',
       parentSessionId: undefined,
       btwOrigin: undefined,
+      parentToolCallId: undefined,
+      subagentType: undefined,
     });
   });
 
@@ -259,10 +261,13 @@ describe('sessionMetadata', () => {
       sessionKind: 'normal',
       parentSessionId: undefined,
       btwOrigin: undefined,
+      parentToolCallId: undefined,
+      subagentType: undefined,
     });
     expect(resolved).toEqual({
       kind: 'normal',
       isBtw: false,
+      isSubagent: false,
       isReview: false,
       isDeepReview: false,
       parentSessionId: undefined,
@@ -345,11 +350,14 @@ describe('sessionMetadata', () => {
         parentDialogTurnId: undefined,
         parentTurnIndex: undefined,
       },
+      parentToolCallId: undefined,
+      subagentType: undefined,
     });
 
     expect(resolveSessionRelationship(relationship)).toMatchObject({
       kind: 'deep_review',
       isBtw: false,
+      isSubagent: false,
       isReview: true,
       isDeepReview: true,
       displayAsChild: true,
@@ -367,11 +375,14 @@ describe('sessionMetadata', () => {
       sessionKind: 'miniapp',
       parentSessionId: undefined,
       btwOrigin: undefined,
+      parentToolCallId: undefined,
+      subagentType: undefined,
     });
 
     expect(resolveSessionRelationship(relationship)).toMatchObject({
       kind: 'miniapp',
       isBtw: false,
+      isSubagent: false,
       isReview: false,
       isDeepReview: false,
       parentSessionId: undefined,
@@ -399,6 +410,74 @@ describe('sessionMetadata', () => {
     const metadata = buildSessionMetadata(session);
 
     expect(metadata.deepReviewRunManifest).toBe(runManifest);
+  });
+
+  it('round-trips subagent identity with parent tool metadata', () => {
+    const session = createSession({
+      sessionId: 'subagent-child-1',
+      title: 'Explore: task card flow',
+      sessionKind: 'subagent',
+      parentSessionId: 'parent-1',
+      parentToolCallId: 'tool-call-7',
+      subagentType: 'Explore',
+      btwOrigin: {
+        parentSessionId: 'parent-1',
+        parentDialogTurnId: 'turn-8',
+        parentTurnIndex: 8,
+      },
+    });
+
+    const metadata = buildSessionMetadata(session, {
+      sessionId: 'subagent-child-1',
+      sessionName: 'Explore: task card flow',
+      agentType: 'Explore',
+      modelName: 'gpt-test',
+      createdAt: 1000,
+      lastActiveAt: 1001,
+      turnCount: 0,
+      messageCount: 0,
+      toolCallCount: 0,
+      status: 'active',
+      tags: [],
+      customMetadata: {},
+      todos: [],
+      workspacePath: '/workspace',
+    });
+
+    expect(metadata.tags).toEqual(['subagent']);
+    expect(metadata.customMetadata).toMatchObject({
+      kind: 'subagent',
+      parentSessionId: 'parent-1',
+      parentDialogTurnId: 'turn-8',
+      parentTurnIndex: 8,
+      parentToolCallId: 'tool-call-7',
+      subagentType: 'Explore',
+    });
+
+    const relationship = deriveSessionRelationshipFromMetadata(metadata);
+    expect(relationship).toEqual({
+      sessionKind: 'subagent',
+      parentSessionId: 'parent-1',
+      btwOrigin: {
+        requestId: undefined,
+        parentSessionId: 'parent-1',
+        parentDialogTurnId: 'turn-8',
+        parentTurnIndex: 8,
+      },
+      parentToolCallId: 'tool-call-7',
+      subagentType: 'Explore',
+    });
+
+    expect(resolveSessionRelationship(relationship)).toMatchObject({
+      kind: 'subagent',
+      isBtw: false,
+      isSubagent: true,
+      isReview: false,
+      isDeepReview: false,
+      parentSessionId: 'parent-1',
+      displayAsChild: true,
+      canOpenInAuxPane: true,
+    });
   });
 
   describe('unread completion persistence', () => {

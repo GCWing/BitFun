@@ -7,7 +7,6 @@ use super::manager::{
     WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions, WorkspaceStatus,
     WorkspaceSummary, WorkspaceType,
 };
-use crate::agentic::persistence::{PersistenceManager, SessionWorkspaceMaintenanceService};
 use crate::infrastructure::storage::{PersistenceService, StorageOptions};
 use crate::infrastructure::{try_get_path_manager_arc, PathManager};
 use crate::service::bootstrap::{
@@ -37,7 +36,6 @@ pub struct WorkspaceService {
     persistence: Arc<PersistenceService>,
     path_manager: Arc<PathManager>,
     runtime_service: Arc<WorkspaceRuntimeService>,
-    session_workspace_maintenance: Arc<SessionWorkspaceMaintenanceService>,
 }
 
 /// Workspace creation options.
@@ -135,11 +133,6 @@ impl WorkspaceService {
                 .await;
             self.ensure_workspace_runtime_best_effort(&workspace, "restored")
                 .await;
-            self.maintain_workspace_sessions_best_effort(
-                &workspace.root_path,
-                "workspace_history_restored",
-            )
-            .await;
         }
     }
 
@@ -208,34 +201,6 @@ impl WorkspaceService {
         }
     }
 
-    async fn maintain_workspace_sessions_best_effort(&self, workspace_path: &Path, trigger: &str) {
-        match self
-            .session_workspace_maintenance
-            .ensure_workspace_maintained(workspace_path)
-            .await
-        {
-            Ok(report) if report.skipped || report.deleted_sessions == 0 => {}
-            Ok(report) => {
-                info!(
-                    "Workspace session maintenance finished: trigger={}, workspace_path={}, scanned_sessions={}, hidden_sessions={}, deleted_sessions={}",
-                    trigger,
-                    workspace_path.display(),
-                    report.scanned_sessions,
-                    report.hidden_sessions,
-                    report.deleted_sessions
-                );
-            }
-            Err(e) => {
-                warn!(
-                    "Failed to maintain workspace sessions: trigger={}, workspace_path={}, error={}",
-                    trigger,
-                    workspace_path.display(),
-                    e
-                );
-            }
-        }
-    }
-
     /// Creates a new workspace service.
     pub async fn new() -> BitFunResult<Self> {
         let config = WorkspaceManagerConfig::default();
@@ -258,9 +223,6 @@ impl WorkspaceService {
         );
 
         let manager = WorkspaceManager::new(config.clone());
-        let session_workspace_maintenance = Arc::new(SessionWorkspaceMaintenanceService::new(
-            Arc::new(PersistenceManager::new(path_manager.clone())?),
-        ));
 
         let service = Self {
             manager: Arc::new(RwLock::new(manager)),
@@ -268,7 +230,6 @@ impl WorkspaceService {
             persistence,
             path_manager,
             runtime_service,
-            session_workspace_maintenance,
         };
 
         if let Err(e) = service.load_workspace_history_only().await {
@@ -336,11 +297,6 @@ impl WorkspaceService {
             }
         }
 
-        if let Ok(workspace) = result.as_ref() {
-            self.maintain_workspace_sessions_best_effort(&workspace.root_path, "workspace_opened")
-                .await;
-        }
-
         result
     }
 
@@ -368,11 +324,6 @@ impl WorkspaceService {
             if let Err(e) = self.save_workspace_data().await {
                 warn!("Failed to save workspace data after tracking activity: {}", e);
             }
-        }
-
-        if let Ok(workspace) = result.as_ref() {
-            self.maintain_workspace_sessions_best_effort(&workspace.root_path, "workspace_tracked")
-                .await;
         }
 
         result
@@ -508,11 +459,6 @@ impl WorkspaceService {
             if let Some(workspace) = self.get_workspace(workspace_id).await {
                 self.ensure_workspace_runtime_best_effort(&workspace, "activated")
                     .await;
-                self.maintain_workspace_sessions_best_effort(
-                    &workspace.root_path,
-                    "workspace_activated",
-                )
-                .await;
             }
         }
 
@@ -1965,11 +1911,6 @@ mod tests {
                 .expect("persistence should initialize"),
         );
         let runtime_service = Arc::new(WorkspaceRuntimeService::new(path_manager.clone()));
-        let session_workspace_maintenance =
-            Arc::new(SessionWorkspaceMaintenanceService::new(Arc::new(
-                PersistenceManager::new(path_manager.clone())
-                    .expect("persistence manager should initialize"),
-            )));
 
         WorkspaceService {
             manager: Arc::new(RwLock::new(WorkspaceManager::new(config.clone()))),
@@ -1977,7 +1918,6 @@ mod tests {
             persistence,
             path_manager,
             runtime_service,
-            session_workspace_maintenance,
         }
     }
 

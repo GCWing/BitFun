@@ -167,7 +167,6 @@ pub async fn run_stream_fixture_with_options(
             "session_fixture".to_string(),
             "turn_fixture".to_string(),
             "round_fixture".to_string(),
-            None,
             &cancellation_token,
         )
         .await;

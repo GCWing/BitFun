@@ -6,7 +6,7 @@
 
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
-export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review' | 'miniapp';
+export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
 export type PersistedSessionKind = 'standard' | 'subagent';
 export type SessionTitleSource = 'text' | 'i18n';
 
@@ -16,6 +16,8 @@ export interface SessionCustomMetadata extends Record<string, unknown> {
   parentRequestId?: string | null;
   parentDialogTurnId?: string | null;
   parentTurnIndex?: number | null;
+  parentToolCallId?: string | null;
+  subagentType?: string | null;
   forkOrigin?: {
     sessionId?: string | null;
     turnId?: string | null;
@@ -157,8 +159,6 @@ export interface TextItemData {
   status?: string;
   orderIndex?: number;
   isMarkdown?: boolean;
-  isSubagentItem?: boolean;
-  parentTaskToolId?: string;
   subagentSessionId?: string;
 }
 
@@ -170,8 +170,6 @@ export interface ThinkingItemData {
   timestamp: number;
   orderIndex?: number;
   status?: string;
-  isSubagentItem?: boolean;
-  parentTaskToolId?: string;
   subagentSessionId?: string;
 }
 
@@ -191,8 +189,6 @@ export interface ToolItemData {
   orderIndex?: number;
   status?: string;
   interruptionReason?: 'app_restart';
-  isSubagentItem?: boolean;
-  parentTaskToolId?: string;
   subagentSessionId?: string;
 }
 

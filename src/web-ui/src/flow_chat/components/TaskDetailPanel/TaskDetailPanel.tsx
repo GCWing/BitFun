@@ -10,16 +10,15 @@ import {
   AlertCircle,
   Square
 } from 'lucide-react';
-import type { FlowToolItem, FlowTextItem, FlowThinkingItem, FlowItem, FlowChatState } from '../../types/flow-chat';
+import type { FlowToolItem, FlowItem, FlowChatState } from '../../types/flow-chat';
 import { FlowChatStore } from '../../store/FlowChatStore';
-import { FlowTextBlock } from '../FlowTextBlock';
-import { FlowToolCard } from '../FlowToolCard';
-import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
 import { ToolTimeoutIndicator } from '../../tool-cards/ToolTimeoutIndicator';
 import { Button, DotMatrixLoader } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import type { ReviewerContext } from '@/shared/services/reviewTeamService';
+import { SubagentProjectionView } from '../subagent/SubagentProjectionView';
+import { getSubagentProjectionState } from '../../utils/subagentProjection';
 import './TaskDetailPanel.scss';
 
 const log = createLogger('TaskDetailPanel');
@@ -30,11 +29,9 @@ type FlowChatSession = NonNullable<ReturnType<FlowChatStore['getState']>['sessio
 
 interface TaskDetailSnapshot {
   toolItem: FlowToolItem | null;
+  subagentSessionId?: string;
   subagentItems: FlowItem[];
-}
-
-function isTerminalStatus(status: FlowItem['status'] | undefined): boolean {
-  return status === 'completed' || status === 'cancelled' || status === 'error';
+  isSubagentRunning: boolean;
 }
 
 function isRunningStatus(status: FlowItem['status'] | undefined): boolean {
@@ -81,6 +78,8 @@ function areFlowItemsEqual(prev: FlowItem[], next: FlowItem[]): boolean {
 function areSnapshotsEqual(prev: TaskDetailSnapshot, next: TaskDetailSnapshot): boolean {
   return (
     prev.toolItem === next.toolItem &&
+    prev.subagentSessionId === next.subagentSessionId &&
+    prev.isSubagentRunning === next.isSubagentRunning &&
     areFlowItemsEqual(prev.subagentItems, next.subagentItems)
   );
 }
@@ -92,7 +91,7 @@ function collectTaskDetailSnapshot(
   directSubagentSessionId?: string,
 ): TaskDetailSnapshot {
   if (parentTaskToolIds.size === 0 && !directSubagentSessionId) {
-    return { toolItem: null, subagentItems: [] };
+    return { toolItem: null, subagentItems: [], subagentSessionId: undefined, isSubagentRunning: false };
   }
 
   const preferredSession = sessionId ? state.sessions.get(sessionId) : undefined;
@@ -100,43 +99,57 @@ function collectTaskDetailSnapshot(
     ? [preferredSession]
     : Array.from(state.sessions.values());
 
-  const collectFromSessions = (sessions: Iterable<FlowChatSession>): TaskDetailSnapshot => {
-    const subagentItems: FlowItem[] = [];
+  const collectToolItem = (sessions: Iterable<FlowChatSession>): FlowToolItem | null => {
     let toolItem: FlowToolItem | null = null;
 
     for (const session of sessions) {
       for (const turn of session.dialogTurns) {
         for (const round of turn.modelRounds) {
           for (const item of round.items) {
-            const itemAny = item as any;
-
             if (!toolItem && item.type === 'tool' && parentTaskToolIds.has(item.id)) {
               toolItem = item as FlowToolItem;
             }
-
-            if (
-              itemAny.isSubagentItem &&
-              (
-                parentTaskToolIds.has(itemAny.parentTaskToolId) ||
-                (directSubagentSessionId && itemAny.subagentSessionId === directSubagentSessionId)
-              )
-            ) {
-              subagentItems.push(item);
+            if (toolItem) {
+              return toolItem;
             }
           }
         }
       }
     }
 
-    return { toolItem, subagentItems };
+    return toolItem;
   };
 
-  const preferredSnapshot = collectFromSessions(sessionsToSearch);
-  if (preferredSnapshot.toolItem || preferredSnapshot.subagentItems.length > 0 || !preferredSession) {
-    return preferredSnapshot;
+  const preferredToolItem = collectToolItem(sessionsToSearch);
+  const toolItem = preferredToolItem || (preferredSession ? collectToolItem(state.sessions.values()) : null);
+
+  const projection = getSubagentProjectionState(state, {
+    parentSessionId: sessionId,
+    parentToolIds: parentTaskToolIds,
+    directSubagentSessionId,
+  });
+
+  if (toolItem || projection.items.length > 0 || projection.session || !preferredSession) {
+    return {
+      toolItem,
+      subagentSessionId: projection.session?.sessionId,
+      subagentItems: projection.items,
+      isSubagentRunning: projection.isRunning,
+    };
   }
 
-  return collectFromSessions(state.sessions.values());
+  const fallbackProjection = getSubagentProjectionState(state, {
+    parentSessionId: undefined,
+    parentToolIds: parentTaskToolIds,
+    directSubagentSessionId,
+  });
+
+  return {
+    toolItem,
+    subagentSessionId: fallbackProjection.session?.sessionId,
+    subagentItems: fallbackProjection.items,
+    isSubagentRunning: fallbackProjection.isRunning,
+  };
 }
 
 export interface TaskDetailData {
@@ -169,6 +182,8 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
   const [taskSnapshot, setTaskSnapshot] = useState<TaskDetailSnapshot>(() => ({
     toolItem: initialToolItem ?? null,
     subagentItems: [],
+    subagentSessionId: initialToolItem?.subagentSessionId,
+    isSubagentRunning: false,
   }));
   const [isSnapshotHydrated, setIsSnapshotHydrated] = useState(false);
   const [visibleSubagentCount, setVisibleSubagentCount] = useState(0);
@@ -191,6 +206,8 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
     let previousSnapshot: TaskDetailSnapshot = {
       toolItem: initialToolItem ?? null,
       subagentItems: [],
+      subagentSessionId: initialToolItem?.subagentSessionId,
+      isSubagentRunning: false,
     };
     let hydrationFrameId: number | null = null;
     let frameId: number | null = null;
@@ -276,42 +293,19 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
   const toolItem = taskSnapshot.toolItem || initialToolItem;
   const status = toolItem?.status;
   const toolResult = toolItem?.toolResult;
-  const isRunning = status === 'preparing' || status === 'streaming' || status === 'running';
+  const isRunning = status === 'preparing' || status === 'streaming' || status === 'running' || taskSnapshot.isSubagentRunning;
   const isFailed = status === 'error' || toolResult?.success === false;
   const taskDurationMs = readTaskDurationMs(toolResult);
   const isCompleted = status === 'completed' && !isFailed;
+  const shouldDisplaySubagentProjection = taskSnapshot.isSubagentRunning;
   const subagentItems = useMemo(() => {
-    if (isRunning) {
-      return taskSnapshot.subagentItems;
+    if (!shouldDisplaySubagentProjection) {
+      return [];
     }
 
-    return taskSnapshot.subagentItems.map((item) => {
-      if (isTerminalStatus(item.status)) {
-        return item;
-      }
-
-      if (item.type === 'text') {
-        return {
-          ...item,
-          status: 'completed',
-          isStreaming: false,
-        } as FlowTextItem;
-      }
-
-      if (item.type === 'thinking') {
-        return {
-          ...item,
-          status: 'completed',
-          isStreaming: false,
-          isCollapsed: true,
-        } as FlowThinkingItem;
-      }
-
-      return item;
-    });
-  }, [isRunning, taskSnapshot.subagentItems]);
-  const subagentSessionId = toolItem?.subagentSessionId || directSubagentSessionId
-    || subagentItems.find((item) => item.subagentSessionId)?.subagentSessionId;
+    return taskSnapshot.subagentItems;
+  }, [shouldDisplaySubagentProjection, taskSnapshot.subagentItems]);
+  const subagentSessionId = taskSnapshot.subagentSessionId || toolItem?.subagentSessionId || directSubagentSessionId;
   const canStopSubagent = Boolean(isRunning && subagentSessionId);
   const visibleSubagentItems = useMemo(
     () => subagentItems.slice(0, visibleSubagentCount),
@@ -415,32 +409,6 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
     }
   }, [isRunning]);
 
-  // Open files in a split editor layout.
-  const handleOpenInEditor = useCallback(async (filePath: string) => {
-    if (!filePath) return;
-    
-    try {
-      const { useAgentCanvasStore } = await import('@/app/components/panels/content-canvas/stores/canvasStore');
-      const store = useAgentCanvasStore.getState();
-      
-      if (store.layout.splitMode === 'none') {
-        store.setSplitMode('horizontal');
-      }
-      
-      const fileName = filePath.split(/[/\\]/).pop() || filePath;
-      
-      store.addTab({
-        type: 'code-editor',
-        title: fileName,
-        data: { filePath },
-        metadata: { filePath }
-      }, 'pinned', 'secondary');
-      
-    } catch (error) {
-      log.error('Failed to open file', { filePath, error });
-    }
-  }, []);
-
   const handleStopSubagent = useCallback(async () => {
     if (!subagentSessionId || stoppingSubagent) {
       return;
@@ -465,40 +433,6 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
       setStoppingSubagent(false);
     }
   }, [stoppingSubagent, subagentSessionId, t]);
-
-  const renderSubagentItem = useCallback((item: FlowItem) => {
-    switch (item.type) {
-      case 'text':
-        return (
-          <FlowTextBlock
-            key={item.id}
-            textItem={item as FlowTextItem}
-            replayStreamingOnMount={false}
-          />
-        );
-      
-      case 'thinking':
-        return (
-          <ModelThinkingDisplay 
-            key={item.id}
-            thinkingItem={item as FlowThinkingItem} 
-          />
-        );
-      
-      case 'tool':
-        return (
-          <FlowToolCard
-            key={item.id}
-            toolItem={item as FlowToolItem}
-            sessionId={sessionId}
-            onOpenInEditor={handleOpenInEditor}
-          />
-        );
-      
-      default:
-        return null;
-    }
-  }, [sessionId, handleOpenInEditor]);
 
   if (!toolItem) {
     return (
@@ -632,7 +566,16 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
 
         {subagentItems.length > 0 && (
           <div className="task-detail-panel__execution">
-            {visibleSubagentItems.map(item => renderSubagentItem(item))}
+            {subagentSessionId && (
+              <SubagentProjectionView
+                parentTaskToolId={toolItem.id}
+                subagentSessionId={subagentSessionId}
+                items={visibleSubagentItems}
+                isRunning={isRunning}
+                sessionId={subagentSessionId}
+                compactText={false}
+              />
+            )}
           </div>
         )}
 

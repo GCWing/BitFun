@@ -40,14 +40,11 @@ describe('shouldSendDialogCompletionNotification', () => {
   it('suppresses notifications for individual subagent completions', () => {
     expect(
       shouldSendDialogCompletionNotification({
-        event: event({
-          subagentParentInfo: {
-            toolCallId: 'task-1',
-            sessionId: 'parent-session',
-            dialogTurnId: 'parent-turn',
-          },
+        event: event(),
+        session: session({
+          sessionKind: 'subagent',
+          parentSessionId: 'parent-1',
         }),
-        session: session(),
         isBackground: true,
         notificationsEnabled: true,
       }),

@@ -989,7 +989,7 @@ impl ExecutionEngine {
         &self,
         session_id: &str,
         dialog_turn_id: &str,
-        subagent_parent_info: Option<SubagentParentInfo>,
+        _subagent_parent_info: Option<SubagentParentInfo>,
         messages: Vec<Message>,
         current_tokens: usize,
         context_window: usize,
@@ -998,7 +998,6 @@ impl ExecutionEngine {
         compression_contract_limit: usize,
         tail_policy: CompressionTailPolicy,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
-        let event_subagent_parent_info = subagent_parent_info.map(|info| info.clone().into());
         let mut session = self
             .session_manager
             .get_session(session_id)
@@ -1030,7 +1029,6 @@ impl ExecutionEngine {
                 tokens_before: current_tokens,
                 context_window,
                 threshold: session.config.compression_threshold,
-                subagent_parent_info: event_subagent_parent_info.clone(),
             },
             EventPriority::Normal,
         )
@@ -1107,7 +1105,6 @@ impl ExecutionEngine {
                         duration_ms,
                         has_summary: compression_result.has_model_summary,
                         summary_source: summary_source.to_string(),
-                        subagent_parent_info: event_subagent_parent_info.clone(),
                     },
                     EventPriority::Normal,
                 )
@@ -1123,7 +1120,6 @@ impl ExecutionEngine {
                         turn_id: dialog_turn_id.to_string(),
                         compression_id: compression_id.clone(),
                         error: e.to_string(),
-                        subagent_parent_info: event_subagent_parent_info.clone(),
                     },
                     EventPriority::High,
                 )
@@ -1163,7 +1159,6 @@ impl ExecutionEngine {
                 tokens_before: current_tokens,
                 context_window,
                 threshold: session.config.compression_threshold,
-                subagent_parent_info: None,
             },
             EventPriority::Normal,
         )
@@ -1194,7 +1189,6 @@ impl ExecutionEngine {
                     duration_ms,
                     has_summary: false,
                     summary_source: "none".to_string(),
-                    subagent_parent_info: None,
                 },
                 EventPriority::Normal,
             )
@@ -1279,7 +1273,6 @@ impl ExecutionEngine {
                         } else {
                             "local_fallback".to_string()
                         },
-                        subagent_parent_info: None,
                     },
                     EventPriority::Normal,
                 )
@@ -1308,7 +1301,6 @@ impl ExecutionEngine {
                         turn_id: dialog_turn_id.to_string(),
                         compression_id: compression_id.clone(),
                         error: err.to_string(),
-                        subagent_parent_info: None,
                     },
                     EventPriority::High,
                 )
@@ -1366,8 +1358,6 @@ impl ExecutionEngine {
         start_time: std::time::Instant,
         initial_count: usize,
     ) -> BitFunResult<ExecutionResult> {
-        let event_subagent_parent_info =
-            context.subagent_parent_info.clone().map(|info| info.into());
         let dialog_turn_id = context.dialog_turn_id.clone();
 
         debug!(
@@ -2136,7 +2126,6 @@ impl ExecutionEngine {
                                 steering_id: injection.id,
                                 content: injection.content,
                                 display_content: injection.display_content,
-                                subagent_parent_info: event_subagent_parent_info.clone(),
                             },
                             EventPriority::Normal,
                         )
@@ -2230,7 +2219,6 @@ impl ExecutionEngine {
                     AgenticEvent::DialogTurnCancelled {
                         session_id: context.session_id.clone(),
                         turn_id: context.dialog_turn_id.clone(),
-                        subagent_parent_info: event_subagent_parent_info.clone(),
                     },
                     EventPriority::High,
                 )
@@ -2398,7 +2386,6 @@ impl ExecutionEngine {
                     total_rounds: completed_rounds,
                     total_tools,
                     duration_ms,
-                    subagent_parent_info: event_subagent_parent_info,
                     partial_recovery_reason: last_partial_recovery_reason,
                     success: Some(success),
                     finish_reason: Some(effective_finish_reason.to_string()),

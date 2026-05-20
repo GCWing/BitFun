@@ -108,7 +108,8 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const childRelationship = resolveSessionRelationship(childSession);
   const childKind = childRelationship.kind === 'review' ||
     childRelationship.kind === 'deep_review' ||
-    childRelationship.kind === 'miniapp'
+    childRelationship.kind === 'miniapp' ||
+    childRelationship.kind === 'subagent'
     ? childRelationship.kind
     : 'btw';
   const childBadgeLabel = t(`childSession.kinds.${childKind}.short`, {
@@ -116,6 +117,8 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       ? 'Deep'
       : childKind === 'review'
         ? 'Review'
+        : childKind === 'subagent'
+          ? 'Agent'
         : childKind === 'miniapp'
           ? 'MiniApp'
           : t('btw.shortLabel'),
@@ -126,7 +129,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   const childOriginLabel = t(`childSession.kinds.${childKind}.origin`, {
     defaultValue: t('btw.origin'),
   });
-  const showOriginMeta = childKind !== 'miniapp';
+  const showOriginMeta = childKind !== 'miniapp' && childKind !== 'subagent';
   const virtualItems = useMemo(() => sessionToVirtualItems(childSession ?? null), [childSession]);
   const {
     exploreGroupStates,
@@ -147,7 +150,14 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     if (!path) return;
 
     isLoadingRef.current = true;
-    flowChatStore.loadSessionHistory(childSessionId, path).finally(() => {
+    flowChatStore.loadSessionHistory(
+      childSessionId,
+      path,
+      undefined,
+      childSession.remoteConnectionId,
+      childSession.remoteSshHost,
+      { includeInternal: childSession.sessionKind === 'subagent' },
+    ).finally(() => {
       isLoadingRef.current = false;
     });
   }, [childSessionId, childSession, workspacePath]);

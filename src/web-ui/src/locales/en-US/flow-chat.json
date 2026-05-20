@@ -934,7 +934,11 @@
     "searchNext": "Next match",
     "searchClose": "Close search",
     "searchOpen": "Search messages",
-    "jumpToCurrentTurn": "Jump to Turn {{turn}}"
+    "jumpToCurrentTurn": "Jump to Turn {{turn}}",
+    "backgroundSubagents": "Background subagents ({{count}})",
+    "backgroundSubagentUntitled": "Background subagent",
+    "subagentStatusProcessing": "Running",
+    "subagentStatusFinishing": "Finishing"
   },
   "stickyTaskIndicator": {
     "tooltip": "Jump to current task"

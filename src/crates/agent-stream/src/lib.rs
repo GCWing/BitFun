@@ -6,10 +6,7 @@ use bitfun_ai_adapters::tool_call_accumulator::{
     FinalizedToolCall, PendingToolCalls, ToolCallBoundary, ToolCallStreamKey,
 };
 use bitfun_ai_adapters::{GeminiUsage, UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
-use bitfun_events::{
-    AgenticEvent, AgenticEventPriority as EventPriority,
-    SubagentParentInfo as EventSubagentParentInfo, ToolEventData,
-};
+use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority, ToolEventData};
 use futures::{Stream, StreamExt};
 use log::{debug, error, trace};
 use serde::{Deserialize, Serialize};
@@ -39,27 +36,6 @@ pub struct ToolCall {
 impl ToolCall {
     pub fn is_valid(&self) -> bool {
         !self.tool_id.is_empty() && !self.tool_name.is_empty() && !self.is_error
-    }
-}
-
-/// Parent task metadata needed to scope stream events for subagents.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubagentParentInfo {
-    #[serde(rename = "toolCallId")]
-    pub tool_call_id: String,
-    #[serde(rename = "sessionId")]
-    pub session_id: String,
-    #[serde(rename = "dialogTurnId")]
-    pub dialog_turn_id: String,
-}
-
-impl From<SubagentParentInfo> for EventSubagentParentInfo {
-    fn from(info: SubagentParentInfo) -> Self {
-        Self {
-            tool_call_id: info.tool_call_id,
-            session_id: info.session_id,
-            dialog_turn_id: info.dialog_turn_id,
-        }
     }
 }
 
@@ -234,8 +210,6 @@ struct StreamContext {
     session_id: String,
     dialog_turn_id: String,
     round_id: String,
-    event_subagent_parent_info: Option<EventSubagentParentInfo>,
-    subagent_parent_info: Option<SubagentParentInfo>,
 
     // Accumulated results
     full_thinking: String,
@@ -267,15 +241,11 @@ impl StreamContext {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
-        subagent_parent_info: Option<SubagentParentInfo>,
     ) -> Self {
-        let event_subagent_parent_info = subagent_parent_info.clone().map(|info| info.into());
         Self {
             session_id,
             dialog_turn_id,
             round_id,
-            event_subagent_parent_info,
-            subagent_parent_info,
             full_thinking: String::new(),
             reasoning_content_present: false,
             thinking_signature: None,
@@ -463,7 +433,6 @@ impl StreamProcessor {
                         round_id: ctx.round_id.clone(),
                         content: String::new(),
                         is_end: true,
-                        subagent_parent_info: ctx.event_subagent_parent_info.clone(),
                     },
                     Some(EventPriority::Normal),
                 )
@@ -502,7 +471,6 @@ impl StreamProcessor {
             ctx.dialog_turn_id.clone(),
             ctx.tool_calls.clone(),
             reason,
-            ctx.subagent_parent_info.clone(),
         )
         .await;
     }
@@ -514,7 +482,6 @@ impl StreamProcessor {
         turn_id: String,
         tool_calls: Vec<ToolCall>,
         reason: String,
-        subagent_parent_info: Option<SubagentParentInfo>,
     ) {
         debug!(
             "Starting graceful shutdown: session_id={}, reason={}",
@@ -523,7 +490,6 @@ impl StreamProcessor {
 
         let is_user_cancellation = reason.contains("cancelled") || reason.contains("cancelled");
         let tool_call_count = tool_calls.len();
-        let event_subagent_parent_info = subagent_parent_info.map(|info| info.clone().into());
 
         // 1. Cleanup all tool calls
         for tool_call in tool_calls {
@@ -564,7 +530,6 @@ impl StreamProcessor {
                         session_id: session_id.clone(),
                         turn_id: turn_id.clone(),
                         tool_event,
-                        subagent_parent_info: event_subagent_parent_info.clone(),
                     },
                     Some(EventPriority::High),
                 )
@@ -577,7 +542,6 @@ impl StreamProcessor {
                 AgenticEvent::DialogTurnCancelled {
                     session_id: session_id.clone(),
                     turn_id: turn_id.clone(),
-                    subagent_parent_info: event_subagent_parent_info.clone(),
                 }
             } else {
                 AgenticEvent::DialogTurnFailed {
@@ -586,7 +550,6 @@ impl StreamProcessor {
                     error: reason,
                     error_category: None,
                     error_detail: None,
-                    subagent_parent_info: event_subagent_parent_info.clone(),
                 }
             };
             let _ = self
@@ -654,7 +617,6 @@ impl StreamProcessor {
                             tool_id: early_detected.tool_id,
                             tool_name: early_detected.tool_name,
                         },
-                        subagent_parent_info: ctx.event_subagent_parent_info.clone(),
                     },
                     None,
                 )
@@ -675,7 +637,6 @@ impl StreamProcessor {
                             tool_name: params_partial.tool_name,
                             params: params_partial.params_chunk,
                         },
-                        subagent_parent_info: ctx.event_subagent_parent_info.clone(),
                     },
                     None,
                 )
@@ -701,7 +662,6 @@ impl StreamProcessor {
                     turn_id: ctx.dialog_turn_id.clone(),
                     round_id: ctx.round_id.clone(),
                     text,
-                    subagent_parent_info: ctx.event_subagent_parent_info.clone(),
                 },
                 None,
             )
@@ -727,7 +687,6 @@ impl StreamProcessor {
                     round_id: ctx.round_id.clone(),
                     content: thinking_content,
                     is_end: false,
-                    subagent_parent_info: ctx.event_subagent_parent_info.clone(),
                 },
                 None,
             )
@@ -794,7 +753,6 @@ impl StreamProcessor {
     /// * `session_id` - Session ID
     /// * `dialog_turn_id` - Dialog turn ID
     /// * `round_id` - Model round ID
-    /// * `subagent_parent_info` - Subagent parent info
     /// * `cancellation_token` - Cancellation token
     #[allow(clippy::too_many_arguments)]
     pub async fn process_stream(
@@ -805,7 +763,6 @@ impl StreamProcessor {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
-        subagent_parent_info: Option<SubagentParentInfo>,
         cancellation_token: &tokio_util::sync::CancellationToken,
     ) -> Result<StreamResult, StreamProcessError> {
         self.process_stream_with_options(
@@ -815,7 +772,6 @@ impl StreamProcessor {
             session_id,
             dialog_turn_id,
             round_id,
-            subagent_parent_info,
             cancellation_token,
             StreamProcessOptions::default(),
         )
@@ -831,12 +787,10 @@ impl StreamProcessor {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
-        subagent_parent_info: Option<SubagentParentInfo>,
         cancellation_token: &tokio_util::sync::CancellationToken,
         options: StreamProcessOptions,
     ) -> Result<StreamResult, StreamProcessError> {
-        let mut ctx =
-            StreamContext::new(session_id, dialog_turn_id, round_id, subagent_parent_info);
+        let mut ctx = StreamContext::new(session_id, dialog_turn_id, round_id);
         // Start SSE log collector (if raw_sse_rx is provided)
         let sse_collector = if let Some(mut rx) = raw_sse_rx {
             let collector = Arc::new(tokio::sync::Mutex::new(SseLogCollector::new(
@@ -1101,7 +1055,6 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
-                None,
                 &cancellation_token,
                 StreamProcessOptions {
                     recover_partial_on_cancel: true,
@@ -1154,7 +1107,6 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
-                None,
                 &CancellationToken::new(),
             )
             .await
@@ -1189,7 +1141,6 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
-                None,
                 &CancellationToken::new(),
             )
             .await
@@ -1225,7 +1176,6 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
-                None,
                 &CancellationToken::new(),
             )
             .await
@@ -1272,7 +1222,6 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
-                None,
                 &CancellationToken::new(),
             )
             .await
@@ -1307,7 +1256,6 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
-                None,
                 &CancellationToken::new(),
             )
             .await
@@ -1360,7 +1308,6 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
-                None,
                 &CancellationToken::new(),
             )
             .await
@@ -1433,7 +1380,6 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
-                None,
                 &CancellationToken::new(),
             )
             .await
@@ -1466,7 +1412,6 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
-                None,
                 &CancellationToken::new(),
             )
             .await

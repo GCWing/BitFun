@@ -2,6 +2,7 @@ import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
+import { DeepReviewActionBar, ReviewActionBar } from './DeepReviewActionBar';
 
 const sendMessageMock = vi.hoisted(() => vi.fn());
 const eventBusEmitMock = vi.hoisted(() => vi.fn());
@@ -210,8 +211,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('keeps remediation in progress after submitting a fix turn', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-
     flowChatSessionsMock.set('child-session', {
       sessionId: 'child-session',
       sessionKind: 'review',
@@ -270,8 +269,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('uses standard review mode when starting Code Review remediation', async () => {
-    const { ReviewActionBar } = await import('./DeepReviewActionBar');
-
     useReviewActionBarStore.getState().showActionBar({
       childSessionId: 'review-session',
       parentSessionId: 'parent-session',
@@ -309,8 +306,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('asks for confirmation before replacing existing chat input text', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-
     eventBusEmitMock.mockImplementation((event: string, payload: { getValue?: () => string }) => {
       if (event === 'chat-input:get-state') {
         payload.getValue = () => 'existing draft';
@@ -348,8 +343,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('fills chat input and minimizes the action bar when current input is empty', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-
     eventBusEmitMock.mockImplementation((event: string, payload: { getValue?: () => string }) => {
       if (event === 'chat-input:get-state') {
         payload.getValue = () => '  ';
@@ -388,8 +381,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('minimizes action bar when close button is clicked', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-
     useReviewActionBarStore.getState().showActionBar({
       childSessionId: 'child-session',
       parentSessionId: 'parent-session',
@@ -417,8 +408,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('does not show capacity queue controls when there is no queue state', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-
     useReviewActionBarStore.getState().showActionBar({
       childSessionId: 'child-session',
       parentSessionId: 'parent-session',
@@ -440,8 +429,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('shows compact capacity queue controls and keeps them locally adjustable', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-
     useReviewActionBarStore.getState().showActionBar({
       childSessionId: 'child-session',
       parentSessionId: 'parent-session',
@@ -504,7 +491,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('sends backend queue control actions for event-driven capacity waits', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
     controlDeepReviewQueueMock.mockResolvedValue(undefined);
 
     useReviewActionBarStore.getState().showCapacityQueueBar({
@@ -568,7 +554,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('shows the backend reason when queue control fails', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
     const { notificationService } = await import('@/shared/notification-system');
     controlDeepReviewQueueMock.mockRejectedValueOnce(new Error('backend queue already closed'));
 
@@ -607,7 +592,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('reports partial backend queue control failures without claiming full success', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
     const { notificationService } = await import('@/shared/notification-system');
     controlDeepReviewQueueMock
       .mockResolvedValueOnce(undefined)
@@ -666,8 +650,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('starts a structured retry turn for explicit incomplete Deep Review slices', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-
     flowChatSessionsMock.set('deep-review-session', {
       sessionId: 'deep-review-session',
       sessionKind: 'deep_review',
@@ -749,8 +731,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('shows distinct progress text after starting fix and re-review', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-
     useReviewActionBarStore.getState().showActionBar({
       childSessionId: 'child-session',
       parentSessionId: 'parent-session',
@@ -778,8 +758,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('requires explicit decision confirmation before executing selected decision remediation', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-
     useReviewActionBarStore.getState().showActionBar({
       childSessionId: 'child-session',
       parentSessionId: 'parent-session',
@@ -880,8 +858,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('shows completed items as disabled and strikethrough', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-
     useReviewActionBarStore.getState().showActionBar({
       childSessionId: 'child-session',
       parentSessionId: 'parent-session',
@@ -905,8 +881,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('shows continue fix UI when phase is fix_interrupted', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
-
     useReviewActionBarStore.getState().showActionBar({
       childSessionId: 'child-session',
       parentSessionId: 'parent-session',
@@ -955,7 +929,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('keeps Deep Review interruption actions in one row without a standalone retry or recovery toggle', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
     buildErrorAttributionMock.mockReturnValue({
       category: 'network',
       title: 'Network issue',
@@ -1009,7 +982,6 @@ describeWithJsdom('DeepReviewActionBar', () => {
   });
 
   it('minimizes and hides stale interruption controls after a resume request starts successfully', async () => {
-    const { DeepReviewActionBar } = await import('./DeepReviewActionBar');
     let resolveContinuation: (() => void) | null = null;
     continueDeepReviewSessionMock.mockReturnValueOnce(new Promise<void>((resolve) => {
       resolveContinuation = resolve;

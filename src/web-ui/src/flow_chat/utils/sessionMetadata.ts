@@ -7,13 +7,15 @@ import type {
 import type { Session } from '../types/flow-chat';
 import { resolveSessionTitle } from './sessionTitle';
 
-const CHILD_SESSION_KIND_TAGS = new Set<SessionKind>(['btw', 'review', 'deep_review', 'miniapp']);
+const CHILD_SESSION_KIND_TAGS = new Set<SessionKind>(['btw', 'review', 'deep_review', 'miniapp', 'subagent']);
 const RELATIONSHIP_METADATA_KEYS = new Set([
   'kind',
   'parentSessionId',
   'parentRequestId',
   'parentDialogTurnId',
   'parentTurnIndex',
+  'parentToolCallId',
+  'subagentType',
 ]);
 const TITLE_METADATA_KEYS = new Set([
   'titleSource',
@@ -21,11 +23,15 @@ const TITLE_METADATA_KEYS = new Set([
   'titleParams',
 ]);
 
-type SessionRelationshipInput = Pick<Session, 'sessionKind' | 'parentSessionId' | 'btwOrigin'>;
+type SessionRelationshipInput = Pick<
+  Session,
+  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType'
+>;
 
 export interface ResolvedSessionRelationship {
   kind: SessionKind;
   isBtw: boolean;
+  isSubagent: boolean;
   isReview: boolean;
   isDeepReview: boolean;
   parentSessionId?: string;
@@ -52,7 +58,13 @@ function normalizeTurnIndex(value: unknown): number | undefined {
 }
 
 export function normalizeSessionKind(value: unknown): SessionKind {
-  if (value === 'btw' || value === 'review' || value === 'deep_review' || value === 'miniapp') {
+  if (
+    value === 'btw' ||
+    value === 'review' ||
+    value === 'deep_review' ||
+    value === 'miniapp' ||
+    value === 'subagent'
+  ) {
     return value;
   }
 
@@ -61,17 +73,30 @@ export function normalizeSessionKind(value: unknown): SessionKind {
 
 export function normalizeSessionRelationship(
   input?: Partial<SessionRelationshipInput> | null
-): Pick<Session, 'sessionKind' | 'parentSessionId' | 'btwOrigin'> {
+): Pick<
+  Session,
+  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType'
+> {
   const sessionKind = normalizeSessionKind(input?.sessionKind);
   const parentSessionId = normalizeString(
     input?.btwOrigin?.parentSessionId ?? input?.parentSessionId
   );
+  const parentToolCallId =
+    sessionKind === 'subagent'
+      ? normalizeString(input?.parentToolCallId)
+      : undefined;
+  const subagentType =
+    sessionKind === 'subagent'
+      ? normalizeString(input?.subagentType)
+      : undefined;
 
   if (sessionKind === 'normal' || sessionKind === 'miniapp') {
     return {
       sessionKind,
       parentSessionId: undefined,
       btwOrigin: undefined,
+      parentToolCallId: undefined,
+      subagentType: undefined,
     };
   }
 
@@ -86,6 +111,8 @@ export function normalizeSessionRelationship(
     sessionKind,
     parentSessionId,
     btwOrigin: origin,
+    parentToolCallId,
+    subagentType,
   };
 }
 
@@ -94,6 +121,7 @@ export function resolveSessionRelationship(
 ): ResolvedSessionRelationship {
   const normalized = normalizeSessionRelationship(input);
   const isBtw = normalized.sessionKind === 'btw';
+  const isSubagent = normalized.sessionKind === 'subagent';
   const isReview =
     normalized.sessionKind === 'review' ||
     normalized.sessionKind === 'deep_review';
@@ -101,6 +129,7 @@ export function resolveSessionRelationship(
   return {
     kind: normalized.sessionKind,
     isBtw,
+    isSubagent,
     isReview,
     isDeepReview: normalized.sessionKind === 'deep_review',
     parentSessionId: normalized.parentSessionId,
@@ -114,7 +143,10 @@ export function resolveSessionRelationship(
 
 export function deriveSessionRelationshipFromMetadata(
   metadata?: Pick<SessionMetadata, 'customMetadata'> | null
-): Pick<Session, 'sessionKind' | 'parentSessionId' | 'btwOrigin'> {
+): Pick<
+  Session,
+  'sessionKind' | 'parentSessionId' | 'btwOrigin' | 'parentToolCallId' | 'subagentType'
+> {
   const customMetadata = metadata?.customMetadata;
   const rawSessionKind = normalizeSessionKind(customMetadata?.kind);
   const sessionKind = rawSessionKind === 'btw' ? 'normal' : rawSessionKind;
@@ -122,6 +154,8 @@ export function deriveSessionRelationshipFromMetadata(
   return normalizeSessionRelationship({
     sessionKind,
     parentSessionId: customMetadata?.parentSessionId ?? undefined,
+    parentToolCallId: normalizeString(customMetadata?.parentToolCallId),
+    subagentType: normalizeString(customMetadata?.subagentType),
     btwOrigin:
       sessionKind !== 'normal'
         ? {
@@ -181,6 +215,8 @@ function buildSessionCustomMetadata(
     | 'sessionKind'
     | 'parentSessionId'
     | 'btwOrigin'
+    | 'parentToolCallId'
+    | 'subagentType'
     | 'lastFinishedAt'
     | 'titleSource'
     | 'titleI18nKey'
@@ -206,6 +242,11 @@ function buildSessionCustomMetadata(
       normalized.btwOrigin?.parentDialogTurnId ?? null;
     nextCustomMetadata.parentTurnIndex =
       normalized.btwOrigin?.parentTurnIndex ?? null;
+  }
+
+  if (normalized.sessionKind === 'subagent') {
+    nextCustomMetadata.parentToolCallId = normalized.parentToolCallId ?? null;
+    nextCustomMetadata.subagentType = normalized.subagentType ?? null;
   }
 
   nextCustomMetadata.lastFinishedAt = session.lastFinishedAt ?? null;
@@ -255,6 +296,8 @@ export function buildSessionMetadata(
     | 'sessionKind'
     | 'parentSessionId'
     | 'btwOrigin'
+    | 'parentToolCallId'
+    | 'subagentType'
     | 'lastFinishedAt'
     | 'titleSource'
     | 'titleI18nKey'
@@ -300,6 +343,8 @@ export function buildSessionMetadata(
         sessionKind,
         parentSessionId: session.parentSessionId,
         btwOrigin: session.btwOrigin,
+        parentToolCallId: session.parentToolCallId,
+        subagentType: session.subagentType,
         lastFinishedAt: session.lastFinishedAt,
         titleSource: session.titleSource,
         titleI18nKey: session.titleI18nKey,

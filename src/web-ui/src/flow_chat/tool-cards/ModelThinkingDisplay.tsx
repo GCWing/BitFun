@@ -20,9 +20,14 @@ interface ModelThinkingDisplayProps {
   thinkingItem: FlowThinkingItem;
   /** Whether this is the last item in the current round. */
   isLastItem?: boolean;
+  displayContext?: 'default' | 'subagent-projection';
 }
 
-export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thinkingItem, isLastItem = true }) => {
+export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
+  thinkingItem,
+  isLastItem = true,
+  displayContext = 'default',
+}) => {
   const { t } = useTranslation('flow-chat');
   const { content, isStreaming, status } = thinkingItem;
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -30,8 +35,12 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
 
   const isActive = isStreaming || status === 'streaming';
   const displayContent = useTypewriter(content, isActive);
+  const shouldDefaultExpanded =
+    displayContext === 'subagent-projection'
+      ? isActive || isLastItem
+      : isLastItem;
 
-  const [isExpanded, setIsExpanded] = useState(isLastItem);
+  const [isExpanded, setIsExpanded] = useState(shouldDefaultExpanded);
   const userToggledRef = useRef(false);
   const { applyExpandedState } = useToolCardHeightContract({
     toolId: thinkingItem.id,
@@ -45,12 +54,21 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({ thin
 
   useEffect(() => {
     if (userToggledRef.current) return;
-    if (!isLastItem && isExpanded) {
+    if (isExpanded !== shouldDefaultExpanded) {
+      applyExpandedState(isExpanded, shouldDefaultExpanded, setIsExpanded, {
+        reason: 'auto',
+      });
+    }
+  }, [applyExpandedState, isExpanded, shouldDefaultExpanded]);
+
+  useEffect(() => {
+    if (userToggledRef.current) return;
+    if (!shouldDefaultExpanded && isExpanded) {
       applyExpandedState(isExpanded, false, setIsExpanded, {
         reason: 'auto',
       });
     }
-  }, [applyExpandedState, isExpanded, isLastItem]);
+  }, [applyExpandedState, isExpanded, shouldDefaultExpanded]);
 
   // Auto-scroll to bottom while content grows.
   useEffect(() => {

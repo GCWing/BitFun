@@ -27,6 +27,7 @@ import type { SessionUsageReport } from '@/infrastructure/api/service-api/Sessio
 import { SessionUsageReportCard } from '../usage/SessionUsageReportCard';
 import type { SessionUsagePanelTab } from '../usage/sessionUsagePanelTypes';
 import { coerceSessionUsageReport } from '../usage/usageReportUtils';
+import { resolveSessionRelationship } from '../../utils/sessionMetadata';
 import './UserMessageItem.scss';
 
 const log = createLogger('UserMessageItem');
@@ -47,6 +48,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       allowUserMessageRollback = true,
     } = useFlowChatContext();
     const activeSessionFromStore = useActiveSession();
+    const activeSession = activeSessionOverride ?? activeSessionFromStore;
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
     const [hasOverflow, setHasOverflow] = useState(false);
@@ -68,6 +70,11 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const isUsageReportMessage = message?.metadata?.localCommandKind === 'usage_report';
     const isUsageReportLoading = message?.metadata?.usageReportStatus === 'loading';
     const usageReport = coerceSessionUsageReport(message?.metadata?.usageReport);
+    const sessionRelationship = useMemo(
+      () => resolveSessionRelationship(activeSession),
+      [activeSession]
+    );
+    const canShowRollbackAction = allowUserMessageRollback && !sessionRelationship.isSubagent;
 
     const currentSession = activeSessionOverride
       ?? (sessionId ? flowChatStore.getState().sessions.get(sessionId) ?? null : null)
@@ -82,7 +89,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     );
     const canRollback =
       !steeringStatus &&
-      allowUserMessageRollback &&
+      canShowRollbackAction &&
       !!resolvedSessionId &&
       turnIndex >= 0 &&
       !isRollingBack &&
@@ -451,7 +458,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                     <ArrowDownToLine size={14} />
                   </button>
                 </Tooltip>
-              ) : allowUserMessageRollback && !steeringStatus ? (
+              ) : canShowRollbackAction && !steeringStatus ? (
                 <Tooltip content={canRollback ? t('message.rollbackTo', { index: turnIndex + 1 }) : t('message.cannotRollback')}>
                   <button
                     className="user-message-item__rollback-btn"
