@@ -1234,12 +1234,56 @@ const requiredContentRules = [
         message: 'missing pure GetToolSpec input schema contract',
       },
       {
+        regex: /\bpub fn get_tool_spec_short_description\b/,
+        message: 'missing pure GetToolSpec short description contract',
+      },
+      {
+        regex: /\bpub fn render_get_tool_spec_tool_use_message\b/,
+        message: 'missing pure GetToolSpec tool-use message renderer',
+      },
+      {
+        regex: /\bpub fn get_tool_spec_is_readonly\b/,
+        message: 'missing pure GetToolSpec readonly metadata contract',
+      },
+      {
+        regex: /\bpub fn get_tool_spec_is_concurrency_safe\b/,
+        message: 'missing pure GetToolSpec concurrency metadata contract',
+      },
+      {
+        regex: /\bpub fn get_tool_spec_needs_permissions\b/,
+        message: 'missing pure GetToolSpec permission metadata contract',
+      },
+      {
         regex: /\bpub fn validate_get_tool_spec_input\b/,
         message: 'missing pure GetToolSpec input validation contract',
       },
       {
         regex: /\bpub fn build_get_tool_spec_assistant_detail\b/,
         message: 'missing pure GetToolSpec assistant detail rendering contract',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_duplicate_load_result\b/,
+        message: 'missing pure GetToolSpec duplicate-load result assembly contract',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_detail_result\b/,
+        message: 'missing pure GetToolSpec detail result assembly contract',
+      },
+      {
+        regex: /\bpub enum GetToolSpecExecutionPlan\b/,
+        message: 'missing pure GetToolSpec execution plan contract',
+      },
+      {
+        regex: /\bpub enum GetToolSpecExecutionError\b/,
+        message: 'missing pure GetToolSpec execution error contract',
+      },
+      {
+        regex: /\bpub fn resolve_get_tool_spec_execution_plan\b/,
+        message: 'missing pure GetToolSpec execution plan resolver',
+      },
+      {
+        regex: /\bpub async fn resolve_get_tool_spec_execution_result_from_provider\b/,
+        message: 'missing provider-backed GetToolSpec execution result resolver',
       },
       {
         regex: /\bpub struct GetToolSpecLoadObservation\b/,
@@ -1448,16 +1492,20 @@ const requiredContentRules = [
         message: 'missing agent-tools provider-backed GetToolSpec catalog delegation',
       },
       {
-        regex: /\bresolve_get_tool_spec_detail_from_provider\b/,
-        message: 'missing agent-tools provider-backed GetToolSpec detail resolver delegation',
+        regex: /\bresolve_get_tool_spec_execution_result_from_provider\b/,
+        message: 'missing agent-tools provider-backed GetToolSpec execution result delegation',
       },
       {
         regex: /\bresolve_product_tool_manifest\b/,
         message: 'missing product manifest facade',
       },
       {
-        regex: /\bresolve_product_get_tool_spec_detail\b/,
-        message: 'missing product GetToolSpec detail facade',
+        regex: /\bresolve_product_get_tool_spec_execution_result\b/,
+        message: 'missing product GetToolSpec execution result facade',
+      },
+      {
+        regex: /\bunlocked_collapsed_tools\b/,
+        message: 'missing core-owned collapsed-tool unlock state source',
       },
       {
         regex: /\bproduct_catalog_provider_default_get_tool_spec_catalog_matches_registry\b/,
@@ -1492,6 +1540,22 @@ const requiredContentRules = [
       {
         regex: /\bpub fn install_static_provider\b/,
         message: 'missing static provider registry installer',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_duplicate_load_result\b/,
+        message: 'missing provider-neutral GetToolSpec duplicate-load result helper',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_detail_result\b/,
+        message: 'missing provider-neutral GetToolSpec detail result helper',
+      },
+      {
+        regex: /\bpub fn resolve_get_tool_spec_execution_plan\b/,
+        message: 'missing provider-neutral GetToolSpec execution plan helper',
+      },
+      {
+        regex: /\bpub async fn resolve_get_tool_spec_execution_result_from_provider\b/,
+        message: 'missing provider-backed GetToolSpec execution result helper',
       },
     ],
   },
@@ -1555,24 +1619,24 @@ const requiredContentRules = [
         message: 'missing GetToolSpec owner type',
       },
       {
-        regex: /\bunlocked_collapsed_tools\b/,
-        message: 'missing collapsed-tool duplicate-load guard',
+        regex: /\bresolve_product_get_tool_spec_execution_result\b/,
+        message: 'missing product GetToolSpec execution result facade delegation',
       },
       {
-        regex: /\balready_loaded\b/,
-        message: 'missing duplicate-load assistant result contract',
-      },
-      {
-        regex: /\bbuild_get_tool_spec_assistant_detail\b/,
-        message: 'missing agent-tools GetToolSpec assistant detail helper delegation',
+        regex: /\bmap_get_tool_spec_execution_error\b/,
+        message: 'missing core GetToolSpec execution error mapping boundary',
       },
       {
         regex: /\bbuild_product_get_tool_spec_catalog_description\b/,
         message: 'missing core product GetToolSpec catalog facade delegation',
       },
       {
-        regex: /\bresolve_product_get_tool_spec_detail\b/,
-        message: 'missing core product GetToolSpec detail facade delegation',
+        regex: /\bget_tool_spec_short_description\b/,
+        message: 'missing agent-tools GetToolSpec static metadata delegation',
+      },
+      {
+        regex: /\brender_get_tool_spec_tool_use_message\b/,
+        message: 'missing agent-tools GetToolSpec use-message delegation',
       },
       {
         regex: /\bvalidate_get_tool_spec_input\b/,
@@ -3254,8 +3318,19 @@ function runManifestParserSelfTest() {
         'resolve_get_tool_spec_detail',
         'build_get_tool_spec_catalog_description',
         'get_tool_spec_input_schema',
+        'get_tool_spec_short_description',
+        'render_get_tool_spec_tool_use_message',
+        'get_tool_spec_is_readonly',
+        'get_tool_spec_is_concurrency_safe',
+        'get_tool_spec_needs_permissions',
         'validate_get_tool_spec_input',
         'build_get_tool_spec_assistant_detail',
+        'build_get_tool_spec_duplicate_load_result',
+        'build_get_tool_spec_detail_result',
+        'GetToolSpecExecutionPlan',
+        'GetToolSpecExecutionError',
+        'resolve_get_tool_spec_execution_plan',
+        'resolve_get_tool_spec_execution_result_from_provider',
         'GetToolSpecLoadObservation',
         'collect_loaded_collapsed_tool_names',
         'sort_tool_manifest_definitions',
@@ -3377,6 +3452,10 @@ function runManifestParserSelfTest() {
         'StaticToolProvider',
         'StaticToolProviderGroup',
         'install_static_provider',
+        'build_get_tool_spec_duplicate_load_result',
+        'build_get_tool_spec_detail_result',
+        'resolve_get_tool_spec_execution_plan',
+        'resolve_get_tool_spec_execution_result_from_provider',
       ],
     },
     {
@@ -3408,9 +3487,10 @@ function runManifestParserSelfTest() {
         'resolve_contextual_visible_tools_from_provider',
         'resolve_contextual_tool_manifest_from_provider',
         'build_get_tool_spec_catalog_description_from_provider',
-        'resolve_get_tool_spec_detail_from_provider',
+        'resolve_get_tool_spec_execution_result_from_provider',
         'resolve_product_tool_manifest',
-        'resolve_product_get_tool_spec_detail',
+        'resolve_product_get_tool_spec_execution_result',
+        'unlocked_collapsed_tools',
         'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
         'GetToolSpec requires agent type context',
       ],
@@ -3430,10 +3510,10 @@ function runManifestParserSelfTest() {
       contracts: [
         'GetToolSpecTool',
         'build_product_get_tool_spec_catalog_description',
-        'resolve_product_get_tool_spec_detail',
-        'unlocked_collapsed_tools',
-        'already_loaded',
-        'build_get_tool_spec_assistant_detail',
+        'resolve_product_get_tool_spec_execution_result',
+        'map_get_tool_spec_execution_error',
+        'get_tool_spec_short_description',
+        'render_get_tool_spec_tool_use_message',
         'validate_get_tool_spec_input',
       ],
     },

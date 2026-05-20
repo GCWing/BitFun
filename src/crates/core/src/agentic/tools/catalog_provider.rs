@@ -1,13 +1,15 @@
 use crate::agentic::agents::{get_agent_registry, AgentToolPolicyOverrides};
-use crate::agentic::tools::framework::{Tool, ToolExposure, ToolUseContext};
+use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
 use crate::agentic::tools::registry::{get_global_tool_registry, GET_TOOL_SPEC_TOOL_NAME};
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_tools::{
     build_get_tool_spec_catalog_description_from_provider,
     resolve_contextual_tool_manifest_from_provider, resolve_contextual_visible_tools_from_provider,
-    resolve_get_tool_spec_detail_from_provider, ContextualToolManifest, ContextualVisibleTools,
-    GetToolSpecCatalogProvider, GetToolSpecDetail, ToolCatalogSnapshotProvider,
+    resolve_get_tool_spec_execution_result_from_provider, ContextualToolManifest,
+    ContextualVisibleTools, GetToolSpecCatalogProvider, GetToolSpecExecutionError,
+    ToolCatalogSnapshotProvider,
 };
+use serde_json::Value;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -110,14 +112,15 @@ pub(crate) async fn build_product_get_tool_spec_catalog_description(
         .await
 }
 
-pub(crate) async fn resolve_product_get_tool_spec_detail(
-    tool_name: &str,
+pub(crate) async fn resolve_product_get_tool_spec_execution_result(
+    input: &Value,
     context: &ToolUseContext,
     get_tool_spec_tool_name: &str,
-) -> Result<GetToolSpecDetail, String> {
-    resolve_get_tool_spec_detail_from_provider(
+) -> Result<ToolResult, GetToolSpecExecutionError> {
+    resolve_get_tool_spec_execution_result_from_provider(
         &ProductToolCatalogProvider,
-        tool_name,
+        input,
+        &context.unlocked_collapsed_tools,
         context,
         get_tool_spec_tool_name,
     )
@@ -127,14 +130,15 @@ pub(crate) async fn resolve_product_get_tool_spec_detail(
 #[cfg(test)]
 mod tests {
     use super::{
-        resolve_product_get_tool_spec_detail, resolve_product_tool_manifest,
+        resolve_product_get_tool_spec_execution_result, resolve_product_tool_manifest,
         ProductToolCatalogProvider,
     };
     use crate::agentic::agents::AgentToolPolicyOverrides;
     use crate::agentic::tools::framework::ToolUseContext;
     use crate::agentic::tools::registry::create_tool_registry;
     use crate::agentic::tools::ToolRuntimeRestrictions;
-    use bitfun_agent_tools::{GetToolSpecCatalogProvider, ToolCatalogSnapshotProvider};
+    use bitfun_agent_tools::{GetToolSpecCatalogProvider, ToolCatalogSnapshotProvider, ToolResult};
+    use serde_json::json;
     use std::collections::HashMap;
 
     fn tool_context(agent_type: Option<&str>) -> ToolUseContext {
@@ -238,17 +242,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn product_catalog_facade_resolves_get_tool_spec_detail_from_same_provider_owner() {
-        let detail = resolve_product_get_tool_spec_detail(
-            "WebFetch",
+    async fn product_catalog_facade_resolves_get_tool_spec_execution_result_from_same_provider_owner(
+    ) {
+        let result = resolve_product_get_tool_spec_execution_result(
+            &json!({ "tool_name": "WebFetch" }),
             &tool_context(Some("agentic")),
             "GetToolSpec",
         )
         .await
         .expect("WebFetch should be available as a collapsed tool for Agentic mode");
 
-        assert_eq!(detail.tool_name, "WebFetch");
-        assert!(!detail.description.trim().is_empty());
-        assert_eq!(detail.input_schema["type"], "object");
+        let ToolResult::Result { data, .. } = result else {
+            panic!("expected normal tool result");
+        };
+
+        assert_eq!(data["tool_name"], "WebFetch");
+        assert!(!data["description"]
+            .as_str()
+            .unwrap_or_default()
+            .trim()
+            .is_empty());
+        assert_eq!(data["input_schema"]["type"], "object");
     }
 }

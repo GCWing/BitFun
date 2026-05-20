@@ -1,24 +1,28 @@
 use bitfun_agent_tools::{
+    build_collapsed_tool_stub_definition, build_get_tool_spec_assistant_detail,
+    build_get_tool_spec_catalog_description, build_get_tool_spec_catalog_description_from_provider,
+    build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
+    build_get_tool_spec_detail_result, build_get_tool_spec_duplicate_load_hint,
+    build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
+    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema,
+    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
+    get_tool_spec_short_description, render_get_tool_spec_tool_use_message,
+    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
+    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
+    resolve_get_tool_spec_execution_result_from_provider, resolve_tool_manifest_policy,
+    sort_tool_manifest_definitions, summarize_get_tool_spec_collapsed_tools,
+    validate_get_tool_spec_input, DynamicMcpToolInfo, DynamicToolInfo,
+    GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError, GetToolSpecExecutionPlan,
+    GetToolSpecLoadObservation, InputValidator, PromptVisibleToolManifestItem, ToolContextFacts,
+    ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
+    ToolPathBackend, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
+    ToolWorkspaceKind, ValidationResult, GET_TOOL_SPEC_TOOL_NAME,
+};
+use bitfun_agent_tools::{
     ContextualToolManifestItem, DynamicToolDescriptor, DynamicToolProvider,
     GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider, StaticToolProvider,
     StaticToolProviderGroup, ToolCatalogSnapshotProvider, ToolDecorator, ToolRegistry,
     ToolRegistryItem,
-};
-use bitfun_agent_tools::{
-    DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, GetToolSpecCollapsedToolSummary,
-    GetToolSpecLoadObservation, InputValidator, PromptVisibleToolManifestItem, ToolContextFacts,
-    ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
-    ToolPathBackend, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
-    ToolWorkspaceKind, ValidationResult, build_collapsed_tool_stub_definition,
-    build_get_tool_spec_assistant_detail, build_get_tool_spec_catalog_description,
-    build_get_tool_spec_catalog_description_from_provider,
-    build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
-    build_get_tool_spec_duplicate_load_hint, build_prompt_visible_tool_manifest_definitions,
-    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema,
-    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
-    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
-    resolve_tool_manifest_policy, sort_tool_manifest_definitions,
-    summarize_get_tool_spec_collapsed_tools, validate_get_tool_spec_input,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -476,10 +480,9 @@ fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
 
     assert_eq!(stub.name, "WebFetch");
     assert!(stub.description.contains("Fetch a URL"));
-    assert!(
-        stub.description
-            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
-    );
+    assert!(stub
+        .description
+        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
     assert_eq!(
         stub.parameters,
         json!({
@@ -547,11 +550,9 @@ fn prompt_visible_manifest_builder_preserves_expanded_and_collapsed_contract() {
         definitions[0].parameters["properties"]["command"]["type"],
         json!("string")
     );
-    assert!(
-        definitions[2]
-            .description
-            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
-    );
+    assert!(definitions[2]
+        .description
+        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
 }
 
 #[test]
@@ -562,12 +563,10 @@ fn get_tool_spec_contract_preserves_input_schema_and_validation() {
     assert_eq!(schema["additionalProperties"], false);
     assert_eq!(schema["required"], json!(["tool_name"]));
     assert_eq!(schema["properties"]["tool_name"]["type"], "string");
-    assert!(
-        schema["properties"]["tool_name"]["description"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("canonical casing")
-    );
+    assert!(schema["properties"]["tool_name"]["description"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("canonical casing"));
 
     let missing = validate_get_tool_spec_input(&json!({}));
     assert!(!missing.result);
@@ -586,6 +585,29 @@ fn get_tool_spec_contract_preserves_input_schema_and_validation() {
     assert_eq!(empty.error_code, Some(400));
 
     assert!(validate_get_tool_spec_input(&json!({ "tool_name": "Git" })).result);
+}
+
+#[test]
+fn get_tool_spec_contract_preserves_static_metadata_and_use_message() {
+    assert_eq!(
+        get_tool_spec_short_description(),
+        "Discover collapsed tools and read their detailed definitions."
+    );
+    assert!(get_tool_spec_is_readonly());
+    assert!(get_tool_spec_is_concurrency_safe(Some(&json!({
+        "tool_name": "WebFetch"
+    }))));
+    assert!(!get_tool_spec_needs_permissions(Some(&json!({
+        "tool_name": "WebFetch"
+    }))));
+    assert_eq!(
+        render_get_tool_spec_tool_use_message(&json!({ "tool_name": "Git" })),
+        "Reading tool spec for 'Git'."
+    );
+    assert_eq!(
+        render_get_tool_spec_tool_use_message(&json!({})),
+        "Reading tool spec for '?'."
+    );
 }
 
 #[test]
@@ -649,6 +671,117 @@ fn get_tool_spec_contract_preserves_duplicate_load_hint() {
         build_get_tool_spec_duplicate_load_hint("WebFetch"),
         "Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use 'WebFetch' directly."
     );
+}
+
+#[test]
+fn get_tool_spec_contract_builds_duplicate_load_result() {
+    let result = build_get_tool_spec_duplicate_load_result("WebFetch");
+
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = result
+    else {
+        panic!("expected normal tool result");
+    };
+
+    assert_eq!(data["tool_name"], "WebFetch");
+    assert_eq!(data["already_loaded"], true);
+    assert_eq!(
+        result_for_assistant.as_deref(),
+        Some("Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use 'WebFetch' directly.")
+    );
+    assert_eq!(image_attachments, None);
+}
+
+#[test]
+fn get_tool_spec_contract_builds_detail_result() {
+    let result = build_get_tool_spec_detail_result(&bitfun_agent_tools::GetToolSpecDetail {
+        tool_name: "Git".to_string(),
+        description: "Use <repo> & inspect changes.".to_string(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "Run <safe> git commands"
+                }
+            }
+        }),
+    });
+
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = result
+    else {
+        panic!("expected normal tool result");
+    };
+
+    assert_eq!(data["tool_name"], "Git");
+    assert_eq!(data["description"], "Use <repo> & inspect changes.");
+    assert_eq!(
+        data["input_schema"]["properties"]["command"]["type"],
+        "string"
+    );
+    let assistant = result_for_assistant.expect("assistant detail");
+    assert!(assistant.contains("Use &lt;repo&gt; &amp; inspect changes."));
+    assert!(assistant.contains("Run &lt;safe&gt; git commands"));
+    assert_eq!(image_attachments, None);
+}
+
+#[test]
+fn get_tool_spec_contract_plans_duplicate_load_without_core_context() {
+    let input = json!({ "tool_name": "WebFetch" });
+    let plan =
+        bitfun_agent_tools::resolve_get_tool_spec_execution_plan(&input, &["WebFetch".to_string()])
+            .expect("duplicate load should be planned");
+
+    let GetToolSpecExecutionPlan::DuplicateLoad(result) = plan else {
+        panic!("expected duplicate-load plan");
+    };
+
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = result
+    else {
+        panic!("expected normal tool result");
+    };
+
+    assert_eq!(data["tool_name"], "WebFetch");
+    assert_eq!(data["already_loaded"], true);
+    assert!(result_for_assistant
+        .as_deref()
+        .unwrap_or_default()
+        .contains("already loaded in the current conversation"));
+    assert_eq!(image_attachments, None);
+}
+
+#[test]
+fn get_tool_spec_contract_plans_detail_load_without_resolving_product_detail() {
+    let input = json!({ "tool_name": "Git" });
+    let plan =
+        bitfun_agent_tools::resolve_get_tool_spec_execution_plan(&input, &["WebFetch".to_string()])
+            .expect("detail load should be planned");
+
+    let GetToolSpecExecutionPlan::LoadDetail { tool_name } = plan else {
+        panic!("expected detail-load plan");
+    };
+
+    assert_eq!(tool_name, "Git");
+}
+
+#[test]
+fn get_tool_spec_contract_rejects_missing_tool_name_in_execution_plan() {
+    let err = bitfun_agent_tools::resolve_get_tool_spec_execution_plan(&json!({}), &[])
+        .expect_err("missing tool name should be rejected");
+
+    assert_eq!(err, GetToolSpecExecutionError::MissingToolName);
+    assert_eq!(err.to_string(), "tool_name is required");
 }
 
 #[derive(Clone)]
@@ -787,6 +920,8 @@ struct ContextualManifestSnapshotProvider {
     tools: Vec<Arc<ContextualManifestTool>>,
 }
 
+struct ErroringGetToolSpecProvider;
+
 #[async_trait::async_trait]
 impl ToolCatalogSnapshotProvider<ContextualManifestTool> for ContextualManifestSnapshotProvider {
     async fn tool_snapshot(&self) -> Vec<Arc<ContextualManifestTool>> {
@@ -823,6 +958,18 @@ impl GetToolSpecCatalogProvider<ContextualManifestTool, ManifestTestContext>
         };
 
         Ok(tools)
+    }
+}
+
+#[async_trait::async_trait]
+impl GetToolSpecCatalogProvider<ContextualManifestTool, ManifestTestContext>
+    for ErroringGetToolSpecProvider
+{
+    async fn collapsed_tools_for_get_tool_spec(
+        &self,
+        _context: Option<&ManifestTestContext>,
+    ) -> Result<Vec<Arc<ContextualManifestTool>>, String> {
+        Err("provider should not be called for duplicate-load execution".to_string())
     }
 }
 
@@ -1047,11 +1194,9 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
         .iter()
         .find(|tool| tool.name == "WebFetch")
         .expect("collapsed WebFetch stub");
-    assert!(
-        web_fetch
-            .description
-            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
-    );
+    assert!(web_fetch
+        .description
+        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
     assert_eq!(web_fetch.parameters["additionalProperties"], false);
 }
 
@@ -1215,6 +1360,117 @@ async fn get_tool_spec_catalog_provider_preserves_runtime_catalog_contract() {
     .expect("provider-backed detail");
     assert_eq!(detail.tool_name, "WebFetch");
     assert_eq!(detail.description, "WebFetch description for agentic");
+}
+
+#[tokio::test]
+async fn get_tool_spec_provider_execution_returns_duplicate_result_without_detail_lookup() {
+    let context = ManifestTestContext { agent: "agentic" };
+    let input = json!({ "tool_name": "WebFetch" });
+
+    let result = resolve_get_tool_spec_execution_result_from_provider(
+        &ErroringGetToolSpecProvider,
+        &input,
+        &["WebFetch".to_string()],
+        &context,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await
+    .expect("duplicate load should not call provider detail lookup");
+
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = result
+    else {
+        panic!("expected normal tool result");
+    };
+
+    assert_eq!(data["tool_name"], "WebFetch");
+    assert_eq!(data["already_loaded"], true);
+    assert!(result_for_assistant
+        .as_deref()
+        .unwrap_or_default()
+        .contains("already loaded in the current conversation"));
+    assert_eq!(image_attachments, None);
+}
+
+#[tokio::test]
+async fn get_tool_spec_provider_execution_returns_detail_result_from_provider() {
+    let provider = ContextualManifestSnapshotProvider {
+        tools: vec![contextual_manifest_tool(
+            "WebFetch",
+            ToolExposure::Collapsed,
+            None,
+        )],
+    };
+    let context = ManifestTestContext { agent: "agentic" };
+    let input = json!({ "tool_name": "WebFetch" });
+
+    let result = resolve_get_tool_spec_execution_result_from_provider(
+        &provider,
+        &input,
+        &[],
+        &context,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await
+    .expect("detail result should come from provider");
+
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = result
+    else {
+        panic!("expected normal tool result");
+    };
+
+    assert_eq!(data["tool_name"], "WebFetch");
+    assert_eq!(data["description"], "WebFetch description for agentic");
+    assert_eq!(
+        data["input_schema"]["properties"]["agent"]["const"],
+        "agentic"
+    );
+    let assistant = result_for_assistant.expect("assistant detail");
+    assert!(assistant.contains("<description>\nWebFetch description for agentic"));
+    assert!(assistant.contains("\"agent\""));
+    assert!(assistant.contains("\"agentic\""));
+    assert_eq!(image_attachments, None);
+}
+
+#[tokio::test]
+async fn get_tool_spec_provider_execution_classifies_detail_errors() {
+    let provider = ContextualManifestSnapshotProvider {
+        tools: vec![contextual_manifest_tool(
+            "WebFetch",
+            ToolExposure::Collapsed,
+            None,
+        )],
+    };
+    let context = ManifestTestContext { agent: "agentic" };
+    let input = json!({ "tool_name": "Git" });
+
+    let err = resolve_get_tool_spec_execution_result_from_provider(
+        &provider,
+        &input,
+        &[],
+        &context,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await
+    .expect_err("missing detail should be classified separately from input errors");
+
+    assert_eq!(
+        err,
+        GetToolSpecExecutionError::Detail(
+            "Tool 'Git' is not an available collapsed tool in the current context".to_string()
+        )
+    );
+    assert_eq!(
+        err.to_string(),
+        "Tool 'Git' is not an available collapsed tool in the current context"
+    );
 }
 
 #[tokio::test]

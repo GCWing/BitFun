@@ -329,6 +329,30 @@ pub fn get_tool_spec_input_schema() -> Value {
     })
 }
 
+pub fn get_tool_spec_short_description() -> String {
+    "Discover collapsed tools and read their detailed definitions.".to_string()
+}
+
+pub fn get_tool_spec_is_readonly() -> bool {
+    true
+}
+
+pub fn get_tool_spec_is_concurrency_safe(_input: Option<&Value>) -> bool {
+    true
+}
+
+pub fn get_tool_spec_needs_permissions(_input: Option<&Value>) -> bool {
+    false
+}
+
+pub fn render_get_tool_spec_tool_use_message(input: &Value) -> String {
+    let tool_name = input
+        .get("tool_name")
+        .and_then(|value| value.as_str())
+        .unwrap_or("?");
+    format!("Reading tool spec for '{}'.", tool_name)
+}
+
 pub fn validate_get_tool_spec_input(input: &Value) -> ValidationResult {
     let Some(tool_name) = input.get("tool_name").and_then(|value| value.as_str()) else {
         return ValidationResult {
@@ -356,6 +380,61 @@ pub fn build_get_tool_spec_duplicate_load_hint(tool_name: &str) -> String {
         "Tool '{}' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use '{}' directly.",
         tool_name, tool_name
     )
+}
+
+pub fn build_get_tool_spec_duplicate_load_result(tool_name: &str) -> ToolResult {
+    ToolResult::Result {
+        data: serde_json::json!({
+            "tool_name": tool_name,
+            "already_loaded": true
+        }),
+        result_for_assistant: Some(build_get_tool_spec_duplicate_load_hint(tool_name)),
+        image_attachments: None,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GetToolSpecExecutionError {
+    MissingToolName,
+    Detail(String),
+}
+
+impl fmt::Display for GetToolSpecExecutionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GetToolSpecExecutionError::MissingToolName => write!(f, "tool_name is required"),
+            GetToolSpecExecutionError::Detail(message) => write!(f, "{message}"),
+        }
+    }
+}
+
+impl std::error::Error for GetToolSpecExecutionError {}
+
+#[derive(Debug, Clone)]
+pub enum GetToolSpecExecutionPlan<'a> {
+    DuplicateLoad(ToolResult),
+    LoadDetail { tool_name: &'a str },
+}
+
+pub fn resolve_get_tool_spec_execution_plan<'a>(
+    input: &'a Value,
+    loaded_collapsed_tools: &[String],
+) -> Result<GetToolSpecExecutionPlan<'a>, GetToolSpecExecutionError> {
+    let tool_name = input
+        .get("tool_name")
+        .and_then(|value| value.as_str())
+        .ok_or(GetToolSpecExecutionError::MissingToolName)?;
+
+    if loaded_collapsed_tools
+        .iter()
+        .any(|loaded| loaded == tool_name)
+    {
+        return Ok(GetToolSpecExecutionPlan::DuplicateLoad(
+            build_get_tool_spec_duplicate_load_result(tool_name),
+        ));
+    }
+
+    Ok(GetToolSpecExecutionPlan::LoadDetail { tool_name })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -396,6 +475,17 @@ pub fn build_get_tool_spec_assistant_detail(description: &str, input_schema: &Va
         escape_get_tool_spec_xml_text(description),
         escape_get_tool_spec_xml_text(&input_schema.to_string())
     )
+}
+
+pub fn build_get_tool_spec_detail_result(detail: &GetToolSpecDetail) -> ToolResult {
+    ToolResult::Result {
+        data: detail.to_value(),
+        result_for_assistant: Some(build_get_tool_spec_assistant_detail(
+            &detail.description,
+            &detail.input_schema,
+        )),
+        image_attachments: None,
+    }
 }
 
 fn escape_get_tool_spec_xml_text(value: &str) -> String {
@@ -601,6 +691,34 @@ where
         get_tool_spec_tool_name,
     )
     .await
+}
+
+pub async fn resolve_get_tool_spec_execution_result_from_provider<Tool, Context, Provider>(
+    provider: &Provider,
+    input: &Value,
+    loaded_collapsed_tools: &[String],
+    context: &Context,
+    get_tool_spec_tool_name: &str,
+) -> Result<ToolResult, GetToolSpecExecutionError>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
+{
+    match resolve_get_tool_spec_execution_plan(input, loaded_collapsed_tools)? {
+        GetToolSpecExecutionPlan::DuplicateLoad(result) => Ok(result),
+        GetToolSpecExecutionPlan::LoadDetail { tool_name } => {
+            let detail = resolve_get_tool_spec_detail_from_provider(
+                provider,
+                tool_name,
+                context,
+                get_tool_spec_tool_name,
+            )
+            .await
+            .map_err(GetToolSpecExecutionError::Detail)?;
+            Ok(build_get_tool_spec_detail_result(&detail))
+        }
+    }
 }
 
 pub async fn resolve_contextual_visible_tools_from_provider<Tool, Context, Provider>(

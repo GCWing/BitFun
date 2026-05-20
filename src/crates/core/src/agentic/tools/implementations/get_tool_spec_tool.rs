@@ -1,7 +1,7 @@
 //! GetToolSpec tool implementation
 
 use crate::agentic::tools::catalog_provider::{
-    build_product_get_tool_spec_catalog_description, resolve_product_get_tool_spec_detail,
+    build_product_get_tool_spec_catalog_description, resolve_product_get_tool_spec_execution_result,
 };
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
@@ -9,12 +9,12 @@ use crate::agentic::tools::framework::{
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_tools::{
-    GET_TOOL_SPEC_TOOL_NAME, build_get_tool_spec_assistant_detail,
-    build_get_tool_spec_duplicate_load_hint, get_tool_spec_input_schema,
-    validate_get_tool_spec_input,
+    get_tool_spec_input_schema, get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly,
+    get_tool_spec_needs_permissions, get_tool_spec_short_description,
+    render_get_tool_spec_tool_use_message, validate_get_tool_spec_input, GetToolSpecExecutionError,
+    GET_TOOL_SPEC_TOOL_NAME,
 };
-use log::debug;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 pub struct GetToolSpecTool;
 
@@ -25,20 +25,6 @@ impl GetToolSpecTool {
 
     async fn build_collapsed_tools_description(&self, context: Option<&ToolUseContext>) -> String {
         build_product_get_tool_spec_catalog_description(context).await
-    }
-
-    async fn build_tool_detail(
-        &self,
-        tool_name: &str,
-        context: Option<&ToolUseContext>,
-    ) -> BitFunResult<Value> {
-        let context = context.ok_or_else(|| {
-            BitFunError::Validation("GetToolSpec requires execution context".to_string())
-        })?;
-        resolve_product_get_tool_spec_detail(tool_name, context, self.name())
-            .await
-            .map(|detail| detail.to_value())
-            .map_err(BitFunError::Validation)
     }
 }
 
@@ -59,7 +45,7 @@ impl Tool for GetToolSpecTool {
     }
 
     fn short_description(&self) -> String {
-        "Discover collapsed tools and read their detailed definitions.".to_string()
+        get_tool_spec_short_description()
     }
 
     async fn description_with_context(
@@ -74,23 +60,19 @@ impl Tool for GetToolSpecTool {
     }
 
     fn is_readonly(&self) -> bool {
-        true
+        get_tool_spec_is_readonly()
     }
 
-    fn is_concurrency_safe(&self, _input: Option<&Value>) -> bool {
-        true
+    fn is_concurrency_safe(&self, input: Option<&Value>) -> bool {
+        get_tool_spec_is_concurrency_safe(input)
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
+    fn needs_permissions(&self, input: Option<&Value>) -> bool {
+        get_tool_spec_needs_permissions(input)
     }
 
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
-        let tool_name = input
-            .get("tool_name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("?");
-        format!("Reading tool spec for '{}'.", tool_name)
+        render_get_tool_spec_tool_use_message(input)
     }
 
     async fn validate_input(
@@ -106,57 +88,31 @@ impl Tool for GetToolSpecTool {
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let tool_name = input
-            .get("tool_name")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("tool_name is required".to_string()))?;
+        let result = resolve_product_get_tool_spec_execution_result(input, context, self.name())
+            .await
+            .map_err(map_get_tool_spec_execution_error)?;
+        Ok(vec![result])
+    }
+}
 
-        if context
-            .unlocked_collapsed_tools
-            .iter()
-            .any(|loaded| loaded == tool_name)
-        {
-            return Ok(vec![ToolResult::Result {
-                data: json!({
-                    "tool_name": tool_name,
-                    "already_loaded": true
-                }),
-                result_for_assistant: Some(build_get_tool_spec_duplicate_load_hint(tool_name)),
-                image_attachments: None,
-            }]);
-        }
-
-        debug!("GetToolSpec reading tool: {}", tool_name);
-        let detail = self.build_tool_detail(tool_name, Some(context)).await?;
-        let description = detail
-            .get("description")
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
-        let input_schema = detail
-            .get("input_schema")
-            .cloned()
-            .unwrap_or_else(|| json!({}));
-        let assistant_detail = build_get_tool_spec_assistant_detail(description, &input_schema);
-
-        Ok(vec![ToolResult::Result {
-            data: detail,
-            result_for_assistant: Some(assistant_detail),
-            image_attachments: None,
-        }])
+fn map_get_tool_spec_execution_error(error: GetToolSpecExecutionError) -> BitFunError {
+    match error {
+        GetToolSpecExecutionError::MissingToolName => BitFunError::tool(error.to_string()),
+        GetToolSpecExecutionError::Detail(message) => BitFunError::Validation(message),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::GetToolSpecTool;
-    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::tools::framework::{
         Tool, ToolExposure, ToolResult, ToolUseContext, ValidationResult,
     };
     use crate::agentic::tools::registry::get_global_tool_registry;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::errors::BitFunResult;
     use async_trait::async_trait;
-    use serde_json::{Value, json};
+    use serde_json::{json, Value};
     use std::collections::HashMap;
     use std::sync::Arc;
 
@@ -219,9 +175,7 @@ mod tests {
             .await;
 
         assert!(description.contains(&format!("- {}: Concise catalog entry.", tool_name)));
-        assert!(
-            !description.contains(&format!("- {}: Verbose description first line.", tool_name))
-        );
+        assert!(!description.contains(&format!("- {}: Verbose description first line.", tool_name)));
     }
 
     #[tokio::test]
@@ -257,11 +211,9 @@ mod tests {
 
         assert_eq!(data["tool_name"], "WebFetch");
         assert_eq!(data["already_loaded"], true);
-        assert!(
-            result_for_assistant
-                .as_deref()
-                .unwrap_or_default()
-                .contains("already loaded in the current conversation")
-        );
+        assert!(result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("already loaded in the current conversation"));
     }
 }

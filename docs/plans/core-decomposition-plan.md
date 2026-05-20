@@ -1086,12 +1086,12 @@ pub fn create_tool_registry() -> ToolRegistry {
   generic collapsed exposure 查询、`GetToolSpec` catalog description 和 detail JSON 的纯规则；core
   仍负责 tool availability、product catalog source、snapshot decorator、runtime unlock state 和工具执行。
 
-**当前安全迁移状态（2026-05-18）：**
+**当前安全迁移状态（2026-05-20）：**
 
-- 已迁移到 `bitfun-agent-tools`：`ToolResult`、`ValidationResult`、`InputValidator`、dynamic tool metadata、tool render options、runtime restriction DTO、path resolution DTO、`ToolContextFacts` / `ToolWorkspaceKind` 轻量上下文事实、`PortableToolContextProvider` 只读 facts provider、不依赖 core service 的 `ToolRegistry<T>` / `ToolRegistryItem` generic registry container、`StaticToolProvider` / `install_static_provider` 安装合约、generic catalog snapshot provider、generic GetToolSpec catalog provider、registry snapshot 到 manifest policy input 的纯 helper、generic collapsed exposure 查询、`GetToolSpec` load observation 到 collapsed 工具名集合的纯收集 helper、prompt-visible manifest definition 的纯组装 helper、generic contextual prompt-manifest resolver，以及 `GetToolSpec` catalog / detail 的 provider-neutral 组装 helper。dynamic tool provider / decorator contract 已通过 `agent-tools` 提供兼容 re-export，原 `runtime-ports` 路径保持可用；core 旧路径继续 re-export，并只保留 `BitFunError` 映射、路径 containment helper、`ToolUseContext` 到 facts 的只读投影和 runtime unlock state。
-- `bitfun-core::agentic::tools` 现在保留 core-owned product provider groups、`ProductToolRuntimeAssembly` snapshot decorator 组装、旧构造函数、`dyn Tool` 到 generic registry / contextual manifest / catalog snapshot provider / GetToolSpec catalog provider 的适配、`ToolUseContext` runtime handle / service owner，以及最新主干新增的 product registry snapshot access / `GetToolSpec` 执行；dynamic metadata map、tool map、dynamic descriptor assembly、static provider 安装合约、portable context facts、纯 manifest/exposure 契约、generic catalog snapshot provider、generic contextual prompt-manifest resolver 和 GetToolSpec presentation/schema/detail 纯 helper 由 `bitfun-agent-tools` 拥有。
+- 已迁移到 `bitfun-agent-tools`：`ToolResult`、`ValidationResult`、`InputValidator`、dynamic tool metadata、tool render options、runtime restriction DTO、path resolution DTO、`ToolContextFacts` / `ToolWorkspaceKind` 轻量上下文事实、`PortableToolContextProvider` 只读 facts provider、不依赖 core service 的 `ToolRegistry<T>` / `ToolRegistryItem` generic registry container、`StaticToolProvider` / `install_static_provider` 安装合约、generic catalog snapshot provider、generic GetToolSpec catalog provider、registry snapshot 到 manifest policy input 的纯 helper、generic collapsed exposure 查询、`GetToolSpec` load observation 到 collapsed 工具名集合的纯收集 helper、prompt-visible manifest definition 的纯组装 helper、generic contextual prompt-manifest resolver，以及 `GetToolSpec` catalog / detail / static metadata / tool-use message / execution-plan / result assembly 的 provider-neutral 组装 helper 和 provider-backed execution result helper。dynamic tool provider / decorator contract 已通过 `agent-tools` 提供兼容 re-export，原 `runtime-ports` 路径保持可用；core 旧路径继续 re-export，并只保留 `BitFunError` 映射、路径 containment helper、`ToolUseContext` 到 facts 的只读投影和 runtime unlock state。
+- `bitfun-core::agentic::tools` 现在保留 core-owned product provider groups、`ProductToolRuntimeAssembly` snapshot decorator 组装、旧构造函数、`dyn Tool` 到 generic registry / contextual manifest / catalog snapshot provider / GetToolSpec catalog provider 的适配、`ToolUseContext` runtime handle / service owner，以及 product registry snapshot access / `GetToolSpecTool` Tool impl；dynamic metadata map、tool map、dynamic descriptor assembly、static provider 安装合约、portable context facts、纯 manifest/exposure 契约、generic catalog snapshot provider、generic contextual prompt-manifest resolver、GetToolSpec presentation/schema/detail/static metadata/tool-use message 纯 helper、provider-neutral execution-plan、provider-backed execution result helper 和 result assembly helper 由 `bitfun-agent-tools` 拥有。
 - 已新增 `bitfun-tool-packs` feature scaffold，默认 feature 为空，`product-full` 只聚合 feature；当前只提供 `ToolPackFeatureGroup` / `all_feature_groups` / `enabled_feature_groups` 元数据，不注册或迁移任何工具实现。
-- 已通过 boundary check 锁定 `agent-tools` / `tool-packs` 暂不拥有 product tool runtime assembly、`GetToolSpecTool` 执行或 collapsed-tool unlock state；`tool-packs` 也不得拥有 manifest/exposure 契约。`agent-tools` 只允许拥有纯 manifest/exposure helper、generic catalog snapshot provider、generic GetToolSpec catalog provider、generic contextual manifest resolver、GetToolSpec presentation/schema/detail helper 和不依赖具体工具的 provider 安装合约，core product tool runtime 继续负责产品 registry snapshot、`dyn Tool` / `ToolUseContext` adapter、unlock state 和执行路径。
+- 已通过 boundary check 锁定 `agent-tools` / `tool-packs` 暂不拥有 product tool runtime assembly、`GetToolSpecTool` Tool impl、collapsed-tool unlock state owner 或 concrete tools；`tool-packs` 也不得拥有 manifest/exposure 契约。`agent-tools` 只允许拥有纯 manifest/exposure helper、generic catalog snapshot provider、generic GetToolSpec catalog provider、generic contextual manifest resolver、GetToolSpec presentation/schema/detail/static metadata/tool-use message/execution-plan/result assembly helper、provider-backed execution result helper 和不依赖具体工具的 provider 安装合约，core product tool runtime 继续负责产品 registry snapshot、`dyn Tool` / `ToolUseContext` adapter、unlock state source 和执行路径。
 - boundary check 也已补充 core owner anchor：要求产品工具注册、expanded/collapsed manifest、`GetToolSpec` duplicate-load guard、`ToolUseContext.unlocked_collapsed_tools`、执行管线 gating 与 execution unlock collector 仍保留在 core。后续若迁移这些 owner，必须先更新 port/provider 设计、等价测试与该脚本，而不能只删除 core 侧实现。
 - `Tool` trait、`ToolUseContext` 和具体工具实现仍在 core；它们直接连接 workspace service、snapshot wrapper、computer-use host、cancellation token 与 Deep Review checkpoint hook。`ToolContextFacts` / `PortableToolContextProvider` 只能作为只读事实投影，继续迁移前必须先确认 service port 方案，并补工具清单等价性测试。
 - 最新主干新增的 Deep Review shared-context / evidence-ledger checkpoint hook 仍保留在 core 的 `ToolUseContext` 中；在设计独立 tool context / event port 前，不应把 `ToolUseContext` 或 concrete tool implementation 继续外移。
@@ -1133,13 +1133,21 @@ pub fn create_tool_registry() -> ToolRegistry {
   product GetToolSpec catalog adapter，并保留 product collapsed catalog source 与
   `dyn Tool` / `ToolUseContext` adapter。该切片仍不迁移 concrete tools、`GetToolSpecTool`
   执行、collapsed unlock state 或 snapshot decorator。
-- 当前 PR（2026-05-20）：收敛 H1 前的 core product tool owner 边界，而不迁移 runtime owner。
+- 已合入 PR #803（2026-05-20）：收敛 H1 前的 core product tool owner 边界，而不迁移 runtime owner。
   `tool_adapter.rs` 只承接 core `Tool` 到 `bitfun-agent-tools` provider-neutral contract 的
   adapter；`catalog_provider.rs` 只承接 product registry snapshot、contextual catalog、
-  manifest 和 GetToolSpec catalog/detail facade；`manifest_resolver` 与 `GetToolSpecTool`
+  manifest 和 GetToolSpec catalog/detail provider facade；`manifest_resolver` 与 `GetToolSpecTool`
   只保留旧路径 result type 转换、execution wrapper、duplicate-load guard 和 assistant result
   rendering。该切片仍不迁移 `ToolUseContext`、runtime manifest assembly、`GetToolSpecTool`
   执行 owner、collapsed unlock state、snapshot decorator 或 concrete tools。
+- H1 execution-plan/result slice（2026-05-20）：将 `GetToolSpec` static metadata、
+  tool-use message、input extraction、duplicate-load planning、duplicate-load result、detail
+  result assembly 和 provider-backed execution result helper 迁入 `bitfun-agent-tools`，并用
+  contract tests 锁定 JSON shape、assistant XML escaping、no-image result、missing `tool_name`
+  error、detail error 分类、provider detail lookup、已加载短路语义和工具展示文案。core
+  `GetToolSpecTool` 继续持有 Tool impl、`ToolUseContext.unlocked_collapsed_tools` 状态来源和
+  `BitFunError` 映射；该切片不迁移
+  runtime manifest assembly、unlock state owner、snapshot decorator 或 concrete tools。
 
 **验证：**
 
@@ -1876,9 +1884,10 @@ git diff -- package.json scripts/dev.cjs scripts/desktop-tauri-build.mjs scripts
 22. 已合入：`ToolUseContext` portable facts owner guard。可外移 facts 与 runtime-only fields 已分界；collapsed unlock state、custom data、workspace services、cancellation token、computer-use host 与 Deep Review checkpoint hook 继续 core-owned。
 23. 已合入：`GetToolSpec` unlock state guard。execution 侧只接受成功的 `GetToolSpec` 结果、只输出 collapsed 白名单工具，并保持去重和过滤语义；`GetToolSpecTool` 执行、runtime manifest assembly、`ToolUseContext` 和 concrete tools 不迁移。
 24. 已合入：contextual manifest owner migration。context-aware prompt manifest / visible-tools resolution 通用算法、generic catalog snapshot provider、generic GetToolSpec catalog provider 和 `GetToolSpec` collapsed summary/detail helper 已迁入 `bitfun-agent-tools`；core 仍保留 product registry snapshot access、product collapsed catalog source、core `Tool` / `ToolUseContext` adapter 与旧路径返回类型。
-25. 当前 PR：product tool adapter/catalog facade closure。`tool_adapter.rs` 承接 core `Tool` 到 provider-neutral contract 的 adapter，`catalog_provider.rs` 承接 product registry snapshot、contextual catalog、manifest、GetToolSpec catalog-description/detail facade；`manifest_resolver` 和 `GetToolSpecTool` 只保留旧路径 result type 转换、execution wrapper、duplicate-load guard 与 assistant result rendering。该 PR 仍不迁移 `ToolUseContext`、runtime manifest assembly、`GetToolSpecTool` 执行 owner、collapsed unlock state、snapshot decorator 或 concrete tools。
-26. 后续表中 H1 必须是真正 runtime owner 迁移设计/实施，而不是继续插入 baseline-only PR：只能选择 `ToolUseContext`、runtime manifest assembly / `GetToolSpec` 执行、snapshot decorator port 或单一 concrete tool feature group 中的一个 owner，并补 port/provider 设计、旧路径兼容和等价测试。
-27. 后续独立评估：`bitfun-core default = []`、per-product feature set、依赖版本收敛或构建收益优化；任何收益声明都需要记录 `cargo check -p bitfun-core`、workspace check 和目标 crate check 的前后数据。
+25. 已合入：product tool adapter/catalog facade closure。`tool_adapter.rs` 承接 core `Tool` 到 provider-neutral contract 的 adapter，`catalog_provider.rs` 承接 product registry snapshot、contextual catalog、manifest、GetToolSpec catalog-description/detail provider facade；`manifest_resolver` 和 `GetToolSpecTool` 只保留旧路径 result type 转换、execution wrapper、duplicate-load guard 与 assistant result rendering。
+26. 当前阶段：H1 GetToolSpec execution-plan/result owner slice。`bitfun-agent-tools` 接管 static metadata、tool-use message、input extraction、duplicate-load planning、duplicate-load result、provider-backed detail lookup 到 result assembly 的组装规则和 typed execution error；core 继续持有 `GetToolSpecTool` Tool impl、`ToolUseContext.unlocked_collapsed_tools` 状态来源、product provider/context 注入和 `BitFunError` 映射；该阶段不迁移 runtime manifest assembly、unlock state owner、snapshot decorator 或 concrete tools。
+27. 后续表中 H1 的下一步必须继续是真正 runtime owner 迁移设计/实施，而不是插入 baseline-only PR：只能选择 `ToolUseContext`、runtime manifest assembly / `GetToolSpec` Tool impl、snapshot decorator port 或单一 concrete tool feature group 中的一个 owner，并补 port/provider 设计、旧路径兼容和等价测试。
+28. 后续独立评估：`bitfun-core default = []`、per-product feature set、依赖版本收敛或构建收益优化；任何收益声明都需要记录 `cargo check -p bitfun-core`、workspace check 和目标 crate check 的前后数据。
 
 冗余清理 PR 不进入上述主线序号。只有在满足 `0A.6` 的绝对等价要求时，才可以插入到相邻里程碑之间，并且不得与主线拆分 PR 混合。
 

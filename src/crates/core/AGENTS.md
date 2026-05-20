@@ -34,14 +34,14 @@ SessionManager → Session → DialogTurn → ModelRound
 - For tools, keep lightweight contracts, pure manifest/exposure contracts,
   generic contextual prompt-manifest resolver contracts, generic catalog
   snapshot provider contracts, generic GetToolSpec catalog provider/detail/
-  summary helpers, and portable tool context facts/provider plus generic registry / static-provider
-  / dynamic-provider container contracts in `bitfun-agent-tools`. Core tool
-  runtime should assemble product tool providers through
+  summary/static metadata/tool-use message/execution-plan/provider-backed execution-result/
+  result-assembly helpers, and portable tool context facts/provider plus generic registry / static-provider / dynamic-provider container
+  contracts in `bitfun-agent-tools`. Core tool runtime should assemble product tool providers through
   `runtime_assembly.rs` + `static_providers.rs`, adapt core `Tool` into
   provider-neutral contracts through `tool_adapter.rs`, keep product catalog
   access and product manifest / GetToolSpec facade wiring in
   `catalog_provider.rs`, apply snapshot decoration, and own on-demand spec
-  discovery execution (`GetToolSpec`) for now.
+  discovery Tool impl and unlock-state source for now.
   `bitfun-tool-packs` may expose planned
   feature-group scaffold metadata, but it must not own concrete tools yet.
 - Keep `ToolUseContext` and concrete tool implementations in core unless a
