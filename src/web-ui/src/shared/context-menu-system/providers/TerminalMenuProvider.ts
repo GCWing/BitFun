@@ -19,9 +19,10 @@ export class TerminalMenuProvider implements IMenuProvider {
     const terminalContext = context as TerminalContext;
     const items: MenuItem[] = [];
     const isReadOnly = terminalContext.isReadOnly ?? false;
-
+    const supportsCopyPaste = terminalContext.supportsCopyPaste ?? true;
     
-    items.push({
+    if(supportsCopyPaste) {
+      items.push({
       id: 'terminal-copy',
       label: i18nService.t('common:actions.copy'),
       icon: 'Copy',
@@ -51,6 +52,8 @@ export class TerminalMenuProvider implements IMenuProvider {
         }
       });
     }
+    }
+    
 
     
     items.push({

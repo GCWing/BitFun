@@ -122,6 +122,8 @@ export interface TerminalContext extends BaseContext {
   selectedText?: string;
    
   isReadOnly?: boolean;
+
+  supportsCopyPaste?: boolean;
 }
 
  

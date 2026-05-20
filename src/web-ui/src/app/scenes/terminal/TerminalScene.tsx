@@ -44,6 +44,7 @@ const TerminalScene: React.FC<TerminalSceneProps> = ({ isActive = true }) => {
           showStatusBar
           onExit={handleExit}
           onClose={handleClose}
+          supportsCopyPaste={false}
         />
       ) : (
         <div className="bitfun-terminal-scene__empty">

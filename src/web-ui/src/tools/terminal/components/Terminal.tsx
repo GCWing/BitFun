@@ -130,6 +130,7 @@ export interface TerminalProps {
    * content. Set back to 0 (or leave unset) to restore normal resize behaviour.
    */
   preventShrinkBelowColsRef?: React.MutableRefObject<number>;
+  supportsCopyPaste?: boolean;
 }
 
 export interface TerminalRef {
@@ -179,6 +180,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   onReady,
   onPaste,
   preventShrinkBelowColsRef,
+  supportsCopyPaste = true,
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
@@ -684,6 +686,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
       className={`bitfun-terminal ${className}`}
       data-terminal-id={terminalId}
       data-session-id={sessionId}
+      data-supports-copy-paste={supportsCopyPaste?'true':'false'}
     >
       <div 
         ref={containerRef} 
