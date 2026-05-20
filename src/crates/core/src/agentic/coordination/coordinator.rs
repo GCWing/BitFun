@@ -34,7 +34,7 @@ use crate::service::workspace::{
 use crate::util::errors::{BitFunError, BitFunResult};
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -2558,6 +2558,41 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         })
         .await;
         Ok(())
+    }
+
+    pub async fn delete_hidden_subagent_sessions_for_parent_turns(
+        &self,
+        workspace_path: &Path,
+        parent_session_id: &str,
+        parent_dialog_turn_ids: &HashSet<String>,
+    ) -> BitFunResult<Vec<String>> {
+        let session_ids = self
+            .session_manager
+            .collect_hidden_subagent_cascade_for_parent_turns(
+                workspace_path,
+                parent_session_id,
+                parent_dialog_turn_ids,
+            )
+            .await?;
+
+        let mut deleted_session_ids = Vec::new();
+
+        for session_id in session_ids {
+            if let Err(e) = self
+                .cancel_active_turn_for_session(&session_id, Duration::from_secs(2))
+                .await
+            {
+                warn!(
+                    "Failed to cancel hidden subagent session before deletion: session_id={}, parent_session_id={}, error={}",
+                    session_id, parent_session_id, e
+                );
+            }
+
+            self.delete_session(workspace_path, &session_id).await?;
+            deleted_session_ids.push(session_id);
+        }
+
+        Ok(deleted_session_ids)
     }
 
     /// Restore session

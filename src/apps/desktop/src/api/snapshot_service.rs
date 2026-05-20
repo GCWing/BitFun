@@ -8,6 +8,7 @@ use bitfun_core::service::snapshot::{
 };
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use tauri::{AppHandle, Emitter};
 
@@ -416,10 +417,61 @@ pub async fn rollback_to_turn(
     let mut deleted_turns_count = 0;
     if request.delete_turns {
         let workspace_path = PathBuf::from(&request.workspace_path);
+        let mut rolled_back_parent_turn_ids = HashSet::new();
+
+        use bitfun_core::agentic::persistence::PersistenceManager;
+
+        match try_get_path_manager_arc() {
+            Ok(path_manager) => match PersistenceManager::new(path_manager) {
+                Ok(persistence_manager) => {
+                    match persistence_manager
+                        .load_session_turns(&workspace_path, &request.session_id)
+                        .await
+                    {
+                        Ok(turns) => {
+                            rolled_back_parent_turn_ids = turns
+                                .into_iter()
+                                .filter(|turn| turn.turn_index >= request.turn_index)
+                                .map(|turn| turn.turn_id)
+                                .collect();
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Failed to load parent turns before rollback cleanup: session_id={}, turn_index={}, error={}",
+                                request.session_id, request.turn_index, e
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to create PersistenceManager: error={}", e);
+                }
+            },
+            Err(e) => {
+                warn!("Failed to create PathManager: error={}", e);
+            }
+        }
+
         {
             use bitfun_core::agentic::coordination::get_global_coordinator;
 
             if let Some(coordinator) = get_global_coordinator() {
+                if !rolled_back_parent_turn_ids.is_empty() {
+                    if let Err(e) = coordinator
+                        .delete_hidden_subagent_sessions_for_parent_turns(
+                            &workspace_path,
+                            &request.session_id,
+                            &rolled_back_parent_turn_ids,
+                        )
+                        .await
+                    {
+                        warn!(
+                            "Failed to delete hidden subagent sessions during rollback: session_id={}, turn_index={}, error={}",
+                            request.session_id, request.turn_index, e
+                        );
+                    }
+                }
+
                 if let Err(e) = coordinator
                     .get_session_manager()
                     .rollback_context_to_turn_start(
@@ -438,8 +490,6 @@ pub async fn rollback_to_turn(
                 warn!("Global coordinator not initialized, skipping agentic context rollback");
             }
         }
-
-        use bitfun_core::agentic::persistence::PersistenceManager;
 
         match try_get_path_manager_arc() {
             Ok(path_manager) => match PersistenceManager::new(path_manager) {

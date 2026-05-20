@@ -19,7 +19,7 @@ use crate::service::config::{
 };
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
-    TextItemData, TurnStatus, UserMessageData,
+    SessionRelationshipKind, TextItemData, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::service::workspace::get_global_workspace_service;
@@ -29,7 +29,7 @@ use crate::util::timing::elapsed_ms_u64;
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use serde_json::json;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
@@ -2205,6 +2205,86 @@ impl SessionManager {
             .await
     }
 
+    pub async fn collect_hidden_subagent_cascade_for_parent_turns(
+        &self,
+        workspace_path: &Path,
+        parent_session_id: &str,
+        parent_dialog_turn_ids: &HashSet<String>,
+    ) -> BitFunResult<Vec<String>> {
+        if parent_session_id.trim().is_empty() || parent_dialog_turn_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let metadata_list = self
+            .persistence_manager
+            .list_session_metadata_including_internal(workspace_path)
+            .await?;
+
+        let mut child_session_ids_by_parent: HashMap<String, Vec<String>> = HashMap::new();
+        let mut root_session_ids = Vec::new();
+
+        for metadata in metadata_list {
+            let Some((relationship_kind, relationship_parent_session_id, parent_dialog_turn_id)) =
+                extract_subagent_relationship(&metadata)
+            else {
+                continue;
+            };
+
+            if relationship_kind != SessionRelationshipKind::Subagent {
+                continue;
+            }
+
+            child_session_ids_by_parent
+                .entry(relationship_parent_session_id.clone())
+                .or_default()
+                .push(metadata.session_id.clone());
+
+            if relationship_parent_session_id == parent_session_id
+                && parent_dialog_turn_ids.contains(&parent_dialog_turn_id)
+            {
+                root_session_ids.push(metadata.session_id);
+            }
+        }
+
+        let mut visited = HashSet::new();
+        let mut ordered_session_ids = Vec::new();
+
+        fn visit(
+            session_id: &str,
+            child_session_ids_by_parent: &HashMap<String, Vec<String>>,
+            visited: &mut HashSet<String>,
+            ordered_session_ids: &mut Vec<String>,
+        ) {
+            if !visited.insert(session_id.to_string()) {
+                return;
+            }
+
+            if let Some(child_session_ids) = child_session_ids_by_parent.get(session_id) {
+                for child_session_id in child_session_ids {
+                    visit(
+                        child_session_id,
+                        child_session_ids_by_parent,
+                        visited,
+                        ordered_session_ids,
+                    );
+                }
+            }
+
+            ordered_session_ids.push(session_id.to_string());
+        }
+
+        for root_session_id in root_session_ids {
+            visit(
+                &root_session_id,
+                &child_session_ids_by_parent,
+                &mut visited,
+                &mut ordered_session_ids,
+            );
+        }
+
+        Ok(ordered_session_ids)
+    }
+
     pub async fn set_session_deep_review_run_manifest(
         &self,
         session_id: &str,
@@ -3275,6 +3355,45 @@ impl SessionManager {
     }
 }
 
+fn extract_subagent_relationship(
+    metadata: &SessionMetadata,
+) -> Option<(SessionRelationshipKind, String, String)> {
+    let relationship = metadata.relationship.as_ref();
+    let custom_metadata = metadata.custom_metadata.as_ref();
+
+    let relationship_kind = relationship
+        .and_then(|value| value.kind.clone())
+        .or_else(|| {
+            custom_metadata
+                .and_then(|value| value.get("kind"))
+                .and_then(|value| value.as_str())
+                .and_then(|value| match value {
+                    "subagent" => Some(SessionRelationshipKind::Subagent),
+                    _ => None,
+                })
+        })?;
+
+    let parent_session_id = relationship
+        .and_then(|value| value.parent_session_id.clone())
+        .or_else(|| {
+            custom_metadata
+                .and_then(|value| value.get("parentSessionId"))
+                .and_then(|value| value.as_str())
+                .map(str::to_string)
+        })?;
+
+    let parent_dialog_turn_id = relationship
+        .and_then(|value| value.parent_dialog_turn_id.clone())
+        .or_else(|| {
+            custom_metadata
+                .and_then(|value| value.get("parentDialogTurnId"))
+                .and_then(|value| value.as_str())
+                .map(str::to_string)
+        })?;
+
+    Some((relationship_kind, parent_session_id, parent_dialog_turn_id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{SessionManager, SessionManagerConfig};
@@ -3284,11 +3403,12 @@ mod tests {
     use crate::infrastructure::PathManager;
     use crate::service::remote_ssh::workspace_state::local_workspace_roots_equal;
     use crate::service::session::{
-        DialogTurnData, ModelRoundData, SessionKind, SessionRelationship,
+        DialogTurnData, ModelRoundData, SessionKind, SessionMetadata, SessionRelationship,
         SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData, UserMessageData,
     };
     use dashmap::try_result::TryResult;
     use serde_json::json;
+    use std::collections::HashSet;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::Duration;
@@ -3669,6 +3789,113 @@ mod tests {
         assert!(custom_metadata.get("parentTurnIndex").is_none());
         assert!(custom_metadata.get("parentToolCallId").is_none());
         assert!(custom_metadata.get("subagentType").is_none());
+    }
+
+    #[tokio::test]
+    async fn collect_hidden_subagent_cascade_for_parent_turns_returns_post_order_matches() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+
+        let mut matched_root = SessionMetadata::new(
+            "child-root".to_string(),
+            "Subagent: root".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        matched_root.session_kind = SessionKind::Subagent;
+        matched_root.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("parent-session".to_string()),
+            parent_request_id: None,
+            parent_dialog_turn_id: Some("turn-2".to_string()),
+            parent_turn_index: Some(2),
+            parent_tool_call_id: Some("tool-1".to_string()),
+            subagent_type: Some("Explore".to_string()),
+        });
+        persistence_manager
+            .save_session_metadata(workspace.path(), &matched_root)
+            .await
+            .expect("matched root should save");
+
+        let mut matched_grandchild = SessionMetadata::new(
+            "grandchild".to_string(),
+            "Subagent: grandchild".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        matched_grandchild.session_kind = SessionKind::Subagent;
+        matched_grandchild.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("child-root".to_string()),
+            parent_request_id: None,
+            parent_dialog_turn_id: Some("child-turn".to_string()),
+            parent_turn_index: None,
+            parent_tool_call_id: Some("tool-child".to_string()),
+            subagent_type: Some("Explore".to_string()),
+        });
+        persistence_manager
+            .save_session_metadata(workspace.path(), &matched_grandchild)
+            .await
+            .expect("grandchild should save");
+
+        let mut unmatched_root = SessionMetadata::new(
+            "child-other-turn".to_string(),
+            "Subagent: other turn".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        unmatched_root.session_kind = SessionKind::Subagent;
+        unmatched_root.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("parent-session".to_string()),
+            parent_request_id: None,
+            parent_dialog_turn_id: Some("turn-1".to_string()),
+            parent_turn_index: Some(1),
+            parent_tool_call_id: Some("tool-2".to_string()),
+            subagent_type: Some("Explore".to_string()),
+        });
+        persistence_manager
+            .save_session_metadata(workspace.path(), &unmatched_root)
+            .await
+            .expect("unmatched root should save");
+
+        let mut visible_review_child = SessionMetadata::new(
+            "review-child".to_string(),
+            "Review child".to_string(),
+            "DeepReview".to_string(),
+            "model".to_string(),
+        );
+        visible_review_child.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::DeepReview),
+            parent_session_id: Some("parent-session".to_string()),
+            parent_request_id: None,
+            parent_dialog_turn_id: Some("turn-2".to_string()),
+            parent_turn_index: Some(2),
+            parent_tool_call_id: None,
+            subagent_type: None,
+        });
+        persistence_manager
+            .save_session_metadata(workspace.path(), &visible_review_child)
+            .await
+            .expect("visible review child should save");
+
+        let matched_turn_ids = HashSet::from(["turn-2".to_string()]);
+        let cascade = manager
+            .collect_hidden_subagent_cascade_for_parent_turns(
+                workspace.path(),
+                "parent-session",
+                &matched_turn_ids,
+            )
+            .await
+            .expect("cascade lookup should succeed");
+
+        assert_eq!(
+            cascade,
+            vec!["grandchild".to_string(), "child-root".to_string()]
+        );
     }
 
     #[tokio::test]
