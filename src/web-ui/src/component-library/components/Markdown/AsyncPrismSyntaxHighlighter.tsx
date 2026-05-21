@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { loadPrismSyntaxHighlighter } from '@/shared/utils/syntaxHighlighterLoader';
+import { getLoadedPrismSyntaxHighlighter, loadPrismSyntaxHighlighter } from '@/shared/utils/syntaxHighlighterLoader';
+import type { FlowCodeBlockFallbackProps } from './Markdown';
 
 interface AsyncPrismSyntaxHighlighterProps {
   language: string;
@@ -8,6 +9,8 @@ interface AsyncPrismSyntaxHighlighterProps {
   customStyle?: React.CSSProperties;
   codeTagProps?: { style?: React.CSSProperties; [key: string]: unknown };
   lineNumberStyle?: React.CSSProperties;
+  fallback?: React.ComponentType<FlowCodeBlockFallbackProps>;
+  fallbackProps?: FlowCodeBlockFallbackProps;
   children: string;
 }
 
@@ -18,9 +21,11 @@ export const AsyncPrismSyntaxHighlighter: React.FC<AsyncPrismSyntaxHighlighterPr
   customStyle,
   codeTagProps,
   lineNumberStyle,
+  fallback: Fallback,
+  fallbackProps,
   children,
 }) => {
-  const [Highlighter, setHighlighter] = useState<React.ComponentType<any> | null>(null);
+  const [Highlighter, setHighlighter] = useState<React.ComponentType<any> | null>(() => getLoadedPrismSyntaxHighlighter());
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +47,10 @@ export const AsyncPrismSyntaxHighlighter: React.FC<AsyncPrismSyntaxHighlighterPr
   }, []);
 
   if (!Highlighter) {
+    if (Fallback && fallbackProps) {
+      return <Fallback {...fallbackProps} />;
+    }
+
     return (
       <pre
         className={`language-${language} code-block-fallback`}

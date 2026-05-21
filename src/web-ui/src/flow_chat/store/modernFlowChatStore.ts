@@ -129,7 +129,7 @@ function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
     return false;
   }
 
-  if (hasActiveTool(round) || hasRecentlyCompletedTool(round, nowMs)) {
+  if (hasActiveTool(round) || (round.isStreaming && hasRecentlyCompletedTool(round, nowMs))) {
     return false;
   }
   

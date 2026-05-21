@@ -184,4 +184,25 @@ describe('buildModelRoundItemGroups', () => {
       },
     ]);
   });
+
+  it('does not keep non-streaming completed tools in a time-based critical state', () => {
+    const completedTool = makeReadTool('tool-1');
+    const justCompletedTool = makeReadTool('tool-2', 'completed', 10_000);
+
+    const groups = buildModelRoundItemGroups({
+      items: [completedTool, justCompletedTool],
+      isStreaming: false,
+      disableExploreGrouping: false,
+      isCollapsibleTool: toolName => toolName === 'Read',
+      nowMs: 10_200,
+    });
+
+    expect(groups).toEqual([
+      {
+        type: 'explore',
+        items: [completedTool, justCompletedTool],
+        isLast: true,
+      },
+    ]);
+  });
 });

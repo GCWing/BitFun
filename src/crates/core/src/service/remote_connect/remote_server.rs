@@ -36,67 +36,9 @@ fn current_workspace_path() -> Option<std::path::PathBuf> {
 
 async fn resolve_session_workspace_path(session_id: &str) -> Option<std::path::PathBuf> {
     use crate::agentic::coordination::get_global_coordinator;
-    use crate::agentic::persistence::PersistenceManager;
-    use crate::infrastructure::PathManager;
-    use crate::service::workspace::get_global_workspace_service;
 
     if let Some(coordinator) = get_global_coordinator() {
-        if let Some(workspace_path) = coordinator
-            .get_session_manager()
-            .get_session(session_id)
-            .and_then(|session| session.config.workspace_path.clone())
-            .filter(|path| !path.is_empty())
-        {
-            return Some(std::path::PathBuf::from(workspace_path));
-        }
-    }
-
-    let workspace_service = get_global_workspace_service()?;
-    let mut candidates: Vec<std::path::PathBuf> = workspace_service
-        .get_opened_workspaces()
-        .await
-        .into_iter()
-        .map(|workspace| workspace.root_path)
-        .collect();
-
-    if let Some(current_workspace) = workspace_service.get_current_workspace().await {
-        let current_root = current_workspace.root_path;
-        if !candidates.iter().any(|path| path == &current_root) {
-            candidates.push(current_root);
-        }
-    }
-
-    let Ok(path_manager) = PathManager::new() else {
-        return None;
-    };
-    let path_manager = Arc::new(path_manager);
-    let Ok(persistence_manager) = PersistenceManager::new(path_manager) else {
-        return None;
-    };
-
-    for workspace_path in candidates {
-        match persistence_manager
-            .load_session_metadata(&workspace_path, session_id)
-            .await
-        {
-            Ok(Some(metadata)) => {
-                if let Some(bound_workspace) =
-                    metadata.workspace_path.filter(|path| !path.is_empty())
-                {
-                    return Some(std::path::PathBuf::from(bound_workspace));
-                }
-                return Some(workspace_path);
-            }
-            Ok(None) => {}
-            Err(err) => {
-                debug!(
-                    "Failed to load session metadata while resolving workspace: session_id={} workspace={} error={}",
-                    session_id,
-                    workspace_path.display(),
-                    err
-                );
-            }
-        }
+        return coordinator.resolve_session_workspace_path(session_id).await;
     }
 
     None

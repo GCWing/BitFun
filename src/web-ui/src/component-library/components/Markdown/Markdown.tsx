@@ -524,6 +524,71 @@ function formatCodeLanguageLabel(lang: string): string {
   return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
 }
 
+export interface FlowCodeBlockFallbackProps {
+  code: string;
+  language: string;
+  bodyStyle: React.CSSProperties;
+  codeTagStyle: React.CSSProperties;
+  gutterColor: string;
+}
+
+/**
+ * Lightweight, stable line-numbered code renderer used while the surrounding
+ * markdown is still streaming. Its layout deliberately matches the
+ * `react-syntax-highlighter` `showLineNumbers` output: a fixed-width inline
+ * line-number column followed by the line content, separated visually by the
+ * same padding. This keeps the code block from visibly jumping when streaming
+ * completes and the heavy Prism highlighter takes over.
+ */
+const CodeBlockFallback: React.FC<FlowCodeBlockFallbackProps> = ({
+  code,
+  language,
+  bodyStyle,
+  codeTagStyle,
+  gutterColor,
+}) => {
+  const lineCount = code.length === 0 ? 1 : code.split('\n').length;
+  let gutterText = '';
+  for (let i = 1; i <= lineCount; i++) {
+    gutterText += i === lineCount ? `${i}` : `${i}\n`;
+  }
+
+  return (
+    <pre
+      className={`language-${language} code-block-fallback code-block-fallback--linenumbers`}
+      style={bodyStyle}
+    >
+      <code style={{ ...codeTagStyle, display: 'flex' }}>
+        <span
+          aria-hidden="true"
+          style={{
+            flex: 'none',
+            display: 'block',
+            minWidth: '3em',
+            paddingRight: '1em',
+            textAlign: 'right',
+            color: gutterColor,
+            userSelect: 'none',
+            whiteSpace: 'pre',
+          }}
+        >
+          {gutterText}
+        </span>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: 'block',
+            whiteSpace: 'pre',
+          }}
+        >
+          {code}
+        </span>
+      </code>
+    </pre>
+  );
+};
+
 const CopyButton: React.FC<{ code: string }> = ({ code }) => {
   const { t } = useI18n('components');
   const [copied, setCopied] = useState(false);
@@ -616,15 +681,31 @@ export const Markdown = React.memo<MarkdownProps>(({
   const { markdownContent, reproductionSteps } = useMemo(() => {
     const regex = /<reproduction_steps>([\s\S]*?)<\/reproduction[\s_]*steps\s*>?/g;
     const match = regex.exec(contentStr);
-    
+
+    let body = contentStr;
+    let steps: string | null = null;
     if (match) {
-      const steps = match[1].trim();
-      const cleanedContent = contentStr.replace(regex, '').trim();
-      return { markdownContent: cleanedContent, reproductionSteps: steps };
+      steps = match[1].trim();
+      body = contentStr.replace(regex, '').trim();
     }
-    
-    return { markdownContent: contentStr, reproductionSteps: null };
-  }, [contentStr]);
+
+    // While streaming, the model may emit an opening ```lang fence long before
+    // the closing ```. react-markdown then flips between parsing the tail as a
+    // paragraph (raw text) and as a fenced code block as more tokens arrive,
+    // which unmounts/remounts the code block and shifts its position every
+    // tick. Append a synthetic closing fence so the AST stays a stable code
+    // block from the moment the opening fence appears.
+    if (isStreaming) {
+      const fenceMatches = body.match(/^[ \t]{0,3}(`{3,}|~{3,})/gm);
+      if (fenceMatches && fenceMatches.length % 2 === 1) {
+        const lastFence = fenceMatches[fenceMatches.length - 1].trim();
+        const needsLeadingNewline = !body.endsWith('\n');
+        body = `${body}${needsLeadingNewline ? '\n' : ''}${lastFence}`;
+      }
+    }
+
+    return { markdownContent: body, reproductionSteps: steps };
+  }, [contentStr, isStreaming]);
   
   const linkMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -847,7 +928,16 @@ export const Markdown = React.memo<MarkdownProps>(({
       }
       
       const normalizedLang = getPrismLanguageFromAlias(language);
-      
+      const codeBodyStyle: React.CSSProperties = {
+        margin: 0,
+        borderRadius: '0 0 8px 8px',
+        fontSize: '0.875rem',
+        lineHeight: '1.55',
+      };
+      const codeTagStyle: React.CSSProperties = {
+        fontFamily: 'var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace)',
+      };
+
       return (
         <div className={`code-block-wrapper${hasMultipleLines ? '' : ' code-block-wrapper--single-line'}`}>
           <div className="code-block-toolbar">
@@ -855,31 +945,48 @@ export const Markdown = React.memo<MarkdownProps>(({
             <CopyButton code={code} />
           </div>
           <div className="code-block-body">
-          <AsyncPrismSyntaxHighlighter
-            language={normalizedLang}
-            style={syntaxTheme}
-            showLineNumbers={true}
-            customStyle={{
-              margin: 0,
-              borderRadius: '0 0 8px 8px',
-              fontSize: '0.875rem',
-              lineHeight: '1.55'
-            }}
-            codeTagProps={{
-              style: {
-                fontFamily: 'var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace)'
-              }
-            }}
-            lineNumberStyle={{
-              color: isLight ? '#999' : '#666',
-              paddingRight: '1em',
-              textAlign: 'right',
-              userSelect: 'none',
-              minWidth: '3em'
-            }}
-          >
-            {code}
-          </AsyncPrismSyntaxHighlighter>
+          {isStreaming ? (
+            // While the text is still streaming, skip the heavy Prism
+            // tokenization on every tick (it re-highlights the entire
+            // code each frame, which is the main source of code-block
+            // jitter in the chat). Render a lightweight, line-numbered
+            // <pre> that matches Prism's `showLineNumbers` layout so the
+            // gutter width and line indentation stay visually stable
+            // across the eventual fallback -> Prism swap when streaming
+            // completes.
+            <CodeBlockFallback
+              code={code}
+              language={normalizedLang}
+              bodyStyle={codeBodyStyle}
+              codeTagStyle={codeTagStyle}
+              gutterColor={isLight ? '#999' : '#666'}
+            />
+          ) : (
+            <AsyncPrismSyntaxHighlighter
+              language={normalizedLang}
+              style={syntaxTheme}
+              showLineNumbers={true}
+              customStyle={codeBodyStyle}
+              codeTagProps={{ style: codeTagStyle }}
+              lineNumberStyle={{
+                color: isLight ? '#999' : '#666',
+                paddingRight: '1em',
+                textAlign: 'right',
+                userSelect: 'none',
+                minWidth: '3em'
+              }}
+              fallback={CodeBlockFallback}
+              fallbackProps={{
+                code,
+                language: normalizedLang,
+                bodyStyle: codeBodyStyle,
+                codeTagStyle,
+                gutterColor: isLight ? '#999' : '#666',
+              }}
+            >
+              {code}
+            </AsyncPrismSyntaxHighlighter>
+          )}
           </div>
         </div>
       );

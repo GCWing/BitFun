@@ -38,6 +38,7 @@ export function processToolEvent(
   context: FlowChatContext,
   sessionId: string,
   turnId: string,
+  roundId: string,
   toolEvent: FlowToolEvent,
   options?: ToolEventOptions,
   onTodoWriteResult?: (sessionId: string, turnId: string, result: any) => void
@@ -59,7 +60,7 @@ export function processToolEvent(
 
   switch (toolEvent.event_type) {
     case 'EarlyDetected': {
-      handleEarlyDetected(context, store, sessionId, turnId, dialogTurn, toolEvent, options);
+      handleEarlyDetected(context, store, sessionId, turnId, roundId, dialogTurn, toolEvent, options);
       break;
     }
     
@@ -70,7 +71,7 @@ export function processToolEvent(
     
     case 'Started': {
       flushPendingBatchedEvents(context);
-      handleStarted(store, sessionId, turnId, dialogTurn, toolEvent, options);
+      handleStarted(store, sessionId, turnId, roundId, dialogTurn, toolEvent, options);
       break;
     }
     
@@ -260,14 +261,12 @@ function handleEarlyDetected(
   store: FlowChatStore,
   sessionId: string,
   turnId: string,
+  roundId: string,
   dialogTurn: DialogTurn,
   toolEvent: EarlyDetectedToolEvent,
   options?: ToolEventOptions
 ): void {
   flushPendingBatchedEvents(context);
-  
-  const shouldDisplayInMainFlow = toolEvent.tool_name === 'submit_code_review' || 
-                                 toolEvent.tool_name === 'AskUserQuestion';
   
   const preparingToolItem: FlowToolItem = {
     id: toolEvent.tool_id,
@@ -282,35 +281,22 @@ function handleEarlyDetected(
     requiresConfirmation: false,
     isParamsStreaming: true,
     startTime: options?.parentTimestamp ? options.parentTimestamp + 2 : Date.now(),
-    ...(options?.isSubagent && !shouldDisplayInMainFlow && {
-      isSubagentItem: true,
-      parentTaskToolId: options.parentToolId,
-      subagentSessionId: options.subagentSessionId
-    })
   };
-  
-  if (options?.isSubagent && options.parentToolId && !shouldDisplayInMainFlow) {
-    store.insertModelRoundItemAfterTool(sessionId, turnId, options.parentToolId, preparingToolItem);
-    applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
-  } else {
-    let lastModelRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
-    if (!lastModelRound) {
-      const newRoundId = `round_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      lastModelRound = {
-        id: newRoundId,
-        index: 0,
-        items: [],
-        isStreaming: true,
-        isComplete: false,
-        status: 'streaming',
-        startTime: Date.now()
-      };
-      store.addModelRound(sessionId, turnId, lastModelRound);
-    }
-    
-    store.addModelRoundItem(sessionId, turnId, preparingToolItem, lastModelRound.id);
-    applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
+
+  const targetRound = dialogTurn.modelRounds.find(round => round.id === roundId);
+  if (!targetRound) {
+    log.error('Tool EarlyDetected event references missing round (backend bug)', {
+      sessionId,
+      turnId,
+      roundId,
+      toolId: toolEvent.tool_id,
+      toolName: toolEvent.tool_name,
+    });
+    return;
   }
+
+  store.addModelRoundItem(sessionId, turnId, preparingToolItem, roundId);
+  applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
 }
 
 /**
@@ -332,6 +318,7 @@ function handleStarted(
   store: FlowChatStore,
   sessionId: string,
   turnId: string,
+  roundId: string,
   dialogTurn: DialogTurn,
   toolEvent: StartedToolEvent,
   options?: ToolEventOptions
@@ -366,31 +353,21 @@ function handleStarted(
       status: 'running',
       requiresConfirmation: false,
       startTime: options?.parentTimestamp ? options.parentTimestamp + 2 : Date.now(),
-      ...(options?.isSubagent && {
-        isSubagentItem: true,
-        parentTaskToolId: options.parentToolId,
-        subagentSessionId: options.subagentSessionId
-      })
     };
-    
-    if (options?.isSubagent && options.parentToolId) {
-      store.insertModelRoundItemAfterTool(sessionId, turnId, options.parentToolId, toolItem);
+
+    const targetRound = dialogTurn.modelRounds.find(round => round.id === roundId);
+    if (targetRound) {
+      store.addModelRoundItem(sessionId, turnId, toolItem, roundId);
       pendingTerminalSessionIds.delete(toolEvent.tool_id);
       applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
     } else {
-      const lastModelRound = dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1];
-      if (lastModelRound) {
-        store.addModelRoundItem(sessionId, turnId, toolItem, lastModelRound.id);
-        pendingTerminalSessionIds.delete(toolEvent.tool_id);
-        applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
-      } else {
-        log.error('Tool Started event without ModelRound (backend bug)', {
-          sessionId,
-          turnId,
-          toolId: toolEvent.tool_id,
-          toolName: toolEvent.tool_name
-        });
-      }
+      log.error('Tool Started event references missing round (backend bug)', {
+        sessionId,
+        turnId,
+        roundId,
+        toolId: toolEvent.tool_id,
+        toolName: toolEvent.tool_name
+      });
     }
   }
 }

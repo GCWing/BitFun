@@ -1,12 +1,11 @@
 use crate::agentic::agents::AgentToolPolicyOverrides;
-use crate::agentic::tools::framework::{Tool, ToolExposure, ToolUseContext};
-use crate::agentic::tools::registry::{get_global_tool_registry, GET_TOOL_SPEC_TOOL_NAME};
+use crate::agentic::tools::catalog_provider::{
+    resolve_product_tool_manifest, resolve_product_visible_tools,
+};
+use crate::agentic::tools::framework::{Tool, ToolUseContext};
 use crate::util::types::ToolDefinition;
-use serde_json::json;
-use std::collections::{HashMap, HashSet};
+use bitfun_agent_tools::{ContextualToolManifest, ContextualVisibleTools, ToolManifestDefinition};
 use std::sync::Arc;
-
-type ToolRef = Arc<dyn Tool>;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedToolManifest {
@@ -17,64 +16,38 @@ pub struct ResolvedToolManifest {
 
 #[derive(Clone)]
 pub struct ResolvedVisibleTools {
-    allowed_tool_names: Vec<String>,
     pub expanded_tools: Vec<Arc<dyn Tool>>,
-    collapsed_tool_names: Vec<String>,
     pub collapsed_tools: Vec<Arc<dyn Tool>>,
 }
 
-fn build_visible_tools(
-    tool_snapshot: &[ToolRef],
-    allowed_tools: &[String],
-    exposure_overrides: &AgentToolPolicyOverrides,
-    available_tool_names: &HashSet<String>,
-) -> ResolvedVisibleTools {
-    let allowed_set: HashSet<&str> = allowed_tools.iter().map(String::as_str).collect();
-    let mut allowed_tool_names = allowed_tools.to_vec();
-    let mut expanded_tools = Vec::new();
-    let mut collapsed_tool_names = Vec::new();
-    let mut collapsed_tools = Vec::new();
+fn to_core_tool_definition(definition: ToolManifestDefinition) -> ToolDefinition {
+    ToolDefinition {
+        name: definition.name,
+        description: definition.description,
+        parameters: definition.parameters,
+    }
+}
 
-    for tool in tool_snapshot {
-        let tool_name = tool.name().to_string();
-        if !available_tool_names.contains(&tool_name) || !allowed_set.contains(tool_name.as_str()) {
-            continue;
-        }
-
-        let exposure = exposure_overrides
-            .get(&tool_name)
-            .copied()
-            .unwrap_or_else(|| tool.default_exposure());
-        match exposure {
-            ToolExposure::Collapsed => {
-                collapsed_tool_names.push(tool_name);
-                collapsed_tools.push(tool.clone());
-            }
-            ToolExposure::Expanded => expanded_tools.push(tool.clone()),
+impl From<ContextualVisibleTools<dyn Tool>> for ResolvedVisibleTools {
+    fn from(value: ContextualVisibleTools<dyn Tool>) -> Self {
+        Self {
+            expanded_tools: value.expanded_tools,
+            collapsed_tools: value.collapsed_tools,
         }
     }
+}
 
-    if !collapsed_tool_names.is_empty() {
-        if !allowed_tool_names
-            .iter()
-            .any(|name| name == GET_TOOL_SPEC_TOOL_NAME)
-        {
-            allowed_tool_names.push(GET_TOOL_SPEC_TOOL_NAME.to_string());
+impl From<ContextualToolManifest<dyn Tool>> for ResolvedToolManifest {
+    fn from(value: ContextualToolManifest<dyn Tool>) -> Self {
+        Self {
+            allowed_tool_names: value.allowed_tool_names,
+            tool_definitions: value
+                .tool_definitions
+                .into_iter()
+                .map(to_core_tool_definition)
+                .collect(),
+            collapsed_tool_names: value.collapsed_tool_names,
         }
-        if let Some(tool) = tool_snapshot
-            .iter()
-            .find(|tool| tool.name() == GET_TOOL_SPEC_TOOL_NAME)
-            .cloned()
-        {
-            expanded_tools.push(tool);
-        }
-    }
-
-    ResolvedVisibleTools {
-        allowed_tool_names,
-        expanded_tools,
-        collapsed_tool_names,
-        collapsed_tools,
     }
 }
 
@@ -83,25 +56,9 @@ pub async fn resolve_visible_tools(
     exposure_overrides: &AgentToolPolicyOverrides,
     context: &ToolUseContext,
 ) -> ResolvedVisibleTools {
-    let registry = get_global_tool_registry();
-    let tool_snapshot = {
-        let registry = registry.read().await;
-        registry.get_all_tools()
-    };
-
-    let mut available_tool_names = HashSet::new();
-    for tool in &tool_snapshot {
-        if tool.is_available_in_context(Some(context)).await {
-            available_tool_names.insert(tool.name().to_string());
-        }
-    }
-
-    build_visible_tools(
-        &tool_snapshot,
-        allowed_tools,
-        exposure_overrides,
-        &available_tool_names,
-    )
+    resolve_product_visible_tools(allowed_tools, exposure_overrides, context)
+    .await
+    .into()
 }
 
 pub async fn resolve_tool_manifest(
@@ -109,82 +66,18 @@ pub async fn resolve_tool_manifest(
     exposure_overrides: &AgentToolPolicyOverrides,
     context: &ToolUseContext,
 ) -> ResolvedToolManifest {
-    let visible_tools = resolve_visible_tools(allowed_tools, exposure_overrides, context).await;
-
-    let mut tool_definitions = Vec::with_capacity(
-        visible_tools.expanded_tools.len() + visible_tools.collapsed_tools.len(),
-    );
-    for tool in &visible_tools.expanded_tools {
-        let description = tool
-            .description_with_context(Some(context))
-            .await
-            .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
-        let parameters = tool
-            .input_schema_for_model_with_context(Some(context))
-            .await;
-
-        tool_definitions.push(ToolDefinition {
-            name: tool.name().to_string(),
-            description,
-            parameters,
-        });
-    }
-
-    for tool in &visible_tools.collapsed_tools {
-        let description = format!(
-            "{} [This tool is collapsed. Call `GetToolSpec` first with {{\"tool_name\":\"{}\"}} before using it.]",
-            tool.short_description(),
-            tool.name()
-        );
-
-        tool_definitions.push(ToolDefinition {
-            name: tool.name().to_string(),
-            description,
-            parameters: json!({
-                "type": "object",
-                "properties": {},
-                "additionalProperties": true
-            }),
-        });
-    }
-
-    let tool_ordering: HashMap<String, usize> = [
-        ("Task", 1),
-        ("Bash", 2),
-        ("TerminalControl", 3),
-        ("Glob", 4),
-        ("Grep", 5),
-        ("Read", 6),
-        ("Edit", 7),
-        ("Write", 8),
-        ("Delete", 9),
-        ("WebFetch", 10),
-        ("WebSearch", 11),
-        ("TodoWrite", 12),
-        ("Skill", 13),
-        ("Log", 14),
-        ("GetToolSpec", 15),
-        ("ControlHub", 16),
-    ]
-    .into_iter()
-    .map(|(k, v)| (k.to_string(), v))
-    .collect();
-    tool_definitions.sort_by_key(|tool| tool_ordering.get(&tool.name).unwrap_or(&100));
-
-    ResolvedToolManifest {
-        allowed_tool_names: visible_tools.allowed_tool_names,
-        tool_definitions,
-        collapsed_tool_names: visible_tools.collapsed_tool_names,
-    }
+    resolve_product_tool_manifest(allowed_tools, exposure_overrides, context)
+    .await
+    .into()
 }
 
 #[cfg(test)]
 mod tests {
     use super::resolve_tool_manifest;
     use crate::agentic::agents::AgentToolPolicyOverrides;
-    use crate::agentic::tools::framework::{ToolExposure, ToolUseContext};
-    use crate::agentic::tools::registry::GET_TOOL_SPEC_TOOL_NAME;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::tools::framework::{ToolExposure, ToolUseContext};
+    use bitfun_agent_tools::GET_TOOL_SPEC_TOOL_NAME;
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -217,10 +110,12 @@ mod tests {
 
         assert!(manifest.collapsed_tool_names.is_empty());
         assert_eq!(manifest.allowed_tool_names, allowed_tools);
-        assert!(!manifest
-            .tool_definitions
-            .iter()
-            .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME));
+        assert!(
+            !manifest
+                .tool_definitions
+                .iter()
+                .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME)
+        );
     }
 
     #[tokio::test]
@@ -235,29 +130,43 @@ mod tests {
         .await;
 
         assert_eq!(manifest.collapsed_tool_names, vec!["WebFetch".to_string()]);
-        assert!(manifest
-            .allowed_tool_names
-            .contains(&GET_TOOL_SPEC_TOOL_NAME.to_string()));
-        assert!(manifest
-            .tool_definitions
-            .iter()
-            .any(|tool| tool.name == "Read"));
-        assert!(manifest
-            .tool_definitions
-            .iter()
-            .any(|tool| tool.name == "WebFetch"));
-        assert!(manifest
-            .tool_definitions
-            .iter()
-            .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME));
+        assert!(
+            manifest
+                .allowed_tool_names
+                .contains(&GET_TOOL_SPEC_TOOL_NAME.to_string())
+        );
+        assert!(
+            manifest
+                .tool_definitions
+                .iter()
+                .any(|tool| tool.name == "Read")
+        );
+        assert!(
+            manifest
+                .tool_definitions
+                .iter()
+                .any(|tool| tool.name == "WebFetch")
+        );
+        assert!(
+            manifest
+                .tool_definitions
+                .iter()
+                .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME)
+        );
         let stub = manifest
             .tool_definitions
             .iter()
             .find(|tool| tool.name == "WebFetch")
             .expect("WebFetch stub should exist");
-        assert!(stub.description.contains("Call `GetToolSpec` first"));
+        assert!(stub.description.contains("First call `GetToolSpec`"));
         assert_eq!(stub.parameters["type"], json!("object"));
-        assert_eq!(stub.parameters["additionalProperties"], json!(true));
+        assert_eq!(stub.parameters["additionalProperties"], json!(false));
+        assert!(
+            stub.parameters["properties"]["tool_name"]["description"]
+                .as_str()
+                .unwrap()
+                .contains("{\"tool_name\":\"WebFetch\"}")
+        );
     }
 
     #[tokio::test]
@@ -307,16 +216,116 @@ mod tests {
             .iter()
             .find(|tool| tool.name == "WebFetch")
             .expect("collapsed WebFetch stub");
-        assert!(web_fetch
-            .description
-            .contains("Call `GetToolSpec` first with {\"tool_name\":\"WebFetch\"}"));
+        assert!(
+            web_fetch
+                .description
+                .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
+        );
         assert_eq!(
             web_fetch.parameters,
             json!({
                 "type": "object",
-                "properties": {},
-                "additionalProperties": true
+                "additionalProperties": false,
+                "properties": {
+                    "tool_name": {
+                        "type": "string",
+                        "description": "Do not supply WebFetch arguments here while the tool is collapsed. Use GetToolSpec with {\"tool_name\":\"WebFetch\"} first."
+                    }
+                }
             })
+        );
+    }
+
+    #[tokio::test]
+    async fn manifest_guard_preserves_get_tool_spec_unlock_surface_before_owner_migration() {
+        let allowed_tools = vec![
+            "Read".to_string(),
+            "WebFetch".to_string(),
+            "GetFileDiff".to_string(),
+            "Git".to_string(),
+        ];
+
+        let manifest = resolve_tool_manifest(
+            &allowed_tools,
+            &AgentToolPolicyOverrides::default(),
+            &tool_context(),
+        )
+        .await;
+
+        assert_eq!(
+            manifest.allowed_tool_names,
+            vec![
+                "Read".to_string(),
+                "WebFetch".to_string(),
+                "GetFileDiff".to_string(),
+                "Git".to_string(),
+                GET_TOOL_SPEC_TOOL_NAME.to_string(),
+            ],
+            "GetToolSpec insertion must preserve the runtime allowed-list contract"
+        );
+        assert_eq!(
+            manifest.collapsed_tool_names,
+            vec![
+                "GetFileDiff".to_string(),
+                "WebFetch".to_string(),
+                "Git".to_string()
+            ],
+            "collapsed unlock list must follow product registry snapshot order"
+        );
+        assert_eq!(
+            manifest
+                .tool_definitions
+                .iter()
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Read", "WebFetch", "GetToolSpec", "GetFileDiff", "Git"],
+            "prompt-visible definitions must keep the current discovery insertion and policy order stable"
+        );
+
+        for tool_name in ["GetFileDiff", "WebFetch", "Git"] {
+            let stub = manifest
+                .tool_definitions
+                .iter()
+                .find(|tool| tool.name == tool_name)
+                .unwrap_or_else(|| panic!("{tool_name} stub should exist"));
+            assert!(
+                stub.description.contains(&format!(
+                    "First call `GetToolSpec` with {{\"tool_name\":\"{tool_name}\"}}"
+                )),
+                "collapsed stub must point to the explicit GetToolSpec unlock flow"
+            );
+            assert_eq!(stub.parameters["type"], json!("object"));
+            assert_eq!(stub.parameters["additionalProperties"], json!(false));
+            assert_eq!(
+                stub.parameters["properties"]["tool_name"]["description"],
+                json!(format!(
+                    "Do not supply {tool_name} arguments here while the tool is collapsed. Use GetToolSpec with {{\"tool_name\":\"{tool_name}\"}} first."
+                ))
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn manifest_preserves_explicit_get_tool_spec_runtime_contract() {
+        let allowed_tools = vec![GET_TOOL_SPEC_TOOL_NAME.to_string(), "WebFetch".to_string()];
+
+        let manifest = resolve_tool_manifest(
+            &allowed_tools,
+            &AgentToolPolicyOverrides::default(),
+            &tool_context(),
+        )
+        .await;
+
+        assert_eq!(manifest.allowed_tool_names, allowed_tools);
+        assert_eq!(manifest.collapsed_tool_names, vec!["WebFetch".to_string()]);
+        assert_eq!(
+            manifest
+                .tool_definitions
+                .iter()
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["WebFetch", "GetToolSpec", "GetToolSpec"],
+            "core runtime currently mirrors the pure policy contract when GetToolSpec is already allowed"
         );
     }
 
@@ -329,13 +338,17 @@ mod tests {
         let manifest = resolve_tool_manifest(&allowed_tools, &overrides, &tool_context()).await;
 
         assert!(manifest.collapsed_tool_names.is_empty());
-        assert!(manifest
-            .tool_definitions
-            .iter()
-            .any(|tool| tool.name == "WebFetch"));
-        assert!(!manifest
-            .tool_definitions
-            .iter()
-            .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME));
+        assert!(
+            manifest
+                .tool_definitions
+                .iter()
+                .any(|tool| tool.name == "WebFetch")
+        );
+        assert!(
+            !manifest
+                .tool_definitions
+                .iter()
+                .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME)
+        );
     }
 }

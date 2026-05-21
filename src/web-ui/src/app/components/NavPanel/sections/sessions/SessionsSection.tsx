@@ -60,11 +60,16 @@ const getTitle = (session: Session): string =>
   resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
 
 const getChildSessionBadge = (kind: Session['sessionKind']): string => {
-  const normalizedKind = kind === 'review' || kind === 'deep_review' ? kind : 'btw';
+  const normalizedKind =
+    kind === 'review' || kind === 'deep_review' || kind === 'subagent'
+      ? kind
+      : 'btw';
   const fallback = normalizedKind === 'deep_review'
     ? 'Deep'
     : normalizedKind === 'review'
       ? 'Review'
+      : normalizedKind === 'subagent'
+        ? 'Agent'
       : 'btw';
   return i18nService.t(`flow-chat:childSession.kinds.${normalizedKind}.short`, {
     defaultValue: fallback,
@@ -234,6 +239,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       Array.from(flowChatState.sessions.values())
         .filter((s: Session) => {
           if (s.isTransient) {
+            return false;
+          }
+          if (s.sessionKind === 'subagent') {
             return false;
           }
           if (workspacePath) {

@@ -3,6 +3,8 @@ import type { SessionUsageReport } from '@/infrastructure/api/service-api/Sessio
 import {
   calculateShare,
   coerceSessionUsageReport,
+  formatHitRatePercent,
+  formatHitRateSuffix,
   getFileSummaryLabel,
   getModelHelp,
   getModelLabel,
@@ -193,5 +195,39 @@ describe('usageReportUtils', () => {
       durationMs: 100,
       redacted: true,
     }, t)).toBe('Redacted');
+  });
+
+  describe('formatHitRateSuffix', () => {
+    it('formats a finite ratio as a parenthesised percentage with leading space', () => {
+      expect(formatHitRateSuffix(0.8, t)).toBe(' (80%)');
+      expect(formatHitRateSuffix(0, t)).toBe(' (0%)');
+      expect(formatHitRateSuffix(1, t)).toBe(' (100%)');
+    });
+
+    it('returns an empty string for missing or non-finite values', () => {
+      expect(formatHitRateSuffix(undefined, t)).toBe('');
+      expect(formatHitRateSuffix(null, t)).toBe('');
+      expect(formatHitRateSuffix(Number.NaN, t)).toBe('');
+      expect(formatHitRateSuffix(Number.POSITIVE_INFINITY, t)).toBe('');
+    });
+
+    it('rounds the displayed percent to the nearest integer', () => {
+      // 0.804 → 80.4% → "80%"; 0.806 → 80.6% → "81%"
+      expect(formatHitRateSuffix(0.804, t)).toBe(' (80%)');
+      expect(formatHitRateSuffix(0.806, t)).toBe(' (81%)');
+    });
+  });
+
+  describe('formatHitRatePercent', () => {
+    it('formats a finite ratio as a bare percentage cell', () => {
+      expect(formatHitRatePercent(0.5, t)).toBe('50%');
+      expect(formatHitRatePercent(1, t)).toBe('100%');
+    });
+
+    it('returns a dash for missing or non-finite values', () => {
+      expect(formatHitRatePercent(undefined, t)).toBe('-');
+      expect(formatHitRatePercent(null, t)).toBe('-');
+      expect(formatHitRatePercent(Number.NaN, t)).toBe('-');
+    });
   });
 });

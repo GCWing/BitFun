@@ -11,7 +11,7 @@
   justify-content: center;
   padding: 0;
   border-radius: 8px;
-  font-size: 10px;
+  font-size: var(--flowchat-font-size-xxs);
   font-weight: 600;
   transition: all 0.25s ease;
   cursor: default;
@@ -69,9 +69,9 @@
   }
   
   &__percentage {
-    line-height: 1;
+    line-height: var(--flowchat-compact-line-height, 1.32);
     font-weight: 600;
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
   }
   
   // Hover behavior
@@ -161,4 +161,3 @@
     opacity: 1;
   }
 }
-

@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 
 pub const SESSION_USAGE_REPORT_SCHEMA_VERSION: u16 = 1;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+// PartialEq only (not Eq) because nested UsageTokenBreakdown/UsageModelBreakdown
+// hold `cache_hit_rate: Option<f64>`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionUsageReport {
     pub schema_version: u16,
@@ -133,7 +135,10 @@ pub enum UsageTimeDenominator {
     Unavailable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+// PartialEq only (not Eq) because `cache_hit_rate: Option<f64>` precludes
+// total equality. Existing call sites compare with `==`, which works on f64
+// via PartialEq (NaN-aware).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageTokenBreakdown {
     pub source: UsageTokenSource,
@@ -142,6 +147,10 @@ pub struct UsageTokenBreakdown {
     pub total_tokens: Option<u64>,
     pub cached_tokens: Option<u64>,
     pub cache_coverage: UsageCacheCoverage,
+    /// `cached_tokens / input_tokens` over records that explicitly report
+    /// cached tokens. `None` when no record has cached coverage. Range: 0.0–1.0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_hit_rate: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -159,7 +168,8 @@ pub enum UsageCacheCoverage {
     Unavailable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+// PartialEq only (not Eq) — see comment on UsageTokenBreakdown.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageModelBreakdown {
     pub model_id: String,
@@ -168,6 +178,9 @@ pub struct UsageModelBreakdown {
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
     pub cached_tokens: Option<u64>,
+    /// Per-model hit rate. Same semantic as [`UsageTokenBreakdown::cache_hit_rate`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_hit_rate: Option<f64>,
     pub duration_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sample_turn_id: Option<String>,
@@ -372,6 +385,7 @@ impl SessionUsageReport {
                 total_tokens: None,
                 cached_tokens: None,
                 cache_coverage: UsageCacheCoverage::Unavailable,
+                cache_hit_rate: None,
             },
             models: vec![],
             tools: vec![],
@@ -445,6 +459,7 @@ pub(crate) fn test_report() -> SessionUsageReport {
         total_tokens: Some(1540),
         cached_tokens: None,
         cache_coverage: UsageCacheCoverage::Unavailable,
+        cache_hit_rate: None,
     };
     report.models = vec![UsageModelBreakdown {
         model_id: "test-model".to_string(),
@@ -453,6 +468,7 @@ pub(crate) fn test_report() -> SessionUsageReport {
         output_tokens: Some(340),
         total_tokens: Some(1540),
         cached_tokens: None,
+        cache_hit_rate: None,
         duration_ms: None,
         sample_turn_id: Some("turn-1".to_string()),
         sample_turn_index: Some(0),

@@ -11,7 +11,15 @@ use uuid::Uuid;
 pub struct Session {
     pub session_id: String,
     pub session_name: String,
+    /// Current/default mode selection for the session.
+    /// This reflects what the next turn should run with by default, not
+    /// necessarily what the last surviving history turn used.
     pub agent_type: String,
+    /// Cached mode of the last surviving user dialog turn in history.
+    /// `previous_agent_type` reminders should read this instead of `agent_type`
+    /// so rollback-to-empty can still be treated as a fresh mode entry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_user_dialog_agent_type: Option<String>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -71,6 +79,7 @@ impl Session {
             session_id: Uuid::new_v4().to_string(),
             session_name,
             agent_type,
+            last_user_dialog_agent_type: None,
             created_by: None,
             kind: SessionKind::Standard,
             snapshot_session_id: None,
@@ -95,6 +104,7 @@ impl Session {
             session_id,
             session_name,
             agent_type,
+            last_user_dialog_agent_type: None,
             created_by: None,
             kind: SessionKind::Standard,
             snapshot_session_id: None,

@@ -51,12 +51,11 @@ pub fn render_usage_report_terminal(report: &SessionUsageReport) -> String {
     ));
     out.push(format!(
         "Cached tokens: {}",
-        match report.tokens.cache_coverage {
-            UsageCacheCoverage::Available | UsageCacheCoverage::Partial => {
-                format_optional_number(report.tokens.cached_tokens)
-            }
-            UsageCacheCoverage::Unavailable => "not reported".to_string(),
-        }
+        format_cached_with_hit_rate(
+            report.tokens.cached_tokens,
+            &report.tokens.cache_coverage,
+            report.tokens.cache_hit_rate,
+        )
     ));
     out.push(format!(
         "Files changed: {}",
@@ -182,12 +181,11 @@ pub fn render_usage_report_markdown(report: &SessionUsageReport) -> String {
     ));
     out.push_str(&format!(
         "| Cached | {} |\n\n",
-        match report.tokens.cache_coverage {
-            UsageCacheCoverage::Available | UsageCacheCoverage::Partial => {
-                format_optional_number(report.tokens.cached_tokens)
-            }
-            UsageCacheCoverage::Unavailable => "not reported".to_string(),
-        }
+        format_cached_with_hit_rate(
+            report.tokens.cached_tokens,
+            &report.tokens.cache_coverage,
+            report.tokens.cache_hit_rate,
+        )
     ));
 
     if !report.models.is_empty() {
@@ -320,6 +318,26 @@ fn format_optional_number(value: Option<u64>) -> String {
     value
         .map(|v| v.to_string())
         .unwrap_or_else(|| "unavailable".to_string())
+}
+
+/// Format the "cached tokens" cell with an optional ` (NN%)` hit-rate suffix.
+/// Falls back to "not reported" when coverage is unavailable, regardless of
+/// whether the hit-rate field happens to be set.
+fn format_cached_with_hit_rate(
+    cached_tokens: Option<u64>,
+    coverage: &UsageCacheCoverage,
+    hit_rate: Option<f64>,
+) -> String {
+    match coverage {
+        UsageCacheCoverage::Unavailable => "not reported".to_string(),
+        UsageCacheCoverage::Available | UsageCacheCoverage::Partial => {
+            let base = format_optional_number(cached_tokens);
+            match hit_rate {
+                Some(rate) => format!("{} ({:.0}%)", base, rate * 100.0),
+                None => base,
+            }
+        }
+    }
 }
 
 fn format_optional_duration(value: Option<u64>) -> String {
@@ -463,6 +481,39 @@ mod tests {
 
         assert!(rendered.contains("redacted"));
         assert!(!rendered.contains("secret.txt"));
+    }
+
+    #[test]
+    fn render_appends_hit_rate_suffix_to_cached_cell() {
+        let mut report = test_report();
+        // Pretend a session covered cache and 80% of input came from cache.
+        report.tokens.cached_tokens = Some(800);
+        report.tokens.cache_coverage = UsageCacheCoverage::Available;
+        report.tokens.cache_hit_rate = Some(0.8);
+
+        let terminal = render_usage_report_terminal(&report);
+        let markdown = render_usage_report_markdown(&report);
+
+        assert!(terminal.contains("Cached tokens: 800 (80%)"));
+        assert!(markdown.contains("| Cached | 800 (80%) |"));
+    }
+
+    #[test]
+    fn render_omits_hit_rate_suffix_when_unavailable() {
+        // Default test_report has Unavailable coverage + None rate. Cached cell
+        // should fall back to "not reported" even if hit_rate accidentally got
+        // populated upstream.
+        let mut report = test_report();
+        report.tokens.cache_hit_rate = Some(0.5); // would be a bug; still hidden
+        report.tokens.cache_coverage = UsageCacheCoverage::Unavailable;
+
+        let terminal = render_usage_report_terminal(&report);
+        let markdown = render_usage_report_markdown(&report);
+
+        assert!(terminal.contains("Cached tokens: not reported"));
+        assert!(markdown.contains("| Cached | not reported |"));
+        assert!(!terminal.contains("(50%)"));
+        assert!(!markdown.contains("(50%)"));
     }
 
     #[test]

@@ -21,6 +21,11 @@ const I18N = {
   'en-US': {
     title: 'PR Review Inbox',
     subtitle: 'Watch repositories, open PRs, review diffs, compose feedback, and publish with confirmation.',
+    manageSources: 'Manage sources',
+    sourceSettingsTitle: 'Sources and queue settings',
+    sourceSettingsSubtitle: 'Adjust watched repositories, queue mode, private access, or open a single PR.',
+    queueSettingsTitle: 'Queue settings',
+    queueSettingsHint: 'Choose which PRs appear in the review queue. The main workspace stays focused on review.',
     queueModeAll: 'Repository PRs',
     queueModeMine: 'Needs my review',
     queueModeAllHint: 'Sync open PRs from watched repositories.',
@@ -70,7 +75,7 @@ const I18N = {
     manualToken: 'Manual token',
     repoAddedSyncing: 'Repository added. Syncing queue...',
     advancedProviders: 'Advanced provider settings',
-    errorRepoNotFound: 'Repository not found or not accessible. Check the repository path or authorize GitHub CLI.',
+    errorSourceUnavailable: 'Could not refresh {repo}. The repository or PR may be unavailable, the provider API may be incompatible, or your account may not have access. Check Manage sources or authorize the provider.',
     workspaceDiscovering: 'Detecting repositories from the current workspace...',
     workspaceDiscovered: 'Added {count} repository from the current workspace.',
     workspaceDiscoveredMany: 'Added {count} repositories from the current workspace.',
@@ -81,6 +86,17 @@ const I18N = {
     repositoryFirstHint: 'Add the repo you care about, then sync its review queue.',
     singlePrFallback: 'Inspect one PR',
     singlePrFallbackHint: 'Use this when the repository is not watched yet.',
+    directOpenBusySync: 'Queue sync is running. Wait a moment before opening a single PR.',
+    directOpenBusyReview: 'AI review is running. Stop or finish it before opening another PR.',
+    directOpenBusyPublish: 'Review publishing is in progress. Finish it before opening another PR.',
+    directOpenBusyLifecycle: 'A PR lifecycle action is in progress. Finish it before opening another PR.',
+    directOpenBusyGeneric: 'Another PR action is in progress. Finish it before opening a single PR.',
+    busyActionSync: 'Queue sync is already running. Wait a moment before starting another action.',
+    busyActionReview: 'AI review is running. Stop or finish it before using this action.',
+    busyActionPublish: 'Review publishing is in progress. Finish it before using this action.',
+    busyActionLifecycle: 'A PR lifecycle action is in progress. Finish it before using this action.',
+    busyActionGeneric: 'Another PR action is in progress. Finish it before using this action.',
+    publishedItemLocked: 'Published review items cannot be deleted from BitFun.',
     owner: 'Owner',
     repo: 'Repository',
     providerName: 'Display name',
@@ -104,6 +120,8 @@ const I18N = {
     ciDetails: 'CI details',
     existingReview: 'Existing discussion',
     ciFolded: 'CI is folded by default. Open it when status needs attention.',
+    ciFreshnessHint: 'CI is fetched when this PR is opened, refreshed, or auto-synced.',
+    ciOpenDetails: 'Open details',
     noCi: 'No CI status returned.',
     noBody: 'No description.',
     noFiles: 'No changed files returned by the provider.',
@@ -111,14 +129,20 @@ const I18N = {
     manualComment: 'Manual comment',
     manualCommentPlaceholder: 'Write a PR-level comment or paste a finding here.',
     addManualComment: 'Add to review',
+    expandComment: 'Expand',
+    collapseComment: 'Collapse',
     composer: 'Review composer',
     composerHint: 'Draft, edit, select, then publish. Nothing is sent without confirmation.',
     modeFast: 'Fast scan',
     modeFocused: 'Focused',
     modeDeep: 'Deep',
+    reviewLanguage: 'Review language',
+    reviewLanguageEn: 'English',
+    reviewLanguageZh: 'Chinese',
+    reviewLanguageHint: 'Used for AI review comments.',
     summaryComment: 'Summary comment',
     inlineComment: 'Inline comment',
-    reviewDecision: 'Review decision',
+    reviewDecision: 'Overall review',
     decisionComment: 'Comment',
     decisionApprove: 'Approve',
     decisionRequestChanges: 'Request changes',
@@ -126,15 +150,18 @@ const I18N = {
     publishSelected: 'Publish selected',
     publishConfirmTitle: 'Publish selected review items?',
     publishConfirmBody: 'These comments will be posted to the provider. This action cannot be undone from BitFun.',
+    overwriteDraftTitle: 'Replace current review draft?',
+    overwriteDraftBody: '{count} unpublished review items will be deleted before a new AI review starts. Published comments are kept as context for the next review.',
+    confirmStartReview: 'Start new AI review',
     publishStaleTitle: 'PR head changed',
     publishStaleBody: 'The draft was created for an older head. Refresh or confirm that you want to publish against the latest head.',
     staleConfirm: 'I understand the PR head changed',
     publishNow: 'Publish now',
     cancel: 'Cancel',
-    markReviewed: 'Mark current head reviewed',
-    audit: 'Publish audit',
+    audit: 'Action audit',
     statusReady: 'Ready',
     statusRefreshing: 'Syncing queue...',
+    statusPartialSync: 'Refreshed what BitFun could access. {count} source could not be refreshed.',
     statusAssignedNeedsToken: 'Assigned-review sync needs a session token for the selected provider.',
     statusNoSubscriptions: 'Add a watched repository or paste a PR URL first.',
     statusNoActiveSubscriptions: 'All watched repositories are paused. Re-enable one or paste a PR URL.',
@@ -150,22 +177,106 @@ const I18N = {
     reviewDetailAi: 'AI is analyzing the diff and existing discussion.',
     reviewDetailAiWait: 'Still analyzing; large diffs can take a little while.',
     reviewDetailBuild: 'Building an editable review draft.',
+    reviewingBannerTitle: 'AI review is running',
+    reviewingBannerBody: 'BitFun is reading the diff and preparing editable findings. You can keep browsing the PR or stop this run.',
     cancelReview: 'Cancel review',
     reviewCancelled: 'Review cancelled',
     statusPublishing: 'Publishing review...',
     statusSaved: 'Saved',
     statusPublished: 'Review published',
-    statusReviewed: 'Current head marked reviewed',
+    statusPublishFailed: 'No review item was published. Check the action audit and try again.',
     errorParse: 'Could not identify a PR from this URL.',
     errorNetwork: 'Provider request failed',
     newPrTitle: 'New reviewable PR',
     newHeadTitle: 'New commits on reviewed PR',
+    newPrBatchTitle: 'Review queue updated',
+    newPrBatchBody: '{count} PRs need attention.',
+    newHeadBatchBody: '{count} reviewed PRs have new commits.',
     publicRead: 'Public read',
     privateAction: 'Private and write actions',
     draftStatus: 'Draft',
     readyStatus: 'Ready',
+    prDraftStatus: 'Draft PR',
+    readyForReviewStatus: 'Ready for review',
+    lifecyclePanel: 'PR lifecycle',
+    lifecyclePanelHint: 'Status is checked before actions.',
+    lifecycleUnsupported: 'This provider does not support this action from BitFun.',
+    refreshLifecycle: 'Refresh status',
+    refreshingLifecycle: 'Refreshing PR lifecycle status...',
+    lifecycleUpdating: 'Updating PR lifecycle...',
+    lifecycleState: 'PR state',
+    lifecyclePermission: 'Permission',
+    lifecycleFreshness: 'Head',
+    lifecycleChecks: 'Checks',
+    lifecycleReviews: 'Reviews',
+    lifecycleMergeability: 'Mergeability',
+    lifecycleTokenReady: 'Authorized',
+    lifecycleTokenMissing: 'Authorization needed',
+    lifecycleHeadReady: 'Head {sha}',
+    lifecycleHeadMissing: 'Head unavailable',
+    lifecycleOpen: 'Open',
+    lifecycleClosed: 'Closed',
+    lifecycleMerged: 'Merged',
+    lifecycleMergeable: 'Mergeable',
+    lifecycleBlocked: 'Blocked',
+    lifecycleUnknown: 'Unknown',
+    lifecycleChecking: 'Checking',
+    lifecycleChecksPassing: 'Passing',
+    lifecycleChecksPending: 'Pending',
+    lifecycleChecksFailing: 'Failing',
+    lifecycleChecksMissing: 'No checks',
+    lifecycleReviewApproved: 'Approved',
+    lifecycleReviewChanges: 'Changes requested',
+    lifecycleReviewCommented: 'Comments only',
+    lifecycleReviewMissing: 'No review signal',
+    lifecycleBlockDraft: 'Draft PRs cannot be merged.',
+    lifecycleBlockClosed: 'Only open PRs can be updated.',
+    lifecycleBlockMerged: 'This PR is already merged.',
+    lifecycleBlockHead: 'The provider did not return a head SHA.',
+    lifecycleBlockToken: 'Authorize this provider before lifecycle actions.',
+    lifecycleBlockMergeable: 'The provider does not report this PR as mergeable.',
+    lifecycleWarnChecks: 'Checks are not passing.',
+    lifecycleWarnReviews: 'Review state needs attention.',
+    lifecycleGuideToken: 'Use GitHub CLI authorization or paste a token before changing PR state.',
+    lifecycleGuideDraft: 'Mark the PR ready before merging.',
+    lifecycleGuideClosed: 'Open the provider page to reopen or inspect the closed PR.',
+    lifecycleGuideHead: 'Refresh the PR so BitFun can verify the latest head commit.',
+    lifecycleGuideMergeable: 'Open the provider page to resolve conflicts or branch-protection blocks.',
+    lifecycleGuideChecking: 'Refresh again after the provider finishes mergeability checks.',
+    lifecycleGuideChecks: 'Open CI details, fix failing checks, or wait for pending checks.',
+    lifecycleGuideReviews: 'Resolve requested changes or collect an approval before merging.',
+    lifecycleAutoAuthHint: 'BitFun will try to authorize with GitHub CLI before this action.',
+    lifecycleAuthFailed: 'Authorization is required. Use GitHub CLI authorization or paste a token in Manage sources.',
+    markPrReady: 'Mark ready',
+    convertPrDraft: 'Convert to draft',
+    mergePr: 'Merge PR',
+    mergeMethod: 'Merge method',
+    mergeMethodMerge: 'Merge commit',
+    mergeMethodSquash: 'Squash merge',
+    mergeMethodRebase: 'Rebase merge',
+    lifecycleConfirmReadyTitle: 'Mark this PR ready for review?',
+    lifecycleConfirmDraftTitle: 'Convert this PR to a draft?',
+    lifecycleConfirmMergeTitle: 'Merge this PR?',
+    lifecycleConfirmReadyBody: 'The provider-side PR state will become ready for review.',
+    lifecycleConfirmDraftBody: 'The provider-side PR state will become draft. Reviewers may stop seeing it as ready.',
+    lifecycleConfirmMergeBody: 'This will merge the selected PR on the provider. BitFun will use the expected head SHA shown below.',
+    lifecycleConfirmWarning: 'Warnings',
+    expectedHeadSha: 'Expected head',
+    confirmLifecycle: 'Confirm action',
+    lifecycleActionReady: 'Ready state',
+    lifecycleActionDraft: 'Draft state',
+    lifecycleActionMerge: 'Merge',
+    lifecycleReadyDone: 'PR marked ready for review',
+    lifecycleDraftDone: 'PR converted to draft',
+    lifecycleMergeDone: 'PR merged',
+    lifecycleHeadChanged: 'The PR head changed. Refresh the PR before taking this action.',
+    lifecycleMergeBlocked: 'Merge is blocked: {reason}',
+    lifecycleActionUnsupported: 'This lifecycle action is not supported for the selected provider.',
     overviewHint: 'Expand for full description.',
     noActionableFindings: 'No actionable findings were generated. Add a manual comment or edit this review decision before publishing.',
+    publishNoDraftItems: 'Generate or add a review item before publishing.',
+    publishSelectItemFirst: 'Select at least one draft review item before publishing.',
+    suggestedFix: 'Suggested fix',
     binary: 'binary',
     large: 'large',
     stale: 'stale',
@@ -177,6 +288,11 @@ const I18N = {
   'zh-CN': {
     title: 'PR 审核台',
     subtitle: '监听仓库、打开 PR、查看变更、组织意见，并在二次确认后发布 Review。',
+    manageSources: '管理来源',
+    sourceSettingsTitle: '来源与队列设置',
+    sourceSettingsSubtitle: '调整监听仓库、队列范围、私有授权，或单独打开某个 PR。',
+    queueSettingsTitle: '队列设置',
+    queueSettingsHint: '选择哪些 PR 进入审核队列。主界面只保留审核工作流。',
     queueModeAll: '仓库全部 PR',
     queueModeMine: '待我审核',
     queueModeAllHint: '从已监听仓库同步打开状态的 PR。',
@@ -226,7 +342,7 @@ const I18N = {
     manualToken: '手动 Token',
     repoAddedSyncing: '已添加监听仓库，正在同步队列...',
     advancedProviders: '高级平台设置',
-    errorRepoNotFound: '仓库不存在或当前无权访问，请检查仓库路径或授权 GitHub CLI。',
+    errorSourceUnavailable: '无法刷新 {repo}。仓库或 PR 可能不可用、接口可能不兼容，或当前账号无权访问。请在“管理来源”中检查仓库地址；如为私有仓库，请先完成授权。',
     workspaceDiscovering: '正在从当前工作区识别仓库...',
     workspaceDiscovered: '已从当前工作区添加 {count} 个仓库。',
     workspaceDiscoveredMany: '已从当前工作区添加 {count} 个仓库。',
@@ -237,6 +353,17 @@ const I18N = {
     repositoryFirstHint: '先添加要关注的仓库，再同步它的审核队列。',
     singlePrFallback: '单独检视一个 PR',
     singlePrFallbackHint: '当这个仓库暂时不需要监听时使用。',
+    directOpenBusySync: '正在同步队列，请稍后再单独打开 PR。',
+    directOpenBusyReview: 'AI 审核正在进行，请先完成或中止后再打开其他 PR。',
+    directOpenBusyPublish: 'Review 正在发布，请完成后再打开其他 PR。',
+    directOpenBusyLifecycle: 'PR 状态操作正在执行，请完成后再打开其他 PR。',
+    directOpenBusyGeneric: '当前有 PR 操作正在进行，请完成后再单独打开 PR。',
+    busyActionSync: '队列正在同步，请稍后再执行其他操作。',
+    busyActionReview: 'AI 审核正在进行，请先完成或中止后再执行此操作。',
+    busyActionPublish: 'Review 正在发布，请完成后再执行此操作。',
+    busyActionLifecycle: 'PR 状态操作正在执行，请完成后再执行此操作。',
+    busyActionGeneric: '当前有 PR 操作正在进行，请完成后再执行此操作。',
+    publishedItemLocked: '已发布的 Review 项不能在 BitFun 中删除。',
     owner: 'Owner',
     repo: '仓库',
     providerName: '显示名称',
@@ -260,6 +387,8 @@ const I18N = {
     ciDetails: 'CI 详情',
     existingReview: '已有讨论',
     ciFolded: 'CI 默认折叠，只有需要定位状态时再展开。',
+    ciFreshnessHint: 'CI 会在打开 PR、刷新或自动同步时重新获取。',
+    ciOpenDetails: '打开详情',
     noCi: '代码平台没有返回 CI 状态。',
     noBody: '没有描述。',
     noFiles: '代码平台没有返回变更文件。',
@@ -267,14 +396,20 @@ const I18N = {
     manualComment: '手写评论',
     manualCommentPlaceholder: '在这里写 PR 级评论，或粘贴你已经发现的问题。',
     addManualComment: '加入 Review',
+    expandComment: '展开',
+    collapseComment: '收起',
     composer: 'Review 编辑器',
     composerHint: '生成、编辑、选择，再发布。未经确认不会提交到代码平台。',
     modeFast: '快速扫读',
     modeFocused: '重点审核',
     modeDeep: '深度审核',
+    reviewLanguage: '审核语言',
+    reviewLanguageEn: '英文',
+    reviewLanguageZh: '中文',
+    reviewLanguageHint: '用于 AI 生成的审核意见。',
     summaryComment: '总结评论',
     inlineComment: '行内评论',
-    reviewDecision: 'Review 结论',
+    reviewDecision: '整体 Review',
     decisionComment: '评论',
     decisionApprove: '通过',
     decisionRequestChanges: '要求修改',
@@ -282,15 +417,18 @@ const I18N = {
     publishSelected: '发布选中项',
     publishConfirmTitle: '确认发布选中的 Review 内容？',
     publishConfirmBody: '这些评论会提交到代码平台。BitFun 无法替你撤回这个操作。',
+    overwriteDraftTitle: '替换当前审核草稿？',
+    overwriteDraftBody: '新的 AI 审核开始前，会删除 {count} 条未发布审核意见。已发布的意见会作为下一轮审核上下文保留。',
+    confirmStartReview: '开始新的 AI 审核',
     publishStaleTitle: 'PR head 已变化',
     publishStaleBody: '草稿基于旧 head 生成。请刷新，或明确确认要基于最新 head 继续发布。',
     staleConfirm: '我确认 PR head 已变化',
     publishNow: '立即发布',
     cancel: '取消',
-    markReviewed: '标记当前 head 已审',
-    audit: '发布审计',
+    audit: '操作记录',
     statusReady: '就绪',
     statusRefreshing: '正在同步队列...',
+    statusPartialSync: '已刷新 BitFun 可访问的内容。{count} 个来源暂时无法刷新。',
     statusAssignedNeedsToken: '同步待我审核需要当前代码平台的会话 Token。',
     statusNoSubscriptions: '请先添加监听仓库，或粘贴一个 PR 链接。',
     statusNoActiveSubscriptions: '已添加的监听仓库都处于暂停状态，请重新开启一个仓库或粘贴 PR 链接。',
@@ -306,22 +444,106 @@ const I18N = {
     reviewDetailAi: 'AI 正在分析 diff 和已有讨论。',
     reviewDetailAiWait: '仍在分析中，大型 diff 可能需要稍等。',
     reviewDetailBuild: '正在整理可编辑的审核草稿。',
+    reviewingBannerTitle: 'AI 正在审核',
+    reviewingBannerBody: 'BitFun 正在读取 diff 并整理可编辑问题。你可以继续浏览 PR，也可以中止本次审核。',
     cancelReview: '中止审核',
     reviewCancelled: '审核已中止',
     statusPublishing: '正在发布 Review...',
     statusSaved: '已保存',
     statusPublished: 'Review 已发布',
-    statusReviewed: '已标记当前 head 已审',
+    statusPublishFailed: '没有 Review 内容发布成功。请查看操作记录后重试。',
     errorParse: '无法从这个链接识别 PR。',
     errorNetwork: '代码平台请求失败',
     newPrTitle: '新的可审核 PR',
     newHeadTitle: '已审 PR 有新提交',
+    newPrBatchTitle: '审核队列已更新',
+    newPrBatchBody: '{count} 个 PR 需要关注。',
+    newHeadBatchBody: '{count} 个已审核 PR 有新提交。',
     publicRead: '公开读取',
     privateAction: '私有与写入操作',
     draftStatus: '草稿',
     readyStatus: '可审',
+    prDraftStatus: '草稿 PR',
+    readyForReviewStatus: '可审 PR',
+    lifecyclePanel: 'PR 生命周期',
+    lifecyclePanelHint: '操作前会先校验状态。',
+    lifecycleUnsupported: '当前代码平台不支持在 BitFun 中执行这个操作。',
+    refreshLifecycle: '刷新状态',
+    refreshingLifecycle: '正在刷新 PR 生命周期状态...',
+    lifecycleUpdating: '正在更新 PR 生命周期...',
+    lifecycleState: 'PR 状态',
+    lifecyclePermission: '权限',
+    lifecycleFreshness: 'Head',
+    lifecycleChecks: '检查',
+    lifecycleReviews: 'Review',
+    lifecycleMergeability: '可合并性',
+    lifecycleTokenReady: '已授权',
+    lifecycleTokenMissing: '需要授权',
+    lifecycleHeadReady: 'Head {sha}',
+    lifecycleHeadMissing: '未返回 Head',
+    lifecycleOpen: '打开',
+    lifecycleClosed: '已关闭',
+    lifecycleMerged: '已合并',
+    lifecycleMergeable: '可合并',
+    lifecycleBlocked: '受阻',
+    lifecycleUnknown: '未知',
+    lifecycleChecking: '检查中',
+    lifecycleChecksPassing: '通过',
+    lifecycleChecksPending: '等待中',
+    lifecycleChecksFailing: '失败',
+    lifecycleChecksMissing: '无检查',
+    lifecycleReviewApproved: '已批准',
+    lifecycleReviewChanges: '要求修改',
+    lifecycleReviewCommented: '仅评论',
+    lifecycleReviewMissing: '无 Review 信号',
+    lifecycleBlockDraft: '草稿 PR 不能合并。',
+    lifecycleBlockClosed: '只有打开状态的 PR 可以更新。',
+    lifecycleBlockMerged: '这个 PR 已经合并。',
+    lifecycleBlockHead: '代码平台未返回 head SHA。',
+    lifecycleBlockToken: '执行生命周期操作前需要先授权。',
+    lifecycleBlockMergeable: '代码平台未确认这个 PR 可合并。',
+    lifecycleWarnChecks: '检查尚未全部通过。',
+    lifecycleWarnReviews: 'Review 状态需要关注。',
+    lifecycleGuideToken: '先使用 GitHub CLI 授权，或粘贴 Token，再变更 PR 状态。',
+    lifecycleGuideDraft: '先将 PR 标记为可审，再执行合并。',
+    lifecycleGuideClosed: '打开代码平台页面，重新打开或检查这个已关闭 PR。',
+    lifecycleGuideHead: '刷新 PR，让 BitFun 确认最新 head 提交。',
+    lifecycleGuideMergeable: '打开代码平台页面处理冲突或分支保护阻塞。',
+    lifecycleGuideChecking: '等待代码平台完成可合并性检查后再刷新。',
+    lifecycleGuideChecks: '展开 CI 详情，修复失败检查或等待检查完成。',
+    lifecycleGuideReviews: '处理要求修改的意见，或先获得批准后再合并。',
+    lifecycleAutoAuthHint: 'BitFun 会先尝试通过 GitHub CLI 自动授权。',
+    lifecycleAuthFailed: '需要授权。请在管理来源中使用 GitHub CLI 授权，或粘贴 Token。',
+    markPrReady: '标记可审',
+    convertPrDraft: '转为草稿',
+    mergePr: '合并 PR',
+    mergeMethod: '合并方式',
+    mergeMethodMerge: '创建合并提交',
+    mergeMethodSquash: 'Squash 合并',
+    mergeMethodRebase: 'Rebase 合并',
+    lifecycleConfirmReadyTitle: '将这个 PR 标记为可审？',
+    lifecycleConfirmDraftTitle: '将这个 PR 转为草稿？',
+    lifecycleConfirmMergeTitle: '合并这个 PR？',
+    lifecycleConfirmReadyBody: '代码平台上的 PR 状态会变为可审。',
+    lifecycleConfirmDraftBody: '代码平台上的 PR 状态会变为草稿，审核者可能不再把它视为待审。',
+    lifecycleConfirmMergeBody: '这会在代码平台合并当前选中的 PR。BitFun 会使用下方显示的预期 head SHA。',
+    lifecycleConfirmWarning: '风险提示',
+    expectedHeadSha: '预期 Head',
+    confirmLifecycle: '确认执行',
+    lifecycleActionReady: '可审状态',
+    lifecycleActionDraft: '草稿状态',
+    lifecycleActionMerge: '合并',
+    lifecycleReadyDone: '已标记为可审 PR',
+    lifecycleDraftDone: '已转为草稿 PR',
+    lifecycleMergeDone: 'PR 已合并',
+    lifecycleHeadChanged: 'PR head 已变化，请刷新后再执行该操作。',
+    lifecycleMergeBlocked: '合并被阻止：{reason}',
+    lifecycleActionUnsupported: '当前代码平台不支持这个生命周期操作。',
     overviewHint: '展开查看完整描述。',
     noActionableFindings: '没有生成可操作问题。发布前可以添加手写评论，或编辑这条 Review 结论。',
+    publishNoDraftItems: '请先生成或添加一条 Review 内容，再发布。',
+    publishSelectItemFirst: '请至少选中一条 Review 草稿后再发布。',
+    suggestedFix: '建议处理',
     binary: '二进制',
     large: '过大',
     stale: '已过期',
@@ -333,6 +555,11 @@ const I18N = {
   'zh-TW': {
     title: 'PR 審核台',
     subtitle: '監聽倉庫、開啟 PR、檢視變更、組織意見，並在二次確認後發布 Review。',
+    manageSources: '管理來源',
+    sourceSettingsTitle: '來源與佇列設定',
+    sourceSettingsSubtitle: '調整監聽倉庫、佇列範圍、私有授權，或單獨開啟某個 PR。',
+    queueSettingsTitle: '佇列設定',
+    queueSettingsHint: '選擇哪些 PR 進入審核佇列。主介面只保留審核工作流。',
     queueModeAll: '倉庫全部 PR',
     queueModeMine: '待我審核',
     queueModeAllHint: '從已監聽倉庫同步開啟狀態的 PR。',
@@ -382,7 +609,7 @@ const I18N = {
     manualToken: '手動 Token',
     repoAddedSyncing: '已新增監聽倉庫，正在同步佇列...',
     advancedProviders: '進階平台設定',
-    errorRepoNotFound: '倉庫不存在或目前無權存取，請檢查倉庫路徑或授權 GitHub CLI。',
+    errorSourceUnavailable: '無法重新整理 {repo}。倉庫或 PR 可能無法使用、介面可能不相容，或目前帳號無權存取。請在「管理來源」中檢查倉庫地址；如為私有倉庫，請先完成授權。',
     workspaceDiscovering: '正在從目前工作區識別倉庫...',
     workspaceDiscovered: '已從目前工作區新增 {count} 個倉庫。',
     workspaceDiscoveredMany: '已從目前工作區新增 {count} 個倉庫。',
@@ -393,6 +620,17 @@ const I18N = {
     repositoryFirstHint: '先新增要關注的倉庫，再同步它的審核佇列。',
     singlePrFallback: '單獨檢視一個 PR',
     singlePrFallbackHint: '當這個倉庫暫時不需要監聽時使用。',
+    directOpenBusySync: '正在同步佇列，請稍後再單獨開啟 PR。',
+    directOpenBusyReview: 'AI 審核正在進行，請先完成或中止後再開啟其他 PR。',
+    directOpenBusyPublish: 'Review 正在發布，請完成後再開啟其他 PR。',
+    directOpenBusyLifecycle: 'PR 狀態操作正在執行，請完成後再開啟其他 PR。',
+    directOpenBusyGeneric: '目前有 PR 操作正在進行，請完成後再單獨開啟 PR。',
+    busyActionSync: '佇列正在同步，請稍後再執行其他操作。',
+    busyActionReview: 'AI 審核正在進行，請先完成或中止後再執行此操作。',
+    busyActionPublish: 'Review 正在發布，請完成後再執行此操作。',
+    busyActionLifecycle: 'PR 狀態操作正在執行，請完成後再執行此操作。',
+    busyActionGeneric: '目前有 PR 操作正在進行，請完成後再執行此操作。',
+    publishedItemLocked: '已發布的 Review 項不能在 BitFun 中刪除。',
     owner: 'Owner',
     repo: '倉庫',
     providerName: '顯示名稱',
@@ -416,6 +654,8 @@ const I18N = {
     ciDetails: 'CI 詳情',
     existingReview: '既有討論',
     ciFolded: 'CI 預設摺疊，只有需要定位狀態時再展開。',
+    ciFreshnessHint: 'CI 會在開啟 PR、重新整理或自動同步時重新取得。',
+    ciOpenDetails: '開啟詳情',
     noCi: '程式碼平台沒有回傳 CI 狀態。',
     noBody: '沒有描述。',
     noFiles: '程式碼平台沒有回傳變更檔案。',
@@ -423,14 +663,20 @@ const I18N = {
     manualComment: '手寫評論',
     manualCommentPlaceholder: '在這裡寫 PR 級評論，或貼上你已經發現的問題。',
     addManualComment: '加入 Review',
+    expandComment: '展開',
+    collapseComment: '收起',
     composer: 'Review 編輯器',
     composerHint: '產生、編輯、選擇，再發布。未經確認不會提交到程式碼平台。',
     modeFast: '快速掃讀',
     modeFocused: '重點審核',
     modeDeep: '深度審核',
+    reviewLanguage: '審核語言',
+    reviewLanguageEn: '英文',
+    reviewLanguageZh: '中文',
+    reviewLanguageHint: '用於 AI 產生的審核意見。',
     summaryComment: '總結評論',
     inlineComment: '行內評論',
-    reviewDecision: 'Review 結論',
+    reviewDecision: '整體 Review',
     decisionComment: '評論',
     decisionApprove: '通過',
     decisionRequestChanges: '要求修改',
@@ -438,15 +684,18 @@ const I18N = {
     publishSelected: '發布選取項',
     publishConfirmTitle: '確認發布選取的 Review 內容？',
     publishConfirmBody: '這些評論會提交到程式碼平台。BitFun 無法替你撤回這個操作。',
+    overwriteDraftTitle: '取代目前審核草稿？',
+    overwriteDraftBody: '新的 AI 審核開始前，會刪除 {count} 條未發布審核意見。已發布的意見會作為下一輪審核上下文保留。',
+    confirmStartReview: '開始新的 AI 審核',
     publishStaleTitle: 'PR head 已變更',
     publishStaleBody: '草稿基於舊 head 產生。請重新整理，或明確確認要基於最新 head 繼續發布。',
     staleConfirm: '我確認 PR head 已變更',
     publishNow: '立即發布',
     cancel: '取消',
-    markReviewed: '標記目前 head 已審',
-    audit: '發布審計',
+    audit: '操作記錄',
     statusReady: '就緒',
     statusRefreshing: '正在同步佇列...',
+    statusPartialSync: '已重新整理 BitFun 可存取的內容。{count} 個來源暫時無法重新整理。',
     statusAssignedNeedsToken: '同步待我審核需要目前程式碼平台的工作階段 Token。',
     statusNoSubscriptions: '請先新增監聽倉庫，或貼上一個 PR 連結。',
     statusNoActiveSubscriptions: '已新增的監聽倉庫都處於暫停狀態，請重新開啟一個倉庫或貼上 PR 連結。',
@@ -462,22 +711,106 @@ const I18N = {
     reviewDetailAi: 'AI 正在分析 diff 和既有討論。',
     reviewDetailAiWait: '仍在分析中，大型 diff 可能需要稍等。',
     reviewDetailBuild: '正在整理可編輯的審核草稿。',
+    reviewingBannerTitle: 'AI 正在審核',
+    reviewingBannerBody: 'BitFun 正在讀取 diff 並整理可編輯問題。你可以繼續瀏覽 PR，也可以中止本次審核。',
     cancelReview: '中止審核',
     reviewCancelled: '審核已中止',
     statusPublishing: '正在發布 Review...',
     statusSaved: '已儲存',
     statusPublished: 'Review 已發布',
-    statusReviewed: '已標記目前 head 已審',
+    statusPublishFailed: '沒有 Review 內容發布成功。請查看操作記錄後重試。',
     errorParse: '無法從這個連結識別 PR。',
     errorNetwork: '程式碼平台請求失敗',
     newPrTitle: '新的可審核 PR',
     newHeadTitle: '已審 PR 有新提交',
+    newPrBatchTitle: '審核佇列已更新',
+    newPrBatchBody: '{count} 個 PR 需要關注。',
+    newHeadBatchBody: '{count} 個已審核 PR 有新提交。',
     publicRead: '公開讀取',
     privateAction: '私有與寫入操作',
     draftStatus: '草稿',
     readyStatus: '可審',
+    prDraftStatus: '草稿 PR',
+    readyForReviewStatus: '可審 PR',
+    lifecyclePanel: 'PR 生命週期',
+    lifecyclePanelHint: '操作前會先校驗狀態。',
+    lifecycleUnsupported: '目前程式碼平台不支援在 BitFun 中執行此操作。',
+    refreshLifecycle: '重新整理狀態',
+    refreshingLifecycle: '正在重新整理 PR 生命週期狀態...',
+    lifecycleUpdating: '正在更新 PR 生命週期...',
+    lifecycleState: 'PR 狀態',
+    lifecyclePermission: '權限',
+    lifecycleFreshness: 'Head',
+    lifecycleChecks: '檢查',
+    lifecycleReviews: 'Review',
+    lifecycleMergeability: '可合併性',
+    lifecycleTokenReady: '已授權',
+    lifecycleTokenMissing: '需要授權',
+    lifecycleHeadReady: 'Head {sha}',
+    lifecycleHeadMissing: '未返回 Head',
+    lifecycleOpen: '開啟',
+    lifecycleClosed: '已關閉',
+    lifecycleMerged: '已合併',
+    lifecycleMergeable: '可合併',
+    lifecycleBlocked: '受阻',
+    lifecycleUnknown: '未知',
+    lifecycleChecking: '檢查中',
+    lifecycleChecksPassing: '通過',
+    lifecycleChecksPending: '等待中',
+    lifecycleChecksFailing: '失敗',
+    lifecycleChecksMissing: '無檢查',
+    lifecycleReviewApproved: '已核准',
+    lifecycleReviewChanges: '要求修改',
+    lifecycleReviewCommented: '僅評論',
+    lifecycleReviewMissing: '無 Review 訊號',
+    lifecycleBlockDraft: '草稿 PR 不能合併。',
+    lifecycleBlockClosed: '只有開啟狀態的 PR 可以更新。',
+    lifecycleBlockMerged: '這個 PR 已經合併。',
+    lifecycleBlockHead: '程式碼平台未返回 head SHA。',
+    lifecycleBlockToken: '執行生命週期操作前需要先授權。',
+    lifecycleBlockMergeable: '程式碼平台未確認這個 PR 可合併。',
+    lifecycleWarnChecks: '檢查尚未全部通過。',
+    lifecycleWarnReviews: 'Review 狀態需要關注。',
+    lifecycleGuideToken: '先使用 GitHub CLI 授權，或貼上 Token，再變更 PR 狀態。',
+    lifecycleGuideDraft: '先將 PR 標記為可審，再執行合併。',
+    lifecycleGuideClosed: '開啟程式碼平台頁面，重新開啟或檢查這個已關閉 PR。',
+    lifecycleGuideHead: '重新整理 PR，讓 BitFun 確認最新 head 提交。',
+    lifecycleGuideMergeable: '開啟程式碼平台頁面處理衝突或分支保護阻塞。',
+    lifecycleGuideChecking: '等待程式碼平台完成可合併性檢查後再重新整理。',
+    lifecycleGuideChecks: '展開 CI 詳情，修復失敗檢查或等待檢查完成。',
+    lifecycleGuideReviews: '處理要求修改的意見，或先取得核准後再合併。',
+    lifecycleAutoAuthHint: 'BitFun 會先嘗試透過 GitHub CLI 自動授權。',
+    lifecycleAuthFailed: '需要授權。請在管理來源中使用 GitHub CLI 授權，或貼上 Token。',
+    markPrReady: '標記可審',
+    convertPrDraft: '轉為草稿',
+    mergePr: '合併 PR',
+    mergeMethod: '合併方式',
+    mergeMethodMerge: '建立合併提交',
+    mergeMethodSquash: 'Squash 合併',
+    mergeMethodRebase: 'Rebase 合併',
+    lifecycleConfirmReadyTitle: '將這個 PR 標記為可審？',
+    lifecycleConfirmDraftTitle: '將這個 PR 轉為草稿？',
+    lifecycleConfirmMergeTitle: '合併這個 PR？',
+    lifecycleConfirmReadyBody: '程式碼平台上的 PR 狀態會變為可審。',
+    lifecycleConfirmDraftBody: '程式碼平台上的 PR 狀態會變為草稿，審核者可能不再把它視為待審。',
+    lifecycleConfirmMergeBody: '這會在程式碼平台合併目前選中的 PR。BitFun 會使用下方顯示的預期 head SHA。',
+    lifecycleConfirmWarning: '風險提示',
+    expectedHeadSha: '預期 Head',
+    confirmLifecycle: '確認執行',
+    lifecycleActionReady: '可審狀態',
+    lifecycleActionDraft: '草稿狀態',
+    lifecycleActionMerge: '合併',
+    lifecycleReadyDone: '已標記為可審 PR',
+    lifecycleDraftDone: '已轉為草稿 PR',
+    lifecycleMergeDone: 'PR 已合併',
+    lifecycleHeadChanged: 'PR head 已變化，請重新整理後再執行該操作。',
+    lifecycleMergeBlocked: '合併被阻止：{reason}',
+    lifecycleActionUnsupported: '目前程式碼平台不支援這個生命週期操作。',
     overviewHint: '展開查看完整描述。',
     noActionableFindings: '沒有生成可操作問題。發布前可以新增手寫評論，或編輯這條 Review 結論。',
+    publishNoDraftItems: '請先產生或新增一條 Review 內容，再發布。',
+    publishSelectItemFirst: '請至少選取一條 Review 草稿後再發布。',
+    suggestedFix: '建議處理',
     binary: '二進位',
     large: '過大',
     stale: '已過期',
@@ -519,8 +852,10 @@ const state = {
     selectedFilePath: null,
     directUrl: '',
     mode: 'focused_review',
+    reviewLanguage: 'en',
     queueMode: 'all',
     drafts: {},
+    publishedReviewContext: {},
     audit: [],
     lastReviewedHeads: {},
     notifiedKeys: [],
@@ -533,10 +868,17 @@ const state = {
     busy: null,
     status: null,
     error: null,
+    startupSyncing: false,
     reviewProgress: null,
     cancelReviewRequested: false,
+    filesExpanded: false,
+    manualCommentExpanded: false,
+    manualCommentDraft: '',
     activeProviderId: 'github',
     confirm: null,
+    draftOverwriteConfirm: null,
+    lifecycleConfirm: null,
+    settingsOpen: false,
   },
   volatile: {
     sessionTokens: {},
@@ -562,6 +904,30 @@ function restoreReviewWorkspaceScroll(position) {
     if (!(workspace instanceof HTMLElement)) return;
     workspace.scrollTop = position.top;
     workspace.scrollLeft = position.left;
+  });
+}
+
+function readPaneScrolls() {
+  return ['.pr-sidebar', '.pr-review-workspace', '.pr-composer'].map((selector) => {
+    const node = document.querySelector(selector);
+    if (!(node instanceof HTMLElement)) return null;
+    return {
+      selector,
+      top: node.scrollTop,
+      left: node.scrollLeft,
+    };
+  }).filter(Boolean);
+}
+
+function restorePaneScrolls(positions) {
+  if (!positions?.length) return;
+  window.requestAnimationFrame(() => {
+    for (const position of positions) {
+      const node = document.querySelector(position.selector);
+      if (!(node instanceof HTMLElement)) continue;
+      node.scrollTop = position.top;
+      node.scrollLeft = position.left;
+    }
   });
 }
 
@@ -607,6 +973,28 @@ function profileById(id) {
   return state.data.profiles.find((profile) => profile.id === id) || state.data.profiles[0];
 }
 
+function sourceLabel(source) {
+  const profileId = source?.providerId || source?.id || '';
+  const profile = profileId ? profileById(profileId) : null;
+  const providerName = source?.displayName || profile?.displayName || source?.id || profile?.id || t('provider');
+  if (!(source?.owner && source?.repo)) return providerName;
+  const repoName = `${source.owner}/${source.repo}`;
+  const number = Number.isFinite(Number(source?.number)) ? `#${source.number}` : '';
+  return `${providerName} ${repoName}${number}`;
+}
+
+function sourceAccessError(source, error) {
+  const friendly = new Error(t('errorSourceUnavailable', { repo: sourceLabel(source) }));
+  friendly.status = Number(error?.status || 0);
+  return friendly;
+}
+
+function preferAccessError(firstError, secondError) {
+  return [401, 403, 404].includes(Number(secondError?.status || 0))
+    ? secondError
+    : firstError;
+}
+
 function activeProfile() {
   return profileById(state.ui.activeProviderId);
 }
@@ -622,7 +1010,7 @@ function setReviewProgress(stageKey, detail = '', progressPct = 8) {
     progressPct: Math.max(0, Math.min(100, Number(progressPct) || 0)),
     cancelled: state.ui.cancelReviewRequested,
   };
-  render();
+  render({ preservePaneScroll: true });
 }
 
 function modeLabel(mode) {
@@ -732,7 +1120,6 @@ async function netJson(url, options = {}) {
       : String(body || `${status}`);
     const error = new Error(`${t('errorNetwork')}: ${message}`);
     error.status = status;
-    error.body = body;
     throw error;
   }
   return body;
@@ -773,12 +1160,14 @@ async function loadStorage() {
       subscriptions,
       items: Array.isArray(parsed.items) ? parsed.items : [],
       drafts: parsed.drafts && typeof parsed.drafts === 'object' ? parsed.drafts : {},
+      publishedReviewContext: parsed.publishedReviewContext && typeof parsed.publishedReviewContext === 'object' ? parsed.publishedReviewContext : {},
       audit: Array.isArray(parsed.audit) ? parsed.audit : [],
       lastReviewedHeads: parsed.lastReviewedHeads || {},
       notifiedKeys: Array.isArray(parsed.notifiedKeys) ? parsed.notifiedKeys : [],
       dismissedWorkspaceRepos: Array.isArray(parsed.dismissedWorkspaceRepos) ? parsed.dismissedWorkspaceRepos : [],
       workspaceAutoListenDoneFor: parsed.workspaceAutoListenDoneFor || '',
       queueMode: parsed.queueMode || 'all',
+      reviewLanguage: ['en', 'zh'].includes(parsed.reviewLanguage) ? parsed.reviewLanguage : 'en',
     };
     state.ui.activeProviderId = state.data.profiles[0]?.id || 'github';
   } catch (error) {
@@ -814,13 +1203,13 @@ function setBusy(key, statusKey) {
   render();
 }
 
-async function finish(statusKey) {
+async function finish(statusKey, renderOptions = {}) {
   state.ui.busy = null;
   state.ui.status = statusKey ? t(statusKey) : null;
   state.ui.reviewProgress = null;
   state.ui.cancelReviewRequested = false;
   await saveStorage();
-  render();
+  render(renderOptions);
 }
 
 function setError(error) {
@@ -1112,9 +1501,19 @@ async function applyWorkspaceDiscoveredRepositories({ force = false, sync = true
 }
 
 async function refreshQueueOnOpen() {
-  await applyWorkspaceDiscoveredRepositories({ sync: false });
-  if (activeSubscriptions().length) {
-    void syncQueue('all');
+  state.ui.startupSyncing = true;
+  state.ui.status = t('statusRefreshing');
+  state.ui.error = null;
+  render({ preservePaneScroll: true });
+  try {
+    await applyWorkspaceDiscoveredRepositories({ sync: false });
+    if (activeSubscriptions().length) {
+      await syncQueue('all');
+    }
+  } finally {
+    state.ui.startupSyncing = false;
+    if (state.ui.busy === 'refresh') state.ui.busy = null;
+    render({ preservePaneScroll: true });
   }
 }
 
@@ -1172,6 +1571,86 @@ function normalizeChecks(statusBody, checksBody) {
   return [...statusChecks, ...checkRuns];
 }
 
+function summarizeCheckState(checks = []) {
+  if (!checks.length) return 'missing';
+  const states = checks.map((check) => String(check.conclusion || check.status || '').toLowerCase());
+  if (states.some((stateValue) => ['failure', 'failed', 'error', 'timed_out', 'cancelled', 'action_required'].includes(stateValue))) {
+    return 'failing';
+  }
+  if (states.some((stateValue) => ['pending', 'queued', 'in_progress', 'requested', 'waiting', 'expected'].includes(stateValue))) {
+    return 'pending';
+  }
+  if (states.every((stateValue) => ['success', 'neutral', 'skipped', 'completed'].includes(stateValue))) {
+    return 'passing';
+  }
+  return 'unknown';
+}
+
+function summarizeReviewState(reviewSummary = {}) {
+  if (reviewSummary.changesRequested > 0) return 'changes_requested';
+  if (reviewSummary.approvals > 0) return 'approved';
+  if (reviewSummary.comments > 0) return 'commented';
+  return 'missing';
+}
+
+function shortSha(value) {
+  const sha = String(value || '').trim();
+  return sha ? sha.slice(0, 12) : '';
+}
+
+function buildMergeReadiness({ pr, checks, reviewSummary, profile }) {
+  const stateName = String(pr.state || pr.status || '').toLowerCase();
+  const merged = Boolean(pr.merged || pr.merged_at);
+  const isOpen = stateName === 'open' || stateName === 'opened';
+  const isDraft = Boolean(pr.draft || pr.work_in_progress);
+  const headSha = pr.head?.sha || pr.head_sha || pr.sha || pr.diff_refs?.head_sha || '';
+  const mergeableRaw = pr.mergeable;
+  const mergeableStateRaw = String(pr.mergeable_state || pr.detailed_merge_status || pr.merge_status || '').toLowerCase();
+  const checkState = summarizeCheckState(checks);
+  const reviewState = summarizeReviewState(reviewSummary);
+  const blockers = [];
+  const warnings = [];
+
+  if (merged) blockers.push('lifecycleBlockMerged');
+  if (!merged && !isOpen) blockers.push('lifecycleBlockClosed');
+  if (isDraft) blockers.push('lifecycleBlockDraft');
+  if (!headSha) blockers.push('lifecycleBlockHead');
+  if (!hasToken(profile)) blockers.push('lifecycleBlockToken');
+  if (mergeableRaw === false || ['dirty', 'blocked', 'cannot_be_merged', 'conflicts'].includes(mergeableStateRaw)) {
+    blockers.push('lifecycleBlockMergeable');
+  }
+  if ((mergeableRaw == null && !['clean', 'unstable', 'can_be_merged'].includes(mergeableStateRaw)) || mergeableStateRaw === 'checking' || mergeableStateRaw === 'unknown') {
+    blockers.push('lifecycleChecking');
+  }
+  if (['failing', 'pending', 'unknown', 'missing'].includes(checkState)) warnings.push('lifecycleWarnChecks');
+  if (['changes_requested', 'missing'].includes(reviewState)) warnings.push('lifecycleWarnReviews');
+
+  let mergeability = 'unknown';
+  if (mergeableRaw === true || ['clean', 'unstable', 'can_be_merged'].includes(mergeableStateRaw)) {
+    mergeability = 'mergeable';
+  } else if (mergeableRaw === false || ['dirty', 'blocked', 'cannot_be_merged', 'conflicts'].includes(mergeableStateRaw)) {
+    mergeability = 'blocked';
+  } else if ((mergeableRaw == null && !['clean', 'unstable', 'can_be_merged'].includes(mergeableStateRaw)) || mergeableStateRaw === 'checking') {
+    mergeability = 'checking';
+  }
+
+  return {
+    state: merged ? 'merged' : isOpen ? 'open' : 'closed',
+    isDraft,
+    headSha,
+    expectedHeadSha: headSha,
+    mergeability,
+    mergeableState: mergeableStateRaw || String(mergeableRaw ?? 'unknown'),
+    checkState,
+    reviewState,
+    permissionState: hasToken(profile) ? 'ready' : 'missing',
+    blockers,
+    warnings,
+    canMerge: blockers.length === 0,
+    refreshedAt: new Date().toISOString(),
+  };
+}
+
 async function fetchGithubSnapshot(identity) {
   const profile = profileById(identity.providerId);
   const base = normalizeBaseUrl(profile.apiBaseUrl);
@@ -1198,6 +1677,8 @@ async function fetchGithubSnapshot(identity) {
     statusResult.status === 'fulfilled' ? statusResult.value : null,
     checksResult.status === 'fulfilled' ? checksResult.value : null,
   );
+  const reviewSummary = summarizeReviews(reviews);
+  const mergeReadiness = buildMergeReadiness({ pr, checks, reviewSummary, profile });
   return {
     identity: {
       providerId: profile.id,
@@ -1206,11 +1687,16 @@ async function fetchGithubSnapshot(identity) {
       repo: identity.repo,
       number: identity.number,
     },
+    queueOrigin: identity.queueOrigin || 'direct',
+    nodeId: pr.node_id || '',
     url: pr.html_url || identity.url || `${normalizeBaseUrl(profile.webBaseUrl)}/${identity.owner}/${identity.repo}/pull/${identity.number}`,
     title: pr.title || `#${identity.number}`,
     body: pr.body || '',
     author: pr.user?.login || '',
     state: pr.state || '',
+    merged: Boolean(pr.merged || pr.merged_at),
+    closedAt: pr.closed_at || '',
+    mergedAt: pr.merged_at || '',
     isDraft: Boolean(pr.draft),
     baseBranch: pr.base?.ref || '',
     headBranch: pr.head?.ref || '',
@@ -1220,11 +1706,17 @@ async function fetchGithubSnapshot(identity) {
     files,
     checks,
     reviews,
-    reviewSummary: summarizeReviews(reviews),
+    reviewSummary,
+    mergeReadiness,
     providerCapabilities: {
       publishSummaryComment: true,
       publishInlineComment: true,
       publishReviewDecision: true,
+      refreshMergeReadiness: true,
+      transitionDraftState: true,
+      mergePullRequest: true,
+      closePullRequest: false,
+      reopenPullRequest: false,
     },
   };
 }
@@ -1238,10 +1730,14 @@ async function fetchCompatibleSnapshot(identity) {
     pr = await requestWithAuthRetry(profile, () => netJson(`${base}/repos/${ownerRepo}/pulls/${identity.number}`, {
       headers: providerHeaders(profile),
     }));
-  } catch {
-    pr = await requestWithAuthRetry(profile, () => netJson(`${base}/projects/${encodeURIComponent(`${identity.owner}/${identity.repo}`)}/merge_requests/${identity.number}`, {
-      headers: providerHeaders(profile),
-    }));
+  } catch (firstError) {
+    try {
+      pr = await requestWithAuthRetry(profile, () => netJson(`${base}/projects/${encodeURIComponent(`${identity.owner}/${identity.repo}`)}/merge_requests/${identity.number}`, {
+        headers: providerHeaders(profile),
+      }));
+    } catch (secondError) {
+      throw preferAccessError(firstError, secondError);
+    }
   }
 
   const headers = providerHeaders(profile);
@@ -1264,6 +1760,7 @@ async function fetchCompatibleSnapshot(identity) {
   const files = rawFiles.map(normalizeFile);
   const reviews = rawReviews.map((item) => normalizeReview(item));
   const headSha = pr.head?.sha || pr.head_sha || pr.sha || pr.diff_refs?.head_sha || '';
+  const reviewSummary = summarizeReviews(reviews);
   return {
     identity: {
       providerId: profile.id,
@@ -1272,6 +1769,7 @@ async function fetchCompatibleSnapshot(identity) {
       repo: identity.repo,
       number: identity.number,
     },
+    queueOrigin: identity.queueOrigin || 'direct',
     url: pr.html_url || pr.web_url || identity.url || `${normalizeBaseUrl(profile.webBaseUrl)}/${identity.owner}/${identity.repo}/pull/${identity.number}`,
     title: pr.title || `#${identity.number}`,
     body: pr.body || pr.description || '',
@@ -1286,20 +1784,46 @@ async function fetchCompatibleSnapshot(identity) {
     files,
     checks: [],
     reviews,
-    reviewSummary: summarizeReviews(reviews),
+    reviewSummary,
+    mergeReadiness: {
+      state: pr.merged || pr.merged_at ? 'merged' : (String(pr.state || pr.status || '').toLowerCase() === 'closed' ? 'closed' : 'open'),
+      isDraft: Boolean(pr.draft || pr.work_in_progress),
+      headSha,
+      expectedHeadSha: headSha,
+      mergeability: 'unknown',
+      checkState: 'missing',
+      reviewState: summarizeReviewState(reviewSummary),
+      permissionState: hasToken(profile) ? 'ready' : 'missing',
+      blockers: ['lifecycleActionUnsupported'],
+      warnings: [],
+      canMerge: false,
+      refreshedAt: new Date().toISOString(),
+    },
     providerCapabilities: {
       publishSummaryComment: true,
       publishInlineComment: true,
       publishReviewDecision: false,
+      refreshMergeReadiness: false,
+      transitionDraftState: false,
+      mergePullRequest: false,
+      closePullRequest: false,
+      reopenPullRequest: false,
     },
   };
 }
 
 async function fetchSnapshot(identity) {
   const profile = profileById(identity.providerId);
-  return profile.kind === 'github'
-    ? fetchGithubSnapshot(identity)
-    : fetchCompatibleSnapshot(identity);
+  try {
+    return profile.kind === 'github'
+      ? fetchGithubSnapshot(identity)
+      : fetchCompatibleSnapshot(identity);
+  } catch (error) {
+    if ([401, 403, 404].includes(Number(error?.status || 0))) {
+      throw sourceAccessError(identity, error);
+    }
+    throw error;
+  }
 }
 
 async function listRepositoryPullRequests(subscription) {
@@ -1314,8 +1838,8 @@ async function listRepositoryPullRequests(subscription) {
         headers: providerHeaders(profile),
       }));
     } catch (error) {
-      if (Number(error?.status || 0) === 404) {
-        throw new Error(`${t('errorRepoNotFound')} (${subscription.owner}/${subscription.repo})`);
+      if ([401, 403, 404].includes(Number(error?.status || 0))) {
+        throw sourceAccessError(subscription, error);
       }
       throw error;
     }
@@ -1326,16 +1850,21 @@ async function listRepositoryPullRequests(subscription) {
       repo: subscription.repo,
       number: Number(row.number || row.iid || row.id),
       url: row.html_url || row.web_url || '',
+      queueOrigin: 'watch',
     })).filter((row) => Number.isFinite(row.number));
   }
   try {
     raw = await requestWithAuthRetry(profile, () => netJson(`${base}/repos/${ownerRepo}/pulls?state=open&per_page=20`, {
       headers: providerHeaders(profile),
     }));
-  } catch {
-    raw = await requestWithAuthRetry(profile, () => netJson(`${base}/projects/${encodeURIComponent(`${subscription.owner}/${subscription.repo}`)}/merge_requests?state=opened&per_page=20`, {
-      headers: providerHeaders(profile),
-    }));
+  } catch (firstError) {
+    try {
+      raw = await requestWithAuthRetry(profile, () => netJson(`${base}/projects/${encodeURIComponent(`${subscription.owner}/${subscription.repo}`)}/merge_requests?state=opened&per_page=20`, {
+        headers: providerHeaders(profile),
+      }));
+    } catch (secondError) {
+      throw sourceAccessError(subscription, preferAccessError(firstError, secondError));
+    }
   }
   const rows = Array.isArray(raw) ? raw : raw?.values || raw?.items || [];
   return rows.slice(0, 20).map((row) => ({
@@ -1345,6 +1874,7 @@ async function listRepositoryPullRequests(subscription) {
     repo: subscription.repo,
     number: Number(row.number || row.iid || row.id),
     url: row.html_url || row.web_url || '',
+    queueOrigin: 'watch',
   })).filter((row) => Number.isFinite(row.number));
 }
 
@@ -1355,31 +1885,57 @@ async function listReviewRequested(profile) {
     const headers = providerHeaders(profile);
     const query = encodeURIComponent('is:pr is:open review-requested:@me archived:false');
     const result = await netJson(`${base}/search/issues?q=${query}&per_page=20`, { headers });
-    return (result.items || []).map((item) => parsePrUrl(item.html_url)).filter(Boolean);
+    return (result.items || [])
+      .map((item) => parsePrUrl(item.html_url))
+      .filter(Boolean)
+      .map((item) => ({ ...item, queueOrigin: 'assigned' }));
   }
   try {
     const result = await netJson(`${normalizeBaseUrl(profile.apiBaseUrl)}/user/review_requests`, {
       headers: providerHeaders(profile),
     });
-    return (Array.isArray(result) ? result : result?.items || []).map((item) => parsePrUrl(item.html_url || item.web_url || item.url)).filter(Boolean);
+    return (Array.isArray(result) ? result : result?.items || [])
+      .map((item) => parsePrUrl(item.html_url || item.web_url || item.url))
+      .filter(Boolean)
+      .map((item) => ({ ...item, queueOrigin: 'assigned' }));
   } catch {
     return [];
   }
 }
 
-function mergeItems(nextItems) {
+function isOpenReviewItem(item) {
+  const stateName = String(item?.state || '').toLowerCase();
+  return !item?.merged && (stateName === 'open' || stateName === 'opened' || !stateName);
+}
+
+function mergeItems(nextItems, { dropMissing = false } = {}) {
   const previous = new Map(state.data.items.map((item) => [itemKey(item), item]));
   const merged = new Map();
   for (const item of nextItems) {
-    merged.set(itemKey(item), { ...previous.get(itemKey(item)), ...item, stale: false });
+    const existing = previous.get(itemKey(item));
+    merged.set(itemKey(item), {
+      ...existing,
+      ...item,
+      queueOrigin: item.queueOrigin || existing?.queueOrigin || 'direct',
+      stale: false,
+    });
   }
   for (const item of state.data.items) {
-    if (!merged.has(itemKey(item))) merged.set(itemKey(item), { ...item, stale: true });
+    if (merged.has(itemKey(item))) continue;
+    if (!dropMissing || item.queueOrigin === 'direct') {
+      merged.set(itemKey(item), { ...item, stale: dropMissing });
+    }
   }
   state.data.items = Array.from(merged.values()).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  if (state.data.selectedKey && !state.data.items.some((item) => itemKey(item) === state.data.selectedKey)) {
+    state.data.selectedKey = null;
+    state.data.selectedFilePath = null;
+    resetSelectedPrTransientUi();
+  }
   if (!state.data.selectedKey && state.data.items[0]) {
     state.data.selectedKey = itemKey(state.data.items[0]);
     state.data.selectedFilePath = state.data.items[0].files?.[0]?.path || null;
+    resetSelectedPrTransientUi();
   }
 }
 
@@ -1412,15 +1968,49 @@ async function notifyNewWork(previousItems, nextItems) {
       }
     }
   }
-  for (const notice of notifications.slice(0, 4)) {
+  if (!notifications.length) return;
+  for (const notice of notifications) {
+    notified.add(notice.key);
+  }
+  state.data.notifiedKeys = Array.from(notified).slice(-200);
+  if (shouldSuppressSystemNotification()) {
+    return;
+  }
+  const digest = buildNotificationDigest(notifications);
+  for (const notice of digest) {
     try {
       await app.notifications.system(notice.title, notice.body);
-      notified.add(notice.key);
     } catch {
       break;
     }
   }
-  state.data.notifiedKeys = Array.from(notified).slice(-200);
+}
+
+function shouldSuppressSystemNotification() {
+  return document.visibilityState === 'visible' || document.hasFocus();
+}
+
+function buildNotificationDigest(notifications) {
+  const newItems = notifications.filter((notice) => notice.key.startsWith('new:'));
+  const newHeads = notifications.filter((notice) => notice.key.startsWith('head:'));
+  const digest = [];
+  if (newItems.length === 1) digest.push(newItems[0]);
+  if (newItems.length > 1) {
+    digest.push({
+      key: 'new:digest',
+      title: t('newPrBatchTitle'),
+      body: t('newPrBatchBody', { count: newItems.length }),
+    });
+  }
+  if (newHeads.length === 1) digest.push(newHeads[0]);
+  if (newHeads.length > 1) {
+    digest.push({
+      key: 'head:digest',
+      title: t('newHeadTitle'),
+      body: t('newHeadBatchBody', { count: newHeads.length }),
+    });
+  }
+  return digest.slice(0, 2);
 }
 
 async function syncQueue(mode = state.data.queueMode) {
@@ -1444,20 +2034,24 @@ async function syncQueue(mode = state.data.queueMode) {
   try {
     const previousItems = [...state.data.items];
     const identities = [];
+    const sourceErrors = [];
+    let refreshedSourceCount = 0;
     if (mode === 'all') {
       for (const subscription of subscriptions) {
         try {
           identities.push(...await listRepositoryPullRequests(subscription));
+          refreshedSourceCount += 1;
         } catch (error) {
-          state.ui.error = String(error?.message || error);
+          sourceErrors.push(error);
         }
       }
     } else {
       for (const item of state.data.profiles.filter((profileItem) => profileItem.enabled && hasToken(profileItem))) {
         try {
           identities.push(...await listReviewRequested(item));
+          refreshedSourceCount += 1;
         } catch (error) {
-          state.ui.error = String(error?.message || error);
+          sourceErrors.push(sourceAccessError(item, error));
         }
       }
     }
@@ -1465,14 +2059,31 @@ async function syncQueue(mode = state.data.queueMode) {
     const snapshots = [];
     for (const identity of Array.from(unique.values()).slice(0, 30)) {
       try {
-        snapshots.push(await fetchSnapshot(identity));
+        const snapshot = await fetchSnapshot(identity);
+        if (isOpenReviewItem(snapshot)) snapshots.push(snapshot);
       } catch (error) {
-        state.ui.error = String(error?.message || error);
+        sourceErrors.push(error);
       }
     }
-    mergeItems(snapshots);
+    const hadSourceError = sourceErrors.length > 0;
+    mergeItems(snapshots, { dropMissing: !hadSourceError });
     await notifyNewWork(previousItems, snapshots);
-    await finish('statusReady');
+    if (hadSourceError) {
+      state.ui.busy = null;
+      if (refreshedSourceCount > 0) {
+        state.ui.error = null;
+        state.ui.status = t('statusPartialSync', { count: sourceErrors.length });
+      } else {
+        state.ui.error = String(sourceErrors[0]?.message || sourceErrors[0]);
+        state.ui.status = null;
+      }
+      state.ui.reviewProgress = null;
+      state.ui.cancelReviewRequested = false;
+      await saveStorage();
+      render({ preservePaneScroll: true });
+    } else {
+      await finish('statusReady');
+    }
     resetPollTimer();
   } catch (error) {
     setError(error);
@@ -1494,6 +2105,7 @@ async function openDirectUrl() {
     const byKey = new Map(state.data.items.map((item) => [itemKey(item), item]));
     byKey.set(itemKey(snapshot), snapshot);
     state.data.items = Array.from(byKey.values());
+    if (state.data.selectedKey !== itemKey(snapshot)) resetSelectedPrTransientUi();
     state.data.selectedKey = itemKey(snapshot);
     state.data.selectedFilePath = snapshot.files?.[0]?.path || null;
     state.ui.activeProviderId = identity.providerId;
@@ -1512,6 +2124,50 @@ function selectedDraft() {
   return snapshot ? state.data.drafts[snapshotKey(snapshot)] || null : null;
 }
 
+function unpublishedDraftOperations(draft) {
+  return (draft?.operations || []).filter((operation) => !operation.published);
+}
+
+function publishedReviewContextFor(snapshot) {
+  const key = snapshotKey(snapshot);
+  const context = state.data.publishedReviewContext?.[key];
+  return Array.isArray(context) ? context.slice(0, 20) : [];
+}
+
+function recordPublishedReviewContext(snapshot, draft, results) {
+  const key = snapshotKey(snapshot);
+  const byOperationId = new Map((results || []).map((result) => [result.operationId, result]));
+  const publishedItems = (draft?.operations || [])
+    .filter((operation) => {
+      const result = byOperationId.get(operation.id);
+      return result?.status === 'success' && result.providerOperationId !== 'skipped';
+    })
+    .map((operation) => ({
+      id: operation.id,
+      kind: operation.kind,
+      path: operation.path || '',
+      position: operation.position || null,
+      body: String(operation.body || '').slice(0, 1200),
+      decision: operation.decision || '',
+      headSha: draft.headSha || snapshot.headSha || '',
+      publishedAt: new Date().toISOString(),
+    }));
+  if (!publishedItems.length) return;
+  const previous = publishedReviewContextFor(snapshot);
+  state.data.publishedReviewContext = {
+    ...(state.data.publishedReviewContext || {}),
+    [key]: [...publishedItems, ...previous].slice(0, 30),
+  };
+}
+
+function resetSelectedPrTransientUi() {
+  state.ui.filesExpanded = false;
+  state.ui.focusedDiffPath = null;
+  state.ui.focusedDiffPosition = null;
+  state.ui.manualCommentDraft = '';
+  state.ui.manualCommentExpanded = false;
+}
+
 function recommendMode(snapshot) {
   const lines = snapshot.files.reduce((sum, file) => sum + file.additions + file.deletions, 0);
   const security = snapshot.files.some((file) => /auth|permission|crypto|secret|token|security/i.test(file.path));
@@ -1521,9 +2177,26 @@ function recommendMode(snapshot) {
   return 'fast_check';
 }
 
+function reviewLanguageName() {
+  return state.data.reviewLanguage === 'zh' ? 'Simplified Chinese' : 'English';
+}
+
 function localSummary(snapshot) {
   const lines = snapshot.files.reduce((sum, file) => sum + file.additions + file.deletions, 0);
   const topFiles = snapshot.files.slice(0, 8).map((file) => `- ${file.path} (+${file.additions}/-${file.deletions})`).join('\n');
+  if (state.data.reviewLanguage === 'zh') {
+    return [
+      `Review 草稿："${snapshot.title}"。`,
+      '',
+      `变更文件：${snapshot.files.length}。变更行数：${lines}。`,
+      snapshot.checks.length ? `CI：${snapshot.checks.map((check) => `${check.name}:${check.conclusion || check.status}`).join(', ')}` : 'CI：代码平台未返回状态。',
+      '',
+      '建议关注：',
+      topFiles || '- 代码平台未返回可审核文件。',
+      '',
+      '发布前请编辑确认。',
+    ].join('\n');
+  }
   return [
     `Review draft for "${snapshot.title}".`,
     '',
@@ -1545,12 +2218,23 @@ function reviewPrompt(snapshot, mode) {
     deletions: file.deletions,
     patch: (file.patch || '').slice(0, mode === 'deep_review' ? 12000 : 5000),
   }));
+  const previousPublishedFindings = publishedReviewContextFor(snapshot).map((item) => ({
+    kind: item.kind,
+    path: item.path,
+    position: item.position,
+    body: item.body,
+    decision: item.decision,
+    headSha: item.headSha,
+  }));
   return [
     'You are reviewing a pull request. Return JSON only with actionable review items.',
+    `Write all review comments in ${reviewLanguageName()}.`,
     'Do not create a general summary comment. The reviewed author does not need a recap unless there is a principle-level concern about the PR direction.',
     'Use summaryComment only when the issue is a principle-level PR direction concern that cannot be tied to a specific file or diff line.',
-    `Depth: ${modeLabel(mode)}. Prefer concrete functionality direction, implementation risks, and missing tests.`,
-    'Schema: {"findings":[{"path":"src/file.ts","position":12,"body":"specific issue"}],"summaryComment":"","decision":"comment","decisionBody":""}.',
+    `Depth: ${modeLabel(mode)}. Prefer concrete functionality direction, implementation risks, missing tests, and a practical suggested fix for each issue.`,
+    'Previous published review comments are provided as context. Do not repeat previous published review comments as new findings.',
+    'You may disagree with or refine those earlier comments when the current diff or discussion shows they were wrong, outdated, resolved, or need follow-up.',
+    'Schema: {"findings":[{"path":"src/file.ts","position":12,"body":"specific issue","suggestion":"how to fix it"}],"summaryComment":"","decision":"comment","decisionBody":""}.',
     'Use a 1-based diff position only when you can identify it from the patch. Omit findings that are not supported by the diff.',
     '',
     JSON.stringify({
@@ -1561,6 +2245,7 @@ function reviewPrompt(snapshot, mode) {
       head: snapshot.headBranch,
       ci: snapshot.checks,
       existingReviews: snapshot.reviews.slice(0, 12),
+      previousPublishedFindings,
       files,
     }, null, 2),
   ].join('\n');
@@ -1581,6 +2266,13 @@ function extractJsonObject(value) {
 
 function normalizeDecision(value) {
   return ['approve', 'request_changes', 'comment'].includes(value) ? value : 'comment';
+}
+
+function formatFindingBody(body, suggestion) {
+  const issue = String(body || '').trim();
+  const fix = String(suggestion || '').trim();
+  if (!fix) return issue;
+  return `${issue}\n\n${state.data.reviewLanguage === 'zh' ? '建议处理' : 'Suggested fix'}: ${fix}`;
 }
 
 function buildReviewOperations(snapshot, aiText, mode) {
@@ -1606,6 +2298,7 @@ function buildReviewOperations(snapshot, aiText, mode) {
     for (const finding of findings.slice(0, 12)) {
       const path = String(finding?.path || '').trim();
       const body = String(finding?.body || '').trim();
+      const suggestion = String(finding?.suggestion || finding?.suggestedFix || '').trim();
       const position = Number(finding?.position || 0);
       if (!path || !body || !validPaths.has(path) || !Number.isFinite(position) || position <= 0) {
         continue;
@@ -1615,15 +2308,16 @@ function buildReviewOperations(snapshot, aiText, mode) {
         kind: 'inline_comment',
         path,
         position,
-        body,
+        body: formatFindingBody(body, suggestion),
         selected: true,
         stale: false,
         published: false,
       });
     }
 
+    const hasInlineFindings = operations.some((operation) => operation.kind === 'inline_comment');
     const decisionBody = String(parsed.decisionBody || '').trim();
-    if (decisionBody) {
+    if (decisionBody && !hasInlineFindings) {
       operations.push({
         id: `decision-${timestamp}`,
         kind: 'review_decision',
@@ -1652,9 +2346,26 @@ function buildReviewOperations(snapshot, aiText, mode) {
   return operations;
 }
 
+function requestGenerateDraft() {
+  const snapshot = selectedSnapshot();
+  if (!snapshot) return;
+  const draft = selectedDraft();
+  const unpublished = unpublishedDraftOperations(draft);
+  if (unpublished.length) {
+    state.ui.draftOverwriteConfirm = {
+      key: snapshotKey(snapshot),
+      count: unpublished.length,
+    };
+    render();
+    return;
+  }
+  void generateDraft();
+}
+
 async function generateDraft() {
   const snapshot = selectedSnapshot();
   if (!snapshot) return;
+  state.ui.draftOverwriteConfirm = null;
   state.ui.cancelReviewRequested = false;
   setBusy('draft', 'statusGenerating');
   try {
@@ -1696,7 +2407,7 @@ async function generateDraft() {
       operations: buildReviewOperations(snapshot, reviewText, mode),
     };
     state.data.drafts[snapshotKey(snapshot)] = draft;
-    await finish('statusReady');
+    await finish('statusReady', { preservePaneScroll: true });
   } catch (error) {
     setError(error);
   }
@@ -1725,6 +2436,7 @@ async function addManualComment() {
     published: false,
   });
   state.data.drafts[key] = draft;
+  state.ui.manualCommentDraft = '';
   input.value = '';
   await finish('statusSaved');
 }
@@ -1879,17 +2591,274 @@ async function confirmPublish() {
     message: result.message || null,
     timestamp: new Date().toISOString(),
   }));
+  recordPublishedReviewContext(snapshot, draft, results);
   state.data.audit = [...auditEntries, ...state.data.audit].slice(0, 50);
-  state.data.lastReviewedHeads[snapshotKey(snapshot)] = snapshot.headSha;
+  const publishedCount = results.filter((result) => result.status === 'success').length;
+  if (publishedCount > 0) {
+    state.data.lastReviewedHeads[snapshotKey(snapshot)] = snapshot.headSha;
+  }
   state.ui.confirm = null;
-  await finish('statusPublished');
+  if (publishedCount > 0) {
+    await finish('statusPublished');
+  } else {
+    await saveStorage();
+    setError(t('statusPublishFailed'));
+  }
 }
 
-async function markReviewed() {
+function upsertSnapshot(snapshot) {
+  if (!snapshot) return;
+  const byKey = new Map(state.data.items.map((item) => [itemKey(item), item]));
+  byKey.set(snapshotKey(snapshot), {
+    ...byKey.get(snapshotKey(snapshot)),
+    ...snapshot,
+    stale: false,
+  });
+  state.data.items = Array.from(byKey.values()).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  state.data.selectedKey = snapshotKey(snapshot);
+  state.data.selectedFilePath = state.data.selectedFilePath || snapshot.files?.[0]?.path || null;
+}
+
+function githubGraphqlUrl(profile) {
+  const base = normalizeBaseUrl(profile.apiBaseUrl);
+  if (base === 'https://api.github.com') return `${base}/graphql`;
+  if (base.endsWith('/api/v3')) return `${base.slice(0, -'/api/v3'.length)}/api/graphql`;
+  return `${base}/graphql`;
+}
+
+async function githubGraphql(profile, query, variables = {}) {
+  const result = await netJson(githubGraphqlUrl(profile), {
+    method: 'POST',
+    headers: providerHeaders(profile, true),
+    body: JSON.stringify({ query, variables }),
+  });
+  if (Array.isArray(result?.errors) && result.errors.length) {
+    const message = result.errors.map((error) => error.message).filter(Boolean).join('; ');
+    throw new Error(`${t('errorNetwork')}: ${message || 'GraphQL error'}`);
+  }
+  return result?.data || {};
+}
+
+async function refreshSelectedLifecycleStatus() {
   const snapshot = selectedSnapshot();
   if (!snapshot) return;
-  state.data.lastReviewedHeads[snapshotKey(snapshot)] = snapshot.headSha;
-  await finish('statusReviewed');
+  setBusy('lifecycle-refresh', 'refreshingLifecycle');
+  try {
+    const fresh = await fetchSnapshot(snapshot.identity);
+    upsertSnapshot(fresh);
+    await finish('statusReady');
+  } catch (error) {
+    setError(error);
+  }
+}
+
+function lifecycleActionBlockers(action, snapshot) {
+  const caps = snapshot?.providerCapabilities || {};
+  const readiness = snapshot?.mergeReadiness || {};
+  if (action === 'merge') {
+    if (!caps.mergePullRequest) return ['lifecycleActionUnsupported'];
+    const blockers = [...(readiness.blockers || ['lifecycleUnknown'])];
+    if (!hasToken(profileById(snapshot?.identity?.providerId)) && !blockers.includes('lifecycleBlockToken')) {
+      blockers.push('lifecycleBlockToken');
+    }
+    return blockers;
+  }
+  if (!caps.transitionDraftState) return ['lifecycleActionUnsupported'];
+  const blockers = [];
+  if (readiness.state === 'merged') blockers.push('lifecycleBlockMerged');
+  if (readiness.state === 'closed') blockers.push('lifecycleBlockClosed');
+  if (!readiness.headSha && !snapshot?.headSha) blockers.push('lifecycleBlockHead');
+  if (!snapshot?.nodeId) blockers.push('lifecycleUnknown');
+  if (!hasToken(profileById(snapshot.identity.providerId))) blockers.push('lifecycleBlockToken');
+  return blockers;
+}
+
+function hardLifecycleBlockers(blockers) {
+  return blockers.filter((key) => key !== 'lifecycleBlockToken');
+}
+
+function lifecycleButtonTitle(action, blockers, profile) {
+  const unique = Array.from(new Set(blockers || []));
+  if (unique.includes('lifecycleBlockToken')) {
+    const authHint = profile?.kind === 'github' ? t('lifecycleAutoAuthHint') : t('lifecycleGuideToken');
+    const other = unique.filter((key) => key !== 'lifecycleBlockToken').map((key) => t(key));
+    return [authHint, ...other].filter(Boolean).join(' · ');
+  }
+  if (unique.length) return unique.map((key) => t(key)).join(' · ');
+  if (action === 'ready') return t('lifecycleConfirmReadyBody');
+  if (action === 'draft') return t('lifecycleConfirmDraftBody');
+  return t('lifecycleConfirmMergeBody');
+}
+
+function lifecycleActionLabel(action) {
+  if (action === 'ready') return t('lifecycleActionReady');
+  if (action === 'draft') return t('lifecycleActionDraft');
+  if (action === 'merge') return t('lifecycleActionMerge');
+  return action;
+}
+
+function lifecycleConfirmTitleKey(action) {
+  if (action === 'ready') return 'lifecycleConfirmReadyTitle';
+  if (action === 'draft') return 'lifecycleConfirmDraftTitle';
+  return 'lifecycleConfirmMergeTitle';
+}
+
+function lifecycleConfirmBodyKey(action) {
+  if (action === 'ready') return 'lifecycleConfirmReadyBody';
+  if (action === 'draft') return 'lifecycleConfirmDraftBody';
+  return 'lifecycleConfirmMergeBody';
+}
+
+async function requestLifecycleAction(action) {
+  const snapshot = selectedSnapshot();
+  if (!snapshot) return;
+  const profile = profileById(snapshot.identity.providerId);
+  if (!profile || !await ensureProfileToken(profile)) {
+    state.ui.settingsOpen = true;
+    state.ui.busy = null;
+    state.ui.status = null;
+    state.ui.error = t('lifecycleAuthFailed');
+    render();
+    return;
+  }
+  setBusy('lifecycle-check', 'refreshingLifecycle');
+  try {
+    const fresh = await fetchSnapshot(snapshot.identity);
+    upsertSnapshot(fresh);
+    if (snapshot.headSha && fresh.headSha && snapshot.headSha !== fresh.headSha) {
+      state.ui.lifecycleConfirm = null;
+      state.ui.busy = null;
+      state.ui.status = null;
+      state.ui.error = t('lifecycleHeadChanged');
+      render();
+      return;
+    }
+    const blockers = lifecycleActionBlockers(action, fresh);
+    if (blockers.length) {
+      state.ui.lifecycleConfirm = null;
+      state.ui.busy = null;
+      state.ui.status = null;
+      state.ui.error = action === 'merge'
+        ? t('lifecycleMergeBlocked', { reason: blockers.map((key) => t(key)).join(', ') })
+        : blockers.map((key) => t(key)).join(', ');
+      render();
+      return;
+    }
+    state.ui.busy = null;
+    state.ui.status = null;
+    state.ui.error = null;
+    state.ui.lifecycleConfirm = {
+      action,
+      identity: fresh.identity,
+      title: fresh.title,
+      owner: fresh.identity.owner,
+      repo: fresh.identity.repo,
+      number: fresh.identity.number,
+      baseBranch: fresh.baseBranch,
+      headBranch: fresh.headBranch,
+      expectedHeadSha: fresh.headSha,
+      warnings: action === 'merge' ? (fresh.mergeReadiness?.warnings || []) : [],
+      defaultMergeMethod: 'merge',
+    };
+    render();
+  } catch (error) {
+    setError(error);
+  }
+}
+
+async function transitionGithubDraftState(profile, snapshot, action) {
+  const mutation = action === 'ready'
+    ? `mutation MarkPullRequestReady($pullRequestId: ID!) {
+        markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) {
+          pullRequest { isDraft }
+        }
+      }`
+    : `mutation ConvertPullRequestToDraft($pullRequestId: ID!) {
+        convertPullRequestToDraft(input: { pullRequestId: $pullRequestId }) {
+          pullRequest { isDraft }
+        }
+      }`;
+  await githubGraphql(profile, mutation, { pullRequestId: snapshot.nodeId });
+}
+
+async function mergeGithubPullRequest(profile, snapshot, mergeMethod, expectedHeadSha) {
+  const base = normalizeBaseUrl(profile.apiBaseUrl);
+  const ownerRepo = `${encodeURIComponent(snapshot.identity.owner)}/${encodeURIComponent(snapshot.identity.repo)}`;
+  return netJson(`${base}/repos/${ownerRepo}/pulls/${snapshot.identity.number}/merge`, {
+    method: 'PUT',
+    headers: providerHeaders(profile, true),
+    body: JSON.stringify({
+      sha: expectedHeadSha,
+      merge_method: mergeMethod,
+    }),
+  });
+}
+
+async function confirmLifecycleAction() {
+  const confirm = state.ui.lifecycleConfirm;
+  if (!confirm) return;
+  const profile = profileById(confirm.identity.providerId);
+  const mergeMethod = document.getElementById('merge-method')?.value || confirm.defaultMergeMethod || 'merge';
+  setBusy('lifecycle', 'lifecycleUpdating');
+  try {
+    const fresh = await fetchSnapshot(confirm.identity);
+    upsertSnapshot(fresh);
+    if (confirm.expectedHeadSha && fresh.headSha && confirm.expectedHeadSha !== fresh.headSha) {
+      state.ui.lifecycleConfirm = null;
+      state.ui.busy = null;
+      state.ui.status = null;
+      state.ui.error = t('lifecycleHeadChanged');
+      render();
+      return;
+    }
+    const blockers = lifecycleActionBlockers(confirm.action, fresh);
+    if (blockers.length) {
+      state.ui.lifecycleConfirm = null;
+      state.ui.busy = null;
+      state.ui.status = null;
+      state.ui.error = confirm.action === 'merge'
+        ? t('lifecycleMergeBlocked', { reason: blockers.map((key) => t(key)).join(', ') })
+        : blockers.map((key) => t(key)).join(', ');
+      render();
+      return;
+    }
+    if (confirm.action === 'merge') {
+      await mergeGithubPullRequest(profile, fresh, mergeMethod, confirm.expectedHeadSha);
+    } else {
+      await transitionGithubDraftState(profile, fresh, confirm.action);
+    }
+    const auditEntry = {
+      id: `${snapshotKey(fresh)}:lifecycle:${confirm.action}:${Date.now()}`,
+      providerId: profile.id,
+      owner: fresh.identity.owner,
+      repo: fresh.identity.repo,
+      number: fresh.identity.number,
+      actionType: `lifecycle:${confirm.action}`,
+      actionLabel: lifecycleActionLabel(confirm.action),
+      status: 'success',
+      headSha: confirm.expectedHeadSha,
+      timestamp: new Date().toISOString(),
+    };
+    state.data.audit = [auditEntry, ...state.data.audit].slice(0, 50);
+    state.ui.lifecycleConfirm = null;
+    try {
+      upsertSnapshot(await fetchSnapshot(fresh.identity));
+    } catch {
+      upsertSnapshot({
+        ...fresh,
+        merged: confirm.action === 'merge' ? true : fresh.merged,
+        isDraft: confirm.action === 'draft' ? true : confirm.action === 'ready' ? false : fresh.isDraft,
+      });
+    }
+    await finish(confirm.action === 'merge'
+      ? 'lifecycleMergeDone'
+      : confirm.action === 'draft'
+        ? 'lifecycleDraftDone'
+        : 'lifecycleReadyDone');
+  } catch (error) {
+    state.ui.lifecycleConfirm = null;
+    setError(error);
+  }
 }
 
 function resetPollTimer() {
@@ -1904,77 +2873,203 @@ function resetPollTimer() {
 
 function renderStatus() {
   if (state.ui.error) return `<div class="pr-status pr-status--error">${esc(state.ui.error)}</div>`;
-  if (state.ui.status) return `<div class="pr-status">${esc(state.ui.status)}</div>`;
+  if (state.ui.status) {
+    const busyClass = state.ui.startupSyncing || state.ui.busy === 'refresh' ? ' pr-status--busy' : '';
+    return `<div class="pr-status${busyClass}">${esc(state.ui.status)}</div>`;
+  }
   return '';
 }
 
+function shouldShowShellStatus() {
+  return Boolean(state.ui.status && (state.ui.startupSyncing || state.ui.busy === 'refresh'));
+}
+
+function directOpenBusyReason() {
+  if (!state.ui.busy) return '';
+  if (state.ui.busy === 'refresh') return t('directOpenBusySync');
+  if (state.ui.busy === 'draft') return t('directOpenBusyReview');
+  if (state.ui.busy === 'publish' || state.ui.busy === 'stale-check') return t('directOpenBusyPublish');
+  if (String(state.ui.busy).startsWith('lifecycle')) return t('directOpenBusyLifecycle');
+  return t('directOpenBusyGeneric');
+}
+
+function busyActionReason(action) {
+  if (!state.ui.busy) return '';
+  if (action === 'open-direct') return directOpenBusyReason();
+  if (state.ui.busy === 'refresh') return t('busyActionSync');
+  if (state.ui.busy === 'draft') return t('busyActionReview');
+  if (state.ui.busy === 'publish' || state.ui.busy === 'stale-check') return t('busyActionPublish');
+  if (String(state.ui.busy).startsWith('lifecycle')) return t('busyActionLifecycle');
+  return t('busyActionGeneric');
+}
+
+function actionAvailabilityAttrs(disabledReason = '', enabledTitle = '') {
+  const title = disabledReason || enabledTitle;
+  const attrs = [`aria-disabled="${disabledReason ? 'true' : 'false'}"`];
+  if (title) attrs.push(`title="${esc(title)}"`);
+  if (disabledReason) attrs.push(`data-disabled-reason="${esc(disabledReason)}"`);
+  return attrs.join(' ');
+}
+
+function disabledActionAttrs(disabledReason = '') {
+  return actionAvailabilityAttrs(disabledReason);
+}
+
+function busyActionAttrs(action) {
+  return disabledActionAttrs(busyActionReason(action));
+}
+
+function renderShellStatus() {
+  if (!shouldShowShellStatus()) return '';
+  return `<div class="pr-shell-status">${renderStatus()}</div>`;
+}
+
 function renderCommandBar() {
-  const profile = activeProfile();
+  const activeRepoCount = activeSubscriptions().length;
+  const modeLabelText = state.data.queueMode === 'mine' ? t('syncMineTitle') : t('syncAllTitle');
   return `
-    <header class="pr-command-bar">
+    <header class="pr-command-bar pr-command-bar--simple">
       <div class="pr-brand">
         <div class="pr-brand-mark">PR</div>
         <div>
           <h1>${esc(t('title'))}</h1>
-          <p>${esc(t('subtitle'))}</p>
+          <p>${esc(modeLabelText)} · ${esc(activeRepoCount ? t('autoSync') : t('queueEmpty'))}</p>
         </div>
       </div>
-      <div class="pr-repo-first pr-url-card">
-        <div class="pr-mini-title">
-          <strong>${esc(t('repositoryFirst'))}</strong>
-          <span>${esc(t('repositoryFirstHint'))}</span>
-        </div>
-        <form class="pr-top-watch-form" id="quick-subscription-form">
-          <label class="pr-field">
-            <span>${esc(t('provider'))}</span>
-            <select class="pr-select" name="providerId" aria-label="${esc(t('provider'))}">
-              ${state.data.profiles.map((item) => `<option value="${esc(item.id)}" ${item.id === state.ui.activeProviderId ? 'selected' : ''}>${esc(item.displayName)}</option>`).join('')}
-            </select>
-          </label>
-          <label class="pr-field pr-field--repo-ref">
-            <span>${esc(t('repoRef'))}</span>
-            <input class="pr-input" name="repoRef" placeholder="${esc(t('repoRefPlaceholder'))}" required />
-          </label>
-          <button class="pr-btn pr-btn--primary pr-btn--compact" type="submit">${esc(t('addWatchedRepo'))}</button>
-        </form>
-      </div>
-      <div class="pr-url-card pr-url-fallback">
-        <div class="pr-mini-title">
-          <strong>${esc(t('singlePrFallback'))}</strong>
-          <span>${esc(t('singlePrFallbackHint'))}</span>
-        </div>
-        <div class="pr-open-strip">
-          <label class="pr-field pr-field--url">
-            <span>${esc(t('directUrl'))}</span>
-            <input class="pr-input pr-url-input" id="direct-url" value="${esc(state.data.directUrl)}" placeholder="${esc(t('directPlaceholder'))}" />
-          </label>
-          <button class="pr-btn pr-btn--primary pr-btn--compact" data-action="open-direct" ${state.ui.busy ? 'disabled' : ''}>${esc(t('openPr'))}</button>
-        </div>
-      </div>
-      <div class="pr-access">
-        <div class="pr-mini-title">
-          <strong>${esc(t('privateAction'))}</strong>
-          <span>${esc(t('authAutoHint'))}</span>
-        </div>
-        <div class="pr-access-row">
-          <label class="pr-field">
-            <span>${esc(t('provider'))}</span>
-            <select class="pr-select" id="active-provider">
-              ${state.data.profiles.map((item) => `<option value="${esc(item.id)}" ${item.id === state.ui.activeProviderId ? 'selected' : ''}>${esc(item.displayName)}</option>`).join('')}
-            </select>
-          </label>
-          ${profile?.kind === 'github' ? `<button class="pr-btn pr-btn--compact" data-action="authorize-gh" ${state.ui.busy ? 'disabled' : ''}>${esc(t('authorizeGitHubCli'))}</button>` : ''}
-          <span class="pr-token-badge ${hasToken(profile) ? 'is-ready' : ''}">${esc(hasToken(profile) ? t('tokenReady') : t('tokenMissing'))}</span>
-        </div>
-        <details class="pr-token-details">
-          <summary>${esc(t('manualToken'))}</summary>
-          <label class="pr-field pr-field--token">
-            <span>${esc(t('token'))}</span>
-            <input class="pr-input" id="session-token" type="password" placeholder="${esc(profile?.credentialLabel || t('token'))}" autocomplete="off" />
-          </label>
-        </details>
+      <div class="pr-command-actions">
+        <button class="pr-btn pr-btn--compact" data-action="sync-current" ${busyActionAttrs('sync-current')}>${esc(t('refreshNow'))}</button>
+        <button class="pr-btn pr-btn--primary pr-btn--compact" data-action="open-settings">${esc(t('manageSources'))}</button>
       </div>
     </header>
+  `;
+}
+
+function renderWatchRepositoryCard() {
+  return `
+    <section class="pr-url-card">
+      <div class="pr-mini-title">
+        <strong>${esc(t('repositoryFirst'))}</strong>
+        <span>${esc(t('repositoryFirstHint'))}</span>
+      </div>
+      <form class="pr-top-watch-form" id="quick-subscription-form">
+        <label class="pr-field">
+          <span>${esc(t('provider'))}</span>
+          <select class="pr-select" name="providerId" aria-label="${esc(t('provider'))}">
+            ${state.data.profiles.map((item) => `<option value="${esc(item.id)}" ${item.id === state.ui.activeProviderId ? 'selected' : ''}>${esc(item.displayName)}</option>`).join('')}
+          </select>
+        </label>
+        <label class="pr-field pr-field--repo-ref">
+          <span>${esc(t('repoRef'))}</span>
+          <input class="pr-input" name="repoRef" placeholder="${esc(t('repoRefPlaceholder'))}" required />
+        </label>
+        <button class="pr-btn pr-btn--primary pr-btn--compact" type="submit">${esc(t('addWatchedRepo'))}</button>
+      </form>
+    </section>
+  `;
+}
+
+function renderDirectOpenCard() {
+  const disabledAttrs = busyActionAttrs('open-direct');
+  return `
+    <section class="pr-url-card">
+      <div class="pr-mini-title">
+        <strong>${esc(t('singlePrFallback'))}</strong>
+        <span>${esc(t('singlePrFallbackHint'))}</span>
+      </div>
+      <div class="pr-open-strip">
+        <label class="pr-field pr-field--url">
+          <span>${esc(t('directUrl'))}</span>
+          <input class="pr-input pr-url-input" id="direct-url" value="${esc(state.data.directUrl)}" placeholder="${esc(t('directPlaceholder'))}" />
+        </label>
+        <button class="pr-btn pr-btn--primary pr-btn--compact" type="button" data-action="open-direct" ${disabledAttrs}>${esc(t('openPr'))}</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderAccessCard() {
+  const profile = activeProfile();
+  return `
+    <section class="pr-access">
+      <div class="pr-mini-title">
+        <strong>${esc(t('privateAction'))}</strong>
+        <span>${esc(t('authAutoHint'))}</span>
+      </div>
+      <div class="pr-access-row">
+        <label class="pr-field">
+          <span>${esc(t('provider'))}</span>
+          <select class="pr-select" id="active-provider">
+            ${state.data.profiles.map((item) => `<option value="${esc(item.id)}" ${item.id === state.ui.activeProviderId ? 'selected' : ''}>${esc(item.displayName)}</option>`).join('')}
+          </select>
+        </label>
+        ${profile?.kind === 'github' ? `<button class="pr-btn pr-btn--compact" data-action="authorize-gh" ${busyActionAttrs('authorize-gh')}>${esc(t('authorizeGitHubCli'))}</button>` : ''}
+        <span class="pr-token-badge ${hasToken(profile) ? 'is-ready' : ''}">${esc(hasToken(profile) ? t('tokenReady') : t('tokenMissing'))}</span>
+      </div>
+      <details class="pr-token-details">
+        <summary>${esc(t('manualToken'))}</summary>
+        <label class="pr-field pr-field--token">
+          <span>${esc(t('token'))}</span>
+          <input class="pr-input" id="session-token" type="password" placeholder="${esc(profile?.credentialLabel || t('token'))}" autocomplete="off" />
+        </label>
+      </details>
+    </section>
+  `;
+}
+
+function renderQueueSettingsCard() {
+  const mode = state.data.queueMode;
+  return `
+    <section class="pr-settings-section">
+      <div class="pr-mini-title">
+        <strong>${esc(t('queueSettingsTitle'))}</strong>
+        <span>${esc(t('queueSettingsHint'))}</span>
+      </div>
+      <div class="pr-sync-panel pr-sync-panel--settings">
+        <button class="pr-sync-tile ${mode === 'all' ? 'is-active' : ''}" data-action="queue-mode" data-mode="all" ${busyActionAttrs('queue-mode')}>
+          <strong>${esc(t('syncAllTitle'))}</strong>
+          <span>${esc(t('syncAllDesc'))}</span>
+        </button>
+        <button class="pr-sync-tile ${mode === 'mine' ? 'is-active' : ''}" data-action="queue-mode" data-mode="mine" ${busyActionAttrs('queue-mode')}>
+          <strong>${esc(t('syncMineTitle'))}</strong>
+          <span>${esc(t('syncMineDesc'))}</span>
+        </button>
+      </div>
+      <div class="pr-queue-actions pr-queue-actions--settings">
+        <label class="pr-mini-control">
+          <span>${esc(t('autoSync'))}</span>
+          <input class="pr-input" id="poll-minutes" type="number" min="1" max="120" value="${esc(state.data.pollMinutes)}" />
+          <span>${esc(t('minutes'))}</span>
+        </label>
+        <button class="pr-btn pr-btn--compact pr-refresh-now" data-action="sync-current" ${busyActionAttrs('sync-current')}>${esc(t('refreshNow'))}</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderSettingsModal() {
+  if (!state.ui.settingsOpen) return '';
+  return `
+    <div class="pr-modal-backdrop">
+      <section class="pr-modal pr-settings-modal" role="dialog" aria-modal="true">
+        <div class="pr-modal-head">
+          <div>
+            <h2>${esc(t('sourceSettingsTitle'))}</h2>
+            <p>${esc(t('sourceSettingsSubtitle'))}</p>
+          </div>
+          <button class="pr-icon-btn" data-action="close-settings" aria-label="${esc(t('cancel'))}">&times;</button>
+        </div>
+        <div class="pr-modal-body pr-settings-body">
+          ${renderWatchRepositoryCard()}
+          ${renderDirectOpenCard()}
+          ${renderQueueSettingsCard()}
+          ${renderAccessCard()}
+          ${renderSourcesPanel()}
+        </div>
+        <div class="pr-modal-foot">
+          <button class="pr-btn pr-btn--primary" data-action="close-settings">${esc(t('save'))}</button>
+        </div>
+      </section>
+    </div>
   `;
 }
 
@@ -1983,8 +3078,7 @@ function renderQueuePanel() {
   const activeRepoCount = activeSubscriptions().length;
   return `
     <aside class="pr-sidebar">
-      ${renderStatus()}
-      ${renderSourcesPanel()}
+      ${shouldShowShellStatus() ? '' : renderStatus()}
       <section class="pr-card pr-card--queue">
         <div class="pr-card-head">
           <div>
@@ -1992,24 +3086,6 @@ function renderQueuePanel() {
             <p>${esc(activeRepoCount ? t(mode === 'mine' ? 'queueModeMineHint' : 'queueModeAllHint') : t(state.data.subscriptions.length ? 'statusNoActiveSubscriptions' : 'queueEmpty'))}</p>
           </div>
           <span class="pr-count">${state.data.items.length}</span>
-        </div>
-        <div class="pr-sync-panel">
-          <button class="pr-sync-tile ${mode === 'all' ? 'is-active' : ''}" data-action="queue-mode" data-mode="all" ${state.ui.busy ? 'disabled' : ''}>
-            <strong>${esc(t('syncAllTitle'))}</strong>
-            <span>${esc(t('syncAllDesc'))}</span>
-          </button>
-          <button class="pr-sync-tile ${mode === 'mine' ? 'is-active' : ''}" data-action="queue-mode" data-mode="mine" ${state.ui.busy ? 'disabled' : ''}>
-            <strong>${esc(t('syncMineTitle'))}</strong>
-            <span>${esc(t('syncMineDesc'))}</span>
-          </button>
-        </div>
-        <div class="pr-queue-actions">
-          <label class="pr-mini-control">
-            <span>${esc(t('autoSync'))}</span>
-            <input class="pr-input" id="poll-minutes" type="number" min="1" max="120" value="${esc(state.data.pollMinutes)}" />
-            <span>${esc(t('minutes'))}</span>
-          </label>
-          <button class="pr-btn pr-btn--compact pr-refresh-now" data-action="sync-current" ${state.ui.busy ? 'disabled' : ''}>${esc(t('refreshNow'))}</button>
         </div>
         <div class="pr-list">
           ${state.data.items.length ? state.data.items.map(renderInboxItem).join('') : `<div class="pr-empty">${esc(t('queueEmpty'))}</div>`}
@@ -2027,7 +3103,7 @@ function renderSourcesPanel() {
           <h2>${esc(t('watchedRepos'))}</h2>
           <p>${esc(t('repositoryFirstHint'))}</p>
         </div>
-        <button class="pr-btn pr-btn--compact" data-action="discover-workspace" ${state.ui.busy ? 'disabled' : ''}>${esc(t('rediscoverWorkspace'))}</button>
+        <button class="pr-btn pr-btn--compact" data-action="discover-workspace" ${busyActionAttrs('discover-workspace')}>${esc(t('rediscoverWorkspace'))}</button>
       </div>
       <div class="pr-source-list pr-source-list--open">
         ${state.data.subscriptions.length ? state.data.subscriptions.map(renderSubscriptionRow).join('') : `<div class="pr-muted-box">${esc(t('noWatchedRepos'))}</div>`}
@@ -2134,28 +3210,14 @@ function renderProviderForm() {
 
 function renderInboxItem(item) {
   const key = itemKey(item);
-  const checks = item.checks || [];
-  const failed = checks.some((check) => ['failure', 'failed', 'error', 'timed_out'].includes(String(check.conclusion || check.status).toLowerCase()));
-  const ok = checks.length && !failed;
-  const lines = item.files.reduce((sum, file) => sum + file.additions + file.deletions, 0);
-  const providerName = profileById(item.identity.providerId)?.displayName || item.identity.providerId;
-  const excerpt = textSnippet(item.body || item.reviewSummary || '', 132);
+  const updatedAt = item.updatedAt || item.createdAt;
   return `
-    <button class="pr-queue-item ${key === state.data.selectedKey ? 'is-active' : ''}" data-action="select-pr" data-key="${esc(key)}">
+    <button class="pr-queue-item pr-queue-item--compact ${key === state.data.selectedKey ? 'is-active' : ''}" data-action="select-pr" data-key="${esc(key)}">
       <span class="pr-queue-title">${esc(item.title || `#${item.identity.number}`)}</span>
       <span class="pr-queue-meta pr-queue-meta--primary">
         <span class="pr-queue-actor">@${esc(item.author || '--')}</span>
-        <span>${esc(providerName)}</span>
-        <span>${esc(item.identity.owner)}/${esc(item.identity.repo)}#${esc(item.identity.number)}</span>
-        <span>${esc(t('created'))}: ${esc(formatDate(item.createdAt))}</span>
-        <span>${esc(t('updated'))}: ${esc(formatDate(item.updatedAt))}</span>
-      </span>
-      ${excerpt ? `<span class="pr-queue-excerpt">${esc(excerpt)}</span>` : ''}
-      <span class="pr-queue-signals">
+        <span>${esc(formatDate(updatedAt))}</span>
         ${renderDraftStateChip(item)}
-        <span class="pr-chip">${esc(item.files.length)} ${esc(t('files'))}</span>
-        <span class="pr-chip">${esc(lines)} ${esc(t('changedLines'))}</span>
-        ${checks.length ? `<span class="pr-chip ${failed ? 'is-bad' : ok ? 'is-ok' : ''}">CI ${esc(failed ? t('failed') : t('success'))}</span>` : ''}
         ${item.stale ? `<span class="pr-chip is-warn">${esc(t('stale'))}</span>` : ''}
       </span>
     </button>
@@ -2163,7 +3225,109 @@ function renderInboxItem(item) {
 }
 
 function renderDraftStateChip(item) {
-  return `<span class="pr-chip ${item.isDraft ? 'is-draft' : 'is-ready'}">${esc(t(item.isDraft ? 'draftStatus' : 'readyStatus'))}</span>`;
+  return `<span class="pr-chip ${item.isDraft ? 'is-draft' : 'is-ready'}">${esc(t(item.isDraft ? 'prDraftStatus' : 'readyForReviewStatus'))}</span>`;
+}
+
+function lifecycleValueLabel(kind, value) {
+  if (kind === 'state') {
+    if (value === 'merged') return t('lifecycleMerged');
+    if (value === 'closed') return t('lifecycleClosed');
+    return t('lifecycleOpen');
+  }
+  if (kind === 'permission') return value === 'ready' ? t('lifecycleTokenReady') : t('lifecycleTokenMissing');
+  if (kind === 'checks') {
+    if (value === 'passing') return t('lifecycleChecksPassing');
+    if (value === 'pending') return t('lifecycleChecksPending');
+    if (value === 'failing') return t('lifecycleChecksFailing');
+    if (value === 'missing') return t('lifecycleChecksMissing');
+    return t('lifecycleUnknown');
+  }
+  if (kind === 'reviews') {
+    if (value === 'approved') return t('lifecycleReviewApproved');
+    if (value === 'changes_requested') return t('lifecycleReviewChanges');
+    if (value === 'commented') return t('lifecycleReviewCommented');
+    return t('lifecycleReviewMissing');
+  }
+  if (kind === 'mergeability') {
+    if (value === 'mergeable') return t('lifecycleMergeable');
+    if (value === 'blocked') return t('lifecycleBlocked');
+    if (value === 'checking') return t('lifecycleChecking');
+    return t('lifecycleUnknown');
+  }
+  return value || t('lifecycleUnknown');
+}
+
+function lifecycleTone(kind, value) {
+  if (kind === 'state') return value === 'open' ? 'is-ok' : value === 'merged' ? 'is-ready' : 'is-bad';
+  if (kind === 'permission') return value === 'ready' ? 'is-ok' : 'is-warn';
+  if (kind === 'checks') return value === 'passing' ? 'is-ok' : value === 'failing' ? 'is-bad' : 'is-warn';
+  if (kind === 'reviews') return value === 'approved' ? 'is-ok' : value === 'changes_requested' ? 'is-bad' : 'is-warn';
+  if (kind === 'mergeability') return value === 'mergeable' ? 'is-ok' : value === 'blocked' ? 'is-bad' : 'is-warn';
+  return '';
+}
+
+function renderLifecycleSignal(labelKey, kind, value) {
+  return `
+    <span class="pr-chip pr-lifecycle-tag ${lifecycleTone(kind, value)}" title="${esc(t(labelKey))}">
+      ${esc(t(labelKey))}: ${esc(lifecycleValueLabel(kind, value))}
+    </span>
+  `;
+}
+
+function renderMergeReadinessPanel(snapshot) {
+  const caps = snapshot.providerCapabilities || {};
+  const readiness = snapshot.mergeReadiness || {};
+  const transitionAction = snapshot.isDraft ? 'ready' : 'draft';
+  const transitionBlockers = lifecycleActionBlockers(transitionAction, snapshot);
+  const blockers = lifecycleActionBlockers('merge', snapshot);
+  const transitionHardBlockers = hardLifecycleBlockers(transitionBlockers);
+  const mergeHardBlockers = hardLifecycleBlockers(blockers);
+  const canTransition = Boolean(caps.transitionDraftState && !transitionHardBlockers.length && !state.ui.busy);
+  const canMerge = Boolean(caps.mergePullRequest && !mergeHardBlockers.length && !state.ui.busy);
+  const profile = profileById(snapshot.identity.providerId);
+  const busyReason = busyActionReason('request-lifecycle');
+  const transitionTitle = lifecycleButtonTitle(transitionAction, transitionBlockers, profile);
+  const mergeTitle = lifecycleButtonTitle('merge', blockers, profile);
+  const transitionDisabledReason = canTransition ? '' : (busyReason || transitionTitle);
+  const mergeDisabledReason = canMerge ? '' : (busyReason || mergeTitle);
+  const headLabel = readiness.headSha || snapshot.headSha
+    ? t('lifecycleHeadReady', { sha: shortSha(readiness.headSha || snapshot.headSha) })
+    : t('lifecycleHeadMissing');
+  return `
+    <section class="pr-review-section pr-lifecycle-panel">
+      <div class="pr-section-head">
+        <div>
+          <h3>${esc(t('lifecyclePanel'))}</h3>
+          <p class="pr-muted">${esc(headLabel)} · ${esc(t('lifecyclePanelHint'))}</p>
+        </div>
+        <button class="pr-btn pr-btn--compact" data-action="refresh-lifecycle" ${busyActionAttrs('refresh-lifecycle')}>${esc(t('refreshLifecycle'))}</button>
+      </div>
+      <div class="pr-lifecycle-tags">
+        ${renderLifecycleSignal('lifecycleState', 'state', readiness.state || 'open')}
+        ${renderLifecycleSignal('lifecycleChecks', 'checks', readiness.checkState || 'missing')}
+        ${renderLifecycleSignal('lifecycleReviews', 'reviews', readiness.reviewState || 'missing')}
+        ${renderLifecycleSignal('lifecycleMergeability', 'mergeability', readiness.mergeability || 'unknown')}
+      </div>
+      ${caps.refreshMergeReadiness ? '' : `<div class="pr-muted-box">${esc(t('lifecycleUnsupported'))}</div>`}
+      <div class="pr-lifecycle-actions">
+        <button class="pr-btn pr-btn--secondary" data-action="request-lifecycle" data-lifecycle-action="${esc(transitionAction)}" ${actionAvailabilityAttrs(transitionDisabledReason, transitionTitle)}>
+          ${esc(t(snapshot.isDraft ? 'markPrReady' : 'convertPrDraft'))}
+        </button>
+        <button class="pr-btn pr-btn--merge" data-action="request-lifecycle" data-lifecycle-action="merge" ${actionAvailabilityAttrs(mergeDisabledReason, mergeTitle)}>
+          ${esc(t('mergePr'))}
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function renderFoldSummary(title, meta = '') {
+  return `
+    <summary>
+      <span class="pr-fold-title">${esc(title)}</span>
+      ${meta ? `<span class="pr-fold-meta">${esc(meta)}</span>` : ''}
+    </summary>
+  `;
 }
 
 function renderOverviewSection(snapshot) {
@@ -2171,9 +3335,23 @@ function renderOverviewSection(snapshot) {
   const summary = textSnippet(body, 160) || t('overviewHint');
   return `
     <details class="pr-review-section pr-fold pr-overview-fold">
-      <summary>${esc(t('overview'))}<span>${esc(summary)}</span></summary>
+      ${renderFoldSummary(t('overview'), summary)}
       <div class="pr-description">${esc(body)}</div>
     </details>
+  `;
+}
+
+function renderReviewingBanner() {
+  if (state.ui.busy !== 'draft') return '';
+  const progress = state.ui.reviewProgress;
+  return `
+    <div class="pr-reviewing-banner">
+      <div>
+        <strong>${esc(t('reviewingBannerTitle'))}</strong>
+        <span>${esc(progress?.detail || t('reviewingBannerBody'))}</span>
+      </div>
+      <button class="pr-btn pr-btn--compact pr-btn--danger" data-action="cancel-review">${esc(t('cancelReview'))}</button>
+    </div>
   `;
 }
 
@@ -2204,8 +3382,7 @@ function renderReviewWorkspace() {
         </div>
         <div class="pr-pr-actions">
           <button class="pr-btn" data-action="open-external">${esc(t('openExternal'))}</button>
-          <button class="pr-btn" data-action="mark-reviewed">${esc(t('markReviewed'))}</button>
-          <button class="pr-btn pr-btn--primary" data-action="start-review" ${state.ui.busy ? 'disabled' : ''}>${esc(t('startReview'))}</button>
+          <button class="pr-btn pr-btn--review" data-action="start-review" ${busyActionAttrs('start-review')}>${esc(t('startReview'))}</button>
         </div>
       </div>
       <div class="pr-kpis">
@@ -2214,17 +3391,19 @@ function renderReviewWorkspace() {
         <div><strong>${summary.comments}</strong><span>${esc(t('existingReview'))}</span></div>
         <div><strong>${snapshot.checks.length}</strong><span>${esc(t('ciDetails'))}</span></div>
       </div>
+      ${renderReviewingBanner()}
+      ${renderMergeReadinessPanel(snapshot)}
       ${renderOverviewSection(snapshot)}
       ${renderFilesExplorer(snapshot)}
       <details class="pr-review-section pr-fold">
-        <summary>${esc(t('ciDetails'))}<span>${esc(t('ciFolded'))}</span></summary>
+        ${renderFoldSummary(t('ciDetails'), t('ciFreshnessHint'))}
         ${renderChecks(snapshot.checks)}
       </details>
-      <section class="pr-review-section">
-        <h3>${esc(t('existingReview'))}</h3>
+      <details class="pr-review-section pr-fold">
+        ${renderFoldSummary(t('existingReview'), String(summary.comments))}
         ${renderReviews(snapshot.reviews)}
-        ${renderManualComment()}
-      </section>
+      </details>
+      ${renderManualComment()}
     </section>
   `;
 }
@@ -2244,12 +3423,10 @@ function renderFilesExplorer(snapshot) {
       </section>
     `;
   }
+  const filesOpen = state.ui.filesExpanded || Boolean(focusedPosition);
   return `
-    <section class="pr-review-section pr-files-explorer">
-      <div class="pr-section-head">
-        <h3>${esc(t('files'))}</h3>
-        <span class="pr-chip">${files.length}</span>
-      </div>
+    <details class="pr-review-section pr-fold pr-files-explorer pr-files-fold" data-fold="files" ${filesOpen ? 'open' : ''}>
+      ${renderFoldSummary(t('files'), `${files.length} · ${activeFile.path}`)}
       <div class="pr-files-layout">
         <nav class="pr-file-list">
           ${files.map((file) => `
@@ -2272,18 +3449,38 @@ function renderFilesExplorer(snapshot) {
           <pre class="pr-diff">${renderHighlightedDiff((activeFile.patch || '').slice(0, 10000) || activeFile.status, focusedPosition)}</pre>
         </article>
       </div>
-    </section>
+    </details>
   `;
+}
+
+function checkStateTone(check) {
+  const value = String(check?.conclusion || check?.status || '').toLowerCase();
+  if (['success', 'completed', 'neutral', 'skipped'].includes(value)) return 'is-ok';
+  if (['failure', 'failed', 'error', 'timed_out', 'cancelled', 'action_required'].includes(value)) return 'is-bad';
+  if (['pending', 'queued', 'in_progress', 'requested', 'waiting', 'expected'].includes(value)) return 'is-warn';
+  return '';
+}
+
+function checkStateLabel(check) {
+  return String(check?.conclusion || check?.status || 'unknown');
 }
 
 function renderChecks(checks) {
   if (!checks.length) return `<div class="pr-empty">${esc(t('noCi'))}</div>`;
-  return `<div class="pr-review-list">${checks.map((check) => `
-    <div class="pr-review-row">
-      <strong>${esc(check.name)}</strong>
-      <span class="pr-chip">${esc(check.conclusion || check.status)}</span>
-    </div>
-  `).join('')}</div>`;
+  return `<div class="pr-ci-list">${checks.map((check) => {
+    const tone = checkStateTone(check);
+    const label = checkStateLabel(check);
+    return `
+      <div class="pr-ci-row">
+        <span class="pr-ci-dot ${esc(tone)}" aria-hidden="true"></span>
+        <div>
+          <strong>${esc(check.name || 'check')}</strong>
+          <span>${esc(label)}</span>
+        </div>
+        ${check.url ? `<a class="pr-text-btn" href="${esc(check.url)}" target="_blank" rel="noreferrer">${esc(t('ciOpenDetails'))}</a>` : `<span class="pr-chip ${esc(tone)}">${esc(label)}</span>`}
+      </div>
+    `;
+  }).join('')}</div>`;
 }
 
 function renderReviews(reviews) {
@@ -2301,21 +3498,41 @@ function renderReviews(reviews) {
 }
 
 function renderManualComment() {
+  const value = state.ui.manualCommentDraft || '';
   return `
-    <div class="pr-manual-comment">
-      <label for="manual-comment">${esc(t('manualComment'))}</label>
-      <textarea id="manual-comment" class="pr-textarea" placeholder="${esc(t('manualCommentPlaceholder'))}"></textarea>
-      <button class="pr-btn" data-action="add-manual-comment">${esc(t('addManualComment'))}</button>
-    </div>
+    <section class="pr-review-section pr-manual-comment ${state.ui.manualCommentExpanded ? 'is-expanded' : ''}">
+      <div class="pr-manual-comment-head">
+        <label for="manual-comment">${esc(t('manualComment'))}</label>
+        <button class="pr-text-btn" data-action="toggle-manual-comment" type="button">${esc(t(state.ui.manualCommentExpanded ? 'collapseComment' : 'expandComment'))}</button>
+      </div>
+      <textarea id="manual-comment" class="pr-textarea" rows="${state.ui.manualCommentExpanded ? 15 : 2}" placeholder="${esc(t('manualCommentPlaceholder'))}">${esc(value)}</textarea>
+      <button class="pr-btn pr-btn--secondary" data-action="add-manual-comment">${esc(t('addManualComment'))}</button>
+    </section>
   `;
+}
+
+function shouldShowComposer() {
+  if (state.ui.startupSyncing) return false;
+  return state.ui.busy === 'draft' || Boolean(selectedDraft());
+}
+
+function renderComposerPlaceholder() {
+  return '';
 }
 
 function renderComposer() {
   const snapshot = selectedSnapshot();
   const draft = selectedDraft();
   const selected = selectedOperations(draft).length;
+  const reviewing = state.ui.busy === 'draft';
+  const startReviewDisabledReason = snapshot ? busyActionReason('start-review') : t('noPr');
+  const publishDisabledReason = !draft
+    ? t('publishNoDraftItems')
+    : !selected
+      ? t('publishSelectItemFirst')
+      : busyActionReason('request-publish');
   return `
-    <aside class="pr-composer">
+    <aside class="pr-composer ${reviewing ? 'is-reviewing' : ''}">
       <div class="pr-card-head">
         <div>
           <h2>${esc(t('composer'))}</h2>
@@ -2328,10 +3545,11 @@ function renderComposer() {
         ${renderModeTab('focused_review', t('modeFocused'))}
         ${renderModeTab('deep_review', t('modeDeep'))}
       </div>
+      ${renderReviewLanguageControl()}
       <div class="pr-compose-actions">
-        <button class="pr-btn pr-btn--primary" data-action="start-review" ${!snapshot || state.ui.busy ? 'disabled' : ''}>${esc(t('startReview'))}</button>
-        ${state.ui.busy === 'draft' ? `<button class="pr-btn pr-btn--compact" data-action="cancel-review">${esc(t('cancelReview'))}</button>` : ''}
-        <button class="pr-btn" data-action="request-publish" ${!draft || !selected || state.ui.busy ? 'disabled' : ''}>${esc(t('publishSelected'))}</button>
+        <button class="pr-btn pr-btn--review" data-action="start-review" ${disabledActionAttrs(startReviewDisabledReason)}>${esc(t('startReview'))}</button>
+        ${reviewing ? `<button class="pr-btn pr-btn--compact pr-btn--danger" data-action="cancel-review">${esc(t('cancelReview'))}</button>` : ''}
+        <button class="pr-btn" data-action="request-publish" ${disabledActionAttrs(publishDisabledReason)}>${esc(t('publishSelected'))}</button>
       </div>
       ${renderReviewProgress()}
       <div class="pr-muted-box">${esc(t('selectedOps'))}: ${selected}</div>
@@ -2384,6 +3602,10 @@ function renderOperation(operation) {
     : operation.kind === 'inline_comment'
       ? t('inlineComment')
       : t('reviewDecision');
+  const prDraftPathRow = operation.path
+    ? `<div class="pr-draft-path-row">${renderFileTargetLink(operation.path, operation.position)}</div>`
+    : '';
+  const deleteDisabledReason = operation.published ? t('publishedItemLocked') : busyActionReason('delete-operation');
   return `
     <article class="pr-draft-op" data-op-id="${esc(operation.id)}">
       <div class="pr-draft-head">
@@ -2392,12 +3614,12 @@ function renderOperation(operation) {
           <strong>${esc(kindLabel)}</strong>
         </label>
         <span class="pr-draft-head-actions">
-          ${operation.path ? renderFileTargetLink(operation.path, operation.position) : ''}
           ${operation.stale ? `<span class="pr-chip is-warn">${esc(t('stale'))}</span>` : ''}
           ${operation.published ? `<span class="pr-chip is-ok">${esc(t('published'))}</span>` : ''}
-          <button class="pr-text-btn pr-op-delete" data-action="delete-operation" data-op-id="${esc(operation.id)}" ${operation.published || state.ui.busy ? 'disabled' : ''}>${esc(t('delete'))}</button>
+          <button class="pr-text-btn pr-op-delete" data-action="delete-operation" data-op-id="${esc(operation.id)}" ${disabledActionAttrs(deleteDisabledReason)}>${esc(t('delete'))}</button>
         </span>
       </div>
+      ${prDraftPathRow}
       ${operation.kind === 'review_decision' ? renderDecisionSelect(operation) : ''}
       <textarea class="pr-textarea op-body" data-op-id="${esc(operation.id)}">${esc(operation.body)}</textarea>
     </article>
@@ -2422,10 +3644,25 @@ function renderAudit() {
       ${state.data.audit.slice(0, 8).map((entry) => `
         <div class="pr-audit-row">
           <span>${esc(entry.owner)}/${esc(entry.repo)}#${esc(entry.number)}</span>
-          <span>${esc(t(entry.status) || entry.status)} · ${esc(formatDate(entry.timestamp))}</span>
+          <span>${esc(entry.actionLabel ? `${entry.actionLabel} · ${t(entry.status) || entry.status}` : (t(entry.status) || entry.status))} · ${esc(formatDate(entry.timestamp))}</span>
         </div>
       `).join('')}
     </details>
+  `;
+}
+
+function renderReviewLanguageControl() {
+  return `
+    <label class="pr-language-control">
+      <span>
+        <strong>${esc(t('reviewLanguage'))}</strong>
+        <small>${esc(t('reviewLanguageHint'))}</small>
+      </span>
+      <select class="pr-select" id="review-language">
+        <option value="en" ${state.data.reviewLanguage !== 'zh' ? 'selected' : ''}>${esc(t('reviewLanguageEn'))}</option>
+        <option value="zh" ${state.data.reviewLanguage === 'zh' ? 'selected' : ''}>${esc(t('reviewLanguageZh'))}</option>
+      </select>
+    </label>
   `;
 }
 
@@ -2454,23 +3691,108 @@ function renderConfirm() {
   `;
 }
 
+function renderDraftOverwriteConfirm() {
+  const confirm = state.ui.draftOverwriteConfirm;
+  const snapshot = selectedSnapshot();
+  if (!confirm || !snapshot || confirm.key !== snapshotKey(snapshot)) return '';
+  return `
+    <div class="pr-modal-backdrop">
+      <section class="pr-modal" role="dialog" aria-modal="true">
+        <div class="pr-modal-head">
+          <h2>${esc(t('overwriteDraftTitle'))}</h2>
+        </div>
+        <div class="pr-modal-body">
+          <p>${esc(t('overwriteDraftBody', { count: confirm.count }))}</p>
+          <div class="pr-muted-box">${esc(snapshot.identity.owner)}/${esc(snapshot.identity.repo)}#${esc(snapshot.identity.number)}</div>
+        </div>
+        <div class="pr-modal-foot">
+          <button class="pr-btn" data-action="cancel-overwrite-draft">${esc(t('cancel'))}</button>
+          <button class="pr-btn pr-btn--review" data-action="confirm-overwrite-draft">${esc(t('confirmStartReview'))}</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderLifecycleConfirm() {
+  const confirm = state.ui.lifecycleConfirm;
+  if (!confirm) return '';
+  const isMerge = confirm.action === 'merge';
+  return `
+    <div class="pr-modal-backdrop">
+      <section class="pr-modal pr-modal--lifecycle" role="dialog" aria-modal="true">
+        <div class="pr-modal-head">
+          <h2>${esc(t(lifecycleConfirmTitleKey(confirm.action)))}</h2>
+        </div>
+        <div class="pr-modal-body">
+          <p>${esc(t(lifecycleConfirmBodyKey(confirm.action)))}</p>
+          <div class="pr-confirm-summary">
+            <div><span>${esc(t('provider'))}</span><strong>${esc(profileById(confirm.identity.providerId)?.displayName || confirm.identity.providerId)}</strong></div>
+            <div><span>${esc(t('repo'))}</span><strong>${esc(confirm.owner)}/${esc(confirm.repo)}#${esc(confirm.number)}</strong></div>
+            <div><span>${esc(t('branch'))}</span><strong>${esc(confirm.baseBranch || '--')} &larr; ${esc(confirm.headBranch || '--')}</strong></div>
+            <div><span>${esc(t('expectedHeadSha'))}</span><strong>${esc(shortSha(confirm.expectedHeadSha) || '--')}</strong></div>
+          </div>
+          <div class="pr-muted-box">${esc(confirm.title || '')}</div>
+          ${isMerge ? `
+            <label class="pr-field">
+              <span>${esc(t('mergeMethod'))}</span>
+              <select id="merge-method" class="pr-select">
+                <option value="merge">${esc(t('mergeMethodMerge'))}</option>
+                <option value="squash">${esc(t('mergeMethodSquash'))}</option>
+                <option value="rebase">${esc(t('mergeMethodRebase'))}</option>
+              </select>
+            </label>
+          ` : ''}
+          ${(confirm.warnings || []).length ? `
+            <div class="pr-lifecycle-warnings pr-lifecycle-warnings--modal">
+              <strong>${esc(t('lifecycleConfirmWarning'))}</strong>
+              ${confirm.warnings.map((key) => `<span>${esc(t(key))}</span>`).join('')}
+            </div>
+          ` : ''}
+        </div>
+        <div class="pr-modal-foot">
+          <button class="pr-btn" data-action="cancel-lifecycle-confirm">${esc(t('cancel'))}</button>
+          <button class="pr-btn ${isMerge ? 'pr-btn--merge' : 'pr-btn--primary'}" data-action="confirm-lifecycle">${esc(t('confirmLifecycle'))}</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
 function render(options = {}) {
   const reviewWorkspaceScroll = options.preserveReviewWorkspaceScroll
     ? readReviewWorkspaceScroll()
     : null;
+  const paneScrolls = options.preservePaneScroll
+    ? readPaneScrolls()
+    : null;
+  const showShellStatus = shouldShowShellStatus();
+  const showComposer = shouldShowComposer();
+  const layoutClass = [
+    'pr-main-layout',
+    state.ui.busy === 'draft' ? 'pr-main-layout--reviewing' : '',
+    showComposer ? '' : 'pr-main-layout--no-composer',
+  ].filter(Boolean).join(' ');
   root.innerHTML = `
-    <main class="pr-shell">
+    <main class="pr-shell ${showShellStatus ? 'pr-shell--with-status' : ''}">
       ${renderCommandBar()}
-      <div class="pr-main-layout">
+      ${showShellStatus ? renderShellStatus() : ''}
+      <div class="${layoutClass}">
         ${renderQueuePanel()}
         ${renderReviewWorkspace()}
-        ${renderComposer()}
+        ${showComposer ? renderComposer() : renderComposerPlaceholder()}
       </div>
       ${renderConfirm()}
+      ${renderDraftOverwriteConfirm()}
+      ${renderLifecycleConfirm()}
+      ${renderSettingsModal()}
     </main>
   `;
   if (options.preserveReviewWorkspaceScroll) {
     restoreReviewWorkspaceScroll(reviewWorkspaceScroll);
+  }
+  if (options.preservePaneScroll) {
+    restorePaneScrolls(paneScrolls);
   }
 }
 
@@ -2525,10 +3847,11 @@ function getDraftOperation(id) {
 async function jumpToFileTarget(path, position) {
   if (!path) return;
   state.data.selectedFilePath = path;
+  state.ui.filesExpanded = true;
   state.ui.focusedDiffPath = path;
   state.ui.focusedDiffPosition = Number(position || 0) || null;
   await saveStorage();
-  render();
+  render({ preservePaneScroll: true });
   window.requestAnimationFrame(() => {
     const target = document.querySelector('.pr-diff-line.is-target') || document.getElementById('pr-diff-view');
     target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -2565,6 +3888,23 @@ document.addEventListener('click', (event) => {
   if (!target) return;
   if (target instanceof HTMLAnchorElement) event.preventDefault();
   const action = target.dataset.action;
+  if (target.getAttribute('aria-disabled') === 'true') {
+    const disabledReason = target.getAttribute('data-disabled-reason') || target.getAttribute('title') || busyActionReason(action);
+    if (disabledReason) {
+      state.ui.status = disabledReason;
+      state.ui.error = null;
+      render({ preservePaneScroll: true, preserveReviewWorkspaceScroll: true });
+    }
+    return;
+  }
+  if (action === 'open-settings') {
+    state.ui.settingsOpen = true;
+    render();
+  }
+  if (action === 'close-settings') {
+    state.ui.settingsOpen = false;
+    render();
+  }
   if (action === 'open-direct') void openDirectUrl();
   if (action === 'authorize-gh') void authorizeGitHubCli();
   if (action === 'discover-workspace') void applyWorkspaceDiscoveredRepositories({ force: true });
@@ -2577,7 +3917,9 @@ document.addEventListener('click', (event) => {
     void syncQueue(nextMode);
   }
   if (action === 'select-pr') {
-    state.data.selectedKey = target.dataset.key;
+    const nextKey = target.dataset.key;
+    if (state.data.selectedKey !== nextKey) resetSelectedPrTransientUi();
+    state.data.selectedKey = nextKey;
     const snapshot = selectedSnapshot();
     if (snapshot) {
       state.ui.activeProviderId = snapshot.identity.providerId;
@@ -2585,22 +3927,40 @@ document.addEventListener('click', (event) => {
       state.data.mode = state.data.mode || recommendMode(snapshot);
     }
     void saveStorage();
-    render();
+    render({ preservePaneScroll: true });
   }
   if (action === 'select-file') {
     state.data.selectedFilePath = target.dataset.path;
+    state.ui.filesExpanded = true;
     state.ui.focusedDiffPath = null;
     state.ui.focusedDiffPosition = null;
     void saveStorage();
     render({ preserveReviewWorkspaceScroll: true });
   }
   if (action === 'jump-file-target') void jumpToFileTarget(target.dataset.path, target.dataset.position);
+  if (action === 'toggle-manual-comment') {
+    const input = document.getElementById('manual-comment');
+    if (input instanceof HTMLTextAreaElement) state.ui.manualCommentDraft = input.value;
+    state.ui.manualCommentExpanded = !state.ui.manualCommentExpanded;
+    render({ preserveReviewWorkspaceScroll: true });
+  }
   if (action === 'set-mode') {
     state.data.mode = target.dataset.mode;
     void saveStorage();
     render();
   }
-  if (action === 'start-review') void generateDraft();
+  if (action === 'start-review') requestGenerateDraft();
+  if (action === 'confirm-overwrite-draft') {
+    const confirm = state.ui.draftOverwriteConfirm;
+    const snapshot = selectedSnapshot();
+    if (confirm && snapshot && confirm.key === snapshotKey(snapshot)) {
+      void generateDraft();
+    }
+  }
+  if (action === 'cancel-overwrite-draft') {
+    state.ui.draftOverwriteConfirm = null;
+    render();
+  }
   if (action === 'cancel-review') {
     state.ui.cancelReviewRequested = true;
     state.ui.reviewProgress = {
@@ -2618,7 +3978,13 @@ document.addEventListener('click', (event) => {
     state.ui.confirm = null;
     render();
   }
-  if (action === 'mark-reviewed') void markReviewed();
+  if (action === 'refresh-lifecycle') void refreshSelectedLifecycleStatus();
+  if (action === 'request-lifecycle') void requestLifecycleAction(target.dataset.lifecycleAction);
+  if (action === 'confirm-lifecycle') void confirmLifecycleAction();
+  if (action === 'cancel-lifecycle-confirm') {
+    state.ui.lifecycleConfirm = null;
+    render();
+  }
   if (action === 'open-external') {
     void openSelectedPrExternal();
   }
@@ -2647,6 +4013,7 @@ document.addEventListener('input', (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
   if (target.id === 'direct-url') state.data.directUrl = target.value;
+  if (target.id === 'manual-comment') state.ui.manualCommentDraft = target.value;
   if (target.id === 'session-token') {
     const profile = activeProfile();
     if (profile) state.volatile.sessionTokens[profile.id] = target.value;
@@ -2670,6 +4037,11 @@ document.addEventListener('change', (event) => {
   if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
   if (target.id === 'active-provider') {
     state.ui.activeProviderId = target.value;
+    render();
+  }
+  if (target.id === 'review-language') {
+    state.data.reviewLanguage = target.value === 'zh' ? 'zh' : 'en';
+    void saveStorage();
     render();
   }
   if (target.classList.contains('subscription-enabled')) {
@@ -2699,6 +4071,18 @@ document.addEventListener('change', (event) => {
     }
   }
 });
+
+document.addEventListener('toggle', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLDetailsElement)) return;
+  if (target.dataset.fold === 'files') {
+    state.ui.filesExpanded = target.open;
+    if (!target.open) {
+      state.ui.focusedDiffPath = null;
+      state.ui.focusedDiffPosition = null;
+    }
+  }
+}, true);
 
 document.addEventListener('submit', (event) => {
   event.preventDefault();

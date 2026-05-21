@@ -7,6 +7,11 @@ fn session_kind_preserves_default_and_serialized_shape() {
         serde_json::to_value(SessionKind::Subagent).expect("session kind should serialize"),
         serde_json::json!("subagent")
     );
+    assert_eq!(
+        serde_json::to_value(SessionKind::EphemeralChild)
+            .expect("ephemeral child kind should serialize"),
+        serde_json::json!("ephemeral_child")
+    );
 }
 
 #[test]

@@ -62,6 +62,7 @@ impl From<ResponsesUsage> for UnifiedTokenUsage {
             cached_content_token_count: usage
                 .input_tokens_details
                 .map(|details| details.cached_tokens),
+            cache_creation_token_count: None,
         }
     }
 }
@@ -128,8 +129,32 @@ pub fn parse_responses_output_item(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_responses_output_item, ResponsesCompleted, ResponsesStreamEvent};
+    use super::{parse_responses_output_item, ResponsesCompleted, ResponsesStreamEvent, ResponsesUsage};
+    use crate::stream::types::unified::UnifiedTokenUsage;
     use serde_json::json;
+
+    #[test]
+    fn responses_cached_tokens_maps_to_cached_content() {
+        let raw = r#"{
+            "input_tokens": 200,
+            "input_tokens_details": { "cached_tokens": 80 },
+            "output_tokens": 40,
+            "total_tokens": 240
+        }"#;
+        let usage: ResponsesUsage = serde_json::from_str(raw).expect("valid responses usage");
+        let unified: UnifiedTokenUsage = usage.into();
+        assert_eq!(unified.cached_content_token_count, Some(80));
+        assert_eq!(unified.cache_creation_token_count, None);
+    }
+
+    #[test]
+    fn responses_absent_cache_stays_none() {
+        let raw = r#"{ "input_tokens": 200, "output_tokens": 40, "total_tokens": 240 }"#;
+        let usage: ResponsesUsage = serde_json::from_str(raw).expect("valid responses usage");
+        let unified: UnifiedTokenUsage = usage.into();
+        assert_eq!(unified.cached_content_token_count, None);
+        assert_eq!(unified.cache_creation_token_count, None);
+    }
 
     #[test]
     fn parses_output_text_message_item() {

@@ -33,26 +33,26 @@ use tokio::process::{Child, Command};
 use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-use super::builtin_clients::{
-    builtin_acp_client_preset, builtin_client_ids, default_config_for_builtin_client,
-    remote_command_for_builtin_client, remote_command_for_builtin_client_in_workspace,
-    supported_remote_acp_clients,
-};
+use super::builtin_clients::{builtin_client_ids, default_config_for_builtin_client};
 use super::config::{
     AcpClientConfig, AcpClientConfigFile, AcpClientInfo, AcpClientPermissionMode,
     AcpClientRequirementProbe, AcpClientStatus, RemoteAcpClientRequirementSnapshot,
 };
 use super::remote_capability_store::RemoteAcpCapabilityStore;
 use super::remote_session::{preferred_resume_strategies, AcpRemoteSessionStrategy};
+use super::remote_shell::{remote_user_shell_command, render_remote_env_assignments, shell_escape};
 use super::requirements::{
     acp_requirement_spec, apply_command_environment, install_npm_cli_package,
-    predownload_npm_adapter, probe_executable, probe_npm_adapter, probe_remote_executable,
-    probe_remote_npx_adapter, resolve_configured_command,
+    install_remote_npm_cli_package, predownload_npm_adapter, probe_executable, probe_npm_adapter,
+    probe_remote_executable, probe_remote_npx_adapter, resolve_configured_command,
 };
 use super::session_options::{model_config_id, session_options_from_state, AcpSessionOptions};
 use super::session_persistence::AcpSessionPersistence;
 pub use super::session_persistence::CreateAcpFlowSessionRecordResponse;
-use super::stream::{acp_dispatch_to_stream_events, AcpClientStreamEvent, AcpStreamRoundTracker};
+use super::stream::{
+    acp_dispatch_to_stream_events_with_tracker, AcpClientStreamEvent, AcpStreamRoundTracker,
+    AcpToolCallTracker,
+};
 use super::tool::AcpAgentTool;
 
 const CONFIG_PATH: &str = "acp_clients";
@@ -362,21 +362,35 @@ impl AcpClientService {
             BitFunError::service("SSH manager is not available for remote ACP".to_string())
         })?;
 
-        let mut ids = builtin_client_ids()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
+        let config_file = self.load_config_file().await?;
+        let mut ids = config_file.acp_clients.keys().cloned().collect::<Vec<_>>();
+        for id in builtin_client_ids() {
+            if !ids.iter().any(|candidate| candidate == id) {
+                ids.push(id.to_string());
+            }
+        }
         ids.sort();
 
         let mut probes = Vec::with_capacity(ids.len());
         for id in ids {
-            let spec = acp_requirement_spec(&id, None);
-            let tool =
-                probe_remote_executable(&ssh_manager, remote_connection_id, spec.tool_command)
-                    .await;
+            let config = resolve_config_for_client(&config_file, &id, Some(remote_connection_id));
+            let spec = acp_requirement_spec(&id, config.as_ref());
+            let tool = probe_remote_executable(
+                &ssh_manager,
+                remote_connection_id,
+                spec.tool_command,
+                config.as_ref().map(|config| &config.env),
+            )
+            .await;
             let adapter = match spec.adapter {
                 Some(adapter) => Some(
-                    probe_remote_npx_adapter(&ssh_manager, remote_connection_id, adapter.package)
-                        .await,
+                    probe_remote_npx_adapter(
+                        &ssh_manager,
+                        remote_connection_id,
+                        adapter.package,
+                        config.as_ref().map(|config| &config.env),
+                    )
+                    .await,
                 ),
                 None => None,
             };
@@ -432,9 +446,17 @@ impl AcpClientService {
         predownload_npm_adapter(adapter.package, adapter.bin).await
     }
 
-    pub async fn install_client_cli(self: &Arc<Self>, client_id: &str) -> BitFunResult<()> {
-        let configs = self.load_configs().await?;
-        let spec = acp_requirement_spec(client_id, configs.get(client_id));
+    pub async fn install_client_cli(
+        self: &Arc<Self>,
+        client_id: &str,
+        remote_connection_id: Option<&str>,
+    ) -> BitFunResult<()> {
+        let remote_connection_id = remote_connection_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let config_file = self.load_config_file().await?;
+        let config = resolve_config_for_client(&config_file, client_id, remote_connection_id);
+        let spec = acp_requirement_spec(client_id, config.as_ref());
         let package = spec.install_package.ok_or_else(|| {
             BitFunError::config(format!(
                 "ACP client '{}' does not have a known CLI installer",
@@ -442,7 +464,17 @@ impl AcpClientService {
             ))
         })?;
 
-        install_npm_cli_package(package).await
+        if let Some(remote_connection_id) = remote_connection_id {
+            let remote_manager = get_remote_workspace_manager().ok_or_else(|| {
+                BitFunError::service("Remote workspace manager is not initialized".to_string())
+            })?;
+            let ssh_manager = remote_manager.get_ssh_manager().await.ok_or_else(|| {
+                BitFunError::service("SSH manager is not available for remote ACP".to_string())
+            })?;
+            install_remote_npm_cli_package(&ssh_manager, remote_connection_id, package).await
+        } else {
+            install_npm_cli_package(package).await
+        }
     }
 
     pub async fn start_client_for_session(
@@ -572,29 +604,30 @@ impl AcpClientService {
             connection_for_task.sessions.clear();
         });
 
-        let (cx, agent_capabilities) =
-            match tokio::time::timeout(CLIENT_STARTUP_TIMEOUT, cx_rx).await {
-                Ok(Ok(result)) => result,
-                Ok(Err(_)) => {
-                    connect_task.abort();
-                    self.cleanup_failed_startup(connection_id).await;
-                    return Err(BitFunError::service(format!(
-                        "ACP client '{}' exited before initialization completed",
-                        client_id
-                    )));
-                }
-                Err(_) => {
-                    warn!(
+        let (cx, agent_capabilities) = match tokio::time::timeout(CLIENT_STARTUP_TIMEOUT, cx_rx)
+            .await
+        {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => {
+                connect_task.abort();
+                self.cleanup_failed_startup(connection_id).await;
+                return Err(BitFunError::service(format!(
+                    "ACP client '{}' exited before initialization completed",
+                    client_id
+                )));
+            }
+            Err(_) => {
+                warn!(
                         "ACP client startup timed out during initialize: id={} connection_id={} timeout_secs={}",
                         client_id,
                         connection_id,
                         CLIENT_STARTUP_TIMEOUT_SECS
                     );
-                    connect_task.abort();
-                    self.cleanup_failed_startup(connection_id).await;
-                    return Err(startup_timeout_error(client_id, "initialize"));
-                }
-            };
+                connect_task.abort();
+                self.cleanup_failed_startup(connection_id).await;
+                return Err(startup_timeout_error(client_id, "initialize"));
+            }
+        };
         *connection.connection.write().await = Some(cx);
         *connection.agent_capabilities.write().await = Some(agent_capabilities);
         *connection.status.write().await = AcpClientStatus::Running;
@@ -768,6 +801,7 @@ impl AcpClientService {
         self.config_service
             .set_config(CONFIG_PATH, canonical_value)
             .await?;
+        self.remote_capability_store.clear().await?;
         self.initialize_all().await
     }
 
@@ -1017,11 +1051,17 @@ impl AcpClientService {
                 .ok_or_else(|| BitFunError::service("ACP session was not initialized"))?;
             active.send_prompt(prompt).map_err(protocol_error)?;
             let mut round_tracker = AcpStreamRoundTracker::new();
+            let mut tool_call_tracker = AcpToolCallTracker::new();
 
             loop {
                 match active.read_update().await.map_err(protocol_error)? {
                     SessionMessage::SessionMessage(dispatch) => {
-                        for event in acp_dispatch_to_stream_events(dispatch).await? {
+                        for event in acp_dispatch_to_stream_events_with_tracker(
+                            dispatch,
+                            &mut tool_call_tracker,
+                        )
+                        .await?
+                        {
                             for event in round_tracker.apply(event) {
                                 on_event(event)?;
                             }
@@ -1307,10 +1347,7 @@ impl AcpClientService {
             Err(_) => {
                 warn!(
                     "ACP client startup timed out: id={} connection_id={} phase={} timeout_secs={}",
-                    client.client_id,
-                    client.id,
-                    phase,
-                    CLIENT_STARTUP_TIMEOUT_SECS
+                    client.client_id, client.id, phase, CLIENT_STARTUP_TIMEOUT_SECS
                 );
                 self.cleanup_failed_startup(&client.id).await;
                 Err(agent_client_protocol::util::internal_error(
@@ -1367,7 +1404,11 @@ impl AcpClientService {
     }
 
     async fn load_configs(&self) -> BitFunResult<HashMap<String, AcpClientConfig>> {
-        Ok(parse_config_value(self.load_config_value().await?)?.acp_clients)
+        Ok(self.load_config_file().await?.acp_clients)
+    }
+
+    async fn load_config_file(&self) -> BitFunResult<AcpClientConfigFile> {
+        parse_config_value(self.load_config_value().await?)
     }
 
     async fn load_config_value(&self) -> BitFunResult<serde_json::Value> {
@@ -1535,7 +1576,7 @@ impl AcpClientService {
     )> {
         match remote_connection_id {
             Some(remote_connection_id) => self
-                .start_remote_transport(client_id, workspace_path, remote_connection_id)
+                .start_remote_transport(client_id, config, workspace_path, remote_connection_id)
                 .await
                 .map(|transport| (transport, None)),
             None => self
@@ -1548,22 +1589,11 @@ impl AcpClientService {
     async fn start_remote_transport(
         &self,
         client_id: &str,
+        config: &AcpClientConfig,
         workspace_path: Option<&str>,
         remote_connection_id: &str,
     ) -> BitFunResult<ByteStreams<AcpOutgoingStream, AcpIncomingStream>> {
-        let command = workspace_path
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .and_then(|workspace_path| {
-                remote_command_for_builtin_client_in_workspace(client_id, workspace_path)
-            })
-            .or_else(|| remote_command_for_builtin_client(client_id))
-            .ok_or_else(|| {
-                BitFunError::config(format!(
-                    "Remote ACP currently supports only built-in clients: {}",
-                    supported_remote_acp_clients()
-                ))
-            })?;
+        let command = render_remote_client_command(config, workspace_path)?;
         let remote_manager = get_remote_workspace_manager().ok_or_else(|| {
             BitFunError::service("Remote workspace manager is not initialized".to_string())
         })?;
@@ -1597,25 +1627,19 @@ impl AcpClientService {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(ToOwned::to_owned);
-        let remote_builtin = remote_connection_id
-            .as_deref()
-            .and_then(|_| builtin_acp_client_preset(client_id))
-            .is_some();
-        let mut config = self
-            .load_configs()
-            .await?
-            .remove(client_id)
-            .or_else(|| {
-                if remote_connection_id.is_some() {
-                    default_config_for_builtin_client(client_id)
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| BitFunError::NotFound(format!("ACP client not found: {}", client_id)))?;
+        let is_remote = remote_connection_id.is_some();
+        let config_file = self.load_config_file().await?;
+        let config =
+            resolve_config_for_client(&config_file, client_id, remote_connection_id.as_deref())
+                .ok_or_else(|| {
+                    BitFunError::NotFound(format!("ACP client not found: {}", client_id))
+                })?;
 
-        if remote_builtin {
-            config.enabled = true;
+        if config.command.trim().is_empty() {
+            return Err(BitFunError::config(format!(
+                "ACP client command is empty: {}",
+                client_id
+            )));
         }
         if !config.enabled {
             return Err(BitFunError::config(format!(
@@ -1624,7 +1648,7 @@ impl AcpClientService {
             )));
         }
 
-        if remote_connection_id.is_some() {
+        if is_remote {
             ensure_remote_client_supported(client_id, workspace_path)?;
         }
 
@@ -1635,8 +1659,20 @@ impl AcpClientService {
     }
 }
 
-fn ensure_remote_client_supported(
+fn resolve_config_for_client(
+    config_file: &AcpClientConfigFile,
     client_id: &str,
+    remote_connection_id: Option<&str>,
+) -> Option<AcpClientConfig> {
+    config_file
+        .acp_clients
+        .get(client_id)
+        .cloned()
+        .or_else(|| remote_connection_id.and_then(|_| default_config_for_builtin_client(client_id)))
+}
+
+fn ensure_remote_client_supported(
+    _client_id: &str,
     workspace_path: Option<&str>,
 ) -> BitFunResult<()> {
     if workspace_path
@@ -1648,14 +1684,41 @@ fn ensure_remote_client_supported(
         ));
     }
 
-    if builtin_acp_client_preset(client_id).is_none() {
-        return Err(BitFunError::config(format!(
-            "Remote ACP currently supports only built-in clients: {}",
-            supported_remote_acp_clients()
-        )));
+    Ok(())
+}
+
+fn render_remote_client_command(
+    config: &AcpClientConfig,
+    workspace_path: Option<&str>,
+) -> BitFunResult<String> {
+    let command = config.command.trim();
+    if command.is_empty() {
+        return Err(BitFunError::config(
+            "ACP client command is empty".to_string(),
+        ));
     }
 
-    Ok(())
+    let mut command_parts = Vec::new();
+    command_parts.push(shell_escape(command));
+    command_parts.extend(config.args.iter().map(|arg| shell_escape(arg)));
+
+    let mut parts = Vec::new();
+    parts.push("exec".to_string());
+    let env_assignments = render_remote_env_assignments(&config.env);
+    if !env_assignments.is_empty() {
+        parts.push("env".to_string());
+        parts.extend(env_assignments);
+    }
+    parts.extend(command_parts);
+
+    let command = parts.join(" ");
+    let workspace_path = workspace_path.map(str::trim).unwrap_or_default();
+    let body = if workspace_path.is_empty() {
+        command
+    } else {
+        format!("cd {} && {}", shell_escape(workspace_path), command)
+    };
+    Ok(remote_user_shell_command(&body))
 }
 
 fn current_unix_timestamp_ms() -> u64 {
@@ -1979,9 +2042,7 @@ fn startup_timeout_error_message(client_id: &str, phase: &str) -> String {
 }
 
 fn is_startup_timeout_error(error: &BitFunError) -> bool {
-    error
-        .to_string()
-        .contains(STARTUP_TIMEOUT_ERROR_PREFIX)
+    error.to_string().contains(STARTUP_TIMEOUT_ERROR_PREFIX)
 }
 
 fn select_permission_by_kind(
@@ -2068,5 +2129,60 @@ mod tests {
             startup_timeout_error_message("codex", "initialize"),
             "ACP startup timed out: client 'codex' exceeded 60s during initialize and was terminated. Please try again after the client is ready."
         );
+    }
+
+    #[test]
+    fn renders_remote_client_command_from_config() {
+        let config = AcpClientConfig {
+            name: Some("Custom".to_string()),
+            command: "custom-acp".to_string(),
+            args: vec!["--stdio".to_string(), "with space".to_string()],
+            env: HashMap::from([
+                ("PATH".to_string(), "/remote/bin:/usr/bin".to_string()),
+                ("INVALID-NAME".to_string(), "ignored".to_string()),
+            ]),
+            enabled: true,
+            readonly: false,
+            permission_mode: AcpClientPermissionMode::Ask,
+        };
+
+        let command = render_remote_client_command(&config, Some("/srv/my repo")).expect("command");
+        assert!(command.starts_with("bash -lc "));
+        assert!(command.contains(".nvm/nvm.sh"));
+        assert!(command.contains(
+            "cd '\\''/srv/my repo'\\'' && exec env PATH=/remote/bin:/usr/bin custom-acp --stdio '\\''with space'\\''"
+        ));
+    }
+
+    #[test]
+    fn resolves_remote_client_config_from_global_config() {
+        let config_file = AcpClientConfigFile {
+            acp_clients: HashMap::from([(
+                "codex".to_string(),
+                AcpClientConfig {
+                    name: Some("Codex".to_string()),
+                    command: "npx".to_string(),
+                    args: vec![
+                        "--yes".to_string(),
+                        "@zed-industries/codex-acp@latest".to_string(),
+                    ],
+                    env: HashMap::from([("BASE".to_string(), "1".to_string())]),
+                    enabled: true,
+                    readonly: false,
+                    permission_mode: AcpClientPermissionMode::Ask,
+                },
+            )]),
+        };
+
+        let resolved = resolve_config_for_client(&config_file, "codex", Some("huawei-server"))
+            .expect("config");
+
+        assert_eq!(resolved.command, "npx");
+        assert_eq!(
+            resolved.args,
+            vec!["--yes", "@zed-industries/codex-acp@latest"]
+        );
+        assert_eq!(resolved.env.get("BASE").map(String::as_str), Some("1"));
+        assert!(resolved.enabled);
     }
 }

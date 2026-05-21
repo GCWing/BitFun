@@ -16,7 +16,7 @@ interface DialogCompletionNotificationCopyInput {
 }
 
 export function shouldSendDialogCompletionNotification({
-  event,
+  event: _event,
   session,
   isBackground,
   notificationsEnabled,
@@ -25,16 +25,12 @@ export function shouldSendDialogCompletionNotification({
     return false;
   }
 
-  if (event.subagentParentInfo) {
-    return false;
-  }
-
   if (!session) {
     return false;
   }
 
   const sessionKind = session?.sessionKind ?? 'normal';
-  if (sessionKind === 'btw' || sessionKind === 'review') {
+  if (sessionKind === 'btw' || sessionKind === 'review' || sessionKind === 'subagent') {
     return false;
   }
 

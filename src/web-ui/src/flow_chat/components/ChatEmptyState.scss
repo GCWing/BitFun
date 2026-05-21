@@ -84,7 +84,7 @@
     background: var(--element-bg-soft);
     border: 1px solid var(--border-medium);
     border-radius: $size-radius-sm;
-    line-height: 1.4;
+    line-height: var(--flowchat-support-line-height, 1.45);
     transition: all $motion-base $easing-standard;
     
     &:hover {
@@ -104,7 +104,7 @@
     background: var(--element-bg-soft);
     border: 1px solid var(--border-medium);
     border-radius: $size-radius-sm;
-    line-height: 1.4;
+    line-height: var(--flowchat-support-line-height, 1.45);
     transition: all $motion-base $easing-standard;
     
     &:hover {
@@ -162,7 +162,7 @@
       margin: 0;
       font-size: var(--flowchat-font-size-xl);
       color: var(--color-text-secondary);
-      line-height: 1.7;
+      line-height: var(--flowchat-text-line-height, 1.58);
       font-weight: $font-weight-normal;
     }
     

@@ -7,6 +7,8 @@ import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
+import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
@@ -20,6 +22,7 @@ import {
   getNextDefaultSessionTitleCount,
   resolveSessionTitle,
 } from '../../utils/sessionTitle';
+import { buildCreateSessionRelationship } from '../../utils/sessionMetadata';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
@@ -105,9 +108,11 @@ async function hydrateHistoricalSession(
 ): Promise<void> {
   const existing = context.pendingHistoryLoads.get(sessionId);
   if (existing) {
+    startupTrace.markPhase('historical_session_hydrate_reused');
     await existing;
     return;
   }
+  const traceStartedAt = nowMs();
 
   const loadPromise = (async () => {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
@@ -116,6 +121,8 @@ async function hydrateHistoricalSession(
     }
 
     const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
+    const remote = isRemoteTraceContext(session.remoteConnectionId, session.remoteSshHost);
+    startupTrace.markPhase('historical_session_hydrate_request', { remote });
 
     // Prefer the current workspace's connection info over the session's
     // stored values.  When the user changes the SSH port the session's
@@ -145,7 +152,13 @@ async function hydrateHistoricalSession(
 
   try {
     await loadPromise;
+    startupTrace.markPhase('historical_session_hydrate_request_end', {
+      durationMs: elapsedMs(traceStartedAt),
+    });
   } catch (error) {
+    startupTrace.markPhase('historical_session_hydrate_request_failed', {
+      durationMs: elapsedMs(traceStartedAt),
+    });
     log.error('Failed to load session history', { sessionId, error });
     if (notifyOnError) {
       notificationService.warning('Failed to load session history, showing empty session', {
@@ -465,6 +478,10 @@ export async function switchChatSession(
 
     // Switch UI immediately so the user sees the new session without waiting for history load.
     context.flowChatStore.switchSession(sessionId);
+    startupTrace.markPhase('historical_session_switch', {
+      historical: Boolean(session?.isHistorical),
+      remote: isRemoteTraceContext(session?.remoteConnectionId, session?.remoteSshHost),
+    });
 
     touchSessionActivity(
       sessionId,
@@ -639,31 +656,91 @@ export async function ensureBackendSession(
 
   const isHistoricalSession = latestSession.isHistorical === true;
   const isFirstTurn = latestSession.dialogTurns.length <= 1;
-  const needsBackendSetup = isHistoricalSession || isFirstTurn;
+  const requiresContextRestore =
+    latestSession.contextRestoreState === 'pending' ||
+    latestSession.contextRestoreState === 'failed';
+  const needsBackendSetup = isHistoricalSession || isFirstTurn || requiresContextRestore;
+  const hasLoadedTurns = latestSession.dialogTurns.length > 0;
   /** Avoid createSession when historical data is already loaded but backend files are missing (e.g. new SSH connection id). */
   const allowRecreateOnCoordinatorFailure =
-    needsBackendSetup && !(isHistoricalSession && session.dialogTurns.length > 1);
+    needsBackendSetup &&
+    !(requiresContextRestore && hasLoadedTurns) &&
+    !(isHistoricalSession && hasLoadedTurns);
 
-  const clearHistoricalFlag = () => {
-    if (!isHistoricalSession) return;
+  const markBackendContextReady = () => {
+    if (!isHistoricalSession && !requiresContextRestore) return;
     context.flowChatStore.setState(prev => {
       const newSessions = new Map(prev.sessions);
       const sess = newSessions.get(sessionId);
       if (sess) {
-        newSessions.set(sessionId, { ...sess, isHistorical: false });
+        newSessions.set(sessionId, {
+          ...sess,
+          isHistorical: false,
+          historyState: 'ready',
+          contextRestoreState: 'ready',
+        });
       }
       return { ...prev, sessions: newSessions };
     });
   };
 
-  try {
+  const markBackendContextFailed = () => {
+    if (!requiresContextRestore) return;
+    context.flowChatStore.setState(prev => {
+      const newSessions = new Map(prev.sessions);
+      const sess = newSessions.get(sessionId);
+      if (sess) {
+        newSessions.set(sessionId, { ...sess, contextRestoreState: 'failed' });
+      }
+      return { ...prev, sessions: newSessions };
+    });
+  };
+
+  const ensureCoordinator = async () => {
     await agentAPI.ensureCoordinatorSession({
       sessionId,
       workspacePath,
       remoteConnectionId: effectiveConnectionId,
       remoteSshHost: effectiveSshHost,
     });
-    clearHistoricalFlag();
+    markBackendContextReady();
+  };
+
+  const restorePendingBackendContext = async () => {
+    if (!context.pendingContextRestores) {
+      context.pendingContextRestores = new Map();
+    }
+    const restoreKey = [
+      sessionId,
+      workspacePath,
+      effectiveConnectionId ?? '',
+      effectiveSshHost ?? '',
+    ].join('\u001f');
+    const existingRestore = context.pendingContextRestores.get(restoreKey);
+    if (existingRestore) {
+      await existingRestore;
+      return;
+    }
+
+    const restorePromise = ensureCoordinator().catch(error => {
+      markBackendContextFailed();
+      throw error;
+    }).finally(() => {
+      if (context.pendingContextRestores?.get(restoreKey) === restorePromise) {
+        context.pendingContextRestores.delete(restoreKey);
+      }
+    });
+    context.pendingContextRestores.set(restoreKey, restorePromise);
+    await restorePromise;
+  };
+
+  try {
+    if (requiresContextRestore) {
+      await restorePendingBackendContext();
+      return;
+    }
+
+    await ensureCoordinator();
   } catch (e: any) {
     if (!allowRecreateOnCoordinatorFailure) {
       const raw = typeof e?.message === 'string' ? e.message : String(e);
@@ -684,6 +761,8 @@ export async function ensureBackendSession(
       workspacePath,
       remoteConnectionId: effectiveConnectionId,
       remoteSshHost: effectiveSshHost,
+      relationship: buildCreateSessionRelationship(latestSession),
+      deepReviewRunManifest: latestSession.deepReviewRunManifest,
       config: {
         modelName: latestSession.config.modelName || 'auto',
         enableTools: true,
@@ -692,7 +771,7 @@ export async function ensureBackendSession(
         remoteSshHost: effectiveSshHost,
       }
     });
-    clearHistoricalFlag();
+    markBackendContextReady();
   }
 }
 
@@ -722,6 +801,8 @@ export async function retryCreateBackendSession(
     workspacePath,
     remoteConnectionId: session.remoteConnectionId,
     remoteSshHost: session.remoteSshHost,
+    relationship: buildCreateSessionRelationship(session),
+    deepReviewRunManifest: session.deepReviewRunManifest,
     config: {
       modelName: session.config.modelName || 'auto',
       enableTools: true,

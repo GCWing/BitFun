@@ -89,7 +89,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   
   &.analyzing {
     color: var(--color-primary);
@@ -114,7 +114,7 @@
     .retry-btn {
       margin-left: 8px;
       padding: 2px 8px;
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
       background: var(--color-error);
       color: white;
       border: none;
@@ -148,8 +148,8 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  line-height: var(--flowchat-support-line-height, 1.45);
   color: var(--color-text);
   
   .summary-icon {
@@ -165,7 +165,7 @@
   gap: 4px;
   margin-top: 8px;
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   color: var(--color-primary);
   background: transparent;
   border: none;
@@ -193,7 +193,7 @@
     }
     
     h4 {
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       font-weight: 600;
       color: var(--color-text-secondary);
       margin: 0 0 6px 0;
@@ -202,8 +202,8 @@
     }
     
     p {
-      font-size: 13px;
-      line-height: 1.6;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      line-height: var(--flowchat-text-line-height, 1.58);
       color: var(--color-text);
       margin: 0;
     }
@@ -217,7 +217,7 @@
     .tag {
       display: inline-block;
       padding: 4px 10px;
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       background: var(--color-surface);
       color: var(--color-text);
       border: 1px solid var(--color-border);
@@ -229,7 +229,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--color-text-secondary);
     
     .meta-separator {
@@ -247,7 +247,7 @@
   padding: 8px 12px;
   background: rgba(var(--color-error-rgb), 0.1);
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   color: var(--color-error);
 }
 

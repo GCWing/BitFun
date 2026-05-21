@@ -1,15 +1,11 @@
-import { agentAPI, btwAPI, sessionAPI } from '@/infrastructure/api';
+import { agentAPI, btwAPI } from '@/infrastructure/api';
 import { notificationService } from '@/shared/notification-system';
-import { createLogger } from '@/shared/utils/logger';
 import { flowChatStore } from '../store/FlowChatStore';
 import { stateMachineManager } from '../state-machine';
 import { flowChatManager } from './FlowChatManager';
 import type { Session } from '../types/flow-chat';
-import type { SessionKind } from '@/shared/types/session-history';
+import type { SessionKind, SessionRelationship } from '@/shared/types/session-history';
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
-import { buildSessionMetadata } from '../utils/sessionMetadata';
-
-const log = createLogger('BtwThreadService');
 
 function safeUuid(prefix = 'btw'): string {
   try {
@@ -29,27 +25,6 @@ function buildChildSessionName(question: string): string {
   const one = toOneLine(question);
   const clipped = one.length > 48 ? `${one.slice(0, 48)}…` : one;
   return clipped || 'Side thread';
-}
-
-async function loadSessionMetadataWithRetry(
-  sessionId: string,
-  workspacePath: string,
-  opts?: { retries?: number; delayMs?: number },
-  remoteConnectionId?: string
-): Promise<import('@/shared/types/session-history').SessionMetadata | null> {
-  const retries = opts?.retries ?? 10;
-  const delayMs = opts?.delayMs ?? 60;
-
-  for (let i = 0; i < retries; i++) {
-    try {
-      const meta = await sessionAPI.loadSessionMetadata(sessionId, workspacePath, remoteConnectionId);
-      if (meta) return meta;
-    } catch (e) {
-      log.debug('loadSessionMetadata retry failed', { sessionId, attempt: i + 1, e });
-    }
-    await new Promise(r => window.setTimeout(r, delayMs));
-  }
-  return null;
 }
 
 function getParentInterruptionContext(parentSessionId: string): { parentDialogTurnId?: string; parentTurnIndex?: number } {
@@ -105,6 +80,8 @@ export async function createBtwChildSession(params: {
   const { parentSessionId } = params;
   const requestId = params.requestId || safeUuid('btw');
   const childSessionKind = params.sessionKind ?? 'btw';
+  const shouldPersistStandaloneSession =
+    !params.isTransient && childSessionKind !== 'btw';
   const createdAt = Date.now();
   const { parentDialogTurnId, parentTurnIndex } = getParentInterruptionContext(parentSessionId);
 
@@ -119,25 +96,39 @@ export async function createBtwChildSession(params: {
   const childSessionName = params.childSessionName.trim() || 'Side thread';
   const remoteConnectionId = parentSession?.remoteConnectionId;
   const remoteSshHost = parentSession?.remoteSshHost;
+  const relationship: SessionRelationship | undefined =
+    childSessionKind === 'btw'
+      ? undefined
+      : {
+          kind: childSessionKind,
+          parentSessionId,
+          parentRequestId: requestId,
+          parentDialogTurnId,
+          parentTurnIndex,
+        };
 
-  const created = await agentAPI.createSession({
-    sessionName: childSessionName,
-    agentType,
-    workspacePath,
-    remoteConnectionId,
-    remoteSshHost,
-    config: {
-      modelName,
-      enableTools: params.enableTools ?? false,
-      safeMode: params.safeMode ?? true,
-      autoCompact: params.autoCompact ?? true,
-      enableContextCompression: params.enableContextCompression ?? true,
-      remoteConnectionId,
-      remoteSshHost,
-    },
-  });
-
-  const childSessionId = created.sessionId;
+  const childSessionId = shouldPersistStandaloneSession
+    ? (
+        await agentAPI.createSession({
+          sessionName: childSessionName,
+          agentType,
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost,
+          relationship,
+          deepReviewRunManifest: params.deepReviewRunManifest,
+          config: {
+            modelName,
+            enableTools: params.enableTools ?? false,
+            safeMode: params.safeMode ?? true,
+            autoCompact: params.autoCompact ?? true,
+            enableContextCompression: params.enableContextCompression ?? true,
+            remoteConnectionId,
+            remoteSshHost,
+          },
+        })
+      ).sessionId
+    : safeUuid('btw_session');
   flowChatStore.addExternalSession(
     childSessionId,
     childSessionName,
@@ -180,26 +171,6 @@ export async function createBtwChildSession(params: {
       parentDialogTurnId,
       parentTurnIndex,
     });
-  }
-
-  if (!params.isTransient) {
-    const meta = await loadSessionMetadataWithRetry(
-      childSessionId,
-      workspacePath,
-      undefined,
-      remoteConnectionId
-    );
-    if (meta) {
-      const childSession = flowChatStore.getState().sessions.get(childSessionId);
-
-      if (childSession) {
-        await sessionAPI.saveSessionMetadata(
-          buildSessionMetadata(childSession, meta),
-          workspacePath,
-          remoteConnectionId
-        );
-      }
-    }
   }
 
   return {

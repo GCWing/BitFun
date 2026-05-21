@@ -129,7 +129,7 @@
       top: 50%;
       transform: translate(-50%, -50%);
       color: rgba(88, 166, 255, 0.9);
-      font-size: 13px;
+      font-size: var(--flowchat-font-size-sm);
       font-weight: 600;
       pointer-events: none;
       z-index: 101;

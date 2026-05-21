@@ -493,15 +493,11 @@ export function isCollapsibleTool(toolName: string): boolean {
 
 /**
  * Check whether a FlowItem is collapsible (no context).
- * - Subagent items are never collapsed.
  * - Text needs context (use isCollapsibleItemWithContext).
  * - Thinking can be collapsed with explorer tools.
  * - Only explorer tools are collapsible.
  */
 export function isCollapsibleItem(item: FlowItem): boolean {
-  // Subagent items are never collapsed.
-  if ((item as any).isSubagentItem) return false;
-  
   // Text: default not collapsed (needs isCollapsibleItemWithContext).
   if (item.type === 'text') return false;
   
@@ -527,9 +523,6 @@ export function isCollapsibleItemWithContext(
   nextItem: FlowItem | undefined, 
   isLast: boolean
 ): boolean {
-  // Subagent items are never collapsed.
-  if ((item as any).isSubagentItem) return false;
-  
   // Text and thinking depend on what follows.
   if (item.type === 'text' || item.type === 'thinking') {
     // Last item should stay visible.

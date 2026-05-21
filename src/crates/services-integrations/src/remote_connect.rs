@@ -271,6 +271,7 @@ pub struct RemoteModelCatalogPollDelta {
 pub fn resolve_remote_agent_type(mobile_type: Option<&str>) -> &'static str {
     match mobile_type {
         Some("code") | Some("agentic") | Some("Agentic") => "agentic",
+        Some("multitask") | Some("Multitask") => "Multitask",
         Some("cowork") | Some("Cowork") => "Cowork",
         Some("plan") | Some("Plan") => "Plan",
         Some("debug") | Some("Debug") => "debug",
@@ -626,6 +627,7 @@ struct TrackerState {
     round_index: usize,
     active_items: Vec<ChatMessageItem>,
     persistence_dirty: bool,
+    linked_subagent_sessions: HashMap<String, String>,
 }
 
 /// Lightweight event broadcast by the tracker for real-time consumers.
@@ -682,6 +684,7 @@ impl RemoteSessionStateTracker {
                 round_index: 0,
                 active_items: Vec::new(),
                 persistence_dirty: true,
+                linked_subagent_sessions: HashMap::new(),
             }),
             event_tx,
         }
@@ -879,23 +882,37 @@ impl RemoteSessionStateTracker {
     pub fn handle_agentic_event(&self, event: &AgenticEvent) {
         use bitfun_events::AgenticEvent as AE;
 
+        if let AE::SubagentSessionLinked {
+            session_id,
+            parent_session_id,
+            ..
+        } = event
+        {
+            if parent_session_id != &self.target_session_id {
+                return;
+            }
+
+            let mut state = self.state.write().unwrap();
+            state
+                .linked_subagent_sessions
+                .insert(session_id.clone(), parent_session_id.clone());
+            drop(state);
+            self.bump_version();
+            return;
+        }
+
         let is_direct = event.session_id() == Some(self.target_session_id.as_str());
         let is_subagent = if !is_direct {
             match event {
-                AE::TextChunk {
-                    subagent_parent_info,
-                    ..
-                }
-                | AE::ThinkingChunk {
-                    subagent_parent_info,
-                    ..
-                }
-                | AE::ToolEvent {
-                    subagent_parent_info,
-                    ..
-                } => subagent_parent_info
-                    .as_ref()
-                    .is_some_and(|parent| parent.session_id == self.target_session_id),
+                AE::TextChunk { session_id, .. }
+                | AE::ThinkingChunk { session_id, .. }
+                | AE::ToolEvent { session_id, .. } => self
+                    .state
+                    .read()
+                    .unwrap()
+                    .linked_subagent_sessions
+                    .get(session_id)
+                    .is_some_and(|parent_session_id| parent_session_id == &self.target_session_id),
                 _ => false,
             }
         } else {

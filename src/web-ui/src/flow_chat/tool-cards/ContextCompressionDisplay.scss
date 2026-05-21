@@ -11,7 +11,7 @@
   .compression-info {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--flowchat-control-gap, 0.5rem);
     flex-wrap: nowrap;
 
     .token-stat {
@@ -23,9 +23,9 @@
     .savings-tag {
       display: inline-flex;
       align-items: center;
-      padding: 2px 8px;
+      padding: 0.12rem 0.5rem;
       border-radius: 4px;
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
       font-weight: 600;
       flex-shrink: 0;
       white-space: nowrap;
@@ -40,19 +40,19 @@
   }
 
   .compression-meta {
-    font-size: 12px;
+    font-size: var(--flowchat-font-size-sm);
     color: var(--tool-card-text-secondary);
     white-space: nowrap;
   }
 
   .error-content {
-    padding: 12px 16px;
+    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--size-gap-4, 16px);
     background: rgba(239, 68, 68, 0.05);
     border-top: 1px solid rgba(239, 68, 68, 0.2);
 
     .error-message {
       color: rgba(239, 68, 68, 0.9);
-      font-size: 13px;
+      font-size: var(--flowchat-font-size-sm);
     }
   }
 
@@ -61,12 +61,11 @@
   }
 
   .compression-detail-note {
-    padding: 12px 16px;
-    font-size: 12px;
-    line-height: 1.5;
+    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--size-gap-4, 16px);
+    font-size: var(--flowchat-font-size-sm);
+    line-height: var(--flowchat-support-line-height, 1.45);
     color: var(--tool-card-text-secondary);
     background: rgba(148, 163, 184, 0.08);
     border-top: 1px solid rgba(148, 163, 184, 0.18);
   }
 }
-

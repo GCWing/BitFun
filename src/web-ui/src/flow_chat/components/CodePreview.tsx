@@ -14,7 +14,7 @@
 import React, { useMemo, memo, useRef, useEffect, useState, useCallback, useDeferredValue } from 'react';
 import { getPrismLanguage } from '@/infrastructure/language-detection';
 import { useTheme } from '@/infrastructure/theme';
-import { loadPrismSyntaxHighlighter } from '@/shared/utils/syntaxHighlighterLoader';
+import { getLoadedPrismSyntaxHighlighter, loadPrismSyntaxHighlighter } from '@/shared/utils/syntaxHighlighterLoader';
 import { buildCodePreviewPrismStyle, CODE_PREVIEW_FONT_FAMILY } from './codePreviewPrismTheme';
 import './CodePreview.scss';
 
@@ -63,7 +63,7 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
 }) => {
   const { isLight } = useTheme();
   const prismStyle = useMemo(() => buildCodePreviewPrismStyle(isLight), [isLight]);
-  const [SyntaxHighlighter, setSyntaxHighlighter] = useState<React.ComponentType<any> | null>(null);
+  const [SyntaxHighlighter, setSyntaxHighlighter] = useState<React.ComponentType<any> | null>(() => getLoadedPrismSyntaxHighlighter());
 
   const containerRef = useRef<HTMLDivElement>(null);
   const prevContentLengthRef = useRef(0);

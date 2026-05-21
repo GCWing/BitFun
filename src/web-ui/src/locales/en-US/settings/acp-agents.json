@@ -4,6 +4,9 @@
   "actions": {
     "add": "Add",
     "download": "Download",
+    "installCli": "Install CLI",
+    "configureAcp": "Configure ACP",
+    "viewError": "View error",
     "save": "Save",
     "refresh": "Refresh",
     "learnMore": "Learn More",
@@ -21,7 +24,7 @@
   },
   "registry": {
     "title": "Agents",
-    "description": "Installed ACP agents with ready dependencies appear in the workspace action menu.",
+    "description": "Installed agents appear in the workspace action menu. Remote workspaces reuse the same list and check the remote host before showing status.",
     "searchPlaceholder": "Search agents...",
     "filterLabel": "ACP agent filter",
     "filters": {
@@ -32,16 +35,41 @@
       "configInvalid": "Invalid config"
     },
     "enabled": "Enabled",
-    "ready": "Ready",
+    "ready": "Available",
+    "partial": "Partially available",
     "installed": "Installed",
     "notInstalled": "Not Installed",
     "configInvalid": "Invalid config",
-    "cliRequired": "Install CLI",
     "checking": "Checking",
+    "cliMissing": "CLI missing",
+    "acpMissing": "ACP missing",
+    "pathInvalid": "Path invalid",
+    "versionMismatch": "Version mismatch",
+    "connectionFailed": "Connection failed",
+    "permissionDenied": "Permission denied",
+    "partialDetail": "The CLI is ready, but the ACP adapter is not configured.",
+    "cliMissingDetail": "No CLI command was found on PATH.",
+    "acpMissingDetail": "The ACP adapter is not available yet.",
+    "pathInvalidDetail": "The command path could not be resolved.",
+    "versionMismatchDetail": "The detected version does not match the expected runtime.",
+    "connectionFailedDetail": "The remote host could not be reached.",
+    "permissionDeniedDetail": "The command could not run because of a permission problem.",
+    "configInvalidDetail": "The current ACP configuration cannot be used as-is.",
+    "toolPath": "Path",
+    "toolVersion": "Version",
     "empty": "No matching ACP agents."
   },
   "clients": {
     "loading": "Loading ACP agents…"
+  },
+  "remote": {
+    "title": "Remote Servers",
+    "description": "Saved SSH servers reuse the same ACP agent list and probe each remote host automatically.",
+    "empty": "No saved SSH servers.",
+    "noAgents": "Add an ACP agent before checking remote servers.",
+    "refreshDetection": "Refresh detection",
+    "summary": "{{available}} / {{total}} available",
+    "issueSummary": "{{count}} issue(s)"
   },
   "fields": {
     "name": "Name",
@@ -72,6 +100,10 @@
     "openLinkFailed": "Failed to open link",
     "invalidJson": "Invalid ACP JSON",
     "invalidEnv": "Invalid environment value",
+    "installSuccess": "ACP CLI installed",
+    "installFailed": "Failed to install ACP CLI",
+    "configureSuccess": "ACP adapter prepared",
+    "configureFailed": "Failed to prepare ACP adapter",
     "downloadSuccess": "ACP agent CLI downloaded",
     "downloadFailed": "Failed to download ACP agent CLI",
     "predownloadSuccess": "ACP adapter downloaded",

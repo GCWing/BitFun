@@ -727,6 +727,8 @@ impl Tool for GitTool {
 
 This tool provides a safe and convenient way to execute Git commands. It supports common Git operations like status, diff, log, add, commit, branch, checkout, pull, push, and more.
 
+If this tool was collapsed earlier in the conversation, only call it after `GetToolSpec` has returned this definition. A failed direct call that says "Tool 'Git' is collapsed" means the next tool call should be `GetToolSpec` with `{"tool_name":"Git"}`; after that, retry `Git` with the schema below.
+
 ## Supported Operations
 
 - **status**: Show working tree status
@@ -832,7 +834,7 @@ When creating commits, use this format for the commit message:
     }
 
     fn short_description(&self) -> String {
-        "Inspect and operate on the Git repository.".to_string()
+        "Inspect and operate on the Git repository; load with GetToolSpec before first use when collapsed.".to_string()
     }
 
     fn default_exposure(&self) -> ToolExposure {
@@ -845,12 +847,12 @@ When creating commits, use this format for the commit message:
             "properties": {
                 "operation": {
                     "type": "string",
-                    "description": "Required Git operation/subcommand to perform (e.g., status, diff, log, add, commit, branch, checkout, pull, push). Do not omit this and do not place the subcommand in args.",
+                    "description": "Required Git subcommand to perform. Use the bare subcommand only, such as \"status\", \"diff\", \"log\", \"add\", or \"commit\". Do not send a raw command like \"git status\". Do not omit this field, and do not place the subcommand in args.",
                     "enum": ALLOWED_OPERATIONS
                 },
                 "args": {
                     "type": "string",
-                    "description": "Only additional arguments for the selected Git operation (e.g., file paths, flags, options). Do not include the operation/subcommand itself here."
+                    "description": "Only additional arguments for the selected operation: flags, refs, commit messages, or file paths. Examples: \"--staged\", \"--oneline -10\", \"-m \\\"message\\\"\", or \"-- src/file.rs\". Do not include \"git\" or repeat the operation/subcommand here."
                 },
                 "working_directory": {
                     "type": "string",
@@ -1175,7 +1177,7 @@ mod tests {
         assert!(schema["properties"]["args"]["description"]
             .as_str()
             .unwrap()
-            .contains("Do not include the operation"));
+            .contains("Do not include \"git\" or repeat the operation"));
 
         let validation = tool
             .validate_input(&json!({"args": "--since=\"2026-05-02\" --oneline"}), None)

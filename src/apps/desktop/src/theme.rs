@@ -1,10 +1,12 @@
 //! Theme System
 
 use std::sync::{OnceLock, RwLock};
+use std::time::Instant;
 
 use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::config::types::GlobalConfig;
 use log::{debug, error, warn};
+use tauri::webview::PageLoadEvent;
 use tauri::{Manager, WebviewUrl};
 
 const AGENT_COMPANION_WINDOW_LABEL: &str = "agent-companion-pet";
@@ -263,12 +265,15 @@ impl ThemeConfig {
         "system"
     }
 
-    pub fn generate_init_script(&self) -> String {
+    pub fn generate_init_script(&self, startup_trace_id: &str) -> String {
         let theme_type = if self.is_light { "light" } else { "dark" };
+        let startup_trace_id_json = serde_json::to_string(startup_trace_id)
+            .unwrap_or_else(|_| "\"desktop-unknown\"".to_string());
 
         format!(
             r#"
             (function() {{
+                window.__BITFUN_STARTUP_TRACE_ID__ = {startup_trace_id_json};
                 function applyTheme() {{
                     var root = document.documentElement;
                     if (!root) return false;
@@ -289,8 +294,7 @@ impl ThemeConfig {
                     if (document.body) {{
                         document.body.style.backgroundColor = '{bg_primary}';
                     }}
-                    
-                    console.log('[Theme] Pre-injected theme: {id}');
+
                     return true;
                 }}
                 
@@ -311,6 +315,7 @@ impl ThemeConfig {
             bg_secondary = self.bg_secondary,
             bg_scene = self.bg_scene,
             text_primary = self.text_primary,
+            startup_trace_id_json = startup_trace_id_json,
         )
     }
 
@@ -323,10 +328,15 @@ impl ThemeConfig {
     }
 }
 
-pub fn create_main_window(app_handle: &tauri::AppHandle) {
+pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str) {
+    let total_started_at = Instant::now();
     let theme = ThemeConfig::load_from_config();
     let bg_color = theme.to_tauri_color();
-    let init_script = theme.generate_init_script();
+    let init_script = theme.generate_init_script(startup_trace_id);
+    debug!(
+        "Main window creation step completed: step=prepare_theme duration_ms={}",
+        total_started_at.elapsed().as_millis()
+    );
 
     let main_url = if cfg!(debug_assertions) {
         match "http://localhost:1422".parse() {
@@ -339,12 +349,34 @@ pub fn create_main_window(app_handle: &tauri::AppHandle) {
     } else {
         WebviewUrl::App("index.html".into())
     };
+    let main_url_kind = match &main_url {
+        WebviewUrl::External(_) => "external",
+        WebviewUrl::App(_) => "app",
+        _ => "other",
+    };
 
     #[allow(unused_mut)]
     let mut builder = tauri::WebviewWindowBuilder::new(app_handle, "main", main_url)
         .background_color(bg_color)
         .accept_first_mouse(true)
-        .initialization_script(&init_script);
+        .initialization_script(&init_script)
+        .on_page_load({
+            let startup_trace_id = startup_trace_id.to_string();
+            let total_started_at = total_started_at;
+            move |_window, payload| {
+                let event = match payload.event() {
+                    PageLoadEvent::Started => "started",
+                    PageLoadEvent::Finished => "finished",
+                };
+                debug!(
+                    "Main window page load event: trace_id={}, event={}, url={}, since_create_start_ms={}",
+                    startup_trace_id,
+                    event,
+                    payload.url(),
+                    total_started_at.elapsed().as_millis()
+                );
+            }
+        });
 
     // Keep HTML5 drag-and-drop working inside the webview for desktop UI drag targets.
     builder = builder.disable_drag_drop_handler();
@@ -363,8 +395,15 @@ pub fn create_main_window(app_handle: &tauri::AppHandle) {
         builder = builder.decorations(false);
     }
 
+    let build_started_at = Instant::now();
     match builder.build() {
         Ok(window) => {
+            debug!(
+                "Main window creation step completed: step=build url_kind={} duration_ms={} total_duration_ms={}",
+                main_url_kind,
+                build_started_at.elapsed().as_millis(),
+                total_started_at.elapsed().as_millis()
+            );
             #[cfg(any(debug_assertions, feature = "devtools"))]
             {
                 if std::env::var("BITFUN_OPEN_DEVTOOLS")
@@ -379,7 +418,11 @@ pub fn create_main_window(app_handle: &tauri::AppHandle) {
             let _ = window;
         }
         Err(e) => {
-            error!("Failed to create main window: {}", e);
+            error!(
+                "Failed to create main window: error={} duration_ms={}",
+                e,
+                total_started_at.elapsed().as_millis()
+            );
         }
     }
 }
@@ -558,6 +601,9 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
     #[cfg(not(target_env = "ohos"))]
     {
         let _guard = agent_companion_window_ops().lock().await;
+    let started_at = Instant::now();
+    let _guard = agent_companion_window_ops().lock().await;
+    debug!("Agent companion window show requested");
 
         // Reuse any existing window: never destroy here. A previous implementation destroyed
         // whenever `is_visible` was false, which raced with another `show` that had built the
@@ -574,6 +620,25 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
             })?;
             return Ok(());
         }
+    // Reuse any existing window: never destroy here. A previous implementation destroyed
+    // whenever `is_visible` was false, which raced with another `show` that had built the
+    // window but not called `show()` yet (or with `hide`), producing duplicate pets or
+    // stuck windows.
+    if let Some(window) = app.get_webview_window(AGENT_COMPANION_WINDOW_LABEL) {
+        if let Err(e) = window.unminimize() {
+            warn!("Failed to unminimize Agent companion window: {}", e);
+        }
+        position_agent_companion_window(&app, &window);
+        window.show().map_err(|e| {
+            error!("Failed to show Agent companion window: {}", e);
+            format!("Failed to show Agent companion window: {}", e)
+        })?;
+        debug!(
+            "Agent companion window reused: total_duration_ms={}",
+            started_at.elapsed().as_millis()
+        );
+        return Ok(());
+    }
 
         let url = app_url("?bitfunWindow=agent-companion");
         let mut builder = tauri::WebviewWindowBuilder::new(&app, AGENT_COMPANION_WINDOW_LABEL, url)
@@ -596,6 +661,42 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
             .visible(false)
             .accept_first_mouse(true)
             .background_color(tauri::window::Color(0, 0, 0, 0));
+    let url = app_url("?bitfunWindow=agent-companion");
+    let mut builder = tauri::WebviewWindowBuilder::new(&app, AGENT_COMPANION_WINDOW_LABEL, url)
+        .title("BitFun Agent Companion")
+        .inner_size(
+            AGENT_COMPANION_WINDOW_MIN_SIZE,
+            AGENT_COMPANION_WINDOW_MIN_SIZE,
+        )
+        .max_inner_size(
+            AGENT_COMPANION_WINDOW_MAX_WIDTH,
+            AGENT_COMPANION_WINDOW_MAX_HEIGHT,
+        )
+        .min_inner_size(1.0, 1.0)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .visible(false)
+        .accept_first_mouse(true)
+        .background_color(tauri::window::Color(0, 0, 0, 0))
+        .on_page_load({
+            let started_at = started_at;
+            move |_window, payload| {
+                let event = match payload.event() {
+                    PageLoadEvent::Started => "started",
+                    PageLoadEvent::Finished => "finished",
+                };
+                debug!(
+                    "Agent companion window page load event: event={}, url={}, since_show_request_ms={}",
+                    event,
+                    payload.url(),
+                    started_at.elapsed().as_millis()
+                );
+            }
+        });
 
         builder = builder.disable_drag_drop_handler();
 
@@ -603,6 +704,20 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
             error!("Failed to create Agent companion window: {}", e);
             format!("Failed to create Agent companion window: {}", e)
         })?;
+    let build_started_at = Instant::now();
+    let window = builder.build().map_err(|e| {
+        error!(
+            "Failed to create Agent companion window: error={} duration_ms={}",
+            e,
+            build_started_at.elapsed().as_millis()
+        );
+        format!("Failed to create Agent companion window: {}", e)
+    })?;
+    debug!(
+        "Agent companion window creation step completed: step=build duration_ms={} total_duration_ms={}",
+        build_started_at.elapsed().as_millis(),
+        started_at.elapsed().as_millis()
+    );
 
         position_agent_companion_window(&app, &window);
 
@@ -610,6 +725,16 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
             error!("Failed to show Agent companion window: {}", e);
             format!("Failed to show Agent companion window: {}", e)
         })?;
+    let show_started_at = Instant::now();
+    window.show().map_err(|e| {
+        error!("Failed to show Agent companion window: {}", e);
+        format!("Failed to show Agent companion window: {}", e)
+    })?;
+    debug!(
+        "Agent companion window shown: show_duration_ms={} total_duration_ms={}",
+        show_started_at.elapsed().as_millis(),
+        started_at.elapsed().as_millis()
+    );
 
         Ok(())
     }
@@ -718,5 +843,4 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     {
         Err("Failed to show main window".to_string())
     }
-
 }

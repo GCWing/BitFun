@@ -4,7 +4,6 @@
 /// - InlineTool: single-line for simple/exploratory tools (Read, Grep, Glob, LS, etc.)
 /// - BlockTool: multi-line with left border for complex tools (Bash, Edit, Write, Task, etc.)
 /// - Phase-aware: same tool can switch from Inline (pending) to Block (has output)
-
 use std::collections::HashMap;
 
 use ratatui::{
@@ -13,11 +12,11 @@ use ratatui::{
     widgets::ListItem,
 };
 
-use crate::chat_state::{ToolDisplayState, ToolDisplayStatus};
 use super::diff_render::{self, DiffViewMode};
+use super::string_utils::{strip_ansi_codes, truncate_str, wrap_to_display_width};
 use super::syntax_highlight::{self, HighlightTheme};
-use super::theme::{Theme, StyleKind, tool_icon};
-use super::string_utils::{truncate_str, strip_ansi_codes, wrap_to_display_width};
+use super::theme::{tool_icon, StyleKind, Theme};
+use crate::chat_state::{ToolDisplayState, ToolDisplayStatus};
 
 // ============ Tool Card Render Cache ============
 
@@ -76,15 +75,17 @@ enum ToolDisplayMode {
 fn tool_display_mode(tool_name: &str, tool_state: &ToolDisplayState) -> ToolDisplayMode {
     match normalize_tool_name(tool_name) {
         // Always inline tools
-        "Read" | "Grep" | "Glob" | "LS" | "WebSearch" | "WebFetch"
-        | "Skill" | "ReadLints" | "Git" | "GetFileDiff"
-        | "IdeControl" | "MermaidInteractive" | "ContextCompression"
+        "Read" | "Grep" | "Glob" | "LS" | "WebSearch" | "WebFetch" | "Skill" | "ReadLints"
+        | "Git" | "GetFileDiff" | "IdeControl" | "MermaidInteractive" | "ContextCompression"
         | "AnalyzeImage" => ToolDisplayMode::Inline,
 
         // Phase-aware: Inline when pending, Block when has output/result
         "Bash" => {
             if tool_state.result.is_some()
-                || matches!(tool_state.status, ToolDisplayStatus::Running | ToolDisplayStatus::Streaming)
+                || matches!(
+                    tool_state.status,
+                    ToolDisplayStatus::Running | ToolDisplayStatus::Streaming
+                )
             {
                 ToolDisplayMode::Block
             } else {
@@ -94,7 +95,9 @@ fn tool_display_mode(tool_name: &str, tool_state: &ToolDisplayState) -> ToolDisp
         "HmosCompilation" => {
             if matches!(
                 tool_state.status,
-                ToolDisplayStatus::Running | ToolDisplayStatus::Streaming | ToolDisplayStatus::Failed
+                ToolDisplayStatus::Running
+                    | ToolDisplayStatus::Streaming
+                    | ToolDisplayStatus::Failed
             ) || tool_state.result.is_some()
             {
                 ToolDisplayMode::Block
@@ -171,9 +174,7 @@ pub fn render_tool_card(
             focused,
             width: available_width,
         };
-        let cached = TOOL_CARD_CACHE.with(|cache| {
-            cache.borrow().get(&key).cloned()
-        });
+        let cached = TOOL_CARD_CACHE.with(|cache| cache.borrow().get(&key).cloned());
         if let Some(rendered) = cached {
             return rendered;
         }
@@ -195,7 +196,14 @@ pub fn render_tool_card(
     }
 
     // Non-terminal tools: render without caching
-    render_tool_card_inner(tool_state, theme, expanded, focused, spinner_frame, available_width)
+    render_tool_card_inner(
+        tool_state,
+        theme,
+        expanded,
+        focused,
+        spinner_frame,
+        available_width,
+    )
 }
 
 /// Internal render function (no caching)
@@ -282,7 +290,10 @@ fn render_inline_dispatch(
     let icon = tool_icon(&tool_state.tool_name);
     let is_complete = matches!(
         tool_state.status,
-        ToolDisplayStatus::Success | ToolDisplayStatus::Failed | ToolDisplayStatus::Rejected | ToolDisplayStatus::Cancelled
+        ToolDisplayStatus::Success
+            | ToolDisplayStatus::Failed
+            | ToolDisplayStatus::Rejected
+            | ToolDisplayStatus::Cancelled
     );
     let is_error = matches!(tool_state.status, ToolDisplayStatus::Failed);
     let is_rejected = matches!(tool_state.status, ToolDisplayStatus::Rejected);
@@ -294,7 +305,10 @@ fn render_inline_dispatch(
         return ToolCardRenderOutput {
             items: vec![ListItem::new(Line::from(vec![
                 Span::raw("   ".to_string()),
-                Span::styled(format!("{} ", spinner_frame), theme.style(StyleKind::Primary)),
+                Span::styled(
+                    format!("{} ", spinner_frame),
+                    theme.style(StyleKind::Primary),
+                ),
                 Span::styled(pending_text.clone(), theme.style(StyleKind::Muted)),
             ]))],
             plain_lines: vec![format!("   {} {}", spinner_frame, pending_text)],
@@ -314,7 +328,9 @@ fn render_inline_dispatch(
     let content_style = if is_error {
         theme.style(StyleKind::Error)
     } else if is_rejected {
-        theme.style(StyleKind::Error).add_modifier(Modifier::CROSSED_OUT)
+        theme
+            .style(StyleKind::Error)
+            .add_modifier(Modifier::CROSSED_OUT)
     } else if is_confirmation {
         theme.style(StyleKind::Warning)
     } else {
@@ -409,7 +425,11 @@ fn inline_pending_text(canonical: &str, tool_state: &ToolDisplayState) -> String
             if tool_state.tool_name.starts_with("mcp_") {
                 // Parse mcp_{server}_{tool} to show a cleaner name
                 let parts: Vec<&str> = tool_state.tool_name.splitn(3, '_').collect();
-                let tool = if parts.len() >= 3 { parts[2] } else { &tool_state.tool_name };
+                let tool = if parts.len() >= 3 {
+                    parts[2]
+                } else {
+                    &tool_state.tool_name
+                };
                 if let Some(ref msg) = tool_state.progress_message {
                     msg.clone()
                 } else {
@@ -428,7 +448,10 @@ fn inline_pending_text(canonical: &str, tool_state: &ToolDisplayState) -> String
 fn inline_complete_text(canonical: &str, tool_state: &ToolDisplayState) -> String {
     match canonical {
         "Read" => {
-            let path = param_str(&tool_state.parameters, &["file_path", "target_file", "path"]);
+            let path = param_str(
+                &tool_state.parameters,
+                &["file_path", "target_file", "path"],
+            );
             format!("Read {}", path)
         }
         "Grep" => {
@@ -452,7 +475,10 @@ fn inline_complete_text(canonical: &str, tool_state: &ToolDisplayState) -> Strin
             text
         }
         "Glob" => {
-            let pattern = param_str(&tool_state.parameters, &["glob_pattern", "pattern", "query"]);
+            let pattern = param_str(
+                &tool_state.parameters,
+                &["glob_pattern", "pattern", "query"],
+            );
             let count = tool_state
                 .metadata
                 .as_ref()
@@ -521,7 +547,10 @@ fn inline_complete_text(canonical: &str, tool_state: &ToolDisplayState) -> Strin
             format!("Analyze Image {}", path)
         }
         "HmosCompilation" => {
-            let path = param_str(&tool_state.parameters, &["project_abs_path", "project_path"]);
+            let path = param_str(
+                &tool_state.parameters,
+                &["project_abs_path", "project_path"],
+            );
             if path.is_empty() {
                 "HarmonyOS Compile".to_string()
             } else {
@@ -569,16 +598,57 @@ fn render_block_dispatch(
     available_width: u16,
 ) -> ToolCardRenderOutput {
     match canonical {
-        "Bash" => render_bash_block(tool_state, theme, expanded, focused, spinner_frame, available_width),
-        "Edit" => render_edit_block(tool_state, theme, expanded, focused, spinner_frame, available_width),
-        "Write" => render_write_block(tool_state, theme, expanded, focused, spinner_frame, available_width),
+        "Bash" => render_bash_block(
+            tool_state,
+            theme,
+            expanded,
+            focused,
+            spinner_frame,
+            available_width,
+        ),
+        "Edit" => render_edit_block(
+            tool_state,
+            theme,
+            expanded,
+            focused,
+            spinner_frame,
+            available_width,
+        ),
+        "Write" => render_write_block(
+            tool_state,
+            theme,
+            expanded,
+            focused,
+            spinner_frame,
+            available_width,
+        ),
         "Delete" => render_delete_block(tool_state, theme, focused, spinner_frame, available_width),
         "Task" => render_task_block(tool_state, theme, focused, spinner_frame, available_width),
-        "TodoWrite" => render_todo_block(tool_state, theme, focused, spinner_frame, available_width),
-        "AskUserQuestion" => render_question_block(tool_state, theme, focused, spinner_frame, available_width),
-        "CreatePlan" => render_plan_block(tool_state, theme, focused, spinner_frame, available_width),
-        "HmosCompilation" => render_hmos_compilation_block(tool_state, theme, expanded, focused, spinner_frame, available_width),
-        _ => render_generic_block(tool_state, theme, expanded, focused, spinner_frame, available_width),
+        "TodoWrite" => {
+            render_todo_block(tool_state, theme, focused, spinner_frame, available_width)
+        }
+        "AskUserQuestion" => {
+            render_question_block(tool_state, theme, focused, spinner_frame, available_width)
+        }
+        "CreatePlan" => {
+            render_plan_block(tool_state, theme, focused, spinner_frame, available_width)
+        }
+        "HmosCompilation" => render_hmos_compilation_block(
+            tool_state,
+            theme,
+            expanded,
+            focused,
+            spinner_frame,
+            available_width,
+        ),
+        _ => render_generic_block(
+            tool_state,
+            theme,
+            expanded,
+            focused,
+            spinner_frame,
+            available_width,
+        ),
     }
 }
 
@@ -631,16 +701,19 @@ fn render_hmos_compilation_block(
         ToolDisplayStatus::Running | ToolDisplayStatus::Streaming
     );
 
-    let project_path = param_str_opt(&tool_state.parameters, &["project_abs_path", "project_path"])
-        .or_else(|| {
-            tool_state
-                .metadata
-                .as_ref()
-                .and_then(|m| m.get("project_path"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-        })
-        .unwrap_or_default();
+    let project_path = param_str_opt(
+        &tool_state.parameters,
+        &["project_abs_path", "project_path"],
+    )
+    .or_else(|| {
+        tool_state
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get("project_path"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    })
+    .unwrap_or_default();
 
     let product = param_str_opt(&tool_state.parameters, &["product"])
         .or_else(|| {
@@ -663,7 +736,17 @@ fn render_hmos_compilation_block(
         })
         .unwrap_or_else(|| "debug".to_string());
 
-    let (success, exit_code, execution_time_ms, deveco_home, stderr, stdout, error_kind, error_message, help) = tool_state
+    let (
+        success,
+        exit_code,
+        execution_time_ms,
+        deveco_home,
+        stderr,
+        stdout,
+        error_kind,
+        error_message,
+        help,
+    ) = tool_state
         .metadata
         .as_ref()
         .and_then(|m| m.as_object())
@@ -693,7 +776,10 @@ fn render_hmos_compilation_block(
                 .get("error_message")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
-            let help = obj.get("help").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let help = obj
+                .get("help")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
             (
                 success,
                 exit_code,
@@ -706,7 +792,17 @@ fn render_hmos_compilation_block(
                 help,
             )
         })
-        .unwrap_or((None, None, None, None, String::new(), String::new(), None, None, None));
+        .unwrap_or((
+            None,
+            None,
+            None,
+            None,
+            String::new(),
+            String::new(),
+            None,
+            None,
+            None,
+        ));
 
     let mut title = "HarmonyOS Compile".to_string();
     if !project_path.is_empty() {
@@ -878,7 +974,10 @@ fn render_hmos_compilation_block(
             }
             if wrapped.len() > max {
                 content_lines.push(Line::from(Span::styled(
-                    format!("\u{25bc} {} more lines (Tab/Click to expand)", wrapped.len() - max),
+                    format!(
+                        "\u{25bc} {} more lines (Tab/Click to expand)",
+                        wrapped.len() - max
+                    ),
                     theme.style(StyleKind::Muted),
                 )));
             }
@@ -957,7 +1056,9 @@ fn render_bash_block(
     let mut content_lines = vec![Line::from(cmd_spans)];
 
     // Extract output: prefer metadata.output (structured), fallback to result (display summary)
-    let output_text = tool_state.metadata.as_ref()
+    let output_text = tool_state
+        .metadata
+        .as_ref()
         .and_then(|m| m.get("output"))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
@@ -982,7 +1083,10 @@ fn render_bash_block(
 
             if output_lines.len() > 10 && !expanded {
                 content_lines.push(Line::from(Span::styled(
-                    format!("\u{2026} ({} more lines, Ctrl+O to expand)", output_lines.len() - 10),
+                    format!(
+                        "\u{2026} ({} more lines, Ctrl+O to expand)",
+                        output_lines.len() - 10
+                    ),
                     theme.style(StyleKind::Muted),
                 )));
             } else if expanded && output_lines.len() > 10 {
@@ -1000,7 +1104,17 @@ fn render_bash_block(
         None
     };
 
-    assemble_block(&title, content_lines, theme, is_running, error, focused, tool_state, spinner_frame, available_width)
+    assemble_block(
+        &title,
+        content_lines,
+        theme,
+        is_running,
+        error,
+        focused,
+        tool_state,
+        spinner_frame,
+        available_width,
+    )
 }
 
 /// Render an Edit tool as a block (file path + diff preview)
@@ -1012,13 +1126,22 @@ fn render_edit_block(
     spinner_frame: &str,
     available_width: u16,
 ) -> ToolCardRenderOutput {
-    let file_path = param_str(&tool_state.parameters, &["file_path", "target_file", "path"]);
+    let file_path = param_str(
+        &tool_state.parameters,
+        &["file_path", "target_file", "path"],
+    );
 
     let mut content_lines = Vec::new();
 
     // Try to show diff from old_string/new_string parameters
-    let old_str = tool_state.parameters.get("old_string").and_then(|v| v.as_str());
-    let new_str = tool_state.parameters.get("new_string").and_then(|v| v.as_str());
+    let old_str = tool_state
+        .parameters
+        .get("old_string")
+        .and_then(|v| v.as_str());
+    let new_str = tool_state
+        .parameters
+        .get("new_string")
+        .and_then(|v| v.as_str());
 
     // Compute stats for title
     let (additions, deletions) = match (old_str, new_str) {
@@ -1037,14 +1160,8 @@ fn render_edit_block(
         let max = if expanded { usize::MAX } else { 8 };
         // Use the block's available width minus border overhead (~8 chars)
         let diff_width = available_width.saturating_sub(8);
-        let diff_lines = diff_render::render_diff(
-            old,
-            new,
-            theme,
-            max,
-            DiffViewMode::Auto,
-            diff_width,
-        );
+        let diff_lines =
+            diff_render::render_diff(old, new, theme, max, DiffViewMode::Auto, diff_width);
         content_lines.extend(diff_lines);
 
         let total_changes = additions + deletions;
@@ -1080,7 +1197,17 @@ fn render_edit_block(
         None
     };
 
-    assemble_block(&title, content_lines, theme, false, error, focused, tool_state, spinner_frame, available_width)
+    assemble_block(
+        &title,
+        content_lines,
+        theme,
+        false,
+        error,
+        focused,
+        tool_state,
+        spinner_frame,
+        available_width,
+    )
 }
 
 /// Render a Write tool as a block (file path + syntax-highlighted content preview)
@@ -1092,12 +1219,17 @@ fn render_write_block(
     spinner_frame: &str,
     available_width: u16,
 ) -> ToolCardRenderOutput {
-    let file_path = param_str(&tool_state.parameters, &["file_path", "target_file", "path"]);
+    let file_path = param_str(
+        &tool_state.parameters,
+        &["file_path", "target_file", "path"],
+    );
 
     let mut content_lines = Vec::new();
 
     // Show content preview with syntax highlighting and line numbers
-    if let Some(content) = tool_state.parameters.get("contents")
+    if let Some(content) = tool_state
+        .parameters
+        .get("contents")
         .or_else(|| tool_state.parameters.get("content"))
         .and_then(|v| v.as_str())
     {
@@ -1121,7 +1253,10 @@ fn render_write_block(
 
         if total_lines > 8 && !expanded {
             content_lines.push(Line::from(Span::styled(
-                format!("\u{2026} ({} more lines, Ctrl+O to expand)", total_lines - 8),
+                format!(
+                    "\u{2026} ({} more lines, Ctrl+O to expand)",
+                    total_lines - 8
+                ),
                 theme.style(StyleKind::Muted),
             )));
         } else if expanded && total_lines > 8 {
@@ -1152,7 +1287,17 @@ fn render_write_block(
             None
         };
 
-        return assemble_block(&title, content_lines, theme, false, error, focused, tool_state, spinner_frame, available_width);
+        return assemble_block(
+            &title,
+            content_lines,
+            theme,
+            false,
+            error,
+            focused,
+            tool_state,
+            spinner_frame,
+            available_width,
+        );
     }
 
     // Fallback: no content available
@@ -1176,7 +1321,17 @@ fn render_write_block(
         None
     };
 
-    assemble_block(&title, content_lines, theme, false, error, focused, tool_state, spinner_frame, available_width)
+    assemble_block(
+        &title,
+        content_lines,
+        theme,
+        false,
+        error,
+        focused,
+        tool_state,
+        spinner_frame,
+        available_width,
+    )
 }
 
 /// Render a Delete tool as a block
@@ -1187,7 +1342,10 @@ fn render_delete_block(
     spinner_frame: &str,
     available_width: u16,
 ) -> ToolCardRenderOutput {
-    let file_path = param_str(&tool_state.parameters, &["file_path", "target_file", "path"]);
+    let file_path = param_str(
+        &tool_state.parameters,
+        &["file_path", "target_file", "path"],
+    );
     let title = format!("Delete {}", file_path);
 
     let mut content_lines = Vec::new();
@@ -1209,7 +1367,17 @@ fn render_delete_block(
         None
     };
 
-    assemble_block(&title, content_lines, theme, false, error, focused, tool_state, spinner_frame, available_width)
+    assemble_block(
+        &title,
+        content_lines,
+        theme,
+        false,
+        error,
+        focused,
+        tool_state,
+        spinner_frame,
+        available_width,
+    )
 }
 
 /// Render a Task tool as a block (sub-agent type + description + real-time progress)
@@ -1242,16 +1410,18 @@ fn render_task_block(
         description.clone()
     };
 
-    let mut content_lines = vec![
-        Line::from(Span::styled(desc_text, theme.style(StyleKind::Muted))),
-    ];
+    let mut content_lines = vec![Line::from(Span::styled(
+        desc_text,
+        theme.style(StyleKind::Muted),
+    ))];
 
     // Show real-time subagent progress (current tool being executed)
     if is_running {
         if let Some(ref progress) = tool_state.subagent_progress {
             if let Some(ref tool_name) = progress.current_tool_name {
                 let progress_text = if let Some(ref title) = progress.current_tool_title {
-                    format!("\u{2514} {} {}", capitalize_first(tool_name), title) // └
+                    format!("\u{2514} {} {}", capitalize_first(tool_name), title)
+                // └
                 } else {
                     format!("\u{2514} {}", capitalize_first(tool_name)) // └
                 };
@@ -1265,7 +1435,9 @@ fn render_task_block(
 
     // Show final result when completed
     if let Some(ref result) = tool_state.result {
-        let max_width = block_content_max_width(available_width).saturating_sub(2).max(1);
+        let max_width = block_content_max_width(available_width)
+            .saturating_sub(2)
+            .max(1);
         for line in wrap_display_lines(result, max_width) {
             content_lines.push(Line::from(Span::styled(
                 format!("\u{2514} {}", line), // └
@@ -1274,7 +1446,17 @@ fn render_task_block(
         }
     }
 
-    assemble_block(&title, content_lines, theme, is_running, None, focused, tool_state, spinner_frame, available_width)
+    assemble_block(
+        &title,
+        content_lines,
+        theme,
+        is_running,
+        None,
+        focused,
+        tool_state,
+        spinner_frame,
+        available_width,
+    )
 }
 
 /// Render a TodoWrite tool as a block (todo list with upgraded icons)
@@ -1287,16 +1469,25 @@ fn render_todo_block(
 ) -> ToolCardRenderOutput {
     let mut content_lines = Vec::new();
 
-    if let Some(todos) = tool_state.parameters.get("todos").and_then(|v| v.as_array()) {
+    if let Some(todos) = tool_state
+        .parameters
+        .get("todos")
+        .and_then(|v| v.as_array())
+    {
         for todo in todos {
-            let status = todo.get("status").and_then(|v| v.as_str()).unwrap_or("pending");
+            let status = todo
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("pending");
             let content = todo.get("content").and_then(|v| v.as_str()).unwrap_or("");
 
             let (marker, marker_style, content_style) = match status {
                 "completed" => (
                     "\u{2713}", // ✓
                     theme.style(StyleKind::Success),
-                    theme.style(StyleKind::Muted).add_modifier(Modifier::CROSSED_OUT),
+                    theme
+                        .style(StyleKind::Muted)
+                        .add_modifier(Modifier::CROSSED_OUT),
                 ),
                 "in_progress" => (
                     "\u{25cf}", // ●
@@ -1306,7 +1497,9 @@ fn render_todo_block(
                 "cancelled" => (
                     "\u{2014}", // —
                     theme.style(StyleKind::Muted),
-                    theme.style(StyleKind::Muted).add_modifier(Modifier::CROSSED_OUT),
+                    theme
+                        .style(StyleKind::Muted)
+                        .add_modifier(Modifier::CROSSED_OUT),
                 ),
                 _ => (
                     "\u{25cb}", // ○
@@ -1323,10 +1516,23 @@ fn render_todo_block(
     }
 
     if content_lines.is_empty() {
-        content_lines.push(Line::from(Span::styled("Updating todos...", theme.style(StyleKind::Muted))));
+        content_lines.push(Line::from(Span::styled(
+            "Updating todos...",
+            theme.style(StyleKind::Muted),
+        )));
     }
 
-    assemble_block("Todos", content_lines, theme, false, None, focused, tool_state, spinner_frame, available_width)
+    assemble_block(
+        "Todos",
+        content_lines,
+        theme,
+        false,
+        None,
+        focused,
+        tool_state,
+        spinner_frame,
+        available_width,
+    )
 }
 
 /// Render an AskUserQuestion tool as a block
@@ -1349,7 +1555,8 @@ fn render_question_block(
                         let answer_text = match val {
                             serde_json::Value::String(s) => s.clone(),
                             serde_json::Value::Array(arr) => {
-                                let items: Vec<String> = arr.iter()
+                                let items: Vec<String> = arr
+                                    .iter()
                                     .filter_map(|v| v.as_str().map(String::from))
                                     .collect();
                                 items.join(", ")
@@ -1369,7 +1576,10 @@ fn render_question_block(
                         }
                         for line in wrapped_answers.iter().skip(1) {
                             content_lines.push(Line::from(vec![
-                                Span::styled(" ".repeat(key_prefix.len()), theme.style(StyleKind::Muted)),
+                                Span::styled(
+                                    " ".repeat(key_prefix.len()),
+                                    theme.style(StyleKind::Muted),
+                                ),
                                 Span::styled(line.clone(), theme.style(StyleKind::Success)),
                             ]));
                         }
@@ -1397,7 +1607,11 @@ fn render_question_block(
             )));
         }
     } else if tool_state.status == ToolDisplayStatus::Running {
-        if let Some(questions) = tool_state.parameters.get("questions").and_then(|v| v.as_array()) {
+        if let Some(questions) = tool_state
+            .parameters
+            .get("questions")
+            .and_then(|v| v.as_array())
+        {
             for q in questions {
                 let question_text = q.get("question").and_then(|v| v.as_str()).unwrap_or("?");
                 content_lines.push(Line::from(Span::styled(
@@ -1411,12 +1625,21 @@ fn render_question_block(
             theme.style(StyleKind::Warning),
         )));
     } else {
-        if let Some(questions) = tool_state.parameters.get("questions").and_then(|v| v.as_array()) {
+        if let Some(questions) = tool_state
+            .parameters
+            .get("questions")
+            .and_then(|v| v.as_array())
+        {
             for q in questions {
-                let prompt = q.get("question").and_then(|v| v.as_str())
+                let prompt = q
+                    .get("question")
+                    .and_then(|v| v.as_str())
                     .or_else(|| q.get("prompt").and_then(|v| v.as_str()))
                     .unwrap_or("?");
-                content_lines.push(Line::from(Span::styled(prompt.to_string(), theme.style(StyleKind::Info))));
+                content_lines.push(Line::from(Span::styled(
+                    prompt.to_string(),
+                    theme.style(StyleKind::Info),
+                )));
 
                 if let Some(options) = q.get("options").and_then(|v| v.as_array()) {
                     for opt in options {
@@ -1432,11 +1655,24 @@ fn render_question_block(
         }
 
         if content_lines.is_empty() {
-            content_lines.push(Line::from(Span::styled("Asking questions...", theme.style(StyleKind::Muted))));
+            content_lines.push(Line::from(Span::styled(
+                "Asking questions...",
+                theme.style(StyleKind::Muted),
+            )));
         }
     }
 
-    assemble_block("Questions", content_lines, theme, false, None, focused, tool_state, spinner_frame, available_width)
+    assemble_block(
+        "Questions",
+        content_lines,
+        theme,
+        false,
+        None,
+        focused,
+        tool_state,
+        spinner_frame,
+        available_width,
+    )
 }
 
 /// Render a CreatePlan tool as a block
@@ -1452,9 +1688,14 @@ fn render_plan_block(
     let title_text = param_str_opt(&tool_state.parameters, &["title", "name"])
         .unwrap_or_else(|| "Plan".to_string());
 
-    if let Some(steps) = tool_state.parameters.get("steps").and_then(|v| v.as_array()) {
+    if let Some(steps) = tool_state
+        .parameters
+        .get("steps")
+        .and_then(|v| v.as_array())
+    {
         for (i, step) in steps.iter().enumerate() {
-            let desc = step.as_str()
+            let desc = step
+                .as_str()
                 .or_else(|| step.get("description").and_then(|v| v.as_str()))
                 .unwrap_or("...");
             content_lines.push(Line::from(vec![
@@ -1467,15 +1708,31 @@ fn render_plan_block(
     if let Some(ref result) = tool_state.result {
         let max_width = block_content_max_width(available_width);
         for line in wrap_display_lines(result, max_width) {
-            content_lines.push(Line::from(Span::styled(line, theme.style(StyleKind::Success))));
+            content_lines.push(Line::from(Span::styled(
+                line,
+                theme.style(StyleKind::Success),
+            )));
         }
     }
 
     if content_lines.is_empty() {
-        content_lines.push(Line::from(Span::styled("Creating plan...", theme.style(StyleKind::Muted))));
+        content_lines.push(Line::from(Span::styled(
+            "Creating plan...",
+            theme.style(StyleKind::Muted),
+        )));
     }
 
-    assemble_block(&title_text, content_lines, theme, false, None, focused, tool_state, spinner_frame, available_width)
+    assemble_block(
+        &title_text,
+        content_lines,
+        theme,
+        false,
+        None,
+        focused,
+        tool_state,
+        spinner_frame,
+        available_width,
+    )
 }
 
 /// Render a generic block tool (fallback for unknown block tools)
@@ -1492,12 +1749,18 @@ fn render_generic_block(
 
     let summary = extract_key_params(&tool_state.parameters);
     if !summary.is_empty() {
-        content_lines.push(Line::from(Span::styled(summary, theme.style(StyleKind::Info))));
+        content_lines.push(Line::from(Span::styled(
+            summary,
+            theme.style(StyleKind::Info),
+        )));
     }
 
     if let Some(ref msg) = tool_state.progress_message {
         for line in wrap_display_lines(msg, block_content_max_width(available_width)) {
-            content_lines.push(Line::from(Span::styled(line, theme.style(StyleKind::Muted))));
+            content_lines.push(Line::from(Span::styled(
+                line,
+                theme.style(StyleKind::Muted),
+            )));
         }
     }
 
@@ -1509,7 +1772,10 @@ fn render_generic_block(
         }
         if lines.len() > max {
             content_lines.push(Line::from(Span::styled(
-                format!("\u{25bc} {} more lines (Tab/Click to expand)", lines.len() - max),
+                format!(
+                    "\u{25bc} {} more lines (Tab/Click to expand)",
+                    lines.len() - max
+                ),
                 theme.style(StyleKind::Muted),
             )));
         }
@@ -1525,7 +1791,17 @@ fn render_generic_block(
         None
     };
 
-    assemble_block(&title, content_lines, theme, is_running, error, focused, tool_state, spinner_frame, available_width)
+    assemble_block(
+        &title,
+        content_lines,
+        theme,
+        is_running,
+        error,
+        focused,
+        tool_state,
+        spinner_frame,
+        available_width,
+    )
 }
 
 // ============ Block Assembly ============
@@ -1571,16 +1847,20 @@ fn assemble_block(
         theme.style(StyleKind::BlockBackground)
     };
 
-    let (status_icon, status_style) = status_icon_and_style(&tool_state.status, theme, spinner_frame);
+    let (status_icon, status_style) =
+        status_icon_and_style(&tool_state.status, theme, spinner_frame);
 
     // Duration text
-    let duration_text = tool_state.duration_ms.map(|ms| {
-        if ms < 1000 {
-            format!("{}ms", ms)
-        } else {
-            format!("{:.1}s", ms as f64 / 1000.0)
-        }
-    }).unwrap_or_default();
+    let duration_text = tool_state
+        .duration_ms
+        .map(|ms| {
+            if ms < 1000 {
+                format!("{}ms", ms)
+            } else {
+                format!("{:.1}s", ms as f64 / 1000.0)
+            }
+        })
+        .unwrap_or_default();
 
     // Box dimensions:
     // Layout: "  ╭─...─╮" => 2 (left margin) + 1 (corner) + inner_width (horizontal lines) + 1 (corner)
@@ -1593,37 +1873,39 @@ fn assemble_block(
     // Helper: build a padded line inside the box.
     // Returns: "  │" + content_spans + padding + "│"
     // Content is expected to be pre-wrapped by callers; this layer should not truncate.
-    let build_box_line = |content_spans: Vec<Span<'static>>,
-                          bs: Style,
-                          bgs: Style|
-     -> (ListItem<'static>, String) {
-        let used_width: usize = content_spans
-            .iter()
-            .map(|span| unicode_display_width(span.content.as_ref()))
-            .sum();
-        let pad = inner_w.saturating_sub(used_width);
-        let content_plain = content_spans
-            .iter()
-            .map(|span| span.content.as_ref())
-            .collect::<String>();
+    let build_box_line =
+        |content_spans: Vec<Span<'static>>, bs: Style, bgs: Style| -> (ListItem<'static>, String) {
+            let used_width: usize = content_spans
+                .iter()
+                .map(|span| unicode_display_width(span.content.as_ref()))
+                .sum();
+            let pad = inner_w.saturating_sub(used_width);
+            let content_plain = content_spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>();
 
-        let mut spans = Vec::with_capacity(content_spans.len() + 4);
-        spans.push(Span::styled("  \u{2502}".to_string(), bs)); // "  │"
-        spans.extend(content_spans);
-        if pad > 0 {
-            spans.push(Span::styled(" ".repeat(pad), bgs));
-        }
-        spans.push(Span::styled("\u{2502}".to_string(), bs)); // "│"
-        let plain = format!("  │{}{}│", content_plain, " ".repeat(pad));
+            let mut spans = Vec::with_capacity(content_spans.len() + 4);
+            spans.push(Span::styled("  \u{2502}".to_string(), bs)); // "  │"
+            spans.extend(content_spans);
+            if pad > 0 {
+                spans.push(Span::styled(" ".repeat(pad), bgs));
+            }
+            spans.push(Span::styled("\u{2502}".to_string(), bs)); // "│"
+            let plain = format!("  │{}{}│", content_plain, " ".repeat(pad));
 
-        (ListItem::new(Line::from(spans)).style(bgs), plain)
-    };
+            (ListItem::new(Line::from(spans)).style(bgs), plain)
+        };
 
     // ── Top border: "  ╭─────...─────╮"
     let horiz_len = if inner_w > 0 { inner_w } else { 1 };
     let top_line = format!("  \u{256D}{}\u{256E}", "\u{2500}".repeat(horiz_len));
     items.push(
-        ListItem::new(Line::from(vec![Span::styled(top_line.clone(), border_style)])).style(bg_style),
+        ListItem::new(Line::from(vec![Span::styled(
+            top_line.clone(),
+            border_style,
+        )]))
+        .style(bg_style),
     );
     plain_lines.push(top_line);
 
@@ -1682,7 +1964,11 @@ fn assemble_block(
     // ── Bottom border: "  ╰─────...─────╯"
     let bottom_line = format!("  \u{2570}{}\u{256F}", "\u{2500}".repeat(horiz_len));
     items.push(
-        ListItem::new(Line::from(vec![Span::styled(bottom_line.clone(), border_style)])).style(bg_style),
+        ListItem::new(Line::from(vec![Span::styled(
+            bottom_line.clone(),
+            border_style,
+        )]))
+        .style(bg_style),
     );
     plain_lines.push(bottom_line);
 
@@ -1707,8 +1993,8 @@ fn status_icon_and_style(
             (spinner_frame.to_string(), theme.style(StyleKind::Primary))
         }
         ToolDisplayStatus::Success => ("\u{2713}".to_string(), theme.style(StyleKind::Success)), // ✓
-        ToolDisplayStatus::Failed => ("\u{2717}".to_string(), theme.style(StyleKind::Error)),    // ✗
-        ToolDisplayStatus::Queued => ("\u{2016}".to_string(), theme.style(StyleKind::Muted)),    // ‖
+        ToolDisplayStatus::Failed => ("\u{2717}".to_string(), theme.style(StyleKind::Error)), // ✗
+        ToolDisplayStatus::Queued => ("\u{2016}".to_string(), theme.style(StyleKind::Muted)), // ‖
         ToolDisplayStatus::Waiting => ("\u{2026}".to_string(), theme.style(StyleKind::Warning)), // …
         ToolDisplayStatus::EarlyDetected | ToolDisplayStatus::ParamsPartial => {
             (spinner_frame.to_string(), theme.style(StyleKind::Muted))
@@ -1746,7 +2032,16 @@ fn param_str_opt(params: &serde_json::Value, keys: &[&str]) -> Option<String> {
 /// Extract a key parameter summary from JSON params
 fn extract_key_params(params: &serde_json::Value) -> String {
     if let Some(obj) = params.as_object() {
-        let priority_keys = ["path", "file_path", "target_file", "query", "pattern", "command", "message", "url"];
+        let priority_keys = [
+            "path",
+            "file_path",
+            "target_file",
+            "query",
+            "pattern",
+            "command",
+            "message",
+            "url",
+        ];
 
         for key in &priority_keys {
             if let Some(value) = obj.get(*key) {

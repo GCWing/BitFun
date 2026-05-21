@@ -5,7 +5,7 @@
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState},
     Frame,
@@ -17,10 +17,28 @@ use crate::ui::theme::{StyleKind, Theme};
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct SubagentItem {
+    pub key: String,
     pub id: String,
     pub name: String,
     pub description: String,
     pub source: String, // "builtin", "project", or "user"
+    pub enabled: bool,
+    pub default_enabled: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum SubagentSelectorAction {
+    ListSubagents,
+    ConfigureSubagents,
+    Launch(SubagentItem),
+    Toggle(SubagentItem),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SubagentSelectorScreen {
+    Menu,
+    List,
+    Configure,
 }
 
 /// Subagent selector popup state
@@ -29,6 +47,7 @@ pub struct SubagentSelectorState {
     list_state: ListState,
     visible: bool,
     last_area: Option<Rect>,
+    screen: SubagentSelectorScreen,
 }
 
 impl SubagentSelectorState {
@@ -38,17 +57,51 @@ impl SubagentSelectorState {
             list_state: ListState::default(),
             visible: false,
             last_area: None,
+            screen: SubagentSelectorScreen::Menu,
         }
     }
 
-    /// Show the subagent selector with given subagent list
-    pub fn show(&mut self, subagents: Vec<SubagentItem>) {
+    pub fn show_menu(&mut self) {
+        self.items.clear();
+        self.screen = SubagentSelectorScreen::Menu;
+        self.list_state.select(Some(0));
+        self.visible = true;
+    }
+
+    /// Show subagents available to the current parent mode.
+    pub fn show_list(&mut self, subagents: Vec<SubagentItem>) {
         if subagents.is_empty() {
             return;
         }
 
         self.items = subagents;
+        self.screen = SubagentSelectorScreen::List;
         self.list_state.select(Some(0));
+        self.visible = true;
+    }
+
+    /// Show all discovered subagents with mode-specific enablement checkboxes.
+    pub fn show_config(&mut self, subagents: Vec<SubagentItem>) {
+        if subagents.is_empty() {
+            return;
+        }
+
+        let selected_key = if self.screen == SubagentSelectorScreen::Configure {
+            self.list_state
+                .selected()
+                .and_then(|index| self.items.get(index))
+                .map(|item| item.key.clone())
+        } else {
+            None
+        };
+        let selected_index = self.list_state.selected().unwrap_or(0);
+        let next_index = selected_key
+            .and_then(|key| subagents.iter().position(|item| item.key == key))
+            .unwrap_or_else(|| selected_index.min(subagents.len().saturating_sub(1)));
+
+        self.items = subagents;
+        self.screen = SubagentSelectorScreen::Configure;
+        self.list_state.select(Some(next_index));
         self.visible = true;
     }
 
@@ -60,7 +113,7 @@ impl SubagentSelectorState {
 
     /// Reshow the subagent selector (for back navigation)
     pub fn reshow(&mut self) {
-        if !self.items.is_empty() {
+        if self.screen == SubagentSelectorScreen::Menu || !self.items.is_empty() {
             self.visible = true;
         }
     }
@@ -70,7 +123,7 @@ impl SubagentSelectorState {
     }
 
     pub fn move_up(&mut self) {
-        if !self.visible || self.items.is_empty() {
+        if !self.visible || self.len() == 0 {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
@@ -79,32 +132,55 @@ impl SubagentSelectorState {
     }
 
     pub fn move_down(&mut self) {
-        if !self.visible || self.items.is_empty() {
+        if !self.visible || self.len() == 0 {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
-        let next = (selected + 1).min(self.items.len().saturating_sub(1));
+        let next = (selected + 1).min(self.len().saturating_sub(1));
         self.list_state.select(Some(next));
     }
 
-    /// Get the selected subagent item
-    pub fn confirm_selection(&self) -> Option<SubagentItem> {
+    /// Get the selected action.
+    pub fn confirm_selection(&self) -> Option<SubagentSelectorAction> {
         if !self.visible {
             return None;
         }
         let idx = self.list_state.selected()?;
-        self.items.get(idx).cloned()
+        match self.screen {
+            SubagentSelectorScreen::Menu => match idx {
+                0 => Some(SubagentSelectorAction::ListSubagents),
+                1 => Some(SubagentSelectorAction::ConfigureSubagents),
+                _ => None,
+            },
+            SubagentSelectorScreen::List => self
+                .items
+                .get(idx)
+                .cloned()
+                .map(SubagentSelectorAction::Launch),
+            SubagentSelectorScreen::Configure => self
+                .items
+                .get(idx)
+                .cloned()
+                .map(SubagentSelectorAction::Toggle),
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self.screen {
+            SubagentSelectorScreen::Menu => 2,
+            SubagentSelectorScreen::List | SubagentSelectorScreen::Configure => self.items.len(),
+        }
     }
 
     /// Render the subagent selector popup as an overlay
     pub fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        if !self.visible || self.items.is_empty() {
+        if !self.visible || self.len() == 0 {
             self.last_area = None;
             return;
         }
 
-        let popup_width = area.width.saturating_sub(4).min(70);
-        let popup_height = (self.items.len() as u16 + 4).min(area.height.saturating_sub(2));
+        let popup_width = area.width.saturating_sub(4).min(92);
+        let popup_height = (self.len() as u16 + 4).min(area.height.saturating_sub(2));
         if popup_height < 5 || popup_width < 20 {
             self.last_area = None;
             return;
@@ -121,40 +197,18 @@ impl SubagentSelectorState {
         };
         self.last_area = Some(popup_area);
 
-        let list_items: Vec<ListItem> = self
-            .items
-            .iter()
-            .map(|subagent| {
-                let source_marker = match subagent.source.as_str() {
-                    "builtin" => "B",
-                    "project" => "P",
-                    "user" => "U",
-                    _ => "?",
-                };
-                let source_style = match subagent.source.as_str() {
-                    "builtin" => theme.style(StyleKind::Success),
-                    "project" => theme.style(StyleKind::Info),
-                    _ => theme.style(StyleKind::Muted),
-                };
-
-                let name_style = theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD);
-                let desc_style = theme.style(StyleKind::Muted);
-
-                let line = Line::from(vec![
-                    Span::styled(format!("[{}] ", source_marker), source_style),
-                    Span::styled(&subagent.name, name_style),
-                    Span::raw("  "),
-                    Span::styled(&subagent.description, desc_style),
-                ]);
-                ListItem::new(line)
-            })
-            .collect();
+        let list_items = self.render_items(theme);
+        let title = match self.screen {
+            SubagentSelectorScreen::Menu => " Subagents ",
+            SubagentSelectorScreen::List => " List Subagents (current mode) ",
+            SubagentSelectorScreen::Configure => " Enable/Disable Subagents (Space/Enter Toggle) ",
+        };
 
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(theme.style(StyleKind::Primary))
             .style(Style::default().bg(theme.background))
-            .title(" Select Subagent (↑↓ Navigate, Enter Select, Esc Cancel) ");
+            .title(title);
 
         let list = List::new(list_items)
             .block(block)
@@ -162,7 +216,7 @@ impl SubagentSelectorState {
             .highlight_style(
                 Style::default()
                     .bg(theme.primary)
-                    .fg(Color::White)
+                    .fg(theme.selection_foreground())
                     .add_modifier(Modifier::BOLD),
             );
 
@@ -171,7 +225,7 @@ impl SubagentSelectorState {
     }
 
     /// Handle mouse events
-    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<SubagentItem> {
+    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<SubagentSelectorAction> {
         if !self.visible {
             return None;
         }
@@ -233,10 +287,88 @@ impl SubagentSelectorState {
 
         let offset = self.list_state.offset();
         let index = (row - inner_y) as usize + offset;
-        if index >= self.items.len() {
+        if index >= self.len() {
             return None;
         }
 
         Some(index)
+    }
+
+    fn render_items(&self, theme: &Theme) -> Vec<ListItem<'static>> {
+        match self.screen {
+            SubagentSelectorScreen::Menu => vec![
+                ListItem::new(Line::from(vec![
+                    Span::styled(
+                        "List subagents",
+                        theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw("  "),
+                    Span::styled(
+                        "Show subagents available to the current mode",
+                        theme.style(StyleKind::Muted),
+                    ),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled(
+                        "Enable/disable subagents",
+                        theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw("  "),
+                    Span::styled(
+                        "Toggle all discovered subagents for this mode",
+                        theme.style(StyleKind::Muted),
+                    ),
+                ])),
+            ],
+            SubagentSelectorScreen::List => self
+                .items
+                .iter()
+                .map(|subagent| self.render_subagent_line(subagent, theme, false))
+                .collect(),
+            SubagentSelectorScreen::Configure => self
+                .items
+                .iter()
+                .map(|subagent| self.render_subagent_line(subagent, theme, true))
+                .collect(),
+        }
+    }
+
+    fn render_subagent_line(
+        &self,
+        subagent: &SubagentItem,
+        theme: &Theme,
+        include_checkbox: bool,
+    ) -> ListItem<'static> {
+        let source_marker = match subagent.source.as_str() {
+            "builtin" => "B",
+            "project" => "P",
+            "user" => "U",
+            _ => "?",
+        };
+        let source_style = match subagent.source.as_str() {
+            "builtin" => theme.style(StyleKind::Success),
+            "project" => theme.style(StyleKind::Info),
+            _ => theme.style(StyleKind::Muted),
+        };
+        let name_style = theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD);
+        let desc_style = theme.style(StyleKind::Muted);
+
+        let mut spans = Vec::new();
+        if include_checkbox {
+            spans.push(Span::styled(
+                if subagent.enabled { "[x] " } else { "[ ] " },
+                if subagent.enabled {
+                    theme.style(StyleKind::Success)
+                } else {
+                    theme.style(StyleKind::Muted)
+                },
+            ));
+        }
+        spans.push(Span::styled(format!("[{}] ", source_marker), source_style));
+        spans.push(Span::styled(subagent.name.clone(), name_style));
+        spans.push(Span::raw("  "));
+        spans.push(Span::styled(subagent.description.clone(), desc_style));
+
+        ListItem::new(Line::from(spans))
     }
 }

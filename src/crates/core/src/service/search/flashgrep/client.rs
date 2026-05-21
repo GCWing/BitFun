@@ -19,7 +19,7 @@ use tokio::{
 
 use super::{
     error::{AppError, Result},
-    log_flashgrep_stderr_line, FLASHGREP_LOG_TARGET,
+    log_flashgrep_stderr_line,
     protocol::{
         ClientCapabilities, ClientInfo, GlobParams, InitializeParams, RepoRef, Request, Response,
         SearchParams, TaskRef,
@@ -30,6 +30,7 @@ use super::{
         GlobOutcome, GlobRequest, OpenRepoParams, RepoStatus, SearchOutcome, SearchRequest,
         TaskStatus,
     },
+    FLASHGREP_LOG_TARGET,
 };
 
 const CLIENT_NAME: &str = "bitfun-workspace-search";

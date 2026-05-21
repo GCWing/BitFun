@@ -23,6 +23,8 @@ export interface FlowChatContext {
   }>;
   /** In-flight historical session hydration: sessionId -> promise */
   pendingHistoryLoads: Map<string, Promise<void>>;
+  /** In-flight backend context restore for view-restored historical sessions. */
+  pendingContextRestores?: Map<string, Promise<void>>;
   /** Content buffers: sessionId -> (roundId -> content) */
   contentBuffers: Map<string, Map<string, string>>;
   /** Active text items: sessionId -> (roundId -> textItemId) */
@@ -58,10 +60,6 @@ export interface FlowChatContext {
 export interface ToolEventOptions {
   /** Whether the event is from a subagent. */
   isSubagent?: boolean;
-  /** Parent tool ID. */
-  parentToolId?: string;
-  /** Subagent session ID. */
-  subagentSessionId?: string;
   /** Parent tool timestamp. */
   parentTimestamp?: number;
 }
@@ -78,6 +76,7 @@ export interface SubagentTextChunkData {
 export interface SubagentToolEventData {
   sessionId: string;
   turnId: string;
+  roundId: string;
   toolEvent: FlowToolEvent;
 }
 

@@ -1,12 +1,12 @@
 use super::inline_think::InlineThinkParser;
 use super::stream_stats::StreamStats;
-use super::{TimedStreamItem, next_stream_item};
+use super::{next_stream_item, TimedStreamItem};
 use crate::stream::types::anthropic::{
     AnthropicSSEError, ContentBlock, ContentBlockDelta, ContentBlockStart, MessageDelta,
     MessageStart, Usage,
 };
 use crate::stream::types::unified::UnifiedResponse;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use eventsource_stream::Eventsource;
 use log::{error, trace};
 use reqwest::Response;

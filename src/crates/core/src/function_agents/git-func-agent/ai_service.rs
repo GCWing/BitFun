@@ -2,6 +2,9 @@ use super::types::{AICommitAnalysis, CommitMessageOptions, ProjectContext};
 use crate::function_agents::common::{AgentError, AgentResult};
 use crate::infrastructure::ai::AIClient;
 use crate::util::types::Message;
+use bitfun_product_domains::function_agents::git_func_agent::{
+    parse_commit_ai_response, prepare_commit_ai_prompt,
+};
 /**
  * AI service layer
  *
@@ -9,9 +12,6 @@ use crate::util::types::Message;
  */
 use log::{debug, error, warn};
 use std::sync::Arc;
-
-/// Prompt template constants (embedded at compile time)
-const COMMIT_MESSAGE_PROMPT: &str = include_str!("prompts/commit_message.md");
 
 pub struct AIAnalysisService {
     ai_client: Arc<AIClient>,
@@ -46,11 +46,16 @@ impl AIAnalysisService {
             return Err(AgentError::invalid_input("Code changes are empty"));
         }
 
-        let processed_diff = self.truncate_diff_if_needed(diff_content, 50000);
+        let prepared_prompt = prepare_commit_ai_prompt(diff_content, project_context, options);
+        if prepared_prompt.truncated {
+            warn!(
+                "Diff too large ({} chars), truncating to {} chars",
+                diff_content.len(),
+                50_000
+            );
+        }
 
-        let prompt = self.build_commit_prompt(&processed_diff, project_context, options);
-
-        let ai_response = self.call_ai(&prompt).await?;
+        let ai_response = self.call_ai(&prepared_prompt.prompt).await?;
 
         self.parse_commit_response(&ai_response)
     }
@@ -83,45 +88,77 @@ impl AIAnalysisService {
         }
     }
 
-    fn build_commit_prompt(
-        &self,
-        diff_content: &str,
-        project_context: &ProjectContext,
-        options: &CommitMessageOptions,
-    ) -> String {
-        super::utils::build_commit_prompt(
-            COMMIT_MESSAGE_PROMPT,
-            diff_content,
-            project_context,
-            options,
-        )
-    }
-
     fn parse_commit_response(&self, response: &str) -> AgentResult<AICommitAnalysis> {
-        let json_str = crate::util::extract_json_from_ai_response(response)
-            .ok_or_else(|| AgentError::analysis_error("Cannot extract JSON from response"))?;
+        parse_commit_ai_response(response)
+    }
+}
 
-        let value: serde_json::Value = serde_json::from_str(&json_str).map_err(|e| {
-            AgentError::analysis_error(format!("Failed to parse AI response: {}", e))
-        })?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::function_agents::common::AgentErrorType;
+    use crate::util::types::AIConfig;
+    use bitfun_ai_adapters::types::ReasoningMode;
 
-        super::utils::parse_commit_analysis_value(&value).map_err(AgentError::analysis_error)
+    fn test_service() -> AIAnalysisService {
+        AIAnalysisService {
+            ai_client: Arc::new(AIClient::new(AIConfig {
+                name: "test".to_string(),
+                base_url: "http://127.0.0.1".to_string(),
+                request_url: "http://127.0.0.1".to_string(),
+                api_key: "test".to_string(),
+                model: "test-model".to_string(),
+                format: "openai".to_string(),
+                context_window: 8192,
+                max_tokens: None,
+                temperature: None,
+                top_p: None,
+                reasoning_mode: ReasoningMode::Default,
+                inline_think_in_text: false,
+                custom_headers: None,
+                custom_headers_mode: None,
+                skip_ssl_verify: false,
+                reasoning_effort: None,
+                thinking_budget_tokens: None,
+                custom_request_body: None,
+                custom_request_body_mode: None,
+            })),
+        }
     }
 
-    fn truncate_diff_if_needed(&self, diff: &str, max_chars: usize) -> String {
-        if diff.len() <= max_chars {
-            return diff.to_string();
-        }
+    #[test]
+    fn parse_commit_response_preserves_product_domain_response_policy() {
+        let service = test_service();
+        let parsed = service
+            .parse_commit_response(
+                r#"The answer is:
+```json
+{
+  "type": "refactor",
+  "title": "refactor(product-domains): add runtime baseline",
+  "body": "Keep behavior stable.",
+  "confidence": 0.91
+}
+```
+"#,
+            )
+            .unwrap();
 
-        warn!(
-            "Diff too large ({} chars), truncating to {} chars",
-            diff.len(),
-            max_chars
+        assert_eq!(
+            parsed.title,
+            "refactor(product-domains): add runtime baseline"
         );
+        assert_eq!(parsed.body.as_deref(), Some("Keep behavior stable."));
+        assert_eq!(parsed.confidence, 0.91);
 
-        let mut truncated = diff.chars().take(max_chars - 100).collect::<String>();
-        truncated.push_str("\n\n... [content truncated] ...");
+        let missing_json = service.parse_commit_response("no json here").unwrap_err();
+        assert_eq!(missing_json.error_type, AgentErrorType::AnalysisError);
+        assert_eq!(missing_json.message, "Cannot extract JSON from response");
 
-        truncated
+        let missing_title = service
+            .parse_commit_response(r#"{"type":"refactor","body":"missing title"}"#)
+            .unwrap_err();
+        assert_eq!(missing_title.error_type, AgentErrorType::AnalysisError);
+        assert_eq!(missing_title.message, "Missing title field");
     }
 }

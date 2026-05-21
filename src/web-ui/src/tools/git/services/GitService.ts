@@ -6,6 +6,7 @@ import { gitAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { measureAsync } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n';
+import { gitStateManager } from '../state/GitStateManager';
 
 const log = createLogger('GitService');
 export type { 
@@ -68,6 +69,15 @@ export class GitService {
     expiredPaths.forEach(path => {
       this.nonGitRepositoryCache.delete(path);
       this.cacheTimestamps.delete(path);
+    });
+  }
+
+  private async ensureFreshOperationState(repositoryPath: string): Promise<void> {
+    await gitStateManager.refresh(repositoryPath, {
+      force: true,
+      layers: ['basic', 'status'],
+      reason: 'operation',
+      silent: true,
     });
   }
 
@@ -275,6 +285,7 @@ export class GitService {
    */
   async commit(repositoryPath: string, params: GitCommitParams): Promise<GitOperationResult> {
     try {
+      await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.commit(repositoryPath, params);
       return result;
     } catch (error) {
@@ -291,6 +302,7 @@ export class GitService {
    */
   async push(repositoryPath: string, params: GitPushParams = {}): Promise<GitOperationResult> {
     try {
+      await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.push(repositoryPath, params);
       return result;
     } catch (error) {
@@ -307,6 +319,7 @@ export class GitService {
    */
   async pull(repositoryPath: string, params: GitPullParams = {}): Promise<GitOperationResult> {
     try {
+      await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.pull(repositoryPath, params);
       return result;
     } catch (error) {
@@ -323,6 +336,7 @@ export class GitService {
    */
   async checkoutBranch(repositoryPath: string, branchName: string): Promise<GitOperationResult> {
     try {
+      await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.checkoutBranch(repositoryPath, branchName);
       return result;
     } catch (error) {
@@ -339,6 +353,7 @@ export class GitService {
    */
   async createBranch(repositoryPath: string, branchName: string, startPoint?: string): Promise<GitOperationResult> {
     try {
+      await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.createBranch(repositoryPath, branchName, startPoint);
       return result;
     } catch (error) {
@@ -355,6 +370,7 @@ export class GitService {
    */
   async deleteBranch(repositoryPath: string, branchName: string, force: boolean = false): Promise<GitOperationResult> {
     try {
+      await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.deleteBranch(repositoryPath, branchName, force);
       return result;
     } catch (error) {
@@ -384,6 +400,7 @@ export class GitService {
    */
   async resetFiles(repositoryPath: string, files: string[], staged: boolean = false): Promise<GitOperationResult> {
     try {
+      await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.resetFiles(repositoryPath, files, staged);
       return result;
     } catch (error) {
@@ -400,6 +417,7 @@ export class GitService {
    */
   async resetToCommit(repositoryPath: string, commitHash: string, mode: 'soft' | 'mixed' | 'hard' = 'mixed'): Promise<GitOperationResult> {
     try {
+      await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.resetToCommit(repositoryPath, commitHash, mode);
       return result;
     } catch (error) {
@@ -443,6 +461,7 @@ export class GitService {
    */
   async cherryPick(repositoryPath: string, commitHash: string, noCommit: boolean = false): Promise<GitOperationResult> {
     try {
+      await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.cherryPick(repositoryPath, commitHash, noCommit);
       return result;
     } catch (error) {
@@ -459,6 +478,7 @@ export class GitService {
    */
   async cherryPickAbort(repositoryPath: string): Promise<GitOperationResult> {
     try {
+      await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.cherryPickAbort(repositoryPath);
       return result;
     } catch (error) {
@@ -475,6 +495,7 @@ export class GitService {
    */
   async cherryPickContinue(repositoryPath: string): Promise<GitOperationResult> {
     try {
+      await this.ensureFreshOperationState(repositoryPath);
       const result = await gitAPI.cherryPickContinue(repositoryPath);
       return result;
     } catch (error) {

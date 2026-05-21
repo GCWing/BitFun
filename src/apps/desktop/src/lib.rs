@@ -20,7 +20,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::Manager;
 
@@ -221,6 +221,10 @@ pub fn run() {
 /// Tauri entry point.
 pub async fn _run() {
     let startup_started = Instant::now();
+    let startup_trace_id = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| format!("desktop-{}", duration.as_millis()))
+        .unwrap_or_else(|_| "desktop-unknown".to_string());
     let mut startup_timings = TimingCollector::default();
     let in_debug = cfg!(debug_assertions) || std::env::var("DEBUG").unwrap_or_default() == "1";
     let log_config = logging::LogConfig::new(in_debug);
@@ -322,6 +326,11 @@ pub async fn _run() {
         .manage(terminal_state)
         .setup(move |app| {
             let setup_started = Instant::now();
+            log::debug!(
+                "Desktop startup trace event: trace_id={}, phase=tauri_setup_start, since_process_start_ms={}",
+                startup_trace_id,
+                elapsed_ms(startup_started)
+            );
             #[cfg(target_os = "macos")]
             {
                 app.on_menu_event(|app, event| {
@@ -426,16 +435,34 @@ pub async fn _run() {
 
             let app_handle = app.handle().clone();
             let window_started = Instant::now();
-            theme::create_main_window(&app_handle);
+            log::debug!(
+                "Desktop startup trace event: trace_id={}, phase=main_window_create_start",
+                startup_trace_id
+            );
+            theme::create_main_window(&app_handle, &startup_trace_id);
+            let window_duration_ms = elapsed_ms(window_started);
             log::debug!(
                 "Desktop startup step completed: step=create_main_window, duration_ms={}",
-                elapsed_ms(window_started)
+                window_duration_ms
+            );
+            log::debug!(
+                "Desktop startup trace event: trace_id={}, phase=main_window_create_end, duration_ms={}",
+                startup_trace_id,
+                window_duration_ms
             );
             bitfun_webdriver::maybe_start(app_handle.clone());
+            let setup_duration_ms = elapsed_ms(setup_started);
+            let since_process_start_ms = elapsed_ms(startup_started);
             log::debug!(
                 "Desktop startup timing: phase=tauri_setup, duration_ms={}, since_process_start_ms={}",
-                elapsed_ms(setup_started),
-                elapsed_ms(startup_started)
+                setup_duration_ms,
+                since_process_start_ms
+            );
+            log::debug!(
+                "Desktop startup trace event: trace_id={}, phase=tauri_setup_end, duration_ms={}, since_process_start_ms={}",
+                startup_trace_id,
+                setup_duration_ms,
+                since_process_start_ms
             );
 
             #[cfg(target_os = "macos")]
@@ -579,6 +606,8 @@ pub async fn _run() {
             api::agentic_api::set_subagent_timeout,
             api::agentic_api::delete_session,
             api::agentic_api::restore_session,
+            api::agentic_api::restore_session_view,
+            api::agentic_api::restore_session_with_turns,
             api::agentic_api::list_sessions,
             api::agentic_api::confirm_tool_execution,
             api::agentic_api::reject_tool_execution,
@@ -654,6 +683,7 @@ pub async fn _run() {
             get_clipboard_files,
             paste_files,
             get_config,
+            get_configs,
             computer_use_get_status,
             computer_use_request_permissions,
             computer_use_open_system_settings,
@@ -693,6 +723,7 @@ pub async fn _run() {
             add_skill,
             delete_skill,
             git_is_repository,
+            git_get_repository_basic,
             git_get_repository,
             git_get_status,
             git_get_branches,
@@ -973,6 +1004,7 @@ pub async fn _run() {
             api::miniapp_api::miniapp_draft_host_call,
             api::miniapp_api::miniapp_draft_worker_stop,
             api::miniapp_api::miniapp_get_customization_metadata,
+            api::miniapp_api::miniapp_decline_builtin_update,
             api::miniapp_api::miniapp_ai_complete,
             api::miniapp_api::miniapp_ai_chat,
             api::miniapp_api::miniapp_ai_cancel,
@@ -1169,7 +1201,7 @@ async fn init_agentic_system() -> anyhow::Result<(
         coordination::DialogScheduler::new(coordinator.clone(), session_manager.clone());
     coordinator.set_scheduler_notifier(scheduler.outcome_sender());
     coordinator.set_round_preempt_source(scheduler.preempt_monitor());
-    coordinator.set_round_steering_source(scheduler.steering_monitor());
+    coordinator.set_round_injection_source(scheduler.round_injection_monitor());
     coordination::set_global_scheduler(scheduler.clone());
 
     let cron_service =

@@ -22,7 +22,9 @@ export const ForkSessionButton: React.FC<ForkSessionButtonProps> = ({
   const { t } = useTranslation('flow-chat');
   const [isForking, setIsForking] = useState(false);
   const session = sessionId ? flowChatStore.getState().sessions.get(sessionId) : undefined;
-  const isBtwSession = resolveSessionRelationship(session).isBtw;
+  const sessionRelationship = resolveSessionRelationship(session);
+  const shouldHideForkAction =
+    sessionRelationship.isBtw || sessionRelationship.isSubagent;
 
   const handleFork = useCallback(async () => {
     if (!sessionId || isForking) {
@@ -43,7 +45,7 @@ export const ForkSessionButton: React.FC<ForkSessionButtonProps> = ({
     }
   }, [isForking, sessionId, t, turnId]);
 
-  if (!sessionId || isBtwSession) {
+  if (!sessionId || shouldHideForkAction) {
     return null;
   }
 

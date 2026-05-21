@@ -199,6 +199,12 @@
       color: var(--color-success);
     }
 
+    &.is-partial {
+      border-color: rgba($color-warning, 0.24);
+      background: rgba($color-warning, 0.1);
+      color: var(--color-warning);
+    }
+
     &.is-not_installed {
       border-color: var(--border-subtle);
       background: var(--element-bg-subtle);
@@ -247,13 +253,94 @@
     text-align: center;
   }
 
+  &__remote-list {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+  }
+
+  &__remote-server {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    background: transparent;
+  }
+
+  &__remote-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: $size-gap-3;
+    align-items: center;
+    padding: $size-gap-3;
+    min-width: 0;
+    border-bottom: 1px solid var(--border-subtle);
+    background: transparent;
+  }
+
+  &__remote-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+    flex-wrap: wrap;
+  }
+
+  &__remote-summary {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    flex-wrap: wrap;
+    margin-top: $size-gap-1;
+  }
+
+  &__summary-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    font-size: var(--font-size-xs);
+    font-weight: $font-weight-medium;
+    line-height: 1;
+    white-space: nowrap;
+
+    &.is-success {
+      border-color: rgba($color-success, 0.24);
+      background: rgba($color-success, 0.08);
+      color: var(--color-success);
+    }
+
+    &.is-warning {
+      border-color: rgba($color-warning, 0.24);
+      background: rgba($color-warning, 0.08);
+      color: var(--color-warning);
+    }
+  }
+
+  &__remote-agent-list {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    padding: $size-gap-2;
+
+    .bitfun-acp-agents__registry-row--remote {
+      padding: $size-gap-2 $size-gap-3;
+    }
+  }
+
   @media (max-width: 860px) {
     &__toolbar,
-    &__registry-row {
+    &__registry-row,
+    &__remote-head {
       grid-template-columns: 1fr;
     }
 
     &__toolbar-actions,
+    &__remote-actions,
+    &__remote-head,
     &__capabilities,
     &__status-cell,
     &__confirmation-cell {

@@ -7,19 +7,15 @@ use bitfun_product_domains::miniapp::ports::{
     MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture, MiniAppStoragePort,
 };
 use bitfun_product_domains::miniapp::storage::{
-    build_package_json, parse_npm_dependencies, MiniAppStorageLayout, COMPILED_HTML, ESM_DEPS_JSON,
-    INDEX_HTML, META_JSON, PACKAGE_JSON, SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, WORKER_JS,
+    COMPILED_HTML, DRAFT_JSON, DRAFTS_CLEANUP_MARKER, DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR,
+    ESM_DEPS_JSON, INDEX_HTML, META_JSON, MiniAppStorageLayout, PACKAGE_JSON, STORAGE_JSON,
+    STYLE_CSS, UI_JS, WORKER_JS, build_package_json, parse_npm_dependencies,
 };
 use serde_json;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-const DRAFTS_DIR: &str = ".drafts";
-const DRAFTS_CLEANUP_PREFIX: &str = ".drafts.cleanup-";
-const DRAFTS_CLEANUP_MARKER: &str = ".cleanup-pending";
-const DRAFT_JSON: &str = "draft.json";
-const CUSTOMIZATION_JSON: &str = ".customization.json";
 /// MiniApp storage service (file-based under path_manager.miniapps_dir).
 pub struct MiniAppStorage {
     path_manager: Arc<crate::infrastructure::PathManager>,
@@ -59,23 +55,22 @@ impl MiniAppStorage {
     }
 
     pub fn drafts_root(&self) -> PathBuf {
-        self.path_manager.miniapps_dir().join(DRAFTS_DIR)
+        MiniAppStorageLayout::drafts_root(self.path_manager.miniapps_dir())
     }
 
     pub fn app_drafts_dir(&self, app_id: &str) -> PathBuf {
-        self.drafts_root().join(app_id)
+        MiniAppStorageLayout::app_drafts_dir(self.path_manager.miniapps_dir(), app_id)
     }
 
     pub fn draft_dir(&self, app_id: &str, draft_id: &str) -> PathBuf {
-        self.app_drafts_dir(app_id).join(draft_id)
+        MiniAppStorageLayout::draft_dir(self.path_manager.miniapps_dir(), app_id, draft_id)
     }
 
     fn cleanup_drafts_root(&self) -> PathBuf {
-        self.path_manager.miniapps_dir().join(format!(
-            "{}{}",
-            DRAFTS_CLEANUP_PREFIX,
-            uuid::Uuid::new_v4()
-        ))
+        MiniAppStorageLayout::cleanup_drafts_root(
+            self.path_manager.miniapps_dir(),
+            &uuid::Uuid::new_v4().to_string(),
+        )
     }
 
     fn cleanup_marker_path(&self, drafts_root: &Path) -> PathBuf {
@@ -94,11 +89,11 @@ impl MiniAppStorage {
     }
 
     fn draft_source_dir(&self, app_id: &str, draft_id: &str) -> PathBuf {
-        self.draft_dir(app_id, draft_id).join(SOURCE_DIR)
+        MiniAppStorageLayout::draft_source_dir(self.path_manager.miniapps_dir(), app_id, draft_id)
     }
 
     fn customization_path(&self, app_id: &str) -> PathBuf {
-        self.app_dir(app_id).join(CUSTOMIZATION_JSON)
+        self.layout(app_id).customization_path()
     }
 
     /// Ensure app directory and source subdir exist.
@@ -851,16 +846,38 @@ mod tests {
     use bitfun_product_domains::miniapp::customization::{
         MiniAppCustomizationMetadata, MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind,
     };
+    use std::fs;
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
+
+    struct TestTempDir {
+        path: PathBuf,
+    }
+
+    impl TestTempDir {
+        fn new(prefix: &str) -> Self {
+            let path = std::env::temp_dir().join(format!("{}-{}", prefix, uuid::Uuid::new_v4()));
+            fs::create_dir_all(&path).expect("test root should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestTempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 
     #[tokio::test]
     async fn storage_port_adapter_preserves_existing_file_lifecycle() {
-        let root = std::env::temp_dir().join(format!(
-            "bitfun-miniapp-storage-port-{}",
-            uuid::Uuid::new_v4()
-        ));
-        let path_manager =
-            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        let root = TestTempDir::new("bitfun-miniapp-storage-port");
+        let path_manager = Arc::new(
+            crate::infrastructure::PathManager::with_user_root_for_tests(root.path().to_path_buf()),
+        );
         let storage = MiniAppStorage::new(path_manager);
         let port: &dyn MiniAppStoragePort = &storage;
         let app = sample_app("demo_app");
@@ -1127,6 +1144,7 @@ mod tests {
             local_override: true,
             last_applied_draft_id: Some("draft_one".to_string()),
             available_builtin_update: None,
+            declined_builtin_updates: Vec::new(),
             updated_at: 123,
         };
 

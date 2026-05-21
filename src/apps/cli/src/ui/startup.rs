@@ -1,3 +1,20 @@
+use super::agent_selector::{AgentItem, AgentSelectorState};
+use super::command_menu::CommandMenuState;
+use super::command_palette::{CommandPaletteState, PaletteAction};
+use super::model_config_form::{ModelConfigFormState, ModelFormAction, ModelFormResult};
+use super::model_selector::{ModelItem, ModelSelectorState};
+use super::provider_selector::{ProviderSelection, ProviderSelectorState};
+use super::session_selector::{SessionAction, SessionItem, SessionSelectorState};
+use super::skill_selector::{SkillItem, SkillSelectorAction, SkillSelectorState};
+use super::subagent_selector::{SubagentItem, SubagentSelectorAction, SubagentSelectorState};
+use super::text_input::{TextInput, TextInputStyle};
+use super::theme::{
+    builtin_theme_ids, builtin_theme_json, resolve_appearance, resolve_effective_color_scheme,
+    Appearance, EffectiveColorScheme, Theme,
+};
+use super::theme_selector::{ThemeItem, ThemeSelectorState};
+use crate::commands::STARTUP_COMMAND_SPECS;
+use crate::config::CliConfig;
 /// Startup page module
 ///
 /// Full-featured startup page with:
@@ -5,39 +22,31 @@
 /// - Slash command menu with real execution
 /// - Model/Agent/Session/Skill/Subagent selector popups
 /// - Random tips
-
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Paragraph},
     Frame, Terminal,
 };
 use std::sync::Arc;
 use std::time::Duration;
-use super::text_input::{TextInput, TextInputStyle};
-use super::command_menu::CommandMenuState;
-use super::command_palette::{CommandPaletteState, PaletteAction};
-use super::model_config_form::{ModelConfigFormState, ModelFormAction, ModelFormResult};
-use super::model_selector::{ModelItem, ModelSelectorState};
-use super::provider_selector::{ProviderSelection, ProviderSelectorState};
-use super::agent_selector::{AgentItem, AgentSelectorState};
-use super::session_selector::{SessionAction, SessionItem, SessionSelectorState};
-use super::skill_selector::{SkillItem, SkillSelectorState};
-use super::subagent_selector::{SubagentItem, SubagentSelectorState};
-use super::theme::{
-    builtin_theme_json, resolve_appearance, resolve_effective_color_scheme, EffectiveColorScheme,
-    Theme,
-};
-use crate::commands::STARTUP_COMMAND_SPECS;
-use crate::config::CliConfig;
 
+use bitfun_core::agentic::agents::{
+    get_agent_registry, AgentInfo, SubAgentSource, SubagentListScope, SubagentQueryContext,
+};
 use bitfun_core::agentic::coordination::ConversationCoordinator;
-use bitfun_core::agentic::agents::{get_agent_registry, AgentInfo};
-use bitfun_core::agentic::tools::implementations::skills::registry::SkillRegistry;
+use bitfun_core::agentic::tools::implementations::skills::{
+    mode_overrides::{
+        load_project_mode_skills_document_local, save_project_mode_skills_document_local,
+        set_mode_skill_disabled_in_document, set_user_mode_skill_state,
+    },
+    registry::SkillRegistry,
+    ModeSkillInfo, SkillInfo,
+};
 use bitfun_core::service::config::GlobalConfigManager;
 
 /// Types of popups that can be shown on the startup page
@@ -49,6 +58,7 @@ pub enum PopupType {
     SessionSelector,
     SkillSelector,
     SubagentSelector,
+    ThemeSelector,
     ProviderSelector,
     ModelConfigForm,
 }
@@ -125,6 +135,7 @@ const TIPS: &[&str] = &[
     "Use /sessions to list and continue previous conversations",
     "Press Ctrl+O to expand/collapse tool output",
     "Use /skills to browse and execute available skills",
+    "Use /theme to switch the CLI theme",
     "Use /acp to copy editor setup commands for ACP hosts",
     "Press Up/Down to cycle through input history",
     "Use /new to start a fresh conversation session",
@@ -136,6 +147,8 @@ pub struct StartupPage {
     text_input: TextInput,
     /// Theme
     theme: Theme,
+    /// CLI config, including persisted theme preference.
+    config: CliConfig,
     /// Current tip text
     tip: &'static str,
 
@@ -151,8 +164,10 @@ pub struct StartupPage {
     session_selector: SessionSelectorState,
     skill_selector: SkillSelectorState,
     subagent_selector: SubagentSelectorState,
+    theme_selector: ThemeSelectorState,
     provider_selector: ProviderSelectorState,
     model_config_form: ModelConfigFormState,
+    theme_preview_original: Option<Theme>,
 
     // ── System context ──
     coordinator: Arc<ConversationCoordinator>,
@@ -214,6 +229,7 @@ impl StartupPage {
         let mut page = Self {
             text_input: TextInput::new(),
             theme,
+            config,
             tip: TIPS[tip_index],
             command_menu: CommandMenuState::new(),
             command_palette: CommandPaletteState::new(),
@@ -222,8 +238,10 @@ impl StartupPage {
             session_selector: SessionSelectorState::new(),
             skill_selector: SkillSelectorState::new(),
             subagent_selector: SubagentSelectorState::new(),
+            theme_selector: ThemeSelectorState::new(),
             provider_selector: ProviderSelectorState::new(),
             model_config_form: ModelConfigFormState::new(),
+            theme_preview_original: None,
             coordinator,
             agent_type: default_agent,
             model_display_name: String::new(),
@@ -258,6 +276,11 @@ impl StartupPage {
         }
     }
 
+    /// Get the current CLI config after startup-page edits.
+    pub fn config(&self) -> &CliConfig {
+        &self.config
+    }
+
     fn workspace_path_buf(&self) -> std::path::PathBuf {
         self.workspace()
             .map(std::path::PathBuf::from)
@@ -273,6 +296,7 @@ impl StartupPage {
             || self.session_selector.is_visible()
             || self.skill_selector.is_visible()
             || self.subagent_selector.is_visible()
+            || self.theme_selector.is_visible()
             || self.provider_selector.is_visible()
             || self.model_config_form.is_visible()
     }
@@ -337,7 +361,10 @@ impl StartupPage {
                     } else {
                         for ev in events {
                             match ev {
-                                Event::Key(key) if key.kind == KeyEventKind::Press || key.kind == KeyEventKind::Repeat => {
+                                Event::Key(key)
+                                    if key.kind == KeyEventKind::Press
+                                        || key.kind == KeyEventKind::Repeat =>
+                                {
                                     if let Some(result) = self.handle_key(key) {
                                         return Ok(result);
                                     }
@@ -365,6 +392,11 @@ impl StartupPage {
                     if let PaletteAction::Execute(id) = action {
                         let _ = self.handle_palette_action(&id);
                     }
+                } else if self.theme_selector.captures_mouse(&mouse) {
+                    self.theme_selector.handle_mouse_event(&mouse);
+                    if let Some(selected) = self.theme_selector.selected_item().cloned() {
+                        self.preview_theme_selection(&selected);
+                    }
                 } else if self.provider_selector.captures_mouse(&mouse) {
                     if let Some(selection) = self.provider_selector.handle_mouse_event(&mouse) {
                         self.handle_provider_selection(selection);
@@ -388,6 +420,10 @@ impl StartupPage {
 
     fn render(&mut self, frame: &mut Frame) {
         let size = frame.area();
+        frame.render_widget(
+            Block::default().style(Style::default().bg(self.theme.background)),
+            size,
+        );
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -418,6 +454,7 @@ impl StartupPage {
         self.session_selector.render(frame, size, &self.theme);
         self.skill_selector.render(frame, size, &self.theme);
         self.subagent_selector.render(frame, size, &self.theme);
+        self.theme_selector.render(frame, size, &self.theme);
         self.provider_selector.render(frame, size, &self.theme);
         self.model_config_form.render_mut(frame, size, &self.theme);
 
@@ -436,19 +473,21 @@ impl StartupPage {
 
         // Dynamic input height: content lines (1..6) + 2 (padding top + agent label row) + 1 (gap)
         let input_content_width = max_width.saturating_sub(2 + 4); // left bar(2) + inner padding(4)
-        let visual_lines = self.text_input.visual_line_count_with_prefix(input_content_width, 0) as u16;
+        let visual_lines =
+            self.text_input
+                .visual_line_count_with_prefix(input_content_width, 0) as u16;
         let content_lines = visual_lines.max(1).min(6);
         let input_box_height = content_lines + 3; // +1 top padding, +1 gap, +1 agent label
 
         let v_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(20), // top space
-                Constraint::Length(12),      // logo
-                Constraint::Length(1),       // gap
+                Constraint::Percentage(20),           // top space
+                Constraint::Length(12),               // logo
+                Constraint::Length(1),                // gap
                 Constraint::Length(input_box_height), // input box
-                Constraint::Length(2),       // gap + tip/status
-                Constraint::Min(1),          // bottom space
+                Constraint::Length(2),                // gap + tip/status
+                Constraint::Min(1),                   // bottom space
             ])
             .split(area);
 
@@ -479,13 +518,14 @@ impl StartupPage {
 
     fn render_input(&mut self, frame: &mut Frame, area: Rect) {
         let highlight_color = self.theme.primary;
+        let input_bg = self.input_background();
 
         // Split: 2 cols for left bar, rest for content
         let h_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
                 Constraint::Length(2), // left bar
-                Constraint::Min(1),   // content
+                Constraint::Min(1),    // content
             ])
             .split(area);
 
@@ -494,21 +534,19 @@ impl StartupPage {
             .map(|_| {
                 Line::from(Span::styled(
                     " ┃",
-                    Style::default().fg(highlight_color),
+                    Style::default().fg(highlight_color).bg(input_bg),
                 ))
             })
             .collect();
-        let bar = Paragraph::new(bar_lines);
+        let bar = Paragraph::new(bar_lines).style(Style::default().bg(input_bg));
         frame.render_widget(bar, h_chunks[0]);
 
         // Content area with background
         let content_area = h_chunks[1];
 
         // Fill background
-        let bg = Paragraph::new(
-            vec![Line::from(""); content_area.height as usize],
-        )
-        .style(Style::default().bg(self.theme.background_element));
+        let bg = Paragraph::new(vec![Line::from(""); content_area.height as usize])
+            .style(Style::default().bg(input_bg));
         frame.render_widget(bg, content_area);
 
         // Inner content with padding
@@ -534,8 +572,8 @@ impl StartupPage {
             first_line_prefix: "",
             continuation_prefix: "",
             placeholder: "Ask anything... or type / for commands".to_string(),
-            text_style: Style::default().fg(Color::White),
-            placeholder_style: Style::default().fg(self.theme.muted),
+            text_style: Style::default().fg(self.theme.command_text).bg(input_bg),
+            placeholder_style: Style::default().fg(self.theme.muted).bg(input_bg),
         };
         self.text_input.render(frame, text_area, &style, true);
 
@@ -546,10 +584,7 @@ impl StartupPage {
                 Style::default().fg(highlight_color),
             )];
             if !self.model_display_name.is_empty() {
-                spans.push(Span::styled(
-                    " | ",
-                    Style::default().fg(self.theme.muted),
-                ));
+                spans.push(Span::styled(" | ", Style::default().fg(self.theme.muted)));
                 spans.push(Span::styled(
                     &self.model_display_name,
                     Style::default().fg(self.theme.muted),
@@ -564,6 +599,10 @@ impl StartupPage {
             };
             frame.render_widget(Paragraph::new(agent_line), agent_area);
         }
+    }
+
+    fn input_background(&self) -> ratatui::style::Color {
+        self.theme.input_background
     }
 
     fn render_tip_or_status(&self, frame: &mut Frame, area: Rect) {
@@ -605,7 +644,10 @@ impl StartupPage {
         // Right: MCP status | version
         let right = Paragraph::new(Line::from(vec![
             Span::styled(&mcp_status, Style::default().fg(mcp_color)),
-            Span::styled(format!(" | {}  ", version), Style::default().fg(self.theme.muted)),
+            Span::styled(
+                format!(" | {}  ", version),
+                Style::default().fg(self.theme.muted),
+            ),
         ]))
         .alignment(Alignment::Right);
         frame.render_widget(right, area);
@@ -627,12 +669,12 @@ impl StartupPage {
             ];
 
             let colors = [
-                Color::Rgb(255, 0, 100),
-                Color::Rgb(255, 100, 0),
-                Color::Rgb(255, 200, 0),
-                Color::Rgb(100, 255, 0),
-                Color::Rgb(0, 255, 200),
-                Color::Rgb(100, 100, 255),
+                self.theme.primary,
+                self.theme.info,
+                self.theme.success,
+                self.theme.warning,
+                self.theme.error,
+                self.theme.muted,
             ];
 
             for (i, line) in logo.iter().enumerate() {
@@ -653,11 +695,11 @@ impl StartupPage {
             ];
 
             let colors = [
-                Color::Cyan,
-                Color::Blue,
-                Color::Magenta,
-                Color::Red,
-                Color::Yellow,
+                self.theme.primary,
+                self.theme.info,
+                self.theme.success,
+                self.theme.warning,
+                self.theme.error,
             ];
 
             for (i, line) in logo.iter().enumerate() {
@@ -674,14 +716,14 @@ impl StartupPage {
         lines.push(Line::from(Span::styled(
             "AI agent-driven command-line programming assistant",
             Style::default()
-                .fg(Color::Gray)
+                .fg(self.theme.muted)
                 .add_modifier(Modifier::ITALIC),
         )));
 
         let version = format!("v{}", env!("CARGO_PKG_VERSION"));
         lines.push(Line::from(Span::styled(
             version,
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(self.theme.muted),
         )));
 
         let paragraph = Paragraph::new(lines).alignment(Alignment::Center);
@@ -716,6 +758,32 @@ impl StartupPage {
         }
 
         // ── Selector popups intercept all keys when active ──
+
+        if self.theme_selector.is_visible() {
+            match key.code {
+                KeyCode::Up => {
+                    self.theme_selector.move_up();
+                    if let Some(selected) = self.theme_selector.selected_item().cloned() {
+                        self.preview_theme_selection(&selected);
+                    }
+                }
+                KeyCode::Down => {
+                    self.theme_selector.move_down();
+                    if let Some(selected) = self.theme_selector.selected_item().cloned() {
+                        self.preview_theme_selection(&selected);
+                    }
+                }
+                KeyCode::Enter => {
+                    if let Some(selected) = self.theme_selector.confirm_selection() {
+                        self.theme_selector.hide();
+                        self.apply_theme_selection(&selected);
+                    }
+                }
+                KeyCode::Esc => self.navigate_back(),
+                _ => {}
+            }
+            return None;
+        }
 
         if self.model_selector.is_visible() {
             match key.code {
@@ -776,10 +844,9 @@ impl StartupPage {
             match key.code {
                 KeyCode::Up => self.skill_selector.move_up(),
                 KeyCode::Down => self.skill_selector.move_down(),
-                KeyCode::Enter => {
-                    if let Some(selected) = self.skill_selector.confirm_selection() {
-                        self.skill_selector.hide();
-                        self.set_input(&format!("Execute the {} skill.", selected.name));
+                KeyCode::Enter | KeyCode::Char(' ') => {
+                    if let Some(action) = self.skill_selector.confirm_selection() {
+                        self.handle_skill_selector_action(action);
                     }
                 }
                 KeyCode::Esc => self.navigate_back(),
@@ -792,10 +859,9 @@ impl StartupPage {
             match key.code {
                 KeyCode::Up => self.subagent_selector.move_up(),
                 KeyCode::Down => self.subagent_selector.move_down(),
-                KeyCode::Enter => {
-                    if let Some(selected) = self.subagent_selector.confirm_selection() {
-                        self.subagent_selector.hide();
-                        self.set_input(&format!("Launch subagent {} to finish task: ", selected.name));
+                KeyCode::Enter | KeyCode::Char(' ') => {
+                    if let Some(action) = self.subagent_selector.confirm_selection() {
+                        self.handle_subagent_selector_action(action);
                     }
                 }
                 KeyCode::Esc => self.navigate_back(),
@@ -866,7 +932,8 @@ impl StartupPage {
                 }
                 KeyCode::Esc => {
                     self.text_input.clear();
-                    self.command_menu.update_with_commands("", 0, STARTUP_COMMAND_SPECS);
+                    self.command_menu
+                        .update_with_commands("", 0, STARTUP_COMMAND_SPECS);
                     return None;
                 }
                 _ => {
@@ -996,6 +1063,10 @@ impl StartupPage {
                 self.push_current_popup_to_stack();
                 self.provider_selector.show();
             }
+            // Appearance group
+            "theme" => {
+                self.show_theme_selector();
+            }
             // Agent group
             "switch_agent" => {
                 self.show_agent_selector();
@@ -1041,6 +1112,9 @@ impl StartupPage {
             "/models" => {
                 self.show_model_selector();
             }
+            "/theme" => {
+                self.show_theme_selector();
+            }
             "/connect" => {
                 self.push_current_popup_to_stack();
                 self.provider_selector.show();
@@ -1065,20 +1139,21 @@ impl StartupPage {
                     prompt: Some("/acp".to_string()),
                 });
             }
-            "/init" => {
-                match crate::prompts::get_cli_prompt("init") {
-                    Some(prompt) => {
-                        return Some(StartupResult::NewSession {
-                            prompt: Some(prompt.to_string()),
-                        });
-                    }
-                    None => {
-                        self.status = Some("Init prompt not found".to_string());
-                    }
+            "/init" => match crate::prompts::get_cli_prompt("init") {
+                Some(prompt) => {
+                    return Some(StartupResult::NewSession {
+                        prompt: Some(prompt.to_string()),
+                    });
                 }
-            }
+                None => {
+                    self.status = Some("Init prompt not found".to_string());
+                }
+            },
             _ => {
-                self.status = Some(format!("Unknown command: {}. Type /help for available commands.", cmd));
+                self.status = Some(format!(
+                    "Unknown command: {}. Type /help for available commands.",
+                    cmd
+                ));
             }
         }
 
@@ -1107,6 +1182,9 @@ impl StartupPage {
         } else if self.subagent_selector.is_visible() {
             self.popup_stack.push(PopupType::SubagentSelector);
             self.subagent_selector.hide();
+        } else if self.theme_selector.is_visible() {
+            self.popup_stack.push(PopupType::ThemeSelector);
+            self.theme_selector.hide();
         } else if self.provider_selector.is_visible() {
             self.popup_stack.push(PopupType::ProviderSelector);
             self.provider_selector.hide();
@@ -1167,9 +1245,8 @@ impl StartupPage {
 
         let result = tokio::task::block_in_place(|| {
             let workspace_path = self.workspace_path_buf();
-            tokio::runtime::Handle::current().block_on(async {
-                coordinator.delete_session(&workspace_path, &sid).await
-            })
+            tokio::runtime::Handle::current()
+                .block_on(async { coordinator.delete_session(&workspace_path, &sid).await })
         });
 
         match result {
@@ -1320,7 +1397,9 @@ impl StartupPage {
             enable_thinking_process: result.enable_thinking || result.support_preserved_thinking,
             skip_ssl_verify: result.skip_ssl_verify,
             custom_headers,
-            custom_headers_mode: if result.custom_headers_mode.is_empty() || result.custom_headers_mode == "merge" {
+            custom_headers_mode: if result.custom_headers_mode.is_empty()
+                || result.custom_headers_mode == "merge"
+            {
                 None
             } else {
                 Some(result.custom_headers_mode.clone())
@@ -1330,8 +1409,7 @@ impl StartupPage {
         };
 
         let result_name = result.name.clone();
-        let result_model_display =
-            format!("{} / {}", result.model_name, result.name);
+        let result_model_display = format!("{} / {}", result.model_name, result.name);
 
         let success = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
@@ -1418,10 +1496,13 @@ impl StartupPage {
                     enable_thinking: model.enable_thinking_process,
                     support_preserved_thinking: model.inline_think_in_text,
                     skip_ssl_verify: model.skip_ssl_verify,
-                    custom_headers: model.custom_headers
+                    custom_headers: model
+                        .custom_headers
                         .map(|h| serde_json::to_string(&h).unwrap_or_default())
                         .unwrap_or_default(),
-                    custom_headers_mode: model.custom_headers_mode.unwrap_or_else(|| "merge".to_string()),
+                    custom_headers_mode: model
+                        .custom_headers_mode
+                        .unwrap_or_else(|| "merge".to_string()),
                     custom_request_body: model.custom_request_body.unwrap_or_default(),
                 };
                 self.model_config_form.show_for_edit(&model.id, &form_data);
@@ -1465,7 +1546,9 @@ impl StartupPage {
             enable_thinking_process: result.enable_thinking || result.support_preserved_thinking,
             skip_ssl_verify: result.skip_ssl_verify,
             custom_headers,
-            custom_headers_mode: if result.custom_headers_mode.is_empty() || result.custom_headers_mode == "merge" {
+            custom_headers_mode: if result.custom_headers_mode.is_empty()
+                || result.custom_headers_mode == "merge"
+            {
                 None
             } else {
                 Some(result.custom_headers_mode.clone())
@@ -1475,8 +1558,7 @@ impl StartupPage {
         };
 
         let result_name = result.name.clone();
-        let result_model_display =
-            format!("{} / {}", result.model_name, result.name);
+        let result_model_display = format!("{} / {}", result.model_name, result.name);
 
         let success = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
@@ -1488,7 +1570,10 @@ impl StartupPage {
                     }
                 };
 
-                if let Err(e) = config_service.update_ai_model(&model_id, model_config).await {
+                if let Err(e) = config_service
+                    .update_ai_model(&model_id, model_config)
+                    .await
+                {
                     tracing::error!("Failed to update AI model: {}", e);
                     return false;
                 }
@@ -1524,7 +1609,8 @@ impl StartupPage {
             })
             .collect();
 
-        self.agent_selector.show(agent_items, Some(self.agent_type.clone()));
+        self.agent_selector
+            .show(agent_items, Some(self.agent_type.clone()));
     }
 
     fn apply_agent_selection(&mut self, selected: &AgentItem) {
@@ -1536,29 +1622,164 @@ impl StartupPage {
         }
     }
 
+    fn show_theme_selector(&mut self) {
+        let themes = self.list_available_themes();
+        if themes.is_empty() {
+            self.status = Some("No themes available.".to_string());
+            return;
+        }
+
+        self.push_current_popup_to_stack();
+        self.begin_theme_preview();
+        self.theme_selector
+            .show(themes, Some(self.config.ui.theme_id.clone()));
+        if let Some(selected) = self.theme_selector.selected_item().cloned() {
+            self.preview_theme_selection(&selected);
+        }
+    }
+
+    fn list_available_themes(&self) -> Vec<ThemeItem> {
+        let mut themes: Vec<ThemeItem> = builtin_theme_ids()
+            .into_iter()
+            .map(|id| ThemeItem { id })
+            .collect();
+
+        themes.sort_by(|a, b| a.id.to_ascii_lowercase().cmp(&b.id.to_ascii_lowercase()));
+        themes.dedup_by(|a, b| a.id == b.id);
+        themes
+    }
+
+    fn current_base_theme(&self) -> (Theme, Appearance, EffectiveColorScheme) {
+        let appearance = resolve_appearance(&self.config.ui.theme);
+        let scheme = resolve_effective_color_scheme(&self.config.ui.color_scheme);
+        let base_is_light = appearance.is_light();
+        let base = match (base_is_light, scheme) {
+            (_, EffectiveColorScheme::Monochrome) => Theme::monochrome(),
+            (true, EffectiveColorScheme::Ansi16) => Theme::light_ansi16(),
+            (true, EffectiveColorScheme::Truecolor) => Theme::light(),
+            (false, EffectiveColorScheme::Ansi16) => Theme::dark_ansi16(),
+            (false, EffectiveColorScheme::Truecolor) => Theme::dark(),
+        };
+
+        (base, appearance, scheme)
+    }
+
+    fn resolve_theme_by_id(
+        &self,
+        base: Theme,
+        appearance: Appearance,
+        scheme: EffectiveColorScheme,
+        id: &str,
+    ) -> Theme {
+        if scheme == EffectiveColorScheme::Monochrome {
+            return Theme::monochrome();
+        }
+
+        let id = id.trim();
+        if id.is_empty() {
+            return base;
+        }
+
+        if let Some(json) = builtin_theme_json(id) {
+            return base
+                .apply_opencode_theme_json(json, appearance)
+                .unwrap_or(base)
+                .with_effective_scheme(scheme);
+        }
+
+        base
+    }
+
+    fn begin_theme_preview(&mut self) {
+        if self.theme_preview_original.is_none() {
+            self.theme_preview_original = Some(self.theme.clone());
+        }
+    }
+
+    fn cancel_theme_preview(&mut self) {
+        if let Some(original) = self.theme_preview_original.take() {
+            self.theme = original;
+        }
+    }
+
+    fn preview_theme_selection(&mut self, theme: &ThemeItem) {
+        self.begin_theme_preview();
+        let (base, appearance, scheme) = self.current_base_theme();
+        self.theme = self.resolve_theme_by_id(base, appearance, scheme, &theme.id);
+        self.status = Some(format!(
+            "Preview theme: {} (Enter apply, Esc cancel)",
+            theme.id
+        ));
+    }
+
+    fn apply_theme_selection(&mut self, theme: &ThemeItem) {
+        let (base, appearance, scheme) = self.current_base_theme();
+        self.config.ui.theme_id = theme.id.clone();
+
+        match self.config.save() {
+            Ok(()) => {
+                self.status = Some(format!("Theme set to: {}", theme.id));
+            }
+            Err(e) => {
+                self.status = Some(format!("Failed to save config: {}", e));
+            }
+        }
+
+        self.theme = self.resolve_theme_by_id(base, appearance, scheme, &theme.id);
+        self.theme_preview_original = None;
+    }
+
     fn show_skill_selector(&mut self) {
         self.push_current_popup_to_stack();
+        self.skill_selector.show_menu();
+    }
 
+    fn show_available_skill_list(&mut self) {
         let skills = tokio::task::block_in_place(|| {
+            let workspace = self.workspace_path_buf();
+            let agent_type = self.agent_type.clone();
             tokio::runtime::Handle::current().block_on(async {
                 let registry = SkillRegistry::global();
-                registry.refresh().await;
-                registry.get_all_skills().await
+                registry
+                    .get_resolved_skills_for_workspace(Some(workspace.as_path()), Some(&agent_type))
+                    .await
             })
         });
 
         if skills.is_empty() {
+            self.status = Some(format!(
+                "No enabled skills found for agent mode '{}'.",
+                self.agent_type
+            ));
+            return;
+        }
+
+        let skill_items: Vec<SkillItem> =
+            skills.into_iter().map(Self::skill_item_from_info).collect();
+
+        if skill_items.is_empty() {
             self.status = Some("No skills found.".to_string());
             return;
         }
 
+        self.skill_selector.show_list(skill_items);
+    }
+
+    fn show_skill_config_selector(&mut self) {
+        let skills = tokio::task::block_in_place(|| {
+            let workspace = self.workspace_path_buf();
+            let agent_type = self.agent_type.clone();
+            tokio::runtime::Handle::current().block_on(async {
+                let registry = SkillRegistry::global();
+                registry
+                    .get_mode_skill_infos_for_workspace(Some(workspace.as_path()), &agent_type)
+                    .await
+            })
+        });
+
         let skill_items: Vec<SkillItem> = skills
             .into_iter()
-            .map(|s| SkillItem {
-                name: s.name,
-                description: s.description,
-                level: s.level.as_str().to_string(),
-            })
+            .map(Self::skill_item_from_mode_info)
             .collect();
 
         if skill_items.is_empty() {
@@ -1566,40 +1787,134 @@ impl StartupPage {
             return;
         }
 
-        self.skill_selector.show(skill_items);
+        self.skill_selector.show_config(skill_items);
+    }
+
+    fn handle_skill_selector_action(&mut self, action: SkillSelectorAction) {
+        match action {
+            SkillSelectorAction::ListSkills => self.show_available_skill_list(),
+            SkillSelectorAction::ConfigureSkills => self.show_skill_config_selector(),
+            SkillSelectorAction::Execute(selected) => {
+                self.skill_selector.hide();
+                self.set_input(&format!("Execute the {} skill.", selected.name));
+            }
+            SkillSelectorAction::Toggle(selected) => {
+                self.set_skill_enabled(&selected, !selected.enabled);
+                self.show_skill_config_selector();
+            }
+        }
+    }
+
+    fn set_skill_enabled(&mut self, selected: &SkillItem, enabled: bool) {
+        let workspace = self.workspace_path_buf();
+        let mode_id = self.agent_type.clone();
+        let skill = selected.clone();
+
+        let result: Result<(), String> = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                match skill.level.as_str() {
+                    "user" => {
+                        set_user_mode_skill_state(
+                            &mode_id,
+                            &skill.key,
+                            enabled,
+                            skill.default_enabled,
+                        )
+                        .await
+                        .map_err(|error| error.to_string())?;
+                    }
+                    "project" => {
+                        let mut document = load_project_mode_skills_document_local(&workspace)
+                            .await
+                            .map_err(|error| error.to_string())?;
+                        set_mode_skill_disabled_in_document(
+                            &mut document,
+                            &mode_id,
+                            &skill.key,
+                            !enabled,
+                        )
+                        .map_err(|error| error.to_string())?;
+                        save_project_mode_skills_document_local(&workspace, &document)
+                            .await
+                            .map_err(|error| error.to_string())?;
+                    }
+                    other => {
+                        return Err(format!("Unsupported skill level '{}'", other));
+                    }
+                }
+
+                Ok(())
+            })
+        });
+
+        self.status = Some(match result {
+            Ok(()) => format!(
+                "Skill '{}' {} for mode '{}'.",
+                selected.name,
+                if enabled { "enabled" } else { "disabled" },
+                self.agent_type
+            ),
+            Err(error) => format!("Failed to update skill '{}': {}", selected.name, error),
+        });
+    }
+
+    fn skill_item_from_info(info: SkillInfo) -> SkillItem {
+        SkillItem {
+            key: info.key,
+            name: info.name,
+            description: info.description,
+            level: info.level.as_str().to_string(),
+            enabled: true,
+            selected_for_runtime: true,
+            default_enabled: true,
+            is_shadowed: info.is_shadowed,
+        }
+    }
+
+    fn skill_item_from_mode_info(info: ModeSkillInfo) -> SkillItem {
+        SkillItem {
+            key: info.skill.key,
+            name: info.skill.name,
+            description: info.skill.description,
+            level: info.skill.level.as_str().to_string(),
+            enabled: info.effective_enabled,
+            selected_for_runtime: info.selected_for_runtime,
+            default_enabled: info.default_enabled,
+            is_shadowed: info.skill.is_shadowed,
+        }
     }
 
     fn show_subagent_selector(&mut self) {
         self.push_current_popup_to_stack();
+        self.subagent_selector.show_menu();
+    }
 
+    fn show_available_subagent_list(&mut self) {
         let registry = get_agent_registry();
         let subagents = tokio::task::block_in_place(|| {
             let workspace = self.workspace_path_buf();
-            tokio::runtime::Handle::current()
-                .block_on(registry.get_subagents_info(Some(workspace.as_path())))
+            let agent_type = self.agent_type.clone();
+            tokio::runtime::Handle::current().block_on(registry.get_subagents_for_query(
+                &SubagentQueryContext {
+                    parent_agent_type: Some(&agent_type),
+                    workspace_root: Some(workspace.as_path()),
+                    list_scope: SubagentListScope::TaskVisible,
+                    include_disabled: false,
+                },
+            ))
         });
 
         if subagents.is_empty() {
-            self.status = Some("No subagents found.".to_string());
+            self.status = Some(format!(
+                "No enabled subagents found for agent mode '{}'.",
+                self.agent_type
+            ));
             return;
         }
 
         let subagent_items: Vec<SubagentItem> = subagents
             .into_iter()
-            .map(|s| {
-                let source = match s.subagent_source {
-                    Some(bitfun_core::agentic::agents::SubAgentSource::Builtin) => "builtin".to_string(),
-                    Some(bitfun_core::agentic::agents::SubAgentSource::Project) => "project".to_string(),
-                    Some(bitfun_core::agentic::agents::SubAgentSource::User) => "user".to_string(),
-                    None => "builtin".to_string(),
-                };
-                SubagentItem {
-                    id: s.id,
-                    name: s.name,
-                    description: s.description,
-                    source,
-                }
-            })
+            .map(Self::subagent_item_from_info)
             .collect();
 
         if subagent_items.is_empty() {
@@ -1607,7 +1922,104 @@ impl StartupPage {
             return;
         }
 
-        self.subagent_selector.show(subagent_items);
+        self.subagent_selector.show_list(subagent_items);
+    }
+
+    fn show_subagent_config_selector(&mut self) {
+        let registry = get_agent_registry();
+        let subagents = tokio::task::block_in_place(|| {
+            let workspace = self.workspace_path_buf();
+            let agent_type = self.agent_type.clone();
+            tokio::runtime::Handle::current().block_on(registry.get_subagents_for_query(
+                &SubagentQueryContext {
+                    parent_agent_type: Some(&agent_type),
+                    workspace_root: Some(workspace.as_path()),
+                    list_scope: SubagentListScope::RegistryManagement,
+                    include_disabled: true,
+                },
+            ))
+        });
+
+        let subagent_items: Vec<SubagentItem> = subagents
+            .into_iter()
+            .map(Self::subagent_item_from_info)
+            .collect();
+
+        if subagent_items.is_empty() {
+            self.status = Some("No subagents found.".to_string());
+            return;
+        }
+
+        self.subagent_selector.show_config(subagent_items);
+    }
+
+    fn handle_subagent_selector_action(&mut self, action: SubagentSelectorAction) {
+        match action {
+            SubagentSelectorAction::ListSubagents => self.show_available_subagent_list(),
+            SubagentSelectorAction::ConfigureSubagents => self.show_subagent_config_selector(),
+            SubagentSelectorAction::Launch(selected) => {
+                self.subagent_selector.hide();
+                self.set_input(&format!(
+                    "Launch subagent {} to finish task: ",
+                    selected.name
+                ));
+            }
+            SubagentSelectorAction::Toggle(selected) => {
+                self.set_subagent_enabled(&selected, !selected.enabled);
+                self.show_subagent_config_selector();
+            }
+        }
+    }
+
+    fn set_subagent_enabled(&mut self, selected: &SubagentItem, enabled: bool) {
+        let registry = get_agent_registry();
+        let workspace = self.workspace_path_buf();
+        let mode_id = self.agent_type.clone();
+        let subagent = selected.clone();
+
+        let result: Result<(), String> = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                registry
+                    .update_subagent_override(
+                        &mode_id,
+                        &subagent.id,
+                        enabled,
+                        Some(workspace.as_path()),
+                    )
+                    .await
+                    .map_err(|error| error.to_string())
+            })
+        });
+
+        self.status = Some(match result {
+            Ok(()) => format!(
+                "Subagent '{}' {} for mode '{}'.",
+                selected.name,
+                if enabled { "enabled" } else { "disabled" },
+                self.agent_type
+            ),
+            Err(error) => format!("Failed to update subagent '{}': {}", selected.name, error),
+        });
+    }
+
+    fn subagent_item_from_info(info: AgentInfo) -> SubagentItem {
+        let source = match info.subagent_source {
+            Some(SubAgentSource::Builtin) => "builtin",
+            Some(SubAgentSource::Project) => "project",
+            Some(SubAgentSource::User) => "user",
+            None => "builtin",
+        }
+        .to_string();
+
+        SubagentItem {
+            key: info.key,
+            id: info.id,
+            name: info.name,
+            description: info.description,
+            source,
+            enabled: info.effective_enabled,
+            default_enabled: info.default_enabled,
+        }
     }
 
     // ======================== Helpers ========================
@@ -1627,6 +2039,9 @@ impl StartupPage {
             self.skill_selector.hide();
         } else if self.subagent_selector.is_visible() {
             self.subagent_selector.hide();
+        } else if self.theme_selector.is_visible() {
+            self.theme_selector.hide();
+            self.cancel_theme_preview();
         } else if self.provider_selector.is_visible() {
             self.provider_selector.hide();
         } else if self.model_config_form.is_visible() {
@@ -1642,6 +2057,7 @@ impl StartupPage {
                 PopupType::SessionSelector => self.session_selector.reshow(),
                 PopupType::SkillSelector => self.skill_selector.reshow(),
                 PopupType::SubagentSelector => self.subagent_selector.reshow(),
+                PopupType::ThemeSelector => self.theme_selector.reshow(),
                 PopupType::ProviderSelector => self.provider_selector.reshow(),
                 PopupType::ModelConfigForm => self.model_config_form.reshow(),
             }
@@ -1656,6 +2072,8 @@ impl StartupPage {
         self.session_selector.hide();
         self.skill_selector.hide();
         self.subagent_selector.hide();
+        self.theme_selector.hide();
+        self.cancel_theme_preview();
         self.provider_selector.hide();
         self.model_config_form.hide();
         self.popup_stack.clear();

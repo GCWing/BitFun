@@ -8,6 +8,9 @@ import AcpAgentsConfig from './AcpAgentsConfig';
 const loadJsonConfigMock = vi.hoisted(() => vi.fn());
 const getClientsMock = vi.hoisted(() => vi.fn());
 const probeClientRequirementsMock = vi.hoisted(() => vi.fn());
+const installClientCliMock = vi.hoisted(() => vi.fn());
+const predownloadClientAdapterMock = vi.hoisted(() => vi.fn());
+const listSavedConnectionsMock = vi.hoisted(() => vi.fn());
 const notifyErrorMock = vi.hoisted(() => vi.fn());
 const notifySuccessMock = vi.hoisted(() => vi.fn());
 const translate = (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => (
@@ -96,7 +99,8 @@ vi.mock('../../api/service-api/ACPClientAPI', () => ({
     loadJsonConfig: loadJsonConfigMock,
     getClients: getClientsMock,
     probeClientRequirements: probeClientRequirementsMock,
-    installClientCli: vi.fn(),
+    installClientCli: installClientCliMock,
+    predownloadClientAdapter: predownloadClientAdapterMock,
     saveJsonConfig: vi.fn(),
   },
 }));
@@ -104,6 +108,12 @@ vi.mock('../../api/service-api/ACPClientAPI', () => ({
 vi.mock('../../api/service-api/SystemAPI', () => ({
   systemAPI: {
     openExternal: vi.fn(),
+  },
+}));
+
+vi.mock('@/features/ssh-remote/sshApi', () => ({
+  sshApi: {
+    listSavedConnections: listSavedConnectionsMock,
   },
 }));
 
@@ -117,6 +127,7 @@ vi.mock('@/shared/notification-system', () => ({
 vi.mock('@/shared/utils/logger', () => ({
   createLogger: () => ({
     error: vi.fn(),
+    warn: vi.fn(),
   }),
 }));
 
@@ -151,7 +162,10 @@ describe('AcpAgentsConfig', () => {
       sessionCount: 0,
       toolName: 'acp__opencode__prompt',
     }]);
+    listSavedConnectionsMock.mockResolvedValue([]);
     probeClientRequirementsMock.mockResolvedValue([]);
+    installClientCliMock.mockResolvedValue(undefined);
+    predownloadClientAdapterMock.mockResolvedValue(undefined);
 
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -168,7 +182,7 @@ describe('AcpAgentsConfig', () => {
     vi.clearAllMocks();
   });
 
-  it('does not probe external ACP CLIs just by opening the settings tab', async () => {
+  it('probes requirements when opened and does not treat missing probe data as invalid config', async () => {
     await act(async () => {
       root.render(<AcpAgentsConfig />);
     });
@@ -179,6 +193,152 @@ describe('AcpAgentsConfig', () => {
 
     expect(loadJsonConfigMock).toHaveBeenCalledTimes(1);
     expect(getClientsMock).toHaveBeenCalledTimes(1);
-    expect(probeClientRequirementsMock).not.toHaveBeenCalled();
+    expect(probeClientRequirementsMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toContain('registry.configInvalid');
+  });
+
+  it('renders saved remote servers as global agent rows without override controls', async () => {
+    listSavedConnectionsMock.mockResolvedValue([{
+      id: 'huawei-server',
+      name: 'huawei-server',
+      host: '119.8.182.138',
+      port: 22,
+      username: 'ssh-root',
+      authType: { type: 'Password' },
+    }]);
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('huawei-server');
+    expect(container.textContent).toContain('ssh-root@119.8.182.138');
+    expect(container.textContent).toContain('remote.refreshDetection');
+    expect(container.textContent).not.toContain('remote.env');
+    expect(probeClientRequirementsMock).toHaveBeenCalledWith({
+      remoteConnectionId: 'huawei-server',
+      force: undefined,
+    });
+  });
+
+  it('configures a preset adapter when the CLI is ready but the ACP layer is missing', async () => {
+    probeClientRequirementsMock.mockResolvedValue([
+      {
+        id: 'opencode',
+        tool: { name: 'opencode', installed: true },
+        runnable: true,
+        notes: [],
+      },
+      {
+        id: 'claude-code',
+        tool: { name: 'claude', installed: true },
+        adapter: { name: '@zed-industries/claude-code-acp', installed: false },
+        runnable: false,
+        notes: [],
+      },
+      {
+        id: 'codex',
+        tool: { name: 'codex', installed: true },
+        adapter: { name: '@zed-industries/codex-acp', installed: false },
+        runnable: false,
+        notes: [],
+      },
+    ]);
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const refreshButtons = Array.from(container.querySelectorAll('button'))
+      .filter(button => button.textContent?.includes('actions.refresh'));
+    expect(refreshButtons.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      refreshButtons[0].click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const configureButtons = Array.from(container.querySelectorAll('button'))
+      .filter(button => button.textContent?.includes('actions.configureAcp'));
+    expect(configureButtons.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      configureButtons[configureButtons.length - 1].click();
+      await Promise.resolve();
+    });
+
+    expect(predownloadClientAdapterMock).toHaveBeenCalledWith({
+      clientId: 'codex',
+    });
+  });
+
+  it('installs a missing remote preset CLI on that remote server', async () => {
+    listSavedConnectionsMock.mockResolvedValue([{
+      id: 'huawei-server',
+      name: 'huawei-server',
+      host: '119.8.182.138',
+      port: 22,
+      username: 'ssh-root',
+      authType: { type: 'Password' },
+    }]);
+    probeClientRequirementsMock.mockImplementation((options?: { remoteConnectionId?: string }) => {
+      if (options?.remoteConnectionId === 'huawei-server') {
+        return Promise.resolve([
+          {
+            id: 'opencode',
+            tool: { name: 'opencode', installed: true },
+            runnable: true,
+            notes: [],
+          },
+          {
+            id: 'claude-code',
+            tool: { name: 'claude', installed: true },
+            runnable: true,
+            notes: [],
+          },
+          {
+            id: 'codex',
+            tool: { name: 'codex', installed: false },
+            runnable: false,
+            notes: [],
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const installButtons = Array.from(container.querySelectorAll('button'))
+      .filter(button => button.textContent?.includes('actions.installCli'));
+    expect(installButtons.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      installButtons[installButtons.length - 1].click();
+      await Promise.resolve();
+    });
+
+    expect(installClientCliMock).toHaveBeenCalledWith({
+      clientId: 'codex',
+      remoteConnectionId: 'huawei-server',
+    });
   });
 });

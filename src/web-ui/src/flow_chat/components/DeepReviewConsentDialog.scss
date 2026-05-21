@@ -59,13 +59,13 @@
     font-size: 21px;
     font-weight: 680;
     letter-spacing: 0;
-    line-height: 1.22;
+    line-height: var(--flowchat-compact-line-height, 1.32);
   }
 }
 
 .deep-review-consent__eyebrow {
   color: color-mix(in srgb, var(--deep-review-accent) 58%, var(--color-text-muted));
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
   font-weight: 720;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -114,8 +114,8 @@
   p {
     margin: 4px 0 0;
     color: color-mix(in srgb, var(--color-text-secondary) 72%, var(--color-text-primary));
-    font-size: 12px;
-    line-height: 1.58;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-text-line-height, 1.58);
   }
 }
 
@@ -135,8 +135,8 @@
   p {
     margin: 4px 0 0;
     color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.55;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 }
 
@@ -151,9 +151,9 @@
     min-height: 20px;
     padding: 0;
     color: color-mix(in srgb, var(--color-text-secondary) 70%, var(--color-text-primary));
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 650;
-    line-height: 1.4;
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 }
 
@@ -177,8 +177,8 @@
   p {
     margin: 4px 0 0;
     color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 }
 
@@ -189,15 +189,15 @@
 
   strong {
     color: var(--color-text-primary);
-    font-size: 13px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 780;
-    line-height: 1.3;
+    line-height: var(--flowchat-compact-line-height, 1.32);
   }
 
   span {
     color: color-mix(in srgb, var(--color-text-secondary) 70%, var(--color-text-primary));
-    font-size: 12px;
-    line-height: 1.42;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
     text-align: left;
   }
 }
@@ -228,8 +228,8 @@
   color: color-mix(in srgb, var(--color-text-secondary) 72%, var(--color-text-primary));
   cursor: pointer;
   text-align: left;
-  font-size: 12px;
-  line-height: 1.25;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  line-height: var(--flowchat-compact-line-height, 1.32);
   transition:
     background 160ms ease,
     border-color 160ms ease,
@@ -291,7 +291,7 @@
 .deep-review-consent__strategy-option-label {
   min-width: 0;
   color: var(--color-text-primary);
-  font-size: 13px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 780;
   overflow-wrap: anywhere;
 }
@@ -312,9 +312,9 @@
   gap: 3px;
   margin-top: auto;
   color: color-mix(in srgb, var(--color-text-muted) 62%, var(--color-text-primary));
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
   font-weight: 680;
-  line-height: 1.25;
+  line-height: var(--flowchat-compact-line-height, 1.32);
 }
 
 .deep-review-consent__reviewer-group-title {
@@ -322,7 +322,7 @@
   align-items: center;
   gap: 6px;
   color: color-mix(in srgb, var(--color-text-secondary) 72%, var(--color-text-primary));
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
   font-weight: 720;
   text-transform: uppercase;
 }
@@ -350,8 +350,8 @@
     border-radius: 6px;
     background: color-mix(in srgb, var(--deep-review-warm) 6%, transparent);
     color: color-mix(in srgb, var(--color-text-secondary) 72%, var(--color-text-primary));
-    font-size: 12px;
-    line-height: 1.35;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-compact-line-height, 1.32);
 
     span {
       min-width: 0;
@@ -361,7 +361,7 @@
 
     strong {
       color: color-mix(in srgb, var(--deep-review-warm) 72%, var(--color-text-primary));
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
       font-weight: 720;
       text-align: right;
       white-space: normal;
@@ -389,9 +389,9 @@ li.deep-review-consent__skipped-more {
 
 .deep-review-consent__fact-title {
   color: var(--color-text-primary);
-  font-size: 13px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 680;
-  line-height: 1.35;
+  line-height: var(--flowchat-compact-line-height, 1.32);
 }
 
 .deep-review-consent__footer {

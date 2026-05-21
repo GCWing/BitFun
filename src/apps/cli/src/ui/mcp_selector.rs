@@ -8,11 +8,10 @@
 /// - Space key toggles server on/off
 /// - Enter key also toggles
 /// - Status indicators: ✓ Connected (green), ○ Stopped (gray), ✗ Failed (red), ⋯ Loading (yellow)
-
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState},
     Frame,
@@ -84,7 +83,8 @@ impl McpSelectorState {
         // Preserve selection if possible
         if let Some(idx) = selected_idx {
             if idx >= self.items.len() {
-                self.list_state.select(Some(self.items.len().saturating_sub(1)));
+                self.list_state
+                    .select(Some(self.items.len().saturating_sub(1)));
             }
         }
     }
@@ -159,7 +159,9 @@ impl McpSelectorState {
 
         let popup_width = area.width.saturating_sub(4).min(72);
         // +5 for border(2) + title(1) + hint(1) + padding(1)
-        let popup_height = (self.items.len() as u16 + 5).min(area.height.saturating_sub(2)).max(6);
+        let popup_height = (self.items.len() as u16 + 5)
+            .min(area.height.saturating_sub(2))
+            .max(6);
         if popup_height < 5 || popup_width < 30 {
             self.last_area = None;
             return;
@@ -185,7 +187,9 @@ impl McpSelectorState {
             .iter()
             .map(|item| {
                 let is_loading = loading_id.as_ref().map_or(false, |id| id == &item.id);
-                let is_confirm_delete = confirm_delete_id.as_ref().map_or(false, |id| id == &item.id);
+                let is_confirm_delete = confirm_delete_id
+                    .as_ref()
+                    .map_or(false, |id| id == &item.id);
 
                 // If this item is pending delete confirmation, show special style
                 if is_confirm_delete {
@@ -290,7 +294,7 @@ impl McpSelectorState {
             .highlight_style(
                 Style::default()
                     .bg(theme.primary)
-                    .fg(Color::White)
+                    .fg(theme.selection_foreground())
                     .add_modifier(Modifier::BOLD),
             );
 

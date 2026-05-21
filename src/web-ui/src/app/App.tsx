@@ -1,5 +1,7 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
+import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
+import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
 import { ChatProvider, useAIInitialization } from '../infrastructure';
 import { ViewModeProvider } from '../infrastructure/contexts/ViewModeProvider';
 import { SSHRemoteProvider } from '../features/ssh-remote';
@@ -10,6 +12,7 @@ import { NotificationContainer, NotificationCenter } from '../shared/notificatio
 import { AnnouncementProvider } from '../shared/announcement-system';
 import { ConfirmDialogRenderer } from '../component-library';
 import { createLogger } from '@/shared/utils/logger';
+import { startupTrace } from '@/shared/utils/startupTrace';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { syncAgentCompanionDesktopWindow } from '@/infrastructure/config/services/AgentCompanionWindowService';
 import { isTauriRuntime } from '@/infrastructure/runtime';
@@ -49,8 +52,11 @@ function App() {
   // Splash screen state
   const [splashVisible, setSplashVisible] = useState(true);
   const [splashExiting, setSplashExiting] = useState(false);
+  const hasAppDismissibleLayer = useHasDismissibleLayer('app');
   const mountTimeRef = useRef(Date.now());
   const mainWindowShownRef = useRef(false);
+  const interactiveShellReadyRef = useRef(false);
+  const [interactiveShellReady, setInteractiveShellReady] = useState(false);
 
   // Once the workspace finishes loading, wait for the remaining min-display
   // time and then begin the exit animation.
@@ -76,6 +82,7 @@ function App() {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('show_main_window');
       log.debug('Main window shown', { reason });
+      startupTrace.markPhase('main_window_shown', { reason });
     } catch (error: any) {
       log.error('Failed to show main window', error);
 
@@ -85,6 +92,7 @@ function App() {
         await mainWindow.show();
         await mainWindow.setFocus();
         log.debug('Main window shown via fallback', { reason });
+        startupTrace.markPhase('main_window_shown_fallback', { reason });
       } catch (fallbackError) {
         log.error('Fallback window show failed', fallbackError);
         mainWindowShownRef.current = false;
@@ -96,8 +104,18 @@ function App() {
   // The splash still covers the UI, so users see immediate feedback instead
   // of waiting on a hidden window while startup continues in the background.
   useEffect(() => {
+    startupTrace.markPhase('app_effect_mounted');
     void showMainWindow('startup-overlay');
   }, [showMainWindow]);
+
+  useEffect(() => {
+    if (workspaceLoading || interactiveShellReadyRef.current) {
+      return;
+    }
+    interactiveShellReadyRef.current = true;
+    startupTrace.markPhase('interactive_shell_ready');
+    setInteractiveShellReady(true);
+  }, [workspaceLoading]);
 
   // If the early reveal path fails, keep the old post-splash show as a retry.
   useEffect(() => {
@@ -152,8 +170,13 @@ function App() {
         const { ACPClientAPI } = await import('../infrastructure/api/service-api/ACPClientAPI');
         await ACPClientAPI.initializeClients();
         log.debug('ACP clients initialized');
-        // Requirement probes execute third-party CLIs such as `opencode --version`.
-        // Keep startup side-effect free; settings and ACP session creation can probe on demand.
+        void ACPClientAPI.probeClientRequirements()
+          .then(() => {
+            log.debug('ACP client requirements probed');
+          })
+          .catch((error) => {
+            log.warn('Failed to probe ACP client requirements during startup', error);
+          });
       } catch (error) {
         log.error('Failed to initialize ACP clients', error);
       }
@@ -166,24 +189,71 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!isTauriRuntime()) return;
+    if (!isTauriRuntime() || !interactiveShellReady) return;
 
+    let disposed = false;
+    let startupSyncHandle: { promise: Promise<void>; cancel: () => void } | null = null;
     const emitCurrentAgentCompanionActivity = () => {
+      if (disposed) {
+        return;
+      }
       void emitAgentCompanionActivity(buildAgentCompanionActivity());
     };
 
     void aiExperienceConfigService.getSettingsAsync().then(async settings => {
-      await syncAgentCompanionDesktopWindow(settings);
-      emitCurrentAgentCompanionActivity();
-      window.setTimeout(emitCurrentAgentCompanionActivity, 250);
+      if (disposed) {
+        return;
+      }
+
+      const { backgroundTaskScheduler, BackgroundTaskCancelledError } = await import('@/shared/utils/backgroundTaskScheduler');
+      if (disposed) {
+        return;
+      }
+
+      startupTrace.markPhase('agent_companion_sync_scheduled', {
+        source: 'startup_idle',
+      });
+      startupSyncHandle = backgroundTaskScheduler.schedule(async signal => {
+        if (signal.aborted || disposed) {
+          return;
+        }
+        startupTrace.markPhase('agent_companion_sync_start', {
+          source: 'startup_idle',
+        });
+        await syncAgentCompanionDesktopWindow(settings);
+        if (signal.aborted || disposed) {
+          return;
+        }
+        emitCurrentAgentCompanionActivity();
+        window.setTimeout(emitCurrentAgentCompanionActivity, 250);
+        startupTrace.markPhase('agent_companion_sync_end', {
+          source: 'startup_idle',
+        });
+      }, {
+        idle: true,
+        inFlightKey: 'agent-companion:startup-sync',
+        priority: 'low',
+      });
+
+      startupSyncHandle.promise.catch(error => {
+        if (!disposed && !(error instanceof BackgroundTaskCancelledError)) {
+          log.warn('Initial Agent companion sync task failed', error);
+        }
+      });
     });
-    return aiExperienceConfigService.addChangeListener(settings => {
+
+    const removeSettingsListener = aiExperienceConfigService.addChangeListener(settings => {
       void syncAgentCompanionDesktopWindow(settings).then(() => {
         emitCurrentAgentCompanionActivity();
         window.setTimeout(emitCurrentAgentCompanionActivity, 250);
       });
     });
-  }, []);
+    return () => {
+      disposed = true;
+      startupSyncHandle?.cancel();
+      removeSettingsListener();
+    };
+  }, [interactiveShellReady]);
 
   useEffect(() => subscribeAgentCompanionActivity(activity => {
     void emitAgentCompanionActivity(activity);
@@ -260,8 +330,14 @@ function App() {
   useShortcut(
     'app.closePreview',
     { key: 'Escape', scope: 'app', allowInInput: true },
-    () => window.dispatchEvent(new CustomEvent('closePreview')),
-    { priority: 1, description: 'keyboard.shortcuts.app.closePreview' }
+    () => {
+      dismissibleLayerManager.dismissTop('app');
+    },
+    {
+      enabled: hasAppDismissibleLayer,
+      priority: 1,
+      description: 'keyboard.shortcuts.app.closePreview',
+    }
   );
 
   // Top SceneBar: Mod+Alt+1..9 / Mod+Alt+PageUp/PageDown

@@ -153,7 +153,59 @@ export function openBtwSessionInAuxPane(params: {
   parentSessionId: string;
   workspacePath?: string;
   expand?: boolean;
+  sessionKind?: 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
+  sessionTitle?: string;
+  agentType?: string;
+  parentToolCallId?: string;
+  subagentType?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  includeInternal?: boolean;
 }): void {
+  const existingSession = flowChatStore.getState().sessions.get(params.childSessionId);
+  const parentSession = flowChatStore.getState().sessions.get(params.parentSessionId);
+  const resolvedWorkspacePath = params.workspacePath || parentSession?.workspacePath;
+
+  if (
+    existingSession &&
+    (params.sessionKind === 'subagent' || existingSession.sessionKind === 'subagent')
+  ) {
+    flowChatStore.updateSessionRelationship(params.childSessionId, {
+      parentSessionId: params.parentSessionId,
+      sessionKind: params.sessionKind || existingSession.sessionKind,
+      parentToolCallId: params.parentToolCallId,
+      subagentType: params.subagentType,
+    });
+  }
+
+  if (!existingSession) {
+    const workspacePath = resolvedWorkspacePath;
+    flowChatStore.addExternalSession(
+      params.childSessionId,
+      params.sessionTitle || resolveBtwSessionTitle(params.childSessionId),
+      params.agentType || parentSession?.mode || 'agentic',
+      workspacePath,
+      {
+        parentSessionId: params.parentSessionId,
+        sessionKind: params.sessionKind || 'btw',
+        parentToolCallId: params.parentToolCallId,
+        subagentType: params.subagentType,
+      },
+      params.remoteConnectionId || parentSession?.remoteConnectionId,
+      params.remoteSshHost || parentSession?.remoteSshHost,
+    );
+    if (workspacePath) {
+      void flowChatStore.loadSessionHistory(
+        params.childSessionId,
+        workspacePath,
+        undefined,
+        params.remoteConnectionId || parentSession?.remoteConnectionId,
+        params.remoteSshHost || parentSession?.remoteSshHost,
+        { includeInternal: params.includeInternal },
+      );
+    }
+  }
+
   const content = buildBtwSessionPanelContent(
     params.childSessionId,
     params.parentSessionId,

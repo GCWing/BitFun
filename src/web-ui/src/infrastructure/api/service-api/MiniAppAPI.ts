@@ -192,8 +192,17 @@ export interface MiniAppCustomizationMetadata {
   last_applied_draft_id?: string;
   available_builtin_update?: {
     builtin_version: number;
+    source_hash: string;
     detected_at: number;
   };
+  declined_builtin_updates?: Array<{
+    builtin_version: number;
+    source_hash: string;
+    declined_at: number;
+    local_app_version?: number | null;
+    local_app_updated_at?: number | null;
+    last_applied_draft_id?: string | null;
+  }>;
   updated_at: number;
 }
 
@@ -511,6 +520,23 @@ export class MiniAppAPI {
       return await api.invoke('miniapp_get_customization_metadata', { appId });
     } catch (error) {
       throw createTauriCommandError('miniapp_get_customization_metadata', error, { appId });
+    }
+  }
+
+  async declineBuiltinUpdate(
+    appId: string,
+    builtinVersion: number,
+    sourceHash: string,
+  ): Promise<MiniAppCustomizationMetadata | null> {
+    try {
+      return await api.invoke('miniapp_decline_builtin_update', {
+        request: { appId, builtinVersion, sourceHash }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_decline_builtin_update', error, {
+        appId,
+        builtinVersion,
+      });
     }
   }
 

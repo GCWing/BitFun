@@ -328,16 +328,19 @@ impl DeepReviewExecutionPolicy {
     fn apply_strategy_runtime_budget(&mut self) {
         let budget = strategy_runtime_budget(self.strategy_level);
 
-        self.reviewer_timeout_seconds =
-            strategy_bounded_timeout(self.reviewer_timeout_seconds, budget.reviewer_timeout_seconds);
+        self.reviewer_timeout_seconds = strategy_bounded_timeout(
+            self.reviewer_timeout_seconds,
+            budget.reviewer_timeout_seconds,
+        );
         self.judge_timeout_seconds =
             strategy_bounded_timeout(self.judge_timeout_seconds, budget.judge_timeout_seconds);
         self.reviewer_file_split_threshold = strategy_bounded_split_threshold(
             self.reviewer_file_split_threshold,
             budget.reviewer_file_split_threshold,
         );
-        self.max_same_role_instances =
-            self.max_same_role_instances.min(budget.max_same_role_instances);
+        self.max_same_role_instances = self
+            .max_same_role_instances
+            .min(budget.max_same_role_instances);
     }
 
     /// Returns true when the file count exceeds the split threshold and
@@ -436,7 +439,10 @@ fn strategy_bounded_timeout(configured_timeout_seconds: u64, strategy_timeout_se
     configured_timeout_seconds.min(strategy_timeout_seconds)
 }
 
-fn strategy_bounded_split_threshold(configured_threshold: usize, strategy_threshold: usize) -> usize {
+fn strategy_bounded_split_threshold(
+    configured_threshold: usize,
+    strategy_threshold: usize,
+) -> usize {
     if configured_threshold == 0 || strategy_threshold == 0 {
         return 0;
     }

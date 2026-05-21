@@ -10,7 +10,7 @@ pub mod types;
 pub use client::{AIClient, StreamOptions, StreamResponse};
 pub use stream::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
 pub use types::{
-    AIConfig, ConnectionTestMessageCode, ConnectionTestResult, GeminiResponse, GeminiUsage,
-    Message, ProxyConfig, ReasoningMode, RemoteModelInfo, ToolCall, ToolDefinition,
-    ToolImageAttachment, resolve_request_url,
+    resolve_request_url, AIConfig, ConnectionTestMessageCode, ConnectionTestResult, GeminiResponse,
+    GeminiUsage, Message, ProxyConfig, ReasoningMode, RemoteModelInfo, ToolCall, ToolDefinition,
+    ToolImageAttachment,
 };

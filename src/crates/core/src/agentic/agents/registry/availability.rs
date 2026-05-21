@@ -66,12 +66,15 @@ pub fn subagent_override_for_parent(
     parent_agent_type: Option<&str>,
     subagent_key: &str,
 ) -> Option<AgentSubagentOverrideState> {
-    override_for_parent(overrides, parent_agent_type).and_then(|parent| parent.get(subagent_key).copied())
+    override_for_parent(overrides, parent_agent_type)
+        .and_then(|parent| parent.get(subagent_key).copied())
 }
 
 pub fn resolve_default_enabled(entry: &AgentEntry, parent_agent_type: Option<&str>) -> bool {
     match entry.subagent_source {
-        Some(SubAgentSource::Builtin) => entry.visibility_policy.can_access_from_parent(parent_agent_type),
+        Some(SubAgentSource::Builtin) => entry
+            .visibility_policy
+            .can_access_from_parent(parent_agent_type),
         Some(SubAgentSource::Project) | Some(SubAgentSource::User) => true,
         None => true,
     }
@@ -96,7 +99,11 @@ pub fn resolve_override_layers(
         },
         Some(SubAgentSource::Builtin) | Some(SubAgentSource::User) => ResolvedOverrideLayers {
             project_override: None,
-            user_override: subagent_override_for_parent(user_overrides, parent_agent_type, &subagent_key),
+            user_override: subagent_override_for_parent(
+                user_overrides,
+                parent_agent_type,
+                &subagent_key,
+            ),
         },
         None => ResolvedOverrideLayers::default(),
     }
@@ -109,7 +116,8 @@ pub fn resolve_availability(
     user_overrides: &AgentSubagentOverrideConfig,
 ) -> ResolvedSubagentAvailability {
     let default_enabled = resolve_default_enabled(entry, parent_agent_type);
-    let layers = resolve_override_layers(entry, parent_agent_type, project_overrides, user_overrides);
+    let layers =
+        resolve_override_layers(entry, parent_agent_type, project_overrides, user_overrides);
 
     if let Some(project_override) = layers.project_override {
         return ResolvedSubagentAvailability {
@@ -203,7 +211,11 @@ mod tests {
         }
     }
 
-    fn overrides(parent: &str, subagent_key: &str, state: AgentSubagentOverrideState) -> AgentSubagentOverrideConfig {
+    fn overrides(
+        parent: &str,
+        subagent_key: &str,
+        state: AgentSubagentOverrideState,
+    ) -> AgentSubagentOverrideConfig {
         let mut parent_overrides = HashMap::new();
         parent_overrides.insert(subagent_key.to_string(), state);
 
@@ -215,16 +227,24 @@ mod tests {
     #[test]
     fn builtin_and_user_subagents_only_use_global_overrides() {
         let builtin_entry = make_entry(SubAgentSource::Builtin, "Explore");
-        let builtin_key = subagent_key_for(builtin_entry.subagent_source, builtin_entry.agent.as_ref())
-            .expect("builtin key");
+        let builtin_key =
+            subagent_key_for(builtin_entry.subagent_source, builtin_entry.agent.as_ref())
+                .expect("builtin key");
         let builtin_layers = resolve_override_layers(
             &builtin_entry,
             Some("agentic"),
-            Some(&overrides("agentic", &builtin_key, AgentSubagentOverrideState::Disabled)),
+            Some(&overrides(
+                "agentic",
+                &builtin_key,
+                AgentSubagentOverrideState::Disabled,
+            )),
             &overrides("agentic", &builtin_key, AgentSubagentOverrideState::Enabled),
         );
         assert_eq!(builtin_layers.project_override, None);
-        assert_eq!(builtin_layers.user_override, Some(AgentSubagentOverrideState::Enabled));
+        assert_eq!(
+            builtin_layers.user_override,
+            Some(AgentSubagentOverrideState::Enabled)
+        );
 
         let user_entry = make_entry(SubAgentSource::User, "UserScout");
         let user_key = subagent_key_for(user_entry.subagent_source, user_entry.agent.as_ref())
@@ -232,26 +252,40 @@ mod tests {
         let user_layers = resolve_override_layers(
             &user_entry,
             Some("agentic"),
-            Some(&overrides("agentic", &user_key, AgentSubagentOverrideState::Disabled)),
+            Some(&overrides(
+                "agentic",
+                &user_key,
+                AgentSubagentOverrideState::Disabled,
+            )),
             &overrides("agentic", &user_key, AgentSubagentOverrideState::Enabled),
         );
         assert_eq!(user_layers.project_override, None);
-        assert_eq!(user_layers.user_override, Some(AgentSubagentOverrideState::Enabled));
+        assert_eq!(
+            user_layers.user_override,
+            Some(AgentSubagentOverrideState::Enabled)
+        );
     }
 
     #[test]
     fn project_subagents_only_use_project_overrides() {
         let entry = make_entry(SubAgentSource::Project, "ProjectScout");
-        let key = subagent_key_for(entry.subagent_source, entry.agent.as_ref())
-            .expect("project key");
+        let key =
+            subagent_key_for(entry.subagent_source, entry.agent.as_ref()).expect("project key");
         let layers = resolve_override_layers(
             &entry,
             Some("agentic"),
-            Some(&overrides("agentic", &key, AgentSubagentOverrideState::Disabled)),
+            Some(&overrides(
+                "agentic",
+                &key,
+                AgentSubagentOverrideState::Disabled,
+            )),
             &overrides("agentic", &key, AgentSubagentOverrideState::Enabled),
         );
 
-        assert_eq!(layers.project_override, Some(AgentSubagentOverrideState::Disabled));
+        assert_eq!(
+            layers.project_override,
+            Some(AgentSubagentOverrideState::Disabled)
+        );
         assert_eq!(layers.user_override, None);
     }
 }

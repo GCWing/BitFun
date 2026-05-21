@@ -1,6 +1,6 @@
 //! Debug Mode - Evidence-driven debugging mode
 
-use crate::agentic::agents::{Agent, PromptBuilder, PromptBuilderContext};
+use crate::agentic::agents::{get_embedded_prompt, Agent, PromptBuilder, PromptBuilderContext};
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{DebugModeConfig, LanguageDebugTemplate};
 use crate::service::lsp::project_detector::{ProjectDetector, ProjectInfo};
@@ -11,7 +11,7 @@ use std::path::Path;
 
 pub struct DebugMode;
 
-include!(concat!(env!("OUT_DIR"), "/embedded_agents_prompt.rs"));
+const DEBUG_MODE_PROMPT_TEMPLATE: &str = "debug_mode";
 
 impl Default for DebugMode {
     fn default() -> Self {
@@ -179,7 +179,7 @@ impl DebugMode {
         section
     }
 
-    /// Builds session-level configuration with dynamic values like server endpoint and log path.
+    /// Builds session-level reminder details with dynamic values like server endpoint and log path.
     fn build_session_level_rule(&self, config: &DebugModeConfig, workspace_path: &str) -> String {
         let log_path = if config.log_path.starts_with('/') || config.log_path.starts_with('.') {
             config.log_path.clone()
@@ -279,7 +279,7 @@ impl Agent for DebugMode {
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
-        "debug_mode"
+        DEBUG_MODE_PROMPT_TEMPLATE
     }
 
     async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {
@@ -295,7 +295,7 @@ impl Agent for DebugMode {
             project_info.languages, project_info.project_types
         );
 
-        let system_prompt_template = get_embedded_prompt("debug_mode")
+        let system_prompt_template = get_embedded_prompt(DEBUG_MODE_PROMPT_TEMPLATE)
             .unwrap_or("Debug mode prompt not found in embedded files");
 
         let language_templates =
@@ -320,7 +320,11 @@ impl Agent for DebugMode {
         Ok(prompt_list.join(""))
     }
 
-    async fn get_system_reminder(&self, _index: usize) -> BitFunResult<String> {
+    async fn get_system_reminder(
+        &self,
+        _previous_agent_type: Option<&str>,
+        _workspace: Option<&crate::agentic::WorkspaceBinding>,
+    ) -> BitFunResult<String> {
         Ok(self.build_system_reminder())
     }
 

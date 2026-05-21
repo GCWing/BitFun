@@ -5,7 +5,6 @@
 /// - Allow once: execute this tool call only
 /// - Allow always: auto-approve this tool type for the session
 /// - Reject: deny execution (optionally with a reason)
-
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -15,8 +14,8 @@ use ratatui::{
     Frame,
 };
 
-use super::theme::{Theme, StyleKind, tool_icon};
 use super::string_utils::truncate_str;
+use super::theme::{tool_icon, StyleKind, Theme};
 
 // ============ Data Types ============
 
@@ -123,8 +122,10 @@ impl PermissionPrompt {
 
     fn handle_confirm_always_key(&mut self, key: KeyEvent) -> PermissionAction {
         match (key.code, key.modifiers) {
-            (KeyCode::Left, _) | (KeyCode::Right, _)
-            | (KeyCode::Char('h'), KeyModifiers::NONE) | (KeyCode::Char('l'), KeyModifiers::NONE) => {
+            (KeyCode::Left, _)
+            | (KeyCode::Right, _)
+            | (KeyCode::Char('h'), KeyModifiers::NONE)
+            | (KeyCode::Char('l'), KeyModifiers::NONE) => {
                 self.selected_option = if self.selected_option == 0 { 1 } else { 0 };
                 PermissionAction::None
             }
@@ -197,12 +198,7 @@ pub fn render_permission_overlay(
 }
 
 /// Render the main permission prompt (Allow once / Allow always / Reject)
-fn render_permission_main(
-    frame: &mut Frame,
-    prompt: &PermissionPrompt,
-    theme: &Theme,
-    area: Rect,
-) {
+fn render_permission_main(frame: &mut Frame, prompt: &PermissionPrompt, theme: &Theme, area: Rect) {
     // Calculate overlay height based on content
     let overlay_height = 8u16.min(area.height.saturating_sub(2));
     let overlay_area = Rect {
@@ -237,7 +233,12 @@ fn render_permission_main(
     let mut lines = vec![
         Line::from(vec![
             Span::styled("\u{25b3} ", theme.style(StyleKind::Warning)), // △
-            Span::styled("Permission required", Style::default().fg(theme.warning).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Permission required",
+                Style::default()
+                    .fg(theme.warning)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(""),
     ];
@@ -250,8 +251,7 @@ fn render_permission_main(
         Span::styled(detail, Style::default()),
     ]));
 
-    let paragraph = Paragraph::new(lines)
-        .wrap(Wrap { trim: true });
+    let paragraph = Paragraph::new(lines).wrap(Wrap { trim: true });
     frame.render_widget(paragraph, inner);
 
     // Button bar
@@ -266,12 +266,7 @@ fn render_permission_main(
 }
 
 /// Render the "Confirm Always" stage
-fn render_confirm_always(
-    frame: &mut Frame,
-    prompt: &PermissionPrompt,
-    theme: &Theme,
-    area: Rect,
-) {
+fn render_confirm_always(frame: &mut Frame, prompt: &PermissionPrompt, theme: &Theme, area: Rect) {
     let overlay_height = 6u16.min(area.height.saturating_sub(2));
     let overlay_area = Rect {
         x: area.x,
@@ -284,10 +279,7 @@ fn render_confirm_always(
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(2),
-            Constraint::Length(2),
-        ])
+        .constraints([Constraint::Min(2), Constraint::Length(2)])
         .split(overlay_area);
 
     let content_block = Block::default()
@@ -301,11 +293,19 @@ fn render_confirm_always(
     let lines = vec![
         Line::from(vec![
             Span::styled("\u{25b3} ", theme.style(StyleKind::Warning)),
-            Span::styled("Always allow", Style::default().fg(theme.warning).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Always allow",
+                Style::default()
+                    .fg(theme.warning)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            format!("This will auto-approve '{}' tool calls for this session.", prompt.tool_name),
+            format!(
+                "This will auto-approve '{}' tool calls for this session.",
+                prompt.tool_name
+            ),
             theme.style(StyleKind::Muted),
         )),
     ];
@@ -324,12 +324,7 @@ fn render_confirm_always(
 }
 
 /// Render the "Reject with reason" stage
-fn render_reject_reason(
-    frame: &mut Frame,
-    prompt: &PermissionPrompt,
-    theme: &Theme,
-    area: Rect,
-) {
+fn render_reject_reason(frame: &mut Frame, prompt: &PermissionPrompt, theme: &Theme, area: Rect) {
     let overlay_height = 7u16.min(area.height.saturating_sub(2));
     let overlay_area = Rect {
         x: area.x,
@@ -342,10 +337,7 @@ fn render_reject_reason(
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(3),
-            Constraint::Length(2),
-        ])
+        .constraints([Constraint::Min(3), Constraint::Length(2)])
         .split(overlay_area);
 
     let content_block = Block::default()
@@ -365,7 +357,12 @@ fn render_reject_reason(
     let lines = vec![
         Line::from(vec![
             Span::styled("\u{25b3} ", theme.style(StyleKind::Error)),
-            Span::styled("Reject permission", Style::default().fg(theme.error).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "Reject permission",
+                Style::default()
+                    .fg(theme.error)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(""),
         Line::from(Span::styled(
@@ -386,8 +383,7 @@ fn render_reject_reason(
     frame.render_widget(paragraph, inner);
 
     // Bottom hint bar
-    let hint_block = Block::default()
-        .style(Style::default().bg(theme.background_element));
+    let hint_block = Block::default().style(Style::default().bg(theme.background_element));
     frame.render_widget(hint_block, chunks[1]);
 
     let hint = Paragraph::new(Line::from(vec![
@@ -410,8 +406,7 @@ fn render_button_bar(
     selected: usize,
     hint_text: &str,
 ) {
-    let bar_block = Block::default()
-        .style(Style::default().bg(theme.background_element));
+    let bar_block = Block::default().style(Style::default().bg(theme.background_element));
     frame.render_widget(bar_block, area);
 
     // Build button spans
@@ -448,8 +443,7 @@ fn render_button_bar(
     }
 
     let line = Line::from(spans);
-    let paragraph = Paragraph::new(line)
-        .style(Style::default().bg(theme.background_element));
+    let paragraph = Paragraph::new(line).style(Style::default().bg(theme.background_element));
     frame.render_widget(paragraph, area);
 }
 
@@ -457,42 +451,53 @@ fn render_button_bar(
 fn build_tool_detail(prompt: &PermissionPrompt) -> String {
     match prompt.tool_name.as_str() {
         "Bash" | "bash_tool" | "run_terminal_cmd" => {
-            let cmd = prompt.params.get("command")
+            let cmd = prompt
+                .params
+                .get("command")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
-            let desc = prompt.params.get("description")
-                .and_then(|v| v.as_str());
+            let desc = prompt.params.get("description").and_then(|v| v.as_str());
             match desc {
                 Some(d) => format!("{}\n$ {}", d, cmd),
                 None => format!("$ {}", cmd),
             }
         }
         "Edit" | "search_replace" => {
-            let path = prompt.params.get("file_path")
+            let path = prompt
+                .params
+                .get("file_path")
                 .or_else(|| prompt.params.get("target_file"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
             format!("Edit {}", path)
         }
         "Write" | "write_file" | "write_file_tool" => {
-            let path = prompt.params.get("file_path")
+            let path = prompt
+                .params
+                .get("file_path")
                 .or_else(|| prompt.params.get("target_file"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
             format!("Write {}", path)
         }
         "Delete" => {
-            let path = prompt.params.get("file_path")
+            let path = prompt
+                .params
+                .get("file_path")
                 .or_else(|| prompt.params.get("path"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
             format!("Delete {}", path)
         }
         "Task" => {
-            let desc = prompt.params.get("description")
+            let desc = prompt
+                .params
+                .get("description")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Task");
-            let subagent = prompt.params.get("subagent_type")
+            let subagent = prompt
+                .params
+                .get("subagent_type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
             format!("{} Task: {}", subagent, desc)
@@ -512,7 +517,15 @@ fn build_tool_detail(prompt: &PermissionPrompt) -> String {
 /// Extract the first meaningful string parameter from JSON
 fn extract_first_param(params: &serde_json::Value) -> String {
     if let Some(obj) = params.as_object() {
-        let priority = ["command", "path", "file_path", "query", "pattern", "url", "description"];
+        let priority = [
+            "command",
+            "path",
+            "file_path",
+            "query",
+            "pattern",
+            "url",
+            "description",
+        ];
         for key in &priority {
             if let Some(v) = obj.get(*key).and_then(|v| v.as_str()) {
                 return v.to_string();

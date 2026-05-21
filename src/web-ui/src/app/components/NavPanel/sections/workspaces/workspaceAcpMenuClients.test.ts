@@ -42,10 +42,11 @@ describe('loadWorkspaceAcpMenuClients', () => {
     expect(clients.map(item => item.id)).toEqual(['opencode']);
   });
 
-  it('uses built-in ACP presets for remote workspaces without requiring local config', async () => {
+  it('uses local ACP config for remote workspaces and filters by remote requirements', async () => {
     vi.mocked(ACPClientAPI.getClients).mockResolvedValue([
-      client('claude-code', false),
+      client('claude-code', true),
       client('custom-remote-only', true),
+      client('disabled-client', false),
     ]);
     vi.mocked(ACPClientAPI.probeClientRequirements).mockResolvedValue([
       {
@@ -62,9 +63,14 @@ describe('loadWorkspaceAcpMenuClients', () => {
         notes: ['claude is not available on remote PATH'],
       },
       {
-        id: 'codex',
-        tool: { name: 'codex', installed: true },
-        adapter: { name: '@zed-industries/codex-acp', installed: true },
+        id: 'custom-remote-only',
+        tool: { name: 'custom-acp', installed: true },
+        runnable: true,
+        notes: [],
+      },
+      {
+        id: 'disabled-client',
+        tool: { name: 'disabled-client', installed: true },
         runnable: true,
         notes: [],
       },
@@ -78,7 +84,75 @@ describe('loadWorkspaceAcpMenuClients', () => {
     expect(ACPClientAPI.probeClientRequirements).toHaveBeenCalledWith({
       remoteConnectionId: 'ssh-1',
     });
+    expect(clients.map(item => item.id)).toEqual(['custom-remote-only']);
+  });
+
+  it('refreshes remote requirements when no cached remote snapshot exists', async () => {
+    vi.mocked(ACPClientAPI.getClients).mockResolvedValue([
+      client('custom-remote-only', true),
+    ]);
+    vi.mocked(ACPClientAPI.probeClientRequirements)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 'custom-remote-only',
+          tool: { name: 'custom-acp', installed: true },
+          runnable: true,
+          notes: [],
+        },
+      ]);
+
+    const clients = await loadWorkspaceAcpMenuClients({
+      remoteWorkspace: true,
+      remoteConnectionId: 'ssh-1',
+    });
+
+    expect(ACPClientAPI.probeClientRequirements).toHaveBeenNthCalledWith(1, {
+      remoteConnectionId: 'ssh-1',
+    });
+    expect(ACPClientAPI.probeClientRequirements).toHaveBeenNthCalledWith(2, {
+      remoteConnectionId: 'ssh-1',
+      force: true,
+    });
+    expect(clients.map(item => item.id)).toEqual(['custom-remote-only']);
+  });
+
+  it('refreshes once when cached remote requirements hide every enabled local ACP client', async () => {
+    vi.mocked(ACPClientAPI.getClients).mockResolvedValue([
+      client('codex', true),
+    ]);
+    vi.mocked(ACPClientAPI.probeClientRequirements)
+      .mockResolvedValueOnce([
+        {
+          id: 'codex',
+          tool: { name: 'codex', installed: true },
+          adapter: { name: '@zed-industries/codex-acp', installed: false },
+          runnable: false,
+          notes: ['npx is not available on remote PATH'],
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'codex',
+          tool: { name: 'codex', installed: true },
+          adapter: { name: '@zed-industries/codex-acp', installed: true },
+          runnable: true,
+          notes: [],
+        },
+      ]);
+
+    const clients = await loadWorkspaceAcpMenuClients({
+      remoteWorkspace: true,
+      remoteConnectionId: 'ssh-stale',
+    });
+
+    expect(ACPClientAPI.probeClientRequirements).toHaveBeenNthCalledWith(1, {
+      remoteConnectionId: 'ssh-stale',
+    });
+    expect(ACPClientAPI.probeClientRequirements).toHaveBeenNthCalledWith(2, {
+      remoteConnectionId: 'ssh-stale',
+      force: true,
+    });
     expect(clients.map(item => item.id)).toEqual(['codex']);
-    expect(clients[0]?.enabled).toBe(true);
   });
 });

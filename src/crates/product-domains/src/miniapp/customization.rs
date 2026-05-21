@@ -19,7 +19,22 @@ pub struct MiniAppCustomizationOrigin {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MiniAppAvailableBuiltinUpdate {
     pub builtin_version: u32,
+    #[serde(default)]
+    pub source_hash: String,
     pub detected_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MiniAppDeclinedBuiltinUpdate {
+    pub builtin_version: u32,
+    pub source_hash: String,
+    pub declined_at: i64,
+    #[serde(default)]
+    pub local_app_version: Option<u32>,
+    #[serde(default)]
+    pub local_app_updated_at: Option<i64>,
+    #[serde(default)]
+    pub last_applied_draft_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,8 +42,201 @@ pub struct MiniAppCustomizationMetadata {
     pub origin: MiniAppCustomizationOrigin,
     pub local_override: bool,
     pub last_applied_draft_id: Option<String>,
+    #[serde(default)]
     pub available_builtin_update: Option<MiniAppAvailableBuiltinUpdate>,
+    #[serde(default)]
+    pub declined_builtin_updates: Vec<MiniAppDeclinedBuiltinUpdate>,
     pub updated_at: i64,
+}
+
+pub const MAX_DECLINED_BUILTIN_UPDATES: usize = 16;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MiniAppCustomizationLocalSnapshot {
+    pub version: u32,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiniAppBuiltinUpdateAvailabilityDecision {
+    pub metadata: MiniAppCustomizationMetadata,
+    pub should_surface_update: bool,
+    pub metadata_changed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MiniAppCustomizationBaseline {
+    Builtin {
+        builtin_id: String,
+        builtin_version: u32,
+    },
+    UserCreated,
+}
+
+pub fn apply_draft_customization_metadata(
+    existing: Option<MiniAppCustomizationMetadata>,
+    baseline: MiniAppCustomizationBaseline,
+    draft_id: &str,
+    now: i64,
+) -> MiniAppCustomizationMetadata {
+    let mut metadata = existing.unwrap_or_else(|| match baseline.clone() {
+        MiniAppCustomizationBaseline::Builtin {
+            builtin_id,
+            builtin_version,
+        } => MiniAppCustomizationMetadata {
+            origin: MiniAppCustomizationOrigin {
+                kind: MiniAppCustomizationOriginKind::Builtin,
+                builtin_id: Some(builtin_id),
+                builtin_version: Some(builtin_version),
+            },
+            local_override: true,
+            last_applied_draft_id: None,
+            available_builtin_update: None,
+            declined_builtin_updates: Vec::new(),
+            updated_at: now,
+        },
+        MiniAppCustomizationBaseline::UserCreated => MiniAppCustomizationMetadata {
+            origin: MiniAppCustomizationOrigin {
+                kind: MiniAppCustomizationOriginKind::UserCreated,
+                builtin_id: None,
+                builtin_version: None,
+            },
+            local_override: false,
+            last_applied_draft_id: None,
+            available_builtin_update: None,
+            declined_builtin_updates: Vec::new(),
+            updated_at: now,
+        },
+    });
+
+    if matches!(
+        metadata.origin.kind,
+        MiniAppCustomizationOriginKind::Builtin
+    ) {
+        metadata.local_override = true;
+        if let MiniAppCustomizationBaseline::Builtin {
+            builtin_version, ..
+        } = baseline
+        {
+            metadata.origin.builtin_version = Some(builtin_version);
+            metadata.available_builtin_update = None;
+        }
+    }
+
+    metadata.last_applied_draft_id = Some(draft_id.to_string());
+    metadata.updated_at = now;
+    metadata
+}
+
+pub fn declined_builtin_update_needs_local_snapshot(
+    metadata: &MiniAppCustomizationMetadata,
+    source_hash: &str,
+) -> bool {
+    metadata
+        .declined_builtin_updates
+        .iter()
+        .rev()
+        .find(|record| record.source_hash == source_hash)
+        .is_some_and(|record| {
+            record.local_app_version.is_some() && record.local_app_updated_at.is_some()
+        })
+}
+
+pub fn is_current_declined_builtin_update(
+    metadata: &MiniAppCustomizationMetadata,
+    source_hash: &str,
+    local_snapshot: Option<MiniAppCustomizationLocalSnapshot>,
+) -> bool {
+    let Some(record) = metadata
+        .declined_builtin_updates
+        .iter()
+        .rev()
+        .find(|record| record.source_hash == source_hash)
+    else {
+        return false;
+    };
+
+    if let (Some(record_version), Some(record_updated_at), Some(snapshot)) = (
+        record.local_app_version,
+        record.local_app_updated_at,
+        local_snapshot,
+    ) {
+        return snapshot.version == record_version && snapshot.updated_at == record_updated_at;
+    }
+
+    record.last_applied_draft_id == metadata.last_applied_draft_id
+}
+
+pub fn mark_builtin_update_available_metadata(
+    mut metadata: MiniAppCustomizationMetadata,
+    builtin_version: u32,
+    source_hash: &str,
+    detected_at: i64,
+    declined_update_current: bool,
+) -> MiniAppBuiltinUpdateAvailabilityDecision {
+    if declined_update_current {
+        let metadata_changed = metadata.available_builtin_update.take().is_some();
+        return MiniAppBuiltinUpdateAvailabilityDecision {
+            metadata,
+            should_surface_update: false,
+            metadata_changed,
+        };
+    }
+
+    metadata.available_builtin_update = Some(MiniAppAvailableBuiltinUpdate {
+        builtin_version,
+        source_hash: source_hash.to_string(),
+        detected_at,
+    });
+    metadata.updated_at = detected_at;
+    MiniAppBuiltinUpdateAvailabilityDecision {
+        metadata,
+        should_surface_update: true,
+        metadata_changed: true,
+    }
+}
+
+pub fn decline_builtin_update_metadata(
+    mut metadata: MiniAppCustomizationMetadata,
+    builtin_version: u32,
+    source_hash: &str,
+    declined_at: i64,
+    local_snapshot: Option<MiniAppCustomizationLocalSnapshot>,
+) -> MiniAppCustomizationMetadata {
+    let (local_app_version, local_app_updated_at) = local_snapshot
+        .map(|snapshot| (Some(snapshot.version), Some(snapshot.updated_at)))
+        .unwrap_or((None, None));
+    let last_applied_draft_id = metadata.last_applied_draft_id.clone();
+
+    if let Some(record) = metadata.declined_builtin_updates.iter_mut().find(|record| {
+        record.builtin_version == builtin_version
+            && record.source_hash == source_hash
+            && record.last_applied_draft_id == last_applied_draft_id
+    }) {
+        record.declined_at = declined_at;
+        record.local_app_version = local_app_version;
+        record.local_app_updated_at = local_app_updated_at;
+    } else {
+        metadata
+            .declined_builtin_updates
+            .push(MiniAppDeclinedBuiltinUpdate {
+                builtin_version,
+                source_hash: source_hash.to_string(),
+                declined_at,
+                local_app_version,
+                local_app_updated_at,
+                last_applied_draft_id,
+            });
+        if metadata.declined_builtin_updates.len() > MAX_DECLINED_BUILTIN_UPDATES {
+            let remove_count =
+                metadata.declined_builtin_updates.len() - MAX_DECLINED_BUILTIN_UPDATES;
+            metadata.declined_builtin_updates.drain(0..remove_count);
+        }
+    }
+
+    metadata.available_builtin_update = None;
+    metadata.updated_at = declined_at;
+    metadata
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -163,6 +371,7 @@ fn diff_string_list(
 
 #[cfg(test)]
 mod tests {
+    use crate::miniapp::customization::MiniAppCustomizationMetadata;
     use crate::miniapp::types::{
         AiPermissions, FsPermissions, MiniAppPermissions, NetPermissions, NodePermissions,
         ShellPermissions,
@@ -170,6 +379,28 @@ mod tests {
 
     fn empty_permissions() -> MiniAppPermissions {
         MiniAppPermissions::default()
+    }
+
+    #[test]
+    fn customization_metadata_defaults_declined_updates_for_existing_files() {
+        let metadata: MiniAppCustomizationMetadata = serde_json::from_value(serde_json::json!({
+            "origin": {
+                "kind": "builtin",
+                "builtin_id": "builtin-demo",
+                "builtin_version": 1
+            },
+            "local_override": true,
+            "last_applied_draft_id": "draft-1",
+            "available_builtin_update": {
+                "builtin_version": 2,
+                "detected_at": 123
+            },
+            "updated_at": 124
+        }))
+        .unwrap();
+
+        assert!(metadata.declined_builtin_updates.is_empty());
+        assert_eq!(metadata.available_builtin_update.unwrap().source_hash, "");
     }
 
     #[test]

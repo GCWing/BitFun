@@ -66,6 +66,16 @@ pub struct UnifiedTokenUsage {
     pub total_token_count: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_token_count: Option<u32>,
+    /// Cache READ tokens (i.e., served from cache this call). Universal across
+    /// providers: OpenAI `cached_tokens`, DeepSeek `prompt_cache_hit_tokens`,
+    /// Anthropic `cache_read_input_tokens`, Gemini `cachedContentTokenCount`.
+    /// Hit rate consumers must use this as numerator and `prompt_token_count`
+    /// as denominator.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cached_content_token_count: Option<u32>,
+    /// Cache WRITE tokens (only Anthropic reports this per-token; others either
+    /// have no creation concept or bill creation by storage time). Disjoint from
+    /// `cached_content_token_count`. Do NOT include in hit-rate numerator.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub cache_creation_token_count: Option<u32>,
 }

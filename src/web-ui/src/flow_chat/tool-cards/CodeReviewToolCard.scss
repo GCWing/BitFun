@@ -88,7 +88,7 @@
 
   .review-reliability-status__title {
     color: var(--color-text-muted);
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     font-weight: 650;
   }
 
@@ -109,8 +109,8 @@
     border-radius: 4px;
     background: color-mix(in srgb, var(--color-bg-elevated) 70%, transparent);
     color: var(--color-text-secondary);
-    font-size: 11px;
-    line-height: 1.4;
+    font-size: var(--flowchat-font-size-xs);
+    line-height: var(--flowchat-support-line-height, 1.45);
 
     &--warning {
       border-left-color: var(--color-warning, #f59e0b);
@@ -151,7 +151,7 @@
     border-bottom: 1px dashed var(--border-base);
 
     .summary-header {
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       font-weight: 600;
       color: var(--color-text-primary);
       margin-bottom: 8px;
@@ -172,8 +172,8 @@
       align-items: center;
       gap: 12px;
       padding: 7px 10px;
-      font-size: 12px;
-      line-height: 1.5;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      line-height: var(--flowchat-support-line-height, 1.45);
       border-bottom: 1px dashed var(--border-base);
 
       &:last-child {
@@ -191,7 +191,7 @@
     .summary-label {
       font-weight: 600;
       color: var(--color-text-muted);
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
       white-space: nowrap;
       flex-shrink: 0;
       min-width: 90px;
@@ -245,7 +245,7 @@
 
   .review-report-section__title {
     overflow: hidden;
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 650;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -253,7 +253,7 @@
 
   .review-report-section__summary {
     color: var(--color-text-muted);
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     white-space: nowrap;
   }
 
@@ -275,7 +275,7 @@
 
   .review-report-group__title {
     color: var(--color-text-primary);
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -287,8 +287,8 @@
     margin: 0;
     padding-left: 18px;
     color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.55;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
 
     li {
       padding: 2px 4px;
@@ -325,8 +325,8 @@
     margin: 0;
     padding-left: 16px;
     color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.55;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
 
     li {
       padding: 1px 0;
@@ -340,7 +340,7 @@
 
   .review-decision-item__tradeoffs {
     color: var(--color-text-muted);
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     font-style: italic;
   }
 
@@ -366,13 +366,13 @@
 
     span {
       color: var(--color-text-muted);
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
     }
 
     strong {
       overflow: hidden;
       color: var(--color-text-primary);
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       font-weight: 650;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -386,7 +386,7 @@
 
   .run-manifest__group-title {
     color: var(--color-text-muted);
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     font-weight: 650;
 
     &--warning {
@@ -413,7 +413,7 @@
   .run-manifest__chip-name {
     overflow: hidden;
     color: var(--color-text-primary);
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -422,7 +422,7 @@
   .run-manifest__chip-meta {
     overflow: hidden;
     color: var(--color-text-muted);
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -445,7 +445,7 @@
       border-radius: 6px;
       background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
       color: var(--color-text-secondary);
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     }
 
     span {
@@ -457,7 +457,7 @@
 
     strong {
       color: var(--color-text-muted);
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
       font-weight: 650;
       white-space: nowrap;
     }
@@ -508,7 +508,7 @@
   }
 
   .reviewer-name {
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 600;
     color: var(--color-text-primary);
   }
@@ -516,7 +516,7 @@
   .reviewer-specialty,
   .reviewer-status,
   .reviewer-issues {
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     color: var(--color-text-muted);
     border: 1px solid var(--border-base);
     background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
@@ -526,8 +526,8 @@
   }
 
   .reviewer-summary {
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
     color: var(--color-text-secondary);
   }
 
@@ -542,8 +542,8 @@
     border: 1px solid var(--border-base);
     border-radius: 6px;
     padding: 10px;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
     transition: all 0.2s ease;
     position: relative;
     overflow: hidden;
@@ -594,7 +594,7 @@
       font-weight: 600;
       color: var(--color-text-secondary);
       flex-shrink: 0;
-      font-size: 10px;
+      font-size: var(--flowchat-font-size-xxs);
       padding: 1px 5px;
       background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
       border-radius: 3px;
@@ -602,7 +602,7 @@
     }
 
     .issue-source {
-      font-size: 10px;
+      font-size: var(--flowchat-font-size-xxs);
       color: var(--color-accent-500, #60a5fa);
       border: 1px solid color-mix(in srgb, var(--color-accent-500, #60a5fa) 35%, transparent);
       background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 10%, transparent);
@@ -614,14 +614,14 @@
     .issue-location {
       color: var(--color-text-muted);
       font-family: var(--tool-card-font-mono);
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .issue-certainty {
-      font-size: 10px;
+      font-size: var(--flowchat-font-size-xxs);
       color: var(--color-text-muted);
       background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
       padding: 1px 6px;
@@ -635,13 +635,13 @@
       font-weight: 600;
       color: var(--color-text-primary);
       margin-bottom: 4px;
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     }
 
     .issue-description {
       color: var(--color-text-secondary);
       margin-bottom: 6px;
-      line-height: 1.5;
+      line-height: var(--flowchat-support-line-height, 1.45);
     }
 
     .issue-validation-note {
@@ -651,7 +651,7 @@
       border-radius: 4px;
       background: rgba(59, 130, 246, 0.08);
       border: 1px solid rgba(59, 130, 246, 0.16);
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
     }
 
     .issue-suggestion {
@@ -669,13 +669,13 @@
       font-weight: 600;
       color: var(--color-success, #16a34a);
       flex-shrink: 0;
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
     }
 
     .suggestion-text {
       color: var(--color-text-primary);
       flex: 1;
-      line-height: 1.5;
+      line-height: var(--flowchat-support-line-height, 1.45);
     }
   }
 
@@ -683,7 +683,7 @@
     margin-bottom: 12px;
 
     .team-header {
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       font-weight: 600;
       color: var(--color-text-primary);
       margin-bottom: 8px;
@@ -719,7 +719,7 @@
     }
 
     .reviewer-name {
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       font-weight: 600;
       color: var(--color-text-primary);
     }
@@ -727,7 +727,7 @@
     .reviewer-specialty,
     .reviewer-status,
     .reviewer-issues {
-      font-size: 10px;
+      font-size: var(--flowchat-font-size-xxs);
       color: var(--color-text-muted);
       border: 1px solid var(--border-base);
       background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
@@ -737,8 +737,8 @@
     }
 
     .reviewer-summary {
-      font-size: 12px;
-      line-height: 1.5;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      line-height: var(--flowchat-support-line-height, 1.45);
       color: var(--color-text-secondary);
     }
   }
@@ -750,7 +750,7 @@
     .issues-header {
       display: flex;
       align-items: center;
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       font-weight: 600;
       color: var(--color-text-primary);
       margin-bottom: 8px;
@@ -766,8 +766,8 @@
         border: 1px solid var(--border-base);
         border-radius: 6px;
         padding: 10px;
-        font-size: 12px;
-        line-height: 1.5;
+        font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+        line-height: var(--flowchat-support-line-height, 1.45);
         transition: all 0.2s ease;
         position: relative;
         overflow: hidden;
@@ -817,7 +817,7 @@
               font-weight: 600;
               color: var(--color-text-secondary);
               flex-shrink: 0;
-              font-size: 10px;
+              font-size: var(--flowchat-font-size-xxs);
               padding: 1px 5px;
               background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
               border-radius: 3px;
@@ -825,7 +825,7 @@
             }
 
             .issue-source {
-              font-size: 10px;
+              font-size: var(--flowchat-font-size-xxs);
               color: var(--color-accent-500, #60a5fa);
               border: 1px solid color-mix(in srgb, var(--color-accent-500, #60a5fa) 35%, transparent);
               background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 10%, transparent);
@@ -837,7 +837,7 @@
             .issue-location {
               color: var(--color-text-muted);
               font-family: var(--tool-card-font-mono);
-              font-size: 11px;
+              font-size: var(--flowchat-font-size-xs);
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
@@ -845,7 +845,7 @@
           }
 
           .issue-certainty {
-            font-size: 10px;
+            font-size: var(--flowchat-font-size-xxs);
             color: var(--color-text-muted);
             background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
             padding: 1px 6px;
@@ -860,13 +860,13 @@
           font-weight: 600;
           color: var(--color-text-primary);
           margin-bottom: 4px;
-          font-size: 12px;
+          font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
         }
 
         .issue-description {
           color: var(--color-text-secondary);
           margin-bottom: 6px;
-          line-height: 1.5;
+          line-height: var(--flowchat-support-line-height, 1.45);
         }
 
         .issue-validation-note {
@@ -876,7 +876,7 @@
           border-radius: 4px;
           background: rgba(59, 130, 246, 0.08);
           border: 1px solid rgba(59, 130, 246, 0.16);
-          font-size: 11px;
+          font-size: var(--flowchat-font-size-xs);
         }
 
         .issue-suggestion {
@@ -893,13 +893,13 @@
             font-weight: 600;
             color: var(--color-success, #16a34a);
             flex-shrink: 0;
-            font-size: 11px;
+            font-size: var(--flowchat-font-size-xs);
           }
 
           .suggestion-text {
             color: var(--color-text-primary);
             flex: 1;
-            line-height: 1.5;
+            line-height: var(--flowchat-support-line-height, 1.45);
           }
         }
       }
@@ -918,7 +918,7 @@
     }
 
     .remediation-header {
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       font-weight: 600;
       color: var(--color-text-primary);
       margin-bottom: 3px;
@@ -926,8 +926,8 @@
 
     .remediation-selection-count {
       color: var(--color-text-muted);
-      font-size: 11px;
-      line-height: 1.35;
+      font-size: var(--flowchat-font-size-xs);
+      line-height: var(--flowchat-compact-line-height, 1.32);
     }
 
     .remediation-select-all {
@@ -949,8 +949,8 @@
       border-radius: 10px;
       background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
       color: var(--color-text-primary);
-      font-size: 12px;
-      line-height: 1.5;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      line-height: var(--flowchat-support-line-height, 1.45);
 
       &.is-selected {
         border-color: color-mix(in srgb, var(--color-accent-500, #60a5fa) 34%, var(--border-base));
@@ -989,7 +989,7 @@
       border-radius: 999px;
       background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 16%, transparent);
       color: var(--color-accent-500, #60a5fa);
-      font-size: 10px;
+      font-size: var(--flowchat-font-size-xxs);
       font-weight: 700;
       flex-shrink: 0;
       margin-top: 1px;
@@ -1005,7 +1005,7 @@
       border-radius: 999px;
       background: transparent;
       color: var(--color-text-muted);
-      font-size: 11px;
+      font-size: var(--flowchat-font-size-xs);
       cursor: pointer;
       transition:
         background 160ms ease,
@@ -1031,7 +1031,7 @@
 
       p {
         margin: 0;
-        line-height: 1.55;
+        line-height: var(--flowchat-support-line-height, 1.45);
       }
     }
 
@@ -1041,7 +1041,7 @@
 
       span {
         color: var(--color-text-muted);
-        font-size: 10px;
+        font-size: var(--flowchat-font-size-xxs);
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
@@ -1069,13 +1069,13 @@
 
       span {
         color: var(--color-text-muted);
-        font-size: 10px;
+        font-size: var(--flowchat-font-size-xxs);
       }
 
       strong {
         overflow: hidden;
         color: var(--color-text-primary);
-        font-size: 11px;
+        font-size: var(--flowchat-font-size-xs);
         font-weight: 650;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1129,15 +1129,15 @@
     gap: 10px;
 
     &__title {
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       font-weight: 700;
       color: var(--color-text-primary);
       margin-bottom: 3px;
     }
 
     &__hint {
-      font-size: 11px;
-      line-height: 1.45;
+      font-size: var(--flowchat-font-size-xs);
+      line-height: var(--flowchat-support-line-height, 1.45);
       color: var(--color-text-muted);
     }
 
@@ -1150,15 +1150,15 @@
     &__empty-selection {
       margin-top: 10px;
       color: color-mix(in srgb, var(--color-warning, #f59e0b) 80%, var(--color-text-secondary));
-      font-size: 11px;
-      line-height: 1.45;
+      font-size: var(--flowchat-font-size-xs);
+      line-height: var(--flowchat-support-line-height, 1.45);
     }
   }
 
   /* ---------- Positive points section ---------- */
   .review-positive {
     .positive-header {
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       font-weight: 600;
       color: var(--color-success, #22c55e);
       margin-bottom: 8px;
@@ -1176,8 +1176,8 @@
         align-items: flex-start;
         gap: 8px;
         color: var(--color-text-primary);
-        font-size: 12px;
-        line-height: 1.5;
+        font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+        line-height: var(--flowchat-support-line-height, 1.45);
         padding: 6px 8px;
         background: var(--color-bg-elevated, rgba(255, 255, 255, 0.02));
         border-radius: 4px;

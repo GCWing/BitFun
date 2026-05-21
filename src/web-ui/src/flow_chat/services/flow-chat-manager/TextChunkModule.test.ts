@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AnyFlowItem, DialogTurn, FlowToolItem, ModelRound, Session } from '../../types/flow-chat';
-import { processNormalTextChunkInternal } from './TextChunkModule';
+import { processNormalTextChunkInternal, processThinkingChunkInternal } from './TextChunkModule';
 
 function makeContext(session: Session): any {
   return {
@@ -149,5 +149,74 @@ describe('processNormalTextChunkInternal', () => {
     expect(secondRound.items.map(item => item.type)).toEqual(['text']);
     expect((firstRound.items[0] as any).content).toBe('Before tools.');
     expect((secondRound.items[0] as any).content).toBe('After tools.');
+  });
+
+  it('reuses the completed text item when a late chunk arrives after the next round has started', () => {
+    const session = makeSession();
+    session.dialogTurns[0].modelRounds.push({
+      id: 'round-2',
+      index: 1,
+      items: [],
+      isStreaming: true,
+      isComplete: false,
+      status: 'streaming',
+      startTime: 1002,
+    });
+    const context = makeContext(session);
+
+    processNormalTextChunkInternal(context, 'session-1', 'turn-1', 'round-1', 'First answer');
+
+    const firstRound = session.dialogTurns[0].modelRounds[0];
+    firstRound.isStreaming = false;
+    firstRound.isComplete = true;
+    firstRound.status = 'completed';
+    firstRound.items.push({
+      id: 'steering-1',
+      type: 'user-steering',
+      timestamp: 1003,
+      status: 'completed',
+      content: 'background result',
+      steeringId: 'steering-1',
+      roundIndex: 0,
+    } as any);
+
+    context.activeTextItems.get('session-1')?.clear();
+
+    processNormalTextChunkInternal(context, 'session-1', 'turn-1', 'round-1', ' plus late chunk');
+
+    const textItems = firstRound.items.filter(item => item.type === 'text');
+    expect(textItems).toHaveLength(1);
+    expect((textItems[0] as any).content).toBe('First answer plus late chunk');
+  });
+
+  it('reuses the completed thinking item when a late thinking chunk arrives after the next round has started', () => {
+    const session = makeSession();
+    session.dialogTurns[0].modelRounds.push({
+      id: 'round-2',
+      index: 1,
+      items: [],
+      isStreaming: true,
+      isComplete: false,
+      status: 'streaming',
+      startTime: 1002,
+    });
+    const context = makeContext(session);
+
+    processThinkingChunkInternal(context, 'session-1', 'turn-1', 'round-1', 'Initial reasoning');
+
+    const firstRound = session.dialogTurns[0].modelRounds[0];
+    firstRound.isStreaming = false;
+    firstRound.isComplete = true;
+    firstRound.status = 'completed';
+
+    context.activeTextItems.get('session-1')?.clear();
+
+    processThinkingChunkInternal(context, 'session-1', 'turn-1', 'round-1', ' plus late reasoning');
+    processThinkingChunkInternal(context, 'session-1', 'turn-1', 'round-1', '', true);
+
+    const thinkingItems = firstRound.items.filter(item => item.type === 'thinking');
+    expect(thinkingItems).toHaveLength(1);
+    expect((thinkingItems[0] as any).content).toBe('Initial reasoning plus late reasoning');
+    expect((thinkingItems[0] as any).status).toBe('completed');
   });
 });

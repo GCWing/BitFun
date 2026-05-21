@@ -4,7 +4,7 @@
   .task-header-wrapper {
     display: flex;
     align-items: stretch;
-    gap: 4px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     width: 100%;
   }
 
@@ -160,7 +160,7 @@
     pointer-events: none;
 
     > * + * {
-      margin-top: 6px;
+      margin-top: var(--flowchat-inline-gap, 0.35rem);
     }
 
     > svg {
@@ -190,14 +190,14 @@
   .task-header-main {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     width: 100%;
     min-height: 20px;
   }
 
 
   .task-action {
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 500;
     color: var(--color-text-primary);
     flex-shrink: 1;
@@ -207,7 +207,7 @@
     white-space: nowrap;
 
     &__model-tag {
-      font-size: 10px;
+      font-size: var(--flowchat-font-size-xxs);
       font-weight: 400;
       color: var(--color-text-secondary);
       vertical-align: baseline;
@@ -228,9 +228,9 @@
   .task-failed-badge {
     display: inline-flex;
     align-items: center;
-    padding: 1px 5px;
+    padding: 0.1rem var(--flowchat-inline-gap, 0.35rem);
     border-radius: 3px;
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
     flex-shrink: 0;
     color: var(--color-text-muted, #6b7280);
@@ -240,9 +240,9 @@
   .agent-type-badge {
     display: inline-flex;
     align-items: center;
-    padding: 2px 6px;
+    padding: 0.125rem var(--flowchat-inline-gap, 0.35rem);
     border-radius: 4px;
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
     flex-shrink: 0;
     color: var(--color-text-secondary, #9ca3af);
@@ -253,7 +253,7 @@
   .task-header-meta {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     margin-left: auto;
     margin-right: 10px;
     flex-shrink: 0;
@@ -273,8 +273,8 @@
      The generic thinking content has vertical padding; with a one-line max-height
      that can leave only padding visible and push the prompt text out of view. */
   .task-expanded-content .task-prompt-content {
-    padding: 0 12px;
-    max-height: calc(var(--flowchat-font-size-base) * 1.5 * 2 + 6px);
+    padding: 0 var(--flowchat-card-pad-x, 0.75rem);
+    max-height: 3.2em;
     overflow-y: auto;
   }
 
@@ -288,14 +288,14 @@
   .task-interruption-note {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     color: var(--color-text-secondary);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
 
     svg {
       flex-shrink: 0;
-      margin-top: 2px;
+      margin-top: 0.15em;
       color: var(--color-warning, #f59e0b);
     }
   }
@@ -328,12 +328,12 @@
   .duration-text {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     color: var(--tool-card-text-secondary, var(--color-text-secondary, #9ca3af));
-    font-size: 12px;
+    font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
     letter-spacing: 0.01em;
-    line-height: 1.2;
+    line-height: var(--flowchat-compact-line-height, 1.32);
 
     svg {
       flex-shrink: 0;
@@ -353,9 +353,9 @@
   .section-header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-bottom: 8px;
-    font-size: 11px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
+    margin-bottom: var(--flowchat-card-gap, 0.45rem);
+    font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
     color: var(--tool-card-text-secondary);
     text-transform: uppercase;
@@ -375,27 +375,27 @@
   .task-expanded-content {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--flowchat-card-gap, 0.45rem);
   }
 
 
   .error-content {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--flowchat-card-gap, 0.45rem);
   }
 
   .error-message {
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--color-error, #ef4444);
-    line-height: 1.4;
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 
   .error-meta {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 11px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
+    font-size: var(--flowchat-font-size-xs);
     color: var(--tool-card-text-muted);
   }
 
@@ -410,15 +410,15 @@
 
   .tool-actions {
     display: flex;
-    gap: 8px;
-    margin-top: 12px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
+    margin-top: var(--flowchat-card-gap, 0.45rem);
   }
 
   .confirm-button,
   .reject-button {
-    padding: 6px 12px;
+    padding: var(--flowchat-control-pad-y, 0.35rem) var(--flowchat-control-pad-x, 0.75rem);
     border-radius: 4px;
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -575,15 +575,15 @@
 .task-reviewer-context {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 6px 0;
-  font-size: 12px;
-  line-height: 1.45;
+  gap: var(--flowchat-inline-gap, 0.35rem);
+  padding: var(--flowchat-inline-gap, 0.35rem) 0;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  line-height: var(--flowchat-support-line-height, 1.45);
   color: var(--color-text-secondary);
 
   &__role {
     font-weight: 600;
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   }
 
   &__description {

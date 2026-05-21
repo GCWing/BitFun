@@ -54,10 +54,6 @@ pub(crate) fn builtin_acp_client_preset(
         .find(|preset| preset.id == client_id)
 }
 
-pub(crate) fn supported_remote_acp_clients() -> String {
-    builtin_client_ids().collect::<Vec<_>>().join(", ")
-}
-
 pub(crate) fn default_config_for_builtin_client(client_id: &str) -> Option<AcpClientConfig> {
     let preset = builtin_acp_client_preset(client_id)?;
     Some(AcpClientConfig {
@@ -75,64 +71,9 @@ pub(crate) fn default_config_for_builtin_client(client_id: &str) -> Option<AcpCl
     })
 }
 
-pub(crate) fn remote_command_for_builtin_client(client_id: &str) -> Option<String> {
-    let preset = builtin_acp_client_preset(client_id)?;
-    Some(render_shell_command(preset.command, preset.args))
-}
-
-pub(crate) fn remote_command_for_builtin_client_in_workspace(
-    client_id: &str,
-    workspace_path: &str,
-) -> Option<String> {
-    let command = remote_command_for_builtin_client(client_id)?;
-    let workspace_path = workspace_path.trim();
-    if workspace_path.is_empty() {
-        return Some(command);
-    }
-    Some(format!(
-        "cd {} && {}",
-        shell_escape(workspace_path),
-        command
-    ))
-}
-
-fn render_shell_command(command: &str, args: &[&str]) -> String {
-    std::iter::once(command)
-        .chain(args.iter().copied())
-        .map(shell_escape)
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn shell_escape(value: &str) -> String {
-    if value.chars().all(|ch| {
-        ch.is_ascii_alphanumeric() || matches!(ch, '/' | '.' | '-' | '_' | ':' | '=' | '@')
-    }) {
-        value.to_string()
-    } else {
-        format!("'{}'", value.replace('\'', "'\\''"))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn builds_remote_builtin_command_for_opencode() {
-        assert_eq!(
-            remote_command_for_builtin_client("opencode").as_deref(),
-            Some("opencode acp")
-        );
-    }
-
-    #[test]
-    fn builds_remote_builtin_command_for_npx_adapter() {
-        assert_eq!(
-            remote_command_for_builtin_client("codex").as_deref(),
-            Some("npx --yes @zed-industries/codex-acp@latest")
-        );
-    }
 
     #[test]
     fn returns_default_config_for_builtin_client() {
@@ -142,19 +83,6 @@ mod tests {
         assert_eq!(
             config.args,
             vec!["--yes", "@zed-industries/claude-code-acp@latest"]
-        );
-    }
-
-    #[test]
-    fn shell_escape_quotes_spaces() {
-        assert_eq!(shell_escape("hello world"), "'hello world'");
-    }
-
-    #[test]
-    fn builds_remote_builtin_command_in_workspace() {
-        assert_eq!(
-            remote_command_for_builtin_client_in_workspace("opencode", "/tmp/my repo").as_deref(),
-            Some("cd '/tmp/my repo' && opencode acp")
         );
     }
 }

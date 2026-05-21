@@ -2,11 +2,10 @@
 ///
 /// Overlay popup that displays all available agent modes
 /// and allows the user to select one to switch to.
-
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState},
     Frame,
@@ -169,7 +168,7 @@ impl AgentSelectorState {
             .highlight_style(
                 Style::default()
                     .bg(theme.primary)
-                    .fg(Color::White)
+                    .fg(theme.selection_foreground())
                     .add_modifier(Modifier::BOLD),
             );
 

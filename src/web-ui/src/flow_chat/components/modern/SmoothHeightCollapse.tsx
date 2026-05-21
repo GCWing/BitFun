@@ -6,6 +6,7 @@ interface SmoothHeightCollapseProps {
   className?: string;
   innerClassName?: string;
   durationMs?: number;
+  disableAnimation?: boolean;
 }
 
 type CollapsePhase = 'open' | 'opening' | 'closed' | 'closing';
@@ -16,11 +17,13 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
   className = '',
   innerClassName = '',
   durationMs = 260,
+  disableAnimation = false,
 }) => {
   const innerRef = useRef<HTMLDivElement>(null);
   const [phase, setPhase] = useState<CollapsePhase>(() => (isOpen ? 'open' : 'closed'));
   const [height, setHeight] = useState<string>(() => (isOpen ? 'auto' : '0px'));
   const shouldRender = isOpen || phase !== 'closed';
+  const shouldAnimate = !disableAnimation && !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
 
   useLayoutEffect(() => {
     const inner = innerRef.current;
@@ -31,8 +34,7 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
     let frameId = 0;
     let timeoutId = 0;
 
-    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
-    if (reduceMotion) {
+    if (!shouldAnimate) {
       setPhase(isOpen ? 'open' : 'closed');
       setHeight(isOpen ? 'auto' : '0px');
       return;
@@ -64,11 +66,11 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
       window.cancelAnimationFrame(frameId);
       window.clearTimeout(timeoutId);
     };
-  }, [durationMs, isOpen]);
+  }, [disableAnimation, durationMs, isOpen, shouldAnimate]);
 
   useLayoutEffect(() => {
     const inner = innerRef.current;
-    if (!inner || phase !== 'open') {
+    if (!inner || phase !== 'open' || !shouldAnimate) {
       return;
     }
 
@@ -77,7 +79,7 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
     });
     observer.observe(inner);
     return () => observer.disconnect();
-  }, [phase, children]);
+  }, [phase, shouldAnimate, children]);
 
   return (
     <div

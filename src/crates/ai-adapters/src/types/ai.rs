@@ -32,6 +32,9 @@ pub struct GeminiUsage {
     #[serde(rename = "cachedContentTokenCount")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cached_content_token_count: Option<u32>,
+    #[serde(rename = "cacheCreationTokenCount")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_creation_token_count: Option<u32>,
 }
 
 /// Structured message codes for localized connection test messaging.
@@ -68,4 +71,41 @@ pub struct RemoteModelInfo {
     /// Optional human-readable display name returned by the provider.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GeminiUsage;
+
+    #[test]
+    fn gemini_usage_roundtrips_cache_creation_field() {
+        let usage = GeminiUsage {
+            prompt_token_count: 100,
+            candidates_token_count: 20,
+            total_token_count: 120,
+            reasoning_token_count: None,
+            cached_content_token_count: Some(30),
+            cache_creation_token_count: Some(20),
+        };
+        let json = serde_json::to_string(&usage).expect("serialize");
+        assert!(json.contains("\"cacheCreationTokenCount\":20"));
+
+        let parsed: GeminiUsage = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.cache_creation_token_count, Some(20));
+    }
+
+    #[test]
+    fn gemini_usage_legacy_payload_parses_with_new_field_absent() {
+        // Records persisted before this plan don't have cacheCreationTokenCount;
+        // they must still parse, with the new field defaulting to None.
+        let raw = r#"{
+            "promptTokenCount": 10,
+            "candidatesTokenCount": 5,
+            "totalTokenCount": 15,
+            "cachedContentTokenCount": 3
+        }"#;
+        let parsed: GeminiUsage = serde_json::from_str(raw).expect("legacy payload");
+        assert_eq!(parsed.cached_content_token_count, Some(3));
+        assert_eq!(parsed.cache_creation_token_count, None);
+    }
 }

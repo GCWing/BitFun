@@ -69,6 +69,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
   const [previewKey, setPreviewKey] = useState(0);
   const [discarding, setDiscarding] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [dismissingBuiltinUpdate, setDismissingBuiltinUpdate] = useState(false);
   const [customizationMetadata, setCustomizationMetadata] = useState<MiniAppCustomizationMetadata | null>(null);
   const theme = themeType ?? 'dark';
 
@@ -84,6 +85,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
     setState(initialState);
     setUserRequest('');
     setPreviewKey(0);
+    setDismissingBuiltinUpdate(false);
     setCustomizationMetadata(null);
     onPreviewChange(null);
   }, [app.id, onPreviewChange]);
@@ -289,6 +291,30 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
     }
   }, [app.id, discarding, onClose, onPreviewChange, state.customizationSessionId, state.draft, t]);
 
+  const handleDismissBuiltinUpdate = useCallback(async () => {
+    if (!builtinUpdateNotice?.sourceHash || dismissingBuiltinUpdate) {
+      return;
+    }
+
+    setDismissingBuiltinUpdate(true);
+    try {
+      const metadata = await miniAppAPI.declineBuiltinUpdate(
+        app.id,
+        builtinUpdateNotice.builtinVersion,
+        builtinUpdateNotice.sourceHash,
+      );
+      setCustomizationMetadata(metadata);
+    } catch (error) {
+      log.error('MiniApp builtin update dismissal failed', error);
+      setState((prev) => ({
+        ...prev,
+        error: t('customize.dismissBuiltinUpdateFailed', { error: formatError(error) }),
+      }));
+    } finally {
+      setDismissingBuiltinUpdate(false);
+    }
+  }, [app.id, builtinUpdateNotice, dismissingBuiltinUpdate, t]);
+
   const handleClose = useCallback(() => {
     if (busy) {
       return;
@@ -372,6 +398,20 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
           <div>
             <strong>{t('customize.builtinUpdateTitle', { version: builtinUpdateNotice.builtinVersion })}</strong>
             <p>{t('customize.builtinUpdateBody')}</p>
+            {builtinUpdateNotice.sourceHash && (
+              <div className="miniapp-customize-panel__notice-actions">
+                <Button
+                  variant="secondary"
+                  size="small"
+                  onClick={() => void handleDismissBuiltinUpdate()}
+                  disabled={dismissingBuiltinUpdate}
+                  isLoading={dismissingBuiltinUpdate}
+                >
+                  <X size={14} />
+                  {t('customize.dismissBuiltinUpdate')}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}

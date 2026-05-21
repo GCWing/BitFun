@@ -11,17 +11,17 @@ pub mod runtime_detect;
 pub mod storage;
 pub use bitfun_product_domains::miniapp::customization::{
     MiniAppAvailableBuiltinUpdate, MiniAppCustomizationMetadata, MiniAppCustomizationOrigin,
-    MiniAppCustomizationOriginKind, MiniAppPermissionDiff,
+    MiniAppCustomizationOriginKind, MiniAppDeclinedBuiltinUpdate, MiniAppPermissionDiff,
 };
+pub use bitfun_product_domains::miniapp::draft::{MiniAppDraft, MiniAppDraftManifest};
 pub use bitfun_product_domains::miniapp::{bridge_builder, permission_policy, types};
 
-pub use builtin::{seed_builtin_miniapps, BuiltinApp, BUILTIN_APPS};
+pub use builtin::{BUILTIN_APPS, BuiltinApp, seed_builtin_miniapps};
 pub use exporter::{ExportCheckResult, ExportOptions, ExportResult, ExportTarget, MiniAppExporter};
 pub use host_dispatch::{dispatch_host, is_host_primitive};
 pub use js_worker_pool::{InstallResult, JsWorkerPool};
 pub use manager::{
-    initialize_global_miniapp_manager, try_get_global_miniapp_manager, MiniAppDraft,
-    MiniAppDraftManifest, MiniAppManager,
+    MiniAppManager, initialize_global_miniapp_manager, try_get_global_miniapp_manager,
 };
 pub use permission_policy::resolve_policy;
 pub use runtime_detect::{DetectedRuntime, RuntimeKind};

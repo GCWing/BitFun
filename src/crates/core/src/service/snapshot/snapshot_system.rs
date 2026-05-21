@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -230,15 +230,27 @@ impl FileSnapshotSystem {
 
     /// Initializes the snapshot system.
     pub async fn initialize(&mut self) -> SnapshotResult<()> {
+        let total_started_at = Instant::now();
         info!("Initializing file snapshot system");
 
+        let directories_started_at = Instant::now();
         self.ensure_directories().await?;
+        debug!(
+            "File snapshot initialize step completed: step=ensure_directories duration_ms={}",
+            directories_started_at.elapsed().as_millis()
+        );
 
+        let index_started_at = Instant::now();
         self.load_snapshot_index().await?;
+        debug!(
+            "File snapshot initialize step completed: step=load_snapshot_index duration_ms={}",
+            index_started_at.elapsed().as_millis()
+        );
 
         info!(
-            "File snapshot system initialized: loaded_snapshots={}",
-            self.active_snapshots.len()
+            "File snapshot system initialized: loaded_snapshots={} duration_ms={}",
+            self.active_snapshots.len(),
+            total_started_at.elapsed().as_millis()
         );
         Ok(())
     }
@@ -266,6 +278,7 @@ impl FileSnapshotSystem {
 
     /// Loads the existing snapshot index.
     async fn load_snapshot_index(&mut self) -> SnapshotResult<()> {
+        let started_at = Instant::now();
         let metadata_dir = self.snapshot_metadata_dir.clone();
 
         if !metadata_dir.exists() {
@@ -300,7 +313,11 @@ impl FileSnapshotSystem {
             }
         }
 
-        debug!("Loaded {} snapshots", loaded_count);
+        debug!(
+            "Loaded snapshot metadata files: count={} duration_ms={}",
+            loaded_count,
+            started_at.elapsed().as_millis()
+        );
         Ok(())
     }
 

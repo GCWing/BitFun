@@ -523,6 +523,10 @@ impl Tool for TaskTool {
                     "minimum": 0,
                     "description": "Optional timeout for this subagent task in seconds. Use 0 or omit it to disable the timeout."
                 },
+                "run_in_background": {
+                    "type": "boolean",
+                    "description": "Optional. When true, start the subagent in the background and return immediately. The final result will be delivered back to the parent agent by steering if it is still running, or by starting a new turn if it is idle."
+                },
                 "retry": {
                     "type": "boolean",
                     "description": "DeepReview only: true when this Task call is a retry for the same reviewer role after partial_timeout or an explicit transient capacity failure in the current turn."
@@ -710,6 +714,10 @@ impl Tool for TaskTool {
             }
             None => None,
         };
+        let run_in_background = input
+            .get("run_in_background")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let is_retry = input.get("retry").and_then(Value::as_bool).unwrap_or(false);
         let requested_auto_retry = Self::is_deep_review_auto_retry(input);
         let is_auto_retry = is_retry && requested_auto_retry;
@@ -1107,6 +1115,36 @@ impl Tool for TaskTool {
             values
         });
         let prepared_prompt = prompt;
+        if run_in_background {
+            let parent_info = SubagentParentInfo {
+                tool_call_id: tool_call_id.clone(),
+                session_id: session_id.clone(),
+                dialog_turn_id: dialog_turn_id.clone(),
+            };
+            let background_result = coordinator
+                .start_background_subagent(
+                    subagent_type.clone(),
+                    prepared_prompt.clone(),
+                    parent_info,
+                    Some(effective_workspace_path.clone()),
+                    subagent_context.clone(),
+                    model_id.clone(),
+                    timeout_seconds,
+                )
+                .await?;
+            return Ok(vec![ToolResult::Result {
+                data: json!({
+                    "status": "started",
+                    "run_in_background": true,
+                    "background_task_id": background_result.background_task_id,
+                }),
+                result_for_assistant: Some(format!(
+                    "Background subagent '{}' started successfully.\n<background_task status=\"started\" id=\"{}\">Its final result will be delivered back automatically to you when it is finished.</background_task>",
+                    subagent_type, background_result.background_task_id
+                )),
+                image_attachments: None,
+            }]);
+        }
         let mut provider_capacity_retry_reason: Option<DeepReviewCapacityQueueReason> = None;
         let mut provider_capacity_queue_elapsed_ms = 0_u64;
         let mut provider_capacity_retry_attempts = 0_usize;

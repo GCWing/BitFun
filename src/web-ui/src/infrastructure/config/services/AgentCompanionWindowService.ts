@@ -15,20 +15,33 @@ export async function syncAgentCompanionDesktopWindow(
   if (!isTauriRuntime()) return;
 
   const run = async (): Promise<void> => {
+    const startedAt = performance.now();
     const command = settings.enable_agent_companion
       && settings.agent_companion_display_mode === 'desktop'
       ? 'show_agent_companion_desktop_pet'
       : 'hide_agent_companion_desktop_pet';
 
     try {
+      log.debug('Agent companion desktop window sync started', {
+        command,
+        displayMode: settings.agent_companion_display_mode,
+      });
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke(command);
       if (command === 'show_agent_companion_desktop_pet') {
         const { emit } = await import('@tauri-apps/api/event');
         await emit('agent-companion://settings-updated', settings);
       }
+      log.debug('Agent companion desktop window sync completed', {
+        command,
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+      });
     } catch (error) {
-      log.error('Failed to sync Agent companion desktop window', { command, error });
+      log.error('Failed to sync Agent companion desktop window', {
+        command,
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+        error,
+      });
     }
   };
 

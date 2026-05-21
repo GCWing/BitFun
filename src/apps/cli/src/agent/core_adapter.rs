@@ -129,7 +129,11 @@ impl CoreAgentAdapter {
         );
 
         let workspace = self.workspace_path_buf();
-        match self.coordinator.restore_session(&workspace, session_id).await {
+        match self
+            .coordinator
+            .restore_session(&workspace, session_id)
+            .await
+        {
             Ok(_) => {
                 tracing::info!("Backend session restored: {}", session_id);
                 Ok(())
@@ -211,7 +215,8 @@ impl Agent for CoreAgentAdapter {
                     session_id,
                     err
                 );
-                self.ensure_backend_session_alive(&session_id, agent_type).await?;
+                self.ensure_backend_session_alive(&session_id, agent_type)
+                    .await?;
                 self.coordinator
                     .start_dialog_turn(
                         session_id,
@@ -237,11 +242,7 @@ impl Agent for CoreAgentAdapter {
         let turn_id_guard = self.current_turn_id.lock().await;
 
         if let (Some(session_id), Some(turn_id)) = (&*session_id_guard, &*turn_id_guard) {
-            tracing::info!(
-                "Cancelling turn: session={}, turn={}",
-                session_id,
-                turn_id
-            );
+            tracing::info!("Cancelling turn: session={}, turn={}", session_id, turn_id);
             self.coordinator
                 .cancel_dialog_turn(session_id, turn_id)
                 .await?;
@@ -276,7 +277,9 @@ impl Agent for CoreAgentAdapter {
     async fn restore_session(&self, session_id: &str) -> Result<()> {
         tracing::info!("Restoring session: {}", session_id);
         let workspace = self.workspace_path_buf();
-        self.coordinator.restore_session(&workspace, session_id).await?;
+        self.coordinator
+            .restore_session(&workspace, session_id)
+            .await?;
 
         let mut session_id_guard = self.session_id.lock().await;
         *session_id_guard = Some(session_id.to_string());
@@ -284,7 +287,11 @@ impl Agent for CoreAgentAdapter {
         Ok(())
     }
 
-    async fn confirm_tool(&self, tool_id: &str, updated_input: Option<serde_json::Value>) -> Result<()> {
+    async fn confirm_tool(
+        &self,
+        tool_id: &str,
+        updated_input: Option<serde_json::Value>,
+    ) -> Result<()> {
         tracing::info!("Confirming tool execution: {}", tool_id);
         self.coordinator
             .confirm_tool(tool_id, updated_input)
@@ -304,12 +311,16 @@ impl Agent for CoreAgentAdapter {
         tracing::info!("Submitting user answers for tool: {}", tool_id);
         use bitfun_core::agentic::tools::user_input_manager::get_user_input_manager;
         let manager = get_user_input_manager();
-        manager.send_answer(tool_id, answers)
+        manager
+            .send_answer(tool_id, answers)
             .map_err(|e| anyhow::anyhow!("Submit user answers failed: {}", e))
     }
 
     fn session_id(&self) -> Option<String> {
         // Try to get session_id without blocking (best effort for sync context)
-        self.session_id.try_lock().ok().and_then(|guard| guard.clone())
+        self.session_id
+            .try_lock()
+            .ok()
+            .and_then(|guard| guard.clone())
     }
 }

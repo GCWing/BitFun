@@ -2,6 +2,10 @@ impl ChatView {
     /// Render interface
     pub fn render(&mut self, frame: &mut Frame, chat_state: &ChatState) {
         let size = frame.area();
+        frame.render_widget(
+            Block::default().style(Style::default().bg(self.theme.background)),
+            size,
+        );
 
         // Dynamic input area height: 2 (borders) + visible content lines, capped at 8+2=10
         let max_input_content_lines: u16 = 8;
@@ -91,7 +95,7 @@ impl ChatView {
             .style(Style::default().bg(self.theme.background));
 
         let title_style = Style::default()
-            .fg(ratatui::style::Color::Rgb(147, 51, 234))
+            .fg(self.theme.primary)
             .add_modifier(Modifier::BOLD);
 
         let text = vec![Line::from(vec![
@@ -119,6 +123,7 @@ impl ChatView {
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(self.theme.style(StyleKind::Border))
+            .style(Style::default().bg(self.theme.background))
             .title(title);
 
         let inner = block.inner(area);
@@ -152,6 +157,7 @@ impl ChatView {
 
             let paragraph = Paragraph::new(welcome)
                 .alignment(Alignment::Center)
+                .style(Style::default().bg(self.theme.background))
                 .wrap(Wrap { trim: true });
 
             frame.render_widget(paragraph, inner);

@@ -5,21 +5,24 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
-    get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
+    PromptBuilder, PromptBuilderContext, RemoteExecutionHints, get_agent_registry,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
-    render_system_reminder, Message, MessageContent, MessageHelper, MessageRole,
-    MessageSemanticKind, RequestReasoningTokenPolicy, Session,
+    Message, MessageContent, MessageHelper, MessageRole, MessageSemanticKind,
+    RequestReasoningTokenPolicy, Session, render_system_reminder,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::execution::types::FinishReason;
 use crate::agentic::image_analysis::{
-    build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
-    ImageLimits,
+    ImageContextData, ImageLimits, build_multimodal_message_with_images,
+    process_image_contexts_for_provider,
 };
+use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
-use crate::agentic::tools::{resolve_tool_manifest, ResolvedToolManifest, SubagentParentInfo, ToolRuntimeRestrictions};
+use crate::agentic::tools::{
+    ResolvedToolManifest, SubagentParentInfo, ToolRuntimeRestrictions, resolve_tool_manifest,
+};
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -31,9 +34,10 @@ use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
+use bitfun_agent_tools::{GetToolSpecLoadObservation, collect_loaded_collapsed_tool_names};
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -498,35 +502,32 @@ impl ExecutionEngine {
         messages: &[Message],
         collapsed_tools: &[String],
     ) -> Vec<String> {
-        let collapsed_set: HashSet<&str> = collapsed_tools.iter().map(String::as_str).collect();
-        let mut unlocked = BTreeSet::new();
+        let observations = messages
+            .iter()
+            .filter_map(|message| {
+                let MessageContent::ToolResult {
+                    tool_name,
+                    result,
+                    is_error,
+                    ..
+                } = &message.content
+                else {
+                    return None;
+                };
 
-        for message in messages {
-            let MessageContent::ToolResult {
-                tool_name,
-                result,
-                is_error,
-                ..
-            } = &message.content
-            else {
-                continue;
-            };
+                Some(GetToolSpecLoadObservation {
+                    tool_name,
+                    loaded_tool_name: result.get("tool_name").and_then(|v| v.as_str()),
+                    is_error: *is_error,
+                })
+            })
+            .collect::<Vec<_>>();
 
-            if *is_error || tool_name != "GetToolSpec" {
-                continue;
-            }
-
-            let Some(tool_name) = result.get("tool_name").and_then(|v| v.as_str())
-            else {
-                continue;
-            };
-
-            if collapsed_set.contains(tool_name) {
-                unlocked.insert(tool_name.to_string());
-            }
-        }
-
-        unlocked.into_iter().collect()
+        collect_loaded_collapsed_tool_names(
+            &observations,
+            collapsed_tools,
+            crate::agentic::tools::registry::GET_TOOL_SPEC_TOOL_NAME,
+        )
     }
 
     async fn build_prompt_context(
@@ -988,7 +989,7 @@ impl ExecutionEngine {
         &self,
         session_id: &str,
         dialog_turn_id: &str,
-        subagent_parent_info: Option<SubagentParentInfo>,
+        _subagent_parent_info: Option<SubagentParentInfo>,
         messages: Vec<Message>,
         current_tokens: usize,
         context_window: usize,
@@ -997,7 +998,6 @@ impl ExecutionEngine {
         compression_contract_limit: usize,
         tail_policy: CompressionTailPolicy,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
-        let event_subagent_parent_info = subagent_parent_info.map(|info| info.clone().into());
         let mut session = self
             .session_manager
             .get_session(session_id)
@@ -1029,7 +1029,6 @@ impl ExecutionEngine {
                 tokens_before: current_tokens,
                 context_window,
                 threshold: session.config.compression_threshold,
-                subagent_parent_info: event_subagent_parent_info.clone(),
             },
             EventPriority::Normal,
         )
@@ -1106,7 +1105,6 @@ impl ExecutionEngine {
                         duration_ms,
                         has_summary: compression_result.has_model_summary,
                         summary_source: summary_source.to_string(),
-                        subagent_parent_info: event_subagent_parent_info.clone(),
                     },
                     EventPriority::Normal,
                 )
@@ -1122,7 +1120,6 @@ impl ExecutionEngine {
                         turn_id: dialog_turn_id.to_string(),
                         compression_id: compression_id.clone(),
                         error: e.to_string(),
-                        subagent_parent_info: event_subagent_parent_info.clone(),
                     },
                     EventPriority::High,
                 )
@@ -1162,7 +1159,6 @@ impl ExecutionEngine {
                 tokens_before: current_tokens,
                 context_window,
                 threshold: session.config.compression_threshold,
-                subagent_parent_info: None,
             },
             EventPriority::Normal,
         )
@@ -1193,7 +1189,6 @@ impl ExecutionEngine {
                     duration_ms,
                     has_summary: false,
                     summary_source: "none".to_string(),
-                    subagent_parent_info: None,
                 },
                 EventPriority::Normal,
             )
@@ -1278,7 +1273,6 @@ impl ExecutionEngine {
                         } else {
                             "local_fallback".to_string()
                         },
-                        subagent_parent_info: None,
                     },
                     EventPriority::Normal,
                 )
@@ -1307,7 +1301,6 @@ impl ExecutionEngine {
                         turn_id: dialog_turn_id.to_string(),
                         compression_id: compression_id.clone(),
                         error: err.to_string(),
-                        subagent_parent_info: None,
                     },
                     EventPriority::High,
                 )
@@ -1365,8 +1358,6 @@ impl ExecutionEngine {
         start_time: std::time::Instant,
         initial_count: usize,
     ) -> BitFunResult<ExecutionResult> {
-        let event_subagent_parent_info =
-            context.subagent_parent_info.clone().map(|info| info.into());
         let dialog_turn_id = context.dialog_turn_id.clone();
 
         debug!(
@@ -1856,8 +1847,8 @@ impl ExecutionEngine {
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
-                steering_interrupt: context.round_steering.as_ref().map(|source| {
-                    crate::agentic::round_preempt::DialogRoundSteeringInterrupt::new(
+                steering_interrupt: context.round_injection.as_ref().map(|source| {
+                    crate::agentic::round_preempt::DialogRoundInjectionInterrupt::new(
                         context.session_id.clone(),
                         context.dialog_turn_id.clone(),
                         Arc::clone(source),
@@ -2095,26 +2086,28 @@ impl ExecutionEngine {
             // contrast with the `round_preempt` path below which finalizes the turn so a
             // queued *new turn* can take over. If the model wanted to finish but the user
             // steered, we keep the turn running so the steering message gets a response.
-            let mut steering_injected = false;
-            if let Some(steer) = context.round_steering.as_ref() {
-                let pending = steer.take_pending(&context.session_id, &context.dialog_turn_id);
+            let mut injection_applied = false;
+            if let Some(source) = context.round_injection.as_ref() {
+                let pending = source.take_pending(&context.session_id, &context.dialog_turn_id);
                 if !pending.is_empty() {
                     info!(
-                        "Injecting {} user steering message(s) at round boundary: session_id={}, dialog_turn_id={}, round_index={}",
+                        "Injecting {} round message(s) at round boundary: session_id={}, dialog_turn_id={}, round_index={}",
                         pending.len(),
                         context.session_id,
                         context.dialog_turn_id,
                         round_index
                     );
-                    for steering_msg in pending {
-                        // Wrap the steering content in a system_reminder envelope so the
-                        // model treats it as an out-of-band course correction layered on
-                        // top of the running task, not as a brand-new top-level instruction
-                        // that supersedes everything before it. Matches Codex CLI semantics.
-                        let wrapped = format!(
-                            "<system_reminder>\nThe user sent a new message while this turn was running. You have just finished the previous atomic action; handle this new user message now as the current direction, while preserving the existing conversation and task context. Do not ignore it or wait for a separate future turn.\n\nNew user message:\n{}\n</system_reminder>",
-                            steering_msg.content
-                        );
+                    for injection in pending {
+                        let wrapped = match injection.kind {
+                            RoundInjectionKind::UserSteering => format!(
+                                "<system_reminder>\nThe user sent a new message while this turn was running. You have just finished the previous atomic action; handle this new user message now as the current direction, while preserving the existing conversation and task context. Do not ignore it or wait for a separate future turn.\n\nNew user message:\n{}\n</system_reminder>",
+                                injection.content
+                            ),
+                            RoundInjectionKind::BackgroundSubagentResult => format!(
+                                "<system_reminder>\nA background subagent has finished and returned new information while this turn was running. Incorporate it into your current work immediately when relevant. Do not wait for a separate future turn.\n\nBackground subagent result:\n{}\n</system_reminder>",
+                                injection.content
+                            ),
+                        };
                         let user_msg = Message::user(wrapped);
                         messages.push(user_msg.clone());
                         if let Err(e) = self
@@ -2130,15 +2123,14 @@ impl ExecutionEngine {
                                 session_id: context.session_id.clone(),
                                 turn_id: context.dialog_turn_id.clone(),
                                 round_index,
-                                steering_id: steering_msg.id,
-                                content: steering_msg.content,
-                                display_content: steering_msg.display_content,
-                                subagent_parent_info: event_subagent_parent_info.clone(),
+                                steering_id: injection.id,
+                                content: injection.content,
+                                display_content: injection.display_content,
                             },
                             EventPriority::Normal,
                         )
                         .await;
-                        steering_injected = true;
+                        injection_applied = true;
                     }
                 }
             }
@@ -2157,7 +2149,7 @@ impl ExecutionEngine {
             //   (write the answer), and continue.
             // - Model emitted nothing at all     -> partial recovery / truncation.
             //   Retrying without new context will not help, so end the turn.
-            if steering_injected {
+            if injection_applied {
                 // fall through to next round so the model can respond to the steering
             } else if !round_result.has_more_rounds {
                 if round_result.had_assistant_text {
@@ -2227,7 +2219,6 @@ impl ExecutionEngine {
                     AgenticEvent::DialogTurnCancelled {
                         session_id: context.session_id.clone(),
                         turn_id: context.dialog_turn_id.clone(),
-                        subagent_parent_info: event_subagent_parent_info.clone(),
                     },
                     EventPriority::High,
                 )
@@ -2395,7 +2386,6 @@ impl ExecutionEngine {
                     total_rounds: completed_rounds,
                     total_tools,
                     duration_ms,
-                    subagent_parent_info: event_subagent_parent_info,
                     partial_recovery_reason: last_partial_recovery_reason,
                     success: Some(success),
                     finish_reason: Some(effective_finish_reason.to_string()),
@@ -2811,6 +2801,98 @@ mod tests {
         );
 
         assert_eq!(unlocked, vec!["WebFetch".to_string()]);
+    }
+
+    #[test]
+    fn collect_unlocked_collapsed_tools_dedupes_and_filters_runtime_unlocks() {
+        let unlocked = ExecutionEngine::collect_unlocked_collapsed_tools(
+            &[
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-1".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": "WebFetch",
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-2".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": "WebFetch",
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-3".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": "Git",
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-4".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": "Read",
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-5".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": "GetFileDiff",
+                    }),
+                    result_for_assistant: None,
+                    is_error: true,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-6".to_string(),
+                    tool_name: "GetToolSpec".to_string(),
+                    result: json!({
+                        "tool_name": 42,
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+                Message::tool_result(ToolResult {
+                    tool_id: "tool-7".to_string(),
+                    tool_name: "Read".to_string(),
+                    result: json!({
+                        "tool_name": "GetFileDiff",
+                    }),
+                    result_for_assistant: None,
+                    is_error: false,
+                    duration_ms: Some(1),
+                    image_attachments: None,
+                }),
+            ],
+            &[
+                "WebFetch".to_string(),
+                "GetFileDiff".to_string(),
+                "Git".to_string(),
+            ],
+        );
+
+        assert_eq!(unlocked, vec!["Git".to_string(), "WebFetch".to_string()]);
     }
 
     #[test]

@@ -2,6 +2,7 @@ import type { MiniAppCustomizationMetadata } from '@/infrastructure/api/service-
 
 export interface MiniAppBuiltinUpdateNotice {
   builtinVersion: number;
+  sourceHash: string;
 }
 
 export function getMiniAppBuiltinUpdateNotice(
@@ -17,5 +18,8 @@ export function getMiniAppBuiltinUpdateNotice(
   if (typeof builtinVersion !== 'number') {
     return null;
   }
-  return { builtinVersion };
+  return {
+    builtinVersion,
+    sourceHash: metadata.available_builtin_update?.source_hash ?? '',
+  };
 }

@@ -510,6 +510,63 @@ describe('Session usage report UI components', () => {
     expect(onOpenDetails).toHaveBeenCalledWith(report);
   });
 
+  it('appends a hit-rate suffix to the cached cell when cache is reported', () => {
+    const report = usageReport({
+      tokens: {
+        source: 'token_usage_records',
+        inputTokens: 1500,
+        outputTokens: 300,
+        totalTokens: 1800,
+        cachedTokens: 1200,
+        cacheCoverage: 'available',
+        cacheHitRate: 0.8,
+      },
+    });
+
+    render(
+      <SessionUsageReportCard
+        report={report}
+        markdown="## Session Usage"
+        onOpenDetails={vi.fn()}
+      />
+    );
+
+    const cachedMetric = Array.from(container.querySelectorAll('.session-usage-report-card__metric'))
+      .find(metric => metric.textContent?.includes('Cached'));
+    // Cached number AND inline (NN%) hit rate must both appear.
+    expect(cachedMetric?.textContent).toMatch(/1,?200/);
+    expect(cachedMetric?.textContent).toContain('(80%)');
+    expect(cachedMetric?.textContent).not.toContain('Cache not reported');
+  });
+
+  it('omits the hit-rate suffix when cache coverage is unavailable', () => {
+    // Even if cacheHitRate accidentally got populated, an Unavailable
+    // coverage state must still fall back to "Cache not reported".
+    const report = usageReport({
+      tokens: {
+        source: 'token_usage_records',
+        inputTokens: 1500,
+        outputTokens: 300,
+        totalTokens: 1800,
+        cacheCoverage: 'unavailable',
+        cacheHitRate: 0.5,
+      },
+    });
+
+    render(
+      <SessionUsageReportCard
+        report={report}
+        markdown="## Session Usage"
+        onOpenDetails={vi.fn()}
+      />
+    );
+
+    const cachedMetric = Array.from(container.querySelectorAll('.session-usage-report-card__metric'))
+      .find(metric => metric.textContent?.includes('Cached'));
+    expect(cachedMetric?.textContent).toContain('Cache not reported');
+    expect(cachedMetric?.textContent).not.toContain('(50%)');
+  });
+
   it('explains error totals on the chat card', () => {
     const report = usageReport({
       errors: {

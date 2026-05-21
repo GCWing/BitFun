@@ -18,8 +18,6 @@ interface RuntimeStatusOptions {
   delayMs?: number;
   scope?: RuntimeStatusScope;
   messageKey?: string;
-  parentToolId?: string;
-  parentTimestamp?: number;
   subagentSessionId?: string;
 }
 
@@ -83,7 +81,7 @@ function createRuntimeStatusItem(
     id: `runtime-status-${options.scope}-${options.subagentSessionId || roundId}`,
     type: 'text',
     content: RUNTIME_STATUS_CONTENT,
-    timestamp: options.parentTimestamp ? options.parentTimestamp + 1 : now,
+    timestamp: now,
     status: 'streaming',
     isStreaming: true,
     isMarkdown: false,
@@ -92,9 +90,7 @@ function createRuntimeStatusItem(
       scope: options.scope,
       messageKey: options.messageKey || DEFAULT_MODEL_RESPONSE_STATUS_MESSAGE_KEY,
     },
-    ...(options.parentToolId && {
-      isSubagentItem: true,
-      parentTaskToolId: options.parentToolId,
+    ...(options.subagentSessionId && {
       subagentSessionId: options.subagentSessionId,
     }),
   };
@@ -140,12 +136,8 @@ export function scheduleModelResponseStatus(
     }
 
     const statusItem = createRuntimeStatusItem(roundId, { ...options, scope });
-    if (options.parentToolId) {
-      context.flowChatStore.insertModelRoundItemAfterTool(sessionId, turnId, options.parentToolId, statusItem);
-    } else {
-      context.flowChatStore.addModelRoundItem(sessionId, turnId, statusItem, roundId);
-      ensureActiveTextItems(context, sessionId).set(roundId, statusItem.id);
-    }
+    context.flowChatStore.addModelRoundItem(sessionId, turnId, statusItem, roundId);
+    ensureActiveTextItems(context, sessionId).set(roundId, statusItem.id);
   }, delayMs);
 
   context.runtimeStatusTimers.set(key, timer);

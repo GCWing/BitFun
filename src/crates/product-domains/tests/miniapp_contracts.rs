@@ -1,35 +1,64 @@
 #![cfg(feature = "miniapp")]
 
 use bitfun_product_domains::miniapp::bridge_builder::{build_bridge_script, build_csp_content};
+use bitfun_product_domains::miniapp::builtin::{
+    build_builtin_install_marker, build_builtin_package_json, builtin_content_hash,
+    builtin_source_files, legacy_builtin_version_marker_content, parse_builtin_install_marker,
+    resolve_builtin_seed_action, resolve_builtin_seed_check, serialize_builtin_install_marker,
+    should_seed_builtin_app, BuiltinInstallMarker, BuiltinMiniAppBundle, BuiltinSeedAction,
+    BuiltinSeedCheck, BUILTIN_INSTALL_MARKER, BUILTIN_PLACEHOLDER_COMPILED_HTML,
+    LEGACY_BUILTIN_VERSION_MARKER,
+};
 use bitfun_product_domains::miniapp::compiler::compile;
+use bitfun_product_domains::miniapp::customization::{
+    apply_draft_customization_metadata, decline_builtin_update_metadata,
+    declined_builtin_update_needs_local_snapshot, is_current_declined_builtin_update,
+    mark_builtin_update_available_metadata, MiniAppCustomizationBaseline,
+    MiniAppCustomizationLocalSnapshot, MiniAppCustomizationMetadata, MiniAppCustomizationOrigin,
+    MiniAppCustomizationOriginKind, MAX_DECLINED_BUILTIN_UPDATES,
+};
+use bitfun_product_domains::miniapp::draft::{
+    build_draft_manifest, build_draft_response, MINIAPP_DRAFT_STATUS_APPLIED,
+    MINIAPP_DRAFT_STATUS_DRAFT,
+};
 use bitfun_product_domains::miniapp::exporter::{ExportCheckResult, ExportTarget};
 use bitfun_product_domains::miniapp::host_routing::{
     command_basename_allowed, command_basename_for_allowlist, host_allowed_by_allowlist,
     is_host_primitive,
 };
 use bitfun_product_domains::miniapp::lifecycle::{
+    apply_import_runtime_state, apply_recompile_result, apply_sync_from_fs_result,
     build_deps_revision, build_runtime_state, build_source_revision, build_worker_revision,
-    ensure_runtime_state, workspace_dir_string,
+    clear_worker_restart_required_state, ensure_runtime_state, mark_deps_installed_state,
+    prepare_rollback_app, workspace_dir_string,
 };
 use bitfun_product_domains::miniapp::permission_policy::resolve_policy;
 use bitfun_product_domains::miniapp::ports::{
     MiniAppInstallDepsRequest, MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture,
-    MiniAppRuntimePort,
+    MiniAppRuntimeFacade, MiniAppRuntimePort, MiniAppStoragePort,
 };
 use bitfun_product_domains::miniapp::runtime::{
-    candidate_dirs, version_manager_roots, RuntimeKind,
+    candidate_dirs, candidate_executable_path, runtime_lookup_order, version_manager_roots,
+    versioned_executable_candidate, RuntimeKind,
 };
 use bitfun_product_domains::miniapp::storage::{
-    build_package_json, parse_npm_dependencies, MiniAppStorageLayout, COMPILED_HTML, ESM_DEPS_JSON,
-    INDEX_HTML, META_JSON, PACKAGE_JSON, SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, VERSIONS_DIR,
-    WORKER_JS,
+    build_import_fallbacks, build_package_json, parse_npm_dependencies, MiniAppImportLayout,
+    MiniAppStorageLayout, COMPILED_HTML, CUSTOMIZATION_JSON, DRAFTS_CLEANUP_MARKER,
+    DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR, DRAFT_JSON, EMPTY_ESM_DEPENDENCIES_JSON, EMPTY_STORAGE_JSON,
+    ESM_DEPS_JSON, INDEX_HTML, META_JSON, PACKAGE_JSON, PLACEHOLDER_COMPILED_HTML,
+    REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, VERSIONS_DIR, WORKER_JS,
 };
 use bitfun_product_domains::miniapp::types::{
     FsPermissions, MiniApp, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource, NetPermissions,
     NotificationPermissions, NpmDep,
 };
 use bitfun_product_domains::miniapp::worker::{install_command_for_runtime, InstallResult};
+use std::collections::BTreeMap;
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::pin::pin;
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 struct RuntimePortStub;
 
@@ -53,6 +82,193 @@ impl MiniAppRuntimePort for RuntimePortStub {
             })
         })
     }
+}
+
+#[derive(Clone)]
+struct StoragePortStub {
+    state: Arc<Mutex<StoragePortStubState>>,
+}
+
+struct StoragePortStubState {
+    current: MiniApp,
+    versions: BTreeMap<u32, MiniApp>,
+    save_count: usize,
+    saved_version_numbers: Vec<u32>,
+}
+
+impl StoragePortStub {
+    fn new(current: MiniApp) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(StoragePortStubState {
+                current,
+                versions: BTreeMap::new(),
+                save_count: 0,
+                saved_version_numbers: Vec::new(),
+            })),
+        }
+    }
+
+    fn current(&self) -> MiniApp {
+        self.state.lock().unwrap().current.clone()
+    }
+
+    fn save_count(&self) -> usize {
+        self.state.lock().unwrap().save_count
+    }
+
+    fn saved_version_numbers(&self) -> Vec<u32> {
+        self.state.lock().unwrap().saved_version_numbers.clone()
+    }
+}
+
+impl MiniAppStoragePort for StoragePortStub {
+    fn list_app_ids(&self) -> MiniAppPortFuture<'_, Vec<String>> {
+        let app_id = self.state.lock().unwrap().current.id.clone();
+        Box::pin(async move { Ok(vec![app_id]) })
+    }
+
+    fn load(&self, app_id: String) -> MiniAppPortFuture<'_, MiniApp> {
+        let result = {
+            let state = self.state.lock().unwrap();
+            if state.current.id == app_id {
+                Ok(state.current.clone())
+            } else {
+                Err(MiniAppPortError::new(
+                    MiniAppPortErrorKind::NotFound,
+                    format!("App not found: {app_id}"),
+                ))
+            }
+        };
+        Box::pin(async move { result })
+    }
+
+    fn load_meta(
+        &self,
+        app_id: String,
+    ) -> MiniAppPortFuture<'_, bitfun_product_domains::miniapp::types::MiniAppMeta> {
+        let result = {
+            let state = self.state.lock().unwrap();
+            if state.current.id == app_id {
+                Ok((&state.current).into())
+            } else {
+                Err(MiniAppPortError::new(
+                    MiniAppPortErrorKind::NotFound,
+                    format!("App not found: {app_id}"),
+                ))
+            }
+        };
+        Box::pin(async move { result })
+    }
+
+    fn load_source(&self, app_id: String) -> MiniAppPortFuture<'_, MiniAppSource> {
+        let result = {
+            let state = self.state.lock().unwrap();
+            if state.current.id == app_id {
+                Ok(state.current.source.clone())
+            } else {
+                Err(MiniAppPortError::new(
+                    MiniAppPortErrorKind::NotFound,
+                    format!("App not found: {app_id}"),
+                ))
+            }
+        };
+        Box::pin(async move { result })
+    }
+
+    fn save(&self, app: MiniApp) -> MiniAppPortFuture<'_, ()> {
+        let state = self.state.clone();
+        Box::pin(async move {
+            let mut state = state.lock().unwrap();
+            state.current = app;
+            state.save_count += 1;
+            Ok(())
+        })
+    }
+
+    fn save_version(
+        &self,
+        _app_id: String,
+        version: u32,
+        app: MiniApp,
+    ) -> MiniAppPortFuture<'_, ()> {
+        let state = self.state.clone();
+        Box::pin(async move {
+            let mut state = state.lock().unwrap();
+            state.versions.insert(version, app);
+            state.saved_version_numbers.push(version);
+            Ok(())
+        })
+    }
+
+    fn load_app_storage(&self, _app_id: String) -> MiniAppPortFuture<'_, serde_json::Value> {
+        Box::pin(async { Ok(serde_json::json!({})) })
+    }
+
+    fn save_app_storage(
+        &self,
+        _app_id: String,
+        _key: String,
+        _value: serde_json::Value,
+    ) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
+
+    fn delete(&self, _app_id: String) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
+
+    fn list_versions(&self, _app_id: String) -> MiniAppPortFuture<'_, Vec<u32>> {
+        let versions = self
+            .state
+            .lock()
+            .unwrap()
+            .versions
+            .keys()
+            .copied()
+            .collect();
+        Box::pin(async move { Ok(versions) })
+    }
+
+    fn load_version(&self, _app_id: String, version: u32) -> MiniAppPortFuture<'_, MiniApp> {
+        let result = self
+            .state
+            .lock()
+            .unwrap()
+            .versions
+            .get(&version)
+            .cloned()
+            .ok_or_else(|| {
+                MiniAppPortError::new(
+                    MiniAppPortErrorKind::NotFound,
+                    format!("Version v{version} not found"),
+                )
+            });
+        Box::pin(async move { result })
+    }
+}
+
+fn block_on<F: Future>(future: F) -> F::Output {
+    let waker = noop_waker();
+    let mut context = Context::from_waker(&waker);
+    let mut future = pin!(future);
+    loop {
+        match Future::poll(future.as_mut(), &mut context) {
+            Poll::Ready(value) => return value,
+            Poll::Pending => std::thread::yield_now(),
+        }
+    }
+}
+
+fn noop_waker() -> Waker {
+    unsafe fn clone(_: *const ()) -> RawWaker {
+        RawWaker::new(std::ptr::null(), &VTABLE)
+    }
+    unsafe fn wake(_: *const ()) {}
+    unsafe fn wake_by_ref(_: *const ()) {}
+    unsafe fn drop(_: *const ()) {}
+
+    static VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop);
+    unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &VTABLE)) }
 }
 
 #[test]
@@ -189,6 +405,11 @@ fn miniapp_storage_layout_preserves_file_shape_contract() {
     assert_eq!(COMPILED_HTML, "compiled.html");
     assert_eq!(STORAGE_JSON, "storage.json");
     assert_eq!(VERSIONS_DIR, "versions");
+    assert_eq!(DRAFTS_DIR, ".drafts");
+    assert_eq!(DRAFTS_CLEANUP_PREFIX, ".drafts.cleanup-");
+    assert_eq!(DRAFTS_CLEANUP_MARKER, ".cleanup-pending");
+    assert_eq!(DRAFT_JSON, "draft.json");
+    assert_eq!(CUSTOMIZATION_JSON, ".customization.json");
 
     assert_eq!(layout.app_dir(), root.join("app-1"));
     assert_eq!(layout.meta_path(), root.join("app-1").join(META_JSON));
@@ -201,6 +422,36 @@ fn miniapp_storage_layout_preserves_file_shape_contract() {
         root.join("app-1").join(VERSIONS_DIR).join("v3.json")
     );
     assert_eq!(layout.versions_dir(), root.join("app-1").join(VERSIONS_DIR));
+    assert_eq!(
+        layout.customization_path(),
+        root.join("app-1").join(CUSTOMIZATION_JSON)
+    );
+    assert_eq!(
+        MiniAppStorageLayout::drafts_root(&root),
+        root.join(DRAFTS_DIR)
+    );
+    assert_eq!(
+        MiniAppStorageLayout::draft_dir(&root, "app-1", "draft-1"),
+        root.join(DRAFTS_DIR).join("app-1").join("draft-1")
+    );
+    assert_eq!(
+        MiniAppStorageLayout::draft_source_dir(&root, "app-1", "draft-1"),
+        root.join(DRAFTS_DIR)
+            .join("app-1")
+            .join("draft-1")
+            .join(SOURCE_DIR)
+    );
+    assert_eq!(
+        MiniAppStorageLayout::draft_manifest_path(&root, "app-1", "draft-1"),
+        root.join(DRAFTS_DIR)
+            .join("app-1")
+            .join("draft-1")
+            .join(DRAFT_JSON)
+    );
+    assert_eq!(
+        MiniAppStorageLayout::cleanup_drafts_root(&root, "cleanup-id"),
+        root.join(".drafts.cleanup-cleanup-id")
+    );
 }
 
 #[test]
@@ -215,6 +466,18 @@ fn miniapp_runtime_search_plan_preserves_common_install_locations() {
     let roots = version_manager_roots(Some(&home));
     assert_eq!(roots[0], home.join(".nvm").join("versions").join("node"));
     assert!(roots.contains(&home.join(".fnm").join("node-versions")));
+
+    assert_eq!(runtime_lookup_order(), &["bun", "node"]);
+    assert_eq!(
+        candidate_executable_path(Path::new("/usr/local/bin"), "node"),
+        PathBuf::from("/usr/local/bin").join("node")
+    );
+    assert_eq!(
+        versioned_executable_candidate(Path::new("/home/bitfun/.nvm/versions/node/v20"), "node"),
+        PathBuf::from("/home/bitfun/.nvm/versions/node/v20")
+            .join("bin")
+            .join("node")
+    );
 }
 
 #[test]
@@ -317,6 +580,60 @@ fn miniapp_lifecycle_helpers_preserve_runtime_revision_contract() {
 }
 
 #[test]
+fn miniapp_lifecycle_manager_state_helpers_preserve_core_transitions() {
+    let source = MiniAppSource {
+        npm_dependencies: vec![NpmDep {
+            name: "lodash".to_string(),
+            version: "^4.17.21".to_string(),
+        }],
+        ..MiniAppSource::default()
+    };
+    let mut app = sample_miniapp_for_lifecycle(source.clone());
+
+    mark_deps_installed_state(&mut app);
+    assert_eq!(app.runtime.source_revision, "src:3:1234");
+    assert_eq!(app.runtime.deps_revision, "lodash@^4.17.21");
+    assert!(!app.runtime.deps_dirty);
+    assert!(app.runtime.worker_restart_required);
+
+    assert!(clear_worker_restart_required_state(&mut app));
+    assert!(!app.runtime.worker_restart_required);
+    assert!(!clear_worker_restart_required_state(&mut app));
+
+    apply_recompile_result(&mut app, "<html>fresh</html>".to_string(), 2000);
+    assert_eq!(app.compiled_html, "<html>fresh</html>");
+    assert_eq!(app.updated_at, 2000);
+    assert!(!app.runtime.ui_recompile_required);
+    assert_eq!(app.runtime.source_revision, "src:3:1234");
+
+    let current = sample_miniapp_for_lifecycle(MiniAppSource::default());
+    let rollback_target = sample_miniapp_for_lifecycle(source.clone());
+    let rolled_back = prepare_rollback_app(&current, rollback_target, 3000);
+    assert_eq!(rolled_back.version, current.version + 1);
+    assert_eq!(rolled_back.updated_at, 3000);
+    assert!(rolled_back.runtime.deps_dirty);
+    assert!(rolled_back.runtime.worker_restart_required);
+    assert_eq!(rolled_back.runtime.deps_revision, "lodash@^4.17.21");
+
+    let synced =
+        apply_sync_from_fs_result(&current, source, "<html>synced</html>".to_string(), 4000);
+    assert_eq!(synced.version, current.version + 1);
+    assert_eq!(synced.updated_at, 4000);
+    assert_eq!(synced.compiled_html, "<html>synced</html>");
+    assert!(synced.runtime.deps_dirty);
+    assert!(synced.runtime.worker_restart_required);
+
+    let mut imported = synced.clone();
+    imported.runtime.worker_restart_required = false;
+    imported.runtime.deps_dirty = false;
+    apply_import_runtime_state(&mut imported);
+    assert!(imported.runtime.deps_dirty);
+    assert!(imported.runtime.worker_restart_required);
+    assert_eq!(imported.runtime.source_revision, "src:4:4000");
+    assert_eq!(imported.runtime.deps_revision, "lodash@^4.17.21");
+}
+
+#[test]
 fn miniapp_storage_package_json_contract_remains_stable() {
     let deps = parse_npm_dependencies(
         r#"{
@@ -352,6 +669,180 @@ fn miniapp_storage_package_json_contract_remains_stable() {
 }
 
 #[test]
+fn miniapp_storage_import_fallback_contract_remains_stable() {
+    let root = PathBuf::from("/miniapps/incoming");
+    let layout = MiniAppImportLayout::new(&root);
+
+    assert_eq!(layout.meta_path(), root.join(META_JSON));
+    assert_eq!(layout.source_dir(), root.join(SOURCE_DIR));
+    assert_eq!(
+        layout.source_file_path(INDEX_HTML),
+        root.join(SOURCE_DIR).join(INDEX_HTML)
+    );
+    assert_eq!(
+        layout.required_source_file_paths(),
+        vec![
+            (INDEX_HTML, root.join(SOURCE_DIR).join(INDEX_HTML)),
+            (STYLE_CSS, root.join(SOURCE_DIR).join(STYLE_CSS)),
+            (UI_JS, root.join(SOURCE_DIR).join(UI_JS)),
+            (WORKER_JS, root.join(SOURCE_DIR).join(WORKER_JS)),
+        ]
+    );
+    assert_eq!(
+        layout.esm_dependencies_path(),
+        root.join(SOURCE_DIR).join(ESM_DEPS_JSON)
+    );
+    assert_eq!(layout.package_json_path(), root.join(PACKAGE_JSON));
+    assert_eq!(layout.storage_json_path(), root.join(STORAGE_JSON));
+
+    assert_eq!(
+        REQUIRED_SOURCE_FILES,
+        &[INDEX_HTML, STYLE_CSS, UI_JS, WORKER_JS]
+    );
+    assert_eq!(EMPTY_ESM_DEPENDENCIES_JSON, "[]");
+    assert_eq!(EMPTY_STORAGE_JSON, "{}");
+    assert_eq!(
+        PLACEHOLDER_COMPILED_HTML,
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"></head><body>Loading...</body></html>"
+    );
+
+    let package = build_package_json("imported-app", &[]);
+    assert_eq!(package["name"], "miniapp-imported-app");
+    assert_eq!(package["private"], true);
+    assert_eq!(package["dependencies"], serde_json::json!({}));
+
+    let fallbacks = build_import_fallbacks("imported-app");
+    assert_eq!(fallbacks.esm_dependencies_json, "[]");
+    assert_eq!(fallbacks.storage_json, "{}");
+    assert_eq!(fallbacks.compiled_html, PLACEHOLDER_COMPILED_HTML);
+    assert_eq!(fallbacks.package_json, package);
+}
+
+#[test]
+fn miniapp_builtin_contract_preserves_seed_marker_and_hash_policy() {
+    let app = BuiltinMiniAppBundle {
+        id: "builtin-demo",
+        version: 2,
+        meta_json: r#"{"id":"builtin-demo"}"#,
+        html: "<!doctype html><html></html>",
+        css: "body { color: red; }",
+        ui_js: r#"console.log("ui");"#,
+        worker_js: r#"console.log("worker");"#,
+        esm_dependencies_json: "[]",
+    };
+    let content_hash = builtin_content_hash(&app);
+
+    assert_eq!(BUILTIN_INSTALL_MARKER, ".builtin-manifest.json");
+    assert_eq!(LEGACY_BUILTIN_VERSION_MARKER, ".builtin-version");
+    assert_eq!(
+        content_hash,
+        "sha256:5a2625011813ed9f39eea6875ab96047eb383ac005298ea86ce68e5ac4e79825"
+    );
+
+    assert!(should_seed_builtin_app(&app, &content_hash, None));
+    assert!(!should_seed_builtin_app(
+        &app,
+        &content_hash,
+        Some(&BuiltinInstallMarker {
+            version: 2,
+            hash: content_hash.clone(),
+        }),
+    ));
+    assert!(should_seed_builtin_app(
+        &app,
+        &content_hash,
+        Some(&BuiltinInstallMarker {
+            version: 1,
+            hash: content_hash.clone(),
+        }),
+    ));
+    assert!(should_seed_builtin_app(
+        &app,
+        &content_hash,
+        Some(&BuiltinInstallMarker {
+            version: 3,
+            hash: "sha256:old".to_string(),
+        }),
+    ));
+
+    let package = build_builtin_package_json(app.id);
+    assert_eq!(package["name"], "miniapp-builtin-demo");
+    assert_eq!(package["private"], true);
+    assert_eq!(package["dependencies"], serde_json::json!({}));
+
+    let source_files = builtin_source_files(&app);
+    assert_eq!(
+        source_files,
+        [
+            (INDEX_HTML, app.html),
+            (STYLE_CSS, app.css),
+            (UI_JS, app.ui_js),
+            (WORKER_JS, app.worker_js),
+            (ESM_DEPS_JSON, app.esm_dependencies_json),
+        ]
+    );
+    assert_eq!(
+        BUILTIN_PLACEHOLDER_COMPILED_HTML,
+        "<!DOCTYPE html><html><body>Loading...</body></html>"
+    );
+}
+
+#[test]
+fn miniapp_builtin_contract_owns_seed_plan_and_marker_wire_shape() {
+    let app = BuiltinMiniAppBundle {
+        id: "builtin-demo",
+        version: 7,
+        meta_json: r#"{"id":"builtin-demo"}"#,
+        html: "<!doctype html><html></html>",
+        css: "body { color: red; }",
+        ui_js: r#"console.log("ui");"#,
+        worker_js: r#"console.log("worker");"#,
+        esm_dependencies_json: "[]",
+    };
+    let artifacts = bitfun_product_domains::miniapp::builtin::build_builtin_seed_artifacts(&app);
+    let marker = build_builtin_install_marker(&app, &artifacts.content_hash);
+
+    assert_eq!(artifacts.marker, marker);
+    assert_eq!(artifacts.legacy_version, "7");
+    assert_eq!(legacy_builtin_version_marker_content(&app), "7");
+    assert_eq!(
+        resolve_builtin_seed_check(&app, Some(&marker)),
+        BuiltinSeedCheck::Skip
+    );
+
+    let stale_marker = BuiltinInstallMarker {
+        version: 7,
+        hash: "sha256:stale".to_string(),
+    };
+    assert_eq!(
+        resolve_builtin_seed_check(&app, Some(&stale_marker)),
+        BuiltinSeedCheck::NeedsSeed(artifacts.clone())
+    );
+    assert_eq!(
+        resolve_builtin_seed_check(&app, None),
+        BuiltinSeedCheck::NeedsSeed(artifacts.clone())
+    );
+    assert_eq!(
+        resolve_builtin_seed_action(artifacts.clone(), true),
+        BuiltinSeedAction::PreserveLocalOverride(artifacts.clone())
+    );
+    assert_eq!(
+        resolve_builtin_seed_action(artifacts.clone(), false),
+        BuiltinSeedAction::SeedBundle(artifacts.clone())
+    );
+
+    let serialized = serialize_builtin_install_marker(&marker).unwrap();
+    assert_eq!(
+        serialized,
+        format!(
+            "{{\n  \"version\": 7,\n  \"hash\": \"{}\"\n}}",
+            artifacts.content_hash
+        )
+    );
+    assert_eq!(parse_builtin_install_marker(&serialized).unwrap(), marker);
+}
+
+#[test]
 fn miniapp_ports_keep_runtime_boundary_lightweight() {
     let decoded: MiniAppInstallDepsRequest = serde_json::from_value(serde_json::json!({
         "appId": "demo",
@@ -381,6 +872,311 @@ fn miniapp_ports_keep_runtime_boundary_lightweight() {
 
     let port: &dyn MiniAppRuntimePort = &RuntimePortStub;
     let _future = port.detect_runtime();
+}
+
+#[test]
+fn miniapp_runtime_facade_persists_port_backed_lifecycle_transitions() {
+    let mut app = sample_miniapp_for_lifecycle(MiniAppSource {
+        css: "body { color: black; }".to_string(),
+        npm_dependencies: vec![NpmDep {
+            name: "lodash".to_string(),
+            version: "^4.17.21".to_string(),
+        }],
+        ..MiniAppSource::default()
+    });
+    app.runtime = build_runtime_state(app.version, app.updated_at, &app.source, true, false);
+    let storage = StoragePortStub::new(app);
+    let facade = MiniAppRuntimeFacade::new(&storage);
+
+    let installed = block_on(facade.mark_deps_installed("demo".to_string())).unwrap();
+    assert!(!installed.runtime.deps_dirty);
+    assert!(installed.runtime.worker_restart_required);
+
+    let cleared = block_on(facade.clear_worker_restart_required("demo".to_string())).unwrap();
+    assert!(!cleared.runtime.worker_restart_required);
+
+    let recompiled = block_on(facade.persist_recompile_result(
+        "demo".to_string(),
+        "<html>fresh</html>".to_string(),
+        2000,
+    ))
+    .unwrap();
+    assert_eq!(recompiled.version, 3);
+    assert_eq!(recompiled.compiled_html, "<html>fresh</html>");
+    assert!(!recompiled.runtime.ui_recompile_required);
+
+    let synced_source = MiniAppSource {
+        css: "body { color: red; }".to_string(),
+        npm_dependencies: vec![NpmDep {
+            name: "lodash".to_string(),
+            version: "^4.17.21".to_string(),
+        }],
+        ..MiniAppSource::default()
+    };
+    let synced = block_on(facade.persist_sync_from_fs_result(
+        "demo".to_string(),
+        synced_source,
+        "<html>synced</html>".to_string(),
+        3000,
+    ))
+    .unwrap();
+    assert_eq!(synced.version, 4);
+    assert_eq!(synced.source.css, "body { color: red; }");
+    assert!(synced.runtime.deps_dirty);
+    assert!(synced.runtime.worker_restart_required);
+    assert_eq!(storage.saved_version_numbers(), vec![3]);
+
+    let rolled_back = block_on(facade.rollback("demo".to_string(), 3, 4000)).unwrap();
+    assert_eq!(rolled_back.version, 5);
+    assert_eq!(rolled_back.compiled_html, "<html>fresh</html>");
+    assert!(rolled_back.runtime.worker_restart_required);
+    assert_eq!(storage.saved_version_numbers(), vec![3, 4]);
+}
+
+#[test]
+fn miniapp_runtime_facade_skips_save_when_restart_flag_already_clear() {
+    let mut app = sample_miniapp_for_lifecycle(MiniAppSource::default());
+    app.runtime = build_runtime_state(app.version, app.updated_at, &app.source, false, false);
+    let storage = StoragePortStub::new(app);
+    let facade = MiniAppRuntimeFacade::new(&storage);
+
+    let unchanged = block_on(facade.clear_worker_restart_required("demo".to_string())).unwrap();
+
+    assert!(!unchanged.runtime.worker_restart_required);
+    assert_eq!(storage.save_count(), 0);
+    assert_eq!(storage.current().version, 3);
+}
+
+#[test]
+fn miniapp_runtime_facade_preserves_storage_errors_without_state_writes() {
+    let app = sample_miniapp_for_lifecycle(MiniAppSource::default());
+    let storage = StoragePortStub::new(app);
+    let facade = MiniAppRuntimeFacade::new(&storage);
+
+    let missing_app = block_on(facade.mark_deps_installed("missing".to_string())).unwrap_err();
+    assert_eq!(missing_app.kind, MiniAppPortErrorKind::NotFound);
+    assert_eq!(storage.save_count(), 0);
+    assert!(storage.saved_version_numbers().is_empty());
+
+    let missing_version = block_on(facade.rollback("demo".to_string(), 99, 4000)).unwrap_err();
+    assert_eq!(missing_version.kind, MiniAppPortErrorKind::NotFound);
+    assert_eq!(storage.save_count(), 0);
+    assert!(storage.saved_version_numbers().is_empty());
+}
+
+#[test]
+fn miniapp_draft_contract_preserves_manifest_and_response_shape() {
+    let app = sample_miniapp_for_lifecycle(MiniAppSource::default());
+    let manifest = build_draft_manifest("app-1", "draft-1", 7, 1234);
+
+    assert_eq!(manifest.app_id, "app-1");
+    assert_eq!(manifest.draft_id, "draft-1");
+    assert_eq!(manifest.source_version, 7);
+    assert_eq!(manifest.status, MINIAPP_DRAFT_STATUS_DRAFT);
+    assert_eq!(manifest.created_at, 1234);
+    assert_eq!(manifest.updated_at, 1234);
+
+    let json = serde_json::to_value(&manifest).unwrap();
+    assert_eq!(json["appId"], "app-1");
+    assert_eq!(json["draftId"], "draft-1");
+    assert_eq!(json["sourceVersion"], 7);
+
+    let response = build_draft_response("/tmp/draft", app, manifest.clone());
+    assert_eq!(response.app_id, "app-1");
+    assert_eq!(response.draft_root, "/tmp/draft");
+    assert_eq!(response.app.id, "demo");
+
+    let mut applied = manifest;
+    applied.mark_applied(2345);
+    assert_eq!(applied.status, MINIAPP_DRAFT_STATUS_APPLIED);
+    assert_eq!(applied.updated_at, 2345);
+}
+
+#[test]
+fn miniapp_customization_apply_helper_preserves_builtin_override_policy() {
+    let metadata = apply_draft_customization_metadata(
+        None,
+        MiniAppCustomizationBaseline::Builtin {
+            builtin_id: "builtin-pr-review".to_string(),
+            builtin_version: 4,
+        },
+        "draft-1",
+        1234,
+    );
+
+    assert_eq!(
+        metadata.origin.kind,
+        MiniAppCustomizationOriginKind::Builtin
+    );
+    assert_eq!(
+        metadata.origin.builtin_id.as_deref(),
+        Some("builtin-pr-review")
+    );
+    assert_eq!(metadata.origin.builtin_version, Some(4));
+    assert!(metadata.local_override);
+    assert_eq!(metadata.last_applied_draft_id.as_deref(), Some("draft-1"));
+    assert!(metadata.available_builtin_update.is_none());
+    assert_eq!(metadata.updated_at, 1234);
+
+    let updated = apply_draft_customization_metadata(
+        Some(metadata),
+        MiniAppCustomizationBaseline::Builtin {
+            builtin_id: "builtin-pr-review".to_string(),
+            builtin_version: 5,
+        },
+        "draft-2",
+        2345,
+    );
+
+    assert_eq!(updated.origin.builtin_version, Some(5));
+    assert!(updated.local_override);
+    assert_eq!(updated.last_applied_draft_id.as_deref(), Some("draft-2"));
+    assert!(updated.available_builtin_update.is_none());
+
+    let user_created = MiniAppCustomizationMetadata {
+        origin: MiniAppCustomizationOrigin {
+            kind: MiniAppCustomizationOriginKind::UserCreated,
+            builtin_id: None,
+            builtin_version: None,
+        },
+        local_override: false,
+        last_applied_draft_id: None,
+        available_builtin_update: None,
+        declined_builtin_updates: Vec::new(),
+        updated_at: 10,
+    };
+    let user_created_update = apply_draft_customization_metadata(
+        Some(user_created),
+        MiniAppCustomizationBaseline::Builtin {
+            builtin_id: "builtin-pr-review".to_string(),
+            builtin_version: 6,
+        },
+        "draft-3",
+        3456,
+    );
+
+    assert_eq!(
+        user_created_update.origin.kind,
+        MiniAppCustomizationOriginKind::UserCreated
+    );
+    assert!(!user_created_update.local_override);
+    assert_eq!(
+        user_created_update.last_applied_draft_id.as_deref(),
+        Some("draft-3")
+    );
+    assert_eq!(user_created_update.updated_at, 3456);
+}
+
+#[test]
+fn miniapp_customization_builtin_update_policy_preserves_decline_contract() {
+    let mut metadata = apply_draft_customization_metadata(
+        None,
+        MiniAppCustomizationBaseline::Builtin {
+            builtin_id: "builtin-pr-review".to_string(),
+            builtin_version: 4,
+        },
+        "draft-1",
+        1234,
+    );
+
+    let available = mark_builtin_update_available_metadata(metadata, 5, "hash-v5", 2000, false);
+    assert!(available.should_surface_update);
+    assert!(available.metadata_changed);
+    metadata = available.metadata;
+    assert_eq!(
+        metadata
+            .available_builtin_update
+            .as_ref()
+            .unwrap()
+            .source_hash,
+        "hash-v5"
+    );
+
+    metadata = decline_builtin_update_metadata(
+        metadata,
+        5,
+        "hash-v5",
+        2100,
+        Some(MiniAppCustomizationLocalSnapshot {
+            version: 7,
+            updated_at: 2200,
+        }),
+    );
+
+    assert!(metadata.available_builtin_update.is_none());
+    assert_eq!(metadata.updated_at, 2100);
+    assert_eq!(metadata.declined_builtin_updates.len(), 1);
+    assert_eq!(
+        metadata.declined_builtin_updates[0]
+            .last_applied_draft_id
+            .as_deref(),
+        Some("draft-1")
+    );
+    assert!(declined_builtin_update_needs_local_snapshot(
+        &metadata, "hash-v5"
+    ));
+    assert!(is_current_declined_builtin_update(
+        &metadata,
+        "hash-v5",
+        Some(MiniAppCustomizationLocalSnapshot {
+            version: 7,
+            updated_at: 2200,
+        }),
+    ));
+    assert!(!is_current_declined_builtin_update(
+        &metadata,
+        "hash-v5",
+        Some(MiniAppCustomizationLocalSnapshot {
+            version: 8,
+            updated_at: 2200,
+        }),
+    ));
+
+    let suppressed =
+        mark_builtin_update_available_metadata(metadata.clone(), 5, "hash-v5", 2300, true);
+    assert!(!suppressed.should_surface_update);
+    assert!(!suppressed.metadata_changed);
+    assert!(suppressed.metadata.available_builtin_update.is_none());
+
+    let fallback = is_current_declined_builtin_update(&metadata, "hash-v5", None);
+    assert!(fallback);
+}
+
+#[test]
+fn miniapp_customization_decline_policy_updates_existing_and_trims_old_records() {
+    let mut metadata = apply_draft_customization_metadata(
+        None,
+        MiniAppCustomizationBaseline::Builtin {
+            builtin_id: "builtin-pr-review".to_string(),
+            builtin_version: 4,
+        },
+        "draft-1",
+        1000,
+    );
+
+    metadata = decline_builtin_update_metadata(metadata, 5, "hash-v5", 2000, None);
+    metadata = decline_builtin_update_metadata(metadata, 5, "hash-v5", 2500, None);
+    assert_eq!(metadata.declined_builtin_updates.len(), 1);
+    assert_eq!(metadata.declined_builtin_updates[0].declined_at, 2500);
+
+    for idx in 0..=MAX_DECLINED_BUILTIN_UPDATES {
+        metadata = decline_builtin_update_metadata(
+            metadata,
+            6 + idx as u32,
+            &format!("hash-{}", idx),
+            3000 + idx as i64,
+            None,
+        );
+    }
+
+    assert_eq!(
+        metadata.declined_builtin_updates.len(),
+        MAX_DECLINED_BUILTIN_UPDATES
+    );
+    assert!(!metadata
+        .declined_builtin_updates
+        .iter()
+        .any(|record| record.source_hash == "hash-v5"));
 }
 
 fn sample_miniapp_for_lifecycle(source: MiniAppSource) -> MiniApp {

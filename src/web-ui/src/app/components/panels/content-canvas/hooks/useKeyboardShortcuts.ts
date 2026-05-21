@@ -7,6 +7,8 @@
  */
 
 import { useCallback } from 'react';
+import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
+import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
 import { useCanvasStore } from '../stores';
@@ -19,6 +21,7 @@ interface UseKeyboardShortcutsOptions {
 
 export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) => {
   const { enabled = true, handleCloseWithDirtyCheck } = options;
+  const hasCanvasDismissibleLayer = useHasDismissibleLayer('canvas');
 
   const {
     primaryGroup,
@@ -96,8 +99,14 @@ export const useKeyboardShortcuts = (options: UseKeyboardShortcutsOptions = {}) 
   useShortcut(
     'canvas.closePreview',
     { key: 'Escape', scope: 'canvas', allowInInput: true },
-    () => window.dispatchEvent(new CustomEvent('closePreview')),
-    { enabled, priority: 5, description: 'keyboard.shortcuts.canvas.closePreview' }
+    () => {
+      dismissibleLayerManager.dismissTop('canvas');
+    },
+    {
+      enabled: enabled && hasCanvasDismissibleLayer,
+      priority: 5,
+      description: 'keyboard.shortcuts.canvas.closePreview',
+    }
   );
 
   // Close current tab: mod+W

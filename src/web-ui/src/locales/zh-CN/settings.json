@@ -172,6 +172,7 @@
       "canvas": "编辑器画布",
       "editor": "代码编辑器（文本焦点）",
       "chat": "Agent 会话",
+      "terminal": "终端",
       "filetree": "文件树",
       "git": "Git"
     },

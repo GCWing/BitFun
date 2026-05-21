@@ -2,17 +2,17 @@ use crate::infrastructure::{FileSearchOutcome, FileSearchResult, SearchMatchType
 use crate::service::bootstrap::ensure_workspace_gitignore_ignores_bitfun;
 use crate::service::config::{get_global_config_service, types::WorkspaceConfig};
 use crate::service::search::flashgrep::{
-    ConsistencyMode, FLASHGREP_LOG_TARGET, FlashgrepRepoSession, GlobRequest, ManagedClient,
-    OpenRepoParams, PathScope, QuerySpec, RefreshPolicyConfig, RepoConfig, RepoSession,
-    SearchRequest, SearchResults,
+    ConsistencyMode, FlashgrepRepoSession, GlobRequest, ManagedClient, OpenRepoParams, PathScope,
+    QuerySpec, RefreshPolicyConfig, RepoConfig, RepoSession, SearchRequest, SearchResults,
+    FLASHGREP_LOG_TARGET,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{
-    Arc, LazyLock, Mutex as StdMutex, Weak,
     atomic::{AtomicU64, Ordering},
+    Arc, LazyLock, Mutex as StdMutex, Weak,
 };
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};

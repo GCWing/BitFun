@@ -4,8 +4,7 @@ export const COMPLETED_TOOL_TRANSIENT_MS = 1000;
 
 export type ModelRoundItemGroup =
   | { type: 'explore'; items: FlowItem[]; isLast: boolean }
-  | { type: 'critical'; item: FlowItem }
-  | { type: 'subagent'; parentTaskToolId: string; items: FlowItem[] };
+  | { type: 'critical'; item: FlowItem };
 
 interface BuildModelRoundItemGroupsInput {
   items: FlowItem[];
@@ -43,37 +42,10 @@ export function buildModelRoundItemGroups({
   nowMs = Date.now(),
 }: BuildModelRoundItemGroupsInput): ModelRoundItemGroup[] {
   const deferExploreGrouping = disableExploreGrouping || (isStreaming && hasActiveStreamingNarrative(items));
-  const intermediateGroups: Array<
-    | { type: 'normal'; item: FlowItem }
-    | { type: 'subagent'; parentTaskToolId: string; items: FlowItem[] }
-  > = [];
-  let currentSubagentGroup: { parentTaskToolId: string; items: FlowItem[] } | null = null;
-
-  for (const item of items) {
-    const isSubagentItemFlag = (item as any).isSubagentItem === true;
-    const parentTaskToolId = (item as any).parentTaskToolId;
-
-    if (isSubagentItemFlag && parentTaskToolId) {
-      if (currentSubagentGroup && currentSubagentGroup.parentTaskToolId === parentTaskToolId) {
-        currentSubagentGroup.items.push(item);
-      } else {
-        if (currentSubagentGroup) {
-          intermediateGroups.push({ type: 'subagent', ...currentSubagentGroup });
-        }
-        currentSubagentGroup = { parentTaskToolId, items: [item] };
-      }
-    } else {
-      if (currentSubagentGroup) {
-        intermediateGroups.push({ type: 'subagent', ...currentSubagentGroup });
-        currentSubagentGroup = null;
-      }
-      intermediateGroups.push({ type: 'normal', item });
-    }
-  }
-
-  if (currentSubagentGroup) {
-    intermediateGroups.push({ type: 'subagent', ...currentSubagentGroup });
-  }
+  const intermediateGroups: Array<{ type: 'normal'; item: FlowItem }> = items.map(item => ({
+    type: 'normal',
+    item,
+  }));
 
   const finalGroups: ModelRoundItemGroup[] = [];
   let exploreBuffer: FlowItem[] = [];
@@ -103,13 +75,6 @@ export function buildModelRoundItemGroups({
     const group = intermediateGroups[i];
     const isLastGroup = i === intermediateGroups.length - 1;
 
-    if (group.type === 'subagent') {
-      flushExploreBuffer(false);
-      flushPendingAsCritical();
-      finalGroups.push(group);
-      continue;
-    }
-
     const item = group.item;
     const isLastNormalItem = normalItemIndex === normalItems.length - 1;
 
@@ -125,7 +90,12 @@ export function buildModelRoundItemGroups({
       const isExploreTool = isCollapsibleTool(toolName);
 
       if (isExploreTool) {
-        if (deferExploreGrouping || isActiveToolItem(item) || isRecentlyCompletedToolItem(item, nowMs)) {
+        const keepTransientlyCritical =
+          deferExploreGrouping ||
+          isActiveToolItem(item) ||
+          (isStreaming && isRecentlyCompletedToolItem(item, nowMs));
+
+        if (keepTransientlyCritical) {
           flushExploreBuffer(false);
           flushPendingAsCritical();
           finalGroups.push({ type: 'critical', item });

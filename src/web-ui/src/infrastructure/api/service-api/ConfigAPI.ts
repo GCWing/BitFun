@@ -89,6 +89,35 @@ export class ConfigAPI {
     }
   }
 
+  async getConfigs(
+    paths: string[],
+    options?: { skipRetryOnNotFound?: boolean }
+  ): Promise<Record<string, any>> {
+    const uniquePaths = Array.from(new Set(paths));
+    if (uniquePaths.length === 0) {
+      return {};
+    }
+
+    const shouldSkipRetry = options?.skipRetryOnNotFound ?? false;
+
+    try {
+      return await api.invoke('get_configs', {
+        request: {
+          paths: uniquePaths,
+          skipRetryOnNotFound: shouldSkipRetry,
+        },
+      });
+    } catch {
+      const entries = await Promise.all(
+        uniquePaths.map(async (path) => [
+          path,
+          await this.getConfig(path, options),
+        ] as const)
+      );
+      return Object.fromEntries(entries);
+    }
+  }
+
    
   async setConfig(path: string, value: any): Promise<void> {
     try {

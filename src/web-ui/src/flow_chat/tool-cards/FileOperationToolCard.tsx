@@ -72,6 +72,16 @@ function firstStringValue(source: Record<string, unknown> | null | undefined, ke
   return '';
 }
 
+function pathFromAcpLocations(locations: unknown): string {
+  if (!Array.isArray(locations)) return '';
+  for (const location of locations) {
+    const object = objectValue(location);
+    const filePath = firstStringValue(object, ['path', 'file_path', 'filePath', 'uri']);
+    if (filePath) return filePath;
+  }
+  return '';
+}
+
 function isWindowsAbsolutePath(filePath: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(filePath);
 }
@@ -142,6 +152,10 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     const resultPath = stringPath(result?.file_path) || stringPath(result?.filePath);
     if (resultPath) {
       return resultPath;
+    }
+    const resultLocationPath = pathFromAcpLocations(result?.locations);
+    if (resultLocationPath) {
+      return resultLocationPath;
     }
 
     const params = objectValue(partialParams || toolCall?.input);

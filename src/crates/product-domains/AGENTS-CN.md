@@ -28,6 +28,24 @@
   `function-agents` 只放 function-agent 专属依赖，`product-full` 只聚合已有
   产品领域 feature 组。
 
+## 当前归属
+
+- `miniapp` 拥有 MiniApp DTO、compiler/bridge helper、storage/draft/import
+  文件形态、fallback payload、runtime search plan、worker install 命令选择、
+  lifecycle/revision 与 manager state-transition helper、host-routing string
+  policy、customization metadata policy、built-in update/decline 决策、
+  built-in bundle/hash/marker seed plan 与 marker wire helper、built-in
+  source/placeholder payload contract、port trait，以及 storage-backed runtime
+  state facade。
+- `function-agents` 拥有纯 DTO、prompt assembly、commit prompt preparation、
+  AI response parsing policy、diff truncation policy、JSON string 到领域 DTO 的
+  解析 helper、本地文件形态分析、Git/AI port trait，以及 port-backed runtime
+  facade orchestration。
+- Core 仍拥有 MiniApp filesystem IO、worker process、host dispatch、built-in
+  asset include/seeding、marker IO、recompile orchestration、source-hash lookup、
+  `PathManager` 集成、function-agent Git/AI service adapter、prompt template、
+  JSON extraction 和 error mapping。
+
 ## 验证
 
 按改动范围选择最小验证：

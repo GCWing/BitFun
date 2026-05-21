@@ -71,38 +71,6 @@ impl SessionControlTool {
         Ok(())
     }
 
-    fn resolve_workspace(&self, workspace: &str) -> BitFunResult<String> {
-        let workspace = workspace.trim();
-        if workspace.is_empty() {
-            return Err(BitFunError::tool(
-                "workspace is required and cannot be empty".to_string(),
-            ));
-        }
-
-        let path = Path::new(workspace);
-        if !path.is_absolute() {
-            return Err(BitFunError::tool(
-                "workspace must be an absolute path".to_string(),
-            ));
-        }
-
-        let resolved = normalize_path(workspace);
-        let path = Path::new(&resolved);
-        if !path.exists() {
-            return Err(BitFunError::tool(format!(
-                "Workspace does not exist: {}",
-                resolved
-            )));
-        }
-        if !path.is_dir() {
-            return Err(BitFunError::tool(format!(
-                "Workspace is not a directory: {}",
-                resolved
-            )));
-        }
-        Ok(resolved)
-    }
-
     fn default_session_name() -> String {
         "New Session".to_string()
     }
@@ -124,6 +92,64 @@ impl SessionControlTool {
             BitFunError::tool("create requires a creator session in tool context".to_string())
         })?;
         Ok(format!("session-{}", creator_session_id))
+    }
+
+    fn validate_workspace_shape(&self, workspace: &str) -> ValidationResult {
+        if workspace.trim().is_empty() {
+            return ValidationResult {
+                result: false,
+                message: Some("workspace is required and cannot be empty".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
+        if !Path::new(workspace.trim()).is_absolute() {
+            return ValidationResult {
+                result: false,
+                message: Some("workspace must be an absolute path".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
+        ValidationResult::default()
+    }
+
+    async fn resolve_effective_workspace(
+        &self,
+        action: SessionControlAction,
+        session_id: Option<&str>,
+        context: &ToolUseContext,
+        coordinator: &crate::agentic::coordination::ConversationCoordinator,
+    ) -> BitFunResult<String> {
+        match action {
+            SessionControlAction::Cancel | SessionControlAction::Delete => {
+                let session_id = session_id.ok_or_else(|| {
+                    BitFunError::tool(format!("session_id is required for {}", action.as_str()))
+                })?;
+                if let Some(resolved) = coordinator
+                    .resolve_session_workspace_path(session_id)
+                    .await
+                    .map(|path| path.to_string_lossy().to_string())
+                {
+                    return Ok(resolved);
+                }
+                Err(BitFunError::NotFound(format!(
+                    "Workspace for session '{}' could not be resolved",
+                    session_id
+                )))
+            }
+            SessionControlAction::Create | SessionControlAction::List => context
+                .workspace_root()
+                .map(|path| normalize_path(path.to_string_lossy().as_ref()))
+                .ok_or_else(|| {
+                    BitFunError::tool(format!(
+                        "workspace is required for {} when the current workspace is unavailable",
+                        action.as_str()
+                    ))
+                }),
+        }
     }
 
     fn validate_mutating_action_target(
@@ -167,18 +193,20 @@ impl SessionControlTool {
         }
 
         if let Some(tool_context) = context {
-            if let Ok(workspace) = self.resolve_workspace(&parsed.workspace) {
-                if self.current_workspace_session(tool_context, &workspace) == Some(session_id) {
-                    return ValidationResult {
-                        result: false,
-                        message: Some(format!(
-                            "cannot {} the current session from SessionControl",
-                            action.as_str()
-                        )),
-                        error_code: Some(400),
-                        meta: None,
-                    };
-                }
+            if context
+                .and_then(|value| value.session_id.as_deref())
+                .is_some_and(|current_session_id| current_session_id == session_id)
+                && tool_context.workspace_root().is_some()
+            {
+                return ValidationResult {
+                    result: false,
+                    message: Some(format!(
+                        "cannot {} the current session from SessionControl",
+                        action.as_str()
+                    )),
+                    error_code: Some(400),
+                    meta: None,
+                };
             }
         }
 
@@ -287,7 +315,7 @@ impl SessionControlAgentType {
 #[derive(Debug, Clone, Deserialize)]
 struct SessionControlInput {
     action: SessionControlAction,
-    workspace: String,
+    workspace: Option<String>,
     session_id: Option<String>,
     session_name: Option<String>,
     agent_type: Option<SessionControlAgentType>,
@@ -309,10 +337,8 @@ Actions:
 - "delete": Delete an existing session by session_id.
 - "list": List all sessions.
 
-Required inputs:
-- "workspace": Absolute workspace path for the target session scope.
-
-Optional inputs:
+Arguments:
+- "workspace": Absolute workspace path. Required for create and list. Ignored for cancel and delete.
 - "session_name": Only used by create. Defaults to "New Session".
 - "agent_type": Only used by create. Defaults to "agentic".
   - "agentic": Coding-focused agent for implementation, debugging, and code changes.
@@ -342,7 +368,7 @@ Optional inputs:
                 },
                 "workspace": {
                     "type": "string",
-                    "description": "Required absolute workspace path."
+                    "description": "Required absolute workspace path for create and list. Ignored for cancel and delete."
                 },
                 "session_id": {
                     "type": "string",
@@ -358,7 +384,7 @@ Optional inputs:
                     "description": "Optional agent type when creating a session. Defaults to agentic."
                 }
             },
-            "required": ["action", "workspace"],
+            "required": ["action"],
             "additionalProperties": false
         })
     }
@@ -388,26 +414,46 @@ Optional inputs:
             }
         };
 
-        if parsed.workspace.trim().is_empty() {
-            return ValidationResult {
-                result: false,
-                message: Some("workspace is required and cannot be empty".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
-        }
-
-        if !Path::new(parsed.workspace.trim()).is_absolute() {
-            return ValidationResult {
-                result: false,
-                message: Some("workspace must be an absolute path".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
+        if let Some(workspace) = parsed.workspace.as_deref() {
+            let should_validate_workspace = matches!(
+                parsed.action,
+                SessionControlAction::Create | SessionControlAction::List
+            );
+            if !should_validate_workspace {
+                // Ignore workspace for cancel/delete so callers cannot accidentally
+                // scope these actions to the wrong workspace.
+                return match parsed.action {
+                    SessionControlAction::Cancel => self
+                        .validate_mutating_action_target(
+                            SessionControlAction::Cancel,
+                            &parsed,
+                            context,
+                        ),
+                    SessionControlAction::Delete => self
+                        .validate_mutating_action_target(
+                            SessionControlAction::Delete,
+                            &parsed,
+                            context,
+                        ),
+                    _ => ValidationResult::default(),
+                };
+            }
+            let workspace_validation = self.validate_workspace_shape(workspace);
+            if !workspace_validation.result {
+                return workspace_validation;
+            }
         }
 
         match parsed.action {
             SessionControlAction::Create => {
+                if parsed.workspace.is_none() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some("workspace is required for create".to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
                 if parsed.session_id.is_some() {
                     return ValidationResult {
                         result: false,
@@ -445,6 +491,14 @@ Optional inputs:
                 );
             }
             SessionControlAction::List => {
+                if parsed.workspace.is_none() {
+                    return ValidationResult {
+                        result: false,
+                        message: Some("workspace is required for list".to_string()),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
                 if parsed.agent_type.is_some() {
                     return ValidationResult {
                         result: false,
@@ -491,11 +545,8 @@ Optional inputs:
 
         match action {
             "create" => format!("Create session in {}", workspace),
-            "cancel" => format!(
-                "Cancel active turn for session {} in {}",
-                session_id, workspace
-            ),
-            "delete" => format!("Delete session {} in {}", session_id, workspace),
+            "cancel" => format!("Cancel active turn for session {}", session_id),
+            "delete" => format!("Delete session {}", session_id),
             "list" => format!("List sessions in {}", workspace),
             _ => format!("Manage sessions in {}", workspace),
         }
@@ -508,13 +559,18 @@ Optional inputs:
     ) -> BitFunResult<Vec<ToolResult>> {
         let params: SessionControlInput = serde_json::from_value(input.clone())
             .map_err(|e| BitFunError::tool(format!("Invalid input: {}", e)))?;
-        let workspace = self.resolve_workspace(&params.workspace)?;
-        let workspace_path = Path::new(&workspace);
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
 
         match params.action {
             SessionControlAction::Create => {
+                let workspace = self.resolve_effective_workspace(
+                    SessionControlAction::Create,
+                    None,
+                    context,
+                    &coordinator,
+                )
+                .await?;
                 let session_name = params
                     .session_name
                     .clone()
@@ -568,6 +624,14 @@ Optional inputs:
                     BitFunError::tool("session_id is required for cancel".to_string())
                 })?;
                 Self::validate_session_id(session_id).map_err(BitFunError::tool)?;
+                let workspace = self.resolve_effective_workspace(
+                    SessionControlAction::Cancel,
+                    Some(session_id),
+                    context,
+                    &coordinator,
+                )
+                .await?;
+                let workspace_path = Path::new(&workspace);
                 if self.current_workspace_session(context, &workspace) == Some(session_id) {
                     return Err(BitFunError::tool(
                         "cannot cancel the current session from SessionControl".to_string(),
@@ -641,6 +705,14 @@ Optional inputs:
                     BitFunError::tool("session_id is required for delete".to_string())
                 })?;
                 Self::validate_session_id(session_id).map_err(BitFunError::tool)?;
+                let workspace = self.resolve_effective_workspace(
+                    SessionControlAction::Delete,
+                    Some(session_id),
+                    context,
+                    &coordinator,
+                )
+                .await?;
+                let workspace_path = Path::new(&workspace);
                 if self.current_workspace_session(context, &workspace) == Some(session_id) {
                     return Err(BitFunError::tool(
                         "cannot delete the current session from SessionControl".to_string(),
@@ -669,6 +741,14 @@ Optional inputs:
                 }])
             }
             SessionControlAction::List => {
+                let workspace = self.resolve_effective_workspace(
+                    SessionControlAction::List,
+                    None,
+                    context,
+                    &coordinator,
+                )
+                .await?;
+                let workspace_path = Path::new(&workspace);
                 let sessions = coordinator.list_sessions(workspace_path).await?;
                 let current_session_id = self.current_workspace_session(context, &workspace);
                 let result_for_assistant =
@@ -698,6 +778,7 @@ mod tests {
     use serde_json::json;
     use std::collections::HashMap;
     use std::fs;
+    use std::path::PathBuf;
     use uuid::Uuid;
 
     fn empty_context() -> ToolUseContext {
@@ -716,25 +797,36 @@ mod tests {
         }
     }
 
-    fn temp_workspace_path() -> String {
-        let path = std::env::temp_dir().join(format!(
-            "bitfun-session-control-tool-test-{}",
-            Uuid::new_v4()
-        ));
-        fs::create_dir_all(&path).expect("temp workspace should be created");
-        path.to_string_lossy().to_string()
+    struct TestTempDir {
+        path: PathBuf,
+    }
+
+    impl TestTempDir {
+        fn new(prefix: &str) -> Self {
+            let path = std::env::temp_dir().join(format!("{prefix}-{}", Uuid::new_v4()));
+            fs::create_dir_all(&path).expect("temp workspace should be created");
+            Self { path }
+        }
+
+        fn as_string(&self) -> String {
+            self.path.to_string_lossy().to_string()
+        }
+    }
+
+    impl Drop for TestTempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
     }
 
     #[tokio::test]
     async fn validate_cancel_requires_session_id() {
         let tool = SessionControlTool::new();
-        let workspace = temp_workspace_path();
 
         let validation = tool
             .validate_input(
                 &json!({
                     "action": "cancel",
-                    "workspace": workspace,
                 }),
                 Some(&empty_context()),
             )
@@ -750,13 +842,11 @@ mod tests {
     #[tokio::test]
     async fn validate_cancel_rejects_session_name() {
         let tool = SessionControlTool::new();
-        let workspace = temp_workspace_path();
 
         let validation = tool
             .validate_input(
                 &json!({
                     "action": "cancel",
-                    "workspace": workspace,
                     "session_id": "worker_1",
                     "session_name": "should-not-be-here",
                 }),
@@ -772,15 +862,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn validate_cancel_allows_missing_workspace() {
+        let tool = SessionControlTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "cancel",
+                    "session_id": "worker_1",
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(validation.result, "{:?}", validation.message);
+    }
+
+    #[tokio::test]
+    async fn validate_cancel_ignores_workspace_when_provided() {
+        let tool = SessionControlTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "cancel",
+                    "session_id": "worker_1",
+                    "workspace": "not-an-absolute-path",
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(validation.result, "{:?}", validation.message);
+    }
+
+    #[tokio::test]
     async fn validate_list_rejects_session_id() {
         let tool = SessionControlTool::new();
-        let workspace = temp_workspace_path();
+        let workspace = TestTempDir::new("bitfun-session-control-tool-test");
 
         let validation = tool
             .validate_input(
                 &json!({
                     "action": "list",
-                    "workspace": workspace,
+                    "workspace": workspace.as_string(),
                     "session_id": "worker_1",
                 }),
                 Some(&empty_context()),
@@ -791,6 +916,26 @@ mod tests {
         assert_eq!(
             validation.message.as_deref(),
             Some("session_id is not allowed for list")
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_list_requires_workspace() {
+        let tool = SessionControlTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "list",
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(
+            validation.message.as_deref(),
+            Some("workspace is required for list")
         );
     }
 
@@ -806,6 +951,6 @@ mod tests {
             &ToolRenderOptions { verbose: false },
         );
 
-        assert_eq!(message, "Cancel active turn for session worker_1 in /repo");
+        assert_eq!(message, "Cancel active turn for session worker_1");
     }
 }

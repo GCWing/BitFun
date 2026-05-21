@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { normalizeSubagentParentInfo } from './subagentParentInfo';
 import {
+  __test_only__,
   formatDialogErrorForNotification,
   handleDialogTurnComplete,
   handleSessionStateChanged,
@@ -40,37 +40,25 @@ describe('isAppWindowFocused', () => {
   });
 });
 
-describe('normalizeSubagentParentInfo', () => {
-  it('normalizes snake_case subagent parent metadata from backend events', () => {
+describe('resolveDialogTurnDisplayContent', () => {
+  it('prefers original user input for ordinary turns', () => {
     expect(
-      normalizeSubagentParentInfo({
-        subagent_parent_info: {
-          session_id: 'parent',
-          dialog_turn_id: 'turn',
-          tool_call_id: 'tool',
-        },
-      }),
-    ).toEqual({
-      sessionId: 'parent',
-      dialogTurnId: 'turn',
-      toolCallId: 'tool',
-    });
+      __test_only__.resolveDialogTurnDisplayContent(
+        '<user_query>\nwrapped runtime content\n</user_query>',
+        'Original human message',
+        { kind: 'user_dialog' },
+      ),
+    ).toBe('Original human message');
   });
 
-  it('keeps camelCase subagent parent metadata intact', () => {
+  it('still prefers original user input when metadata is background_subagent_result', () => {
     expect(
-      normalizeSubagentParentInfo({
-        subagentParentInfo: {
-          sessionId: 'parent',
-          dialogTurnId: 'turn',
-          toolCallId: 'tool',
-        },
-      }),
-    ).toEqual({
-      sessionId: 'parent',
-      dialogTurnId: 'turn',
-      toolCallId: 'tool',
-    });
+      __test_only__.resolveDialogTurnDisplayContent(
+        'Delivered result text',
+        'Display content chosen by backend',
+        { kind: 'background_subagent_result' },
+      ),
+    ).toBe('Display content chosen by backend');
   });
 });
 

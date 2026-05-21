@@ -16,6 +16,10 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
 }));
 
 let i18n: I18nInstance;
+let JSDOMCtor: (new (
+  html?: string,
+  options?: { pretendToBeVisual?: boolean; url?: string }
+) => { window: Window & typeof globalThis }) | null = null;
 
 beforeAll(async () => {
   i18n = createInstance();
@@ -41,6 +45,9 @@ beforeAll(async () => {
     },
     interpolation: { escapeValue: false },
   });
+
+  const jsdom = await import('jsdom');
+  JSDOMCtor = jsdom.JSDOM as typeof JSDOMCtor;
 });
 
 function withI18n(element: React.ReactElement): React.ReactElement {
@@ -60,9 +67,8 @@ describe('ToolTimeoutIndicator', () => {
   let container: HTMLDivElement | null = null;
   let root: Root | null = null;
 
-  beforeEach(async () => {
-    const jsdom = await import('jsdom');
-    dom = new jsdom.JSDOM('<!doctype html><html><body></body></html>', {
+  beforeEach(() => {
+    dom = new JSDOMCtor!('<!doctype html><html><body></body></html>', {
       pretendToBeVisual: true,
       url: 'http://localhost',
     }) as unknown as { window: Window & typeof globalThis };

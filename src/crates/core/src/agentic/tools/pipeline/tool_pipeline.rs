@@ -19,8 +19,8 @@ use log::{debug, error, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
-use tokio::sync::{oneshot, RwLock as TokioRwLock};
-use tokio::time::{timeout, Duration};
+use tokio::sync::{RwLock as TokioRwLock, oneshot};
+use tokio::time::{Duration, timeout};
 use tokio_util::sync::CancellationToken;
 
 /// A batch of tool tasks to execute together.
@@ -1577,9 +1577,17 @@ impl ToolPipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use serde_json::json;
     use std::collections::HashMap;
+
+    fn test_tool_pipeline() -> ToolPipeline {
+        let registry = Arc::new(TokioRwLock::new(ToolRegistry::new()));
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let state_manager = Arc::new(ToolStateManager::new(event_queue));
+        ToolPipeline::new(registry, state_manager, None)
+    }
 
     fn test_tool_task(tool_id: &str, tool_name: &str) -> ToolTask {
         ToolTask::new(
@@ -1594,6 +1602,7 @@ mod tests {
             ToolExecutionContext {
                 session_id: "session_1".to_string(),
                 dialog_turn_id: "turn_1".to_string(),
+                round_id: "round_1".to_string(),
                 agent_type: "agent".to_string(),
                 workspace: None,
                 context_vars: HashMap::new(),
@@ -1643,12 +1652,14 @@ mod tests {
             result.result.result["provided_arguments"],
             serde_json::Value::String("{\"operation\":\"log\"".to_string())
         );
-        assert!(result
-            .result
-            .result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .contains("Provided arguments: {\"operation\":\"log\""));
+        assert!(
+            result
+                .result
+                .result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .contains("Provided arguments: {\"operation\":\"log\"")
+        );
     }
 
     #[test]
@@ -1676,6 +1687,62 @@ mod tests {
     }
 
     #[test]
+    fn pipeline_preserves_core_owned_tool_context_without_portable_runtime_leak() {
+        let pipeline = test_tool_pipeline();
+        let mut task = test_tool_task("tool_context_1", "WebFetch");
+        task.context
+            .context_vars
+            .insert("turn_index".to_string(), "7".to_string());
+        task.context
+            .context_vars
+            .insert("primary_model_provider".to_string(), "openai".to_string());
+        task.context.context_vars.insert(
+            "primary_model_supports_image_understanding".to_string(),
+            "true".to_string(),
+        );
+        task.context.collapsed_tools = vec!["WebFetch".to_string()];
+        task.context.unlocked_collapsed_tools = vec!["WebFetch".to_string()];
+        task.context.runtime_tool_restrictions = ToolRuntimeRestrictions {
+            allowed_tool_names: ["WebFetch"].into_iter().map(str::to_string).collect(),
+            denied_tool_names: ["Bash"].into_iter().map(str::to_string).collect(),
+            path_policy: Default::default(),
+        };
+
+        let context = pipeline.build_tool_use_context(&task, CancellationToken::new());
+
+        assert_eq!(context.tool_call_id.as_deref(), Some("tool_context_1"));
+        assert_eq!(context.agent_type.as_deref(), Some("agent"));
+        assert_eq!(context.session_id.as_deref(), Some("session_1"));
+        assert_eq!(context.dialog_turn_id.as_deref(), Some("turn_1"));
+        assert_eq!(context.unlocked_collapsed_tools, vec!["WebFetch"]);
+        assert!(context.cancellation_token.is_some());
+        assert!(
+            context
+                .runtime_tool_restrictions
+                .is_tool_allowed("WebFetch")
+        );
+        assert!(!context.runtime_tool_restrictions.is_tool_allowed("Bash"));
+        assert_eq!(context.custom_data["turn_index"], json!(7));
+        assert_eq!(
+            context.custom_data["primary_model_provider"],
+            json!("openai")
+        );
+        assert_eq!(
+            context.custom_data["primary_model_supports_image_understanding"],
+            json!(true)
+        );
+
+        let facts = context.to_tool_context_facts();
+        let value = serde_json::to_value(&facts).expect("serialize context facts");
+        assert_eq!(value["toolCallId"], "tool_context_1");
+        assert_eq!(value["sessionId"], "session_1");
+        assert!(value.get("unlockedCollapsedTools").is_none());
+        assert!(value.get("customData").is_none());
+        assert!(value.get("cancellationToken").is_none());
+        assert!(value.get("workspaceServices").is_none());
+    }
+
+    #[test]
     fn collapsed_tool_requires_tool_catalog_unlock() {
         let mut task = test_tool_task("tool_1", "WebFetch");
         task.context.collapsed_tools = vec!["WebFetch".to_string()];
@@ -1683,9 +1750,10 @@ mod tests {
         let err = ToolPipeline::validate_collapsed_tool_usage(&task)
             .expect_err("collapsed tool should require GetToolSpec unlock");
 
-        assert!(err
-            .to_string()
-            .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}"));
+        assert!(
+            err.to_string()
+                .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}")
+        );
     }
 
     #[test]

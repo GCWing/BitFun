@@ -36,25 +36,6 @@ pub(crate) fn is_codex_chatgpt_endpoint(request_url: &str) -> bool {
     request_url.contains("chatgpt.com/backend-api/codex")
 }
 
-/// Convert a `ToolDefinition` list to the *flat* Responses tool schema that
-/// Codex backend (and OpenAI's public Responses API) expects:
-/// `{ "type": "function", "name": ..., "description": ..., "parameters": ..., "strict": false }`.
-fn convert_tools_flat(tools: Option<Vec<ToolDefinition>>) -> Option<Vec<Value>> {
-    tools.map(|defs| {
-        defs.into_iter()
-            .map(|tool| {
-                json!({
-                    "type": "function",
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.parameters,
-                    "strict": false,
-                })
-            })
-            .collect()
-    })
-}
-
 fn attach_tools(request_body: &mut Value, tools: Option<Vec<Value>>) {
     if let Some(tools) = tools {
         let names: Vec<String> = tools
@@ -173,7 +154,7 @@ pub(crate) async fn send_stream(
 
     let (instructions, response_input) =
         OpenAIMessageConverter::convert_messages_to_responses_input(messages);
-    let tools_flat = convert_tools_flat(tools);
+    let tools_flat = common::convert_tools_flat(tools);
     let request_body =
         build_request_body(client, instructions, response_input, tools_flat, extra_body);
     let idle_timeout = client.stream_options.idle_timeout;

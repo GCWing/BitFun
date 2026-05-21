@@ -231,7 +231,7 @@
     background: transparent;
     color: var(--color-text-secondary);
     font-size: var(--flowchat-font-size-sm);
-    line-height: 1.2;
+    line-height: var(--flowchat-compact-line-height, 1.32);
     text-align: left;
     cursor: pointer;
     transition: all $motion-fast $easing-standard;
@@ -341,7 +341,7 @@
     padding: 8px 10px;
     border-bottom: 1px solid var(--border-subtle);
     font-size: var(--flowchat-font-size-xs);
-    line-height: 1.3;
+    line-height: var(--flowchat-compact-line-height, 1.32);
     color: var(--color-text-secondary);
   }
 

@@ -14,6 +14,7 @@ import { IconButton, MarkdownRenderer, ToolProcessingDots, Tooltip } from '@/com
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import {
   buildSessionUsageExportMarkdown,
+  formatHitRateSuffix,
   formatUsageDuration,
   formatUsageNumber,
   formatUsageTimestamp,
@@ -157,7 +158,7 @@ export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
   const tokenTotal = report.tokens.totalTokens;
   const cachedTokenText = report.tokens.cacheCoverage === 'unavailable'
     ? t('usage.status.cacheNotReported')
-    : formatUsageNumber(report.tokens.cachedTokens, t);
+    : `${formatUsageNumber(report.tokens.cachedTokens, t)}${formatHitRateSuffix(report.tokens.cacheHitRate, t)}`;
   const cachedTokenHelp = report.tokens.cacheCoverage === 'unavailable'
     ? t('usage.help.cachedTokens')
     : report.tokens.cacheCoverage === 'partial'

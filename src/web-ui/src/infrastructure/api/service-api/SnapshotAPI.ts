@@ -137,6 +137,23 @@ export interface CleanupSandboxDataRequest {
 }
 
 export class SnapshotAPI {
+  private readonly inFlightRequests = new Map<string, Promise<unknown>>();
+
+  private dedupeInFlight<T>(key: string, load: () => Promise<T>): Promise<T> {
+    const existing = this.inFlightRequests.get(key) as Promise<T> | undefined;
+    if (existing) {
+      return existing;
+    }
+
+    const request = load().finally(() => {
+      if (this.inFlightRequests.get(key) === request) {
+        this.inFlightRequests.delete(key);
+      }
+    });
+    this.inFlightRequests.set(key, request);
+    return request;
+  }
+
    
   async getSessionStats(sessionId: string, workspacePath?: string): Promise<{
     session_id: string;
@@ -146,9 +163,10 @@ export class SnapshotAPI {
   }> {
     try {
       const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
-      return await api.invoke('get_session_stats', { 
-        request: { session_id: sessionId, workspacePath: resolvedWorkspacePath } 
-      });
+      const key = `get_session_stats:${resolvedWorkspacePath}:${sessionId}`;
+      return await this.dedupeInFlight(key, () => api.invoke('get_session_stats', {
+        request: { session_id: sessionId, workspacePath: resolvedWorkspacePath }
+      }));
     } catch (error) {
       throw createTauriCommandError('get_session_stats', error, { sessionId, workspacePath });
     }
@@ -158,9 +176,10 @@ export class SnapshotAPI {
   async getSessionFiles(sessionId: string, workspacePath?: string): Promise<string[]> {
     try {
       const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
-      return await api.invoke('get_session_files', { 
-        request: { session_id: sessionId, workspacePath: resolvedWorkspacePath } 
-      });
+      const key = `get_session_files:${resolvedWorkspacePath}:${sessionId}`;
+      return await this.dedupeInFlight(key, () => api.invoke('get_session_files', {
+        request: { session_id: sessionId, workspacePath: resolvedWorkspacePath }
+      }));
     } catch (error) {
       throw createTauriCommandError('get_session_files', error, { sessionId, workspacePath });
     }
@@ -195,9 +214,10 @@ export class SnapshotAPI {
   ): Promise<SessionFileDiffStats> {
     try {
       const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
-      return await api.invoke('get_session_file_diff_stats', {
+      const key = `get_session_file_diff_stats:${resolvedWorkspacePath}:${sessionId}:${filePath}`;
+      return await this.dedupeInFlight(key, () => api.invoke('get_session_file_diff_stats', {
         request: { sessionId, filePath, workspacePath: resolvedWorkspacePath },
-      });
+      }));
     } catch (error) {
       throw createTauriCommandError('get_session_file_diff_stats', error, {
         sessionId,
@@ -214,9 +234,10 @@ export class SnapshotAPI {
   ): Promise<SandboxOperationSummary> {
     try {
       const resolvedWorkspacePath = requireSessionWorkspacePath(sessionId, workspacePath);
-      return await api.invoke('get_operation_summary', {
+      const key = `get_operation_summary:${resolvedWorkspacePath}:${sessionId}:${operationId}`;
+      return await this.dedupeInFlight(key, () => api.invoke('get_operation_summary', {
         request: { sessionId, operationId, workspacePath: resolvedWorkspacePath }
-      });
+      }));
     } catch (error) {
       throw createTauriCommandError('get_operation_summary', error, {
         sessionId,

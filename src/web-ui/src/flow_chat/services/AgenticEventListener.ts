@@ -12,6 +12,7 @@ import type {
   TextChunkEvent,
   ToolEvent,
   AgenticEvent,
+  SubagentSessionLinkedEvent,
   SessionTitleGeneratedEvent,
   SessionModelAutoMigratedEvent,
   ImageAnalysisEvent,
@@ -36,6 +37,7 @@ export interface AgenticEventCallbacks {
   onModelRoundCompleted?: (event: ModelRoundCompletedEvent) => void;
   onTextChunk?: (event: TextChunkEvent) => void;
   onToolEvent?: (event: ToolEvent) => void;
+  onSubagentSessionLinked?: (event: SubagentSessionLinkedEvent) => void;
   onDeepReviewQueueStateChanged?: (event: DeepReviewQueueStateChangedEvent) => void;
   onDialogTurnCompleted?: (event: AgenticEvent) => void;
   onDialogTurnFailed?: (event: AgenticEvent) => void;
@@ -136,6 +138,14 @@ export class AgenticEventListener {
       if (callbacks.onToolEvent) {
         const unlisten = agentAPI.onToolEvent((event) => {
           callbacks.onToolEvent?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onSubagentSessionLinked) {
+        const unlisten = agentAPI.onSubagentSessionLinked((event) => {
+          logger.debug('Subagent session linked:', event);
+          callbacks.onSubagentSessionLinked?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }

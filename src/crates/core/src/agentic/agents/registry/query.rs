@@ -65,7 +65,8 @@ impl AgentRegistry {
                 let allowed_tool_set: HashSet<&str> =
                     allowed_tools.iter().map(String::as_str).collect();
                 let mut exposure_overrides = entry.agent.tool_exposure_overrides().clone();
-                exposure_overrides.retain(|tool_name, _| allowed_tool_set.contains(tool_name.as_str()));
+                exposure_overrides
+                    .retain(|tool_name, _| allowed_tool_set.contains(tool_name.as_str()));
 
                 AgentToolPolicy {
                     allowed_tools,
@@ -77,7 +78,8 @@ impl AgentRegistry {
                 let allowed_tool_set: HashSet<&str> =
                     allowed_tools.iter().map(String::as_str).collect();
                 let mut exposure_overrides = entry.agent.tool_exposure_overrides().clone();
-                exposure_overrides.retain(|tool_name, _| allowed_tool_set.contains(tool_name.as_str()));
+                exposure_overrides
+                    .retain(|tool_name, _| allowed_tool_set.contains(tool_name.as_str()));
 
                 AgentToolPolicy {
                     allowed_tools,
@@ -113,11 +115,12 @@ impl AgentRegistry {
             let order = |id: &str| -> u8 {
                 match id {
                     "agentic" => 0,
-                    "Cowork" => 1,
-                    "Plan" => 2,
-                    "debug" => 3,
-                    "DeepResearch" => 4,
-                    "Team" => 5,
+                    "Multitask" => 1,
+                    "Cowork" => 2,
+                    "Plan" => 3,
+                    "debug" => 4,
+                    "DeepResearch" => 5,
+                    "Team" => 6,
                     _ => 99,
                 }
             };
@@ -184,7 +187,9 @@ impl AgentRegistry {
         }
 
         match query.list_scope {
-            SubagentListScope::RegistryManagement => entry.visibility_policy.show_in_global_registry,
+            SubagentListScope::RegistryManagement => {
+                entry.visibility_policy.show_in_global_registry
+            }
             SubagentListScope::TaskVisible => {
                 entry.visibility_policy.show_in_global_registry
                     || entry
@@ -306,7 +311,8 @@ impl AgentRegistry {
         };
 
         if let Some(workspace_root) = query.workspace_root {
-            let is_project_cache_loaded = self.read_project_subagents().contains_key(workspace_root);
+            let is_project_cache_loaded =
+                self.read_project_subagents().contains_key(workspace_root);
             if !is_project_cache_loaded {
                 self.load_custom_subagents(workspace_root).await;
             }

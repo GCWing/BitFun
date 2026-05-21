@@ -494,14 +494,12 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
         user_input: "hello".to_string(),
         original_user_input: None,
         user_message_metadata: None,
-        subagent_parent_info: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::ModelRoundStarted {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
         round_id: "round-1".to_string(),
         round_index: 3,
-        subagent_parent_info: None,
         model_id: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::ThinkingChunk {
@@ -510,14 +508,12 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
         round_id: "round-1".to_string(),
         content: "<thinking>plan".to_string(),
         is_end: false,
-        subagent_parent_info: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::TextChunk {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
         round_id: "round-1".to_string(),
         text: "answer".to_string(),
-        subagent_parent_info: None,
     });
 
     let snapshot = tracker
@@ -541,19 +537,20 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
 #[test]
 fn remote_connect_tracker_keeps_subagent_items_out_of_parent_accumulators() {
     let tracker = RemoteSessionStateTracker::new("parent-session".to_string());
-    let subagent_parent_info = Some(bitfun_events::SubagentParentInfo {
-        tool_call_id: "task-1".to_string(),
-        session_id: "parent-session".to_string(),
-        dialog_turn_id: "parent-turn".to_string(),
-    });
 
     tracker.initialize_active_turn("parent-turn".to_string());
+    tracker.handle_agentic_event(&AgenticEvent::SubagentSessionLinked {
+        session_id: "child-session".to_string(),
+        parent_session_id: "parent-session".to_string(),
+        parent_dialog_turn_id: "parent-turn".to_string(),
+        parent_tool_call_id: "task-1".to_string(),
+        agent_type: None,
+    });
     tracker.handle_agentic_event(&AgenticEvent::TextChunk {
         session_id: "child-session".to_string(),
         turn_id: "child-turn".to_string(),
         round_id: "round-1".to_string(),
         text: "child text".to_string(),
-        subagent_parent_info,
     });
 
     assert_eq!(tracker.accumulated_text(), "");
@@ -577,23 +574,21 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
         user_input: "hello".to_string(),
         original_user_input: None,
         user_message_metadata: None,
-        subagent_parent_info: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::ToolEvent {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
+        round_id: "round-1".to_string(),
         tool_event: ToolEventData::Started {
             tool_id: "tool-1".to_string(),
             tool_name: "AskUserQuestion".to_string(),
             params: serde_json::json!({ "questions": [] }),
             timeout_seconds: None,
         },
-        subagent_parent_info: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::DialogTurnCancelled {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
-        subagent_parent_info: None,
     });
 
     match events.recv().await.expect("tool started event") {
@@ -625,14 +620,12 @@ fn remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finaliz
         user_input: "hello".to_string(),
         original_user_input: None,
         user_message_metadata: None,
-        subagent_parent_info: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::TextChunk {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
         round_id: "round-1".to_string(),
         text: "answer".to_string(),
-        subagent_parent_info: None,
     });
     tracker.mark_persistence_clean();
 
@@ -642,7 +635,6 @@ fn remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finaliz
         total_rounds: 1,
         total_tools: 0,
         duration_ms: 42,
-        subagent_parent_info: None,
         partial_recovery_reason: None,
         success: Some(true),
         finish_reason: Some("stop".to_string()),
@@ -716,14 +708,12 @@ fn remote_connect_poll_helpers_preserve_delta_and_completion_policy() {
         user_input: "hello".to_string(),
         original_user_input: None,
         user_message_metadata: None,
-        subagent_parent_info: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::TextChunk {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
         round_id: "round-1".to_string(),
         text: "answer".to_string(),
-        subagent_parent_info: None,
     });
     tracker.mark_persistence_clean();
 
@@ -744,7 +734,6 @@ fn remote_connect_poll_helpers_preserve_delta_and_completion_policy() {
         total_rounds: 1,
         total_tools: 0,
         duration_ms: 42,
-        subagent_parent_info: None,
         partial_recovery_reason: None,
         success: Some(true),
         finish_reason: Some("stop".to_string()),
@@ -804,14 +793,12 @@ fn remote_connect_tracker_ignores_unrelated_direct_session_events() {
         user_input: "hello".to_string(),
         original_user_input: None,
         user_message_metadata: None,
-        subagent_parent_info: None,
     });
     tracker.handle_agentic_event(&AgenticEvent::TextChunk {
         session_id: "session-2".to_string(),
         turn_id: "turn-2".to_string(),
         round_id: "round-1".to_string(),
         text: "other answer".to_string(),
-        subagent_parent_info: None,
     });
 
     assert_eq!(tracker.version(), 0);

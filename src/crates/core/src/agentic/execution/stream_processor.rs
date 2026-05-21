@@ -2,7 +2,6 @@
 
 use crate::agentic::core::ToolCall;
 use crate::agentic::events::EventQueue;
-use crate::agentic::tools::SubagentParentInfo;
 use crate::util::errors::BitFunError;
 use crate::util::types::ai::GeminiUsage;
 use futures::stream::BoxStream;
@@ -91,7 +90,6 @@ impl StreamProcessor {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
-        subagent_parent_info: Option<SubagentParentInfo>,
         cancellation_token: &CancellationToken,
     ) -> Result<StreamResult, StreamProcessError> {
         self.process_stream_with_options(
@@ -101,7 +99,6 @@ impl StreamProcessor {
             session_id,
             dialog_turn_id,
             round_id,
-            subagent_parent_info,
             cancellation_token,
             StreamProcessOptions::default(),
         )
@@ -117,7 +114,6 @@ impl StreamProcessor {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
-        subagent_parent_info: Option<SubagentParentInfo>,
         cancellation_token: &CancellationToken,
         options: StreamProcessOptions,
     ) -> Result<StreamResult, StreamProcessError> {
@@ -129,7 +125,6 @@ impl StreamProcessor {
                 session_id,
                 dialog_turn_id,
                 round_id,
-                subagent_parent_info.map(Into::into),
                 cancellation_token,
                 options,
             )

@@ -4,8 +4,8 @@
  * Height matches side panel headers (40px).
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, List } from 'lucide-react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import { Bot, ChevronDown, ChevronUp, List } from 'lucide-react';
 import { Tooltip, IconButton } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
@@ -15,6 +15,13 @@ export interface FlowChatHeaderTurnSummary {
   turnId: string;
   turnIndex: number;
   title: string;
+}
+
+export interface FlowChatHeaderSubagentSummary {
+  sessionId: string;
+  title: string;
+  agentType?: string;
+  status: 'processing' | 'finishing';
 }
 
 export interface FlowChatHeaderProps {
@@ -54,6 +61,10 @@ export interface FlowChatHeaderProps {
   onSearchClose?: () => void;
   /** Increments each time the parent requests to open the search bar. */
   searchOpenRequest?: number;
+  /** Running background subagents launched by the active parent session. */
+  backgroundSubagents?: FlowChatHeaderSubagentSummary[];
+  /** Open a background subagent in the right-side panel. */
+  onOpenBackgroundSubagent?: (sessionId: string) => void;
 }
 export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   currentTurn,
@@ -67,11 +78,15 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   onJumpToPreviousTurn,
   onJumpToNextTurn,
   searchOpenRequest = 0,
+  backgroundSubagents = [],
+  onOpenBackgroundSubagent,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [isTurnListOpen, setIsTurnListOpen] = useState(false);
+  const [isSubagentListOpen, setIsSubagentListOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const turnListRef = useRef<HTMLDivElement | null>(null);
+  const subagentListRef = useRef<HTMLDivElement | null>(null);
   const activeTurnItemRef = useRef<HTMLButtonElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -92,24 +107,40 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const previousTurnDisabled = currentTurn <= 1;
   const nextTurnDisabled = currentTurn <= 0 || currentTurn >= totalTurns;
   const hasTurnNavigation = turns.length > 0 && !!onJumpToTurn;
+  const hasBackgroundSubagents = backgroundSubagents.length > 0;
   const displayTurns = useMemo(() => (
     turns.map(turn => ({
       ...turn,
       title: turn.title.trim() || untitledTurnLabel,
     }))
   ), [turns, untitledTurnLabel]);
+  const displayBackgroundSubagents = useMemo(() => (
+    backgroundSubagents.map((subagent) => ({
+      ...subagent,
+      title: subagent.title.trim() || t('flowChatHeader.backgroundSubagentUntitled', {
+        defaultValue: 'Background subagent',
+      }),
+    }))
+  ), [backgroundSubagents, t]);
+
   useEffect(() => {
-    if (!isTurnListOpen) return;
+    if (!isTurnListOpen && !isSubagentListOpen) return;
 
     const handlePointerDown = (event: MouseEvent) => {
-      if (!turnListRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        !turnListRef.current?.contains(target) &&
+        !subagentListRef.current?.contains(target)
+      ) {
         setIsTurnListOpen(false);
+        setIsSubagentListOpen(false);
       }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsTurnListOpen(false);
+        setIsSubagentListOpen(false);
       }
     };
 
@@ -120,7 +151,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isTurnListOpen]);
+  }, [isSubagentListOpen, isTurnListOpen]);
 
   const prevSearchOpenRequestRef = useRef(0);
   useEffect(() => {
@@ -133,6 +164,12 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   useEffect(() => {
     setIsTurnListOpen(false);
   }, [currentTurn]);
+
+  useEffect(() => {
+    if (!hasBackgroundSubagents) {
+      setIsSubagentListOpen(false);
+    }
+  }, [hasBackgroundSubagents]);
 
   useEffect(() => {
     if (!isSearchOpen) return;
@@ -164,7 +201,14 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 
   const handleToggleTurnList = () => {
     if (!hasTurnNavigation) return;
+    setIsSubagentListOpen(false);
     setIsTurnListOpen(prev => !prev);
+  };
+
+  const handleToggleSubagentList = () => {
+    if (!hasBackgroundSubagents) return;
+    setIsTurnListOpen(false);
+    setIsSubagentListOpen(prev => !prev);
   };
 
   const handleTurnSelect = (turnId: string) => {
@@ -173,115 +217,197 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     setIsTurnListOpen(false);
   };
 
+  const handleSubagentSelect = (sessionId: string) => {
+    onOpenBackgroundSubagent?.(sessionId);
+    setIsSubagentListOpen(false);
+  };
+
   if (!visible || totalTurns === 0) {
     return null;
   }
 
   return (
-    <div className="flowchat-header">
-      <div className="flowchat-header__actions flowchat-header__actions--left">
-        <SessionFilesBadge sessionId={sessionId} />
-      </div>
+      <div className="flowchat-header">
+        <div className="flowchat-header__actions flowchat-header__actions--left">
+          <SessionFilesBadge sessionId={sessionId} />
+        </div>
 
-      <Tooltip content={currentUserMessage} placement="bottom">
-        <div
-          className="flowchat-header__message"
-          role="button"
-          tabIndex={0}
-          onClick={onJumpToCurrentTurn}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onJumpToCurrentTurn?.();
-            }
-          }}
-          aria-label={t('flowChatHeader.jumpToCurrentTurn', {
-            turn: currentTurn,
-            defaultValue: `Jump to Turn ${currentTurn}`,
-          })}
-        >
+        <Tooltip content={currentUserMessage} placement="bottom">
+          <div
+              className="flowchat-header__message"
+              role="button"
+              tabIndex={0}
+              onClick={onJumpToCurrentTurn}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onJumpToCurrentTurn?.();
+                }
+              }}
+              aria-label={t('flowChatHeader.jumpToCurrentTurn', {
+                turn: currentTurn,
+                defaultValue: `Jump to Turn ${currentTurn}`,
+              })}
+          >
           <span className="flowchat-header__turn-badge" aria-label={turnBadgeLabel}>
             <span>{turnBadgeLabel}</span>
           </span>
-          <span className="flowchat-header__message-text">
+            <span className="flowchat-header__message-text">
             {truncatedMessage}
           </span>
-        </div>
-      </Tooltip>
+          </div>
+        </Tooltip>
 
-      <div className="flowchat-header__actions">
-        <div className="flowchat-header__turn-nav" ref={turnListRef}>
-          <IconButton
-            className={`flowchat-header__turn-nav-button${isTurnListOpen ? ' flowchat-header__turn-nav-button--active' : ''}`}
-            variant="ghost"
-            size="xs"
-            onClick={handleToggleTurnList}
-            tooltip={turnListTooltip}
-            disabled={!hasTurnNavigation}
-            aria-label={turnListTooltip}
-            aria-expanded={isTurnListOpen}
-            aria-haspopup="dialog"
-            data-testid="flowchat-header-turn-list"
-          >
-            <List size={14} />
-          </IconButton>
-          <IconButton
-            className="flowchat-header__turn-nav-button"
-            variant="ghost"
-            size="xs"
-            onClick={onJumpToPreviousTurn}
-            tooltip={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
-            disabled={previousTurnDisabled || !onJumpToPreviousTurn}
-            aria-label={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
-            data-testid="flowchat-header-turn-prev"
-          >
-            <ChevronUp size={14} />
-          </IconButton>
-          <IconButton
-            className="flowchat-header__turn-nav-button"
-            variant="ghost"
-            size="xs"
-            onClick={onJumpToNextTurn}
-            tooltip={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
-            disabled={nextTurnDisabled || !onJumpToNextTurn}
-            aria-label={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
-            data-testid="flowchat-header-turn-next"
-          >
-            <ChevronDown size={14} />
-          </IconButton>
+        <div className="flowchat-header__actions">
+          <div className="flowchat-header__subagent-nav" ref={subagentListRef}>
+            <IconButton
+                className={`flowchat-header__subagent-nav-button${isSubagentListOpen ? ' flowchat-header__subagent-nav-button--active' : ''}`}
+                variant="ghost"
+                size="xs"
+                onClick={handleToggleSubagentList}
+                tooltip={t('flowChatHeader.backgroundSubagents', {
+                  count: backgroundSubagents.length,
+                  defaultValue: 'Running background subagents',
+                })}
+                disabled={!hasBackgroundSubagents}
+                aria-label={t('flowChatHeader.backgroundSubagents', {
+                  count: backgroundSubagents.length,
+                  defaultValue: 'Running background subagents',
+                })}
+                aria-expanded={isSubagentListOpen}
+                aria-haspopup="dialog"
+                data-testid="flowchat-header-background-subagents"
+            >
+            <span className="flowchat-header__subagent-nav-button-inner">
+              <Bot size={14} />
+              {hasBackgroundSubagents ? (
+                  <span
+                      className="flowchat-header__subagent-status-dot"
+                      aria-hidden="true"
+                  />
+              ) : null}
+            </span>
+            </IconButton>
 
-          {isTurnListOpen && hasTurnNavigation && (
-            <div className="flowchat-header__turn-list-panel" role="dialog" aria-label={turnListTooltip}>
-              <div className="flowchat-header__turn-list-header">
-                <span>{turnListTooltip}</span>
-                <span>{currentTurn}/{totalTurns}</span>
-              </div>
-              <div className="flowchat-header__turn-list">
-                {displayTurns.map(turn => (
-                  <button
-                    key={turn.turnId}
-                    type="button"
-                    className={`flowchat-header__turn-list-item${turn.turnIndex === currentTurn ? ' flowchat-header__turn-list-item--active' : ''}`}
-                    onClick={() => handleTurnSelect(turn.turnId)}
-                    ref={turn.turnIndex === currentTurn ? activeTurnItemRef : undefined}
-                  >
+            {isSubagentListOpen && hasBackgroundSubagents && (
+                <div
+                    className="flowchat-header__subagent-list-panel"
+                    role="dialog"
+                    aria-label={t('flowChatHeader.backgroundSubagents', {
+                      count: backgroundSubagents.length,
+                      defaultValue: 'Running background subagents',
+                    })}
+                >
+                  <div className="flowchat-header__subagent-list-header">
+                <span>
+                  {t('flowChatHeader.backgroundSubagents', {
+                    count: backgroundSubagents.length,
+                    defaultValue: 'Running background subagents',
+                  })}
+                </span>
+                    <span>{backgroundSubagents.length}</span>
+                  </div>
+                  <div className="flowchat-header__subagent-list">
+                    {displayBackgroundSubagents.map((subagent) => (
+                        <button
+                            key={subagent.sessionId}
+                            type="button"
+                            className="flowchat-header__subagent-list-item"
+                            onClick={() => handleSubagentSelect(subagent.sessionId)}
+                        >
+                    <span className="flowchat-header__subagent-list-title">
+                      {subagent.title}
+                    </span>
+                          <span className="flowchat-header__subagent-list-meta">
+                      {[
+                        subagent.agentType,
+                        subagent.status === 'finishing'
+                            ? t('flowChatHeader.subagentStatusFinishing', {
+                              defaultValue: 'Finishing',
+                            })
+                            : t('flowChatHeader.subagentStatusProcessing', {
+                              defaultValue: 'Running',
+                            }),
+                      ].filter(Boolean).join(' · ')}
+                    </span>
+                        </button>
+                    ))}
+                  </div>
+                </div>
+            )}
+          </div>
+
+          <div className="flowchat-header__turn-nav" ref={turnListRef}>
+            <IconButton
+                className={`flowchat-header__turn-nav-button${isTurnListOpen ? ' flowchat-header__turn-nav-button--active' : ''}`}
+                variant="ghost"
+                size="xs"
+                onClick={handleToggleTurnList}
+                tooltip={turnListTooltip}
+                disabled={!hasTurnNavigation}
+                aria-label={turnListTooltip}
+                aria-expanded={isTurnListOpen}
+                aria-haspopup="dialog"
+                data-testid="flowchat-header-turn-list"
+            >
+              <List size={14} />
+            </IconButton>
+            <IconButton
+                className="flowchat-header__turn-nav-button"
+                variant="ghost"
+                size="xs"
+                onClick={onJumpToPreviousTurn}
+                tooltip={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
+                disabled={previousTurnDisabled || !onJumpToPreviousTurn}
+                aria-label={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
+                data-testid="flowchat-header-turn-prev"
+            >
+              <ChevronUp size={14} />
+            </IconButton>
+            <IconButton
+                className="flowchat-header__turn-nav-button"
+                variant="ghost"
+                size="xs"
+                onClick={onJumpToNextTurn}
+                tooltip={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
+                disabled={nextTurnDisabled || !onJumpToNextTurn}
+                aria-label={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
+                data-testid="flowchat-header-turn-next"
+            >
+              <ChevronDown size={14} />
+            </IconButton>
+
+            {isTurnListOpen && hasTurnNavigation && (
+                <div className="flowchat-header__turn-list-panel" role="dialog" aria-label={turnListTooltip}>
+                  <div className="flowchat-header__turn-list-header">
+                    <span>{turnListTooltip}</span>
+                    <span>{currentTurn}/{totalTurns}</span>
+                  </div>
+                  <div className="flowchat-header__turn-list">
+                    {displayTurns.map(turn => (
+                        <button
+                            key={turn.turnId}
+                            type="button"
+                            className={`flowchat-header__turn-list-item${turn.turnIndex === currentTurn ? ' flowchat-header__turn-list-item--active' : ''}`}
+                            onClick={() => handleTurnSelect(turn.turnId)}
+                            ref={turn.turnIndex === currentTurn ? activeTurnItemRef : undefined}
+                        >
                     <span className="flowchat-header__turn-list-badge">
                       {t('flowChatHeader.turnBadge', {
                         current: turn.turnIndex,
                         defaultValue: `Turn ${turn.turnIndex}`,
                       })}
                     </span>
-                    <span className="flowchat-header__turn-list-title">{turn.title}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+                          <span className="flowchat-header__turn-list-title">{turn.title}</span>
+                        </button>
+                    ))}
+                  </div>
+                </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
   );
 };
 
 FlowChatHeader.displayName = 'FlowChatHeader';
-

@@ -3,9 +3,10 @@
  * Mission control overlay showing thumbnails of all open files.
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { X, Merge } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import { ThumbnailCard } from './ThumbnailCard';
 import { SearchFilter } from './SearchFilter';
 import { useCanvasStore } from '../stores';
@@ -27,6 +28,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
   handleCloseWithDirtyCheck,
 }) => {
   const { t } = useTranslation('components');
+  const rootRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroups, setSelectedGroups] = useState<Set<EditorGroupId>>(new Set(['primary', 'secondary', 'tertiary']));
   const [, setDraggingTabId] = useState<string | null>(null);
@@ -41,6 +43,13 @@ export const MissionControl: React.FC<MissionControlProps> = ({
     togglePinTab,
     setSplitMode,
   } = useCanvasStore();
+  useDismissibleLayer({
+    enabled: isOpen,
+    scope: 'canvas',
+    onDismiss: onClose,
+    id: 'canvas-mission-control',
+  });
+
   // Organize tabs by group
   const organizedTabs = useMemo(() => {
     const primary = primaryGroup.tabs
@@ -98,20 +107,10 @@ export const MissionControl: React.FC<MissionControlProps> = ({
     return group.activeTabId;
   }, [activeGroupId, primaryGroup, secondaryGroup, tertiaryGroup]);
 
-  // Keyboard handling
   useEffect(() => {
     if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+    rootRef.current?.focus({ preventScroll: true });
+  }, [isOpen]);
 
   // Close on backdrop click
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
@@ -188,7 +187,10 @@ export const MissionControl: React.FC<MissionControlProps> = ({
 
   return (
     <div
+      ref={rootRef}
       className="canvas-mission-control"
+      data-shortcut-scope="canvas"
+      tabIndex={-1}
       onClick={handleBackdropClick}
     >
       <div className="canvas-mission-control__content">

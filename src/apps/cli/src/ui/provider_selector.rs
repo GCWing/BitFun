@@ -8,7 +8,7 @@
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
@@ -490,14 +490,16 @@ impl ProviderSelectorState {
         let label_style = if is_selected {
             Style::default()
                 .bg(theme.primary)
-                .fg(Color::White)
+                .fg(theme.selection_foreground())
                 .add_modifier(Modifier::BOLD)
         } else {
             theme.style(StyleKind::Primary)
         };
 
         let desc_style = if is_selected {
-            Style::default().bg(theme.primary).fg(Color::White)
+            Style::default()
+                .bg(theme.primary)
+                .fg(theme.selection_foreground())
         } else {
             theme.style(StyleKind::Muted)
         };

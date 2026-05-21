@@ -39,6 +39,13 @@
   "runtimeStatus": {
     "waitingForModelResponse": "Waiting for model response..."
   },
+  "historyState": {
+    "loadingTitle": "Loading saved session",
+    "loadingDescription": "Preparing the conversation history.",
+    "failedTitle": "Session history did not load",
+    "failedDescription": "Retry loading the saved conversation.",
+    "retry": "Retry"
+  },
   "usage": {
     "title": "Session Usage",
     "unavailable": "Unavailable",
@@ -227,6 +234,7 @@
       "input": "Input",
       "output": "Output",
       "cached": "Cached",
+      "hitRate": "Hit rate",
       "duration": "Recorded time",
       "p95": "P95",
       "execution": "Execution",
@@ -337,7 +345,23 @@
     "rollbackPanelBulletUndo": "Undo all file changes from that turn onward",
     "rollbackPanelBulletHistory": "Keep the session history (you can roll forward again anytime)",
     "rollbackSuccess": "Rolled back and deleted subsequent dialog records",
-    "rollbackFailed": "Rollback failed"
+    "rollbackFailed": "Rollback failed",
+    "saveEdit": "Save and rerun",
+    "cancelEdit": "Cancel",
+    "editPlaceholder": "Edit your message...",
+    "cannotEdit": "Cannot edit this message",
+    "editDisabledImages": "Image messages cannot be edited yet",
+    "editDisabledRemote": "Remote sessions do not support message editing yet",
+    "editDisabledLocalCommand": "Local command messages cannot be edited",
+    "editDisabledHistoryNotReady": "Session history is not ready yet",
+    "editDialogTitle": "Edit and rerun from turn {{index}}?",
+    "editDialogIntro": "This will:",
+    "editDialogBulletStopRunning": "Stop the currently running task",
+    "editDialogBulletFiles": "Restore files to the state before this turn",
+    "editDialogBulletHistory": "Delete this turn and all following dialog records",
+    "editDialogBulletRerun": "Start a new turn with the edited message",
+    "editSuccess": "Message edited and rerun",
+    "editFailed": "Failed to edit message"
   },
   "contextMenu": {
     "copySelection": "Copy Selection",
@@ -498,6 +522,7 @@
     "sendingToBtw": "Side session: {{title}}",
     "modeDescriptions": {
       "agentic": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
+      "Multitask": "Multitask mode: decompose work into orthogonal branches or a DAG and proactively use subagents in parallel when it helps",
       "Claw": "Personal assistant mode for dedicated assistant workspaces and everyday task support",
       "Plan": "Plan first, execute later — clarify requirements and create an implementation plan before coding",
       "debug": "Evidence-driven systematic debugging: form hypotheses, gather runtime evidence, and fix with confidence",
@@ -508,6 +533,7 @@
     },
     "modeNames": {
       "agentic": "Agentic",
+      "Multitask": "Multitask",
       "Claw": "Claw",
       "Plan": "Plan",
       "debug": "Debug",
@@ -908,7 +934,11 @@
     "searchNext": "Next match",
     "searchClose": "Close search",
     "searchOpen": "Search messages",
-    "jumpToCurrentTurn": "Jump to Turn {{turn}}"
+    "jumpToCurrentTurn": "Jump to Turn {{turn}}",
+    "backgroundSubagents": "Background subagents ({{count}})",
+    "backgroundSubagentUntitled": "Background subagent",
+    "subagentStatusProcessing": "Running",
+    "subagentStatusFinishing": "Finishing"
   },
   "stickyTaskIndicator": {
     "tooltip": "Jump to current task"

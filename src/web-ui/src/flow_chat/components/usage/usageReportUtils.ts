@@ -92,6 +92,29 @@ export function formatUsagePercent(value: number | undefined, t: Translator): st
   return t('usage.percent', { value: Math.round(value) });
 }
 
+/**
+ * Render a 0..1 hit-rate ratio as ` (NN%)` (with a leading space for inline
+ * use after a token count). Returns an empty string for null/undefined/NaN,
+ * so callers can unconditionally append the result.
+ */
+export function formatHitRateSuffix(rate: number | undefined | null, t: Translator): string {
+  if (typeof rate !== 'number' || !Number.isFinite(rate)) {
+    return '';
+  }
+  return ` (${t('usage.percent', { value: Math.round(rate * 100) })})`;
+}
+
+/**
+ * Render a 0..1 hit-rate ratio as a bare percentage cell (`80%`).
+ * Falls back to the dash placeholder when the rate is null/undefined/NaN.
+ */
+export function formatHitRatePercent(rate: number | undefined | null, t: Translator): string {
+  if (typeof rate !== 'number' || !Number.isFinite(rate)) {
+    return '-';
+  }
+  return t('usage.percent', { value: Math.round(rate * 100) });
+}
+
 export function calculateShare(part: number | undefined, denominator: number | undefined): number | undefined {
   if (
     typeof part !== 'number' ||

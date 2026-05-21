@@ -7,9 +7,10 @@ use crate::service::snapshot::types::{
     OperationType, SessionInfo, SnapshotConfig, SnapshotError, SnapshotResult,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeContext;
-use log::info;
+use log::{debug, info};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::RwLock;
 
 /// Snapshot-based change tracking service (operation-history + file snapshots, git-isolated).
@@ -57,29 +58,51 @@ impl SnapshotService {
             return Ok(());
         }
 
+        let total_started_at = Instant::now();
         info!("Initializing snapshot/operation history service");
 
         {
+            let step_started_at = Instant::now();
             let mut isolation_manager = self.isolation_manager.write().await;
             isolation_manager.ensure_complete_isolation().await?;
+            debug!(
+                "Snapshot service initialize step completed: step=ensure_complete_isolation duration_ms={}",
+                step_started_at.elapsed().as_millis()
+            );
         }
 
         {
+            let step_started_at = Instant::now();
             let mut snapshot_core = self.snapshot_core.write().await;
             snapshot_core.initialize().await?;
+            debug!(
+                "Snapshot service initialize step completed: step=snapshot_core_initialize duration_ms={}",
+                step_started_at.elapsed().as_millis()
+            );
         }
 
+        let step_started_at = Instant::now();
         self.file_lock_manager.initialize().await?;
+        debug!(
+            "Snapshot service initialize step completed: step=file_lock_manager_initialize duration_ms={}",
+            step_started_at.elapsed().as_millis()
+        );
         self.initialized = true;
 
+        let step_started_at = Instant::now();
         let isolation_status = {
             let isolation_manager = self.isolation_manager.read().await;
             isolation_manager.check_isolation_status().await?
         };
+        debug!(
+            "Snapshot service initialize step completed: step=check_isolation_status duration_ms={}",
+            step_started_at.elapsed().as_millis()
+        );
         info!(
-            "Snapshot service initialized: git_isolated={} bitfun_dir={}",
+            "Snapshot service initialized: git_isolated={} bitfun_dir={} duration_ms={}",
             isolation_status,
-            self.runtime_context.runtime_root.display()
+            self.runtime_context.runtime_root.display(),
+            total_started_at.elapsed().as_millis()
         );
 
         Ok(())

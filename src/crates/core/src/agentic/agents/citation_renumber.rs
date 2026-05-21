@@ -393,16 +393,11 @@ async fn write_display_map_sidecar(
         "citation_count": order.len(),
         "entries": entries,
     });
-    let serialized = serde_json::to_string_pretty(&body).map_err(|e| {
-        BitFunError::tool(format!("serialize display_map.json failed: {}", e))
-    })?;
-    fs::write(&map_path, serialized).await.map_err(|e| {
-        BitFunError::tool(format!(
-            "write {} failed: {}",
-            map_path.display(),
-            e
-        ))
-    })?;
+    let serialized = serde_json::to_string_pretty(&body)
+        .map_err(|e| BitFunError::tool(format!("serialize display_map.json failed: {}", e)))?;
+    fs::write(&map_path, serialized)
+        .await
+        .map_err(|e| BitFunError::tool(format!("write {} failed: {}", map_path.display(), e)))?;
     Ok(map_path)
 }
 
@@ -579,7 +574,10 @@ cit_003 | claim c | url=u3 | status=accepted
         assert!(data_rows[1].contains("[2] cit_001"));
 
         // cit_002 must not appear anywhere in the rendered Index.
-        assert!(!out.contains("cit_002"), "REJECTED cit_002 leaked into index");
+        assert!(
+            !out.contains("cit_002"),
+            "REJECTED cit_002 leaked into index"
+        );
         assert!(!out.contains("[REJECTED]"), "no REJECTED tag should remain");
     }
 

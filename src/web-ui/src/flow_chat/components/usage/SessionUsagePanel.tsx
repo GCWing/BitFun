@@ -27,6 +27,7 @@ import {
 import {
   calculateShare,
   buildSessionUsageExportMarkdown,
+  formatHitRatePercent,
   formatUsageDuration,
   formatUsageNumber,
   formatUsagePercent,
@@ -682,6 +683,7 @@ function UsageModels({ report, sessionId }: { report: SessionUsageReport; sessio
     { id: 'input', label: t('usage.table.input') },
     { id: 'output', label: t('usage.table.output') },
     { id: 'cached', label: t('usage.table.cached') },
+    { id: 'hitRate', label: t('usage.table.hitRate') },
   ];
   return (
     <UsageTable
@@ -720,6 +722,7 @@ function UsageModels({ report, sessionId }: { report: SessionUsageReport; sessio
           report.tokens.cacheCoverage === 'unavailable'
             ? { value: t('usage.status.cacheNotReported'), help: t('usage.help.cachedTokens') }
             : cached,
+          formatHitRatePercent(model.cacheHitRate, t),
         );
         return {
           id: `model-${index}-${model.modelId}`,

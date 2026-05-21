@@ -22,6 +22,7 @@ BitFun 是一个由 Rust workspace 与共享 React 前端组成的项目。
 | 产品领域 crate | `src/crates/product-domains` | [AGENTS.md](src/crates/product-domains/AGENTS.md) |
 | Transport 适配层 | `src/crates/transport` | （使用 core 指南） |
 | API layer | `src/crates/api-layer` | （使用 core 指南） |
+| ACP 集成 | `src/crates/acp` | [AGENTS.md](src/crates/acp/AGENTS.md) |
 | AI adapters | `src/crates/ai-adapters` | [AGENTS.md](src/crates/ai-adapters/AGENTS.md) |
 | 桌面应用 | `src/apps/desktop` | [AGENTS.md](src/apps/desktop/AGENTS.md) |
 | Server | `src/apps/server` | （使用 core 指南） |
@@ -114,14 +115,13 @@ await api.invoke('your_command', { request: { ... } });
 任何 `bitfun-core` 拆解、feature 边界、依赖边界或 Rust 构建提速重构，
 都必须先阅读
 [`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)。
-该文档定义产品行为不变量、crate 归属目标、禁止依赖方向、feature 安全规则和里程碑验证门禁。
+顶层文档只作为入口；模块级 ownership 细节应放到离代码最近的模块 `AGENTS.md`。
 
-### Tool 归属护栏
+仓库级拆解规则：
 
-- `src/crates/agent-tools` 拥有轻量 tool contract，以及 generic registry / dynamic-provider container。
-- `src/crates/core/src/agentic/tools` 当前负责产品工具组装、`dyn Tool` 适配、snapshot decoration、tool exposure / manifest resolution，以及按需工具说明发现（`GetToolSpec`）。
-- `ToolUseContext` 与具体工具实现继续留在 core，直到有已评审的 port/provider 设计和等价测试。
-- Tool 迁移必须保持 expanded/collapsed exposure、prompt 可见 manifest、`ToolUseContext.unlocked_collapsed_tools`，以及 desktop/MCP/ACP tool catalog 行为等价。
+- 不要把 DTO / contract 抽取误判为 runtime owner 已迁移。
+- 产品表面可以有差异；共享稳定 facts 或 ports，不共享 UI、protocol、lifecycle 或平台实现。
+- 迁移 runtime owner 必须有评审过的 port/provider 设计、旧路径兼容、行为等价测试；如果可能改变行为边界，还需要先确认。
 
 ### DeepReview 护栏
 

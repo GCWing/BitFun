@@ -2,12 +2,11 @@
 ///
 /// Uses the `similar` crate to compute line-level diffs and renders them
 /// with line numbers, hunk headers, and full-line background colors.
-
 use ratatui::text::{Line, Span};
 use similar::{ChangeTag, TextDiff};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use super::theme::{Theme, StyleKind};
+use super::theme::{StyleKind, Theme};
 
 /// Diff view mode
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -278,7 +277,10 @@ fn render_unified<'a>(
         for (visual_idx, segment) in wrapped.iter().enumerate() {
             if shown >= max_lines {
                 lines.push(Line::from(Span::styled(
-                    format!("\u{2026} ({} more changes)", entries.len().saturating_sub(i)),
+                    format!(
+                        "\u{2026} ({} more changes)",
+                        entries.len().saturating_sub(i)
+                    ),
                     theme.style(StyleKind::Muted),
                 )));
                 return lines;
@@ -462,7 +464,10 @@ fn render_split<'a>(
                 for (row_idx, segment) in wrapped.iter().enumerate() {
                     if shown >= max_lines {
                         lines.push(Line::from(Span::styled(
-                            format!("\u{2026} ({} more changes)", entries.len().saturating_sub(i)),
+                            format!(
+                                "\u{2026} ({} more changes)",
+                                entries.len().saturating_sub(i)
+                            ),
                             theme.style(StyleKind::Muted),
                         )));
                         return lines;
@@ -512,7 +517,10 @@ fn render_split<'a>(
                     for row_idx in 0..row_count {
                         if shown >= max_lines {
                             lines.push(Line::from(Span::styled(
-                                format!("\u{2026} ({} more changes)", entries.len().saturating_sub(i)),
+                                format!(
+                                    "\u{2026} ({} more changes)",
+                                    entries.len().saturating_sub(i)
+                                ),
                                 theme.style(StyleKind::Muted),
                             )));
                             return lines;
@@ -562,7 +570,10 @@ fn render_split<'a>(
                     for (row_idx, old_piece) in old_wrapped.iter().enumerate() {
                         if shown >= max_lines {
                             lines.push(Line::from(Span::styled(
-                                format!("\u{2026} ({} more changes)", entries.len().saturating_sub(i)),
+                                format!(
+                                    "\u{2026} ({} more changes)",
+                                    entries.len().saturating_sub(i)
+                                ),
                                 theme.style(StyleKind::Muted),
                             )));
                             return lines;
@@ -603,7 +614,10 @@ fn render_split<'a>(
                 for (row_idx, new_piece) in new_wrapped.iter().enumerate() {
                     if shown >= max_lines {
                         lines.push(Line::from(Span::styled(
-                            format!("\u{2026} ({} more changes)", entries.len().saturating_sub(i)),
+                            format!(
+                                "\u{2026} ({} more changes)",
+                                entries.len().saturating_sub(i)
+                            ),
                             theme.style(StyleKind::Muted),
                         )));
                         return lines;
