@@ -70,7 +70,6 @@ Below is BitFun’s **official Agent and capability inventory**, plus how we tra
 | **Session usage report** | Type `/usage` in chat to view recorded runtime, token usage, and model/tool/file summaries for the current session. |
 | **Cowork Agent** | Native PDF / DOCX / XLSX / PPTX workflows; extend on demand from the Skill marketplace |
 | **Document collaboration** | Write and ask in the document; the AI rewrites, continues, summarizes, and lays out text directly in paragraphs |
-| **Computer Use** | Sees the screen and drives mouse and keyboard to operate browsers and any desktop app—hand repetitive clicking to the Agent |
 | **Personal Assistant** | Long-term memory and personality; schedules Code / Cowork / Computer Use / custom Agents as needed |
 | **Remote control / IM** | Phone QR pairing, Telegram, Feishu Bot, WeChat Bot for remote commands with live progress |
 | **MCP / MCP App** | One-click hookup for external tools; MCP can also be packaged as installable Apps |
@@ -126,10 +125,6 @@ Desktop is built on Tauri for Windows / macOS / Linux; remote control works from
 
 ## Quick Start
 
-### Download and use
-
-Download the latest desktop installer from [Releases](https://github.com/GCWing/BitFun/releases). After installation, configure your model and start using BitFun.
-
 ### Build from source
 
 **Prerequisites:**
@@ -145,11 +140,12 @@ Download the latest desktop installer from [Releases](https://github.com/GCWing/
 # Install dependencies
 pnpm install
 
-# Run desktop in development mode
-pnpm run desktop:dev
+# build frontend
+npm run build
 
-# Build desktop
-pnpm run desktop:build
+# build so 
+cd ./src/apps/desktop
+cargo tauri ohos build
 ```
 
 For more details, see the [Contributing guide](./CONTRIBUTING.md).
