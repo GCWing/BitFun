@@ -30,6 +30,8 @@ moves here gradually.
 - Feature-gated additions must remain narrow. `miniapp` may use MiniApp-only
   dependencies, `function-agents` may use function-agent-only dependencies, and
   `product-full` should only aggregate existing product-domain feature groups.
+  Boundary checks enforce the default-light profile and current `product-full`
+  feature-group list.
 
 ## Current owners
 

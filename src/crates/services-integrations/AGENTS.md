@@ -11,6 +11,8 @@ slices that are outside pure product logic but still platform-neutral.
   presentation code.
 - Keep integration families behind explicit features. The default feature set
   should not compile heavy Git, MCP, SSH, network, or file-watch runtimes.
+  Boundary checks enforce `default = []` and the current `product-full`
+  integration feature-group list.
 - MCP config/process/transport lifecycle and dynamic provider helpers may live
   here; product tool registry assembly, manifest filtering, `GetToolSpec`
   execution, and concrete tool behavior remain core-owned until H1.
