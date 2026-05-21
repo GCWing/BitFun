@@ -1744,8 +1744,8 @@ const requiredContentRules = [
         message: 'missing product decorator ref alias using agent-tools contract',
       },
       {
-        regex: /\bProductToolRuntimeAssembly\b/,
-        message: 'missing product tool runtime assembly delegation',
+        regex: /\bProductToolRuntime\b/,
+        message: 'missing product tool runtime owner delegation',
       },
       {
         regex: /\bget_collapsed_tool_names\b/,
@@ -1756,7 +1756,7 @@ const requiredContentRules = [
         message: 'missing product tool catalog readonly facade delegation',
       },
       {
-        regex: /\bregistry_preserves_collapsed_tool_manifest_for_owner_migration\b/,
+        regex: /\bproduct_tool_runtime_owner_preserves_registry_contract\b/,
         message: 'missing collapsed-tool manifest migration baseline',
       },
       {
@@ -1766,13 +1766,13 @@ const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/core/src/agentic/tools/runtime_assembly.rs',
+    path: 'src/crates/core/src/agentic/tools/product_runtime.rs',
     reason:
-      'core must keep product tool runtime assembly explicit until ToolUseContext and concrete tool-pack migration are reviewed',
+      'core product tool runtime owner keeps registry assembly, static tool materialization, catalog manifests, and GetToolSpec facades explicit until concrete tools migrate',
     patterns: [
       {
-        regex: /\bProductToolRuntimeAssembly\b/,
-        message: 'missing core product tool runtime assembly owner',
+        regex: /\bProductToolRuntime\b/,
+        message: 'missing core product tool runtime owner',
       },
       {
         regex: /\bSnapshotToolDecorator\b/,
@@ -1785,29 +1785,6 @@ const requiredContentRules = [
       {
         regex: /\bbuiltin_static_tool_providers\b/,
         message: 'missing builtin provider assembly input',
-      },
-      {
-        regex: /\bToolRuntimeAssembly\b/,
-        message: 'missing generic agent-tools runtime assembly delegation',
-      },
-      {
-        regex: /\bcreate_registry_from_static_providers\b/,
-        message: 'missing generic static provider assembly delegation',
-      },
-      {
-        regex: /\bwrap_tool_for_snapshot_tracking\b/,
-        message: 'missing snapshot wrapper boundary',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/core/src/agentic/tools/static_providers.rs',
-    reason:
-      'core materializes concrete tools from the tool-pack provider plan until concrete tools migrate',
-    patterns: [
-      {
-        regex: /\bbuiltin_static_tool_providers\b/,
-        message: 'missing builtin static tool provider owner',
       },
       {
         regex: /\bStaticToolProviderGroup\b/,
@@ -1825,48 +1802,18 @@ const requiredContentRules = [
         regex: /\bGetToolSpecTool::new\(\)/,
         message: 'missing GetToolSpec registration anchor',
       },
-    ],
-  },
-  {
-    path: 'src/crates/core/src/agentic/tools/tool_adapter.rs',
-    reason:
-      'core must keep the product Tool-to-agent-tools adapters explicit until ToolUseContext and concrete tools migrate',
-    patterns: [
       {
-        regex: /\bimpl ToolRegistryItem for dyn Tool\b/,
-        message: 'missing core Tool registry adapter',
+        regex: /\bToolRuntimeAssembly\b/,
+        message: 'missing generic agent-tools runtime assembly delegation',
       },
       {
-        regex: /\bimpl ContextualToolManifestItem<ToolUseContext> for dyn Tool\b/,
-        message: 'missing core ToolUseContext contextual manifest adapter',
+        regex: /\bcreate_registry_from_static_providers\b/,
+        message: 'missing generic static provider assembly delegation',
       },
       {
-        regex: /\bTool::dynamic_tool_info\b/,
-        message: 'missing dynamic tool metadata adapter',
+        regex: /\bwrap_tool_for_snapshot_tracking\b/,
+        message: 'missing snapshot wrapper boundary',
       },
-      {
-        regex: /\bTool::is_readonly\b/,
-        message: 'missing readonly metadata adapter',
-      },
-      {
-        regex: /\bTool::is_enabled\b/,
-        message: 'missing enabled-state metadata adapter',
-      },
-      {
-        regex: /\bTool::description_with_context\b/,
-        message: 'missing context-aware tool description adapter',
-      },
-      {
-        regex: /\bTool::input_schema_for_model_with_context\b/,
-        message: 'missing context-aware tool schema adapter',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/core/src/agentic/tools/catalog_provider.rs',
-    reason:
-      'core must keep the product tool catalog provider explicit until ToolUseContext, manifest assembly, and GetToolSpec execution migration are reviewed',
-    patterns: [
       {
         regex: /\bProductToolCatalogProvider\b/,
         message: 'missing core product tool catalog provider owner',
@@ -1924,8 +1871,47 @@ const requiredContentRules = [
         message: 'missing product catalog provider collapsed catalog regression',
       },
       {
+        regex: /\bproduct_tool_runtime_owner_preserves_registry_contract\b/,
+        message: 'missing product runtime owner registry equivalence regression',
+      },
+      {
         regex: /\bGetToolSpec requires agent type context\b/,
         message: 'missing contextual GetToolSpec catalog validation boundary',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_adapter.rs',
+    reason:
+      'core must keep the product Tool-to-agent-tools adapters explicit until ToolUseContext and concrete tools migrate',
+    patterns: [
+      {
+        regex: /\bimpl ToolRegistryItem for dyn Tool\b/,
+        message: 'missing core Tool registry adapter',
+      },
+      {
+        regex: /\bimpl ContextualToolManifestItem<ToolUseContext> for dyn Tool\b/,
+        message: 'missing core ToolUseContext contextual manifest adapter',
+      },
+      {
+        regex: /\bTool::dynamic_tool_info\b/,
+        message: 'missing dynamic tool metadata adapter',
+      },
+      {
+        regex: /\bTool::is_readonly\b/,
+        message: 'missing readonly metadata adapter',
+      },
+      {
+        regex: /\bTool::is_enabled\b/,
+        message: 'missing enabled-state metadata adapter',
+      },
+      {
+        regex: /\bTool::description_with_context\b/,
+        message: 'missing context-aware tool description adapter',
+      },
+      {
+        regex: /\bTool::input_schema_for_model_with_context\b/,
+        message: 'missing context-aware tool schema adapter',
       },
     ],
   },
@@ -3895,31 +3881,41 @@ function runManifestParserSelfTest() {
       contracts: [
         'from_inner',
         'ProductToolDecoratorRef',
-        'ProductToolRuntimeAssembly',
+        'ProductToolRuntime',
         'get_collapsed_tool_names',
         'resolve_product_readonly_enabled_tools',
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/runtime_assembly.rs',
+      path: 'src/crates/core/src/agentic/tools/product_runtime.rs',
       contracts: [
-        'ProductToolRuntimeAssembly',
+        'ProductToolRuntime',
         'SnapshotToolDecorator',
         'ProductSnapshotToolWrapper',
-        'builtin_static_tool_providers',
-        'ToolRuntimeAssembly',
-        'create_registry_from_static_providers',
-        'wrap_tool_for_snapshot_tracking',
-      ],
-    },
-    {
-      path: 'src/crates/core/src/agentic/tools/static_providers.rs',
-      contracts: [
         'builtin_static_tool_providers',
         'StaticToolProviderGroup',
         'product_tool_provider_group_plan',
         'materialize_tool',
         'GetToolSpecTool',
+        'ToolRuntimeAssembly',
+        'create_registry_from_static_providers',
+        'wrap_tool_for_snapshot_tracking',
+        'ProductToolCatalogProvider',
+        'ToolCatalogSnapshotProvider',
+        'GetToolSpecCatalogProvider',
+        'get_global_tool_registry',
+        'get_agent_registry',
+        'ToolCatalogRuntime',
+        'product_tool_catalog_runtime',
+        'GetToolSpecRuntime',
+        'product_get_tool_spec_runtime',
+        'resolve_product_tool_manifest',
+        'resolve_product_readonly_enabled_tools',
+        'resolve_product_get_tool_spec_results',
+        'unlocked_collapsed_tools',
+        'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
+        'product_tool_runtime_owner_preserves_registry_contract',
+        'GetToolSpec requires agent type context',
       ],
     },
     {
@@ -3966,26 +3962,6 @@ function runManifestParserSelfTest() {
         'Tool::is_enabled',
         'Tool::description_with_context',
         'Tool::input_schema_for_model_with_context',
-      ],
-    },
-    {
-      path: 'src/crates/core/src/agentic/tools/catalog_provider.rs',
-      contracts: [
-        'ProductToolCatalogProvider',
-        'ToolCatalogSnapshotProvider',
-        'GetToolSpecCatalogProvider',
-        'get_global_tool_registry',
-        'get_agent_registry',
-        'ToolCatalogRuntime',
-        'product_tool_catalog_runtime',
-        'GetToolSpecRuntime',
-        'product_get_tool_spec_runtime',
-        'resolve_product_tool_manifest',
-        'resolve_product_readonly_enabled_tools',
-        'resolve_product_get_tool_spec_results',
-        'unlocked_collapsed_tools',
-        'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
-        'GetToolSpec requires agent type context',
       ],
     },
     {

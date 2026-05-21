@@ -1,7 +1,6 @@
 //! Tool system - includes Tool interface, tool registry and tool executor
 
 pub mod browser_control;
-pub(crate) mod catalog_provider;
 pub mod computer_use_capability;
 pub mod computer_use_host;
 pub mod computer_use_optimizer;
@@ -12,10 +11,9 @@ pub mod implementations;
 pub mod manifest_resolver;
 pub mod pipeline;
 pub(crate) mod post_call_hooks;
+pub(crate) mod product_runtime;
 pub mod registry;
 pub mod restrictions;
-pub(crate) mod runtime_assembly;
-pub(crate) mod static_providers;
 pub(crate) mod tool_adapter;
 pub mod user_input_manager;
 pub mod workspace_paths;

@@ -1,5 +1,5 @@
 use crate::agentic::agents::AgentToolPolicyOverrides;
-use crate::agentic::tools::catalog_provider::{
+use crate::agentic::tools::product_runtime::{
     resolve_product_tool_manifest, resolve_product_visible_tools,
 };
 use crate::agentic::tools::framework::{Tool, ToolUseContext};

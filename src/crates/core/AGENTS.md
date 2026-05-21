@@ -40,12 +40,11 @@ SessionManager → Session → DialogTurn → ModelRound
   generic decorator references, snapshot decorator adapters, static-provider runtime assembly, and readonly/enabled
   registry-snapshot filtering belong in
   `bitfun-agent-tools`; core tool runtime should materialize concrete tools from the `bitfun-tool-packs`
-  provider group plan and keep product snapshot wrapper adapter injection in
-  `runtime_assembly.rs` + `static_providers.rs`, adapt core `Tool` into
-  provider-neutral contracts through `tool_adapter.rs`, keep product catalog
-  access and product manifest / GetToolSpec facade wiring in
-  `catalog_provider.rs`, apply snapshot decoration, and own on-demand spec
-  discovery Tool impl and unlock-state source for now.
+  provider group plan through `product_runtime.rs`, adapt core `Tool` into
+  provider-neutral contracts through `tool_adapter.rs`, and keep product
+  registry snapshot access, product manifest / GetToolSpec facade wiring,
+  product snapshot wrapper adapter injection, on-demand spec discovery Tool
+  impl, and unlock-state source in that product runtime owner for now.
   `bitfun-tool-packs` may expose planned
   feature-group scaffold metadata, but it must not own concrete tools yet.
 - Keep `ToolUseContext` and concrete tool implementations in core unless a

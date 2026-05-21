@@ -1,7 +1,9 @@
 //! Tool registry
 
-use crate::agentic::tools::catalog_provider::resolve_product_readonly_enabled_tools;
 use crate::agentic::tools::framework::{DynamicToolInfo, Tool};
+use crate::agentic::tools::product_runtime::{
+    resolve_product_readonly_enabled_tools, ProductToolRuntime,
+};
 use crate::util::errors::BitFunResult;
 use bitfun_agent_tools::{
     DynamicToolDescriptor, DynamicToolProvider, PortResult, ToolDecoratorRef,
@@ -29,8 +31,7 @@ impl Default for ToolRegistry {
 impl ToolRegistry {
     /// Create a new tool registry
     pub fn new() -> Self {
-        crate::agentic::tools::runtime_assembly::ProductToolRuntimeAssembly::default()
-            .create_registry()
+        ProductToolRuntime::default().create_registry()
     }
 
     /// Create a registry with an injected decoration boundary.
@@ -39,10 +40,7 @@ impl ToolRegistry {
     /// allowing future owner crates to replace this concrete service coupling
     /// through the `bitfun-runtime-ports` interface.
     pub fn with_tool_decorator(tool_decorator: ProductToolDecoratorRef) -> Self {
-        crate::agentic::tools::runtime_assembly::ProductToolRuntimeAssembly::with_tool_decorator(
-            tool_decorator,
-        )
-        .create_registry()
+        ProductToolRuntime::with_tool_decorator(tool_decorator).create_registry()
     }
 
     pub(in crate::agentic::tools) fn from_inner(inner: AgentToolRegistry<dyn Tool>) -> Self {
@@ -174,10 +172,9 @@ mod tests {
     use crate::agentic::tools::framework::{
         DynamicMcpToolInfo, DynamicToolInfo, Tool, ToolResult, ToolUseContext, ValidationResult,
     };
-    use crate::agentic::tools::runtime_assembly::ProductToolRuntimeAssembly;
-    use crate::agentic::tools::static_providers::builtin_static_tool_providers;
+    use crate::agentic::tools::product_runtime::ProductToolRuntime;
     use async_trait::async_trait;
-    use bitfun_agent_tools::{DynamicToolProvider, StaticToolProvider, ToolDecorator};
+    use bitfun_agent_tools::{DynamicToolProvider, ToolDecorator};
     use serde_json::json;
     use serde_json::Value;
     use std::sync::Arc;
@@ -395,11 +392,7 @@ mod tests {
 
     #[test]
     fn builtin_static_tool_providers_cover_registry_manifest_in_order() {
-        let provider_tools = builtin_static_tool_providers()
-            .into_iter()
-            .flat_map(|provider| provider.tools())
-            .map(|tool| tool.name().to_string())
-            .collect::<Vec<_>>();
+        let provider_tools = ProductToolRuntime::default().provider_tool_names();
 
         assert_eq!(
             provider_tools,
@@ -410,10 +403,7 @@ mod tests {
 
     #[test]
     fn builtin_static_tool_providers_keep_owner_group_order() {
-        let provider_ids = builtin_static_tool_providers()
-            .into_iter()
-            .map(|provider| provider.provider_id())
-            .collect::<Vec<_>>();
+        let provider_ids = ProductToolRuntime::default().provider_group_ids();
 
         assert_eq!(
             provider_ids,
@@ -429,10 +419,7 @@ mod tests {
 
     #[test]
     fn builtin_static_tool_providers_follow_tool_pack_group_plan() {
-        let provider_ids = builtin_static_tool_providers()
-            .into_iter()
-            .map(|provider| provider.provider_id())
-            .collect::<Vec<_>>();
+        let provider_ids = ProductToolRuntime::default().provider_group_ids();
         let planned_provider_ids = bitfun_tool_packs::product_tool_provider_group_plan()
             .iter()
             .map(|group| group.provider_id())
@@ -445,11 +432,11 @@ mod tests {
     }
 
     #[test]
-    fn product_tool_runtime_assembly_preserves_core_owned_registry_contract() {
-        let assembly = ProductToolRuntimeAssembly::default();
+    fn product_tool_runtime_preserves_core_owned_registry_contract() {
+        let runtime = ProductToolRuntime::default();
 
         assert_eq!(
-            assembly.provider_group_ids(),
+            runtime.provider_group_ids(),
             vec![
                 "core.basic",
                 "core.agent",
@@ -459,7 +446,7 @@ mod tests {
             "runtime assembly must keep core-owned provider group order explicit"
         );
 
-        let assembled_registry = assembly.create_registry();
+        let assembled_registry = runtime.create_registry();
         let compatibility_registry = create_tool_registry();
 
         assert_eq!(
@@ -490,10 +477,27 @@ mod tests {
     }
 
     #[test]
-    fn product_tool_runtime_assembly_keeps_custom_decorator_provider_contract() {
-        let registry =
-            ProductToolRuntimeAssembly::with_tool_decorator(Arc::new(MarkerToolDecorator))
-                .create_registry();
+    fn product_tool_runtime_owner_preserves_registry_contract() {
+        let runtime = ProductToolRuntime::default();
+        let owner_registry = runtime.create_registry();
+        let compatibility_registry = create_tool_registry();
+
+        assert_eq!(
+            owner_registry.get_tool_names(),
+            compatibility_registry.get_tool_names(),
+            "product tool runtime owner must preserve legacy registry output"
+        );
+        assert_eq!(
+            owner_registry.get_collapsed_tool_names(),
+            compatibility_registry.get_collapsed_tool_names(),
+            "product tool runtime owner must preserve collapsed-tool exposure"
+        );
+    }
+
+    #[test]
+    fn product_tool_runtime_keeps_custom_decorator_provider_contract() {
+        let registry = ProductToolRuntime::with_tool_decorator(Arc::new(MarkerToolDecorator))
+            .create_registry();
         let compatibility_registry = create_tool_registry();
 
         assert_eq!(
