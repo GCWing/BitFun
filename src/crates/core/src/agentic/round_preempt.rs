@@ -70,7 +70,7 @@ impl DialogRoundPreemptSource for SessionRoundYieldFlags {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RoundInjectionKind {
     UserSteering,
-    BackgroundSubagentResult,
+    BackgroundResult,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -245,7 +245,7 @@ mod steering_tests {
     fn current_turn_msg(content: &str) -> RoundInjection {
         RoundInjection {
             id: uuid::Uuid::new_v4().to_string(),
-            kind: RoundInjectionKind::BackgroundSubagentResult,
+            kind: RoundInjectionKind::BackgroundResult,
             target: RoundInjectionTarget::CurrentRunningTurn,
             content: content.to_string(),
             display_content: content.to_string(),

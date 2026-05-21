@@ -2127,8 +2127,8 @@ impl ExecutionEngine {
                                 "<system_reminder>\nThe user sent a new message while this turn was running. You have just finished the previous atomic action; handle this new user message now as the current direction, while preserving the existing conversation and task context. Do not ignore it or wait for a separate future turn.\n\nNew user message:\n{}\n</system_reminder>",
                                 injection.content
                             ),
-                            RoundInjectionKind::BackgroundSubagentResult => format!(
-                                "<system_reminder>\nA background subagent has finished and returned new information while this turn was running. Incorporate it into your current work immediately when relevant. Do not wait for a separate future turn.\n\nBackground subagent result:\n{}\n</system_reminder>",
+                            RoundInjectionKind::BackgroundResult => format!(
+                                "<system_reminder>\nA background task has finished and returned new information while this turn was running. Incorporate it into your current work immediately when relevant. Do not wait for a separate future turn.\n\nBackground result:\n{}\n</system_reminder>",
                                 injection.content
                             ),
                         };

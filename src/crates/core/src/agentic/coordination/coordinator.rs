@@ -26,8 +26,8 @@ use crate::agentic::WorkspaceBinding;
 use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
-use crate::service::session::{SessionRelationship, SessionRelationshipKind};
 use crate::service::config::global::GlobalConfigManager;
+use crate::service::session::{SessionRelationship, SessionRelationshipKind};
 use crate::service::workspace::{
     get_global_workspace_service, WorkspaceCreateOptions, WorkspaceKind,
 };
@@ -1623,8 +1623,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         };
         let effective_agent_type = Self::normalize_agent_type(&provisional_agent_type);
 
-        Self::track_session_workspace_activity_best_effort(&session.config, "dialog_started")
-            .await;
+        Self::track_session_workspace_activity_best_effort(&session.config, "dialog_started").await;
 
         debug!(
             "Resolved dialog turn agent type: session_id={}, turn_id={}, requested_agent_type={}, session_agent_type={}, effective_agent_type={}, trigger_source={:?}, queue_priority={:?}, skip_tool_confirmation={}",
@@ -2663,7 +2662,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.session_manager.list_sessions(workspace_path).await
     }
 
-    pub async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<std::path::PathBuf> {
+    pub async fn resolve_session_workspace_path(
+        &self,
+        session_id: &str,
+    ) -> Option<std::path::PathBuf> {
         self.session_manager
             .resolve_session_workspace_path(session_id)
             .await
@@ -3075,10 +3077,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.session_manager
             .persist_session_lineage(
                 &session_id,
-                build_subagent_session_relationship(
-                    subagent_parent_info.as_ref(),
-                    &agent_type,
-                ),
+                build_subagent_session_relationship(subagent_parent_info.as_ref(), &agent_type),
             )
             .await?;
 
@@ -3861,9 +3860,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             context: context.unwrap_or_default(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
         };
-        let coordinator = get_global_coordinator().ok_or_else(|| {
-            BitFunError::service("Coordinator not initialized".to_string())
-        })?;
+        let coordinator = get_global_coordinator()
+            .ok_or_else(|| BitFunError::service("Coordinator not initialized".to_string()))?;
 
         tokio::spawn(async move {
             let delivery_text = match coordinator
@@ -3883,7 +3881,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             };
 
             let metadata = serde_json::json!({
-                "kind": "background_subagent_result",
+                "kind": "background_result",
+                "sourceKind": "subagent",
                 "backgroundTaskId": background_task_id_for_delivery,
                 "subagentType": agent_type,
                 "taskDescription": task_description,
@@ -3891,7 +3890,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
             if let Some(scheduler) = super::scheduler::get_global_scheduler() {
                 if let Err(error) = scheduler
-                    .deliver_background_subagent_result(
+                    .deliver_background_result(
                         subagent_parent_info.session_id.clone(),
                         parent_agent_type,
                         parent_workspace_path,
@@ -4479,10 +4478,8 @@ mod tests {
         assert!(completed_text.contains("<result>\n"));
         assert!(!completed_text.contains("background_task_id=\"bg-subagent-123\""));
 
-        let partial = super::SubagentResult::partial_timeout(
-            "partial".to_string(),
-            "timeout".to_string(),
-        );
+        let partial =
+            super::SubagentResult::partial_timeout("partial".to_string(), "timeout".to_string());
         let partial_text = super::format_background_subagent_delivery_text(
             "bg-subagent-456",
             "GeneralPurpose",
