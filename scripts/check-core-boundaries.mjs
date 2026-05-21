@@ -930,6 +930,10 @@ const forbiddenContentRules = [
         message: 'core remote-connect server must not own image-context preference policy; use the integrations helper',
       },
       {
+        regex: /\btrait RemoteImageContextAdapter\b/,
+        message: 'core remote-connect server must not own image-context adapter contracts; use the integrations contract',
+      },
+      {
         regex: /\bconst MAX_SIZE\b/,
         message: 'core remote-connect server must not own remote file max-read policy; use the integrations helper',
       },
@@ -940,6 +944,30 @@ const forbiddenContentRules = [
       {
         regex: /unwrap_or\("file"\)/,
         message: 'core remote-connect server must not own remote file display-name fallback; use the integrations helper',
+      },
+      {
+        regex: /\bresolve_workspace_path\b/,
+        message: 'core remote-connect server must not own workspace file path resolution; use the integrations helper',
+      },
+      {
+        regex: /\bdetect_mime_type\b/,
+        message: 'core remote-connect server must not own workspace file MIME detection; use the integrations helper',
+      },
+      {
+        regex: /\bread_workspace_file\b/,
+        message: 'core remote-connect server must not own workspace file read helpers; use the integrations helper',
+      },
+      {
+        regex: /\bfn read_remote_workspace_file\b/,
+        message: 'core remote-connect server must not redefine remote workspace full-file readers; use the integrations helper',
+      },
+      {
+        regex: /\bfn read_remote_workspace_file_chunk\b/,
+        message: 'core remote-connect server must not redefine remote workspace chunk readers; use the integrations helper',
+      },
+      {
+        regex: /\bfn read_remote_workspace_file_info\b/,
+        message: 'core remote-connect server must not redefine remote workspace file-info readers; use the integrations helper',
       },
       {
         regex: /\bfn should_send_remote_model_catalog\b/,
@@ -960,6 +988,27 @@ const forbiddenContentRules = [
       {
         regex: /\bfn remote_persisted_poll_response\b/,
         message: 'core remote-connect server must not own persisted poll response assembly; use the integrations helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_connect/bot/mod.rs',
+    patterns: [
+      {
+        regex: /\bfn strip_workspace_path_prefix\b/,
+        message: 'core remote-connect bot facade must not own workspace path prefix stripping; use the integrations helper',
+      },
+      {
+        regex: /\bfn is_absolute_workspace_path\b/,
+        message: 'core remote-connect bot facade must not own workspace path absolute detection; use the integrations helper',
+      },
+      {
+        regex: /\bmatch ext\.as_str\(\)/,
+        message: 'core remote-connect bot facade must not own workspace file MIME mapping; use the integrations helper',
+      },
+      {
+        regex: /\btokio::fs::read\(&abs_path\)/,
+        message: 'core remote-connect bot facade must not own workspace file reads; use the integrations helper',
       },
     ],
   },
@@ -1371,6 +1420,313 @@ const requiredContentRules = [
       {
         regex: /agent submission port does not yet accept generic attachments/,
         message: 'missing generic attachment guard on agent submission port',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services-integrations/src/remote_connect.rs',
+    reason:
+      'services-integrations must own remote-connect wire, tracker, dialog, file, and image adapter contracts',
+    patterns: [
+      {
+        regex: /\bpub struct RemoteSessionStateTracker\b/,
+        message: 'missing remote session state tracker owner',
+      },
+      {
+        regex: /\bpub enum TrackerEvent\b/,
+        message: 'missing remote tracker event owner',
+      },
+      {
+        regex: /\bpub trait RemoteSessionTrackerHost\b/,
+        message: 'missing remote tracker host port',
+      },
+      {
+        regex: /\bpub struct RemoteSessionTrackerRegistry\b/,
+        message: 'missing remote tracker registry owner',
+      },
+      {
+        regex: /\bpub fn make_slim_tool_params\b/,
+        message: 'missing remote tool preview slimming helper',
+      },
+      {
+        regex: /\bfn handle_agentic_event\b/,
+        message: 'missing tracker event reducer',
+      },
+      {
+        regex: /\bpub fn resolve_remote_agent_type\b/,
+        message: 'missing remote agent type helper',
+      },
+      {
+        regex: /\bpub struct RemoteImageContext\b/,
+        message: 'missing portable remote image context contract',
+      },
+      {
+        regex: /\bpub trait RemoteImageContextAdapter\b/,
+        message: 'missing remote image context adapter contract',
+      },
+      {
+        regex: /\bpub fn build_remote_image_contexts\b/,
+        message: 'missing legacy remote image context builder',
+      },
+      {
+        regex: /\bpub fn resolve_remote_execution_image_contexts\b/,
+        message: 'missing remote image context preference helper',
+      },
+      {
+        regex: /\bpub fn remote_session_restore_target\b/,
+        message: 'missing remote restore-target helper',
+      },
+      {
+        regex: /\bpub enum RemoteCancelDecision\b/,
+        message: 'missing remote cancel decision contract',
+      },
+      {
+        regex: /\bpub fn resolve_remote_cancel_decision\b/,
+        message: 'missing remote cancel decision resolver',
+      },
+      {
+        regex: /\bpub trait RemoteDialogRuntimeHost\b/,
+        message: 'missing remote dialog runtime host port',
+      },
+      {
+        regex: /\bpub async fn submit_remote_dialog\b/,
+        message: 'missing remote dialog orchestration owner',
+      },
+      {
+        regex: /\bpub const REMOTE_FILE_MAX_READ_BYTES\b/,
+        message: 'missing remote file max-read policy',
+      },
+      {
+        regex: /\bpub const REMOTE_FILE_MAX_CHUNK_BYTES\b/,
+        message: 'missing remote file chunk policy',
+      },
+      {
+        regex: /\bpub fn resolve_remote_file_chunk_range\b/,
+        message: 'missing remote file chunk range helper',
+      },
+      {
+        regex: /\bpub fn remote_file_display_name\b/,
+        message: 'missing remote file display-name fallback',
+      },
+      {
+        regex: /\bpub fn resolve_remote_workspace_path\b/,
+        message: 'missing remote workspace path resolver',
+      },
+      {
+        regex: /\bpub fn detect_remote_mime_type\b/,
+        message: 'missing remote MIME detector',
+      },
+      {
+        regex: /\bpub async fn read_remote_workspace_file\b/,
+        message: 'missing remote workspace full-file reader',
+      },
+      {
+        regex: /\bpub async fn read_remote_workspace_file_chunk\b/,
+        message: 'missing remote workspace chunk reader',
+      },
+      {
+        regex: /\bpub async fn read_remote_workspace_file_info\b/,
+        message: 'missing remote workspace file-info reader',
+      },
+      {
+        regex: /\bpub struct RemoteDefaultModelsConfig\b/,
+        message: 'missing remote model default DTO',
+      },
+      {
+        regex: /\bpub struct RemoteModelConfig\b/,
+        message: 'missing remote model DTO',
+      },
+      {
+        regex: /\bpub struct RemoteModelCatalog\b/,
+        message: 'missing remote model catalog DTO',
+      },
+      {
+        regex: /\bpub struct RemoteModelCatalogPollDelta\b/,
+        message: 'missing remote model catalog poll delta',
+      },
+      {
+        regex: /\bpub enum RemoteCommand\b/,
+        message: 'missing remote command wire contract',
+      },
+      {
+        regex: /\bpub enum RemoteResponse\b/,
+        message: 'missing remote response wire contract',
+      },
+      {
+        regex: /\bpub fn should_send_remote_model_catalog\b/,
+        message: 'missing remote model catalog poll policy',
+      },
+      {
+        regex: /\bpub fn remote_model_catalog_poll_delta\b/,
+        message: 'missing remote model catalog poll delta helper',
+      },
+      {
+        regex: /\bpub fn remote_no_change_poll_response\b/,
+        message: 'missing remote no-change poll response helper',
+      },
+      {
+        regex: /\bpub fn remote_snapshot_poll_response\b/,
+        message: 'missing remote snapshot poll response helper',
+      },
+      {
+        regex: /\bpub fn remote_persisted_poll_response\b/,
+        message: 'missing remote persisted poll response helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services-integrations/tests/remote_connect_contracts.rs',
+    reason: 'remote-connect owner crate must keep focused behavior contracts',
+    patterns: [
+      {
+        regex: /\bremote_connect_command_wire_shape_lives_in_owner_contract\b/,
+        message: 'missing remote command wire contract test',
+      },
+      {
+        regex: /\bremote_connect_response_wire_shape_lives_in_owner_contract\b/,
+        message: 'missing remote response wire contract test',
+      },
+      {
+        regex: /\bremote_connect_model_catalog_delta_preserves_poll_invalidation_policy\b/,
+        message: 'missing remote model catalog delta contract test',
+      },
+      {
+        regex: /\bremote_connect_poll_helpers_preserve_delta_and_completion_policy\b/,
+        message: 'missing remote poll helper contract test',
+      },
+      {
+        regex: /\bremote_connect_image_context_policy_preserves_legacy_fallback_shape\b/,
+        message: 'missing legacy image context fallback test',
+      },
+      {
+        regex: /\bremote_connect_image_context_policy_prefers_explicit_contexts\b/,
+        message: 'missing explicit image context preference test',
+      },
+      {
+        regex: /\bremote_connect_image_context_adapter_owns_portable_conversion_shape\b/,
+        message: 'missing image context adapter contract test',
+      },
+      {
+        regex: /\bremote_connect_cancel_and_restore_policy_preserve_runtime_decisions\b/,
+        message: 'missing cancel/restore policy test',
+      },
+      {
+        regex: /\bremote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order\b/,
+        message: 'missing dialog runtime order test',
+      },
+      {
+        regex: /\bremote_connect_dialog_runtime_preserves_explicit_turn_without_restore\b/,
+        message: 'missing dialog explicit-turn test',
+      },
+      {
+        regex: /\bremote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance\b/,
+        message: 'missing restore failure tolerance test',
+      },
+      {
+        regex: /\bremote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges\b/,
+        message: 'missing remote file transfer policy test',
+      },
+      {
+        regex: /\bremote_connect_file_transfer_policy_preserves_name_fallback\b/,
+        message: 'missing remote file display-name test',
+      },
+      {
+        regex: /\bremote_connect_file_path_resolution_stays_within_workspace_root\b/,
+        message: 'missing remote file path resolution test',
+      },
+      {
+        regex: /\bremote_connect_file_read_helpers_preserve_current_wire_inputs\b/,
+        message: 'missing remote full-read helper test',
+      },
+      {
+        regex: /\bremote_connect_file_chunk_and_info_helpers_preserve_response_facts\b/,
+        message: 'missing remote chunk/info helper test',
+      },
+      {
+        regex: /\bremote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes\b/,
+        message: 'missing tracker completion contract test',
+      },
+      {
+        regex: /\bremote_connect_tracker_registry_owns_lifecycle_without_core_state\b/,
+        message: 'missing tracker registry owner test',
+      },
+      {
+        regex: /\bremote_connect_tracker_ignores_unrelated_direct_session_events\b/,
+        message: 'missing tracker unrelated-event guard test',
+      },
+      {
+        regex: /\bremote_connect_tool_preview_slimming_keeps_short_fields_and_drops_large_strings\b/,
+        message: 'missing remote tool preview slimming test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_connect/remote_server.rs',
+    reason:
+      'core remote-connect server must remain a product runtime adapter around integrations-owned contracts',
+    patterns: [
+      {
+        regex: /\bstruct CoreRemoteDialogRuntimeHost\b/,
+        message: 'missing core remote dialog runtime adapter',
+      },
+      {
+        regex: /\bimpl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost\b/,
+        message: 'missing integrations dialog host adapter implementation',
+      },
+      {
+        regex: /\bsubmit_remote_dialog\b/,
+        message: 'missing remote dialog owner orchestration delegation',
+      },
+      {
+        regex: /\bread_remote_workspace_file\b/,
+        message: 'missing remote file full-read helper delegation',
+      },
+      {
+        regex: /\bread_remote_workspace_file_chunk\b/,
+        message: 'missing remote file chunk helper delegation',
+      },
+      {
+        regex: /\bread_remote_workspace_file_info\b/,
+        message: 'missing remote file info helper delegation',
+      },
+      {
+        regex: /\bImageContextData::from_remote_image_context\b/,
+        message: 'missing image context adapter contract delegation',
+      },
+      {
+        regex: /\bremote_execution_prefers_unified_image_contexts_over_legacy_images\b/,
+        message: 'missing unified image context preference regression',
+      },
+      {
+        regex: /\bremote_execution_falls_back_to_legacy_images_as_image_contexts\b/,
+        message: 'missing legacy image context fallback regression',
+      },
+      {
+        regex: /\bremote_cancel_decision_preserves_current_turn_boundaries\b/,
+        message: 'missing remote cancel boundary regression',
+      },
+      {
+        regex: /\bremote_restore_target_only_restores_cold_sessions_with_workspace_binding\b/,
+        message: 'missing remote restore target regression',
+      },
+      {
+        regex: /\bremote_command_snapshot_covers_execution_poll_and_cancel_surfaces\b/,
+        message: 'missing remote command snapshot regression',
+      },
+      {
+        regex: /\bremote_response_snapshot_preserves_active_turn_and_result_shapes\b/,
+        message: 'missing remote response snapshot regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+    reason:
+      'core scheduler keeps remote queue policy semantics until agent-runtime migration is reviewed',
+    patterns: [
+      {
+        regex: /\bremote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary\b/,
+        message: 'missing remote queue policy regression',
       },
     ],
   },
@@ -4025,13 +4381,16 @@ function runManifestParserSelfTest() {
     },
   ];
   for (const { path, contracts } of requiredContentContracts) {
-    const rule = requiredContentRules.find((rule) => rule.path === path);
-    if (!rule) {
+    const matchingRules = requiredContentRules.filter((rule) => rule.path === path);
+    if (matchingRules.length === 0) {
       throw new Error(`missing owner content anchor rule for ${path}`);
     }
-    const ruleText = rule.patterns.map((pattern) => pattern.regex.source).join('\n');
+    const ruleText = matchingRules
+      .flatMap((rule) => rule.patterns)
+      .map((pattern) => pattern.regex.source)
+      .join('\n');
     for (const contract of contracts) {
-      if (!ruleText.includes(contract)) {
+      if (!ruleText.includes(contract) && !ruleText.includes(escapeRegex(contract))) {
         throw new Error(`owner content anchor rule for ${path} must require: ${contract}`);
       }
     }
@@ -4376,9 +4735,16 @@ function runManifestParserSelfTest() {
     'resolve_remote_cancel_decision',
     'remote_session_restore_target',
     'resolve_remote_execution_image_contexts',
+    'RemoteImageContextAdapter',
     'MAX_SIZE',
     'MAX_CHUNK',
     'unwrap_or\\("file"\\)',
+    'resolve_workspace_path',
+    'detect_mime_type',
+    'read_workspace_file',
+    'read_remote_workspace_file',
+    'read_remote_workspace_file_chunk',
+    'read_remote_workspace_file_info',
     'should_send_remote_model_catalog',
     'remote_model_catalog_poll_delta',
     'remote_no_change_poll_response',

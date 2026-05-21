@@ -62,13 +62,19 @@ SessionManager → Session → DialogTurn → ModelRound
   as cache reads/hits and `cache_creation_token_count` as a separate provider
   fact.
 - Function-agent commit-message and Startchat work-state orchestration may
-  route through `bitfun-product-domains`; keep Git/AI service adapters, prompt
-  templates, JSON extraction, and error mapping core-owned. JSON-string parsing
-  helpers may live in `bitfun-product-domains` after extraction has happened.
+  route through `bitfun-product-domains`. Keep Git/AI service adapters,
+  provider acquisition, AI client calls, and transport error mapping core-owned;
+  prompt templates, JSON extraction/repair, domain error mapping, and domain
+  JSON parsing policy may live in `bitfun-product-domains`.
 - MiniApp built-in bundle/hash/marker seed-plan and marker wire helpers may
   live in `bitfun-product-domains`; keep bundled asset includes, filesystem
   writes, marker IO, customization metadata IO, recompile orchestration, worker
   process runtime, and host dispatch execution core-owned until a reviewed
+  migration proves equivalence.
+- Remote-connect wire/tracker/dialog orchestration and portable file/image
+  contracts may live in `bitfun-services-integrations`; keep workspace-root
+  source selection, response wrapping, concrete scheduler/session restore,
+  terminal pre-warm adapters, and product execution core-owned until a reviewed
   migration proves equivalence.
 - Do not add new cross-layer references from `service` to `agentic` without a
   small port/interface boundary.

@@ -35,13 +35,18 @@ SessionManager → Session → DialogTurn → ModelRound
 - 不要把 OpenAI Responses / Codex ChatGPT flat tool schema 等 provider-specific 序列化行为写进 core tool contract；AI adapter 负责 provider 序列化，core 保持 provider-neutral manifest。
 - 调整 session/token usage 路径时，`cached_content_token_count` 必须继续表示 cache reads/hits，`cache_creation_token_count` 必须作为独立 provider fact 保留。
 - Function-agent commit-message 与 Startchat work-state orchestration 可以经由
-  `bitfun-product-domains`；Git/AI service adapter、prompt template、JSON
-  extraction 和 error mapping 仍由 core 拥有。JSON extraction 之后的 JSON string
-  parser 可以放在 `bitfun-product-domains`。
+  `bitfun-product-domains`；Git/AI service adapter、provider 获取、AI client
+  调用和 transport error mapping 仍由 core 拥有。prompt template、JSON
+  extraction/repair、domain error mapping 与 domain JSON parsing policy 可以放在
+  `bitfun-product-domains`。
 - MiniApp built-in bundle/hash/marker seed plan 与 marker wire helper 可以放在
   `bitfun-product-domains`；bundled asset include、filesystem writes、marker IO、
   customization metadata IO、recompile orchestration、worker process runtime 和
   host dispatch execution 仍由 core 拥有，直到有评审过的迁移和等价测试。
+- Remote-connect wire/tracker/dialog orchestration 与 portable file/image contract
+  可以放在 `bitfun-services-integrations`；workspace-root source selection、
+  response wrapping、concrete scheduler/session restore、terminal pre-warm adapter
+  和 product execution 仍由 core 拥有，直到有评审过的迁移和等价测试。
 - 不要在没有小型 port/interface 边界的情况下新增 `service` 到 `agentic` 的跨层引用。
 - 不要在 core 拆解中把平台专属逻辑、构建脚本行为或产品能力选择下沉到 shared core。
 

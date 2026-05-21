@@ -2060,10 +2060,10 @@ pub async fn execute_forwarded_turn(
     message_sender: Option<BotMessageSender>,
     verbose_mode: bool,
 ) -> ForwardedTurnResult {
-    use crate::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSource};
     use crate::service::remote_connect::remote_server::{
         get_or_init_global_dispatcher, TrackerEvent,
     };
+    use bitfun_services_integrations::remote_connect::RemoteConnectSubmissionSource;
 
     let language = current_bot_language().await;
     let s = strings_for(language);
@@ -2080,7 +2080,7 @@ pub async fn execute_forwarded_turn(
             forward.content,
             Some(&forward.agent_type),
             forward.image_contexts,
-            DialogSubmissionPolicy::for_source(DialogTriggerSource::Bot),
+            RemoteConnectSubmissionSource::Bot,
             Some(forward.turn_id.clone()),
         )
         .await

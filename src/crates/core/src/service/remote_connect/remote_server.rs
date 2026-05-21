@@ -15,12 +15,15 @@ use std::sync::{Arc, OnceLock};
 
 use super::encryption;
 use bitfun_services_integrations::remote_connect::{
-    build_remote_image_contexts, remote_file_display_name, remote_model_catalog_poll_delta,
-    remote_no_change_poll_response, remote_persisted_poll_response, remote_session_restore_target,
-    remote_snapshot_poll_response, resolve_remote_cancel_decision,
-    resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range, RemoteCancelDecision,
-    RemoteImageContext, RemoteSessionTrackerHost, RemoteSessionTrackerRegistry,
-    REMOTE_FILE_MAX_READ_BYTES,
+    build_remote_image_contexts, read_remote_workspace_file, read_remote_workspace_file_chunk,
+    read_remote_workspace_file_info, remote_model_catalog_poll_delta,
+    remote_no_change_poll_response, remote_persisted_poll_response, remote_snapshot_poll_response,
+    resolve_remote_cancel_decision, resolve_remote_execution_image_contexts, submit_remote_dialog,
+    RemoteCancelDecision, RemoteConnectSubmissionSource, RemoteDialogQueuePriority,
+    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy,
+    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
+    RemoteImageContextAdapter, RemoteSessionTrackerHost, RemoteSessionTrackerRegistry,
+    RemoteTerminalPrewarmRequest, REMOTE_FILE_MAX_READ_BYTES,
 };
 pub use bitfun_services_integrations::remote_connect::{
     ActiveTurnSnapshot, AssistantEntry, ChatImageAttachment, ChatMessage, ChatMessageItem,
@@ -503,12 +506,18 @@ fn build_core_image_contexts(
 fn remote_image_context_to_core(
     context: RemoteImageContext,
 ) -> crate::agentic::image_analysis::ImageContextData {
-    crate::agentic::image_analysis::ImageContextData {
-        id: context.id,
-        image_path: context.image_path,
-        data_url: context.data_url,
-        mime_type: context.mime_type,
-        metadata: context.metadata,
+    crate::agentic::image_analysis::ImageContextData::from_remote_image_context(context)
+}
+
+impl RemoteImageContextAdapter for crate::agentic::image_analysis::ImageContextData {
+    fn from_remote_image_context(context: RemoteImageContext) -> Self {
+        Self {
+            id: context.id,
+            image_path: context.image_path,
+            data_url: context.data_url,
+            mime_type: context.mime_type,
+            metadata: context.metadata,
+        }
     }
 }
 
@@ -562,6 +571,174 @@ impl RemoteSessionTrackerHost for CoreRemoteSessionTrackerHost {
     }
 }
 
+struct CoreRemoteDialogRuntimeHost<'a> {
+    dispatcher: &'a RemoteExecutionDispatcher,
+    coordinator: Arc<crate::agentic::coordination::ConversationCoordinator>,
+    scheduler: Arc<crate::agentic::coordination::DialogScheduler>,
+}
+
+impl<'a> CoreRemoteDialogRuntimeHost<'a> {
+    fn new(dispatcher: &'a RemoteExecutionDispatcher) -> std::result::Result<Self, String> {
+        use crate::agentic::coordination::{get_global_coordinator, get_global_scheduler};
+
+        let coordinator = get_global_coordinator()
+            .ok_or_else(|| "Desktop session system not ready".to_string())?;
+        let scheduler = get_global_scheduler()
+            .ok_or_else(|| "Dialog scheduler is not initialized".to_string())?;
+
+        Ok(Self {
+            dispatcher,
+            coordinator,
+            scheduler,
+        })
+    }
+}
+
+fn core_dialog_submission_policy(
+    policy: RemoteDialogSubmissionPolicy,
+) -> crate::agentic::coordination::DialogSubmissionPolicy {
+    use crate::agentic::coordination::{
+        DialogQueuePriority, DialogSubmissionPolicy, DialogTriggerSource,
+    };
+
+    let trigger_source = match policy.source {
+        RemoteConnectSubmissionSource::Relay => DialogTriggerSource::RemoteRelay,
+        RemoteConnectSubmissionSource::Bot => DialogTriggerSource::Bot,
+    };
+    let queue_priority = match policy.queue_priority {
+        RemoteDialogQueuePriority::Low => DialogQueuePriority::Low,
+        RemoteDialogQueuePriority::Normal => DialogQueuePriority::Normal,
+        RemoteDialogQueuePriority::High => DialogQueuePriority::High,
+    };
+
+    DialogSubmissionPolicy::new(
+        trigger_source,
+        queue_priority,
+        policy.skip_tool_confirmation,
+    )
+}
+
+#[async_trait::async_trait]
+impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
+    type ImageContext = crate::agentic::image_analysis::ImageContextData;
+
+    fn ensure_tracker(&self, session_id: &str) {
+        self.dispatcher.ensure_tracker(session_id);
+    }
+
+    async fn resolve_binding_workspace(&self, session_id: &str) -> Option<String> {
+        self.coordinator
+            .resolve_session_workspace_path(session_id)
+            .await
+            .map(|path| path.to_string_lossy().into_owned())
+    }
+
+    async fn remote_session_exists(&self, session_id: &str) -> std::result::Result<bool, String> {
+        Ok(self
+            .coordinator
+            .get_session_manager()
+            .get_session(session_id)
+            .is_some())
+    }
+
+    async fn restore_remote_session(
+        &self,
+        session_id: &str,
+        workspace_path: &str,
+    ) -> std::result::Result<(), String> {
+        self.coordinator
+            .restore_session(std::path::Path::new(workspace_path), session_id)
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    fn prewarm_remote_terminal(&self, request: RemoteTerminalPrewarmRequest) {
+        use terminal_core::session::SessionSource;
+        use terminal_core::{TerminalApi, TerminalBindingOptions};
+
+        let sid = request.session_id;
+        let binding_workspace_for_terminal = request.binding_workspace;
+        tokio::spawn(async move {
+            let Ok(api) = TerminalApi::from_singleton() else {
+                return;
+            };
+            let binding = api.session_manager().binding();
+            if binding.get(&sid).is_some() {
+                return;
+            }
+            let workspace = binding_workspace_for_terminal;
+            let name = format!("Chat-{}", &sid[..8.min(sid.len())]);
+            match binding
+                .get_or_create(
+                    &sid,
+                    TerminalBindingOptions {
+                        working_directory: workspace,
+                        session_id: Some(sid.clone()),
+                        session_name: Some(name),
+                        env: Some(
+                            crate::agentic::tools::implementations::bash_tool::BashTool::noninteractive_env(),
+                        ),
+                        source: Some(SessionSource::Agent),
+                        ..Default::default()
+                    },
+                )
+                .await
+            {
+                Ok(_) => info!("Terminal pre-warmed for remote session {sid}"),
+                Err(e) => debug!("Terminal pre-warm skipped for {sid}: {e}"),
+            }
+        });
+    }
+
+    fn generate_turn_id(&self) -> String {
+        format!("turn_{}", chrono::Utc::now().timestamp_millis())
+    }
+
+    async fn submit_dialog(
+        &self,
+        submission: RemoteDialogResolvedSubmission<Self::ImageContext>,
+    ) -> std::result::Result<RemoteDialogSubmitOutcome, String> {
+        let image_payload = if submission.image_contexts.is_empty() {
+            None
+        } else {
+            Some(submission.image_contexts)
+        };
+        let policy = core_dialog_submission_policy(submission.policy);
+
+        self.scheduler
+            .submit(
+                submission.session_id,
+                submission.content,
+                None,
+                Some(submission.turn_id),
+                submission.resolved_agent_type,
+                submission.binding_workspace,
+                policy,
+                None,
+                None,
+                image_payload,
+            )
+            .await
+            .map(|outcome| match outcome {
+                crate::agentic::coordination::DialogSubmitOutcome::Started {
+                    session_id,
+                    turn_id,
+                } => RemoteDialogSubmitOutcome::Started {
+                    session_id,
+                    turn_id,
+                },
+                crate::agentic::coordination::DialogSubmitOutcome::Queued {
+                    session_id,
+                    turn_id,
+                } => RemoteDialogSubmitOutcome::Queued {
+                    session_id,
+                    turn_id,
+                },
+            })
+    }
+}
+
 // ── RemoteExecutionDispatcher (global singleton) ────────────────────
 
 /// Shared dispatch layer that owns the session state trackers.
@@ -610,10 +787,12 @@ impl RemoteExecutionDispatcher {
             .remove_tracker_with_host(session_id, &CoreRemoteSessionTrackerHost);
     }
 
-    /// Dispatch a SendMessage command: ensure tracker, restore session, submit via
-    /// [`DialogScheduler`](crate::agentic::coordination::DialogScheduler) (same as desktop).
+    /// Dispatch a SendMessage command through the remote-connect runtime owner.
+    ///
+    /// `bitfun-services-integrations` owns the orchestration order; core supplies
+    /// the concrete tracker, session restore, terminal, and scheduler adapters.
     /// When the session is already processing, the message is queued and the current turn
-    /// may yield after the current model round (for interactive `submission_policy` sources).
+    /// may yield after the current model round for interactive remote sources.
     /// Returns whether this message started immediately or was only queued, plus ids.
     /// If `turn_id` is `None`, one is auto-generated before queueing.
     ///
@@ -624,103 +803,23 @@ impl RemoteExecutionDispatcher {
         content: String,
         agent_type: Option<&str>,
         image_contexts: Vec<crate::agentic::image_analysis::ImageContextData>,
-        submission_policy: crate::agentic::coordination::DialogSubmissionPolicy,
+        source: RemoteConnectSubmissionSource,
         turn_id: Option<String>,
-    ) -> std::result::Result<crate::agentic::coordination::DialogSubmitOutcome, String> {
-        use crate::agentic::coordination::{get_global_coordinator, get_global_scheduler};
+    ) -> std::result::Result<RemoteDialogSubmitOutcome, String> {
+        let host = CoreRemoteDialogRuntimeHost::new(self)?;
 
-        let coordinator = get_global_coordinator()
-            .ok_or_else(|| "Desktop session system not ready".to_string())?;
-
-        let scheduler = get_global_scheduler()
-            .ok_or_else(|| "Dialog scheduler is not initialized".to_string())?;
-
-        self.ensure_tracker(session_id);
-
-        let session_mgr = coordinator.get_session_manager();
-        let binding_workspace = resolve_session_workspace_path(session_id)
-            .await
-            .map(|path| path.to_string_lossy().into_owned());
-
-        if let Some(workspace_path) = remote_session_restore_target(
-            session_mgr.get_session(session_id).is_some(),
-            binding_workspace.as_deref(),
-        ) {
-            let _ = coordinator
-                .restore_session(std::path::Path::new(workspace_path), session_id)
-                .await
-                .ok();
-        }
-
-        // Pre-warm the terminal so shell integration is ready before BashTool runs.
-        // Bot/remote sessions have no Terminal panel to pre-create the session, so the
-        // AI model's processing time (typically 5-15 s) gives shell integration a head
-        // start.  When BashTool eventually calls get_or_create, the binding already
-        // exists and the 30-second readiness wait is skipped entirely.
-        {
-            use terminal_core::session::SessionSource;
-            use terminal_core::{TerminalApi, TerminalBindingOptions};
-            let sid = session_id.to_string();
-            let binding_workspace_for_terminal = binding_workspace.clone();
-            tokio::spawn(async move {
-                let Ok(api) = TerminalApi::from_singleton() else {
-                    return;
-                };
-                let binding = api.session_manager().binding();
-                if binding.get(&sid).is_some() {
-                    return;
-                }
-                let workspace = binding_workspace_for_terminal.clone();
-                let name = format!("Chat-{}", &sid[..8.min(sid.len())]);
-                match binding
-                    .get_or_create(
-                        &sid,
-                        TerminalBindingOptions {
-                            working_directory: workspace,
-                            session_id: Some(sid.clone()),
-                            session_name: Some(name),
-                            env: Some(
-                                crate::agentic::tools::implementations::bash_tool::BashTool::noninteractive_env(),
-                            ),
-                            source: Some(SessionSource::Agent),
-                            ..Default::default()
-                        },
-                    )
-                    .await
-                {
-                    Ok(_) => info!("Terminal pre-warmed for remote session {sid}"),
-                    Err(e) => debug!("Terminal pre-warm skipped for {sid}: {e}"),
-                }
-            });
-        }
-
-        let resolved_agent_type = agent_type
-            .map(|t| resolve_agent_type(Some(t)).to_string())
-            .unwrap_or_else(|| "agentic".to_string());
-
-        let turn_id =
-            turn_id.unwrap_or_else(|| format!("turn_{}", chrono::Utc::now().timestamp_millis()));
-
-        let image_payload = if image_contexts.is_empty() {
-            None
-        } else {
-            Some(image_contexts)
-        };
-
-        scheduler
-            .submit(
-                session_id.to_string(),
+        submit_remote_dialog(
+            &host,
+            RemoteDialogSubmissionRequest {
+                session_id: session_id.to_string(),
                 content,
-                None,
-                Some(turn_id.clone()),
-                resolved_agent_type,
-                binding_workspace,
-                submission_policy,
-                None,
-                None,
-                image_payload,
-            )
-            .await
+                agent_type: agent_type.map(ToOwned::to_owned),
+                image_contexts,
+                policy: RemoteDialogSubmissionPolicy::for_source(source),
+                turn_id,
+            },
+        )
+        .await
     }
 
     /// Cancel a running dialog turn.
@@ -1033,29 +1132,23 @@ impl RemoteServer {
     /// Relative paths are resolved against the session workspace when possible,
     /// otherwise the current workspace root. Rejects files larger than 30 MB.
     async fn handle_read_file(&self, raw_path: &str, session_id: Option<&str>) -> RemoteResponse {
-        use crate::service::remote_connect::bot::{read_workspace_file, WorkspaceFileContent};
-
         let workspace_root = resolve_file_workspace_root(session_id).await;
-        match read_workspace_file(
+        match read_remote_workspace_file(
             raw_path,
             REMOTE_FILE_MAX_READ_BYTES,
             workspace_root.as_deref(),
         )
         .await
         {
-            Ok(WorkspaceFileContent {
-                name,
-                bytes,
-                mime_type,
-                size,
-            }) => {
+            Ok(content) => {
                 use base64::Engine as _;
-                let content_base64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                let content_base64 =
+                    base64::engine::general_purpose::STANDARD.encode(&content.bytes);
                 RemoteResponse::FileContent {
-                    name,
+                    name: content.name,
                     content_base64,
-                    mime_type: mime_type.to_string(),
-                    size,
+                    mime_type: content.mime_type.to_string(),
+                    size: content.size,
                 }
             }
             Err(e) => RemoteResponse::Error {
@@ -1071,56 +1164,24 @@ impl RemoteServer {
         offset: u64,
         limit: u64,
     ) -> RemoteResponse {
-        use crate::service::remote_connect::bot::{detect_mime_type, resolve_workspace_path};
-
         let workspace_root = resolve_file_workspace_root(session_id).await;
-        let abs = match resolve_workspace_path(raw_path, workspace_root.as_deref()) {
-            Some(p) => p,
-            None => {
-                return RemoteResponse::Error {
-                    message: format!("Remote file path could not be resolved: {raw_path}"),
-                };
+        match read_remote_workspace_file_chunk(raw_path, workspace_root.as_deref(), offset, limit)
+            .await
+        {
+            Ok(chunk) => {
+                use base64::Engine as _;
+                let chunk_base64 = base64::engine::general_purpose::STANDARD.encode(&chunk.bytes);
+
+                RemoteResponse::FileChunk {
+                    name: chunk.name,
+                    chunk_base64,
+                    offset: chunk.offset,
+                    chunk_size: chunk.chunk_size,
+                    total_size: chunk.total_size,
+                    mime_type: chunk.mime_type.to_string(),
+                }
             }
-        };
-        if !abs.exists() || !abs.is_file() {
-            return RemoteResponse::Error {
-                message: format!("File not found or not a regular file: {}", abs.display()),
-            };
-        }
-
-        let total_size = match tokio::fs::metadata(&abs).await {
-            Ok(m) => m.len(),
-            Err(e) => {
-                return RemoteResponse::Error {
-                    message: format!("Cannot read file metadata: {e}"),
-                };
-            }
-        };
-
-        let bytes = match tokio::fs::read(&abs).await {
-            Ok(b) => b,
-            Err(e) => {
-                return RemoteResponse::Error {
-                    message: format!("Cannot read file: {e}"),
-                };
-            }
-        };
-
-        let range = resolve_remote_file_chunk_range(bytes.len(), offset, limit);
-        let chunk = &bytes[range.start..range.end];
-
-        use base64::Engine as _;
-        let chunk_base64 = base64::engine::general_purpose::STANDARD.encode(chunk);
-
-        let name = remote_file_display_name(abs.file_name().and_then(|n| n.to_str()));
-
-        RemoteResponse::FileChunk {
-            name,
-            chunk_base64,
-            offset,
-            chunk_size: range.chunk_size,
-            total_size,
-            mime_type: detect_mime_type(&abs).to_string(),
+            Err(message) => RemoteResponse::Error { message },
         }
     }
 
@@ -1129,44 +1190,14 @@ impl RemoteServer {
         raw_path: &str,
         session_id: Option<&str>,
     ) -> RemoteResponse {
-        use crate::service::remote_connect::bot::{detect_mime_type, resolve_workspace_path};
-
         let workspace_root = resolve_file_workspace_root(session_id).await;
-        let abs = match resolve_workspace_path(raw_path, workspace_root.as_deref()) {
-            Some(p) => p,
-            None => {
-                return RemoteResponse::Error {
-                    message: format!("Remote file path could not be resolved: {raw_path}"),
-                };
-            }
-        };
-
-        if !abs.exists() {
-            return RemoteResponse::Error {
-                message: format!("File not found: {}", abs.display()),
-            };
-        }
-        if !abs.is_file() {
-            return RemoteResponse::Error {
-                message: format!("Path is not a regular file: {}", abs.display()),
-            };
-        }
-
-        let size = match std::fs::metadata(&abs) {
-            Ok(m) => m.len(),
-            Err(e) => {
-                return RemoteResponse::Error {
-                    message: format!("Cannot read file metadata: {e}"),
-                };
-            }
-        };
-
-        let name = remote_file_display_name(abs.file_name().and_then(|n| n.to_str()));
-
-        RemoteResponse::FileInfo {
-            name,
-            size,
-            mime_type: detect_mime_type(&abs).to_string(),
+        match read_remote_workspace_file_info(raw_path, workspace_root.as_deref()).await {
+            Ok(info) => RemoteResponse::FileInfo {
+                name: info.name,
+                size: info.size,
+                mime_type: info.mime_type.to_string(),
+            },
+            Err(message) => RemoteResponse::Error { message },
         }
     }
 
@@ -1666,9 +1697,7 @@ impl RemoteServer {
     // ── Execution commands ──────────────────────────────────────────
 
     async fn handle_execution_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
-        use crate::agentic::coordination::{
-            get_global_coordinator, DialogSubmissionPolicy, DialogTriggerSource,
-        };
+        use crate::agentic::coordination::get_global_coordinator;
 
         let dispatcher = get_or_init_global_dispatcher();
 
@@ -1703,18 +1732,18 @@ impl RemoteServer {
                         content.clone(),
                         requested_agent_type.as_deref(),
                         resolved_contexts,
-                        DialogSubmissionPolicy::for_source(DialogTriggerSource::RemoteRelay),
+                        RemoteConnectSubmissionSource::Relay,
                         None,
                     )
                     .await
                 {
                     Ok(outcome) => {
                         let (sid, turn_id) = match outcome {
-                            crate::agentic::coordination::DialogSubmitOutcome::Started {
+                            RemoteDialogSubmitOutcome::Started {
                                 session_id,
                                 turn_id,
                             }
-                            | crate::agentic::coordination::DialogSubmitOutcome::Queued {
+                            | RemoteDialogSubmitOutcome::Queued {
                                 session_id,
                                 turn_id,
                             } => (session_id, turn_id),
@@ -1824,6 +1853,7 @@ impl RemoteServer {
 mod tests {
     use super::*;
     use crate::service::remote_connect::encryption::KeyPair;
+    use bitfun_services_integrations::remote_connect::remote_session_restore_target;
 
     #[test]
     fn test_command_round_trip() {

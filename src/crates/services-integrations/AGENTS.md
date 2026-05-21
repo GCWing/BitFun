@@ -14,11 +14,15 @@ slices that are outside pure product logic but still platform-neutral.
 - MCP config/process/transport lifecycle and dynamic provider helpers may live
   here; product tool registry assembly, manifest filtering, `GetToolSpec`
   execution, and concrete tool behavior remain core-owned until H1.
-- Remote-connect tracker/wire/pure-policy contracts may live here; dialog
-  submission, file IO/path resolution, terminal pre-warm, and product execution
-  remain core-owned until H3.
+- Remote-connect tracker/wire/pure-policy contracts, dialog submission
+  orchestration ports, image-context adapter contracts, and portable
+  workspace-file path/read/chunk/info helpers may live here. Workspace-root
+  source selection, response/base64 wrapping, concrete scheduler submission,
+  concrete terminal pre-warm adapters, and product execution remain core-owned
+  unless a later reviewed port/provider moves them with equivalence tests.
 - Remote-SSH path/session identity helpers may live here; SSH channels, SFTP,
-  remote FS, remote terminal, and manager assembly remain core-owned until H3.
+  remote FS, remote terminal, and manager assembly remain core-owned unless a
+  later reviewed port/provider migration proves equivalence.
 
 ## Verification
 
