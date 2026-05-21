@@ -1,5 +1,6 @@
 //! Workspace manager.
 
+#[cfg(feature = "service-integrations")]
 use crate::service::git::GitService;
 use crate::service::remote_ssh::workspace_state::{
     canonicalize_local_workspace_root, local_workspace_roots_equal,
@@ -421,26 +422,35 @@ impl WorkspaceInfo {
     }
 
     async fn resolve_worktree_info(workspace_root: &Path) -> Option<WorkspaceWorktreeInfo> {
-        let normalized_workspace_path = workspace_root.to_string_lossy().replace('\\', "/");
-        let worktrees = match GitService::list_worktrees(workspace_root).await {
-            Ok(worktrees) => worktrees,
-            Err(_) => return None,
-        };
+        #[cfg(not(feature = "service-integrations"))]
+        {
+            let _ = workspace_root;
+            return None;
+        }
 
-        let main_repo_path = worktrees
-            .iter()
-            .find(|worktree| worktree.is_main)
-            .map(|worktree| worktree.path.clone())?;
+        #[cfg(feature = "service-integrations")]
+        {
+            let normalized_workspace_path = workspace_root.to_string_lossy().replace('\\', "/");
+            let worktrees = match GitService::list_worktrees(workspace_root).await {
+                Ok(worktrees) => worktrees,
+                Err(_) => return None,
+            };
 
-        worktrees
-            .into_iter()
-            .find(|worktree| worktree.path == normalized_workspace_path)
-            .map(|worktree| WorkspaceWorktreeInfo {
-                path: worktree.path,
-                branch: worktree.branch,
-                main_repo_path: main_repo_path.clone(),
-                is_main: worktree.is_main,
-            })
+            let main_repo_path = worktrees
+                .iter()
+                .find(|worktree| worktree.is_main)
+                .map(|worktree| worktree.path.clone())?;
+
+            worktrees
+                .into_iter()
+                .find(|worktree| worktree.path == normalized_workspace_path)
+                .map(|worktree| WorkspaceWorktreeInfo {
+                    path: worktree.path,
+                    branch: worktree.branch,
+                    main_repo_path: main_repo_path.clone(),
+                    is_main: worktree.is_main,
+                })
+        }
     }
 
     /// Detects the workspace type.
@@ -871,7 +881,8 @@ impl WorkspaceManager {
         path: PathBuf,
         options: WorkspaceOpenOptions,
     ) -> BitFunResult<WorkspaceInfo> {
-        self.upsert_workspace_with_options(path, options, true).await
+        self.upsert_workspace_with_options(path, options, true)
+            .await
     }
 
     /// Registers or refreshes workspace activity without changing opened UI state.

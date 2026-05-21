@@ -76,6 +76,14 @@ SessionManager → Session → DialogTurn → ModelRound
   terminal pre-warm adapters, and product execution core-owned until a reviewed
   migration proves equivalence. Core service/agent runtime bindings are
   centralized in `src/crates/core/src/service_agent_runtime.rs`.
+- Keep concrete remote SSH runtime code behind `ssh-remote`. No-default builds
+  may keep workspace identity helpers and explicit unsupported stubs, but must
+  not compile russh-backed SSH/SFTP/terminal/search runtime modules.
+- Keep no-default `bitfun-core` as a runtime-surface-light facade, not a
+  claimed dependency-light build. Full product runtime modules such as agentic,
+  MiniApp/function-agent, Git/MCP, remote-connect, review-platform, snapshot,
+  token usage, and mode canonicalization stay behind `product-full` or their
+  owner feature group.
 - Do not add new cross-layer references from `service` to `agentic` without a
   small port/interface boundary.
 - Do not move platform-specific logic, build-script behavior, or product

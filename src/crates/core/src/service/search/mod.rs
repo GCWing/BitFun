@@ -1,9 +1,15 @@
 pub(crate) mod flashgrep;
+#[cfg(feature = "ssh-remote")]
 mod remote;
+#[cfg(not(feature = "ssh-remote"))]
+mod remote_disabled;
 pub mod service;
 pub mod types;
 
+#[cfg(feature = "ssh-remote")]
 pub use remote::{remote_workspace_search_service_for_path, RemoteWorkspaceSearchService};
+#[cfg(not(feature = "ssh-remote"))]
+pub use remote_disabled::{remote_workspace_search_service_for_path, RemoteWorkspaceSearchService};
 pub use service::{
     get_global_workspace_search_service, resolve_workspace_search_daemon_program_path,
     set_global_workspace_search_service, workspace_search_daemon_available,

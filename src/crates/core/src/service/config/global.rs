@@ -4,7 +4,9 @@
 
 use super::service::ConfigService;
 use crate::util::errors::*;
-use log::{debug, info, warn};
+#[cfg(feature = "product-full")]
+use log::warn;
+use log::{debug, info};
 use std::sync::Arc;
 use std::sync::OnceLock;
 use tokio::sync::RwLock;
@@ -101,18 +103,21 @@ impl GlobalConfigManager {
 
         info!("Global config service initialized");
 
-        match super::mode_config_canonicalizer::canonicalize_mode_configs().await {
-            Ok(report) => {
-                if !report.removed_mode_configs.is_empty() || !report.updated_modes.is_empty() {
-                    info!(
-                        "Mode config canonicalization completed: removed_modes={}, updated_modes={}",
-                        report.removed_mode_configs.len(),
-                        report.updated_modes.len()
-                    );
+        #[cfg(feature = "product-full")]
+        {
+            match super::mode_config_canonicalizer::canonicalize_mode_configs().await {
+                Ok(report) => {
+                    if !report.removed_mode_configs.is_empty() || !report.updated_modes.is_empty() {
+                        info!(
+                            "Mode config canonicalization completed: removed_modes={}, updated_modes={}",
+                            report.removed_mode_configs.len(),
+                            report.updated_modes.len()
+                        );
+                    }
                 }
-            }
-            Err(e) => {
-                warn!("Mode config canonicalization failed: {}", e);
+                Err(e) => {
+                    warn!("Mode config canonicalization failed: {}", e);
+                }
             }
         }
 
@@ -156,6 +161,7 @@ impl GlobalConfigManager {
     pub async fn reload() -> BitFunResult<()> {
         let service = Self::get_service().await?;
         service.reload().await?;
+        #[cfg(feature = "product-full")]
         if let Err(error) = super::mode_config_canonicalizer::canonicalize_mode_configs().await {
             warn!(
                 "Mode config canonicalization failed after reload: {}",

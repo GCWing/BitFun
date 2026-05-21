@@ -322,7 +322,10 @@ impl WorkspaceService {
 
         if result.is_ok() {
             if let Err(e) = self.save_workspace_data().await {
-                warn!("Failed to save workspace data after tracking activity: {}", e);
+                warn!(
+                    "Failed to save workspace data after tracking activity: {}",
+                    e
+                );
             }
         }
 
@@ -1859,7 +1862,7 @@ pub fn get_global_workspace_service() -> Option<Arc<WorkspaceService>> {
     GLOBAL_WORKSPACE_SERVICE.get().cloned()
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "product-full"))]
 mod tests {
     use super::*;
     use crate::agentic::persistence::PersistenceManager;

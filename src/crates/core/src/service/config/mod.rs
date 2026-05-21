@@ -6,6 +6,7 @@ pub mod app_language;
 pub mod factory;
 pub mod global;
 pub mod manager;
+#[cfg(feature = "product-full")]
 pub mod mode_config_canonicalizer;
 pub mod providers;
 pub mod service;
@@ -20,6 +21,7 @@ pub use global::{
     subscribe_config_updates, ConfigUpdateEvent, GlobalConfigManager,
 };
 pub use manager::{ConfigManager, ConfigManagerSettings, ConfigStatistics};
+#[cfg(feature = "product-full")]
 pub use mode_config_canonicalizer::{
     canonicalize_mode_configs, ModeConfigCanonicalizationReport, ModeConfigUpdateInfo,
 };

@@ -1147,6 +1147,191 @@ const forbiddenContentUnderRules = [
 
 const requiredContentRules = [
   {
+    path: 'src/crates/core/Cargo.toml',
+    reason:
+      'bitfun-core product-full must explicitly aggregate owner crate feature groups instead of forcing them through dependency declarations',
+    patterns: [
+      {
+        regex:
+          /bitfun-tool-packs = \{ path = "\.\.\/tool-packs", default-features = false, optional = true \}/,
+        message: 'bitfun-tool-packs dependency must stay optional and not force product-full outside the core feature graph',
+      },
+      {
+        regex:
+          /bitfun-services-integrations = \{ path = "\.\.\/services-integrations", default-features = false, features = \["remote-ssh"\] \}/,
+        message:
+          'bitfun-services-integrations dependency may keep remote workspace identity helpers but must not force product-full outside the core feature graph',
+      },
+      {
+        regex:
+          /bitfun-product-domains = \{ path = "\.\.\/product-domains", default-features = false, optional = true \}/,
+        message:
+          'bitfun-product-domains dependency must stay optional and not force product-full outside the core feature graph',
+      },
+      {
+        regex: /"dep:bitfun-tool-packs"/,
+        message: 'core tool-packs feature must explicitly enable the optional dependency',
+      },
+      {
+        regex: /"bitfun-tool-packs\/product-full"/,
+        message: 'core product-full must explicitly enable tool pack product features',
+      },
+      {
+        regex: /"bitfun-services-integrations\/product-full"/,
+        message: 'core product-full must explicitly enable integration product features',
+      },
+      {
+        regex: /"dep:bitfun-product-domains"/,
+        message: 'core product-domains feature must explicitly enable the optional dependency',
+      },
+      {
+        regex: /"bitfun-product-domains\/product-full"/,
+        message: 'core product-full must explicitly enable product-domain features',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/lib.rs',
+    reason:
+      'no-default bitfun-core must keep product runtime surfaces behind explicit features',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*pub mod agentic\b/s,
+        message: 'agentic runtime must stay behind product-full for no-default builds',
+      },
+      {
+        regex: /#\[cfg\(feature = "product-domains"\)\]\s*pub mod function_agents\b/s,
+        message: 'function-agent product domain facade must stay behind product-domains',
+      },
+      {
+        regex: /#\[cfg\(feature = "product-domains"\)\]\s*pub mod miniapp\b/s,
+        message: 'MiniApp product domain facade must stay behind product-domains',
+      },
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub\(crate\) mod service_agent_runtime\b/s,
+        message: 'service agent runtime owner assembly must stay behind service-integrations',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/mod.rs',
+    reason:
+      'service integration and agent-runtime surfaces must not compile in no-default core builds',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub mod git\b/s,
+        message: 'git service facade must stay behind service-integrations',
+      },
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub mod mcp\b/s,
+        message: 'MCP service facade must stay behind service-integrations',
+      },
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub mod remote_connect\b/s,
+        message: 'remote-connect service facade must stay behind service-integrations',
+      },
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub mod review_platform\b/s,
+        message: 'review platform facade must stay behind service-integrations',
+      },
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*pub mod snapshot\b/s,
+        message: 'snapshot service must stay behind product-full until tool-runtime ownership is split',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/config/mod.rs',
+    reason:
+      'mode config canonicalization depends on product agent/tool registries and must stay out of no-default builds',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*pub mod mode_config_canonicalizer\b/s,
+        message: 'mode config canonicalizer must stay behind product-full',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/workspace/manager.rs',
+    reason:
+      'workspace metadata may omit git worktree enrichment when service integrations are disabled',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*use crate::service::git::GitService\b/s,
+        message: 'GitService import must stay gated for no-default builds',
+      },
+      {
+        regex: /#\[cfg\(not\(feature = "service-integrations"\)\)\]\s*\{\s*let _ = workspace_root;\s*return None;\s*\}/s,
+        message: 'no-default worktree enrichment fallback must remain explicit',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/workspace_runtime/service.rs',
+    reason:
+      'workspace runtime binding helpers may depend on agentic runtime only in full product builds',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*use crate::agentic::WorkspaceBinding\b/s,
+        message: 'WorkspaceBinding import must stay gated for no-default builds',
+      },
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*pub async fn ensure_runtime_for_workspace_binding\b/s,
+        message: 'WorkspaceBinding runtime helper must stay behind product-full',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_ssh/mod.rs',
+    reason:
+      'core remote SSH runtime must keep concrete SSH dependencies behind the ssh-remote feature while preserving lightweight workspace identity helpers',
+    patterns: [
+      {
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod disabled\b/s,
+        message: 'missing disabled remote SSH runtime surface for no-default builds',
+      },
+      {
+        regex: /#\[cfg\(feature = "ssh-remote"\)\]\s*pub mod manager\b/s,
+        message: 'remote SSH manager must stay gated behind ssh-remote',
+      },
+      {
+        regex: /#\[cfg\(feature = "ssh-remote"\)\]\s*pub mod remote_fs\b/s,
+        message: 'remote SSH filesystem runtime must stay gated behind ssh-remote',
+      },
+      {
+        regex: /#\[cfg\(feature = "ssh-remote"\)\]\s*pub mod remote_terminal\b/s,
+        message: 'remote SSH terminal runtime must stay gated behind ssh-remote',
+      },
+      {
+        regex: /\bpub mod workspace_state\b/,
+        message: 'remote workspace identity helpers must remain available without ssh-remote',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_ssh/disabled.rs',
+    reason:
+      'no-default core builds must expose explicit unsupported remote SSH stubs instead of compiling russh-backed runtime code',
+    patterns: [
+      {
+        regex: /Remote SSH support is disabled; enable the `ssh-remote` feature/,
+        message: 'missing explicit disabled remote SSH diagnostic',
+      },
+      {
+        regex: /\bpub struct SSHConnectionManager\b/,
+        message: 'missing disabled SSH manager compatibility surface',
+      },
+      {
+        regex: /\bpub struct RemoteFileService\b/,
+        message: 'missing disabled remote file compatibility surface',
+      },
+      {
+        regex: /\bpub struct RemoteTerminalManager\b/,
+        message: 'missing disabled remote terminal compatibility surface',
+      },
+    ],
+  },
+  {
     path: 'src/crates/runtime-ports/src/lib.rs',
     reason:
       'runtime-ports must keep remote runtime boundary contracts DTO/trait-only',
@@ -2529,6 +2714,44 @@ const requiredContentRules = [
       {
         regex: /\bfallback_query\b/,
         message: 'missing FilesWithMatches fallback query',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/search/mod.rs',
+    reason:
+      'remote workspace search must route to the real implementation only when ssh-remote is enabled',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "ssh-remote"\)\]\s*mod remote\b/s,
+        message: 'missing ssh-remote gate for real remote search implementation',
+      },
+      {
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod remote_disabled\b/s,
+        message: 'missing disabled remote search implementation for no-default builds',
+      },
+      {
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*pub use remote_disabled/s,
+        message: 'missing disabled remote search export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/search/remote_disabled.rs',
+    reason:
+      'no-default core builds must keep remote search unavailable with an explicit diagnostic',
+    patterns: [
+      {
+        regex: /Remote SSH search is disabled; enable the `ssh-remote` feature/,
+        message: 'missing explicit disabled remote search diagnostic',
+      },
+      {
+        regex: /\bpub struct RemoteWorkspaceSearchService\b/,
+        message: 'missing disabled remote workspace search service surface',
+      },
+      {
+        regex: /\bremote_workspace_search_service_for_path\b/,
+        message: 'missing disabled remote workspace search resolver',
       },
     ],
   },
@@ -4255,6 +4478,63 @@ function runManifestParserSelfTest() {
       contracts: ['remote_workspace_search_service_for_path', 'lookup_remote_connection_with_hint', 'allow_scan_fallback', 'fallback_query'],
     },
     {
+      path: 'src/crates/core/src/service/search/mod.rs',
+      contracts: ['mod remote_disabled', 'feature = "ssh-remote"', 'pub use remote_disabled'],
+    },
+    {
+      path: 'src/crates/core/src/service/search/remote_disabled.rs',
+      contracts: ['Remote SSH search is disabled', 'RemoteWorkspaceSearchService', 'remote_workspace_search_service_for_path'],
+    },
+    {
+      path: 'src/crates/core/Cargo.toml',
+      contracts: [
+        'bitfun-tool-packs = \\{ path = "\\.\\./tool-packs", default-features = false, optional = true \\}',
+        'bitfun-services-integrations = \\{ path = "\\.\\./services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
+        'bitfun-product-domains = \\{ path = "\\.\\./product-domains", default-features = false, optional = true \\}',
+        'dep:bitfun-tool-packs',
+        'bitfun-tool-packs/product-full',
+        'bitfun-services-integrations/product-full',
+        'dep:bitfun-product-domains',
+        'bitfun-product-domains/product-full',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/lib.rs',
+      contracts: [
+        'feature = "product-full"',
+        'pub mod agentic',
+        'feature = "product-domains"',
+        'pub mod function_agents',
+        'pub mod miniapp',
+        'feature = "service-integrations"',
+        'service_agent_runtime',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/service/mod.rs',
+      contracts: [
+        'feature = "service-integrations"',
+        'pub mod git',
+        'pub mod mcp',
+        'pub mod remote_connect',
+        'pub mod review_platform',
+        'feature = "product-full"',
+        'pub mod snapshot',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/service/config/mod.rs',
+      contracts: ['feature = "product-full"', 'mode_config_canonicalizer'],
+    },
+    {
+      path: 'src/crates/core/src/service/workspace/manager.rs',
+      contracts: ['feature = "service-integrations"', 'GitService', 'return None'],
+    },
+    {
+      path: 'src/crates/core/src/service/workspace_runtime/service.rs',
+      contracts: ['feature = "product-full"', 'WorkspaceBinding', 'ensure_runtime_for_workspace_binding'],
+    },
+    {
       path: 'src/crates/acp/src/client/manager.rs',
       contracts: ['CLIENT_STARTUP_TIMEOUT_SECS', 'startup_timeout_error_message', 'formats_startup_timeout_error_message'],
     },
@@ -4390,6 +4670,14 @@ function runManifestParserSelfTest() {
         'FunctionAgentGitPort',
         'FunctionAgentAiPort',
       ],
+    },
+    {
+      path: 'src/crates/core/src/service/remote_ssh/mod.rs',
+      contracts: ['mod disabled', 'pub mod manager', 'pub mod remote_fs', 'pub mod remote_terminal', 'pub mod workspace_state'],
+    },
+    {
+      path: 'src/crates/core/src/service/remote_ssh/disabled.rs',
+      contracts: ['Remote SSH support is disabled', 'SSHConnectionManager', 'RemoteFileService', 'RemoteTerminalManager'],
     },
     {
       path: 'src/crates/services-integrations/src/remote_ssh/paths.rs',

@@ -1,3 +1,5 @@
+#![cfg_attr(not(feature = "ssh-remote"), allow(unused_imports, dead_code))]
+
 mod client;
 pub mod error;
 mod protocol;

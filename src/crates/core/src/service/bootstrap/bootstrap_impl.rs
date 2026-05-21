@@ -11,6 +11,7 @@ const BOOTSTRAP_TEMPLATE: &str = include_str!("templates/BOOTSTRAP.md");
 const SOUL_TEMPLATE: &str = include_str!("templates/SOUL.md");
 const USER_TEMPLATE: &str = include_str!("templates/USER.md");
 const IDENTITY_TEMPLATE: &str = include_str!("templates/IDENTITY.md");
+#[cfg(feature = "product-full")]
 const PERSONA_FILE_NAMES: [&str; 4] = [
     BOOTSTRAP_FILE_NAME,
     SOUL_FILE_NAME,
@@ -140,10 +141,12 @@ pub(crate) async fn initialize_workspace_persona_files(workspace_root: &Path) ->
     Ok(())
 }
 
+#[cfg(feature = "product-full")]
 pub(crate) fn is_workspace_bootstrap_pending(workspace_root: &Path) -> bool {
     workspace_root.join(BOOTSTRAP_FILE_NAME).exists()
 }
 
+#[cfg(feature = "product-full")]
 pub(crate) async fn ensure_workspace_persona_files_for_prompt(
     workspace_root: &Path,
 ) -> BitFunResult<()> {
@@ -233,6 +236,7 @@ pub async fn reset_workspace_persona_files_to_default(workspace_root: &Path) -> 
     Ok(())
 }
 
+#[cfg(feature = "product-full")]
 pub(crate) async fn build_workspace_persona_prompt(
     workspace_root: &Path,
 ) -> BitFunResult<Option<String>> {
@@ -308,6 +312,7 @@ The following files are located in the workspace root directory and define your 
     )))
 }
 
+#[cfg(feature = "product-full")]
 fn persona_file_description(file_name: &str) -> &'static str {
     match file_name {
         BOOTSTRAP_FILE_NAME => "Bootstrap guidance and initialization instructions",
@@ -318,7 +323,7 @@ fn persona_file_description(file_name: &str) -> &'static str {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "product-full"))]
 mod tests {
     use super::{
         ensure_workspace_gitignore_ignores_bitfun, ensure_workspace_persona_files_for_prompt,
