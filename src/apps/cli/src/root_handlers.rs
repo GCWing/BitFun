@@ -5,6 +5,7 @@ use std::path::Path;
 
 use crate::{
     config::CliConfig,
+    diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind},
     modes::exec::{ExecMode, ExecOutputFormat, ExecSessionOptions},
     ui::string_utils::truncate_str,
     ConfigAction, SessionAction,
@@ -47,7 +48,20 @@ pub async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Re
 
     let skip_confirmation = !args.confirm;
     let (agentic_system, original_skip_confirmation) =
-        crate::initialize_core_services(skip_confirmation).await?;
+        crate::initialize_core_services(skip_confirmation)
+            .await
+            .map_err(|error| {
+                emit_exit_diagnostic(
+                    ExitKind::ExecError,
+                    &error.to_string(),
+                    &ExitContext {
+                        agent_type: Some(args.agent.as_str()),
+                        workspace: workspace_path_resolved.as_deref(),
+                        ..Default::default()
+                    },
+                );
+                error
+            })?;
 
     let mut exec_mode = ExecMode::new(
         config,
