@@ -10,6 +10,8 @@ mod agent;
 mod chat_state;
 mod commands;
 mod config;
+mod diagnostics;
+mod logging;
 mod management;
 mod modes;
 mod prompts;
@@ -559,30 +561,9 @@ async fn run_cli() -> Result<()> {
         tracing::Level::ERROR
     };
 
-    if is_tui_mode {
-        use std::fs::OpenOptions;
-
-        let log_dir = CliConfig::config_dir()
-            .ok()
-            .map(|d| d.join("logs"))
-            .unwrap_or_else(|| std::env::temp_dir().join("bitfun-cli"));
-
-        std::fs::create_dir_all(&log_dir).ok();
-        let log_file = log_dir.join("bitfun-cli.log");
-
-        if let Ok(file) = OpenOptions::new().create(true).append(true).open(log_file) {
-            tracing_subscriber::fmt()
-                .with_max_level(log_level)
-                .with_writer(move || file.try_clone().unwrap())
-                .with_ansi(false)
-                .with_target(false)
-                .init();
-        } else {
-            tracing_subscriber::fmt()
-                .with_max_level(log_level)
-                .with_target(false)
-                .init();
-        }
+    let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
+    if is_tui_mode || is_exec_mode {
+        logging::init_file_logging(log_level);
     } else {
         tracing_subscriber::fmt()
             .with_max_level(log_level)
