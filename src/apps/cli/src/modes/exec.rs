@@ -10,6 +10,7 @@ use bitfun_events::AgenticEvent;
 
 use crate::agent::{agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter, Agent};
 use crate::config::CliConfig;
+use crate::diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind};
 
 pub struct ExecMode {
     #[allow(dead_code)]
@@ -47,6 +48,19 @@ impl ExecMode {
         }
     }
 
+    fn exit_context<'a>(
+        &'a self,
+        session_id: Option<&'a str>,
+        turn_id: Option<&'a str>,
+    ) -> ExitContext<'a> {
+        ExitContext {
+            session_id,
+            turn_id,
+            agent_type: Some(self.agent_type.as_str()),
+            workspace: self.workspace_path.as_deref(),
+        }
+    }
+
     fn get_git_diff(&self) -> Option<String> {
         let workspace = self.workspace_path.as_ref()?;
 
@@ -72,24 +86,46 @@ impl ExecMode {
 
     pub async fn run(&mut self) -> Result<()> {
         tracing::info!(
-            "Executing command, Agent: {}, Message: {}",
-            self.agent_type,
-            self.message
+            agent_type = %self.agent_type,
+            message_len = self.message.len(),
+            workspace = ?self.workspace_path,
+            "Executing command"
         );
 
         println!("Executing: {}", self.message);
         println!();
 
         // Ensure session and send message
-        let session_id = self.agent.ensure_session(&self.agent_type).await?;
+        let session_id = self
+            .agent
+            .ensure_session(&self.agent_type)
+            .await
+            .map_err(|e| {
+                emit_exit_diagnostic(
+                    ExitKind::SessionCreateFailed,
+                    &e.to_string(),
+                    &self.exit_context(None, None),
+                );
+                e
+            })?;
+        tracing::info!(session_id = %session_id, "Session ready");
         let event_queue = self.agent.event_queue().clone();
 
         println!("Thinking...");
 
-        let _turn_id = self
+        let turn_id = self
             .agent
             .send_message(self.message.clone(), &self.agent_type)
-            .await?;
+            .await
+            .map_err(|e| {
+                emit_exit_diagnostic(
+                    ExitKind::SendMessageFailed,
+                    &e.to_string(),
+                    &self.exit_context(Some(&session_id), None),
+                );
+                e
+            })?;
+        tracing::info!(session_id = %session_id, turn_id = %turn_id, "Message sent");
 
         // Consume events from EventQueue until turn completes
         let mut total_tool_calls = 0usize;
@@ -215,6 +251,11 @@ impl ExecMode {
 
                     AgenticEvent::DialogTurnFailed { error, .. } => {
                         eprintln!("\nExecution failed: {}", error);
+                        emit_exit_diagnostic(
+                            ExitKind::DialogTurnFailed,
+                            error,
+                            &self.exit_context(Some(&session_id), Some(&turn_id)),
+                        );
                         self.output_patch_if_needed();
                         return Err(anyhow::anyhow!("Execution failed: {}", error));
                     }
@@ -227,6 +268,11 @@ impl ExecMode {
 
                     AgenticEvent::SystemError { error, .. } => {
                         eprintln!("\nSystem error: {}", error);
+                        emit_exit_diagnostic(
+                            ExitKind::SystemError,
+                            error,
+                            &self.exit_context(Some(&session_id), Some(&turn_id)),
+                        );
                         self.output_patch_if_needed();
                         return Err(anyhow::anyhow!("System error: {}", error));
                     }
@@ -269,7 +315,7 @@ impl ExecMode {
                     println!("{}", patch);
                     println!("---PATCH_END---");
                 } else {
-                    match std::fs::write(output_target, &patch) {
+                    match write_patch_to_path(output_target, &patch) {
                         Ok(_) => {
                             println!("Patch saved to: {}", output_target);
                             println!("({} bytes)", patch.len());
@@ -286,5 +332,36 @@ impl ExecMode {
                 println!("(Unable to generate patch)");
             }
         }
+    }
+}
+
+pub(crate) fn write_patch_to_path(output_target: &str, patch: &str) -> std::io::Result<()> {
+    use std::path::Path;
+
+    let path = Path::new(output_target);
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+    std::fs::write(path, patch)
+}
+
+#[cfg(test)]
+mod patch_tests {
+    use super::write_patch_to_path;
+
+    #[test]
+    fn write_patch_to_path_creates_nested_parent_directories() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let patch_path = temp.path().join("parent/child/out.patch");
+        write_patch_to_path(
+            patch_path.to_str().expect("utf8 path"),
+            "diff content",
+        )
+        .expect("write patch");
+
+        let written = std::fs::read_to_string(&patch_path).expect("read patch");
+        assert_eq!(written, "diff content");
     }
 }

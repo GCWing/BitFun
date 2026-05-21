@@ -9,6 +9,8 @@ mod commands;
 /// - Single command execution
 /// - Batch task processing
 mod config;
+mod diagnostics;
+mod logging;
 mod modes;
 mod prompts;
 mod ui;
@@ -378,31 +380,11 @@ async fn main() -> Result<()> {
 
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
     let is_acp_mode = matches!(cli.command, Some(Commands::Acp { .. }));
+    let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
+    let uses_file_log = is_tui_mode || is_exec_mode;
 
-    if is_tui_mode {
-        use std::fs::OpenOptions;
-
-        let log_dir = CliConfig::config_dir()
-            .ok()
-            .map(|d| d.join("logs"))
-            .unwrap_or_else(|| std::env::temp_dir().join("bitfun-cli"));
-
-        std::fs::create_dir_all(&log_dir).ok();
-        let log_file = log_dir.join("bitfun-cli.log");
-
-        if let Ok(file) = OpenOptions::new().create(true).append(true).open(log_file) {
-            tracing_subscriber::fmt()
-                .with_max_level(log_level)
-                .with_writer(move || file.try_clone().unwrap())
-                .with_ansi(false)
-                .with_target(false)
-                .init();
-        } else {
-            tracing_subscriber::fmt()
-                .with_max_level(log_level)
-                .with_target(false)
-                .init();
-        }
+    if uses_file_log {
+        logging::init_file_logging(log_level);
     } else if is_acp_mode {
         tracing_subscriber::fmt()
             .with_max_level(log_level)
@@ -437,6 +419,7 @@ async fn main() -> Result<()> {
             output_patch,
             confirm,
         }) => {
+            let agent_type = agent.clone();
             let workspace_path_resolved = std::env::current_dir().ok();
 
             if let Some(ref ws_path) = workspace_path_resolved {
@@ -445,7 +428,20 @@ async fn main() -> Result<()> {
 
             let skip_confirmation = !confirm;
             let (agentic_system, original_skip_confirmation) =
-                initialize_core_services(skip_confirmation).await?;
+                initialize_core_services(skip_confirmation)
+                    .await
+                    .map_err(|e| {
+                        crate::diagnostics::emit_exit_diagnostic(
+                            crate::diagnostics::ExitKind::ExecError,
+                            &e.to_string(),
+                            &crate::diagnostics::ExitContext {
+                                agent_type: Some(agent_type.as_str()),
+                                workspace: workspace_path_resolved.as_deref(),
+                                ..Default::default()
+                            },
+                        );
+                        e
+                    })?;
 
             let mut exec_mode = ExecMode::new(
                 config,
