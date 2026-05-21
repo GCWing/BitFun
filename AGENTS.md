@@ -21,7 +21,7 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 | Service core owner crate | `src/crates/services-core` | [AGENTS.md](src/crates/services-core/AGENTS.md) |
 | Service integrations owner crate | `src/crates/services-integrations` | [AGENTS.md](src/crates/services-integrations/AGENTS.md) |
 | Agent tool contracts | `src/crates/agent-tools` | [AGENTS.md](src/crates/agent-tools/AGENTS.md) |
-| Tool pack scaffold | `src/crates/tool-packs` | [AGENTS.md](src/crates/tool-packs/AGENTS.md) |
+| Tool pack provider plan | `src/crates/tool-packs` | [AGENTS.md](src/crates/tool-packs/AGENTS.md) |
 | Product domains | `src/crates/product-domains` | [AGENTS.md](src/crates/product-domains/AGENTS.md) |
 | Transport adapters | `src/crates/transport` | (use core guide) |
 | API layer | `src/crates/api-layer` | (use core guide) |

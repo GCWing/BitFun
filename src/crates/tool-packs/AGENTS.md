@@ -2,8 +2,8 @@
 
 Scope: this guide applies to `src/crates/tool-packs`.
 
-`bitfun-tool-packs` currently owns tool feature-group scaffold metadata only.
-It does not own concrete tool implementations yet.
+`bitfun-tool-packs` owns tool feature-group scaffold metadata and the product
+tool provider group plan. It does not own concrete tool implementations yet.
 
 ## Guardrails
 
@@ -12,9 +12,9 @@ It does not own concrete tool implementations yet.
 - Do not depend on `bitfun-core`, concrete service crates, app crates, Tauri,
   Git, MCP, network clients, or CLI UI dependencies unless H1 explicitly moves a
   reviewed tool runtime owner here.
-- Do not own manifest/exposure contracts, runtime manifest assembly,
+- Do not own manifest/exposure contracts, concrete runtime manifest assembly,
   `GetToolSpec` execution, collapsed unlock state, snapshot decoration, or
-  `ToolUseContext`.
+  `ToolUseContext`. Provider group plans may list group ids and tool names only.
 - Future concrete tool migration must preserve product registry order,
   expanded/collapsed exposure, prompt stubs, unlock state, cancellation, runtime
   restrictions, and Deep Review tool flow.

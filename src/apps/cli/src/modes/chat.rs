@@ -9,6 +9,7 @@ use crossterm::event::{
 };
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use std::collections::HashMap;
 use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -50,72 +51,6 @@ use bitfun_core::agentic::tools::implementations::skills::{
     ModeSkillInfo, SkillInfo,
 };
 use bitfun_core::service::config::GlobalConfigManager;
-
-fn event_subagent_parent_info(
-    event: &bitfun_events::AgenticEvent,
-) -> Option<&bitfun_events::SubagentParentInfo> {
-    use bitfun_events::AgenticEvent;
-
-    match event {
-        AgenticEvent::DialogTurnStarted {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::DialogTurnCompleted {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::DialogTurnCancelled {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::DialogTurnFailed {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::ContextCompressionStarted {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::ContextCompressionCompleted {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::ContextCompressionFailed {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::ModelRoundStarted {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::ModelRoundCompleted {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::TextChunk {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::ThinkingChunk {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::ToolEvent {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::DeepReviewQueueStateChanged {
-            subagent_parent_info,
-            ..
-        }
-        | AgenticEvent::UserSteeringInjected {
-            subagent_parent_info,
-            ..
-        } => subagent_parent_info.as_ref(),
-        _ => None,
-    }
-}
 
 /// Keyboard shortcuts help text
 const KEYBOARD_SHORTCUTS_HELP: &str = "\
@@ -472,6 +407,7 @@ impl ChatMode {
         let mut exit_reason = ChatExitReason::Quit;
         let mut should_quit = false;
         let mut needs_redraw = true;
+        let mut subagent_parent_tools: HashMap<String, String> = HashMap::new();
         let mut last_spinner_redraw = Instant::now();
         let mut pending_resize_at: Option<Instant> = None;
         let spinner_redraw_interval = Duration::from_millis(SPINNER_REDRAW_INTERVAL_MS);
@@ -557,16 +493,31 @@ impl ChatMode {
             for envelope in events {
                 let event = &envelope.event;
 
+                if let AgenticEvent::SubagentSessionLinked {
+                    session_id: subagent_session_id,
+                    parent_session_id,
+                    parent_tool_call_id,
+                    ..
+                } = event
+                {
+                    if parent_session_id == &session_id {
+                        subagent_parent_tools
+                            .insert(subagent_session_id.clone(), parent_tool_call_id.clone());
+                    }
+                    continue;
+                }
+
                 // Check if this is a subagent event that belongs to our session
                 if event.session_id() != Some(&session_id) {
                     // Check if this event was emitted by a subagent whose parent is in our session
-                    if let Some(parent_info) = event_subagent_parent_info(event) {
-                        if parent_info.session_id == session_id {
-                            // Forward subagent event to the parent Task tool for progress display
-                            chat_state.handle_subagent_event(&parent_info.tool_call_id, event);
-                            chat_view.invalidate_lines_cache();
-                            needs_redraw = true;
-                        }
+                    if let Some(parent_tool_call_id) = event
+                        .session_id()
+                        .and_then(|event_session_id| subagent_parent_tools.get(event_session_id))
+                    {
+                        // Forward subagent event to the parent Task tool for progress display
+                        chat_state.handle_subagent_event(parent_tool_call_id, event);
+                        chat_view.invalidate_lines_cache();
+                        needs_redraw = true;
                     }
                     continue;
                 }

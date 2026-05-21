@@ -890,6 +890,17 @@ where
         )
         .await
     }
+
+    pub async fn call_results(
+        &self,
+        input: &Value,
+        loaded_collapsed_tools: &[String],
+        context: &Context,
+    ) -> Result<Vec<ToolResult>, GetToolSpecExecutionError> {
+        self.execute(input, loaded_collapsed_tools, context)
+            .await
+            .map(|result| vec![result])
+    }
 }
 
 pub async fn resolve_contextual_visible_tools_from_provider<Tool, Context, Provider>(

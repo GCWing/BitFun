@@ -2,8 +2,7 @@
 
 use crate::agentic::tools::catalog_provider::{
     build_product_get_tool_spec_catalog_description, product_get_tool_spec_runtime,
-    resolve_product_get_tool_spec_execution_result, ProductGetToolSpecRuntime,
-    ProductToolCatalogProvider,
+    resolve_product_get_tool_spec_results, ProductGetToolSpecRuntime, ProductToolCatalogProvider,
 };
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
@@ -90,10 +89,9 @@ impl Tool for GetToolSpecTool {
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let result = resolve_product_get_tool_spec_execution_result(input, context, self.name())
+        resolve_product_get_tool_spec_results(input, context, self.name())
             .await
-            .map_err(map_get_tool_spec_execution_error)?;
-        Ok(vec![result])
+            .map_err(map_get_tool_spec_execution_error)
     }
 }
 

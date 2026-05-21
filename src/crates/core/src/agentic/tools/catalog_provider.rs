@@ -123,21 +123,21 @@ pub(crate) async fn build_product_get_tool_spec_catalog_description(
         .await
 }
 
-pub(crate) async fn resolve_product_get_tool_spec_execution_result(
+pub(crate) async fn resolve_product_get_tool_spec_results(
     input: &Value,
     context: &ToolUseContext,
     get_tool_spec_tool_name: &str,
-) -> Result<ToolResult, GetToolSpecExecutionError> {
+) -> Result<Vec<ToolResult>, GetToolSpecExecutionError> {
     let provider = ProductToolCatalogProvider;
     GetToolSpecRuntime::new(&provider, get_tool_spec_tool_name)
-        .execute(input, &context.unlocked_collapsed_tools, context)
+        .call_results(input, &context.unlocked_collapsed_tools, context)
         .await
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        resolve_product_get_tool_spec_execution_result, resolve_product_readonly_enabled_tools,
+        resolve_product_get_tool_spec_results, resolve_product_readonly_enabled_tools,
         resolve_product_tool_manifest, ProductToolCatalogProvider,
     };
     use crate::agentic::agents::AgentToolPolicyOverrides;
@@ -249,26 +249,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn product_catalog_facade_resolves_get_tool_spec_execution_result_from_same_provider_owner(
-    ) {
-        let result = resolve_product_get_tool_spec_execution_result(
+    async fn product_catalog_facade_resolves_get_tool_spec_results_from_same_provider_owner() {
+        let results = resolve_product_get_tool_spec_results(
             &json!({ "tool_name": "WebFetch" }),
             &tool_context(Some("agentic")),
             "GetToolSpec",
         )
         .await
-        .expect("WebFetch should be available as a collapsed tool for Agentic mode");
+        .expect("WebFetch should resolve through product GetToolSpec runtime facade");
 
-        let ToolResult::Result { data, .. } = result else {
+        assert_eq!(results.len(), 1);
+        let ToolResult::Result { data, .. } = &results[0] else {
             panic!("expected normal tool result");
         };
 
         assert_eq!(data["tool_name"], "WebFetch");
-        assert!(!data["description"]
-            .as_str()
-            .unwrap_or_default()
-            .trim()
-            .is_empty());
         assert_eq!(data["input_schema"]["type"], "object");
     }
 

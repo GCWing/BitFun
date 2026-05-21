@@ -1070,7 +1070,7 @@ const forbiddenContentUnderRules = [
   {
     path: 'src/crates/tool-packs/src',
     reason:
-      'tool-packs must not own product tool manifest/exposure or GetToolSpec runtime without an approved provider migration',
+      'tool-packs may own provider group plans, but not product tool manifest/exposure or GetToolSpec runtime',
     patterns: [
       {
         regex: /\bGetToolSpecTool\b/,
@@ -1290,6 +1290,10 @@ const requiredContentRules = [
         message: 'missing provider-backed GetToolSpec runtime facade',
       },
       {
+        regex: /\bpub async fn call_results\b/,
+        message: 'missing provider-backed GetToolSpec Tool-result vector adapter facade',
+      },
+      {
         regex: /\bpub struct GetToolSpecLoadObservation\b/,
         message: 'missing pure GetToolSpec load observation contract',
       },
@@ -1443,7 +1447,7 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/tools/static_providers.rs',
     reason:
-      'core owns builtin product tool provider groups until concrete tool-pack migration exists',
+      'core materializes concrete tools from the tool-pack provider plan until concrete tools migrate',
     patterns: [
       {
         regex: /\bbuiltin_static_tool_providers\b/,
@@ -1454,20 +1458,12 @@ const requiredContentRules = [
         message: 'missing generic static provider group contract use',
       },
       {
-        regex: /core\.basic/,
-        message: 'missing core basic tool provider group',
+        regex: /\bproduct_tool_provider_group_plan\b/,
+        message: 'missing tool-pack provider group plan delegation',
       },
       {
-        regex: /core\.agent/,
-        message: 'missing core agent tool provider group',
-      },
-      {
-        regex: /core\.session/,
-        message: 'missing core session tool provider group',
-      },
-      {
-        regex: /core\.integration/,
-        message: 'missing core integration tool provider group',
+        regex: /\bmaterialize_tool\b/,
+        message: 'missing core concrete tool materialization boundary',
       },
       {
         regex: /\bGetToolSpecTool::new\(\)/,
@@ -1560,8 +1556,8 @@ const requiredContentRules = [
         message: 'missing product readonly enabled tools facade',
       },
       {
-        regex: /\bresolve_product_get_tool_spec_execution_result\b/,
-        message: 'missing product GetToolSpec execution result facade',
+        regex: /\bresolve_product_get_tool_spec_results\b/,
+        message: 'missing product GetToolSpec Tool-result vector facade',
       },
       {
         regex: /\bunlocked_collapsed_tools\b/,
@@ -1660,6 +1656,14 @@ const requiredContentRules = [
         regex: /\bpub fn enabled_feature_groups\b/,
         message: 'missing tool-pack compile-time feature metadata helper',
       },
+      {
+        regex: /\bpub struct ToolProviderGroupPlan\b/,
+        message: 'missing tool-pack provider group plan contract',
+      },
+      {
+        regex: /\bpub fn product_tool_provider_group_plan\b/,
+        message: 'missing product tool provider group plan',
+      },
     ],
   },
   {
@@ -1703,8 +1707,8 @@ const requiredContentRules = [
         message: 'missing GetToolSpec owner type',
       },
       {
-        regex: /\bresolve_product_get_tool_spec_execution_result\b/,
-        message: 'missing product GetToolSpec execution result facade delegation',
+        regex: /\bresolve_product_get_tool_spec_results\b/,
+        message: 'missing product GetToolSpec Tool-result vector facade delegation',
       },
       {
         regex: /\bmap_get_tool_spec_execution_error\b/,
@@ -3412,6 +3416,7 @@ function runManifestParserSelfTest() {
         'resolve_get_tool_spec_execution_plan',
         'resolve_get_tool_spec_execution_result_from_provider',
         'GetToolSpecRuntime',
+        'call_results',
         'GetToolSpecLoadObservation',
         'collect_loaded_collapsed_tool_names',
         'sort_tool_manifest_definitions',
@@ -3521,10 +3526,8 @@ function runManifestParserSelfTest() {
       contracts: [
         'builtin_static_tool_providers',
         'StaticToolProviderGroup',
-        'core.basic',
-        'core.agent',
-        'core.session',
-        'core.integration',
+        'product_tool_provider_group_plan',
+        'materialize_tool',
         'GetToolSpecTool',
       ],
     },
@@ -3549,14 +3552,17 @@ function runManifestParserSelfTest() {
         'resolve_get_tool_spec_execution_plan',
         'resolve_get_tool_spec_execution_result_from_provider',
         'GetToolSpecRuntime',
+        'call_results',
       ],
     },
     {
       path: 'src/crates/tool-packs/src/lib.rs',
       contracts: [
         'ToolPackFeatureGroup',
+        'ToolProviderGroupPlan',
         'all_feature_groups',
         'enabled_feature_groups',
+        'product_tool_provider_group_plan',
       ],
     },
     {
@@ -3585,7 +3591,7 @@ function runManifestParserSelfTest() {
         'product_get_tool_spec_runtime',
         'resolve_product_tool_manifest',
         'resolve_product_readonly_enabled_tools',
-        'resolve_product_get_tool_spec_execution_result',
+        'resolve_product_get_tool_spec_results',
         'unlocked_collapsed_tools',
         'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
         'GetToolSpec requires agent type context',
@@ -3608,7 +3614,7 @@ function runManifestParserSelfTest() {
         'build_product_get_tool_spec_catalog_description',
         'product_get_tool_spec_runtime',
         'with_runtime',
-        'resolve_product_get_tool_spec_execution_result',
+        'resolve_product_get_tool_spec_results',
         'map_get_tool_spec_execution_error',
       ],
     },

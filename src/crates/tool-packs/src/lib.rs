@@ -73,9 +73,104 @@ pub fn enabled_feature_groups() -> Vec<ToolPackFeatureGroup> {
     .collect()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ToolProviderGroupPlan {
+    provider_id: &'static str,
+    feature_groups: &'static [ToolPackFeatureGroup],
+    tool_names: &'static [&'static str],
+}
+
+impl ToolProviderGroupPlan {
+    pub const fn provider_id(self) -> &'static str {
+        self.provider_id
+    }
+
+    pub const fn feature_groups(self) -> &'static [ToolPackFeatureGroup] {
+        self.feature_groups
+    }
+
+    pub const fn tool_names(self) -> &'static [&'static str] {
+        self.tool_names
+    }
+}
+
+const CORE_BASIC_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::Basic];
+const CORE_AGENT_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::AgentControl];
+const CORE_SESSION_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::AgentControl];
+const CORE_INTEGRATION_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
+    ToolPackFeatureGroup::BrowserWeb,
+    ToolPackFeatureGroup::Mcp,
+    ToolPackFeatureGroup::Git,
+    ToolPackFeatureGroup::MiniApp,
+    ToolPackFeatureGroup::ComputerUse,
+    ToolPackFeatureGroup::ImageAnalysis,
+    ToolPackFeatureGroup::AgentControl,
+];
+
+const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
+    ToolProviderGroupPlan {
+        provider_id: "core.basic",
+        feature_groups: CORE_BASIC_FEATURE_GROUPS,
+        tool_names: &[
+            "LS", "Read", "Glob", "Grep", "Write", "Edit", "Delete", "Bash",
+        ],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.agent",
+        feature_groups: CORE_AGENT_FEATURE_GROUPS,
+        tool_names: &[
+            "Task",
+            "Skill",
+            "AskUserQuestion",
+            "TodoWrite",
+            "CreatePlan",
+            "submit_code_review",
+            "GetToolSpec",
+            "GetFileDiff",
+            "Log",
+        ],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.session",
+        feature_groups: CORE_SESSION_FEATURE_GROUPS,
+        tool_names: &[
+            "TerminalControl",
+            "SessionControl",
+            "SessionMessage",
+            "SessionHistory",
+            "Cron",
+        ],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.integration",
+        feature_groups: CORE_INTEGRATION_FEATURE_GROUPS,
+        tool_names: &[
+            "WebSearch",
+            "WebFetch",
+            "ListMCPResources",
+            "ReadMCPResource",
+            "ListMCPPrompts",
+            "GetMCPPrompt",
+            "GenerativeUI",
+            "Git",
+            "InitMiniApp",
+            "ControlHub",
+            "ComputerUse",
+            "Playbook",
+        ],
+    },
+];
+
+pub fn product_tool_provider_group_plan() -> &'static [ToolProviderGroupPlan] {
+    PRODUCT_TOOL_PROVIDER_GROUP_PLAN
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{all_feature_groups, enabled_feature_groups, ToolPackFeatureGroup};
+    use super::{
+        all_feature_groups, enabled_feature_groups, product_tool_provider_group_plan,
+        ToolPackFeatureGroup,
+    };
 
     #[test]
     fn all_feature_groups_cover_planned_tool_pack_scaffold() {
@@ -147,5 +242,109 @@ mod tests {
         assert_eq!(ToolPackFeatureGroup::ImageAnalysis.id(), "image-analysis");
         assert_eq!(ToolPackFeatureGroup::MiniApp.id(), "miniapp");
         assert_eq!(ToolPackFeatureGroup::AgentControl.id(), "agent-control");
+    }
+
+    #[test]
+    fn product_provider_group_plan_preserves_core_runtime_order() {
+        let provider_ids = product_tool_provider_group_plan()
+            .iter()
+            .map(|group| group.provider_id())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            provider_ids,
+            vec![
+                "core.basic",
+                "core.agent",
+                "core.session",
+                "core.integration"
+            ]
+        );
+    }
+
+    #[test]
+    fn product_provider_group_plan_preserves_builtin_tool_order() {
+        let tool_names = product_tool_provider_group_plan()
+            .iter()
+            .flat_map(|group| group.tool_names().iter().copied())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            tool_names,
+            vec![
+                "LS",
+                "Read",
+                "Glob",
+                "Grep",
+                "Write",
+                "Edit",
+                "Delete",
+                "Bash",
+                "Task",
+                "Skill",
+                "AskUserQuestion",
+                "TodoWrite",
+                "CreatePlan",
+                "submit_code_review",
+                "GetToolSpec",
+                "GetFileDiff",
+                "Log",
+                "TerminalControl",
+                "SessionControl",
+                "SessionMessage",
+                "SessionHistory",
+                "Cron",
+                "WebSearch",
+                "WebFetch",
+                "ListMCPResources",
+                "ReadMCPResource",
+                "ListMCPPrompts",
+                "GetMCPPrompt",
+                "GenerativeUI",
+                "Git",
+                "InitMiniApp",
+                "ControlHub",
+                "ComputerUse",
+                "Playbook",
+            ]
+        );
+    }
+
+    #[test]
+    fn product_provider_group_plan_preserves_feature_group_mapping() {
+        let feature_groups = product_tool_provider_group_plan()
+            .iter()
+            .map(|group| {
+                (
+                    group.provider_id(),
+                    group
+                        .feature_groups()
+                        .iter()
+                        .map(|feature_group| feature_group.id())
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            feature_groups,
+            vec![
+                ("core.basic", vec!["basic"]),
+                ("core.agent", vec!["agent-control"]),
+                ("core.session", vec!["agent-control"]),
+                (
+                    "core.integration",
+                    vec![
+                        "browser-web",
+                        "mcp",
+                        "git",
+                        "miniapp",
+                        "computer-use",
+                        "image-analysis",
+                        "agent-control",
+                    ]
+                ),
+            ]
+        );
     }
 }

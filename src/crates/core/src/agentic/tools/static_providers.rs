@@ -3,63 +3,61 @@
 use crate::agentic::tools::framework::Tool;
 use crate::agentic::tools::implementations::*;
 use bitfun_agent_tools::StaticToolProviderGroup;
+use bitfun_tool_packs::product_tool_provider_group_plan;
 use std::sync::Arc;
 
 pub(crate) fn builtin_static_tool_providers() -> Vec<StaticToolProviderGroup<dyn Tool>> {
-    vec![
-        StaticToolProviderGroup::new(
-            "core.basic",
-            vec![
-                Arc::new(LSTool::new()),
-                Arc::new(FileReadTool::new()),
-                Arc::new(GlobTool::new()),
-                Arc::new(GrepTool::new()),
-                Arc::new(FileWriteTool::new()),
-                Arc::new(FileEditTool::new()),
-                Arc::new(DeleteFileTool::new()),
-                Arc::new(BashTool::new()),
-            ],
-        ),
-        StaticToolProviderGroup::new(
-            "core.agent",
-            vec![
-                Arc::new(TaskTool::new()),
-                Arc::new(SkillTool::new()),
-                Arc::new(AskUserQuestionTool::new()),
-                Arc::new(TodoWriteTool::new()),
-                Arc::new(CreatePlanTool::new()),
-                Arc::new(CodeReviewTool::new()),
-                Arc::new(GetToolSpecTool::new()),
-                Arc::new(GetFileDiffTool::new()),
-                Arc::new(LogTool::new()),
-            ],
-        ),
-        StaticToolProviderGroup::new(
-            "core.session",
-            vec![
-                Arc::new(TerminalControlTool::new()),
-                Arc::new(SessionControlTool::new()),
-                Arc::new(SessionMessageTool::new()),
-                Arc::new(SessionHistoryTool::new()),
-                Arc::new(CronTool::new()),
-            ],
-        ),
-        StaticToolProviderGroup::new(
-            "core.integration",
-            vec![
-                Arc::new(WebSearchTool::new()),
-                Arc::new(WebFetchTool::new()),
-                Arc::new(ListMCPResourcesTool::new()),
-                Arc::new(ReadMCPResourceTool::new()),
-                Arc::new(ListMCPPromptsTool::new()),
-                Arc::new(GetMCPPromptTool::new()),
-                Arc::new(GenerativeUITool::new()),
-                Arc::new(GitTool::new()),
-                Arc::new(InitMiniAppTool::new()),
-                Arc::new(ControlHubTool::new()),
-                Arc::new(ComputerUseTool::new()),
-                Arc::new(PlaybookTool::new()),
-            ],
-        ),
-    ]
+    product_tool_provider_group_plan()
+        .iter()
+        .map(|group| {
+            StaticToolProviderGroup::new(group.provider_id(), materialize_tools(group.tool_names()))
+        })
+        .collect()
+}
+
+fn materialize_tools(tool_names: &[&str]) -> Vec<Arc<dyn Tool>> {
+    tool_names
+        .iter()
+        .map(|tool_name| materialize_tool(tool_name))
+        .collect()
+}
+
+fn materialize_tool(tool_name: &str) -> Arc<dyn Tool> {
+    match tool_name {
+        "LS" => Arc::new(LSTool::new()),
+        "Read" => Arc::new(FileReadTool::new()),
+        "Glob" => Arc::new(GlobTool::new()),
+        "Grep" => Arc::new(GrepTool::new()),
+        "Write" => Arc::new(FileWriteTool::new()),
+        "Edit" => Arc::new(FileEditTool::new()),
+        "Delete" => Arc::new(DeleteFileTool::new()),
+        "Bash" => Arc::new(BashTool::new()),
+        "Task" => Arc::new(TaskTool::new()),
+        "Skill" => Arc::new(SkillTool::new()),
+        "AskUserQuestion" => Arc::new(AskUserQuestionTool::new()),
+        "TodoWrite" => Arc::new(TodoWriteTool::new()),
+        "CreatePlan" => Arc::new(CreatePlanTool::new()),
+        "submit_code_review" => Arc::new(CodeReviewTool::new()),
+        "GetToolSpec" => Arc::new(GetToolSpecTool::new()),
+        "GetFileDiff" => Arc::new(GetFileDiffTool::new()),
+        "Log" => Arc::new(LogTool::new()),
+        "TerminalControl" => Arc::new(TerminalControlTool::new()),
+        "SessionControl" => Arc::new(SessionControlTool::new()),
+        "SessionMessage" => Arc::new(SessionMessageTool::new()),
+        "SessionHistory" => Arc::new(SessionHistoryTool::new()),
+        "Cron" => Arc::new(CronTool::new()),
+        "WebSearch" => Arc::new(WebSearchTool::new()),
+        "WebFetch" => Arc::new(WebFetchTool::new()),
+        "ListMCPResources" => Arc::new(ListMCPResourcesTool::new()),
+        "ReadMCPResource" => Arc::new(ReadMCPResourceTool::new()),
+        "ListMCPPrompts" => Arc::new(ListMCPPromptsTool::new()),
+        "GetMCPPrompt" => Arc::new(GetMCPPromptTool::new()),
+        "GenerativeUI" => Arc::new(GenerativeUITool::new()),
+        "Git" => Arc::new(GitTool::new()),
+        "InitMiniApp" => Arc::new(InitMiniAppTool::new()),
+        "ControlHub" => Arc::new(ControlHubTool::new()),
+        "ComputerUse" => Arc::new(ComputerUseTool::new()),
+        "Playbook" => Arc::new(PlaybookTool::new()),
+        _ => panic!("unknown product tool provider plan entry: {tool_name}"),
+    }
 }

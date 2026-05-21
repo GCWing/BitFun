@@ -1703,6 +1703,72 @@ async fn get_tool_spec_runtime_facade_owns_catalog_and_execution_paths() {
     );
 }
 
+#[tokio::test]
+async fn get_tool_spec_runtime_facade_owns_tool_result_vector_adapter_shape() {
+    let provider = ContextualManifestSnapshotProvider {
+        tools: vec![contextual_manifest_tool(
+            "WebFetch",
+            ToolExposure::Collapsed,
+            None,
+        )],
+    };
+    let context = ManifestTestContext { agent: "agentic" };
+    let runtime = GetToolSpecRuntime::<ContextualManifestTool, ManifestTestContext, _>::new(
+        &provider,
+        GET_TOOL_SPEC_TOOL_NAME,
+    );
+
+    let mut results = runtime
+        .call_results(&json!({ "tool_name": "WebFetch" }), &[], &context)
+        .await
+        .expect("runtime facade should produce the Tool impl result vector shape");
+
+    assert_eq!(results.len(), 1);
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = results.remove(0)
+    else {
+        panic!("expected normal detail result");
+    };
+    assert_eq!(data["tool_name"], "WebFetch");
+    assert!(result_for_assistant
+        .expect("assistant detail")
+        .contains("<description>\nWebFetch description for agentic"));
+    assert_eq!(image_attachments, None);
+
+    let duplicate_runtime =
+        GetToolSpecRuntime::<ContextualManifestTool, ManifestTestContext, _>::new(
+            &ErroringGetToolSpecProvider,
+            GET_TOOL_SPEC_TOOL_NAME,
+        );
+    let duplicate_results = duplicate_runtime
+        .call_results(
+            &json!({ "tool_name": "WebFetch" }),
+            &["WebFetch".to_string()],
+            &context,
+        )
+        .await
+        .expect("duplicate-load path should not consult provider detail");
+
+    assert_eq!(duplicate_results.len(), 1);
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = &duplicate_results[0]
+    else {
+        panic!("expected duplicate-load result");
+    };
+    assert_eq!(data["tool_name"], "WebFetch");
+    assert_eq!(
+        result_for_assistant.as_deref(),
+        Some("Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use 'WebFetch' directly.")
+    );
+    assert!(image_attachments.is_none());
+}
+
 #[test]
 fn get_tool_spec_runtime_facade_owns_static_tool_surface() {
     let provider = ContextualManifestSnapshotProvider { tools: Vec::new() };

@@ -427,6 +427,23 @@ mod tests {
     }
 
     #[test]
+    fn builtin_static_tool_providers_follow_tool_pack_group_plan() {
+        let provider_ids = builtin_static_tool_providers()
+            .into_iter()
+            .map(|provider| provider.provider_id())
+            .collect::<Vec<_>>();
+        let planned_provider_ids = bitfun_tool_packs::product_tool_provider_group_plan()
+            .iter()
+            .map(|group| group.provider_id())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            provider_ids, planned_provider_ids,
+            "core must materialize provider groups from the tool-pack plan"
+        );
+    }
+
+    #[test]
     fn product_tool_runtime_assembly_preserves_core_owned_registry_contract() {
         let assembly = ProductToolRuntimeAssembly::default();
 

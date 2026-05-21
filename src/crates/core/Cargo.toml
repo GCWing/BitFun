@@ -90,6 +90,9 @@ bitfun-agent-stream = { path = "../agent-stream" }
 # Agent tool contracts
 bitfun-agent-tools = { path = "../agent-tools" }
 
+# Tool pack provider plan
+bitfun-tool-packs = { path = "../tool-packs", features = ["product-full"] }
+
 # Core service owner crate
 bitfun-services-core = { path = "../services-core" }
 
