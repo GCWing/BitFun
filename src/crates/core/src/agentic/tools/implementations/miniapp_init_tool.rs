@@ -1,6 +1,6 @@
 //! InitMiniApp tool — create a new MiniApp skeleton; AI then uses generic file tools to edit.
 
-use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::infrastructure::events::{emit_global_event, BackendEvent};
 use crate::miniapp::try_get_global_miniapp_manager;
 use crate::miniapp::types::{
@@ -56,6 +56,18 @@ impl Default for InitMiniAppTool {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::InitMiniAppTool;
+    use crate::agentic::tools::framework::{Tool, ToolExposure};
+
+    #[test]
+    fn init_miniapp_stays_expanded_for_assistant_creation() {
+        let tool = InitMiniAppTool::new();
+        assert_eq!(tool.default_exposure(), ToolExposure::Expanded);
+    }
+}
+
 #[async_trait]
 impl Tool for InitMiniAppTool {
     fn name(&self) -> &str {
@@ -75,10 +87,6 @@ Returns app_id and the app root directory. Use the root directory and file names
 
     fn short_description(&self) -> String {
         "Create a new MiniApp skeleton in the Toolbox.".to_string()
-    }
-
-    fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {
@@ -196,6 +204,7 @@ Returns app_id and the app root directory. Use the root directory and file names
             "style": source_dir.join("style.css").to_string_lossy(),
             "html": source_dir.join("index.html").to_string_lossy(),
             "package": app_dir.join("package.json").to_string_lossy(),
+            "storage": app_dir.join("storage.json").to_string_lossy(),
         });
 
         let _ = emit_global_event(BackendEvent::Custom {
