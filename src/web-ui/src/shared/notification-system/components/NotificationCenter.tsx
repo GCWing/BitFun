@@ -341,7 +341,9 @@ export const NotificationCenter: React.FC = () => {
                   }
                   return newSet;
                 });
-                handleNotificationClick(notification);
+                if (!notification.read) {
+                  notificationService.markAsRead(notification.id);
+                }
               }}
               title={isExpanded ? t('common:actions.collapse') : t('common:actions.expand')}
             >
