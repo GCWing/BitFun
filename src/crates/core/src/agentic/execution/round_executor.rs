@@ -8,12 +8,15 @@ use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{ToolPathResolution, ToolUseContext};
-use crate::agentic::tools::implementations::file_write_tool::FileWriteTool;
+use crate::agentic::tools::implementations::file_write_tool::{
+    FileWriteTool, WRITE_TOOL_MODE_CONTEXT_KEY,
+};
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
 use crate::agentic::tools::ToolPathOperation;
 use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
+use crate::service::config::types::WriteToolMode;
 use crate::service::config::GlobalConfigManager;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -42,6 +45,15 @@ impl RoundExecutor {
 
     fn has_user_visible_assistant_text(text: &str) -> bool {
         !text.trim().is_empty()
+    }
+
+    fn write_tool_mode(context: &RoundContext) -> WriteToolMode {
+        WriteToolMode::from_context_var(
+            context
+                .context_vars
+                .get(WRITE_TOOL_MODE_CONTEXT_KEY)
+                .map(String::as_str),
+        )
     }
 
     pub fn new(
@@ -555,8 +567,11 @@ impl RoundExecutor {
         // model emit large file contents inside JSON tool-call arguments, which
         // is a major source of JSON parse failures.
         let tool_calls = stream_result.tool_calls.clone();
-        let tool_calls = self
-            .generate_write_tool_contents(
+        let tool_calls = if matches!(
+            Self::write_tool_mode(&context),
+            WriteToolMode::PlaintextFollowup
+        ) {
+            self.generate_write_tool_contents(
                 ai_client.clone(),
                 &context,
                 &round_id,
@@ -564,7 +579,10 @@ impl RoundExecutor {
                 tool_calls,
                 &cancel_token,
             )
-            .await?;
+            .await?
+        } else {
+            tool_calls
+        };
 
         // Execute tool calls
         debug!(
@@ -1990,8 +2008,18 @@ mod tests {
             cache_creation_token_count: Some(20),
         };
         let details = super::token_details_from_usage(&usage).expect("details");
-        assert_eq!(details.get("cachedContentTokenCount").and_then(|v| v.as_u64()), Some(30));
-        assert_eq!(details.get("cacheCreationTokenCount").and_then(|v| v.as_u64()), Some(20));
+        assert_eq!(
+            details
+                .get("cachedContentTokenCount")
+                .and_then(|v| v.as_u64()),
+            Some(30)
+        );
+        assert_eq!(
+            details
+                .get("cacheCreationTokenCount")
+                .and_then(|v| v.as_u64()),
+            Some(20)
+        );
     }
 
     #[test]
@@ -2006,7 +2034,12 @@ mod tests {
             cache_creation_token_count: None,
         };
         let details = super::token_details_from_usage(&usage).expect("details");
-        assert_eq!(details.get("cachedContentTokenCount").and_then(|v| v.as_u64()), Some(30));
+        assert_eq!(
+            details
+                .get("cachedContentTokenCount")
+                .and_then(|v| v.as_u64()),
+            Some(30)
+        );
         assert!(details.get("cacheCreationTokenCount").is_none());
     }
 

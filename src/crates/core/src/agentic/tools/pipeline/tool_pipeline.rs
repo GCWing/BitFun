@@ -19,8 +19,8 @@ use log::{debug, error, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
-use tokio::sync::{RwLock as TokioRwLock, oneshot};
-use tokio::time::{Duration, timeout};
+use tokio::sync::{oneshot, RwLock as TokioRwLock};
+use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
 /// A batch of tool tasks to execute together.
@@ -1319,6 +1319,19 @@ impl ToolPipeline {
                         );
                     }
                 }
+                if let Some(write_tool_mode) = task.context.context_vars.get("write_tool_mode") {
+                    if !write_tool_mode.is_empty() {
+                        map.insert(
+                            "write_tool_mode".to_string(),
+                            serde_json::json!(write_tool_mode),
+                        );
+                    }
+                }
+                if let Some(acp_transport) = task.context.context_vars.get("acp_transport") {
+                    if let Ok(flag) = acp_transport.parse::<bool>() {
+                        map.insert("acp_transport".to_string(), serde_json::json!(flag));
+                    }
+                }
                 let deep_review_parent_context =
                     task.context
                         .subagent_parent_info
@@ -1652,14 +1665,12 @@ mod tests {
             result.result.result["provided_arguments"],
             serde_json::Value::String("{\"operation\":\"log\"".to_string())
         );
-        assert!(
-            result
-                .result
-                .result_for_assistant
-                .as_deref()
-                .unwrap_or_default()
-                .contains("Provided arguments: {\"operation\":\"log\"")
-        );
+        assert!(result
+            .result
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Provided arguments: {\"operation\":\"log\""));
     }
 
     #[test]
@@ -1700,6 +1711,12 @@ mod tests {
             "primary_model_supports_image_understanding".to_string(),
             "true".to_string(),
         );
+        task.context
+            .context_vars
+            .insert("write_tool_mode".to_string(), "inline_content".to_string());
+        task.context
+            .context_vars
+            .insert("acp_transport".to_string(), "true".to_string());
         task.context.collapsed_tools = vec!["WebFetch".to_string()];
         task.context.unlocked_collapsed_tools = vec!["WebFetch".to_string()];
         task.context.runtime_tool_restrictions = ToolRuntimeRestrictions {
@@ -1716,11 +1733,9 @@ mod tests {
         assert_eq!(context.dialog_turn_id.as_deref(), Some("turn_1"));
         assert_eq!(context.unlocked_collapsed_tools, vec!["WebFetch"]);
         assert!(context.cancellation_token.is_some());
-        assert!(
-            context
-                .runtime_tool_restrictions
-                .is_tool_allowed("WebFetch")
-        );
+        assert!(context
+            .runtime_tool_restrictions
+            .is_tool_allowed("WebFetch"));
         assert!(!context.runtime_tool_restrictions.is_tool_allowed("Bash"));
         assert_eq!(context.custom_data["turn_index"], json!(7));
         assert_eq!(
@@ -1731,6 +1746,11 @@ mod tests {
             context.custom_data["primary_model_supports_image_understanding"],
             json!(true)
         );
+        assert_eq!(
+            context.custom_data["write_tool_mode"],
+            json!("inline_content")
+        );
+        assert_eq!(context.custom_data["acp_transport"], json!(true));
 
         let facts = context.to_tool_context_facts();
         let value = serde_json::to_value(&facts).expect("serialize context facts");
@@ -1750,10 +1770,9 @@ mod tests {
         let err = ToolPipeline::validate_collapsed_tool_usage(&task)
             .expect_err("collapsed tool should require GetToolSpec unlock");
 
-        assert!(
-            err.to_string()
-                .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}")
-        );
+        assert!(err
+            .to_string()
+            .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}"));
     }
 
     #[test]

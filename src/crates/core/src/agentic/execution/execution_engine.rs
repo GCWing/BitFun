@@ -5,36 +5,36 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
-    PromptBuilder, PromptBuilderContext, RemoteExecutionHints, get_agent_registry,
+    get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
-    Message, MessageContent, MessageHelper, MessageRole, MessageSemanticKind,
-    RequestReasoningTokenPolicy, Session, render_system_reminder,
+    render_system_reminder, Message, MessageContent, MessageHelper, MessageRole,
+    MessageSemanticKind, RequestReasoningTokenPolicy, Session,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::execution::types::FinishReason;
 use crate::agentic::image_analysis::{
-    ImageContextData, ImageLimits, build_multimodal_message_with_images,
-    process_image_contexts_for_provider,
+    build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
+    ImageLimits,
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
 use crate::agentic::tools::{
-    ResolvedToolManifest, SubagentParentInfo, ToolRuntimeRestrictions, resolve_tool_manifest,
+    resolve_tool_manifest, ResolvedToolManifest, SubagentParentInfo, ToolRuntimeRestrictions,
 };
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
-use crate::service::config::types::{ModelCapability, ModelCategory};
+use crate::service::config::types::{ModelCapability, ModelCategory, WriteToolMode};
 use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
-use bitfun_agent_tools::{GetToolSpecLoadObservation, collect_loaded_collapsed_tool_names};
+use bitfun_agent_tools::{collect_loaded_collapsed_tool_names, GetToolSpecLoadObservation};
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -1432,7 +1432,11 @@ impl ExecutionEngine {
             })?;
 
         // Primary model vision capability (tools + system prompt appendix; also used below for API message stripping).
-        let (resolved_primary_model_id, primary_supports_image_understanding) = {
+        let (
+            resolved_primary_model_id,
+            primary_supports_image_understanding,
+            configured_write_tool_mode,
+        ) = {
             let config_service = get_global_config_service().await.ok();
             if let Some(service) = config_service {
                 let ai_config: crate::service::config::types::AIConfig =
@@ -1465,12 +1469,12 @@ impl ExecutionEngine {
                         || matches!(m.category, ModelCategory::Multimodal)
                 });
 
-                (resolved_id, supports)
+                (resolved_id, supports, ai_config.write_tool_mode)
             } else {
                 warn!(
                     "Config service unavailable, assuming primary model is text-only for image input gating"
                 );
-                (model_id.clone(), false)
+                (model_id.clone(), false, WriteToolMode::default())
             }
         };
 
@@ -1524,6 +1528,22 @@ impl ExecutionEngine {
             .get("enable_tools")
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(true);
+        let write_tool_mode = if context
+            .context
+            .get("acp_transport")
+            .is_some_and(|value| value == "true")
+        {
+            WriteToolMode::InlineContent
+        } else {
+            configured_write_tool_mode
+        };
+
+        let mut tool_manifest_context_vars = context.context.clone();
+        tool_manifest_context_vars.insert(
+            "write_tool_mode".to_string(),
+            write_tool_mode.as_str().to_string(),
+        );
+
         let tool_manifest = if enable_tools {
             debug!(
                 "Agent tools: agent={}, tool_count={}",
@@ -1538,7 +1558,7 @@ impl ExecutionEngine {
                     context.workspace_services.as_ref(),
                     &agent_type,
                     primary_supports_image_understanding,
-                    &context.context,
+                    &tool_manifest_context_vars,
                 )
                 .await,
             )
@@ -1654,6 +1674,10 @@ impl ExecutionEngine {
         execution_context_vars.insert(
             "primary_model_supports_image_understanding".to_string(),
             primary_supports_image_understanding.to_string(),
+        );
+        execution_context_vars.insert(
+            "write_tool_mode".to_string(),
+            write_tool_mode.as_str().to_string(),
         );
         execution_context_vars.insert("turn_index".to_string(), context.turn_index.to_string());
 
