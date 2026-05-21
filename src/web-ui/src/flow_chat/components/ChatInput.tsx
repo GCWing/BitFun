@@ -2056,7 +2056,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       e.stopPropagation();
 
-      // Dismiss slash command if open
       if (slashCommandState.isActive) {
         setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
         dispatchInput({ type: 'CLEAR_VALUE' });
