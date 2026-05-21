@@ -8,7 +8,8 @@ tool provider group plan. It does not own concrete tool implementations yet.
 ## Guardrails
 
 - Keep `default = []`; `product-full` may aggregate feature groups but must not
-  silently enable new runtime behavior.
+  silently enable new runtime behavior. Boundary checks enforce the current
+  feature-group list.
 - Do not depend on `bitfun-core`, concrete service crates, app crates, Tauri,
   Git, MCP, network clients, or CLI UI dependencies unless H1 explicitly moves a
   reviewed tool runtime owner here.

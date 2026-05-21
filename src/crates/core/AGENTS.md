@@ -84,6 +84,25 @@ SessionManager → Session → DialogTurn → ModelRound
   MiniApp/function-agent, Git/MCP, remote-connect, review-platform, snapshot,
   token usage, and mode canonicalization stay behind `product-full` or their
   owner feature group.
+- Product/runtime dependencies that are only used behind those feature gates
+  should stay optional in `bitfun-core` and be enabled by `product-full`,
+  `service-integrations`, or `ssh-remote`; do not treat that as permission to
+  lighten defaults or change product crate feature sets. Keep
+  `scripts/check-core-boundaries.mjs` updated so each optional runtime
+  dependency has an explicit feature owner.
+- Product entry crates that depend on `bitfun-core` must keep
+  `default-features = false` and explicitly enable `product-full`; keep this
+  wired through product manifests rather than relying on core defaults. The
+  boundary script scans product entry manifests for new direct `bitfun-core`
+  dependencies and requires matching assembly rules.
+- Keep `default = ["product-full"]` until a separate product matrix review
+  explicitly changes default capability selection.
+- Owner crate feature graph guards keep `tool-packs`, `services-integrations`,
+  and `product-domains` default-light while allowing `product-full` to
+  explicitly aggregate current owner feature groups.
+- `service-integrations` is not a standalone product shape in core yet; MCP,
+  remote-connect, and review-platform still depend on agentic/product runtime
+  owners through `product-full`.
 - Do not add new cross-layer references from `service` to `agentic` without a
   small port/interface boundary.
 - Do not move platform-specific logic, build-script behavior, or product

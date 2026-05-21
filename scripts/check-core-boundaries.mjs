@@ -113,6 +113,49 @@ const lightweightBoundaryRules = [
 
 const dependencyProfileRules = [
   {
+    crateName: 'core',
+    profileName: 'no-default runtime-surface-light profile',
+    reason:
+      'bitfun-core no-default profile must not force product/runtime integration dependencies',
+    forbiddenNonOptionalDeps: [
+      'aes',
+      'aes-gcm',
+      'bitfun-product-domains',
+      'bitfun-relay-server',
+      'bitfun-tool-packs',
+      'chrono-tz',
+      'cron',
+      'dashmap',
+      'eventsource-stream',
+      'filetime',
+      'flate2',
+      'fs2',
+      'git2',
+      'glob',
+      'globset',
+      'hostname',
+      'image',
+      'include_dir',
+      'indexmap',
+      'local-ip-address',
+      'mac_address',
+      'md5',
+      'qrcode',
+      'rand',
+      'rmcp',
+      'russh',
+      'russh-keys',
+      'russh-sftp',
+      'shellexpand',
+      'sse-stream',
+      'ssh_config',
+      'similar',
+      'tool-runtime',
+      'tokio-tungstenite',
+      'x25519-dalek',
+    ],
+  },
+  {
     crateName: 'core-types',
     profileName: 'default DTO profile',
     reason: 'core-types default profile must stay DTO-only',
@@ -236,6 +279,108 @@ const dependencyProfileRules = [
       'tokio-tungstenite',
       'bitfun-relay-server',
     ],
+  },
+];
+
+const optionalDependencyFeatureOwnerRules = [
+  {
+    crateName: 'core',
+    reason:
+      'bitfun-core product/runtime optional dependencies must stay owned by explicit feature gates',
+    dependencies: [
+      { depName: 'aes', ownerFeatures: ['service-integrations'] },
+      { depName: 'aes-gcm', ownerFeatures: ['service-integrations', 'ssh-remote'] },
+      { depName: 'bitfun-product-domains', ownerFeatures: ['product-domains'] },
+      { depName: 'bitfun-relay-server', ownerFeatures: ['service-integrations'] },
+      { depName: 'bitfun-tool-packs', ownerFeatures: ['tool-packs'] },
+      { depName: 'chrono-tz', ownerFeatures: ['product-full'] },
+      { depName: 'cron', ownerFeatures: ['product-full'] },
+      { depName: 'dashmap', ownerFeatures: ['product-full'] },
+      { depName: 'eventsource-stream', ownerFeatures: ['product-full'] },
+      { depName: 'filetime', ownerFeatures: ['product-full'] },
+      { depName: 'flate2', ownerFeatures: ['product-full'] },
+      { depName: 'fs2', ownerFeatures: ['product-full'] },
+      { depName: 'git2', ownerFeatures: ['service-integrations'] },
+      { depName: 'glob', ownerFeatures: ['product-full'] },
+      { depName: 'globset', ownerFeatures: ['product-full'] },
+      { depName: 'hostname', ownerFeatures: ['service-integrations'] },
+      { depName: 'image', ownerFeatures: ['service-integrations'] },
+      { depName: 'include_dir', ownerFeatures: ['product-full'] },
+      { depName: 'indexmap', ownerFeatures: ['product-full'] },
+      { depName: 'local-ip-address', ownerFeatures: ['service-integrations'] },
+      { depName: 'mac_address', ownerFeatures: ['service-integrations'] },
+      { depName: 'md5', ownerFeatures: ['product-full', 'service-integrations'] },
+      { depName: 'qrcode', ownerFeatures: ['service-integrations'] },
+      { depName: 'rand', ownerFeatures: ['service-integrations', 'ssh-remote'] },
+      { depName: 'rmcp', ownerFeatures: ['service-integrations'] },
+      { depName: 'russh', ownerFeatures: ['ssh-remote'] },
+      { depName: 'russh-keys', ownerFeatures: ['ssh-remote'] },
+      { depName: 'russh-sftp', ownerFeatures: ['ssh-remote'] },
+      { depName: 'shellexpand', ownerFeatures: ['ssh-remote'] },
+      { depName: 'similar', ownerFeatures: ['product-full'] },
+      { depName: 'sse-stream', ownerFeatures: ['service-integrations'] },
+      { depName: 'ssh_config', ownerFeatures: ['ssh-remote'] },
+      { depName: 'tokio-tungstenite', ownerFeatures: ['service-integrations'] },
+      { depName: 'tool-runtime', ownerFeatures: ['product-full'] },
+      { depName: 'x25519-dalek', ownerFeatures: ['service-integrations'] },
+    ],
+  },
+];
+
+const productCoreFeatureAssemblyRules = [
+  {
+    manifestPath: 'src/apps/desktop/Cargo.toml',
+    dependencyName: 'bitfun-core',
+    requiredFeatures: ['product-full'],
+    reason: 'desktop must explicitly assemble the full bitfun-core product runtime',
+  },
+  {
+    manifestPath: 'src/apps/cli/Cargo.toml',
+    dependencyName: 'bitfun-core',
+    requiredFeatures: ['product-full'],
+    reason: 'CLI must explicitly assemble the full bitfun-core product runtime',
+  },
+  {
+    manifestPath: 'src/crates/acp/Cargo.toml',
+    dependencyName: 'bitfun-core',
+    requiredFeatures: ['product-full'],
+    reason: 'ACP must explicitly assemble the full bitfun-core product runtime',
+  },
+];
+
+const productCoreFeatureAssemblyScanRoots = ['src/apps', 'src/crates/acp'];
+
+const ownerCrateFeatureAssemblyRules = [
+  {
+    manifestPath: 'src/crates/tool-packs/Cargo.toml',
+    reason: 'tool-packs must keep product feature groups explicit and default-light',
+    requiredProductFullFeatures: [
+      'basic',
+      'git',
+      'mcp',
+      'browser-web',
+      'computer-use',
+      'image-analysis',
+      'miniapp',
+      'agent-control',
+    ],
+  },
+  {
+    manifestPath: 'src/crates/services-integrations/Cargo.toml',
+    reason: 'services-integrations must keep integration feature groups explicit and default-light',
+    requiredProductFullFeatures: [
+      'announcement',
+      'file-watch',
+      'git',
+      'mcp',
+      'remote-connect',
+      'remote-ssh',
+    ],
+  },
+  {
+    manifestPath: 'src/crates/product-domains/Cargo.toml',
+    reason: 'product-domains must keep product domain feature groups explicit and default-light',
+    requiredProductFullFeatures: ['miniapp', 'function-agents'],
   },
 ];
 
@@ -3806,6 +3951,7 @@ function parseManifestDependencies(lines) {
     }
 
     if (currentInline) {
+      currentInline.text.push(trimmed);
       if (/\boptional\s*=\s*true\b/.test(trimmed)) {
         currentInline.optional = true;
       }
@@ -3825,6 +3971,7 @@ function parseManifestDependencies(lines) {
             name: depName,
             line: index + 1,
             optional: false,
+            text: [trimmed],
           };
           deps.push(currentTable);
           break;
@@ -3833,8 +3980,11 @@ function parseManifestDependencies(lines) {
       return;
     }
 
-    if (currentTable && /\boptional\s*=\s*true\b/.test(trimmed)) {
-      currentTable.optional = true;
+    if (currentTable) {
+      currentTable.text.push(trimmed);
+      if (/\boptional\s*=\s*true\b/.test(trimmed)) {
+        currentTable.optional = true;
+      }
       return;
     }
 
@@ -3849,6 +3999,7 @@ function parseManifestDependencies(lines) {
         name,
         line: index + 1,
         optional: /\boptional\s*=\s*true\b/.test(trimmed),
+        text: [trimmed],
       });
       if (trimmed.includes('{') && !trimmed.includes('}')) {
         currentInline = deps[deps.length - 1];
@@ -3861,12 +4012,117 @@ function parseManifestDependencies(lines) {
   return deps;
 }
 
+function manifestDependencyText(dep) {
+  return dep?.text?.join('\n') ?? '';
+}
+
+function manifestDependencyDisablesDefaultFeatures(dep) {
+  return /\bdefault-features\s*=\s*false\b/.test(manifestDependencyText(dep));
+}
+
+function parseManifestDependencyFeatureNames(dep) {
+  const features = new Set();
+  const text = manifestDependencyText(dep);
+  for (const match of text.matchAll(/\bfeatures\s*=\s*\[([\s\S]*?)\]/g)) {
+    for (const featureMatch of match[1].matchAll(/"([^"]+)"/g)) {
+      features.add(featureMatch[1]);
+    }
+  }
+  return features;
+}
+
+function collectProductCoreDependencyManifestPaths(manifestEntries) {
+  return manifestEntries
+    .filter((entry) => {
+      const deps = parseManifestDependencies(entry.text.split(/\r?\n/));
+      return deps.some((dep) => dep.name === 'bitfun-core');
+    })
+    .map((entry) => entry.manifestPath)
+    .sort();
+}
+
+function collectProductCoreDependencyManifests(scanRoots = productCoreFeatureAssemblyScanRoots) {
+  const manifestEntries = [];
+  for (const repoDir of scanRoots) {
+    const dir = join(ROOT, ...repoDir.split('/'));
+    walkFiles(dir, (path) => {
+      if (!path.endsWith('Cargo.toml')) {
+        return;
+      }
+      manifestEntries.push({
+        manifestPath: toRepoPath(path),
+        text: readText(path),
+      });
+    });
+  }
+  return collectProductCoreDependencyManifestPaths(manifestEntries);
+}
+
+function parseManifestFeatures(lines) {
+  const features = new Map();
+  let inFeatures = false;
+  let currentFeature = null;
+
+  const appendRefs = (feature, text) => {
+    const refs = [...text.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+    feature.refs.push(...refs);
+  };
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('#') || trimmed === '') {
+      return;
+    }
+
+    const headerMatch = trimmed.match(/^\[(.+)]$/);
+    if (headerMatch) {
+      inFeatures = trimmed === '[features]';
+      currentFeature = null;
+      return;
+    }
+
+    if (!inFeatures) {
+      return;
+    }
+
+    if (currentFeature) {
+      appendRefs(currentFeature, trimmed);
+      if (trimmed.includes(']')) {
+        currentFeature = null;
+      }
+      return;
+    }
+
+    const featureMatch = trimmed.match(/^([A-Za-z0-9_-]+)\s*=\s*(.*)$/);
+    if (!featureMatch) {
+      return;
+    }
+
+    const feature = {
+      name: featureMatch[1],
+      line: index + 1,
+      refs: [],
+    };
+    appendRefs(feature, featureMatch[2]);
+    features.set(feature.name, feature);
+    if (featureMatch[2].includes('[') && !featureMatch[2].includes(']')) {
+      currentFeature = feature;
+    }
+  });
+
+  return features;
+}
+
 function collectKnownDependencyNames() {
   return Array.from(
     new Set([
       'bitfun-core',
       ...lightweightBoundaryRules.flatMap((rule) => rule.forbiddenDeps),
       ...dependencyProfileRules.flatMap((rule) => rule.forbiddenNonOptionalDeps),
+      ...optionalDependencyFeatureOwnerRules.flatMap((rule) =>
+        rule.dependencies.map((dependency) => dependency.depName),
+      ),
+      ...productCoreFeatureAssemblyRules.map((rule) => rule.dependencyName),
     ]),
   );
 }
@@ -3904,6 +4160,7 @@ function runManifestParserSelfTest() {
     'rmcp = { version = "0.12.0", default-features = false, features = [',
     '    "auth",',
     '], optional = true }',
+    'bitfun-core = { path = "../core", default-features = false, features = ["product-full"] }',
     '[dependencies.git2]',
     'workspace = true',
     'optional = true',
@@ -3928,8 +4185,109 @@ function runManifestParserSelfTest() {
   if (parsedByName.get('bitfun-cli')?.optional !== false) {
     throw new Error('dependency profile parser must detect non-optional target dependency tables');
   }
+  const parsedCoreDep = parsedByName.get('bitfun-core');
+  if (!manifestDependencyDisablesDefaultFeatures(parsedCoreDep)) {
+    throw new Error('dependency profile parser must detect default-features = false');
+  }
+  if (!parseManifestDependencyFeatureNames(parsedCoreDep).has('product-full')) {
+    throw new Error('dependency profile parser must detect inline dependency features');
+  }
+  const parsedCoreTableDeps = parseManifestDependencies([
+    '[dependencies."bitfun-core"]',
+    'path = "../core"',
+    'default-features = false',
+    'features = [',
+    '  "product-full",',
+    '  "ssh-remote",',
+    ']',
+  ]);
+  const parsedCoreTableDep = parsedCoreTableDeps.find((dep) => dep.name === 'bitfun-core');
+  if (!manifestDependencyDisablesDefaultFeatures(parsedCoreTableDep)) {
+    throw new Error('dependency profile parser must detect table default-features = false');
+  }
+  if (!parseManifestDependencyFeatureNames(parsedCoreTableDep).has('ssh-remote')) {
+    throw new Error('dependency profile parser must detect table dependency features');
+  }
   if (parsedByName.has('image')) {
     throw new Error('dependency profile parser must ignore feature entries named like dependencies');
+  }
+
+  const productCoreRulePaths = new Set(
+    productCoreFeatureAssemblyRules.map((rule) => rule.manifestPath),
+  );
+  for (const manifestPath of [
+    'src/apps/desktop/Cargo.toml',
+    'src/apps/cli/Cargo.toml',
+    'src/crates/acp/Cargo.toml',
+  ]) {
+    if (!productCoreRulePaths.has(manifestPath)) {
+      throw new Error(`product core feature assembly rule must cover ${manifestPath}`);
+    }
+  }
+  for (const rule of productCoreFeatureAssemblyRules) {
+    if (!rule.requiredFeatures.includes('product-full')) {
+      throw new Error(`${rule.manifestPath} must require bitfun-core product-full`);
+    }
+  }
+  const discoveredProductCoreManifests = collectProductCoreDependencyManifestPaths([
+    {
+      manifestPath: 'src/apps/desktop/Cargo.toml',
+      text:
+        '[dependencies]\nbitfun-core = { path = "../../crates/core", default-features = false, features = ["product-full"] }',
+    },
+    {
+      manifestPath: 'src/apps/server/Cargo.toml',
+      text: '[dependencies]\naxum = { workspace = true }',
+    },
+    {
+      manifestPath: 'src/crates/acp/Cargo.toml',
+      text: '[dependencies."bitfun-core"]\npath = "../core"\ndefault-features = false\nfeatures = ["product-full"]',
+    },
+  ]);
+  if (discoveredProductCoreManifests.join(',') !== 'src/apps/desktop/Cargo.toml,src/crates/acp/Cargo.toml') {
+    throw new Error('product core dependency scanner must discover only manifests that depend on bitfun-core');
+  }
+  const ownerFeatureRulePaths = new Set(
+    ownerCrateFeatureAssemblyRules.map((rule) => rule.manifestPath),
+  );
+  for (const manifestPath of [
+    'src/crates/tool-packs/Cargo.toml',
+    'src/crates/services-integrations/Cargo.toml',
+    'src/crates/product-domains/Cargo.toml',
+  ]) {
+    if (!ownerFeatureRulePaths.has(manifestPath)) {
+      throw new Error(`owner crate feature assembly rule must cover ${manifestPath}`);
+    }
+  }
+
+  const parsedFeatures = parseManifestFeatures([
+    '[package]',
+    'name = "example"',
+    '[features]',
+    'default = ["product-full"]',
+    'product-full = [',
+    '    "dep:tool-runtime",',
+    '    "service-integrations",',
+    ']',
+    'service-integrations = ["dep:git2", "dep:rmcp"]',
+    'ssh-remote = [',
+    '    "russh",',
+    '    "russh-sftp",',
+    ']',
+    '[dependencies]',
+    'git2 = { workspace = true, optional = true }',
+  ]);
+  if (!parsedFeatures.get('default')?.refs.includes('product-full')) {
+    throw new Error('feature parser must detect inline feature references');
+  }
+  if (!parsedFeatures.get('product-full')?.refs.includes('dep:tool-runtime')) {
+    throw new Error('feature parser must detect multiline dependency feature references');
+  }
+  if (!parsedFeatures.get('service-integrations')?.refs.includes('dep:rmcp')) {
+    throw new Error('feature parser must detect inline dependency feature references');
+  }
+  if (!parsedFeatures.get('ssh-remote')?.refs.includes('russh-sftp')) {
+    throw new Error('feature parser must detect implicit optional dependency feature references');
   }
 
   const acceptsGitFacadeLine = createFacadeLineChecker('bitfun_services_integrations::git');
@@ -4041,6 +4399,26 @@ function runManifestParserSelfTest() {
   );
   if (!productDomainProfile?.forbiddenNonOptionalDeps.includes('dirs')) {
     throw new Error('product-domains default profile must forbid non-optional dirs');
+  }
+  const coreProfile = dependencyProfileRules.find((rule) => rule.crateName === 'core');
+  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
+    if (!coreProfile?.forbiddenNonOptionalDeps.includes(dep)) {
+      throw new Error(`core no-default profile must forbid non-optional ${dep}`);
+    }
+  }
+  const coreOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'core',
+  );
+  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
+    if (!coreOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
+      throw new Error(`core optional dependency owner rule must cover ${dep}`);
+    }
+  }
+  const coreGit2Owner = coreOptionalOwnerRule?.dependencies.find(
+    (dependency) => dependency.depName === 'git2',
+  );
+  if (!coreGit2Owner?.ownerFeatures.includes('service-integrations')) {
+    throw new Error('core optional dependency owner rule must keep git2 under service-integrations');
   }
   const productDomainRuntimeRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/product-domains/src',
@@ -4488,14 +4866,14 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/Cargo.toml',
       contracts: [
-        'bitfun-tool-packs = \\{ path = "\\.\\./tool-packs", default-features = false, optional = true \\}',
-        'bitfun-services-integrations = \\{ path = "\\.\\./services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
-        'bitfun-product-domains = \\{ path = "\\.\\./product-domains", default-features = false, optional = true \\}',
+        'bitfun-tool-packs = \\{ path = "\\.\\.\\/tool-packs", default-features = false, optional = true \\}',
+        'bitfun-services-integrations = \\{ path = "\\.\\.\\/services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
+        'bitfun-product-domains = \\{ path = "\\.\\.\\/product-domains", default-features = false, optional = true \\}',
         'dep:bitfun-tool-packs',
-        'bitfun-tool-packs/product-full',
-        'bitfun-services-integrations/product-full',
+        'bitfun-tool-packs\\/product-full',
+        'bitfun-services-integrations\\/product-full',
         'dep:bitfun-product-domains',
-        'bitfun-product-domains/product-full',
+        'bitfun-product-domains\\/product-full',
       ],
     },
     {
@@ -5286,6 +5664,156 @@ function checkForbiddenNonOptionalManifestDeps(crateDir, forbiddenDeps, messageF
   }
 }
 
+function featureReferencesDependency(feature, depName) {
+  if (!feature) {
+    return false;
+  }
+  return feature.refs.includes(`dep:${depName}`) || feature.refs.includes(depName);
+}
+
+function featureReferencesFeature(feature, featureName) {
+  if (!feature) {
+    return false;
+  }
+  return feature.refs.includes(featureName);
+}
+
+function checkOptionalDependencyFeatureOwners(crateDir, rule) {
+  const manifestPath = join(crateDir, 'Cargo.toml');
+  const lines = readText(manifestPath).split(/\r?\n/);
+  const deps = parseManifestDependencies(lines);
+  const depsByName = new Map(deps.map((dep) => [dep.name, dep]));
+  const features = parseManifestFeatures(lines);
+
+  for (const dependency of rule.dependencies) {
+    const dep = depsByName.get(dependency.depName);
+    if (!dep) {
+      failures.push({
+        path: manifestPath,
+        line: 1,
+        message: `${rule.reason}; missing optional dependency: ${dependency.depName}`,
+      });
+      continue;
+    }
+    if (!dep.optional) {
+      failures.push({
+        path: manifestPath,
+        line: dep.line,
+        message: `${rule.reason}; dependency must be optional: ${dependency.depName}`,
+      });
+    }
+    for (const featureName of dependency.ownerFeatures) {
+      const feature = features.get(featureName);
+      if (!featureReferencesDependency(feature, dependency.depName)) {
+        failures.push({
+          path: manifestPath,
+          line: feature?.line ?? dep.line,
+          message: `${rule.reason}; ${featureName} must explicitly enable ${dependency.depName}`,
+        });
+      }
+    }
+  }
+}
+
+function checkProductCoreFeatureAssembly(rule) {
+  const manifestPath = join(ROOT, ...rule.manifestPath.split('/'));
+  const deps = parseManifestDependencies(readText(manifestPath).split(/\r?\n/));
+  const dep = deps.find((candidate) => candidate.name === rule.dependencyName);
+  if (!dep) {
+    failures.push({
+      path: manifestPath,
+      line: 1,
+      message: `${rule.reason}; missing dependency: ${rule.dependencyName}`,
+    });
+    return;
+  }
+
+  if (!manifestDependencyDisablesDefaultFeatures(dep)) {
+    failures.push({
+      path: manifestPath,
+      line: dep.line,
+      message: `${rule.reason}; ${rule.dependencyName} must set default-features = false`,
+    });
+  }
+
+  const enabledFeatures = parseManifestDependencyFeatureNames(dep);
+  for (const featureName of rule.requiredFeatures) {
+    if (!enabledFeatures.has(featureName)) {
+      failures.push({
+        path: manifestPath,
+        line: dep.line,
+        message: `${rule.reason}; ${rule.dependencyName} must enable feature ${featureName}`,
+      });
+    }
+  }
+}
+
+function checkProductCoreFeatureAssemblyCoverage() {
+  const rulePaths = new Set(productCoreFeatureAssemblyRules.map((rule) => rule.manifestPath));
+  for (const manifestPath of collectProductCoreDependencyManifests()) {
+    if (!rulePaths.has(manifestPath)) {
+      failures.push({
+        path: join(ROOT, ...manifestPath.split('/')),
+        line: 1,
+        message:
+          'product entry crate depends on bitfun-core but is not covered by product-full assembly rules',
+      });
+    }
+  }
+}
+
+function checkCoreDefaultProductFullFeature() {
+  const manifestPath = join(ROOT, 'src', 'crates', 'core', 'Cargo.toml');
+  const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
+  if (!featureReferencesFeature(features.get('default'), 'product-full')) {
+    failures.push({
+      path: manifestPath,
+      line: features.get('default')?.line ?? 1,
+      message:
+        'bitfun-core default feature must remain product-full until a separate product matrix review changes it',
+    });
+  }
+}
+
+function checkOwnerCrateFeatureAssembly(rule) {
+  const manifestPath = join(ROOT, ...rule.manifestPath.split('/'));
+  const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
+  const defaultFeature = features.get('default');
+  if (!defaultFeature) {
+    failures.push({
+      path: manifestPath,
+      line: 1,
+      message: `${rule.reason}; missing default feature declaration`,
+    });
+  } else if (defaultFeature.refs.length > 0) {
+    failures.push({
+      path: manifestPath,
+      line: defaultFeature.line,
+      message: `${rule.reason}; default feature must remain empty`,
+    });
+  }
+
+  const productFull = features.get('product-full');
+  if (!productFull) {
+    failures.push({
+      path: manifestPath,
+      line: 1,
+      message: `${rule.reason}; missing product-full feature declaration`,
+    });
+    return;
+  }
+
+  for (const featureName of rule.requiredProductFullFeatures) {
+    if (!featureReferencesFeature(productFull, featureName)) {
+      failures.push({
+        path: manifestPath,
+        line: productFull.line,
+        message: `${rule.reason}; product-full must explicitly enable ${featureName}`,
+      });
+    }
+  }
+}
+
 function checkRustImports(crateDir) {
   const srcDir = join(crateDir, 'src');
   try {
@@ -5495,6 +6023,20 @@ for (const rule of dependencyProfileRules) {
   const messageForDep = (dep) =>
     `${rule.reason}; ${rule.profileName} forbids non-optional dependency: ${dep}`;
   checkForbiddenNonOptionalManifestDeps(crateDir, rule.forbiddenNonOptionalDeps, messageForDep);
+}
+
+for (const rule of optionalDependencyFeatureOwnerRules) {
+  const crateDir = join(ROOT, 'src', 'crates', rule.crateName);
+  checkOptionalDependencyFeatureOwners(crateDir, rule);
+}
+
+for (const rule of productCoreFeatureAssemblyRules) {
+  checkProductCoreFeatureAssembly(rule);
+}
+checkProductCoreFeatureAssemblyCoverage();
+checkCoreDefaultProductFullFeature();
+for (const rule of ownerCrateFeatureAssemblyRules) {
+  checkOwnerCrateFeatureAssembly(rule);
 }
 
 for (const facade of facadeOnlyFiles) {
