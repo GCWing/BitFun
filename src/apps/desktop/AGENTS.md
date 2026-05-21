@@ -21,6 +21,8 @@ If a change affects shared product behavior across runtimes, the implementation 
 ## Local rules
 
 - Keep desktop-only integrations here; do not move them into shared core
+- Window lifecycle behavior, including close/minimize-to-tray defaults, is a
+  desktop surface concern. Preserve saved user preferences when changing it.
 - For packaging or release asks, see the top-level `AGENTS.md`
 
 ## Commands

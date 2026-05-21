@@ -14,6 +14,8 @@ use tauri::{AppHandle, Emitter, State};
 #[serde(rename_all = "camelCase")]
 pub struct AcpClientIdRequest {
     pub client_id: String,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,7 +148,7 @@ pub async fn install_acp_client_cli(
         .as_ref()
         .ok_or_else(|| "ACP client service not initialized".to_string())?;
     service
-        .install_client_cli(&request.client_id)
+        .install_client_cli(&request.client_id, request.remote_connection_id.as_deref())
         .await
         .map_err(|e| e.to_string())
 }

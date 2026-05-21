@@ -187,7 +187,13 @@ impl PersistenceManager {
             branched_metadata.tags = branched_metadata
                 .tags
                 .into_iter()
-                .filter(|tag| tag != "btw" && tag != "review" && tag != "deep_review")
+                .filter(|tag| {
+                    tag != "btw"
+                        && tag != "review"
+                        && tag != "deep_review"
+                        && tag != "miniapp"
+                        && tag != "subagent"
+                })
                 .collect();
             branched_metadata.custom_metadata = build_branch_custom_metadata(
                 source_metadata.custom_metadata.as_ref(),
@@ -195,7 +201,9 @@ impl PersistenceManager {
                 &request.source_turn_id,
                 source_turn_index,
             );
+            branched_metadata.relationship = None;
             branched_metadata.todos = None;
+            branched_metadata.deep_review_run_manifest = None;
             branched_metadata.unread_completion = None;
             branched_metadata.needs_user_attention = None;
 
@@ -246,6 +254,12 @@ mod tests {
         fn path(&self) -> &Path {
             &self.path
         }
+
+        fn path_manager(&self) -> Arc<PathManager> {
+            Arc::new(PathManager::with_user_root_for_tests(
+                self.path.join("user-root"),
+            ))
+        }
     }
 
     impl Drop for TestWorkspace {
@@ -278,8 +292,8 @@ mod tests {
     #[tokio::test]
     async fn branch_session_copies_turns_snapshots_and_lineage_metadata() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
 
         let mut source_session = Session::new(
             "Source Title".to_string(),
@@ -332,6 +346,18 @@ mod tests {
             "parentSessionId": "legacy-parent",
             "preservedKey": "preserved-value"
         }));
+        source_metadata.relationship = Some(serde_json::from_value(serde_json::json!({
+            "kind": "deep_review",
+            "parentSessionId": "structured-parent",
+            "parentRequestId": "structured-request",
+            "parentDialogTurnId": "structured-turn",
+            "parentTurnIndex": 4
+        }))
+        .expect("relationship should deserialize"));
+        source_metadata.deep_review_run_manifest = Some(serde_json::json!({
+            "reviewMode": "deep",
+            "coreReviewers": [{ "subagentId": "ReviewBusinessLogic" }]
+        }));
         source_metadata.todos = Some(serde_json::json!([{ "id": "todo-1" }]));
         source_metadata.unread_completion = Some("completed".to_string());
         source_metadata.needs_user_attention = Some("ask_user".to_string());
@@ -383,6 +409,8 @@ mod tests {
         assert_eq!(branched_metadata.session_name, "Source Title");
         assert_eq!(branched_metadata.session_kind, SessionKind::Standard);
         assert_eq!(branched_metadata.tags, vec!["kept".to_string()]);
+        assert!(branched_metadata.relationship.is_none());
+        assert!(branched_metadata.deep_review_run_manifest.is_none());
         assert!(branched_metadata.todos.is_none());
         assert!(branched_metadata.unread_completion.is_none());
         assert!(branched_metadata.needs_user_attention.is_none());

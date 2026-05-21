@@ -7,6 +7,25 @@ import { sanitizeErrorForLog } from '../logSanitizer';
 
 const log = createLogger('TauriAdapter');
 
+export function isExpectedTauriRequestError(action: string, params: unknown, error: unknown): boolean {
+  if (action !== 'get_config') {
+    return false;
+  }
+
+  const request = (params as { request?: unknown } | undefined)?.request;
+  if (!request || typeof request !== 'object') {
+    return false;
+  }
+
+  if (!(request as Record<string, unknown>).skipRetryOnNotFound) {
+    return false;
+  }
+
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  const normalized = errorMessage.toLowerCase();
+  return normalized.includes('not found') && normalized.includes('config path');
+}
+
 export class TauriTransportAdapter implements ITransportAdapter {
   private unlistenFunctions: UnlistenFn[] = [];
   private connected: boolean = false;
@@ -69,7 +88,9 @@ export class TauriTransportAdapter implements ITransportAdapter {
 
       return result as T;
     } catch (error) {
-      log.error('Request failed', { action, error: sanitizeErrorForLog(error) });
+      if (!isExpectedTauriRequestError(action, params, error)) {
+        log.error('Request failed', { action, error: sanitizeErrorForLog(error) });
+      }
       throw error;
     }
   }

@@ -22,6 +22,7 @@ export interface FlowChatContextValue {
   sessionId?: string;
   activeSessionOverride?: Session | null;
   allowUserMessageRollback?: boolean;
+  allowUserMessageEdit?: boolean;
 
   // Config
   config?: FlowChatConfig;

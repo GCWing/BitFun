@@ -76,7 +76,10 @@ impl CustomSubagentLoader {
     /// Agents with the same name are prioritized by path order: earlier paths have higher priority, later ones won't override already loaded agents with the same name.
     pub fn load_custom_subagents(workspace_root: &Path) -> Vec<CustomSubagent> {
         let mut candidates = Vec::new();
-        for (root_priority, entry) in Self::get_possible_paths(workspace_root).into_iter().enumerate() {
+        for (root_priority, entry) in Self::get_possible_paths(workspace_root)
+            .into_iter()
+            .enumerate()
+        {
             for md_path in Self::list_md_files(&entry.path) {
                 let path_str = md_path.to_string_lossy();
                 match CustomSubagent::from_file(path_str.as_ref(), entry.kind) {
@@ -99,7 +102,12 @@ impl CustomSubagentLoader {
         candidates.sort_by(|a, b| {
             a.root_priority
                 .cmp(&b.root_priority)
-                .then_with(|| a.agent.id().to_lowercase().cmp(&b.agent.id().to_lowercase()))
+                .then_with(|| {
+                    a.agent
+                        .id()
+                        .to_lowercase()
+                        .cmp(&b.agent.id().to_lowercase())
+                })
                 .then_with(|| a.agent.id().cmp(b.agent.id()))
                 .then_with(|| a.path.cmp(&b.path))
         });

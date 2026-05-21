@@ -258,7 +258,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
   });
 
-  it('keeps a just-completed collapsible tool as a model round before merging it', () => {
+  it('keeps a just-completed streaming collapsible tool as a model round before merging it', () => {
     vi.useFakeTimers();
     vi.setSystemTime(10_200);
     const session = makeSession({
@@ -266,6 +266,45 @@ describe('sessionToVirtualItems explore grouping', () => {
       dialogTurns: [{
         id: 'turn-1',
         sessionId: 'just-completed-tool-session',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [
+          makeRound({ id: 'round-1', isStreaming: false, isComplete: true }),
+          makeRound({
+            id: 'round-2',
+            items: [makeTool('tool-2', 'Read', 'completed', 10_000)],
+            isStreaming: true,
+            isComplete: false,
+            status: 'streaming',
+          }),
+        ],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
+    expect(items[2]).toMatchObject({
+      type: 'model-round',
+      data: {
+        id: 'round-2',
+      },
+    });
+  });
+
+  it('does not use the transient completed-tool window for non-streaming rounds', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_200);
+    const session = makeSession({
+      sessionId: 'settled-completed-tool-session',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'settled-completed-tool-session',
         userMessage: {
           id: 'user-1',
           content: 'Help',
@@ -288,11 +327,16 @@ describe('sessionToVirtualItems explore grouping', () => {
 
     const items = sessionToVirtualItems(session);
 
-    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group', 'model-round']);
-    expect(items[2]).toMatchObject({
-      type: 'model-round',
+    expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+    expect(items[1]).toMatchObject({
+      type: 'explore-group',
       data: {
-        id: 'round-2',
+        groupId: 'round-1',
+        allItems: [
+          expect.objectContaining({ id: 'text-1' }),
+          expect.objectContaining({ id: 'tool-1' }),
+          expect.objectContaining({ id: 'tool-2' }),
+        ],
       },
     });
   });

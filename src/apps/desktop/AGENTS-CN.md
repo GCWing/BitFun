@@ -21,6 +21,7 @@
 ## 本模块规则
 
 - 桌面端专属集成留在这里，不要下沉到共享 core
+- 窗口 lifecycle 行为（包括 close/minimize-to-tray 默认值）属于桌面端 surface；修改时必须保留用户已保存偏好。
 - 涉及打包或 release 请求时，参见顶层 `AGENTS.md`
 
 ## 命令

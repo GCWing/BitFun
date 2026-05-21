@@ -23,6 +23,7 @@ import {
   getSessionMetadataSortTimestamp,
   getSessionSortTimestamp,
 } from '@/flow_chat/utils/sessionOrdering';
+import { deriveSessionRelationshipFromMetadata } from '@/flow_chat/utils/sessionMetadata';
 import './NavSearchDialog.scss';
 
 interface NavSearchDialogProps {
@@ -182,7 +183,7 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
 
     const diskMatches = persistedOpenWorkspaceSessions.filter(({ meta, workspace }) => {
       if (!openedWorkspaceIdSet.has(workspace.id)) return false;
-      if (meta.customMetadata?.parentSessionId) return false;
+      if (deriveSessionRelationshipFromMetadata(meta).parentSessionId) return false;
       const label = resolvePersistedSessionTitle(meta, (key, options) =>
         i18nService.t(key, options)
       );

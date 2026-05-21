@@ -16,10 +16,10 @@
   --flowchat-md-pre-bg: var(--color-bg-primary);
   --flowchat-md-pre-border: rgba(255, 255, 255, 0.1);
   --flowchat-md-pre-border-style: dashed;
-  --flowchat-md-pre-radius: 4px;
+  --flowchat-md-pre-radius: var(--flowchat-card-radius, 8px);
   --flowchat-md-pre-shadow: none;
-  --flowchat-md-pre-padding: 1.25rem;
-  --flowchat-md-pre-font-size: 0.85rem;
+  --flowchat-md-pre-padding: var(--flowchat-markdown-code-block-pad-y, 0.78rem) var(--flowchat-markdown-code-block-pad-x, 0.86rem);
+  --flowchat-md-pre-font-size: var(--flowchat-code-font-size, var(--flowchat-font-size-sm));
   --flowchat-md-pre-hover-border: rgba(255, 255, 255, 0.15);
   --flowchat-md-pre-hover-shadow:
     0 8px 24px rgba(0, 0, 0, 0.4),
@@ -29,10 +29,10 @@
 
   --flowchat-md-bq-bg: rgba(255, 255, 255, 0.02);
   --flowchat-md-bq-border: rgba(255, 255, 255, 0.15);
-  --flowchat-md-bq-radius: 0 4px 4px 0;
+  --flowchat-md-bq-radius: 0 6px 6px 0;
   --flowchat-md-bq-fg: rgba(255, 255, 255, 0.7);
-  --flowchat-md-bq-padding: 1rem 1.2rem;
-  --flowchat-md-bq-margin: 1.5rem 0;
+  --flowchat-md-bq-padding: 0.58rem 0.72rem;
+  --flowchat-md-bq-margin: calc(var(--flowchat-markdown-block-gap, 0.58em) * 1.2) 0;
 }
 
 :root[data-theme-type="light"] {

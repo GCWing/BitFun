@@ -102,7 +102,6 @@ impl TransportAdapter for TauriTransportAdapter {
                 user_input,
                 original_user_input,
                 user_message_metadata,
-                subagent_parent_info,
             } => {
                 self.app_handle.emit(
                     "agentic://dialog-turn-started",
@@ -113,7 +112,24 @@ impl TransportAdapter for TauriTransportAdapter {
                         "userInput": user_input,
                         "originalUserInput": original_user_input,
                         "userMessageMetadata": user_message_metadata,
-                        "subagentParentInfo": subagent_parent_info,
+                    }),
+                )?;
+            }
+            AgenticEvent::SubagentSessionLinked {
+                session_id,
+                parent_session_id,
+                parent_dialog_turn_id,
+                parent_tool_call_id,
+                agent_type,
+            } => {
+                self.app_handle.emit(
+                    "agentic://subagent-session-linked",
+                    json!({
+                        "sessionId": session_id,
+                        "parentSessionId": parent_session_id,
+                        "parentDialogTurnId": parent_dialog_turn_id,
+                        "parentToolCallId": parent_tool_call_id,
+                        "agentType": agent_type,
                     }),
                 )?;
             }
@@ -122,7 +138,6 @@ impl TransportAdapter for TauriTransportAdapter {
                 turn_id,
                 round_id,
                 round_index,
-                subagent_parent_info,
                 model_id,
             } => {
                 self.app_handle.emit(
@@ -132,7 +147,6 @@ impl TransportAdapter for TauriTransportAdapter {
                         "turnId": turn_id,
                         "roundId": round_id,
                         "roundIndex": round_index,
-                        "subagentParentInfo": subagent_parent_info,
                         "modelId": model_id,
                     }),
                 )?;
@@ -142,7 +156,6 @@ impl TransportAdapter for TauriTransportAdapter {
                 turn_id,
                 round_id,
                 text,
-                subagent_parent_info,
             } => {
                 self.app_handle.emit(
                     "agentic://text-chunk",
@@ -151,7 +164,6 @@ impl TransportAdapter for TauriTransportAdapter {
                         "turnId": turn_id,
                         "roundId": round_id,
                         "text": text,
-                        "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;
             }
@@ -161,7 +173,6 @@ impl TransportAdapter for TauriTransportAdapter {
                 round_id,
                 content,
                 is_end,
-                subagent_parent_info,
             } => {
                 self.app_handle.emit(
                     "agentic://text-chunk",
@@ -172,30 +183,28 @@ impl TransportAdapter for TauriTransportAdapter {
                         "text": content,
                         "contentType": "thinking",
                         "isThinkingEnd": is_end,
-                        "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;
             }
             AgenticEvent::ToolEvent {
                 session_id,
                 turn_id,
+                round_id,
                 tool_event,
-                subagent_parent_info,
             } => {
                 self.app_handle.emit(
                     "agentic://tool-event",
                     json!({
                         "sessionId": session_id,
                         "turnId": turn_id,
+                        "roundId": round_id,
                         "toolEvent": tool_event,
-                        "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;
             }
             AgenticEvent::DialogTurnCompleted {
                 session_id,
                 turn_id,
-                subagent_parent_info,
                 partial_recovery_reason,
                 success,
                 finish_reason,
@@ -206,7 +215,6 @@ impl TransportAdapter for TauriTransportAdapter {
                     json!({
                         "sessionId": session_id,
                         "turnId": turn_id,
-                        "subagentParentInfo": subagent_parent_info,
                         "partialRecoveryReason": partial_recovery_reason,
                         "success": success,
                         "finishReason": finish_reason,
@@ -231,14 +239,12 @@ impl TransportAdapter for TauriTransportAdapter {
             AgenticEvent::DialogTurnCancelled {
                 session_id,
                 turn_id,
-                subagent_parent_info,
             } => {
                 self.app_handle.emit(
                     "agentic://dialog-turn-cancelled",
                     json!({
                         "sessionId": session_id,
                         "turnId": turn_id,
-                        "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;
             }
@@ -248,7 +254,6 @@ impl TransportAdapter for TauriTransportAdapter {
                 error,
                 error_category,
                 error_detail,
-                subagent_parent_info,
             } => {
                 self.app_handle.emit(
                     "agentic://dialog-turn-failed",
@@ -258,7 +263,6 @@ impl TransportAdapter for TauriTransportAdapter {
                         "error": error,
                         "errorCategory": error_category,
                         "errorDetail": error_detail,
-                        "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;
             }
@@ -293,7 +297,6 @@ impl TransportAdapter for TauriTransportAdapter {
             AgenticEvent::ContextCompressionStarted {
                 session_id,
                 turn_id,
-                subagent_parent_info,
                 compression_id,
                 trigger,
                 tokens_before,
@@ -310,14 +313,12 @@ impl TransportAdapter for TauriTransportAdapter {
                         "tokensBefore": tokens_before,
                         "contextWindow": context_window,
                         "threshold": threshold,
-                        "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;
             }
             AgenticEvent::ContextCompressionCompleted {
                 session_id,
                 turn_id,
-                subagent_parent_info,
                 compression_id,
                 compression_count,
                 tokens_before,
@@ -340,14 +341,12 @@ impl TransportAdapter for TauriTransportAdapter {
                         "durationMs": duration_ms,
                         "hasSummary": has_summary,
                         "summarySource": summary_source,
-                        "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;
             }
             AgenticEvent::ContextCompressionFailed {
                 session_id,
                 turn_id,
-                subagent_parent_info,
                 compression_id,
                 error,
             } => {
@@ -358,7 +357,6 @@ impl TransportAdapter for TauriTransportAdapter {
                         "turnId": turn_id,
                         "compressionId": compression_id,
                         "error": error,
-                        "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;
             }
@@ -394,7 +392,6 @@ impl TransportAdapter for TauriTransportAdapter {
                 session_id,
                 turn_id,
                 queue_state,
-                subagent_parent_info,
             } => {
                 self.app_handle.emit(
                     "agentic://deep-review-queue-state-changed",
@@ -415,7 +412,6 @@ impl TransportAdapter for TauriTransportAdapter {
                             "maxQueueWaitSeconds": queue_state.max_queue_wait_seconds,
                             "sessionConcurrencyHigh": queue_state.session_concurrency_high,
                         },
-                        "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;
             }
@@ -424,7 +420,6 @@ impl TransportAdapter for TauriTransportAdapter {
                 turn_id,
                 round_id,
                 has_tool_calls,
-                subagent_parent_info,
                 duration_ms,
                 provider_id,
                 model_id,
@@ -443,7 +438,6 @@ impl TransportAdapter for TauriTransportAdapter {
                         "turnId": turn_id,
                         "roundId": round_id,
                         "hasToolCalls": has_tool_calls,
-                        "subagentParentInfo": subagent_parent_info,
                         "durationMs": duration_ms,
                         "providerId": provider_id,
                         "modelId": model_id,
@@ -464,7 +458,6 @@ impl TransportAdapter for TauriTransportAdapter {
                 steering_id,
                 content,
                 display_content,
-                subagent_parent_info,
             } => {
                 self.app_handle.emit(
                     "agentic://user-steering-injected",
@@ -475,7 +468,6 @@ impl TransportAdapter for TauriTransportAdapter {
                         "steeringId": steering_id,
                         "content": content,
                         "displayContent": display_content,
-                        "subagentParentInfo": subagent_parent_info,
                     }),
                 )?;
             }

@@ -117,15 +117,29 @@ impl CronTool {
         self.resolve_workspace(workspace.to_string_lossy().as_ref(), Some(context))
     }
 
-    fn resolve_effective_workspace(
+    async fn resolve_effective_workspace_for_session(
         &self,
-        workspace: Option<&str>,
+        session_id: &str,
         context: &ToolUseContext,
     ) -> BitFunResult<String> {
-        match workspace {
-            Some(workspace) => self.resolve_workspace(workspace, Some(context)),
-            None => self.resolve_workspace_from_context(context),
+        if let Some(coordinator) = get_global_coordinator() {
+            if let Some(resolved) = coordinator
+                .resolve_session_workspace_path(session_id)
+                .await
+                .map(|path| path.to_string_lossy().to_string())
+            {
+                return Ok(resolved);
+            }
         }
+
+        if context.session_id.as_deref() == Some(session_id) {
+            return self.resolve_workspace_from_context(context);
+        }
+
+        Err(BitFunError::tool(format!(
+            "Unable to resolve workspace for session '{}'",
+            session_id
+        )))
     }
 
     fn resolve_effective_session_id(
@@ -353,9 +367,9 @@ impl CronToolJobPatchInput {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct CronToolInput {
     action: CronAction,
-    workspace: Option<String>,
     session_id: Option<String>,
     job: Option<CronToolJobInput>,
     patch: Option<CronToolJobPatchInput>,
@@ -550,12 +564,11 @@ impl Tool for CronTool {
         Ok(r#"Manage scheduled jobs for agent sessions.
 
 Defaults:
-- "workspace": defaults to the current workspace.
 - "session_id": defaults to the current session for "list" and "add".
 
 Actions:
 - "get_time": Return the current local time including timezone information.
-- "list": List all jobs for the effective workspace + session scope.
+- "list": List all jobs for the effective session scope.
 - "add": Create a job. Requires "job". When "job.name" is omitted, uses "Cron job".
 - "update": Update a job. Requires "job_id" and "patch".
 - "remove": Delete a job. Requires "job_id".
@@ -597,10 +610,6 @@ Patch schema for "update":
         json!({
             "type": "object",
             "properties": {
-                "workspace": {
-                    "type": "string",
-                    "description": "Optional absolute workspace path. Defaults to the current workspace."
-                },
                 "session_id": {
                     "type": "string",
                     "description": "Optional target session ID. Defaults to the current session for list/add."
@@ -699,17 +708,6 @@ Patch schema for "update":
             }
         };
 
-        if let Some(workspace) = parsed.workspace.as_deref() {
-            if let Err(message) = Self::validate_workspace_format(workspace, context) {
-                return ValidationResult {
-                    result: false,
-                    message: Some(message),
-                    error_code: Some(400),
-                    meta: None,
-                };
-            }
-        }
-
         if let Some(session_id) = parsed.session_id.as_deref() {
             if let Err(message) = Self::validate_session_id(session_id.trim()) {
                 return ValidationResult {
@@ -724,11 +722,11 @@ Patch schema for "update":
         match parsed.action {
             CronAction::GetTime => ValidationResult::default(),
             CronAction::List => {
-                if parsed.session_id.is_none()
-                    && context
+                let has_effective_session = parsed.session_id.is_some()
+                    || context
                         .and_then(|tool_context| tool_context.session_id.as_deref())
-                        .is_none()
-                {
+                        .is_some();
+                if !has_effective_session {
                     return ValidationResult {
                         result: false,
                         message: Some(
@@ -739,7 +737,7 @@ Patch schema for "update":
                         meta: None,
                     };
                 }
-                if parsed.workspace.is_none()
+                if parsed.session_id.is_none()
                     && context
                         .and_then(|tool_context| tool_context.workspace_root())
                         .is_none()
@@ -747,7 +745,7 @@ Patch schema for "update":
                     return ValidationResult {
                         result: false,
                         message: Some(
-                            "workspace is required for list when the current workspace is unavailable"
+                            "the current workspace is required for list when session_id is omitted"
                                 .to_string(),
                         ),
                         error_code: Some(400),
@@ -783,11 +781,11 @@ Patch schema for "update":
                     };
                 }
 
-                if parsed.session_id.is_none()
-                    && context
+                let has_effective_session = parsed.session_id.is_some()
+                    || context
                         .and_then(|tool_context| tool_context.session_id.as_deref())
-                        .is_none()
-                {
+                        .is_some();
+                if !has_effective_session {
                     return ValidationResult {
                         result: false,
                         message: Some(
@@ -798,7 +796,7 @@ Patch schema for "update":
                         meta: None,
                     };
                 }
-                if parsed.workspace.is_none()
+                if parsed.session_id.is_none()
                     && context
                         .and_then(|tool_context| tool_context.workspace_root())
                         .is_none()
@@ -806,7 +804,7 @@ Patch schema for "update":
                     return ValidationResult {
                         result: false,
                         message: Some(
-                            "workspace is required for add when the current workspace is unavailable"
+                            "the current workspace is required for add when session_id is omitted"
                                 .to_string(),
                         ),
                         error_code: Some(400),
@@ -971,10 +969,11 @@ Patch schema for "update":
             CronAction::List => {
                 let cron_service = get_global_cron_service()
                     .ok_or_else(|| BitFunError::tool("cron service not initialized".to_string()))?;
-                let workspace =
-                    self.resolve_effective_workspace(params.workspace.as_deref(), context)?;
                 let session_id =
                     self.resolve_effective_session_id(params.session_id.as_deref(), context)?;
+                let workspace = self
+                    .resolve_effective_workspace_for_session(&session_id, context)
+                    .await?;
                 let mut jobs = cron_service
                     .list_jobs_filtered(Some(&workspace), Some(&session_id))
                     .await;
@@ -1004,10 +1003,11 @@ Patch schema for "update":
             CronAction::Add => {
                 let cron_service = get_global_cron_service()
                     .ok_or_else(|| BitFunError::tool("cron service not initialized".to_string()))?;
-                let workspace =
-                    self.resolve_effective_workspace(params.workspace.as_deref(), context)?;
                 let session_id =
                     self.resolve_effective_session_id(params.session_id.as_deref(), context)?;
+                let workspace = self
+                    .resolve_effective_workspace_for_session(&session_id, context)
+                    .await?;
                 let job = params
                     .job
                     .ok_or_else(|| BitFunError::tool("job is required for add".to_string()))?;
@@ -1147,5 +1147,95 @@ Patch schema for "update":
                 }])
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agentic::tools::framework::ToolUseContext;
+    use serde_json::json;
+    use std::collections::HashMap;
+
+    fn empty_context() -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: Default::default(),
+            workspace_services: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn validate_list_allows_missing_workspace_when_session_id_present() {
+        let tool = CronTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "list",
+                    "session_id": "worker_1",
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(validation.result, "{:?}", validation.message);
+    }
+
+    #[tokio::test]
+    async fn validate_add_allows_missing_workspace_when_session_id_present() {
+        let tool = CronTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "add",
+                    "session_id": "worker_1",
+                    "job": {
+                        "payload": "hello",
+                        "schedule": {
+                            "kind": "every",
+                            "every": 60
+                        }
+                    }
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(validation.result, "{:?}", validation.message);
+    }
+
+    #[tokio::test]
+    async fn validate_rejects_legacy_workspace_field() {
+        let tool = CronTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "action": "list",
+                    "session_id": "worker_1",
+                    "workspace": "E:/Projects/OpenBitfun/BitFun",
+                }),
+                Some(&empty_context()),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert!(
+            validation
+                .message
+                .as_deref()
+                .unwrap_or_default()
+                .contains("unknown field")
+        );
     }
 }

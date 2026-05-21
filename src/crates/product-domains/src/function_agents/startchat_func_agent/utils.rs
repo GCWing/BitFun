@@ -1,7 +1,11 @@
 //! Pure Startchat function-agent helper utilities.
 
-use crate::function_agents::common::Language;
+use crate::function_agents::common::{
+    AgentError, AgentResult, Language, extract_json_from_ai_response,
+};
 use crate::function_agents::startchat_func_agent::types::*;
+
+pub const WORK_STATE_ANALYSIS_PROMPT: &str = include_str!("prompts/work_state_analysis.md");
 
 pub fn language_instruction(language: &Language) -> &'static str {
     match language {
@@ -23,6 +27,14 @@ pub fn build_complete_analysis_prompt(
             "{git_diff_section}",
             &build_git_diff_section(git_diff, 8000),
         )
+}
+
+pub fn build_work_state_analysis_prompt(
+    git_state: &Option<GitWorkState>,
+    git_diff: &str,
+    language: &Language,
+) -> String {
+    build_complete_analysis_prompt(WORK_STATE_ANALYSIS_PROMPT, git_state, git_diff, language)
 }
 
 pub fn build_git_state_section(git_state: &Option<GitWorkState>) -> String {
@@ -137,6 +149,7 @@ pub fn limit_quick_actions(mut actions: Vec<QuickAction>) -> Vec<QuickAction> {
     actions
 }
 
+#[derive(Debug, Clone)]
 pub struct ParsedCompleteAnalysis {
     pub analysis: AIGeneratedAnalysis,
     pub predicted_actions_count: usize,
@@ -173,6 +186,25 @@ pub fn parse_complete_analysis_value(parsed: &serde_json::Value) -> ParsedComple
         predicted_actions_count,
         quick_actions_count,
     }
+}
+
+pub fn parse_complete_analysis_json(json: &str) -> Result<ParsedCompleteAnalysis, String> {
+    let parsed = serde_json::from_str::<serde_json::Value>(json)
+        .map_err(|error| format!("Failed to parse complete analysis response: {}", error))?;
+    Ok(parse_complete_analysis_value(&parsed))
+}
+
+pub fn parse_work_state_analysis_response(response: &str) -> AgentResult<ParsedCompleteAnalysis> {
+    let json_str = extract_json_from_ai_response(response).ok_or_else(|| {
+        AgentError::internal_error("Failed to extract JSON from analysis response")
+    })?;
+
+    log::debug!(
+        "Parsing function-agent work state JSON response: length={}",
+        json_str.len()
+    );
+
+    parse_complete_analysis_json(&json_str).map_err(AgentError::internal_error)
 }
 
 pub fn parse_action_priority_label(label: &str) -> ActionPriority {
@@ -261,5 +293,83 @@ pub fn time_of_day_for_hour(hour: u32) -> TimeOfDay {
         12..=17 => TimeOfDay::Afternoon,
         18..=22 => TimeOfDay::Evening,
         _ => TimeOfDay::Night,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::function_agents::common::AgentErrorType;
+
+    #[test]
+    fn work_state_ai_prompt_uses_product_domain_template() {
+        let git_state = Some(GitWorkState {
+            current_branch: "feature/runtime".to_string(),
+            unstaged_files: 1,
+            staged_files: 2,
+            unpushed_commits: 3,
+            ahead_behind: None,
+            modified_files: vec![FileModification {
+                module: Some("src".to_string()),
+                path: "src/lib.rs".to_string(),
+                change_type: FileChangeType::Modified,
+            }],
+        });
+
+        let prompt = build_work_state_analysis_prompt(
+            &git_state,
+            "diff --git a/src/lib.rs b/src/lib.rs",
+            &Language::English,
+        );
+
+        assert!(prompt.contains("BitFun AI assistant"));
+        assert!(prompt.contains("Current branch: feature/runtime"));
+        assert!(prompt.contains("diff --git a/src/lib.rs b/src/lib.rs"));
+    }
+
+    #[test]
+    fn work_state_ai_response_policy_extracts_json_and_maps_domain_errors() {
+        let analysis = parse_work_state_analysis_response(
+            r#"The answer is:
+```json
+{
+  "summary": "Working on product-domain owner closure.",
+  "predicted_actions": [
+    {"description": "Run checks", "priority": "High", "icon": "check", "is_reminder": false}
+  ],
+  "quick_actions": [
+    {"title": "Status", "command": "git status", "icon": "git", "action_type": "ViewStatus"}
+  ]
+}
+```
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            analysis.analysis.summary,
+            "Working on product-domain owner closure."
+        );
+        assert_eq!(analysis.analysis.predicted_actions.len(), 3);
+        assert_eq!(analysis.analysis.quick_actions.len(), 1);
+
+        let missing_json = parse_work_state_analysis_response("no json here").unwrap_err();
+        assert_eq!(missing_json.error_type, AgentErrorType::InternalError);
+        assert_eq!(
+            missing_json.message,
+            "Failed to extract JSON from analysis response"
+        );
+
+        let invalid_json = parse_work_state_analysis_response(
+            r#"```json
+not json
+```"#,
+        )
+        .unwrap_err();
+        assert_eq!(invalid_json.error_type, AgentErrorType::InternalError);
+        assert_eq!(
+            invalid_json.message,
+            "Failed to extract JSON from analysis response"
+        );
     }
 }

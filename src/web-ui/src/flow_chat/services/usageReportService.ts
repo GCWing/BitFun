@@ -203,7 +203,16 @@ export function renderUsageReportMarkdown(report: SessionUsageReport): string {
     `| Input | ${formatNumber(report.tokens.inputTokens)} |`,
     `| Output | ${formatNumber(report.tokens.outputTokens)} |`,
     `| Total | ${formatNumber(report.tokens.totalTokens)} |`,
-    `| Cached | ${report.tokens.cacheCoverage === 'unavailable' ? 'not reported' : formatNumber(report.tokens.cachedTokens)} |`,
+    `| Cached | ${
+      report.tokens.cacheCoverage === 'unavailable'
+        ? 'not reported'
+        : `${formatNumber(report.tokens.cachedTokens)}${
+            typeof report.tokens.cacheHitRate === 'number' &&
+            Number.isFinite(report.tokens.cacheHitRate)
+              ? ` (${Math.round(report.tokens.cacheHitRate * 100)}%)`
+              : ''
+          }`
+    } |`,
     '',
   );
 

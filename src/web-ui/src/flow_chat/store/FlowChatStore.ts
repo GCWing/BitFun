@@ -14,10 +14,18 @@ import {
   ImageAnalysisResult,
   AnyFlowItem,
   SessionConfig,
+  SessionContextRestoreState,
+  SessionHistoryState,
 } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  isRemoteTraceContext,
+  markPhaseAfterAnimationFrames,
+  startupTrace,
+} from '@/shared/utils/startupTrace';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
-import type { LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
+import type { DialogTurnData, LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
 import {
   deriveLastFinishedAtFromMetadata,
   deriveSessionRelationshipFromMetadata,
@@ -45,7 +53,63 @@ import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 import { storage } from '@/shared/utils/storageAdapter';
 
 const log = createLogger('FlowChatStore');
-const VALID_AGENT_TYPES = new Set(['agentic', 'debug', 'Plan', 'Cowork', 'Claw', 'Team', 'DeepResearch']);
+const VALID_AGENT_TYPES = new Set([
+  'agentic',
+  'Multitask',
+  'debug',
+  'Plan',
+  'Cowork',
+  'Claw',
+  'Team',
+  'DeepResearch',
+]);
+const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
+
+interface MetadataListRequest {
+  promise: Promise<void>;
+  completedAtMs?: number;
+  cleanupTimer?: ReturnType<typeof setTimeout>;
+}
+
+function isUnsupportedTauriCommandError(error: unknown, command: string): boolean {
+  const anyError = error as any;
+  const originalError = anyError?.context?.originalError;
+  const messageParts = [
+    anyError?.message,
+    typeof originalError === 'string' ? originalError : originalError?.message,
+  ].filter((part): part is string => typeof part === 'string');
+  const normalizedMessage = messageParts.join(' ').toLowerCase();
+  const normalizedCommand = command.toLowerCase();
+  const contextCommand =
+    typeof anyError?.context?.command === 'string'
+      ? anyError.context.command.toLowerCase()
+      : '';
+  const mentionsCommand =
+    contextCommand === normalizedCommand ||
+    normalizedMessage.includes(normalizedCommand);
+
+  if (!mentionsCommand) {
+    return false;
+  }
+
+  return normalizedMessage.includes('unknown command') ||
+    normalizedMessage.includes('command not found') ||
+    (normalizedMessage.includes('command') && normalizedMessage.includes('not found')) ||
+    normalizedMessage.includes('not registered') ||
+    normalizedMessage.includes('is not a function');
+}
+
+function restoreCommandSupportKey(
+  command: string,
+  remoteConnectionId?: string,
+  remoteSshHost?: string
+): string {
+  return JSON.stringify([
+    command,
+    remoteConnectionId?.trim() || 'local',
+    remoteSshHost?.trim().toLowerCase() || '',
+  ]);
+}
 
 function isValidPersistedAgentType(agentType: string): boolean {
   return VALID_AGENT_TYPES.has(agentType) || agentType.startsWith('acp:');
@@ -56,6 +120,8 @@ export class FlowChatStore {
   private state: FlowChatState;
   private listeners: Set<(state: FlowChatState) => void> = new Set();
   private silentMode = false;
+  private metadataListRequests = new Map<string, MetadataListRequest>();
+  private unsupportedRestoreCommands = new Set<string>();
   private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | 'interrupted' | undefined) => void;
 
   private constructor() {
@@ -105,6 +171,18 @@ export class FlowChatStore {
 
   public getState(): FlowChatState {
     return this.state;
+  }
+
+  private getMetadataListRequestKey(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+  ): string {
+    return JSON.stringify([
+      workspacePath,
+      remoteConnectionId || '',
+      remoteSshHost || '',
+    ]);
   }
 
   public setState(updater: (prevState: FlowChatState) => FlowChatState): void {
@@ -255,6 +333,7 @@ export class FlowChatStore {
         lastActiveAt: Date.now(),
         lastFinishedAt: undefined,
         error: null,
+        historyState: 'new',
         maxContextTokens: maxContextTokens || 128128,
         mode: mode || 'agentic',
         workspacePath,
@@ -263,6 +342,8 @@ export class FlowChatStore {
         remoteSshHost,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
+        parentToolCallId: relationship.parentToolCallId,
+        subagentType: relationship.subagentType,
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
         isTransient: false,
@@ -292,6 +373,8 @@ export class FlowChatStore {
       parentSessionId?: string;
       sessionKind?: SessionKind;
       btwOrigin?: Session['btwOrigin'];
+      parentToolCallId?: string;
+      subagentType?: string;
       isTransient?: boolean;
       agentBackedTransient?: boolean;
       deepReviewRunManifest?: Session['deepReviewRunManifest'];
@@ -326,11 +409,14 @@ export class FlowChatStore {
         maxContextTokens: 128128,
         mode: mode || 'agentic',
         isHistorical: false,
+        historyState: 'new',
         workspacePath,
         remoteConnectionId,
         remoteSshHost,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
+        parentToolCallId: relationship.parentToolCallId,
+        subagentType: relationship.subagentType,
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
         deepReviewRunManifest: meta?.deepReviewRunManifest,
@@ -440,7 +526,12 @@ export class FlowChatStore {
    */
   public updateSessionRelationship(
     sessionId: string,
-    updates: { parentSessionId?: string; sessionKind?: SessionKind }
+    updates: {
+      parentSessionId?: string;
+      sessionKind?: SessionKind;
+      parentToolCallId?: string;
+      subagentType?: string;
+    }
   ): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
@@ -450,11 +541,21 @@ export class FlowChatStore {
         sessionKind: updates.sessionKind ?? session.sessionKind,
         parentSessionId: updates.parentSessionId ?? session.parentSessionId,
         btwOrigin: session.btwOrigin,
+        parentToolCallId:
+          updates.parentToolCallId !== undefined
+            ? updates.parentToolCallId
+            : session.parentToolCallId,
+        subagentType:
+          updates.subagentType !== undefined
+            ? updates.subagentType
+            : session.subagentType,
       });
       const next: Session = {
         ...session,
         parentSessionId: relationship.parentSessionId,
         sessionKind: relationship.sessionKind,
+        parentToolCallId: relationship.parentToolCallId,
+        subagentType: relationship.subagentType,
         btwOrigin: relationship.btwOrigin,
       };
 
@@ -1189,69 +1290,6 @@ export class FlowChatStore {
     }
   }
 
-  /**
-   * Insert new FlowItem after specified tool item (for subagent content flattening)
-   * @param sessionId Session ID
-   * @param dialogTurnId Dialog turn ID
-   * @param parentToolId Parent tool ID
-   * @param newItem New item to insert
-   */
-  public insertModelRoundItemAfterTool(sessionId: string, dialogTurnId: string, parentToolId: string, newItem: AnyFlowItem): void {
-    this.updateDialogTurn(sessionId, dialogTurnId, turn => {
-      let parentRoundIndex = -1;
-      let parentItemIndex = -1;
-      
-      for (let i = 0; i < turn.modelRounds.length; i++) {
-        const itemIndex = turn.modelRounds[i].items.findIndex((item: any) => item.id === parentToolId);
-        if (itemIndex !== -1) {
-          parentRoundIndex = i;
-          parentItemIndex = itemIndex;
-          break;
-        }
-      }
-      
-      if (parentRoundIndex === -1 || parentItemIndex === -1) {
-        log.warn('Parent tool item not found', { sessionId, dialogTurnId, parentToolId });
-        return turn;
-      }
-      
-      const targetModelRound = turn.modelRounds[parentRoundIndex];
-      
-      const existingItem = targetModelRound.items.find((item: any) => item.id === newItem.id);
-      if (existingItem) {
-        return turn;
-      }
-      
-      let insertIndex = parentItemIndex + 1;
-      
-      while (insertIndex < targetModelRound.items.length) {
-        const currentItem = targetModelRound.items[insertIndex] as any;
-        if (currentItem.parentTaskToolId === parentToolId && currentItem.isSubagentItem) {
-          insertIndex++;
-        } else {
-          break;
-        }
-      }
-      
-      const updatedItems = [
-        ...targetModelRound.items.slice(0, insertIndex),
-        newItem,
-        ...targetModelRound.items.slice(insertIndex)
-      ];
-      
-      const updatedModelRounds = [...turn.modelRounds];
-      updatedModelRounds[parentRoundIndex] = {
-        ...targetModelRound,
-        items: updatedItems
-      };
-      
-      return {
-        ...turn,
-        modelRounds: updatedModelRounds
-      };
-    });
-  }
-
   public updateModelRoundItem(sessionId: string, dialogTurnId: string, itemId: string, updates: Partial<FlowItem>): void {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => {
       let updated = false;
@@ -1735,42 +1773,142 @@ export class FlowChatStore {
   public async initializeFromDisk(
     workspacePath: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    traceSource = 'unknown'
   ): Promise<void> {
+    const requestKey = this.getMetadataListRequestKey(workspacePath, remoteConnectionId, remoteSshHost);
+    const existingRequest = this.metadataListRequests.get(requestKey);
+    const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
+    if (existingRequest) {
+      const completedAtMs = existingRequest.completedAtMs;
+      const isRecentCompletedRequest =
+        completedAtMs !== undefined &&
+        elapsedMs(completedAtMs) <= METADATA_LIST_RECENT_DEDUPE_TTL_MS;
+
+      if (completedAtMs === undefined || isRecentCompletedRequest) {
+        startupTrace.markPhase('session_metadata_list_deduped', {
+          remote,
+          source: traceSource,
+          dedupeState: completedAtMs === undefined ? 'in-flight' : 'recent',
+        });
+        return existingRequest.promise;
+      }
+
+      if (existingRequest.cleanupTimer) {
+        clearTimeout(existingRequest.cleanupTimer);
+      }
+      this.metadataListRequests.delete(requestKey);
+    }
+
+    let succeeded = false;
+    const loadPromise = this.initializeFromDiskUncached(
+      workspacePath,
+      remoteConnectionId,
+      remoteSshHost,
+      traceSource,
+    ).then(result => {
+      succeeded = result;
+    });
+
+    const request: MetadataListRequest = { promise: loadPromise };
+    this.metadataListRequests.set(requestKey, request);
+
+    loadPromise.finally(() => {
+      const currentRequest = this.metadataListRequests.get(requestKey);
+      if (currentRequest !== request) {
+        return;
+      }
+
+      if (!succeeded) {
+        this.metadataListRequests.delete(requestKey);
+        return;
+      }
+
+      request.completedAtMs = nowMs();
+      request.cleanupTimer = setTimeout(() => {
+        if (this.metadataListRequests.get(requestKey) === request) {
+          this.metadataListRequests.delete(requestKey);
+        }
+      }, METADATA_LIST_RECENT_DEDUPE_TTL_MS);
+    });
+
+    return loadPromise;
+  }
+
+  private async initializeFromDiskUncached(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+    traceSource = 'unknown'
+  ): Promise<boolean> {
+    const traceStartedAt = nowMs();
+    const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
+    const metadataListTraceId = `metadata-${Math.random().toString(36).slice(2, 8)}`;
+    let sessionCount = 0;
+    startupTrace.markPhase('session_metadata_list_start', {
+      remote,
+      source: traceSource,
+      metadataListTraceId,
+    });
     try {
       const { sessionAPI } = await import('@/infrastructure/api');
       const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost);
+      sessionCount = sessions.length;
+      startupTrace.markPhase('session_metadata_list_loaded', {
+        remote,
+        source: traceSource,
+        metadataListTraceId,
+        sessionCount,
+      });
 
       const { stateMachineManager } = await import('../state-machine');
-      sessions.forEach(metadata => {
-        stateMachineManager.getOrCreate(metadata.sessionId);
-      });
-      
-      const processSession = async (metadata: any) => {
-        const existingSession = this.state.sessions.get(metadata.sessionId);
-        if (existingSession) {
-          return;
-        }
-        if (isLegacyPersistedBtwSession(metadata)) {
-          return;
-        }
 
-        let maxContextTokens = 128128;
+      let models: any[] = [];
+      let defaultModels: Record<string, string> = {};
+      try {
+        const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
+        const [modelsResult, defaultModelsResult] = await Promise.allSettled([
+          configManager.getConfig<any[]>('ai.models'),
+          configManager.getConfig<Record<string, string>>('ai.default_models'),
+        ]);
+
+        if (modelsResult.status === 'fulfilled' && Array.isArray(modelsResult.value)) {
+          models = modelsResult.value;
+        }
+        if (
+          defaultModelsResult.status === 'fulfilled' &&
+          defaultModelsResult.value &&
+          typeof defaultModelsResult.value === 'object'
+        ) {
+          defaultModels = defaultModelsResult.value;
+        }
+      } catch (error) {
+        log.warn('Failed to load model config for session metadata, using defaults', { error });
+      }
+
+      const processSession = async (metadata: any) => {
         try {
-          const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
-          const models = await configManager.getConfig<any[]>('ai.models') || [];
-          
+          const existingSession = this.state.sessions.get(metadata.sessionId);
+          if (existingSession) {
+            return;
+          }
+          if (isLegacyPersistedBtwSession(metadata)) {
+            return;
+          }
+
+          stateMachineManager.getOrCreate(metadata.sessionId);
+
+          let maxContextTokens = 128128;
           if (metadata.modelName) {
             const model = models.find((m: any) => m.name === metadata.modelName || m.id === metadata.modelName);
             if (model?.context_window) {
               maxContextTokens = model.context_window;
             }
           }
-          
+
           if (maxContextTokens === 128128) {
-            const defaultModels = await configManager.getConfig<Record<string, string>>('ai.default_models');
             const primaryModelId = defaultModels?.primary;
-            
+
             if (primaryModelId) {
               const primaryModel = models.find((m: any) => m.id === primaryModelId);
               if (primaryModel?.context_window) {
@@ -1778,76 +1916,141 @@ export class FlowChatStore {
               }
             }
           }
+
+          const relationship = deriveSessionRelationshipFromMetadata(metadata);
+          const lastFinishedAt = deriveLastFinishedAtFromMetadata(metadata);
+          const titleState = deriveSessionTitleStateFromMetadata(metadata);
+          const hasDynamicDefaultTitle = titleState.titleSource === 'i18n';
+
+          this.setState(prev => {
+            if (prev.sessions.has(metadata.sessionId)) {
+              return prev;
+            }
+
+            const rawAgentType = metadata.agentType || 'agentic';
+            const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+
+            if (rawAgentType !== validatedAgentType) {
+              log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
+            }
+
+            const session: Session = {
+              sessionId: metadata.sessionId,
+              title: titleState.title,
+              titleSource: titleState.titleSource,
+              titleI18nKey: titleState.titleI18nKey,
+              titleI18nParams: titleState.titleI18nParams,
+              titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
+              dialogTurns: [],
+              status: 'idle',
+              config: {
+                agentType: validatedAgentType,
+                modelName: metadata.modelName,
+              },
+              createdAt: metadata.createdAt,
+              lastActiveAt: metadata.lastActiveAt,
+              lastFinishedAt,
+              error: null,
+              isHistorical: true,
+              historyState: 'metadata-only',
+              todos: (metadata as any).todos || [],
+              maxContextTokens,
+              mode: validatedAgentType,
+              workspacePath: (metadata as any).workspacePath || workspacePath,
+              remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
+              remoteSshHost:
+                metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
+              parentSessionId: relationship.parentSessionId,
+              sessionKind: relationship.sessionKind,
+              parentToolCallId: relationship.parentToolCallId,
+              subagentType: relationship.subagentType,
+              btwThreads: [],
+              btwOrigin: relationship.btwOrigin,
+              hasUnreadCompletion: metadata.unreadCompletion,
+              needsUserAttention: metadata.needsUserAttention,
+              deepReviewRunManifest: metadata.deepReviewRunManifest,
+              isTransient: false,
+            };
+
+            const newSessions = new Map(prev.sessions);
+            newSessions.set(metadata.sessionId, session);
+
+            return {
+              ...prev,
+              sessions: newSessions,
+            };
+          });
         } catch (error) {
-          log.warn('Failed to get model context window size, using default', { sessionId: metadata.sessionId, error });
+          log.warn('Failed to process persisted session metadata', {
+            sessionId: metadata?.sessionId,
+            error,
+          });
         }
-        
-        const relationship = deriveSessionRelationshipFromMetadata(metadata);
-        const lastFinishedAt = deriveLastFinishedAtFromMetadata(metadata);
-        const titleState = deriveSessionTitleStateFromMetadata(metadata);
-        const hasDynamicDefaultTitle = titleState.titleSource === 'i18n';
-
-        this.setState(prev => {
-          if (prev.sessions.has(metadata.sessionId)) {
-            return prev;
-          }
-
-          const rawAgentType = metadata.agentType || 'agentic';
-          const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
-          
-          if (rawAgentType !== validatedAgentType) {
-            log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
-          }
-          
-          const session: Session = {
-            sessionId: metadata.sessionId,
-            title: titleState.title,
-            titleSource: titleState.titleSource,
-            titleI18nKey: titleState.titleI18nKey,
-            titleI18nParams: titleState.titleI18nParams,
-            titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
-            dialogTurns: [],
-            status: 'idle',
-            config: {
-              agentType: validatedAgentType,
-              modelName: metadata.modelName,
-            },
-            createdAt: metadata.createdAt,
-            lastActiveAt: metadata.lastActiveAt,
-            lastFinishedAt,
-            error: null,
-            isHistorical: true,
-            todos: (metadata as any).todos || [],
-            maxContextTokens,
-            mode: validatedAgentType,
-            workspacePath: (metadata as any).workspacePath || workspacePath,
-            remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
-            remoteSshHost:
-              metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
-            parentSessionId: relationship.parentSessionId,
-            sessionKind: relationship.sessionKind,
-            btwThreads: [],
-            btwOrigin: relationship.btwOrigin,
-            hasUnreadCompletion: metadata.unreadCompletion,
-            needsUserAttention: metadata.needsUserAttention,
-            deepReviewRunManifest: metadata.deepReviewRunManifest,
-            isTransient: false,
-          };
-          
-          const newSessions = new Map(prev.sessions);
-          newSessions.set(metadata.sessionId, session);
-          
-          return {
-            ...prev,
-            sessions: newSessions,
-          };
-        });
       };
       
       await Promise.all(sessions.map(processSession));
+      startupTrace.markPhase('session_metadata_list_end', {
+        remote,
+        source: traceSource,
+        metadataListTraceId,
+        sessionCount,
+        durationMs: elapsedMs(traceStartedAt),
+      });
+      return true;
     } catch (error) {
+      startupTrace.markPhase('session_metadata_list_failed', {
+        remote,
+        source: traceSource,
+        metadataListTraceId,
+        sessionCount,
+        durationMs: elapsedMs(traceStartedAt),
+      });
       log.error('Failed to load persisted sessions', error);
+      return false;
     }
+  }
+
+  public setSessionHistoryState(sessionId: string, historyState: SessionHistoryState): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session || session.historyState === historyState) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        historyState,
+      });
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+  }
+
+  public setSessionContextRestoreState(
+    sessionId: string,
+    contextRestoreState: SessionContextRestoreState
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session || session.contextRestoreState === contextRestoreState) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        contextRestoreState,
+      });
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
   }
 
   /**
@@ -1858,8 +2061,17 @@ export class FlowChatStore {
     workspacePath: string,
     limit?: number,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    options?: {
+      includeInternal?: boolean;
+    }
   ): Promise<void> {
+    const traceStartedAt = nowMs();
+    const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
+    const sessionTraceId = `${sessionId.slice(0, 8)}-${Math.random().toString(36).slice(2, 8)}`;
+    startupTrace.markPhase('historical_session_hydrate_start', { remote, sessionTraceId });
+    this.setSessionHistoryState(sessionId, 'hydrating');
+
     try {
       const { stateMachineManager } = await import('../state-machine');
       stateMachineManager.getOrCreate(sessionId);
@@ -1867,26 +2079,151 @@ export class FlowChatStore {
       const existingSession = this.state.sessions.get(sessionId);
       const isAcpSession = existingSession?.mode?.startsWith('acp:') ||
         existingSession?.config.agentType?.startsWith('acp:');
+      let turns: DialogTurnData[] | undefined;
+      let contextRestoreState: SessionContextRestoreState = 'ready';
       if (!isAcpSession) {
+        const restoreStartedAt = nowMs();
+        startupTrace.markPhase('historical_session_restore_start', { remote, sessionTraceId });
         try {
           const { agentAPI } = await import('@/infrastructure/api');
-          await agentAPI.restoreSession(sessionId, workspacePath, remoteConnectionId, remoteSshHost);
+          const restoreSessionViewSupportKey = restoreCommandSupportKey(
+            'restore_session_view',
+            remoteConnectionId,
+            remoteSshHost
+          );
+          const restoreSessionWithTurnsSupportKey = restoreCommandSupportKey(
+            'restore_session_with_turns',
+            remoteConnectionId,
+            remoteSshHost
+          );
+          const restoreWithTurnsOrSession = async (): Promise<void> => {
+            if (
+              typeof agentAPI.restoreSessionWithTurns === 'function' &&
+              !this.unsupportedRestoreCommands.has(restoreSessionWithTurnsSupportKey)
+            ) {
+              try {
+                const restored = await agentAPI.restoreSessionWithTurns(
+                  sessionId,
+                  workspacePath,
+                  remoteConnectionId,
+                  remoteSshHost,
+                  sessionTraceId,
+                  options?.includeInternal,
+                );
+                turns = restored.turns;
+                contextRestoreState = 'ready';
+                return;
+              } catch (error) {
+                if (!isUnsupportedTauriCommandError(error, 'restore_session_with_turns')) {
+                  throw error;
+                }
+                this.unsupportedRestoreCommands.add(restoreSessionWithTurnsSupportKey);
+                startupTrace.markPhase('historical_session_restore_fallback', {
+                  remote,
+                  sessionTraceId,
+                  from: 'restore_session_with_turns',
+                  to: 'restore_session',
+                  reason: 'unsupported-command',
+                });
+              }
+            }
+
+            await agentAPI.restoreSession(
+              sessionId,
+              workspacePath,
+              remoteConnectionId,
+              remoteSshHost,
+              sessionTraceId,
+              options?.includeInternal,
+            );
+            contextRestoreState = 'ready';
+          };
+
+          if (
+            typeof agentAPI.restoreSessionView === 'function' &&
+            !this.unsupportedRestoreCommands.has(restoreSessionViewSupportKey)
+          ) {
+            try {
+              const restored = await agentAPI.restoreSessionView(
+                sessionId,
+                workspacePath,
+                remoteConnectionId,
+                remoteSshHost,
+                sessionTraceId,
+                options?.includeInternal,
+              );
+              turns = restored.turns;
+              contextRestoreState =
+                restored.contextRestoreState === 'ready' ? 'ready' : 'pending';
+            } catch (error) {
+              if (!isUnsupportedTauriCommandError(error, 'restore_session_view')) {
+                throw error;
+              }
+              this.unsupportedRestoreCommands.add(restoreSessionViewSupportKey);
+              startupTrace.markPhase('historical_session_restore_fallback', {
+                remote,
+                sessionTraceId,
+                from: 'restore_session_view',
+                to: 'restore_session_with_turns',
+                reason: 'unsupported-command',
+              });
+              await restoreWithTurnsOrSession();
+            }
+          } else {
+            await restoreWithTurnsOrSession();
+          }
+          startupTrace.markPhase('historical_session_restore_end', {
+            remote,
+            sessionTraceId,
+            turnCount: Array.isArray(turns) ? turns.length : 0,
+            contextRestoreState,
+            durationMs: elapsedMs(restoreStartedAt),
+          });
         } catch (error) {
+          contextRestoreState = 'pending';
+          startupTrace.markPhase('historical_session_restore_failed', {
+            remote,
+            sessionTraceId,
+            durationMs: elapsedMs(restoreStartedAt),
+          });
           log.warn('Backend session restore failed (may be new session)', { sessionId, error });
         }
       }
       
-      const { sessionAPI } = await import('@/infrastructure/api');
-      const turns = await sessionAPI.loadSessionTurns(
-        sessionId,
-        workspacePath,
-        limit,
-        remoteConnectionId,
-        remoteSshHost
-      );
+      if (!turns) {
+        const turnsLoadStartedAt = nowMs();
+        startupTrace.markPhase('historical_session_turns_load_start', { remote, sessionTraceId });
+        const { sessionAPI } = await import('@/infrastructure/api');
+        turns = await sessionAPI.loadSessionTurns(
+          sessionId,
+          workspacePath,
+          limit,
+          remoteConnectionId,
+          remoteSshHost
+        );
+        startupTrace.markPhase('historical_session_turns_load_end', {
+          remote,
+          sessionTraceId,
+          turnCount: Array.isArray(turns) ? turns.length : 0,
+          durationMs: elapsedMs(turnsLoadStartedAt),
+        });
+      }
+      startupTrace.markPhase('historical_session_turns_loaded', {
+        remote,
+        sessionTraceId,
+        turnCount: Array.isArray(turns) ? turns.length : 0,
+      });
       
+      const convertStartedAt = nowMs();
       const dialogTurns = this.convertToDialogTurns(turns);
-      
+      startupTrace.markPhase('historical_session_convert_end', {
+        remote,
+        sessionTraceId,
+        turnCount: dialogTurns.length,
+        durationMs: elapsedMs(convertStartedAt),
+      });
+
+      const stateCommitStartedAt = nowMs();
       this.setState(prev => {
         const session = prev.sessions.get(sessionId);
         if (!session) return prev;
@@ -1895,6 +2232,9 @@ export class FlowChatStore {
           ...session,
           dialogTurns,
           isHistorical: false,
+          historyState: 'ready' as const,
+          contextRestoreState,
+          error: null,
         };
         
         const newSessions = new Map(prev.sessions);
@@ -1905,11 +2245,51 @@ export class FlowChatStore {
           sessions: newSessions,
         };
       });
+      startupTrace.markPhase('historical_session_state_commit_end', {
+        remote,
+        sessionTraceId,
+        turnCount: dialogTurns.length,
+        durationMs: elapsedMs(stateCommitStartedAt),
+      });
+      markPhaseAfterAnimationFrames(startupTrace, 'historical_session_after_state_commit_frame', {
+        remote,
+        sessionTraceId,
+        turnCount: dialogTurns.length,
+      }, {
+        frameCount: 2,
+      });
 
       // Reset state machine to IDLE after loading history
       // This handles the case where restoreSession triggered events that left the state machine in PROCESSING
       stateMachineManager.reset(sessionId);
+      startupTrace.markPhase('historical_session_hydrate_end', {
+        remote,
+        sessionTraceId,
+        turnCount: dialogTurns.length,
+        durationMs: elapsedMs(traceStartedAt),
+      });
     } catch (error) {
+      this.setState(prev => {
+        const session = prev.sessions.get(sessionId);
+        if (!session) return prev;
+
+        const newSessions = new Map(prev.sessions);
+        newSessions.set(sessionId, {
+          ...session,
+          isHistorical: true,
+          historyState: 'failed',
+        });
+
+        return {
+          ...prev,
+          sessions: newSessions,
+        };
+      });
+      startupTrace.markPhase('historical_session_hydrate_failed', {
+        remote,
+        sessionTraceId,
+        durationMs: elapsedMs(traceStartedAt),
+      });
       log.error('Failed to load session history', { sessionId, error });
       throw error;
     }
@@ -1985,8 +2365,6 @@ export class FlowChatStore {
               timestamp: text.timestamp,
               status: normalizeRecoveredTextStatus(text.status, normalizedTurnStatus),
               orderIndex: text.orderIndex,
-              isSubagentItem: text.isSubagentItem,
-              parentTaskToolId: text.parentTaskToolId,
               subagentSessionId: text.subagentSessionId,
             })),
             ...round.toolItems.map((tool: any) => ({
@@ -2020,8 +2398,6 @@ export class FlowChatStore {
                 { preservePendingConfirmation: true },
               ),
               orderIndex: tool.orderIndex,
-              isSubagentItem: tool.isSubagentItem,
-              parentTaskToolId: tool.parentTaskToolId,
               subagentSessionId: tool.subagentSessionId,
               subagentModelId: tool.subagentModelId,
               subagentModelAlias: tool.subagentModelAlias,
@@ -2035,8 +2411,6 @@ export class FlowChatStore {
               timestamp: thinking.timestamp,
               status: normalizeRecoveredThinkingStatus(thinking.status, normalizedTurnStatus),
               orderIndex: thinking.orderIndex,
-              isSubagentItem: thinking.isSubagentItem,
-              parentTaskToolId: thinking.parentTaskToolId,
               subagentSessionId: thinking.subagentSessionId,
             })),
           ].sort((a: any, b: any) => {

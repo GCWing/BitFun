@@ -18,6 +18,7 @@ import { loader } from '@monaco-editor/react';
 import { getMonacoPath, getMonacoWorkerPath, logMonacoResourceCheck } from './tools/editor/utils/monacoPathHelper';
 import { bootstrapLogger, createLogger, initLogger } from './shared/utils/logger';
 import { elapsedMs, logElapsed, measureAsyncAndLog, nowMs } from './shared/utils/timing';
+import { startupTrace } from './shared/utils/startupTrace';
 import {
   buildReactCrashLogPayload,
   isMinifiedReactErrorMessage,
@@ -27,6 +28,7 @@ import {
 bootstrapLogger();
 
 const log = createLogger('App');
+startupTrace.markPhase('first_script_eval');
 
 /** Dedupe only for white-screen heuristic (empty #root), not for Error Boundary logs. */
 const WHITE_SCREEN_LOGGED_FLAG = '__bitfun_white_screen_crash_logged__';
@@ -225,6 +227,7 @@ const DEFAULT_WORKER = 'base/worker/workerMain.js';
 /** Logger, theme, and minimal deps — must finish before first React paint (F5 / webview reload does not re-run Tauri init script). */
 async function initializeBeforeRender(): Promise<void> {
   const phaseStartedAt = nowMs();
+  startupTrace.markPhase('before_render_start');
   await measureAsyncAndLog(log, 'Startup step completed', () => initLogger(), {
     data: { step: 'initLogger' },
   });
@@ -240,20 +243,6 @@ async function initializeBeforeRender(): Promise<void> {
   log.info('Initializing BitFun');
 
   await measureAsyncAndLog(log, 'Startup step completed', async () => {
-    const { registerDefaultContextTypes } = await import('./shared/context-system/core/registerDefaultTypes');
-    registerDefaultContextTypes();
-  }, {
-    data: { step: 'registerDefaultContextTypes' },
-  });
-
-  await measureAsyncAndLog(log, 'Startup step completed', async () => {
-    const { initRecommendationProviders } = await import('./flow_chat/components/smart-recommendations');
-    initRecommendationProviders();
-  }, {
-    data: { step: 'initRecommendationProviders' },
-  });
-
-  await measureAsyncAndLog(log, 'Startup step completed', async () => {
     const { themeService } = await import('./infrastructure/theme');
     await themeService.initialize();
   }, {
@@ -263,20 +252,44 @@ async function initializeBeforeRender(): Promise<void> {
   logElapsed(log, 'Startup phase completed', phaseStartedAt, {
     data: { phase: 'initializeBeforeRender' },
   });
+  startupTrace.markPhase('before_render_end', {
+    durationMs: elapsedMs(phaseStartedAt),
+  });
 }
 
 /** Rest of startup runs after the shell is visible so refresh latency stays reasonable. */
 async function initializeAfterRender(): Promise<void> {
   const phaseStartedAt = nowMs();
+  startupTrace.markPhase('after_render_start');
   const { fontPreferenceService } = await import('./infrastructure/font-preference');
   await fontPreferenceService.initialize();
   log.info('Font preference initialized at startup');
 
-  const { configManager } = await import('./infrastructure/config');
-  await configManager.getConfig('editor');
-  log.info('Editor configuration preloaded');
-
   const initResults = await Promise.allSettled([
+    (async () => {
+      const { backgroundTaskScheduler } = await import('./shared/utils/backgroundTaskScheduler');
+      backgroundTaskScheduler.schedule(async () => {
+        const { configManager } = await import('./infrastructure/config/services/ConfigManager');
+        await configManager.getConfig('editor');
+        log.info('Editor configuration preloaded');
+      }, {
+        idle: true,
+        inFlightKey: 'startup:editor-config-preload',
+        priority: 'low',
+      });
+    })(),
+    (async () => {
+      const { installFrontendLogLevelConfigWatcher } = await import('./infrastructure/config/services/FrontendLogLevelSync');
+      await installFrontendLogLevelConfigWatcher();
+    })(),
+    (async () => {
+      const { registerDefaultContextTypes } = await import('./shared/context-system/core/registerDefaultTypes');
+      registerDefaultContextTypes();
+    })(),
+    (async () => {
+      const { initRecommendationProviders } = await import('./flow_chat/components/smart-recommendations');
+      initRecommendationProviders();
+    })(),
     initializeAllTools(),
     (async () => {
       initContextMenuSystem({
@@ -289,17 +302,21 @@ async function initializeAfterRender(): Promise<void> {
       registerNotificationContextMenu();
     })(),
     (async () => {
-      const { MonacoManager } = await import('./tools/editor');
-      await MonacoManager.initialize();
-
-      const { monacoThemeSync } = await import('./infrastructure/theme/integrations/MonacoThemeSync');
-      await monacoThemeSync.initialize();
-      log.info('Monaco theme sync initialized');
+      const { scheduleMonacoStartupWarmup } = await import('./tools/editor/services/MonacoStartupWarmup');
+      scheduleMonacoStartupWarmup();
     })(),
   ]);
 
   initResults.forEach((result, index) => {
-    const names = ['Tools', 'ContextMenu', 'Editors'];
+    const names = [
+      'EditorConfigPreload',
+      'LogLevelConfigWatcher',
+      'DefaultContextTypes',
+      'RecommendationProviders',
+      'Tools',
+      'ContextMenu',
+      'EditorWarmup',
+    ];
     if (result.status === 'rejected') {
       log.warn('Initialization failed', { module: names[index], error: result.reason });
     }
@@ -309,10 +326,14 @@ async function initializeAfterRender(): Promise<void> {
   logElapsed(log, 'Startup phase completed', phaseStartedAt, {
     data: { phase: 'initializeAfterRender' },
   });
+  startupTrace.markPhase('after_render_end', {
+    durationMs: elapsedMs(phaseStartedAt),
+  });
 }
 
 async function startApplication(): Promise<void> {
   const appStartedAt = nowMs();
+  startupTrace.markPhase('start_application_start');
   try {
     await initializeBeforeRender();
   } catch (error) {
@@ -345,6 +366,10 @@ async function startApplication(): Promise<void> {
         sinceStartupMs: elapsedMs(appStartedAt),
       },
     });
+    startupTrace.markPhase('agent_companion_render_scheduled', {
+      sinceStartupMs: elapsedMs(appStartedAt),
+    });
+    startupTrace.flushSummary('agent_companion_render_scheduled');
     return;
   }
 
@@ -363,6 +388,9 @@ async function startApplication(): Promise<void> {
       sinceStartupMs: elapsedMs(appStartedAt),
     },
   });
+  startupTrace.markPhase('react_render_scheduled', {
+    sinceStartupMs: elapsedMs(appStartedAt),
+  });
 
   try {
     await initializeAfterRender();
@@ -373,6 +401,10 @@ async function startApplication(): Promise<void> {
   logElapsed(log, 'Startup phase completed', appStartedAt, {
     data: { phase: 'startApplication' },
   });
+  startupTrace.markPhase('start_application_end', {
+    durationMs: elapsedMs(appStartedAt),
+  });
+  startupTrace.flushSummary('start_application_completed');
 }
 
 void startApplication();

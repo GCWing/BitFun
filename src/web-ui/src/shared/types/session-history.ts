@@ -6,9 +6,20 @@
 
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
-export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review' | 'miniapp';
+export type SessionKind = 'normal' | 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
 export type PersistedSessionKind = 'standard' | 'subagent';
 export type SessionTitleSource = 'text' | 'i18n';
+export type SessionRelationshipKind = 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
+
+export interface SessionRelationship {
+  kind?: SessionRelationshipKind;
+  parentSessionId?: string | null;
+  parentRequestId?: string | null;
+  parentDialogTurnId?: string | null;
+  parentTurnIndex?: number | null;
+  parentToolCallId?: string | null;
+  subagentType?: string | null;
+}
 
 export interface SessionCustomMetadata extends Record<string, unknown> {
   kind?: SessionKind;
@@ -16,6 +27,8 @@ export interface SessionCustomMetadata extends Record<string, unknown> {
   parentRequestId?: string | null;
   parentDialogTurnId?: string | null;
   parentTurnIndex?: number | null;
+  parentToolCallId?: string | null;
+  subagentType?: string | null;
   forkOrigin?: {
     sessionId?: string | null;
     turnId?: string | null;
@@ -42,6 +55,7 @@ export interface SessionMetadata {
   snapshotSessionId?: string;
   tags: string[];
   customMetadata?: SessionCustomMetadata;
+  relationship?: SessionRelationship;
   todos?: any[];
   workspacePath?: string;
   remoteConnectionId?: string;
@@ -157,8 +171,6 @@ export interface TextItemData {
   status?: string;
   orderIndex?: number;
   isMarkdown?: boolean;
-  isSubagentItem?: boolean;
-  parentTaskToolId?: string;
   subagentSessionId?: string;
 }
 
@@ -170,8 +182,6 @@ export interface ThinkingItemData {
   timestamp: number;
   orderIndex?: number;
   status?: string;
-  isSubagentItem?: boolean;
-  parentTaskToolId?: string;
   subagentSessionId?: string;
 }
 
@@ -191,8 +201,6 @@ export interface ToolItemData {
   orderIndex?: number;
   status?: string;
   interruptionReason?: 'app_restart';
-  isSubagentItem?: boolean;
-  parentTaskToolId?: string;
   subagentSessionId?: string;
 }
 

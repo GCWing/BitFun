@@ -491,13 +491,8 @@ mod tests {
 
     #[test]
     fn canonicalize_mode_config_treats_null_as_missing() {
-        let canonical = canonicalize_mode_config(
-            "Claw",
-            Some(&Value::Null),
-            &[],
-            &HashSet::new(),
-        )
-        .expect("null mode config should be ignored");
+        let canonical = canonicalize_mode_config("Claw", Some(&Value::Null), &[], &HashSet::new())
+            .expect("null mode config should be ignored");
 
         assert!(canonical.is_none());
     }

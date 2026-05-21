@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use agent_client_protocol::schema::{
     ContentBlock, ContentChunk, SessionNotification, SessionUpdate, ToolCall, ToolCallContent,
     ToolCallStatus, ToolCallUpdate,
@@ -32,6 +34,19 @@ enum AcpStreamItemKind {
 pub(super) struct AcpStreamRoundTracker {
     next_round_index: usize,
     last_item_kind: Option<AcpStreamItemKind>,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct AcpToolCallTracker {
+    calls: HashMap<String, AcpToolCallSnapshot>,
+}
+
+#[derive(Debug, Clone)]
+struct AcpToolCallSnapshot {
+    title: String,
+    tool_name: String,
+    raw_input: Option<serde_json::Value>,
+    kind: Option<agent_client_protocol::schema::ToolKind>,
 }
 
 impl AcpStreamRoundTracker {
@@ -82,8 +97,9 @@ impl AcpStreamRoundTracker {
     }
 }
 
-pub async fn acp_dispatch_to_stream_events(
+pub(super) async fn acp_dispatch_to_stream_events_with_tracker(
     dispatch: agent_client_protocol::Dispatch,
+    tracker: &mut AcpToolCallTracker,
 ) -> BitFunResult<Vec<AcpClientStreamEvent>> {
     let mut events = Vec::new();
     MatchDispatch::new(dispatch)
@@ -100,12 +116,10 @@ pub async fn acp_dispatch_to_stream_events(
                     }
                 }
                 SessionUpdate::ToolCall(tool_call) => {
-                    events.extend(acp_tool_call_events(tool_call));
+                    events.extend(acp_tool_call_events(tool_call, tracker));
                 }
                 SessionUpdate::ToolCallUpdate(tool_call_update) => {
-                    if let Some(event) = acp_tool_call_update_event(tool_call_update) {
-                        events.push(event);
-                    }
+                    events.extend(acp_tool_call_update_events(tool_call_update, tracker));
                 }
                 _ => {}
             }
@@ -124,16 +138,73 @@ fn content_chunk_text(chunk: ContentChunk) -> Option<String> {
     }
 }
 
-fn acp_tool_call_events(tool_call: ToolCall) -> Vec<AcpClientStreamEvent> {
+impl AcpToolCallTracker {
+    pub(super) fn new() -> Self {
+        Self::default()
+    }
+
+    fn upsert_from_call(
+        &mut self,
+        tool_id: String,
+        title: String,
+        raw_input: Option<serde_json::Value>,
+        kind: Option<agent_client_protocol::schema::ToolKind>,
+    ) -> AcpToolCallSnapshot {
+        let tool_name = acp_tool_name(&title, raw_input.as_ref(), kind.as_ref());
+        let snapshot = AcpToolCallSnapshot {
+            title,
+            tool_name,
+            raw_input,
+            kind,
+        };
+        self.calls.insert(tool_id, snapshot.clone());
+        snapshot
+    }
+
+    fn update_from_fields(
+        &mut self,
+        tool_id: &str,
+        title: Option<String>,
+        raw_input: Option<serde_json::Value>,
+        kind: Option<agent_client_protocol::schema::ToolKind>,
+    ) -> AcpToolCallSnapshot {
+        let previous = self.calls.get(tool_id).cloned();
+        let title = title
+            .or_else(|| previous.as_ref().map(|snapshot| snapshot.title.clone()))
+            .unwrap_or_else(|| tool_id.to_string());
+        let raw_input = raw_input.or_else(|| {
+            previous
+                .as_ref()
+                .and_then(|snapshot| snapshot.raw_input.clone())
+        });
+        let kind = kind.or_else(|| previous.as_ref().and_then(|snapshot| snapshot.kind.clone()));
+        let tool_name = acp_tool_name(&title, raw_input.as_ref(), kind.as_ref());
+        let snapshot = AcpToolCallSnapshot {
+            title,
+            tool_name,
+            raw_input,
+            kind,
+        };
+        self.calls.insert(tool_id.to_string(), snapshot.clone());
+        snapshot
+    }
+}
+
+fn acp_tool_call_events(
+    tool_call: ToolCall,
+    tracker: &mut AcpToolCallTracker,
+) -> Vec<AcpClientStreamEvent> {
     let tool_id = tool_call.tool_call_id.to_string();
-    let tool_name = acp_tool_name(
-        &tool_call.title,
-        tool_call.raw_input.as_ref(),
-        Some(&tool_call.kind),
+    let snapshot = tracker.upsert_from_call(
+        tool_id.clone(),
+        tool_call.title.clone(),
+        tool_call.raw_input.clone(),
+        Some(tool_call.kind.clone()),
     );
+    let tool_name = snapshot.tool_name;
     let params = normalize_tool_params(
         &tool_name,
-        tool_call.raw_input.clone().unwrap_or_else(|| {
+        snapshot.raw_input.clone().unwrap_or_else(|| {
             serde_json::json!({
                 "title": tool_call.title,
                 "kind": format!("{:?}", tool_call.kind),
@@ -185,18 +256,31 @@ fn acp_tool_call_events(tool_call: ToolCall) -> Vec<AcpClientStreamEvent> {
     events
 }
 
-fn acp_tool_call_update_event(update: ToolCallUpdate) -> Option<AcpClientStreamEvent> {
+fn acp_tool_call_update_events(
+    update: ToolCallUpdate,
+    tracker: &mut AcpToolCallTracker,
+) -> Vec<AcpClientStreamEvent> {
     let tool_id = update.tool_call_id.to_string();
-    let title = update.fields.title.unwrap_or_else(|| tool_id.clone());
-    let tool_name = acp_tool_name(
-        &title,
-        update.fields.raw_input.as_ref(),
-        update.fields.kind.as_ref(),
+    let snapshot = tracker.update_from_fields(
+        &tool_id,
+        update.fields.title.clone(),
+        update.fields.raw_input.clone(),
+        update.fields.kind.clone(),
     );
+    let tool_name = snapshot.tool_name.clone();
 
     match update.fields.status {
         Some(ToolCallStatus::Completed) => {
-            Some(AcpClientStreamEvent::ToolEvent(ToolEventData::Completed {
+            let mut events = Vec::new();
+            if let Some(raw_input) = snapshot.raw_input {
+                events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
+                    tool_id: tool_id.clone(),
+                    tool_name: tool_name.clone(),
+                    params: normalize_tool_params(&tool_name, raw_input),
+                    timeout_seconds: None,
+                }));
+            }
+            events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Completed {
                 tool_id,
                 tool_name,
                 result: acp_tool_result_value(
@@ -210,10 +294,20 @@ fn acp_tool_call_update_event(update: ToolCallUpdate) -> Option<AcpClientStreamE
                 preflight_ms: None,
                 confirmation_wait_ms: None,
                 execution_ms: None,
-            }))
+            }));
+            events
         }
         Some(ToolCallStatus::Failed) => {
-            Some(AcpClientStreamEvent::ToolEvent(ToolEventData::Failed {
+            let mut events = Vec::new();
+            if let Some(raw_input) = snapshot.raw_input {
+                events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
+                    tool_id: tool_id.clone(),
+                    tool_name: tool_name.clone(),
+                    params: normalize_tool_params(&tool_name, raw_input),
+                    timeout_seconds: None,
+                }));
+            }
+            events.push(AcpClientStreamEvent::ToolEvent(ToolEventData::Failed {
                 tool_id,
                 tool_name,
                 error: acp_tool_error_text(
@@ -225,33 +319,37 @@ fn acp_tool_call_update_event(update: ToolCallUpdate) -> Option<AcpClientStreamE
                 preflight_ms: None,
                 confirmation_wait_ms: None,
                 execution_ms: None,
-            }))
+            }));
+            events
         }
         Some(ToolCallStatus::InProgress) | Some(ToolCallStatus::Pending) | Some(_) => {
             let params = normalize_tool_params(
                 &tool_name,
-                update.fields.raw_input.unwrap_or_else(|| {
+                snapshot.raw_input.unwrap_or_else(|| {
                     serde_json::json!({
-                        "title": title,
+                        "title": snapshot.title,
                     })
                 }),
             );
-            Some(AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
+            vec![AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
                 tool_id,
                 tool_name,
                 params,
                 timeout_seconds: None,
-            }))
+            })]
         }
-        None => update.fields.raw_input.map(|params| {
-            let params = normalize_tool_params(&tool_name, params);
-            AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
-                tool_id,
-                tool_name,
-                params,
-                timeout_seconds: None,
+        None => snapshot
+            .raw_input
+            .map(|params| {
+                let params = normalize_tool_params(&tool_name, params);
+                vec![AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
+                    tool_id,
+                    tool_name,
+                    params,
+                    timeout_seconds: None,
+                })]
             })
-        }),
+            .unwrap_or_default(),
     }
 }
 
@@ -305,6 +403,7 @@ fn protocol_error(error: impl std::fmt::Display) -> BitFunError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agent_client_protocol::schema::{ToolCallUpdateFields, ToolKind};
     use serde_json::json;
 
     fn tool_event(id: &str) -> AcpClientStreamEvent {
@@ -374,5 +473,54 @@ mod tests {
         events.extend(tracker.apply(AcpClientStreamEvent::AgentText("b".to_string())));
 
         assert_eq!(event_kinds(&events), vec!["round", "text", "text"]);
+    }
+
+    #[test]
+    fn tool_call_tracker_replays_cached_input_before_completed_update() {
+        let mut tracker = AcpToolCallTracker::new();
+        let in_progress = ToolCallUpdate::new(
+            "tool-1",
+            ToolCallUpdateFields::new()
+                .title("Edit file")
+                .kind(ToolKind::Edit)
+                .status(ToolCallStatus::InProgress)
+                .raw_input(json!({
+                    "path": "src/lib.rs",
+                    "oldString": "before",
+                    "newString": "after"
+                })),
+        );
+        let completed = ToolCallUpdate::new(
+            "tool-1",
+            ToolCallUpdateFields::new()
+                .status(ToolCallStatus::Completed)
+                .raw_output(json!({ "success": true })),
+        );
+
+        let first = acp_tool_call_update_events(in_progress, &mut tracker);
+        assert!(matches!(
+            first.first(),
+            Some(AcpClientStreamEvent::ToolEvent(
+                ToolEventData::Started { .. }
+            ))
+        ));
+
+        let second = acp_tool_call_update_events(completed, &mut tracker);
+        assert_eq!(second.len(), 2);
+        match &second[0] {
+            AcpClientStreamEvent::ToolEvent(ToolEventData::Started {
+                tool_name, params, ..
+            }) => {
+                assert_eq!(tool_name, "Edit");
+                assert_eq!(params["file_path"], "src/lib.rs");
+                assert_eq!(params["old_string"], "before");
+                assert_eq!(params["new_string"], "after");
+            }
+            other => panic!("expected cached Started event, got {other:?}"),
+        }
+        assert!(matches!(
+            second[1],
+            AcpClientStreamEvent::ToolEvent(ToolEventData::Completed { .. })
+        ));
     }
 }

@@ -1,19 +1,19 @@
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::service::search::{
-    ContentSearchOutputMode, ContentSearchRequest, WorkspaceSearchHit, WorkspaceSearchLine,
     get_global_workspace_search_service, remote_workspace_search_service_for_path,
-    workspace_search_feature_enabled, workspace_search_runtime_available,
+    workspace_search_feature_enabled, workspace_search_runtime_available, ContentSearchOutputMode,
+    ContentSearchRequest, WorkspaceSearchHit, WorkspaceSearchLine,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 use tool_runtime::search::grep_search::{
-    GrepOptions, GrepSearchResult, OutputMode, ProgressCallback, grep_search,
+    grep_search, GrepOptions, GrepSearchResult, OutputMode, ProgressCallback,
 };
 
 const DEFAULT_HEAD_LIMIT: usize = 250;
@@ -551,8 +551,8 @@ fn apply_offset_and_limit(items: &mut Vec<String>, offset: usize, head_limit: Op
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_HEAD_LIMIT, GrepTool, render_workspace_search_content_lines,
-        render_workspace_search_result_lines,
+        render_workspace_search_content_lines, render_workspace_search_result_lines, GrepTool,
+        DEFAULT_HEAD_LIMIT,
     };
     use crate::infrastructure::{FileSearchOutcome, FileSearchResult, SearchMatchType};
     use crate::service::search::{

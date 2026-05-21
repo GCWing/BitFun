@@ -35,6 +35,7 @@ export interface AcpClientRequirementProbe {
 
 export interface AcpClientIdRequest {
   clientId: string;
+  remoteConnectionId?: string;
 }
 
 export interface CreateAcpFlowSessionRequest {

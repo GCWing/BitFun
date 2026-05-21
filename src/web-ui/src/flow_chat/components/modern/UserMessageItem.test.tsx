@@ -8,7 +8,15 @@ import { UserMessageItem } from './UserMessageItem';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+const activeSessionRef: { current: any } = {
+  current: null,
+};
+
 vi.mock('react-i18next', () => ({
+  initReactI18next: {
+    type: '3rdParty',
+    init: () => undefined,
+  },
   useTranslation: () => ({
     t: (key: string) => {
       const labels: Record<string, string> = {
@@ -23,7 +31,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../../store/modernFlowChatStore', () => ({
-  useActiveSession: () => null,
+  useActiveSession: () => activeSessionRef.current,
 }));
 
 vi.mock('../../store/FlowChatStore', () => ({
@@ -77,6 +85,7 @@ describe('UserMessageItem steering tag', () => {
 
     container = dom.window.document.getElementById('root') as HTMLDivElement;
     root = createRoot(container);
+    activeSessionRef.current = null;
   });
 
   afterEach(() => {
@@ -127,5 +136,101 @@ describe('UserMessageItem steering tag', () => {
     });
 
     expect(container.querySelector('.user-message-item__steering-tag')).toBeNull();
+  });
+
+  it('hides the rollback button for subagent sessions', () => {
+    activeSessionRef.current = {
+      sessionId: 'subagent-session',
+      sessionKind: 'subagent',
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          status: 'completed',
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ sessionId: 'subagent-session', allowUserMessageRollback: true }}>
+          <UserMessageItem
+            message={{
+              id: 'user-subagent-1',
+              content: 'subagent question',
+              timestamp: 1000,
+            }}
+            turnId="turn-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    expect(container.querySelector('.user-message-item__rollback-btn')).toBeNull();
+  });
+
+  it('renders the rollback button for normal sessions when rollback is allowed', () => {
+    activeSessionRef.current = {
+      sessionId: 'main-session',
+      sessionKind: 'normal',
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          status: 'completed',
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider value={{ sessionId: 'main-session', allowUserMessageRollback: true }}>
+          <UserMessageItem
+            message={{
+              id: 'user-main-1',
+              content: 'main session question',
+              timestamp: 1000,
+            }}
+            turnId="turn-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    expect(container.querySelector('.user-message-item__rollback-btn')).not.toBeNull();
+  });
+
+  it('hides the edit button when the panel context disables user message editing', () => {
+    activeSessionRef.current = {
+      sessionId: 'btw-session',
+      sessionKind: 'btw',
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          status: 'completed',
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider
+          value={{
+            sessionId: 'btw-session',
+            allowUserMessageRollback: true,
+            allowUserMessageEdit: false,
+          }}
+        >
+          <UserMessageItem
+            message={{
+              id: 'user-btw-1',
+              content: 'btw session question',
+              timestamp: 1000,
+            }}
+            turnId="turn-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    expect(container.querySelector('.user-message-item__edit-btn')).toBeNull();
   });
 });

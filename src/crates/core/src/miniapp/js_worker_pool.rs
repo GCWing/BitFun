@@ -378,15 +378,42 @@ mod tests {
     use super::*;
     use bitfun_product_domains::miniapp::runtime::RuntimeKind;
     use std::collections::HashMap;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    struct TestTempDir {
+        path: PathBuf,
+    }
+
+    impl TestTempDir {
+        fn new(prefix: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "{}-{}",
+                prefix,
+                uuid::Uuid::new_v4()
+            ));
+            fs::create_dir_all(&path).expect("test root should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestTempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 
     #[tokio::test]
     async fn runtime_port_adapter_preserves_existing_runtime_and_noop_install() {
-        let root = std::env::temp_dir().join(format!(
-            "bitfun-miniapp-runtime-port-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let root = TestTempDir::new("bitfun-miniapp-runtime-port");
         let path_manager =
-            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(
+                root.path().to_path_buf(),
+            ));
         let app_id = "demo_app";
         tokio::fs::create_dir_all(path_manager.miniapp_dir(app_id))
             .await

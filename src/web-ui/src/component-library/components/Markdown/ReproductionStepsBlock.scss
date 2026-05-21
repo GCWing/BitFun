@@ -7,8 +7,8 @@
 .reproduction-steps-block {
   display: flex;
   flex-direction: column;
-  margin: 6px 0;
-  border-radius: var(--radius-md, 8px);
+  margin: var(--flowchat-card-gap, 0.42rem) 0;
+  border-radius: var(--flowchat-card-radius, 8px);
   border: 1px solid var(--color-warning, #f59e0b);
   background: var(--color-bg-flowchat);
   backdrop-filter: blur(10px);
@@ -35,8 +35,8 @@
 .reproduction-steps-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: var(--flowchat-control-gap, 0.5rem);
+  padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
   background: transparent;
   transition: background 0.15s ease;
 
@@ -86,7 +86,7 @@
 }
 
 .reproduction-steps-title {
-  font-size: 13px;
+  font-size: var(--flowchat-font-size-sm);
   font-weight: 600;
   color: var(--color-text-primary, #e5e7eb);
   flex: 1;
@@ -96,21 +96,21 @@
 .reproduction-steps-badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
+  padding: 0.18rem 0.5rem;
   background: var(--element-bg-subtle, rgba(255, 255, 255, 0.06));
   color: var(--color-text-secondary, #9ca3af);
   border: 1px solid var(--border-base);
-  border-radius: var(--radius-sm, 4px);
-  font-size: 10px;
+  border-radius: var(--size-radius-sm, 6px);
+  font-size: var(--flowchat-font-size-xxs);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.02em;
   flex-shrink: 0;
 }
 
 
 .reproduction-steps-content {
-  padding: 12px 14px;
+  padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
 }
 
 .reproduction-steps-list {
@@ -119,21 +119,21 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--flowchat-flow-item-gap, 0.42rem);
 }
 
 .reproduction-step-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: var(--flowchat-control-gap, 0.5rem);
+  padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
   background: transparent;
   border: 1px solid var(--border-base);
-  border-radius: var(--radius-md, 6px);
-  font-size: 13px;
+  border-radius: var(--flowchat-card-radius, 8px);
+  font-size: var(--flowchat-font-size-sm);
   font-weight: 500;
   color: var(--color-text-primary, #e5e7eb);
-  line-height: 1.5;
+  line-height: var(--flowchat-support-line-height, 1.45);
   transition: all 0.15s ease;
 
   &:hover {
@@ -154,7 +154,7 @@
     background: rgba(245, 158, 11, 0.12);
     color: var(--color-warning, #f59e0b);
     border-radius: var(--radius-sm, 4px);
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xxs);
     font-weight: 600;
     flex-shrink: 0;
   }
@@ -173,37 +173,37 @@
 
 
 .reproduction-steps-actions {
-  padding: 12px 14px;
+  padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--flowchat-control-gap, 0.5rem);
   border-top: 1px solid var(--border-base);
 }
 
 .reproduction-steps-hint {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--flowchat-control-gap, 0.5rem);
+  padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
   background: var(--element-bg-soft, rgba(59, 130, 246, 0.08));
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md, 6px);
-  font-size: 12px;
+  border-radius: var(--flowchat-card-radius, 8px);
+  font-size: var(--flowchat-font-size-sm);
   color: var(--color-text-secondary, #9ca3af);
-  line-height: 1.5;
+  line-height: var(--flowchat-support-line-height, 1.45);
 }
 
 .reproduction-proceed-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 16px;
+  gap: var(--flowchat-inline-gap, 0.35rem);
+  padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--size-gap-4, 16px);
   background: var(--element-bg-base, rgba(255, 255, 255, 0.06));
   color: var(--color-text-primary, #e5e7eb);
   border: 1px solid var(--border-base);
-  border-radius: var(--radius-md, 6px);
-  font-size: 13px;
+  border-radius: var(--flowchat-card-radius, 8px);
+  font-size: var(--flowchat-font-size-sm);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -241,10 +241,10 @@
 .reproduction-steps-completed {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: var(--flowchat-control-gap, 0.5rem);
+  padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
   color: var(--color-text-secondary, #9ca3af);
-  font-size: 12px;
+  font-size: var(--flowchat-font-size-sm);
   font-weight: 500;
   border-top: 1px dashed var(--border-base);
 

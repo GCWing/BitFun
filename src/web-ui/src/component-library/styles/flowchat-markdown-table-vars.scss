@@ -3,9 +3,9 @@
  * Single source for `.markdown-renderer` and m-editor tables.
  */
 :root {
-  --flowchat-md-table-radius: 12px;
+  --flowchat-md-table-radius: var(--flowchat-card-radius, 8px);
   --flowchat-md-table-border: rgba(255, 255, 255, 0.12);
-  --flowchat-md-table-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --flowchat-md-table-shadow: none;
   --flowchat-md-table-surface: transparent;
   --flowchat-md-table-cell-border: rgba(255, 255, 255, 0.1);
   --flowchat-md-table-col-divider: transparent;

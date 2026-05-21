@@ -32,10 +32,13 @@ interface UseFlowChatFollowOutputOptions {
   performLatestTurnStickyPin: () => void;
   /**
    * Returns true when auto-follow should be suspended for layout-protection
-   * reasons (collapse animation, etc.). The continuous follow loop ignores
-   * this signal because follow mode actively wants to track the bottom even
-   * while intermediate cards collapse; only the event-driven `scheduleFollowToLatest`
-   * still respects it for backward compatibility with anchor restore paths.
+   * reasons (collapse animation, layout transition, pending collapse intent).
+   * Both the event-driven `scheduleFollowToLatest` and the continuous follow
+   * loop honour this signal: while a known collapse animation is in flight we
+   * must not fight the anchor-lock + bottom-reservation machinery, otherwise
+   * the conversation visibly "sinks down" each time content above shrinks.
+   * The continuous loop keeps requesting frames while suspended and resumes
+   * bottom-tracking on the next frame after the suspension clears.
    */
   shouldSuspendAutoFollow?: () => boolean;
   getAutoFollowDistanceFromBottom?: (scroller: HTMLElement) => number;
@@ -90,11 +93,13 @@ export function useFlowChatFollowOutput({
   const performAutoFollowScrollRef = useRef(performAutoFollowScroll);
   const onContinuousFollowFrameRef = useRef(onContinuousFollowFrame);
   const getAutoFollowDistanceFromBottomRef = useRef(getAutoFollowDistanceFromBottom);
+  const shouldSuspendAutoFollowRef = useRef(shouldSuspendAutoFollow);
 
   isStreamingRef.current = isStreaming;
   performAutoFollowScrollRef.current = performAutoFollowScroll;
   onContinuousFollowFrameRef.current = onContinuousFollowFrame;
   getAutoFollowDistanceFromBottomRef.current = getAutoFollowDistanceFromBottom;
+  shouldSuspendAutoFollowRef.current = shouldSuspendAutoFollow;
 
   const setFollowingOutput = useCallback((nextValue: boolean) => {
     isFollowingOutputRef.current = nextValue;
@@ -152,9 +157,16 @@ export function useFlowChatFollowOutput({
 
     onContinuousFollowFrameRef.current?.();
 
-    const rawDistance = getDistanceFromBottom(scroller);
-    const measuredDistance = getAutoFollowDistanceFromBottomRef.current?.(scroller) ?? rawDistance;
-    if (measuredDistance > AUTO_FOLLOW_BOTTOM_THRESHOLD_PX) {
+    // While a known collapse animation / layout transition is in flight, the
+    // VirtualMessageList anchor-lock + bottom-reservation footer is preserving
+    // the upper visual anchor. Issuing a programmatic scroll-to-bottom from
+    // this loop would fight that machinery and re-introduce the "sink-down"
+    // jitter the user reported. We simply re-arm the next frame and resume on
+    // the first frame after the suspension clears.
+    const isSuspended = shouldSuspendAutoFollowRef.current?.() === true;
+    const measuredDistance = getAutoFollowDistanceFromBottomRef.current?.(scroller)
+      ?? getDistanceFromBottom(scroller);
+    if (!isSuspended && measuredDistance > AUTO_FOLLOW_BOTTOM_THRESHOLD_PX) {
       programmaticScrollUntilMsRef.current = performance.now() + PROGRAMMATIC_SCROLL_GUARD_MS;
       explicitUserScrollIntentUntilMsRef.current = 0;
       performAutoFollowScrollRef.current();

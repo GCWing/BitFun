@@ -5,12 +5,21 @@ use bitfun_core::util::errors::BitFunError;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use tauri::State;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GetConfigRequest {
     pub path: Option<String>,
+    #[serde(default)]
+    pub skip_retry_on_not_found: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetConfigsRequest {
+    pub paths: Vec<String>,
     #[serde(default)]
     pub skip_retry_on_not_found: bool,
 }
@@ -64,6 +73,41 @@ pub async fn get_config(
             Err(format!("Failed to get config: {}", e))
         }
     }
+}
+
+#[tauri::command]
+pub async fn get_configs(
+    state: State<'_, AppState>,
+    request: GetConfigsRequest,
+) -> Result<BTreeMap<String, Value>, String> {
+    let config_service = &state.config_service;
+    let mut configs = BTreeMap::new();
+
+    for path in request.paths {
+        if configs.contains_key(&path) {
+            continue;
+        }
+
+        match config_service
+            .get_config::<Value>(Some(path.as_str()))
+            .await
+        {
+            Ok(config) => {
+                configs.insert(path, config);
+            }
+            Err(e) => {
+                if request.skip_retry_on_not_found
+                    && is_expected_config_path_not_found(&e, Some(path.as_str()))
+                {
+                    return Err(format!("Failed to get config: {}", e));
+                }
+                error!("Failed to get config: path={}, error={}", path, e);
+                return Err(format!("Failed to get config: {}", e));
+            }
+        }
+    }
+
+    Ok(configs)
 }
 
 #[cfg(test)]

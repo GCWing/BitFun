@@ -13,8 +13,8 @@ use russh::client::{DisconnectReason, Handle, Handler, Msg};
 use russh::Sig;
 use russh_keys::key::PublicKey;
 use russh_keys::PublicKeyBase64;
-use russh_sftp::client::SftpSession;
 use russh_sftp::client::fs::ReadDir;
+use russh_sftp::client::SftpSession;
 #[cfg(feature = "ssh_config")]
 use ssh_config::SSHConfig;
 use std::collections::HashMap;

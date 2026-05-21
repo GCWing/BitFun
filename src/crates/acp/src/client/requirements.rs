@@ -4,12 +4,13 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use bitfun_core::service::remote_ssh::SSHConnectionManager;
+use bitfun_core::service::remote_ssh::{SSHCommandOptions, SSHConnectionManager};
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use tokio::process::Command;
 
 use super::builtin_clients::builtin_acp_client_preset;
 use super::config::{AcpClientConfig, AcpRequirementProbeItem};
+use super::remote_shell::{remote_user_shell_command, render_remote_env_assignments, shell_escape};
 
 const REQUIREMENT_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
 const ADAPTER_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(120);
@@ -156,6 +157,7 @@ pub(crate) async fn probe_remote_executable(
     ssh_manager: &SSHConnectionManager,
     connection_id: &str,
     command: &str,
+    env: Option<&HashMap<String, String>>,
 ) -> AcpRequirementProbeItem {
     let mut item = AcpRequirementProbeItem {
         name: command.to_string(),
@@ -165,7 +167,9 @@ pub(crate) async fn probe_remote_executable(
         error: None,
     };
 
-    let resolve_command = format!("command -v {}", shell_escape(command));
+    let env_prefix = render_remote_env_prefix(env);
+    let resolve_command =
+        remote_user_shell_command(&format!("{env_prefix}command -v {}", shell_escape(command)));
     match ssh_manager
         .execute_command(connection_id, &resolve_command)
         .await
@@ -191,7 +195,8 @@ pub(crate) async fn probe_remote_executable(
     }
 
     if item.installed {
-        let version_command = format!("{} --version", shell_escape(command));
+        let version_command =
+            remote_user_shell_command(&format!("{env_prefix}{} --version", shell_escape(command)));
         match ssh_manager
             .execute_command(connection_id, &version_command)
             .await
@@ -216,6 +221,7 @@ pub(crate) async fn probe_remote_npx_adapter(
     ssh_manager: &SSHConnectionManager,
     connection_id: &str,
     package: &str,
+    env: Option<&HashMap<String, String>>,
 ) -> AcpRequirementProbeItem {
     let mut item = AcpRequirementProbeItem {
         name: package.to_string(),
@@ -225,9 +231,10 @@ pub(crate) async fn probe_remote_npx_adapter(
         error: None,
     };
 
-    let resolve_command = "command -v npx";
+    let env_prefix = render_remote_env_prefix(env);
+    let resolve_command = remote_user_shell_command(&format!("{env_prefix}command -v npx"));
     match ssh_manager
-        .execute_command(connection_id, resolve_command)
+        .execute_command(connection_id, &resolve_command)
         .await
     {
         Ok((stdout, _stderr, exit_code)) if exit_code == 0 => {
@@ -301,6 +308,45 @@ pub(crate) async fn install_npm_cli_package(package: &str) -> BitFunResult<()> {
         ))),
         Err(error) => Err(BitFunError::service(format!(
             "Failed to install ACP agent CLI '{}': {}",
+            package, error
+        ))),
+    }
+}
+
+pub(crate) async fn install_remote_npm_cli_package(
+    ssh_manager: &SSHConnectionManager,
+    connection_id: &str,
+    package: &str,
+) -> BitFunResult<()> {
+    let command = remote_user_shell_command(&format!("npm install -g {}", shell_escape(package)));
+    let timeout_ms = u64::try_from(CLI_INSTALL_TIMEOUT.as_millis()).unwrap_or(u64::MAX);
+    match ssh_manager
+        .execute_command_with_options(
+            connection_id,
+            &command,
+            SSHCommandOptions {
+                timeout_ms: Some(timeout_ms),
+                cancellation_token: None,
+            },
+        )
+        .await
+    {
+        Ok(output) if output.exit_code == 0 && !output.timed_out && !output.interrupted => Ok(()),
+        Ok(output) if output.timed_out => Err(BitFunError::service(format!(
+            "Failed to install remote ACP agent CLI '{}': command timed out",
+            package
+        ))),
+        Ok(output) if output.interrupted => Err(BitFunError::service(format!(
+            "Failed to install remote ACP agent CLI '{}': command was cancelled",
+            package
+        ))),
+        Ok(output) => Err(BitFunError::service(format!(
+            "Failed to install remote ACP agent CLI '{}': {}",
+            package,
+            remote_command_error_summary(&output.stderr, &output.stdout)
+        ))),
+        Err(error) => Err(BitFunError::service(format!(
+            "Failed to install remote ACP agent CLI '{}': {}",
             package, error
         ))),
     }
@@ -403,14 +449,15 @@ fn truncate_error(value: String) -> String {
     format!("{}...", value.chars().take(MAX_LEN).collect::<String>())
 }
 
-fn shell_escape(value: &str) -> String {
-    if value.chars().all(|ch| {
-        ch.is_ascii_alphanumeric() || matches!(ch, '/' | '.' | '-' | '_' | ':' | '=' | '@')
-    }) {
-        value.to_string()
-    } else {
-        format!("'{}'", value.replace('\'', "'\\''"))
+fn render_remote_env_prefix(env: Option<&HashMap<String, String>>) -> String {
+    let Some(env) = env else {
+        return String::new();
+    };
+    let assignments = render_remote_env_assignments(env);
+    if assignments.is_empty() {
+        return String::new();
     }
+    format!("{} ", assignments.join(" "))
 }
 
 fn find_executable(command: &str) -> Option<PathBuf> {
@@ -594,5 +641,19 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&test_dir);
         assert_eq!(found, Some(executable));
+    }
+
+    #[test]
+    fn remote_env_prefix_uses_valid_keys_in_stable_order() {
+        let env = HashMap::from([
+            ("INVALID-NAME".to_string(), "ignored".to_string()),
+            ("PATH".to_string(), "/remote/bin:/usr/bin".to_string()),
+            ("ACP_HOME".to_string(), "/tmp/acp home".to_string()),
+        ]);
+
+        assert_eq!(
+            render_remote_env_prefix(Some(&env)),
+            "ACP_HOME='/tmp/acp home' PATH=/remote/bin:/usr/bin "
+        );
     }
 }

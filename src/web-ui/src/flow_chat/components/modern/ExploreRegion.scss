@@ -15,7 +15,7 @@
 .explore-region--collapsible {
   margin: 0 0 0.3rem 0;
   font-size: var(--flowchat-font-size-sm);
-  line-height: 1.5;
+  line-height: var(--flowchat-support-line-height, 1.45);
 
   .explore-region__header {
     display: flex;
@@ -24,7 +24,7 @@
     padding: 0;
     color: var(--text-tertiary, #6b7280);
     font-size: var(--flowchat-font-size-sm);
-    line-height: 1.5;
+    line-height: var(--flowchat-support-line-height, 1.45);
     cursor: pointer;
     user-select: none;
     border-radius: var(--radius-sm, 6px);
@@ -46,7 +46,7 @@
 
   .explore-region__summary {
     font-size: var(--flowchat-font-size-sm);
-    line-height: 1.5;
+    line-height: var(--flowchat-support-line-height, 1.45);
     opacity: 0.8;
   }
 

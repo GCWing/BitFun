@@ -3,31 +3,12 @@ import {
   type AcpClientInfo,
 } from '@/infrastructure/api/service-api/ACPClientAPI';
 
-const REMOTE_ACP_PRESETS = [
-  { id: 'opencode', name: 'opencode' },
-  { id: 'claude-code', name: 'Claude Code' },
-  { id: 'codex', name: 'Codex' },
-] as const;
-
 interface LoadWorkspaceAcpMenuClientsOptions {
   remoteWorkspace?: boolean;
   remoteConnectionId?: string;
 }
 
-function virtualRemoteClient(id: string, name: string): AcpClientInfo {
-  return {
-    id,
-    name,
-    command: '',
-    args: [],
-    enabled: true,
-    readonly: false,
-    permissionMode: 'ask',
-    status: 'configured',
-    toolName: `acp__${id}__prompt`,
-    sessionCount: 0,
-  };
-}
+const forcedRemoteRequirementRefreshes = new Set<string>();
 
 export async function loadWorkspaceAcpMenuClients(
   options: LoadWorkspaceAcpMenuClientsOptions = {}
@@ -42,24 +23,41 @@ export async function loadWorkspaceAcpMenuClients(
     return [];
   }
 
-  const probes = await ACPClientAPI.probeClientRequirements({
+  const enabledClients = clients.filter(client => client.enabled);
+  if (enabledClients.length === 0) {
+    return [];
+  }
+
+  let probes = await ACPClientAPI.probeClientRequirements({
     remoteConnectionId: options.remoteConnectionId,
   });
+  if (probes.length === 0) {
+    probes = await ACPClientAPI.probeClientRequirements({
+      remoteConnectionId: options.remoteConnectionId,
+      force: true,
+    });
+  }
+  let visibleClients = filterRunnableClients(enabledClients, probes);
+  if (
+    visibleClients.length === 0 &&
+    !forcedRemoteRequirementRefreshes.has(options.remoteConnectionId)
+  ) {
+    forcedRemoteRequirementRefreshes.add(options.remoteConnectionId);
+    probes = await ACPClientAPI.probeClientRequirements({
+      remoteConnectionId: options.remoteConnectionId,
+      force: true,
+    });
+    visibleClients = filterRunnableClients(enabledClients, probes);
+  }
+  return visibleClients;
+}
+
+function filterRunnableClients(
+  clients: AcpClientInfo[],
+  probes: Awaited<ReturnType<typeof ACPClientAPI.probeClientRequirements>>
+): AcpClientInfo[] {
   const runnableRemoteIds = new Set(
     probes.filter(probe => probe.runnable).map(probe => probe.id)
   );
-  const clientsById = new Map(clients.map(client => [client.id, client]));
-  return REMOTE_ACP_PRESETS
-    .filter(({ id }) => runnableRemoteIds.has(id))
-    .map(({ id, name }) => {
-    const configured = clientsById.get(id);
-    if (!configured) {
-      return virtualRemoteClient(id, name);
-    }
-    return {
-      ...configured,
-      name: configured.name || name,
-      enabled: true,
-    };
-    });
+  return clients.filter(client => runnableRemoteIds.has(client.id));
 }

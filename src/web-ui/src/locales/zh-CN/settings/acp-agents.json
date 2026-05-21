@@ -4,6 +4,9 @@
   "actions": {
     "add": "添加",
     "download": "下载",
+    "installCli": "安装 CLI",
+    "configureAcp": "配置 ACP",
+    "viewError": "查看错误",
     "save": "保存",
     "refresh": "刷新",
     "learnMore": "了解更多",
@@ -21,7 +24,7 @@
   },
   "registry": {
     "title": "Agent 列表",
-    "description": "安装完成且依赖就绪后，ACP Agent 会出现在工作区操作菜单里。",
+    "description": "已安装的 Agent 会出现在工作区操作菜单里。远程工作区会复用同一份列表，并先在远端主机检测状态。",
     "searchPlaceholder": "搜索 Agent...",
     "filterLabel": "ACP Agent 筛选",
     "filters": {
@@ -32,16 +35,41 @@
       "configInvalid": "配置异常"
     },
     "enabled": "已启用",
-    "ready": "依赖就绪",
+    "ready": "可用",
+    "partial": "部分可用",
     "installed": "已安装",
     "notInstalled": "未安装",
     "configInvalid": "配置异常",
-    "cliRequired": "需安装 CLI",
     "checking": "检测中",
+    "cliMissing": "CLI 未安装",
+    "acpMissing": "ACP 未配置",
+    "pathInvalid": "路径无效",
+    "versionMismatch": "版本异常",
+    "connectionFailed": "连接失败",
+    "permissionDenied": "权限不足",
+    "partialDetail": "CLI 已就绪，但 ACP 适配器还未配置。",
+    "cliMissingDetail": "未检测到对应命令，请确认已安装并加入 PATH。",
+    "acpMissingDetail": "ACP 适配器暂不可用。",
+    "pathInvalidDetail": "命令路径无法解析，请确认路径有效。",
+    "versionMismatchDetail": "检测到的版本与当前运行环境不匹配。",
+    "connectionFailedDetail": "远端主机当前无法连接。",
+    "permissionDeniedDetail": "命令无法执行，可能是权限不足。",
+    "configInvalidDetail": "当前 ACP 配置暂时无法直接使用。",
+    "toolPath": "路径",
+    "toolVersion": "版本",
     "empty": "没有匹配的 ACP Agent。"
   },
   "clients": {
     "loading": "正在加载 ACP Agent…"
+  },
+  "remote": {
+    "title": "远程服务器",
+    "description": "已保存的 SSH 服务器会复用同一份 ACP Agent 列表，并自动检测每台远端主机的状态。",
+    "empty": "没有已保存的 SSH 服务器。",
+    "noAgents": "请先添加 ACP Agent，再检测远程服务器。",
+    "refreshDetection": "刷新检测",
+    "summary": "{{available}} / {{total}} 可用",
+    "issueSummary": "{{count}} 个异常"
   },
   "fields": {
     "name": "名称",
@@ -72,6 +100,10 @@
     "openLinkFailed": "打开链接失败",
     "invalidJson": "ACP JSON 无效",
     "invalidEnv": "环境变量无效",
+    "installSuccess": "ACP CLI 已安装",
+    "installFailed": "安装 ACP CLI 失败",
+    "configureSuccess": "ACP 适配器已就绪",
+    "configureFailed": "配置 ACP 适配器失败",
     "downloadSuccess": "ACP Agent CLI 已下载",
     "downloadFailed": "下载 ACP Agent CLI 失败",
     "predownloadSuccess": "ACP 适配器已下载",

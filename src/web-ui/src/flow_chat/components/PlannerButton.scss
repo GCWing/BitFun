@@ -97,7 +97,7 @@
   }
   
   &__text {
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     font-weight: 500;
     white-space: nowrap;
     position: relative;
@@ -105,7 +105,7 @@
   }
   
   &__progress {
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
     white-space: nowrap;
     position: relative;

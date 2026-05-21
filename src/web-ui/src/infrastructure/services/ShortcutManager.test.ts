@@ -110,4 +110,24 @@ describe('ShortcutManager platform primary modifier', () => {
 
     expect(callback).not.toHaveBeenCalled();
   });
+
+  it('does not inherit canvas shortcuts when focus is inside terminal scope', () => {
+    const canvasCallback = vi.fn();
+    const terminalCallback = vi.fn();
+    shortcutManager.register(
+      'canvas.closePreview',
+      { key: 'Escape', scope: 'canvas', allowInInput: true },
+      canvasCallback
+    );
+    shortcutManager.register(
+      'terminal.escape',
+      { key: 'Escape', scope: 'terminal', allowInInput: true },
+      terminalCallback
+    );
+
+    dispatchScopedKey('terminal', { key: 'Escape' });
+
+    expect(canvasCallback).not.toHaveBeenCalled();
+    expect(terminalCallback).toHaveBeenCalledTimes(1);
+  });
 });

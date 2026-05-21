@@ -2,7 +2,9 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
+import type { DialogTurnData, SessionRelationship } from '@/shared/types/session-history';
 import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
+import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
 
 
@@ -43,6 +45,8 @@ export interface CreateSessionRequest {
   remoteConnectionId?: string;
   remoteSshHost?: string;
   sessionKind?: 'standard' | 'subagent';
+  relationship?: SessionRelationship;
+  deepReviewRunManifest?: ReviewTeamRunManifest;
   config?: SessionConfig;
 }
 
@@ -81,6 +85,17 @@ export interface SessionInfo {
   state: string;
   turnCount: number;
   createdAt: number;
+}
+
+export interface RestoreSessionWithTurnsResponse {
+  session: SessionInfo;
+  turns: DialogTurnData[];
+}
+
+export interface RestoreSessionViewResponse {
+  session: SessionInfo;
+  turns: DialogTurnData[];
+  contextRestoreState: 'ready' | 'pending';
 }
 
 export interface EnsureAssistantBootstrapRequest {
@@ -139,21 +154,28 @@ export interface SubagentParentInfo {
 export interface AgenticEvent {
   sessionId: string;
   turnId?: string;
-  subagentParentInfo?: SubagentParentInfo;
   [key: string]: any;
 }
+
+export type DialogTurnStartedEvent = AgenticEvent;
 
 export interface TextChunkEvent extends AgenticEvent {
   roundId: string;
   text: string;
   contentType?: 'text' | 'thinking';
   isThinkingEnd?: boolean;
-  subagentParentInfo?: SubagentParentInfo;
 }
 
 export interface ToolEvent extends AgenticEvent {
+  roundId: string;
   toolEvent: any;
-  subagentParentInfo?: SubagentParentInfo;
+}
+
+export interface SubagentSessionLinkedEvent extends AgenticEvent {
+  parentSessionId: string;
+  parentDialogTurnId: string;
+  parentToolCallId: string;
+  agentType?: string;
 }
 
 export type DeepReviewQueueStatus =
@@ -250,7 +272,6 @@ export interface CompressionEvent extends AgenticEvent {
   summarySource?: 'model' | 'local_fallback' | 'none';
   
   error?: string;                  
-  subagentParentInfo?: SubagentParentInfo;
 }
 
 
@@ -359,14 +380,71 @@ export class AgentAPI {
     sessionId: string,
     workspacePath: string,
     remoteConnectionId?: string,
-    remoteSshHost?: string
+    remoteSshHost?: string,
+    traceId?: string,
+    includeInternal?: boolean,
   ): Promise<SessionInfo> {
     try {
       return await api.invoke<SessionInfo>('restore_session', {
-        request: { sessionId, workspacePath, remoteConnectionId, remoteSshHost },
+        request: {
+          sessionId,
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost,
+          traceId,
+          includeInternal,
+        },
       });
     } catch (error) {
       throw createTauriCommandError('restore_session', error, { sessionId, workspacePath });
+    }
+  }
+
+  async restoreSessionWithTurns(
+    sessionId: string,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+    traceId?: string,
+    includeInternal?: boolean,
+  ): Promise<RestoreSessionWithTurnsResponse> {
+    try {
+      return await api.invoke<RestoreSessionWithTurnsResponse>('restore_session_with_turns', {
+        request: {
+          sessionId,
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost,
+          traceId,
+          includeInternal,
+        },
+      });
+    } catch (error) {
+      throw createTauriCommandError('restore_session_with_turns', error, { sessionId, workspacePath });
+    }
+  }
+
+  async restoreSessionView(
+    sessionId: string,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+    traceId?: string,
+    includeInternal?: boolean,
+  ): Promise<RestoreSessionViewResponse> {
+    try {
+      return await api.invoke<RestoreSessionViewResponse>('restore_session_view', {
+        request: {
+          sessionId,
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost,
+          traceId,
+          includeInternal,
+        },
+      });
+    } catch (error) {
+      throw createTauriCommandError('restore_session_view', error, { sessionId, workspacePath });
     }
   }
 
@@ -379,6 +457,7 @@ export class AgentAPI {
     workspacePath: string;
     remoteConnectionId?: string;
     remoteSshHost?: string;
+    includeInternal?: boolean;
   }): Promise<void> {
     try {
       await api.invoke<void>('ensure_coordinator_session', { request });
@@ -471,8 +550,8 @@ export class AgentAPI {
   }
 
    
-  onDialogTurnStarted(callback: (event: AgenticEvent) => void): () => void {
-    return api.listen<AgenticEvent>('agentic://dialog-turn-started', callback);
+  onDialogTurnStarted(callback: (event: DialogTurnStartedEvent) => void): () => void {
+    return api.listen<DialogTurnStartedEvent>('agentic://dialog-turn-started', callback);
   }
 
    
@@ -492,6 +571,15 @@ export class AgentAPI {
    
   onToolEvent(callback: (event: ToolEvent) => void): () => void {
     return api.listen<ToolEvent>('agentic://tool-event', callback);
+  }
+
+  onSubagentSessionLinked(
+    callback: (event: SubagentSessionLinkedEvent) => void
+  ): () => void {
+    return api.listen<SubagentSessionLinkedEvent>(
+      'agentic://subagent-session-linked',
+      callback
+    );
   }
 
   onDeepReviewQueueStateChanged(

@@ -3,8 +3,8 @@
 //! The [`DialogRoundPreemptSource`] is implemented by [`DialogScheduler`](super::scheduler::DialogScheduler)
 //! and read by [`ExecutionEngine`](super::execution::ExecutionEngine) after each completed model round.
 //!
-//! In addition, the [`DialogRoundSteeringSource`] trait is read by the engine at the same
-//! round boundary to retrieve any pending user "steering" messages that should be injected
+//! In addition, the [`DialogRoundInjectionSource`] trait is read by the engine at the same
+//! round boundary to retrieve any pending round injections that should be injected
 //! into the current dialog turn (Codex-style mid-turn injection) without ending the turn.
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -65,17 +65,32 @@ impl DialogRoundPreemptSource for SessionRoundYieldFlags {
     }
 }
 
-// ── Mid-turn user "steering" injection ─────────────────────────────────────
+// ── Round-boundary injection ────────────────────────────────────────────────
 
-/// A user-authored message to inject into the currently running dialog turn at the
-/// next model-round boundary. Produced by `submit_steering` on the scheduler/coordinator
-/// and consumed by [`ExecutionEngine`](super::execution::ExecutionEngine) before each new round.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoundInjectionKind {
+    UserSteering,
+    BackgroundSubagentResult,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoundInjectionTarget {
+    /// Only inject into the exact targeted running turn. If that turn already
+    /// finished, the injection is ignored.
+    ExactTurn(String),
+    /// Inject into whichever turn is currently running for the session.
+    CurrentRunningTurn,
+}
+
+/// A message to inject into the currently running dialog turn at the next
+/// model-round boundary. Produced by the scheduler/coordinator and consumed by
+/// [`ExecutionEngine`](super::execution::ExecutionEngine) before each new round.
 #[derive(Debug, Clone)]
-pub struct SteeringMessage {
+pub struct RoundInjection {
     pub id: String,
-    /// The dialog turn this steering targets. Steering messages whose `turn_id` does not
-    /// match the running turn are ignored (e.g. user steered a turn that already finished).
-    pub turn_id: String,
+    pub kind: RoundInjectionKind,
+    /// Injection target routing policy.
+    pub target: RoundInjectionTarget,
     pub content: String,
     /// Original (pre-rendering) text from the user, for UI display when the rendered
     /// `content` differs (e.g. when wrapped with a system reminder envelope).
@@ -83,53 +98,53 @@ pub struct SteeringMessage {
     pub created_at: SystemTime,
 }
 
-/// Observes whether any user steering messages are pending for a given (session, turn).
-pub trait DialogRoundSteeringSource: Send + Sync {
-    /// Check whether the given running turn has pending steering without
+/// Observes whether any round injections are pending for a given (session, turn).
+pub trait DialogRoundInjectionSource: Send + Sync {
+    /// Check whether the given running turn has pending injections without
     /// consuming it. This lets tool execution stop at a safe boundary while the
     /// execution engine remains responsible for draining and injecting the
     /// messages into the next model round.
     fn has_pending(&self, session_id: &str, turn_id: &str) -> bool;
 
-    /// Drain all pending steering messages targeted at the given dialog turn.
+    /// Drain all pending injections targeted at the given dialog turn.
     /// Implementations must be safe to call concurrently from multiple round boundaries.
-    fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<SteeringMessage>;
+    fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection>;
 }
 
 /// Used when no scheduler is wired (e.g. tests, isolated execution).
-pub struct NoopDialogRoundSteeringSource;
+pub struct NoopDialogRoundInjectionSource;
 
-impl DialogRoundSteeringSource for NoopDialogRoundSteeringSource {
+impl DialogRoundInjectionSource for NoopDialogRoundInjectionSource {
     fn has_pending(&self, _session_id: &str, _turn_id: &str) -> bool {
         false
     }
 
-    fn take_pending(&self, _session_id: &str, _turn_id: &str) -> Vec<SteeringMessage> {
+    fn take_pending(&self, _session_id: &str, _turn_id: &str) -> Vec<RoundInjection> {
         Vec::new()
     }
 }
 
 #[derive(Clone)]
-pub struct DialogRoundSteeringInterrupt {
+pub struct DialogRoundInjectionInterrupt {
     session_id: String,
     turn_id: String,
-    source: Arc<dyn DialogRoundSteeringSource>,
+    source: Arc<dyn DialogRoundInjectionSource>,
 }
 
-impl std::fmt::Debug for DialogRoundSteeringInterrupt {
+impl std::fmt::Debug for DialogRoundInjectionInterrupt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DialogRoundSteeringInterrupt")
+        f.debug_struct("DialogRoundInjectionInterrupt")
             .field("session_id", &self.session_id)
             .field("turn_id", &self.turn_id)
             .finish_non_exhaustive()
     }
 }
 
-impl DialogRoundSteeringInterrupt {
+impl DialogRoundInjectionInterrupt {
     pub fn new(
         session_id: String,
         turn_id: String,
-        source: Arc<dyn DialogRoundSteeringSource>,
+        source: Arc<dyn DialogRoundInjectionSource>,
     ) -> Self {
         Self {
             session_id,
@@ -143,35 +158,37 @@ impl DialogRoundSteeringInterrupt {
     }
 }
 
-/// Per-session FIFO buffer of user steering messages keyed by `session_id`.
-/// Messages are appended via [`SessionSteeringBuffer::push`] and drained at round boundaries.
+/// Per-session FIFO buffer of round injections keyed by `session_id`.
+/// Messages are appended via [`SessionRoundInjectionBuffer::push`] and drained at round boundaries.
 #[derive(Debug, Default)]
-pub struct SessionSteeringBuffer {
-    inner: dashmap::DashMap<String, Vec<SteeringMessage>>,
+pub struct SessionRoundInjectionBuffer {
+    inner: dashmap::DashMap<String, Vec<RoundInjection>>,
 }
 
-impl SessionSteeringBuffer {
-    pub fn push(&self, session_id: &str, message: SteeringMessage) {
+impl SessionRoundInjectionBuffer {
+    pub fn push(&self, session_id: &str, message: RoundInjection) {
         self.inner
             .entry(session_id.to_string())
             .or_default()
             .push(message);
     }
 
-    /// Drain all messages whose `turn_id` matches `turn_id`. Messages targeting a different
-    /// turn are dropped (the targeted turn is no longer running), matching Codex semantics
-    /// where steering is bound to a specific in-flight turn.
-    pub fn drain_for_turn(&self, session_id: &str, turn_id: &str) -> Vec<SteeringMessage> {
+    /// Drain all messages eligible for the currently running turn. Exact-turn
+    /// injections that target a different turn are retained until the targeted
+    /// turn consumes them or the session is cleared.
+    pub fn drain_for_turn(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection> {
         let Some(mut entry) = self.inner.get_mut(session_id) else {
             return Vec::new();
         };
         let mut taken = Vec::new();
         let mut keep = Vec::new();
         for msg in entry.drain(..) {
-            if msg.turn_id == turn_id {
-                taken.push(msg);
-            } else {
-                keep.push(msg);
+            match &msg.target {
+                RoundInjectionTarget::ExactTurn(target_turn_id) if target_turn_id == turn_id => {
+                    taken.push(msg);
+                }
+                RoundInjectionTarget::CurrentRunningTurn => taken.push(msg),
+                RoundInjectionTarget::ExactTurn(_) => keep.push(msg),
             }
         }
         *entry = keep;
@@ -181,7 +198,12 @@ impl SessionSteeringBuffer {
     pub fn has_pending_for_turn(&self, session_id: &str, turn_id: &str) -> bool {
         self.inner
             .get(session_id)
-            .map(|entry| entry.iter().any(|msg| msg.turn_id == turn_id))
+            .map(|entry| {
+                entry.iter().any(|msg| match &msg.target {
+                    RoundInjectionTarget::ExactTurn(target_turn_id) => target_turn_id == turn_id,
+                    RoundInjectionTarget::CurrentRunningTurn => true,
+                })
+            })
             .unwrap_or(false)
     }
 
@@ -195,12 +217,12 @@ impl SessionSteeringBuffer {
     }
 }
 
-impl DialogRoundSteeringSource for SessionSteeringBuffer {
+impl DialogRoundInjectionSource for SessionRoundInjectionBuffer {
     fn has_pending(&self, session_id: &str, turn_id: &str) -> bool {
         self.has_pending_for_turn(session_id, turn_id)
     }
 
-    fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<SteeringMessage> {
+    fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection> {
         self.drain_for_turn(session_id, turn_id)
     }
 }
@@ -209,10 +231,22 @@ impl DialogRoundSteeringSource for SessionSteeringBuffer {
 mod steering_tests {
     use super::*;
 
-    fn msg(turn_id: &str, content: &str) -> SteeringMessage {
-        SteeringMessage {
+    fn exact_turn_msg(turn_id: &str, content: &str) -> RoundInjection {
+        RoundInjection {
             id: uuid::Uuid::new_v4().to_string(),
-            turn_id: turn_id.to_string(),
+            kind: RoundInjectionKind::UserSteering,
+            target: RoundInjectionTarget::ExactTurn(turn_id.to_string()),
+            content: content.to_string(),
+            display_content: content.to_string(),
+            created_at: SystemTime::now(),
+        }
+    }
+
+    fn current_turn_msg(content: &str) -> RoundInjection {
+        RoundInjection {
+            id: uuid::Uuid::new_v4().to_string(),
+            kind: RoundInjectionKind::BackgroundSubagentResult,
+            target: RoundInjectionTarget::CurrentRunningTurn,
             content: content.to_string(),
             display_content: content.to_string(),
             created_at: SystemTime::now(),
@@ -221,10 +255,10 @@ mod steering_tests {
 
     #[test]
     fn drain_for_turn_returns_only_matching_turn_messages_in_fifo_order() {
-        let buf = SessionSteeringBuffer::default();
-        buf.push("s1", msg("turn_a", "first"));
-        buf.push("s1", msg("turn_b", "for_b_only"));
-        buf.push("s1", msg("turn_a", "second"));
+        let buf = SessionRoundInjectionBuffer::default();
+        buf.push("s1", exact_turn_msg("turn_a", "first"));
+        buf.push("s1", exact_turn_msg("turn_b", "for_b_only"));
+        buf.push("s1", exact_turn_msg("turn_a", "second"));
 
         assert!(buf.has_pending_for_turn("s1", "turn_a"));
         assert!(buf.has_pending_for_turn("s1", "turn_b"));
@@ -246,17 +280,30 @@ mod steering_tests {
 
     #[test]
     fn drain_for_turn_on_empty_session_returns_empty() {
-        let buf = SessionSteeringBuffer::default();
+        let buf = SessionRoundInjectionBuffer::default();
         assert!(buf.drain_for_turn("missing", "turn_a").is_empty());
     }
 
     #[test]
     fn clear_drops_all_pending_for_session() {
-        let buf = SessionSteeringBuffer::default();
-        buf.push("s1", msg("turn_a", "x"));
-        buf.push("s1", msg("turn_b", "y"));
+        let buf = SessionRoundInjectionBuffer::default();
+        buf.push("s1", exact_turn_msg("turn_a", "x"));
+        buf.push("s1", exact_turn_msg("turn_b", "y"));
         buf.clear("s1");
         assert_eq!(buf.pending_count("s1"), 0);
         assert!(buf.drain_for_turn("s1", "turn_a").is_empty());
+    }
+
+    #[test]
+    fn current_running_turn_messages_are_delivered_to_active_turn() {
+        let buf = SessionRoundInjectionBuffer::default();
+        buf.push("s1", current_turn_msg("background result"));
+
+        assert!(buf.has_pending_for_turn("s1", "turn_a"));
+
+        let drained = buf.drain_for_turn("s1", "turn_a");
+        assert_eq!(drained.len(), 1);
+        assert_eq!(drained[0].content, "background result");
+        assert_eq!(buf.pending_count("s1"), 0);
     }
 }

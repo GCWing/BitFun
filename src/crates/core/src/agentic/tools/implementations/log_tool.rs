@@ -188,7 +188,8 @@ The tool will return the log content or analysis results that you can use to dia
     }
 
     fn short_description(&self) -> String {
-        "Read and analyze log files for debugging and monitoring.".to_string()
+        "Read and analyze log files for debugging and monitoring; mainly used in Debug mode."
+            .to_string()
     }
 
     fn default_exposure(&self) -> ToolExposure {

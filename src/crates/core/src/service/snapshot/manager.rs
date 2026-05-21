@@ -14,7 +14,13 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock, RwLock as StdRwLock};
-use tokio::sync::RwLock;
+use std::time::Instant;
+use tokio::sync::{Mutex as AsyncMutex, RwLock};
+
+#[cfg(test)]
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+#[cfg(test)]
+use std::time::Duration;
 
 /// Snapshot manager
 ///
@@ -29,6 +35,9 @@ impl SnapshotManager {
         workspace_dir: PathBuf,
         config: Option<SnapshotConfig>,
     ) -> SnapshotResult<Self> {
+        #[cfg(test)]
+        record_snapshot_manager_new_for_test().await;
+
         info!(
             "Creating snapshot manager: workspace={}",
             workspace_dir.display()
@@ -302,6 +311,57 @@ fn snapshot_managers() -> &'static StdRwLock<HashMap<PathBuf, Arc<SnapshotManage
     static SNAPSHOT_MANAGERS: OnceLock<StdRwLock<HashMap<PathBuf, Arc<SnapshotManager>>>> =
         OnceLock::new();
     SNAPSHOT_MANAGERS.get_or_init(|| StdRwLock::new(HashMap::new()))
+}
+
+fn snapshot_manager_init_locks() -> &'static AsyncMutex<HashMap<PathBuf, Arc<AsyncMutex<()>>>> {
+    static SNAPSHOT_MANAGER_INIT_LOCKS: OnceLock<
+        AsyncMutex<HashMap<PathBuf, Arc<AsyncMutex<()>>>>,
+    > = OnceLock::new();
+    SNAPSHOT_MANAGER_INIT_LOCKS.get_or_init(|| AsyncMutex::new(HashMap::new()))
+}
+
+async fn snapshot_manager_init_lock(workspace_dir: &Path) -> Arc<AsyncMutex<()>> {
+    let mut locks = snapshot_manager_init_locks().lock().await;
+    locks
+        .entry(workspace_dir.to_path_buf())
+        .or_insert_with(|| Arc::new(AsyncMutex::new(())))
+        .clone()
+}
+
+#[cfg(test)]
+static SNAPSHOT_MANAGER_NEW_COUNT_FOR_TEST: AtomicUsize = AtomicUsize::new(0);
+#[cfg(test)]
+static SNAPSHOT_MANAGER_NEW_DELAY_MS_FOR_TEST: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(test)]
+async fn record_snapshot_manager_new_for_test() {
+    SNAPSHOT_MANAGER_NEW_COUNT_FOR_TEST.fetch_add(1, Ordering::SeqCst);
+    let delay_ms = SNAPSHOT_MANAGER_NEW_DELAY_MS_FOR_TEST.load(Ordering::SeqCst);
+    if delay_ms > 0 {
+        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+    }
+}
+
+#[cfg(test)]
+fn reset_snapshot_manager_new_count_for_test() {
+    SNAPSHOT_MANAGER_NEW_COUNT_FOR_TEST.store(0, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+fn snapshot_manager_new_count_for_test() -> usize {
+    SNAPSHOT_MANAGER_NEW_COUNT_FOR_TEST.load(Ordering::SeqCst)
+}
+
+#[cfg(test)]
+fn set_snapshot_manager_new_delay_for_test(delay: Duration) {
+    SNAPSHOT_MANAGER_NEW_DELAY_MS_FOR_TEST.store(delay.as_millis() as u64, Ordering::SeqCst);
+}
+
+#[cfg(test)]
+fn clear_snapshot_manager_for_test(workspace_dir: &Path) {
+    if let Ok(mut managers) = snapshot_managers().write() {
+        managers.remove(workspace_dir);
+    }
 }
 
 /// Ensures the registry always exposes the same tool implementation that will be
@@ -672,6 +732,22 @@ pub async fn get_or_create_snapshot_manager(
         return Ok(existing);
     }
 
+    let init_lock = snapshot_manager_init_lock(&workspace_dir).await;
+    let _init_guard = init_lock.lock().await;
+
+    if let Some(existing) = get_snapshot_manager_for_workspace(&workspace_dir) {
+        debug!(
+            "Snapshot manager initialized by concurrent request: workspace={}",
+            workspace_dir.display()
+        );
+        return Ok(existing);
+    }
+
+    let started_at = Instant::now();
+    info!(
+        "Snapshot manager cold initialization started: workspace={}",
+        workspace_dir.display()
+    );
     let manager = Arc::new(SnapshotManager::new(workspace_dir.clone(), config).await?);
     {
         let mut managers = snapshot_managers().write().map_err(|_| {
@@ -682,6 +758,10 @@ pub async fn get_or_create_snapshot_manager(
         }
         managers.insert(workspace_dir, manager.clone());
     }
+    info!(
+        "Snapshot manager cold initialization completed: duration_ms={}",
+        started_at.elapsed().as_millis()
+    );
 
     Ok(manager)
 }
@@ -710,6 +790,63 @@ pub async fn initialize_snapshot_manager_for_workspace(
     config: Option<SnapshotConfig>,
 ) -> SnapshotResult<()> {
     get_or_create_snapshot_manager(workspace_dir, config).await?;
-    info!("Snapshot manager initialized for workspace");
+    debug!("Snapshot manager initialized for workspace");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        clear_snapshot_manager_for_test, get_or_create_snapshot_manager,
+        reset_snapshot_manager_new_count_for_test, set_snapshot_manager_new_delay_for_test,
+        snapshot_manager_new_count_for_test,
+    };
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::time::Duration;
+    use uuid::Uuid;
+
+    struct TestWorkspace {
+        path: PathBuf,
+    }
+
+    impl TestWorkspace {
+        fn new() -> Self {
+            let path = std::env::temp_dir()
+                .join(format!("bitfun-snapshot-manager-test-{}", Uuid::new_v4()));
+            std::fs::create_dir_all(&path).expect("test workspace should be created");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            clear_snapshot_manager_for_test(&self.path);
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn concurrent_get_or_create_initializes_snapshot_manager_once_per_workspace() {
+        let workspace = TestWorkspace::new();
+        clear_snapshot_manager_for_test(workspace.path());
+        reset_snapshot_manager_new_count_for_test();
+        set_snapshot_manager_new_delay_for_test(Duration::from_millis(80));
+
+        let first = get_or_create_snapshot_manager(workspace.path().to_path_buf(), None);
+        let second = get_or_create_snapshot_manager(workspace.path().to_path_buf(), None);
+        let (first, second) = tokio::join!(first, second);
+
+        set_snapshot_manager_new_delay_for_test(Duration::ZERO);
+
+        let first = first.expect("first snapshot manager should initialize");
+        let second = second.expect("second snapshot manager should initialize");
+
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(snapshot_manager_new_count_for_test(), 1);
+    }
 }

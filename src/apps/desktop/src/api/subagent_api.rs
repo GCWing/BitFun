@@ -357,9 +357,7 @@ pub async fn create_subagent(
         kind,
     );
     subagent.review = review;
-    subagent
-        .save_to_file(None)
-        .map_err(|e| e.to_string())?;
+    subagent.save_to_file(None).map_err(|e| e.to_string())?;
 
     let custom_config = CustomSubagentConfig {
         model: subagent.model.clone(),

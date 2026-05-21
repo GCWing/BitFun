@@ -99,14 +99,14 @@
   }
 
   &__subtitle {
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-muted);
     display: inline-block;
   }
 
   &__timestamp {
     margin-left: auto;
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-muted);
     display: inline-block;
     flex-shrink: 0;
@@ -123,7 +123,7 @@
     border-radius: 12px;
     padding: 14px 16px;
     font-size: 14px;
-    line-height: 1.6;
+    line-height: var(--flowchat-text-line-height, 1.58);
     color: var(--color-text-primary);
     white-space: pre-wrap !important;
     word-break: break-word;
@@ -193,7 +193,7 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-muted);
     white-space: nowrap;
     

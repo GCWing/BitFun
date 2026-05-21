@@ -22,7 +22,7 @@
   .compact-tool-card {
     min-height: 0;
     padding: 0 !important;
-    line-height: 1.65;
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 
   .compact-card-action {
@@ -58,8 +58,8 @@
     border-radius: 4px;
     background: transparent;
     color: var(--color-text-muted);
-    font-size: 10px;
-    line-height: 1.4;
+    font-size: var(--flowchat-font-size-xxs);
+    line-height: var(--flowchat-compact-line-height, 1.32);
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -68,13 +68,13 @@
   .default-tool-card__expanded {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--flowchat-card-gap, 0.45rem);
   }
 
   .default-tool-card__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     align-items: center;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--border-subtle);
@@ -83,31 +83,31 @@
   .default-tool-card__meta-label {
     display: inline-flex;
     align-items: center;
-    padding: 2px 8px;
+    padding: 0.125rem var(--flowchat-control-pad-x, 0.75rem);
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--border-subtle);
     color: var(--color-text-secondary);
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
     font-family: var(--tool-card-font-mono);
   }
 
   .default-tool-card__meta-description {
     color: var(--color-text-muted);
-    font-size: 12px;
-    line-height: 1.4;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 
   .default-tool-card__section {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
   }
 
   .default-tool-card__section-label {
     color: var(--color-text-secondary);
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -115,14 +115,14 @@
 
   .default-tool-card__code-block {
     margin: 0;
-    padding: 10px 12px;
+    padding: var(--flowchat-code-block-pad-y, 0.55rem) var(--flowchat-code-block-pad-x, 0.75rem);
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
     background: var(--color-bg-secondary);
     color: var(--color-text-primary);
     font-family: var(--tool-card-font-mono);
-    font-size: 11px;
-    line-height: 1.65;
+    font-size: var(--flowchat-code-font-size, 0.92em);
+    line-height: var(--flowchat-code-line-height, 1.52);
     white-space: pre-wrap;
     word-break: break-word;
     overflow: auto;
@@ -130,20 +130,20 @@
   }
 
   .default-tool-card__error-message {
-    padding: 10px 12px;
+    padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
     border: 1px solid rgba(239, 68, 68, 0.24);
     border-radius: 8px;
     background: rgba(239, 68, 68, 0.08);
     color: var(--color-error);
-    font-size: 12px;
-    line-height: 1.65;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    line-height: var(--flowchat-support-line-height, 1.45);
     white-space: pre-wrap;
     word-break: break-word;
   }
 
   .default-tool-card__actions {
     display: flex;
-    gap: 8px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     flex-wrap: wrap;
   }
 
@@ -151,8 +151,8 @@
     appearance: none;
     border: 1px solid var(--border-base);
     border-radius: 8px;
-    padding: 7px 12px;
-    font-size: 12px;
+    padding: var(--flowchat-control-pad-y, 0.35rem) var(--flowchat-control-pad-x, 0.75rem);
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -200,4 +200,3 @@
     }
   }
 }
-

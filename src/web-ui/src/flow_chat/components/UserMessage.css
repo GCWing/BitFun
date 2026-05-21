@@ -1,6 +1,6 @@
 /* User message styling aligned with inline tags. */
 .message-inline-content {
-  line-height: 1.8;
+  line-height: var(--flowchat-text-line-height, 1.58);
   word-break: break-word;
   white-space: pre-wrap;
 }
@@ -15,7 +15,7 @@
   border-radius: 12px;
   font-size: 0.875em;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: var(--flowchat-support-line-height, 1.45);
   border: 1px solid;
   vertical-align: middle;
   cursor: default;
@@ -53,7 +53,7 @@
   white-space: nowrap;
   opacity: 0.95;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: var(--flowchat-support-line-height, 1.45);
   display: flex;
   align-items: center;
 }

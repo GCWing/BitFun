@@ -1943,6 +1943,7 @@ const ModelSelectorPill: React.FC<{
 // ─── Agent Mode ─────────────────────────────────────────────────────────────
 
 type AgentMode = 'agentic' | 'Plan' | 'debug';
+const AGENT_MODE_ORDER: AgentMode[] = ['agentic', 'Plan', 'debug'];
 
 // ─── ChatPage ───────────────────────────────────────────────────────────────
 
@@ -1969,6 +1970,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const messages = getMessages(sessionId);
   const [input, setInput] = useState('');
   const [agentMode, setAgentMode] = useState<AgentMode>('agentic');
+
+  const cycleAgentMode = useCallback(() => {
+    setAgentMode(prev => {
+      const idx = AGENT_MODE_ORDER.indexOf(prev);
+      return AGENT_MODE_ORDER[(idx + 1) % AGENT_MODE_ORDER.length];
+    });
+  }, []);
   const [liveTitle, setLiveTitle] = useState(sessionName);
   const [modelCatalog, setModelCatalog] = useState<RemoteModelCatalog | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<string>('auto');
@@ -2391,6 +2399,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       e.preventDefault();
       handleSend();
     }
+    if (e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault();
+      cycleAgentMode();
+    }
   };
 
   const handleCancel = async () => {
@@ -2400,6 +2412,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       // best effort
     }
   };
+
+  // Listen at document level so the shortcut works even when the input is collapsed.
+  const cycleAgentModeRef = useRef(cycleAgentMode);
+  cycleAgentModeRef.current = cycleAgentMode;
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Tab' && e.shiftKey) {
+        // Skip when the textarea is focused — its own React handler already fired.
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'TEXTAREA') return;
+        e.preventDefault();
+        cycleAgentModeRef.current();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   const workspaceName = currentWorkspace?.project_name || currentWorkspace?.path?.split('/').pop() || '';
   const gitBranch = currentWorkspace?.git_branch;
@@ -2735,11 +2764,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
                 <>
                   <button
                     className={`chat-page__mode-pill${agentMode !== 'agentic' ? ` chat-page__mode-pill--${agentMode}` : ''}`}
-                    onClick={() => {
-                      const modes: AgentMode[] = ['agentic', 'Plan', 'debug'];
-                      const idx = modes.indexOf(agentMode);
-                      setAgentMode(modes[(idx + 1) % modes.length]);
-                    }}
+                    onClick={cycleAgentMode}
                     disabled={imageAnalyzing}
                   >
                     {modeOptions.find(m => m.id === agentMode)?.label}

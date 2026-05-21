@@ -6,4 +6,5 @@ pub enum SessionKind {
     #[default]
     Standard,
     Subagent,
+    EphemeralChild,
 }

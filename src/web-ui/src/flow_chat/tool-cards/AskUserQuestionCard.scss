@@ -60,7 +60,7 @@
 }
 
 .questions-count {
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 600;
   color: var(--color-text-secondary);
   letter-spacing: -0.01em;
@@ -88,7 +88,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
   color: var(--color-text-muted);
   white-space: nowrap;
   padding-left: 10px;
@@ -116,7 +116,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 14px;
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   color: var(--color-text-secondary);
 }
 
@@ -160,7 +160,7 @@
   color: var(--color-text-secondary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm, 4px);
-  font-size: 10px;
+  font-size: var(--flowchat-font-size-xxs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -169,11 +169,11 @@
 }
 
 .question-text {
-  font-size: 13px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
   color: var(--color-text-primary);
   flex: 1;
-  line-height: 1.5;
+  line-height: var(--flowchat-support-line-height, 1.45);
   min-width: 0;
 }
 
@@ -345,17 +345,17 @@
 }
 
 .option-label-text {
-  font-size: 13px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
   color: var(--color-text-primary);
-  line-height: 1.4;
+  line-height: var(--flowchat-support-line-height, 1.45);
   flex-shrink: 0;
 }
 
 .option-description {
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
   color: var(--color-text-muted);
-  line-height: 1.4;
+  line-height: var(--flowchat-support-line-height, 1.45);
   flex: 1;
   text-align: right;
   min-width: 0;
@@ -416,7 +416,7 @@
   padding: 6px 10px;
   border: 1px solid var(--border-base);
   border-radius: var(--radius-sm, 4px);
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   color: var(--color-text-primary);
   background: var(--color-bg-tertiary);
   transition: all 0.15s ease;
@@ -449,7 +449,7 @@
   color: var(--color-text-primary);
   border: 1px solid var(--border-base);
   border-radius: var(--radius-sm, 5px);
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -507,20 +507,20 @@
 }
 
 .summary-questions-count {
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 600;
   color: var(--color-text-secondary);
   flex-shrink: 0;
 }
 
 .summary-arrow {
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   color: var(--color-text-muted);
   flex-shrink: 0;
 }
 
 .summary-answer {
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
   color: var(--color-text-primary);
   flex: 1;
@@ -550,7 +550,7 @@
   gap: 8px;
   padding: 8px 12px;
   border-radius: var(--radius-md, 6px);
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
   font-weight: 500;
   margin: 0 14px 12px;
   background: var(--color-warning-bg);
@@ -566,7 +566,7 @@
 
 /* ========== Error message ========== */
 .error-message {
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   color: var(--color-error);
   text-align: center;
   padding: 12px;

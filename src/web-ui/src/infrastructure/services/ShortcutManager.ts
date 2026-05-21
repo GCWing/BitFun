@@ -334,7 +334,7 @@ export class ShortcutManager {
     const scope = el?.getAttribute('data-shortcut-scope') as ShortcutScope | null;
     // Only accept known panel scopes; canvas is included so canvas-scoped shortcuts
     // fire only when focus is inside the editor canvas area.
-    if (scope === 'canvas' || scope === 'editor' || scope === 'chat' || scope === 'filetree' || scope === 'git') {
+    if (scope === 'canvas' || scope === 'editor' || scope === 'chat' || scope === 'terminal' || scope === 'filetree' || scope === 'git') {
       return scope;
     }
     return 'app';
@@ -471,7 +471,7 @@ export class ShortcutManager {
   public checkConflicts(config: ShortcutConfig, excludeId?: string, excludeIds?: string[]): ShortcutRegistration[] {
     const scope = config.scope ?? 'app';
     const scopesToCheck: ShortcutScope[] = scope === 'app'
-      ? ['app', 'chat', 'editor', 'canvas', 'filetree', 'git']
+      ? ['app', 'chat', 'editor', 'terminal', 'canvas', 'filetree', 'git']
       : [scope, 'app'];
     const seen = new Set<string>();
     const list: ShortcutRegistration[] = [];

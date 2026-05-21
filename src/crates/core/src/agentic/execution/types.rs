@@ -2,7 +2,7 @@
 
 use crate::agentic::core::Message;
 use crate::agentic::round_preempt::{
-    DialogRoundPreemptSource, DialogRoundSteeringInterrupt, DialogRoundSteeringSource,
+    DialogRoundInjectionInterrupt, DialogRoundInjectionSource, DialogRoundPreemptSource,
 };
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::agentic::tools::ToolRuntimeRestrictions;
@@ -29,9 +29,9 @@ pub struct ExecutionContext {
     pub workspace_services: Option<WorkspaceServices>,
     /// When set, engine may end the turn after a full model round if a user message was queued.
     pub round_preempt: Option<Arc<dyn DialogRoundPreemptSource>>,
-    /// When set, engine drains pending user steering messages at each round boundary
+    /// When set, engine drains pending round injections at each round boundary
     /// and injects them into the dialog history without ending the turn.
-    pub round_steering: Option<Arc<dyn DialogRoundSteeringSource>>,
+    pub round_injection: Option<Arc<dyn DialogRoundInjectionSource>>,
     /// When true, stream cancellation may be converted into a partial assistant
     /// result if text/tool output has already been produced.
     pub recover_partial_on_cancel: bool,
@@ -54,9 +54,9 @@ pub struct RoundContext {
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
-    /// Cooperative interrupt checked by tool execution so user steering can be
+    /// Cooperative interrupt checked by tool execution so round injections can be
     /// applied after the currently running atomic tool/batch finishes.
-    pub steering_interrupt: Option<DialogRoundSteeringInterrupt>,
+    pub steering_interrupt: Option<DialogRoundInjectionInterrupt>,
     pub cancellation_token: CancellationToken,
     pub workspace_services: Option<WorkspaceServices>,
     pub recover_partial_on_cancel: bool,

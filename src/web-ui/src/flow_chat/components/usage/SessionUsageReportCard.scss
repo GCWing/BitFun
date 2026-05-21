@@ -44,14 +44,14 @@
     color: var(--color-text-primary);
     font-size: var(--flowchat-font-size-sm);
     font-weight: 650;
-    line-height: 1.35;
+    line-height: var(--flowchat-compact-line-height, 1.32);
   }
 
   &__loading-description,
   &__loading-step {
     color: var(--color-text-secondary);
     font-size: var(--flowchat-font-size-xs);
-    line-height: 1.45;
+    line-height: var(--flowchat-support-line-height, 1.45);
   }
 
   &__loading-description {
@@ -100,7 +100,7 @@
     color: var(--color-text-primary);
     font-size: var(--flowchat-font-size-lg);
     font-weight: 650;
-    line-height: 1.25;
+    line-height: var(--flowchat-compact-line-height, 1.32);
     white-space: nowrap;
   }
 
@@ -366,7 +366,7 @@
     }
 
     span {
-      line-height: 1.35;
+      line-height: var(--flowchat-compact-line-height, 1.32);
     }
   }
 

@@ -230,6 +230,7 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
         className="explore-region__content-wrapper"
         innerClassName="explore-region__content-inner"
         durationMs={320}
+        disableAnimation={isGroupStreaming}
       >
         <div ref={containerRef} className="explore-region__content" onScroll={checkScrollState}>
           {allItems.map((item, idx) => (

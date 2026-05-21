@@ -56,9 +56,10 @@ pub use fork_agent::*;
 pub use image_analysis::{ImageAnalyzer, MessageEnhancer};
 pub use persistence::PersistenceManager;
 pub use round_preempt::{
-    DialogRoundPreemptSource, DialogRoundSteeringInterrupt, DialogRoundSteeringSource,
-    NoopDialogRoundPreemptSource, NoopDialogRoundSteeringSource, SessionRoundYieldFlags,
-    SessionSteeringBuffer, SteeringMessage,
+    DialogRoundInjectionInterrupt, DialogRoundInjectionSource, DialogRoundPreemptSource,
+    NoopDialogRoundInjectionSource, NoopDialogRoundPreemptSource, RoundInjection,
+    RoundInjectionKind, RoundInjectionTarget, SessionRoundInjectionBuffer,
+    SessionRoundYieldFlags,
 };
 pub use session::*;
 pub use side_question::*;

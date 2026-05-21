@@ -7,14 +7,14 @@
   .diff-tool-info {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--flowchat-control-gap, 0.5rem);
     overflow: hidden;
   }
 
   .diff-file-name {
     color: var(--color-text-primary);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -23,8 +23,8 @@
   .diff-type-tag {
     display: inline-flex;
     align-items: center;
-    padding: 1px 6px;
-    font-size: 10px;
+    padding: 0.06rem 0.38rem;
+    font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
     border-radius: 4px;
     background: var(--color-bg-secondary);
@@ -37,9 +37,9 @@
   .diff-stats {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    margin-right: 8px;
-    font-size: 11px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
+    margin-right: var(--flowchat-control-gap, 0.5rem);
+    font-size: var(--flowchat-font-size-xs);
     font-family: var(--font-mono);
     flex-shrink: 0;
 
@@ -55,22 +55,22 @@
 
 .diff-expanded-content {
   .diff-message {
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-muted);
-    margin-bottom: 8px;
-    padding-bottom: 8px;
+    margin-bottom: var(--flowchat-card-gap, 0.42rem);
+    padding-bottom: var(--flowchat-card-gap, 0.42rem);
     border-bottom: 1px solid var(--border-subtle);
   }
 
   .diff-content-preview {
     margin: 0;
-    padding: 12px;
+    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     background: var(--color-bg-secondary);
     border: 1px solid var(--border-subtle);
     border-radius: 4px;
     font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--flowchat-font-size-sm);
+    line-height: var(--flowchat-support-line-height, 1.45);
     color: var(--color-text-primary);
     overflow-x: auto;
     max-height: 400px;

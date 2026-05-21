@@ -1,12 +1,12 @@
 use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
+use crate::agentic::agents::registry::visibility::{
+    SubagentVisibilityPolicy, SubagentVisibilitySummary,
+};
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides};
 use crate::agentic::deep_review_policy::{
     REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
     REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE,
     REVIEW_JUDGE_AGENT_TYPE,
-};
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides};
-use crate::agentic::agents::registry::visibility::{
-    SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
 use crate::service::config::types::AgentSubagentOverrideState;
 use serde::{Deserialize, Serialize};
@@ -128,10 +128,7 @@ fn default_true() -> bool {
     true
 }
 
-pub fn subagent_key_for(
-    source: Option<SubAgentSource>,
-    agent: &dyn Agent,
-) -> Option<String> {
+pub fn subagent_key_for(source: Option<SubAgentSource>, agent: &dyn Agent) -> Option<String> {
     let source = source?;
     let slot = match source {
         SubAgentSource::Builtin => "builtin",
@@ -164,7 +161,10 @@ impl AgentInfo {
         let default_tools = agent.default_tools();
 
         // get model from custom_config; path by downcast
-        let model = entry.custom_config.as_ref().map(|config| config.model.clone());
+        let model = entry
+            .custom_config
+            .as_ref()
+            .map(|config| config.model.clone());
 
         // get path by downcast to CustomSubagent (only custom subagent has path)
         let path = agent
@@ -173,7 +173,8 @@ impl AgentInfo {
             .map(|c| c.path.clone());
 
         AgentInfo {
-            key: subagent_key_for(entry.subagent_source, agent).unwrap_or_else(|| agent.id().to_string()),
+            key: subagent_key_for(entry.subagent_source, agent)
+                .unwrap_or_else(|| agent.id().to_string()),
             id: agent.id().to_string(),
             name: agent.name().to_string(),
             description: agent.description().to_string(),

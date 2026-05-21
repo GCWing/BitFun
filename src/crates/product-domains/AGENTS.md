@@ -16,8 +16,8 @@ moves here gradually.
   service, desktop, network, process, AI, or tool-runtime dependencies.
 - This crate may own pure DTOs, enums, serialization contracts, search plans,
   command-selection decisions, host-routing string rules, storage-shape parsers,
-  small helpers, and file-shape analyzers that use `std` or feature-gated
-  lightweight dependencies only.
+  draft/metadata response shapes, small helpers, and file-shape analyzers that
+  use `std` or feature-gated lightweight dependencies only.
 - This crate may define product-domain port traits for future runtime migration,
   but concrete adapters that perform IO, process execution, AI calls, Git
   service calls, or platform integration still belong outside this crate.
@@ -30,6 +30,27 @@ moves here gradually.
 - Feature-gated additions must remain narrow. `miniapp` may use MiniApp-only
   dependencies, `function-agents` may use function-agent-only dependencies, and
   `product-full` should only aggregate existing product-domain feature groups.
+
+## Current owners
+
+- `miniapp` owns MiniApp DTOs, compiler/bridge helpers, storage/draft/import
+  file shapes, import fallback payloads, runtime search-plan helpers, worker
+  install command selection, lifecycle/revision and manager state-transition
+  helpers, host-routing string policy, customization metadata policy including
+  built-in update/decline decisions, built-in bundle/hash/marker seed plan and
+  marker wire helpers, built-in source/placeholder payload contracts, port
+  traits, and storage-backed runtime state facade logic.
+- `function-agents` owns pure function-agent DTOs, prompt templates and
+  assembly helpers, commit prompt preparation, AI-response JSON extraction and
+  domain error-mapping policy, diff truncation policy, JSON-string-to-domain
+  parsing helpers, local file-shape analysis, Git/AI port traits, and
+  port-backed runtime facade orchestration, including the commit-message and
+  Startchat work-state facades used by core adapters.
+- Core still owns MiniApp filesystem IO, worker process execution, host dispatch
+  execution, built-in asset includes/seeding, marker IO, recompile orchestration,
+  source-hash input lookup, `PathManager` integration, function-agent Git/AI
+  service adapters, AI client calls, provider acquisition, and AI transport
+  error mapping.
 
 ## Verification
 

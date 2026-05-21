@@ -23,7 +23,7 @@
   }
 
   .content-summary {
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--tool-card-text-secondary);
     white-space: nowrap;
   }
@@ -53,7 +53,7 @@
     align-items: center;
     
     .error-text {
-      font-size: 12px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       color: rgba(239, 68, 68, 0.9);
       font-weight: 600;
     }
@@ -62,8 +62,8 @@
   .mcp-expanded-content {
     .content-item {
       &:not(:last-child) {
-        margin-bottom: 12px;
-        padding-bottom: 12px;
+        margin-bottom: var(--flowchat-card-gap, 0.42rem);
+        padding-bottom: var(--flowchat-card-gap, 0.42rem);
         border-bottom: 1px solid rgba(255, 255, 255, 0.05);
       }
     }
@@ -71,11 +71,11 @@
     .text-content {
       pre {
         margin: 0;
-        padding: 8px 12px;
+        padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
         background: rgba(0, 0, 0, 0.2);
         border-radius: 4px;
-        font-size: 12px;
-        line-height: 1.5;
+        font-size: var(--flowchat-font-size-sm);
+        line-height: var(--flowchat-support-line-height, 1.45);
         color: var(--tool-card-text-primary);
         white-space: pre-wrap;
         word-wrap: break-word;
@@ -91,10 +91,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      padding: 24px;
+      gap: var(--flowchat-control-gap, 0.5rem);
+      padding: var(--size-gap-6, 24px);
       color: var(--tool-card-text-secondary);
-      font-size: 13px;
+      font-size: var(--flowchat-font-size-sm);
     }
 
     .mcp-app-error {
@@ -110,7 +110,7 @@
     }
 
     .resource-content {
-      padding: 8px 12px;
+      padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
       background: rgba(139, 92, 246, 0.05);
       border-left: 3px solid rgba(139, 92, 246, 0.5);
       border-radius: 4px;
@@ -118,18 +118,18 @@
       .resource-name {
         font-weight: 600;
         color: var(--tool-card-text-primary);
-        margin-bottom: 4px;
+        margin-bottom: var(--flowchat-inline-gap, 0.35rem);
       }
 
       .resource-uri {
-        font-size: 11px;
+        font-size: var(--flowchat-font-size-xs);
         color: rgba(139, 92, 246, 0.7);
         font-family: monospace;
-        margin-bottom: 4px;
+        margin-bottom: var(--flowchat-inline-gap, 0.35rem);
       }
 
       .resource-description {
-        font-size: 12px;
+        font-size: var(--flowchat-font-size-sm);
         color: var(--tool-card-text-secondary);
       }
     }
@@ -141,7 +141,7 @@
 
     .error-message {
       color: rgba(239, 68, 68, 0.9);
-      font-size: 13px;
+      font-size: var(--flowchat-font-size-sm);
     }
   }
 
@@ -152,7 +152,7 @@
   .mcp-action-buttons {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
   }
 
   .mcp-icon-button {

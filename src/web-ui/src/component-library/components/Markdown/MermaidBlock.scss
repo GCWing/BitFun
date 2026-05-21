@@ -3,7 +3,7 @@
  * Styles for rendering Mermaid diagrams during streaming output
  */
 .mermaid-block {
-  margin: 0.5rem 0;
+  margin: var(--flowchat-markdown-block-gap, 0.58em) 0;
   border-radius: 6px;
   overflow: hidden;
   background: var(--color-bg-primary, #121214);
@@ -20,7 +20,7 @@
 
   &--streaming {
     .mermaid-block__streaming {
-      padding: 0.5rem;
+      padding: var(--flowchat-code-block-pad-y, 0.55rem) var(--flowchat-code-block-pad-x, 0.75rem);
     }
 
     .streaming-cursor {
@@ -40,12 +40,12 @@
     .mermaid-block__hint {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem;
+      gap: var(--flowchat-inline-gap, 0.35rem);
+      padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
       background: var(--color-warning-bg, rgba(251, 191, 36, 0.1));
       border-top: 1px solid var(--color-warning-border, rgba(251, 191, 36, 0.2));
       color: var(--color-warning, #fbbf24);
-      font-size: 0.8rem;
+      font-size: var(--flowchat-font-size-xs);
 
       svg {
         flex-shrink: 0;
@@ -56,7 +56,7 @@
   &--waiting,
   &--rendering {
     .mermaid-block__loading {
-      padding: 1rem 0.5rem;
+      padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
       text-align: center;
     }
 
@@ -64,10 +64,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.5rem;
+      gap: var(--flowchat-inline-gap, 0.35rem);
       color: var(--color-accent-500, #60a5fa);
-      font-size: 0.85rem;
-      margin-bottom: 0.5rem;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      margin-bottom: var(--flowchat-card-gap, 0.45rem);
 
       .spinning {
         animation: spin 1s linear infinite;
@@ -84,7 +84,7 @@
     position: relative;
 
     .mermaid-block__diagram {
-      padding: 0.75rem 0.5rem;
+      padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
       background: transparent;
       overflow-x: auto;
       animation: fadeIn 0.4s ease;
@@ -113,7 +113,7 @@
       top: 4px;
       right: 4px;
       display: flex;
-      gap: 2px;
+      gap: 0.125rem;
       opacity: 0;
       transition: opacity 0.2s ease;
     }
@@ -123,7 +123,7 @@
     }
 
     .mermaid-block__source {
-      padding: 0.5rem;
+      padding: var(--flowchat-code-block-pad-y, 0.55rem) var(--flowchat-code-block-pad-x, 0.75rem);
       border-top: 1px solid var(--element-bg-base, rgba(255, 255, 255, 0.08));
       background: transparent;
 
@@ -143,12 +143,12 @@
     .mermaid-block__error-message {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 1rem;
+      gap: var(--flowchat-inline-gap, 0.35rem);
+      padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
       background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
       border-bottom: 1px solid var(--color-error-border, rgba(239, 68, 68, 0.2));
       color: var(--color-error, #ef4444);
-      font-size: 0.875rem;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
 
       svg {
         flex-shrink: 0;
@@ -157,8 +157,8 @@
 
     .mermaid-block__actions {
       display: flex;
-      gap: 0.5rem;
-      padding: 0.75rem 1rem;
+      gap: var(--flowchat-inline-gap, 0.35rem);
+      padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
       background: var(--color-bg-secondary, rgba(0, 0, 0, 0.4));
       border-top: 1px solid var(--element-bg-base, rgba(255, 255, 255, 0.08));
     }
@@ -166,7 +166,7 @@
 
 
   .mermaid-block__code-preview {
-    padding: 0.5rem;
+    padding: var(--flowchat-code-block-pad-y, 0.55rem) var(--flowchat-code-block-pad-x, 0.75rem);
     background: transparent;
 
     .mermaid-code {
@@ -176,8 +176,8 @@
       border: none;
       border-radius: 0;
       font-family: var(--font-family-mono, 'Consolas', 'Monaco', 'Courier New', monospace);
-      font-size: 0.8rem;
-      line-height: 1.5;
+      font-size: var(--flowchat-code-font-size, 0.92em);
+      line-height: var(--flowchat-code-line-height, 1.52);
       color: var(--color-text-primary, #e8e8e8);
       overflow-x: auto;
       white-space: pre;

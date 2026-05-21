@@ -1,24 +1,23 @@
 /// String processing utilities
-
 use unicode_width::UnicodeWidthChar;
 
 /// Safely truncate string to specified byte length
 pub fn truncate_str(s: &str, max_bytes: usize) -> String {
     let first_line = s.lines().next().unwrap_or("");
-    
+
     if first_line.len() <= max_bytes {
         return first_line.to_string();
     }
-    
+
     let mut boundary = max_bytes;
     while boundary > 0 && !first_line.is_char_boundary(boundary) {
         boundary -= 1;
     }
-    
+
     if boundary == 0 {
         return String::new();
     }
-    
+
     format!("{}...", &first_line[..boundary])
 }
 
@@ -118,4 +117,3 @@ pub fn wrap_to_display_width(s: &str, max_width: usize) -> Vec<String> {
 
     lines
 }
-

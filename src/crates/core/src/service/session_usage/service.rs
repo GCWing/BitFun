@@ -355,6 +355,36 @@ fn build_time_breakdown(turns: &[DialogTurnData]) -> UsageTimeBreakdown {
     }
 }
 
+/// Compute `cache hit rate = cached / input` over records whose provider
+/// reported cached tokens. Records without `cached_tokens_available` are
+/// excluded from BOTH numerator and denominator — never punish a partially
+/// reporting provider by inflating the denominator with un-reported input.
+///
+/// Returns `None` when no record reports cached tokens, or when the filtered
+/// input sum is zero (avoids dividing by zero on edge cases like a tool-only
+/// turn). Range: 0.0..=1.0 in normal cases; values >1.0 are theoretically
+/// possible on broken providers and left as-is for diagnostic visibility.
+fn compute_cache_hit_rate<'a, I>(records: I) -> Option<f64>
+where
+    I: IntoIterator<Item = &'a TokenUsageRecord>,
+{
+    let mut cached_sum: u64 = 0;
+    let mut input_sum: u64 = 0;
+    let mut any_reported = false;
+    for record in records {
+        if !record.cached_tokens_available {
+            continue;
+        }
+        any_reported = true;
+        cached_sum += record.cached_tokens as u64;
+        input_sum += record.input_tokens as u64;
+    }
+    if !any_reported || input_sum == 0 {
+        return None;
+    }
+    Some(cached_sum as f64 / input_sum as f64)
+}
+
 fn build_token_breakdown(token_records: &[TokenUsageRecord]) -> UsageTokenBreakdown {
     if token_records.is_empty() {
         return UsageTokenBreakdown {
@@ -364,6 +394,7 @@ fn build_token_breakdown(token_records: &[TokenUsageRecord]) -> UsageTokenBreakd
             total_tokens: None,
             cached_tokens: None,
             cache_coverage: UsageCacheCoverage::Unavailable,
+            cache_hit_rate: None,
         };
     }
 
@@ -410,6 +441,7 @@ fn build_token_breakdown(token_records: &[TokenUsageRecord]) -> UsageTokenBreakd
         } else {
             UsageCacheCoverage::Unavailable
         },
+        cache_hit_rate: compute_cache_hit_rate(token_records.iter()),
     }
 }
 
@@ -433,6 +465,8 @@ fn build_model_breakdown(
                 output_tokens: Some(0),
                 total_tokens: Some(0),
                 cached_tokens: None,
+                // Filled in by P2-2.
+                cache_hit_rate: None,
                 duration_ms: None,
                 sample_turn_id: None,
                 sample_turn_index: None,
@@ -468,6 +502,8 @@ fn build_model_breakdown(
                     output_tokens: None,
                     total_tokens: None,
                     cached_tokens: None,
+                    // Filled in by P2-2.
+                    cache_hit_rate: None,
                     duration_ms: Some(0),
                     sample_turn_id: None,
                     sample_turn_index: None,
@@ -487,6 +523,21 @@ fn build_model_breakdown(
     for (model_id, span_count) in span_counts_by_model {
         if let Some(row) = by_model.get_mut(&model_id) {
             row.call_count = row.call_count.max(span_count);
+        }
+    }
+
+    // Per-model hit rate: group records by model_id, then apply the same
+    // numerator/denominator policy as the session-level rate.
+    let mut records_by_model: HashMap<&str, Vec<&TokenUsageRecord>> = HashMap::new();
+    for record in token_records {
+        records_by_model
+            .entry(record.model_id.as_str())
+            .or_default()
+            .push(record);
+    }
+    for (model_id, model_records) in &records_by_model {
+        if let Some(row) = by_model.get_mut(*model_id) {
+            row.cache_hit_rate = compute_cache_hit_rate(model_records.iter().copied());
         }
     }
 
@@ -1748,6 +1799,7 @@ mod tests {
             session_id: "session-1".to_string(),
             timestamp: 1_000 + turn_index as u64,
             kind,
+            agent_type: None,
             user_message: UserMessageData {
                 id: format!("user-{}", turn_index),
                 content: "hidden from report".to_string(),
@@ -1898,5 +1950,75 @@ mod tests {
             token_details: None,
             is_subagent: false,
         }
+    }
+
+    fn reported_token_record(
+        model_id: &str,
+        input_tokens: u32,
+        output_tokens: u32,
+        cached_tokens: u32,
+    ) -> TokenUsageRecord {
+        let mut record = test_token_record(model_id, input_tokens, output_tokens, cached_tokens);
+        record.cached_tokens_available = true;
+        record
+    }
+
+    #[test]
+    fn cache_hit_rate_computes_when_all_records_report_cache() {
+        let records = vec![
+            reported_token_record("model-a", 100, 20, 30),
+            reported_token_record("model-a", 200, 40, 80),
+        ];
+        let breakdown = build_token_breakdown(&records);
+        // (30 + 80) / (100 + 200) = 110 / 300
+        let rate = breakdown.cache_hit_rate.expect("hit rate present");
+        assert!((rate - (110.0 / 300.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cache_hit_rate_is_none_when_no_record_reports_cache() {
+        let records = vec![
+            test_token_record("model-a", 100, 20, 0),
+            test_token_record("model-a", 200, 40, 0),
+        ];
+        let breakdown = build_token_breakdown(&records);
+        assert_eq!(breakdown.cache_hit_rate, None);
+    }
+
+    #[test]
+    fn cache_hit_rate_excludes_unreported_records_from_denominator() {
+        // Partial coverage: one record reports, the other does not. The
+        // unreported record must be excluded from BOTH numerator and
+        // denominator — otherwise hit rate is artificially deflated.
+        let records = vec![
+            reported_token_record("model-a", 100, 20, 80), // reports → counts
+            test_token_record("model-a", 9999, 1, 0),      // unreported → excluded
+        ];
+        let breakdown = build_token_breakdown(&records);
+        let rate = breakdown.cache_hit_rate.expect("hit rate present");
+        // 80 / 100 — the 9999 input from the unreported record must NOT bloat the denominator.
+        assert!((rate - 0.8).abs() < 1e-9);
+    }
+
+    #[test]
+    fn cache_hit_rate_none_when_input_sum_is_zero() {
+        // Edge case: reported records but their input_tokens all 0.
+        // Avoid divide-by-zero; surface as None.
+        let records = vec![reported_token_record("model-a", 0, 5, 0)];
+        let breakdown = build_token_breakdown(&records);
+        assert_eq!(breakdown.cache_hit_rate, None);
+    }
+
+    #[test]
+    fn per_model_cache_hit_rate_isolated_per_model() {
+        let records = vec![
+            reported_token_record("model-a", 100, 10, 40), // a: 40/100
+            reported_token_record("model-b", 200, 20, 50), // b: 50/200
+        ];
+        let models = build_model_breakdown(&[], &records);
+        let a = models.iter().find(|m| m.model_id == "model-a").unwrap();
+        let b = models.iter().find(|m| m.model_id == "model-b").unwrap();
+        assert!((a.cache_hit_rate.unwrap() - 0.4).abs() < 1e-9);
+        assert!((b.cache_hit_rate.unwrap() - 0.25).abs() < 1e-9);
     }
 }

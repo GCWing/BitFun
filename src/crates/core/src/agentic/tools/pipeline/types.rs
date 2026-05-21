@@ -2,7 +2,7 @@
 
 use crate::agentic::core::{ToolCall, ToolExecutionState};
 use crate::agentic::events::SubagentParentInfo as EventSubagentParentInfo;
-use crate::agentic::round_preempt::DialogRoundSteeringInterrupt;
+use crate::agentic::round_preempt::DialogRoundInjectionInterrupt;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
@@ -50,21 +50,12 @@ impl From<SubagentParentInfo> for EventSubagentParentInfo {
     }
 }
 
-impl From<SubagentParentInfo> for bitfun_agent_stream::SubagentParentInfo {
-    fn from(info: SubagentParentInfo) -> Self {
-        Self {
-            tool_call_id: info.tool_call_id,
-            session_id: info.session_id,
-            dialog_turn_id: info.dialog_turn_id,
-        }
-    }
-}
-
 /// Tool execution context
 #[derive(Debug, Clone)]
 pub struct ToolExecutionContext {
     pub session_id: String,
     pub dialog_turn_id: String,
+    pub round_id: String,
     pub agent_type: String,
     pub workspace: Option<WorkspaceBinding>,
     pub context_vars: HashMap<String, String>,
@@ -77,8 +68,8 @@ pub struct ToolExecutionContext {
     pub allowed_tools: Vec<String>,
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Optional cooperative interrupt used to stop remaining tool calls when a
-    /// user steering message is waiting for this turn.
-    pub steering_interrupt: Option<DialogRoundSteeringInterrupt>,
+    /// round injection is waiting for this turn.
+    pub steering_interrupt: Option<DialogRoundInjectionInterrupt>,
     pub workspace_services: Option<WorkspaceServices>,
 }
 

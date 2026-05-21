@@ -28,7 +28,7 @@
     border: none;
     background: transparent;
     color: var(--color-text-secondary);
-    font-size: 9px;
+    font-size: var(--flowchat-font-size-2xs);
     font-weight: 400;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -80,7 +80,7 @@
     border-radius: 3px;
     background: rgba(100, 140, 255, 0.15);
     color: rgba(140, 180, 255, 0.9);
-    font-size: 7px;
+    font-size: var(--flowchat-font-size-2xs);
     font-weight: 600;
     letter-spacing: 0.5px;
     line-height: 1;
@@ -94,7 +94,7 @@
     border-radius: 3px;
     background: rgba(100, 200, 160, 0.15);
     color: rgba(100, 200, 160, 0.9);
-    font-size: 7px;
+    font-size: var(--flowchat-font-size-2xs);
     font-weight: 600;
     letter-spacing: 0.3px;
     line-height: 1;
@@ -102,7 +102,7 @@
   }
   
   &__ctx-usage {
-    font-size: 9px;
+    font-size: var(--flowchat-font-size-2xs);
     font-weight: 400;
     color: var(--color-text-muted);
     opacity: 0.55;
@@ -160,7 +160,7 @@
     justify-content: space-between;
     padding: 8px 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
     color: var(--color-text-muted);
     text-transform: uppercase;
@@ -168,7 +168,7 @@
   }
   
   &__dropdown-hint {
-    font-size: 9px;
+    font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-tertiary);
     font-weight: 400;
     text-transform: none;
@@ -255,7 +255,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     font-weight: 500;
     color: var(--color-text-secondary);
     white-space: nowrap;
@@ -264,7 +264,7 @@
   }
   
   &__option-desc {
-    font-size: 9px;
+    font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-tertiary);
     white-space: nowrap;
     overflow: hidden;
@@ -283,7 +283,7 @@
   }
 
   &__option-subdesc {
-    font-size: 9px;
+    font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-muted);
     white-space: nowrap;
     overflow: hidden;

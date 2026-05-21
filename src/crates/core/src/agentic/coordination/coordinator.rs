@@ -17,7 +17,7 @@ use crate::agentic::fork_agent::{
     ForkAgentContextSnapshot, ForkAgentExecutionRequest, ForkAgentExecutionResult,
 };
 use crate::agentic::image_analysis::ImageContextData;
-use crate::agentic::round_preempt::{DialogRoundPreemptSource, DialogRoundSteeringSource};
+use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
@@ -26,11 +26,15 @@ use crate::agentic::WorkspaceBinding;
 use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
+use crate::service::session::{SessionRelationship, SessionRelationshipKind};
 use crate::service::config::global::GlobalConfigManager;
+use crate::service::workspace::{
+    get_global_workspace_service, WorkspaceCreateOptions, WorkspaceKind,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -93,6 +97,54 @@ impl SubagentResult {
 
     pub fn ledger_event_id(&self) -> Option<&str> {
         self.ledger_event_id.as_deref()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BackgroundSubagentStartResult {
+    pub background_task_id: String,
+}
+
+fn format_background_subagent_delivery_text(
+    background_task_id: &str,
+    agent_type: &str,
+    outcome: Result<&SubagentResult, &BitFunError>,
+) -> String {
+    match outcome {
+        Ok(result) => {
+            if result.is_partial_timeout() {
+                format!(
+                    "Background subagent '{}' (background_task_id='{}') completed with partial timeout result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>",
+                    agent_type, background_task_id, result.text
+                )
+            } else {
+                format!(
+                    "Background subagent '{}' (background_task_id='{}') completed successfully:\n<result>\n{}\n</result>",
+                    agent_type, background_task_id, result.text
+                )
+            }
+        }
+        Err(error) => {
+            format!(
+                "Background subagent '{}' (background_task_id='{}') failed before producing a final result.\nError: {}",
+                agent_type, background_task_id, error
+            )
+        }
+    }
+}
+
+fn build_subagent_session_relationship(
+    parent_info: Option<&SubagentParentInfo>,
+    agent_type: &str,
+) -> SessionRelationship {
+    SessionRelationship {
+        kind: Some(SessionRelationshipKind::Subagent),
+        parent_session_id: parent_info.map(|info| info.session_id.clone()),
+        parent_request_id: None,
+        parent_dialog_turn_id: parent_info.map(|info| info.dialog_turn_id.clone()),
+        parent_turn_index: None,
+        parent_tool_call_id: parent_info.map(|info| info.tool_call_id.clone()),
+        subagent_type: Some(agent_type.to_string()),
     }
 }
 
@@ -301,7 +353,7 @@ pub struct ConversationCoordinator {
     /// Round-boundary yield (same source as scheduler's yield flags); injected after construction
     round_preempt_source: OnceLock<Arc<dyn DialogRoundPreemptSource>>,
     /// Round-boundary user steering source (mid-turn user message injection); injected after construction
-    round_steering_source: OnceLock<Arc<dyn DialogRoundSteeringSource>>,
+    round_injection_source: OnceLock<Arc<dyn DialogRoundInjectionSource>>,
     /// In-flight dialog turn tracker per session, used to serialize cancel→start
     /// transitions so a new turn never starts touching the in-memory message
     /// list while the previous (cancelled) turn's spawn task is still draining.
@@ -311,6 +363,38 @@ pub struct ConversationCoordinator {
 }
 
 impl ConversationCoordinator {
+    async fn track_session_workspace_activity_best_effort(config: &SessionConfig, reason: &str) {
+        let Some(workspace_path) = config.workspace_path.as_ref() else {
+            return;
+        };
+
+        let Some(workspace_service) = get_global_workspace_service() else {
+            return;
+        };
+
+        let mut options = WorkspaceCreateOptions {
+            auto_set_current: false,
+            add_to_recent: true,
+            ..Default::default()
+        };
+
+        if config.remote_connection_id.is_some() {
+            options.workspace_kind = WorkspaceKind::Remote;
+            options.remote_connection_id = config.remote_connection_id.clone();
+            options.remote_ssh_host = config.remote_ssh_host.clone();
+        }
+
+        if let Err(error) = workspace_service
+            .track_workspace_activity(PathBuf::from(workspace_path), options)
+            .await
+        {
+            warn!(
+                "Failed to track session workspace activity: reason={}, workspace_path={}, error={}",
+                reason, workspace_path, error
+            );
+        }
+    }
+
     /// Build a workspace binding that is remote-aware.
     /// If the global remote workspace is active and matches the session path,
     /// returns a `WorkspaceBinding` with remote metadata and correct local
@@ -719,7 +803,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             subagent_timeout_registry: Arc::new(RwLock::new(HashMap::new())),
             scheduler_notify_tx: OnceLock::new(),
             round_preempt_source: OnceLock::new(),
-            round_steering_source: OnceLock::new(),
+            round_injection_source: OnceLock::new(),
             active_turns_per_session: Arc::new(DashMap::new()),
         }
     }
@@ -735,10 +819,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let _ = self.round_preempt_source.set(source);
     }
 
-    /// Wire round-boundary user-steering source (typically the scheduler's
-    /// [`SessionSteeringBuffer`](crate::agentic::round_preempt::SessionSteeringBuffer)).
-    pub fn set_round_steering_source(&self, source: Arc<dyn DialogRoundSteeringSource>) {
-        let _ = self.round_steering_source.set(source);
+    /// Wire round-boundary injection source (typically the scheduler's
+    /// [`SessionRoundInjectionBuffer`](crate::agentic::round_preempt::SessionRoundInjectionBuffer)).
+    pub fn set_round_injection_source(&self, source: Arc<dyn DialogRoundInjectionSource>) {
+        let _ = self.round_injection_source.set(source);
     }
 
     /// Dynamically adjust a running subagent's timeout.
@@ -878,6 +962,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
 
+        Self::track_session_workspace_activity_best_effort(&session.config, "session_created")
+            .await;
+
         // SessionManager::create_session_with_id_and_creator already persists the
         // session into the effective workspace session storage path. Avoid writing
         // a second copy here using the raw workspace path, because remote workspaces
@@ -894,7 +981,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(session)
     }
 
-    /// Create a hidden, non-persisted session that is still addressable by the UI.
+    /// Create a hidden internal subagent session that is persisted but excluded
+    /// from normal user-facing session lists.
     pub async fn create_hidden_subagent_session_with_workspace(
         &self,
         session_id: Option<String>,
@@ -931,6 +1019,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         turn_id: &str,
         turn_index: usize,
+        agent_type: &str,
         user_input: &str,
         workspace_path: &str,
         // Pre-resolved on-disk session storage path (mirror dir for remote workspaces).
@@ -993,6 +1082,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 snapshot_session_id: None,
                 tags: Vec::new(),
                 custom_metadata: None,
+                relationship: None,
                 todos: None,
                 deep_review_run_manifest: None,
                 deep_review_cache: None,
@@ -1025,6 +1115,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 metadata: user_message_metadata,
             },
         );
+        turn_data.agent_type = Some(agent_type.to_string());
         turn_data.status = status;
         turn_data.end_time = Some(now_ms);
         turn_data.duration_ms = Some(now_ms.saturating_sub(turn_data.start_time));
@@ -1100,6 +1191,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     async fn wrap_user_input(
         &self,
         agent_type: &str,
+        previous_agent_type: Option<&str>,
         user_input: String,
         workspace: Option<&WorkspaceBinding>,
     ) -> BitFunResult<String> {
@@ -1112,24 +1204,27 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let current_agent = agent_registry
             .get_agent(agent_type, workspace.map(|binding| binding.root_path()))
             .ok_or_else(|| BitFunError::NotFound(format!("Agent not found: {}", agent_type)))?;
-        let system_reminder = current_agent.get_system_reminder(0).await?;
+        let system_reminder = current_agent
+            .get_system_reminder(previous_agent_type, workspace)
+            .await?;
 
-        let mut wrapped_user_input = if has_prompt_markup(&user_input) {
-            user_input
+        if has_prompt_markup(&user_input) {
+            if system_reminder.is_empty() {
+                Ok(user_input)
+            } else {
+                let mut envelope = PromptEnvelope::new();
+                envelope.push_system_reminder(system_reminder);
+                envelope.push_user_query(user_input);
+                Ok(envelope.render())
+            }
         } else {
             let mut envelope = PromptEnvelope::new();
-            envelope.push_user_query(user_input);
-            envelope.render()
-        };
-        if !system_reminder.is_empty() {
-            let mut envelope = PromptEnvelope::new();
-            envelope.push_system_reminder(system_reminder);
-            if !wrapped_user_input.is_empty() {
-                wrapped_user_input.push('\n');
+            if !system_reminder.is_empty() {
+                envelope.push_system_reminder(system_reminder);
             }
-            wrapped_user_input.push_str(&envelope.render());
+            envelope.push_user_query(user_input);
+            Ok(envelope.render())
         }
-        Ok(wrapped_user_input)
     }
 
     pub async fn ensure_assistant_bootstrap(
@@ -1376,7 +1471,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             user_input: MANUAL_COMPACTION_COMMAND.to_string(),
             original_user_input: None,
             user_message_metadata: user_message_metadata.clone(),
-            subagent_parent_info: None,
         })
         .await;
 
@@ -1439,7 +1533,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     total_rounds: 1,
                     total_tools: 1,
                     duration_ms: outcome.duration_ms,
-                    subagent_parent_info: None,
                     partial_recovery_reason: None,
                     success: Some(true),
                     finish_reason: Some("complete".to_string()),
@@ -1477,7 +1570,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     error: error_text.clone(),
                     error_category: Some(err.error_category()),
                     error_detail: Some(err.error_detail()),
-                    subagent_parent_info: None,
                 })
                 .await;
                 Err(err)
@@ -1520,6 +1612,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         };
 
+        let previous_agent_type = session.last_user_dialog_agent_type.clone();
         let requested_agent_type = agent_type.trim().to_string();
         let provisional_agent_type = if !requested_agent_type.is_empty() {
             requested_agent_type.clone()
@@ -1529,6 +1622,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "agentic".to_string()
         };
         let effective_agent_type = Self::normalize_agent_type(&provisional_agent_type);
+
+        Self::track_session_workspace_activity_best_effort(&session.config, "dialog_started")
+            .await;
 
         debug!(
             "Resolved dialog turn agent type: session_id={}, turn_id={}, requested_agent_type={}, session_agent_type={}, effective_agent_type={}, trigger_source={:?}, queue_priority={:?}, skip_tool_confirmation={}",
@@ -1754,6 +1850,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let wrapped_user_input = self
             .wrap_user_input(
                 &effective_agent_type,
+                previous_agent_type
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty()),
                 user_input,
                 session_workspace.as_ref(),
             )
@@ -1778,6 +1878,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .start_dialog_turn(
                 &session_id,
+                effective_agent_type.clone(),
                 wrapped_user_input.clone(),
                 turn_id,
                 image_contexts,
@@ -1831,7 +1932,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 None
             },
             user_message_metadata: user_message_metadata.clone(),
-            subagent_parent_info: None,
         })
         .await;
 
@@ -1911,7 +2011,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services,
             round_preempt: self.round_preempt_source.get().cloned(),
-            round_steering: self.round_steering_source.get().cloned(),
+            round_injection: self.round_injection_source.get().cloned(),
             recover_partial_on_cancel: false,
         };
 
@@ -2046,7 +2146,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
 
             let workspace_turn_status = match execution_engine
-                .execute_dialog_turn(effective_agent_type_clone, messages, execution_context)
+                .execute_dialog_turn(
+                    effective_agent_type_clone.clone(),
+                    messages,
+                    execution_context,
+                )
                 .await
             {
                 Ok(execution_result) => {
@@ -2132,7 +2236,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                 AgenticEvent::DialogTurnCancelled {
                                     session_id: session_id_clone.clone(),
                                     turn_id: turn_id_clone.clone(),
-                                    subagent_parent_info: None,
                                 },
                                 Some(EventPriority::Critical),
                             )
@@ -2199,7 +2302,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                     error: error_text.clone(),
                                     error_category: Some(e.error_category()),
                                     error_detail: Some(e.error_detail()),
-                                    subagent_parent_info: None,
                                 },
                                 Some(EventPriority::Critical),
                             )
@@ -2269,6 +2371,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         &session_id_clone,
                         &turn_id_clone,
                         turn_index,
+                        &effective_agent_type_clone,
                         &user_input_for_workspace,
                         wp,
                         session_storage_path_for_finalize.as_deref(),
@@ -2457,6 +2560,41 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(())
     }
 
+    pub async fn delete_hidden_subagent_sessions_for_parent_turns(
+        &self,
+        workspace_path: &Path,
+        parent_session_id: &str,
+        parent_dialog_turn_ids: &HashSet<String>,
+    ) -> BitFunResult<Vec<String>> {
+        let session_ids = self
+            .session_manager
+            .collect_hidden_subagent_cascade_for_parent_turns(
+                workspace_path,
+                parent_session_id,
+                parent_dialog_turn_ids,
+            )
+            .await?;
+
+        let mut deleted_session_ids = Vec::new();
+
+        for session_id in session_ids {
+            if let Err(e) = self
+                .cancel_active_turn_for_session(&session_id, Duration::from_secs(2))
+                .await
+            {
+                warn!(
+                    "Failed to cancel hidden subagent session before deletion: session_id={}, parent_session_id={}, error={}",
+                    session_id, parent_session_id, e
+                );
+            }
+
+            self.delete_session(workspace_path, &session_id).await?;
+            deleted_session_ids.push(session_id);
+        }
+
+        Ok(deleted_session_ids)
+    }
+
     /// Restore session
     pub async fn restore_session(
         &self,
@@ -2468,9 +2606,67 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub async fn restore_internal_session(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        self.session_manager
+            .restore_internal_session(workspace_path, session_id)
+            .await
+    }
+
+    /// Restore session and return the persisted turns read during restore.
+    pub async fn restore_session_with_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_session_with_turns(workspace_path, session_id)
+            .await
+    }
+
+    pub async fn restore_internal_session_with_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_internal_session_with_turns(workspace_path, session_id)
+            .await
+    }
+
+    /// Restore only the UI-visible persisted session view.
+    pub async fn restore_session_view(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_session_view(workspace_path, session_id)
+            .await
+    }
+
+    pub async fn restore_internal_session_view(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_internal_session_view(workspace_path, session_id)
+            .await
+    }
+
     /// List all sessions
     pub async fn list_sessions(&self, workspace_path: &Path) -> BitFunResult<Vec<SessionSummary>> {
         self.session_manager.list_sessions(workspace_path).await
+    }
+
+    pub async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<std::path::PathBuf> {
+        self.session_manager
+            .resolve_session_workspace_path(session_id)
+            .await
     }
 
     /// Get a best-effort message view for a session.
@@ -2876,6 +3072,26 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
         let session_id = session.session_id.clone();
+        self.session_manager
+            .persist_session_lineage(
+                &session_id,
+                build_subagent_session_relationship(
+                    subagent_parent_info.as_ref(),
+                    &agent_type,
+                ),
+            )
+            .await?;
+
+        if let Some(parent_info) = subagent_parent_info.as_ref() {
+            self.emit_event(AgenticEvent::SubagentSessionLinked {
+                session_id: session_id.clone(),
+                parent_session_id: parent_info.session_id.clone(),
+                parent_dialog_turn_id: parent_info.dialog_turn_id.clone(),
+                parent_tool_call_id: parent_info.tool_call_id.clone(),
+                agent_type: Some(agent_type.clone()),
+            })
+            .await;
+        }
 
         // Register timeout handle so it can be adjusted at runtime.
         let timeout_handle = Arc::new(SubagentTimeoutHandle {
@@ -2950,9 +3166,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
 
-        // Emit DialogTurnStarted with subagent_parent_info so the frontend can
-        // associate the subagent session ID with the parent tool (enabling the
-        // "ignore timeout" feature for deep-review subagents).
+        // Emit DialogTurnStarted after the dedicated linking event.
         let user_input_text = initial_messages
             .first()
             .map(|m| match &m.content {
@@ -2967,7 +3181,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             user_input: user_input_text,
             original_user_input: None,
             user_message_metadata: None,
-            subagent_parent_info: subagent_parent_info.clone().map(Into::into),
         })
         .await;
 
@@ -2991,7 +3204,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             // Subagents are autonomous; user steering is targeted at top-level
             // dialog turns only. Leave None so we don't intercept buffer entries
             // that belong to a different (parent) session/turn.
-            round_steering: None,
+            round_injection: None,
             recover_partial_on_cancel: true,
         };
 
@@ -3419,12 +3632,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .unwrap_or("Side thread")
             .to_string();
         let child_session = self
-            .create_hidden_subagent_session(
+            .session_manager
+            .create_session_with_id_and_details(
                 Some(child_session_id.to_string()),
                 session_name,
                 snapshot.parent_agent_type.clone(),
                 snapshot.build_child_session_config(None),
                 Some(format!("session-{}", snapshot.parent_session_id)),
+                SessionKind::EphemeralChild,
             )
             .await?;
 
@@ -3603,9 +3818,113 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await
     }
 
-    /// Clean up subagent session resources
+    pub async fn start_background_subagent(
+        &self,
+        agent_type: String,
+        task_description: String,
+        subagent_parent_info: SubagentParentInfo,
+        workspace_path: Option<String>,
+        context: Option<HashMap<String, String>>,
+        model_id: Option<String>,
+        timeout_seconds: Option<u64>,
+    ) -> BitFunResult<BackgroundSubagentStartResult> {
+        let workspace_path = workspace_path.ok_or_else(|| {
+            BitFunError::Validation(
+                "workspace_path is required when creating a background subagent session"
+                    .to_string(),
+            )
+        })?;
+        let model_id = model_id
+            .map(|model_id| model_id.trim().to_string())
+            .filter(|model_id| !model_id.is_empty());
+        let parent_session = self
+            .session_manager
+            .get_session(&subagent_parent_info.session_id)
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!(
+                    "Parent session not found: {}",
+                    subagent_parent_info.session_id
+                ))
+            })?;
+        let parent_agent_type = parent_session.agent_type.clone();
+        let parent_workspace_path = parent_session.config.workspace_path.clone();
+        let background_task_id = format!("bg-subagent-{}", uuid::Uuid::new_v4());
+        let background_task_id_for_delivery = background_task_id.clone();
+        let request = HiddenSubagentExecutionRequest {
+            session_name: format!("Subagent: {}", task_description),
+            agent_type: agent_type.clone(),
+            session_config: Self::build_session_config_for_workspace(workspace_path, model_id)
+                .await,
+            initial_messages: vec![Message::user(task_description.clone())],
+            created_by: Some(format!("session-{}", subagent_parent_info.session_id)),
+            subagent_parent_info: Some(subagent_parent_info.clone()),
+            context: context.unwrap_or_default(),
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+        };
+        let coordinator = get_global_coordinator().ok_or_else(|| {
+            BitFunError::service("Coordinator not initialized".to_string())
+        })?;
+
+        tokio::spawn(async move {
+            let delivery_text = match coordinator
+                .execute_hidden_subagent_internal(request, None, timeout_seconds)
+                .await
+            {
+                Ok(result) => format_background_subagent_delivery_text(
+                    &background_task_id_for_delivery,
+                    &agent_type,
+                    Ok(&result),
+                ),
+                Err(error) => format_background_subagent_delivery_text(
+                    &background_task_id_for_delivery,
+                    &agent_type,
+                    Err(&error),
+                ),
+            };
+
+            let metadata = serde_json::json!({
+                "kind": "background_subagent_result",
+                "backgroundTaskId": background_task_id_for_delivery,
+                "subagentType": agent_type,
+                "taskDescription": task_description,
+            });
+
+            if let Some(scheduler) = super::scheduler::get_global_scheduler() {
+                if let Err(error) = scheduler
+                    .deliver_background_subagent_result(
+                        subagent_parent_info.session_id.clone(),
+                        parent_agent_type,
+                        parent_workspace_path,
+                        delivery_text,
+                        None,
+                        Some(metadata),
+                    )
+                    .await
+                {
+                    warn!(
+                        "Failed to deliver background subagent result: background_task_id={}, parent_session_id={}, error={}",
+                        background_task_id_for_delivery,
+                        subagent_parent_info.session_id,
+                        error
+                    );
+                }
+            } else {
+                warn!(
+                    "Scheduler not initialized; background subagent result dropped: background_task_id={}, parent_session_id={}",
+                    background_task_id_for_delivery,
+                    subagent_parent_info.session_id
+                );
+            }
+        });
+
+        Ok(BackgroundSubagentStartResult { background_task_id })
+    }
+
+    /// Clean up runtime-only subagent resources.
     ///
-    /// Release resources occupied by subagent session (sandbox, etc.) and delete session
+    /// Subagent sessions are now persisted so users can reopen them from the UI.
+    /// This cleanup path must only release ephemeral runtime resources such as
+    /// snapshot bookkeeping; it must not delete the persisted session itself.
     async fn cleanup_subagent_resources(&self, session_id: &str) -> BitFunResult<()> {
         let cleanup_started_at = Instant::now();
         debug!(
@@ -3646,43 +3965,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "Subagent cleanup stage completed: session_id={}, stage=snapshot_cleanup, duration_ms={}",
                 session_id,
                 stage_started_at.elapsed().as_millis()
-            );
-        }
-
-        // Delete the subagent session itself, including runtime context and persisted turn data.
-        let workspace_path = self
-            .session_manager
-            .get_session(session_id)
-            .and_then(|session| session.config.workspace_path.map(std::path::PathBuf::from));
-
-        if let Some(workspace_path) = workspace_path {
-            debug!(
-                "Subagent cleanup stage starting: session_id={}, stage=session_delete, workspace_path={}",
-                session_id,
-                workspace_path.display()
-            );
-            let stage_started_at = Instant::now();
-            if let Err(e) = self
-                .session_manager
-                .delete_session(&workspace_path, session_id)
-                .await
-            {
-                warn!(
-                    "Failed to delete subagent session: session={}, error={}",
-                    session_id, e
-                );
-            } else {
-                debug!("Subagent session deleted: session={}", session_id);
-            }
-            debug!(
-                "Subagent cleanup stage completed: session_id={}, stage=session_delete, duration_ms={}",
-                session_id,
-                stage_started_at.elapsed().as_millis()
-            );
-        } else {
-            warn!(
-                "Failed to delete subagent session because workspace_path is missing: session={}",
-                session_id
             );
         }
 
@@ -3804,7 +4086,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             session_id: session_id.to_string(),
             turn_id: turn_id.to_string(),
             queue_state,
-            subagent_parent_info: None,
         };
         let _ = self
             .event_queue
@@ -4182,6 +4463,46 @@ mod tests {
         assert_eq!(normalize_subagent_max_concurrency(0), 1);
         assert_eq!(normalize_subagent_max_concurrency(5), 5);
         assert_eq!(normalize_subagent_max_concurrency(usize::MAX), 64);
+    }
+
+    #[test]
+    fn background_subagent_delivery_text_includes_background_task_id() {
+        let completed = super::SubagentResult::completed("done".to_string());
+        let completed_text = super::format_background_subagent_delivery_text(
+            "bg-subagent-123",
+            "GeneralPurpose",
+            Ok(&completed),
+        );
+        assert!(completed_text.contains(
+            "Background subagent 'GeneralPurpose' (background_task_id='bg-subagent-123') completed successfully:"
+        ));
+        assert!(completed_text.contains("<result>\n"));
+        assert!(!completed_text.contains("background_task_id=\"bg-subagent-123\""));
+
+        let partial = super::SubagentResult::partial_timeout(
+            "partial".to_string(),
+            "timeout".to_string(),
+        );
+        let partial_text = super::format_background_subagent_delivery_text(
+            "bg-subagent-456",
+            "GeneralPurpose",
+            Ok(&partial),
+        );
+        assert!(partial_text.contains(
+            "Background subagent 'GeneralPurpose' (background_task_id='bg-subagent-456') completed with partial timeout result:"
+        ));
+        assert!(partial_text.contains("<partial_result status=\"partial_timeout\">\n"));
+        assert!(!partial_text.contains("background_task_id=\"bg-subagent-456\""));
+
+        let failed_text = super::format_background_subagent_delivery_text(
+            "bg-subagent-789",
+            "GeneralPurpose",
+            Err(&crate::util::errors::BitFunError::tool("boom".to_string())),
+        );
+        assert!(failed_text.contains(
+            "Background subagent 'GeneralPurpose' (background_task_id='bg-subagent-789') failed before producing a final result."
+        ));
+        assert!(failed_text.contains("Error:"));
     }
 
     #[test]

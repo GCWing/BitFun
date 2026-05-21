@@ -38,6 +38,7 @@ const ANCHOR_LOCK_MIN_DEVIATION_PX = 0.5;
 const ANCHOR_LOCK_DURATION_MS = 450;
 const PINNED_TURN_VIEWPORT_OFFSET_PX = 57; // Keep in sync with `.message-list-header`.
 const TOUCH_SCROLL_INTENT_EXIT_THRESHOLD_PX = 6;
+const USER_UPWARD_SCROLL_INTENT_WINDOW_MS = 800;
 
 // Read `FLOWCHAT_SCROLL_STABILITY.md` before changing collapse compensation logic.
 
@@ -243,6 +244,12 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   const layoutTransitionCountRef = useRef(0);
   const touchScrollIntentStartYRef = useRef<number | null>(null);
   const scrollbarPointerInteractionActiveRef = useRef(false);
+  // Timestamp until which we treat any upward scroll as user-initiated. Set by
+  // wheel/touch/keyboard/scrollbar handlers BEFORE the browser actually moves
+  // the scroller. Used by the handleScroll "shrink-clamp restore" intercept
+  // (below) to distinguish a genuine user upward scroll from a browser auto
+  // clamp caused by content shrinking near the bottom in follow mode.
+  const userInitiatedUpwardScrollUntilMsRef = useRef(0);
   const anchorLockRef = useRef<ScrollAnchorLockState>({
     active: false,
     targetScrollTop: 0,
@@ -457,13 +464,16 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     // Content shrank: preserve the current visual anchor by extending the footer
     // when the user does not already have enough distance from the bottom.
     const shrinkAmount = -heightDelta;
-    // Follow-output mode wants to chase the bottom; absorbing the shrink with
-    // synthetic footer would visually freeze the viewport mid-animation. The
-    // continuous follow loop will scroll back to the tail on the next frame.
-    if (isFollowingOutputRef.current && isStreamingOutputRef.current) {
-      previousScrollTopRef.current = currentScrollTop;
-      return;
-    }
+    // Note: previously this branch returned early in follow-output mode to let
+    // the continuous follow loop chase the bottom every frame. That caused the
+    // visible "sink-down" jitter when tool-card auto-collapse shrank content
+    // above the viewport. We now run the full compensation path regardless of
+    // follow state — the bottom-reservation footer keeps `scrollHeight` stable
+    // and the anchor lock preserves the upper visual anchor during the
+    // animation. The continuous follow loop is gated by
+    // `shouldSuspendAutoFollow` while a collapse intent / layout transition is
+    // in flight, so it does not fight the anchor lock; once the transition
+    // ends, the deferred follow path resumes bottom-tracking smoothly.
     const collapseIntent = pendingCollapseIntentRef.current;
     const now = performance.now();
     const hasValidCollapseIntent = collapseIntent.active && collapseIntent.expiresAtMs >= now;
@@ -1150,6 +1160,51 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         releaseAnchorLock('expired-before-scroll');
       }
 
+      // Reactive shrink-clamp restore: in follow + streaming mode, an upward
+      // jump in scrollTop that we did NOT request from JS and that is NOT
+      // attributable to a user gesture is the browser auto-clamping scrollTop
+      // because `scrollHeight` shrunk below `scrollTop + clientHeight`
+      // (typical cause: an unsignaled item shrink from Virtuoso re-measure
+      // or a tool result finalizing). With `overflow-anchor: none` we cannot
+      // ask the browser to keep the visual anchor for us, so we extend the
+      // bottom collapse reservation by the clamp amount and restore
+      // `scrollTop` to its pre-clamp value. The widened footer prevents the
+      // browser from re-clamping immediately; subsequent streaming-token
+      // growth drains the reservation via the grow branch of
+      // `measureHeightChange`. This is the only place that protects against
+      // unsignaled shrinks that do not arrive with a `collapse-intent` event.
+      const intentCheckScrollTop = scrollerElement.scrollTop;
+      const intentCheckPreviousScrollTop = previousScrollTopRef.current;
+      const intentCheckScrollDelta = intentCheckScrollTop - intentCheckPreviousScrollTop;
+      const hasRecentUserUpwardIntent = now <= userInitiatedUpwardScrollUntilMsRef.current;
+      if (
+        intentCheckScrollDelta < -COMPENSATION_EPSILON_PX &&
+        isFollowingOutputRef.current &&
+        isStreamingOutputRef.current &&
+        !hasRecentUserUpwardIntent &&
+        !anchorLockRef.current.active
+      ) {
+        const clampAmount = -intentCheckScrollDelta;
+        const baseState = bottomReservationStateRef.current;
+        const nextReservationState: BottomReservationState = {
+          ...baseState,
+          collapse: {
+            ...baseState.collapse,
+            px: baseState.collapse.px + clampAmount,
+            floorPx: baseState.collapse.floorPx,
+          },
+        };
+        updateBottomReservationState(nextReservationState);
+        applyFooterCompensationNow(nextReservationState);
+        scrollerElement.scrollTop = intentCheckPreviousScrollTop;
+        previousScrollTopRef.current = intentCheckPreviousScrollTop;
+        previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(
+          scrollerElement,
+          nextReservationState,
+        );
+        return;
+      }
+
       const currentTotalCompensation = getTotalBottomCompensationPx();
       if (
         currentTotalCompensation > COMPENSATION_EPSILON_PX &&
@@ -1193,6 +1248,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     const handleWheel = (event: WheelEvent) => {
       if (event.deltaY < 0) {
+        userInitiatedUpwardScrollUntilMsRef.current =
+          performance.now() + USER_UPWARD_SCROLL_INTENT_WINDOW_MS;
         followOutputControllerRef.current.handleUserScrollIntent();
         releaseAnchorLock('wheel-up');
       }
@@ -1211,6 +1268,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
       if (currentY - startY > TOUCH_SCROLL_INTENT_EXIT_THRESHOLD_PX) {
         touchScrollIntentStartYRef.current = currentY;
+        userInitiatedUpwardScrollUntilMsRef.current =
+          performance.now() + USER_UPWARD_SCROLL_INTENT_WINDOW_MS;
         followOutputControllerRef.current.handleUserScrollIntent();
         releaseAnchorLock('touch-scroll-up');
       }
@@ -1225,6 +1284,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         return;
       }
 
+      userInitiatedUpwardScrollUntilMsRef.current =
+        performance.now() + USER_UPWARD_SCROLL_INTENT_WINDOW_MS;
       followOutputControllerRef.current.handleUserScrollIntent();
       releaseAnchorLock('keyboard-scroll-up');
     };
@@ -1239,6 +1300,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       }
 
       scrollbarPointerInteractionActiveRef.current = true;
+      userInitiatedUpwardScrollUntilMsRef.current =
+        performance.now() + USER_UPWARD_SCROLL_INTENT_WINDOW_MS;
       followOutputControllerRef.current.handleUserScrollIntent();
       releaseAnchorLock('scrollbar-pointer-down');
     };
@@ -1253,6 +1316,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         return;
       }
 
+      userInitiatedUpwardScrollUntilMsRef.current =
+        performance.now() + USER_UPWARD_SCROLL_INTENT_WINDOW_MS;
       followOutputControllerRef.current.handleUserScrollIntent();
       releaseAnchorLock('scrollbar-pointer-move');
     };
@@ -1292,11 +1357,12 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       // collapse animation, producing the "stutter then jump" effect. Skip
       // the protection path entirely and let the continuous follow loop
       // absorb the shrink frame-by-frame.
-      if (isFollowingOutputRef.current && isStreamingOutputRef.current) {
-        scheduleVisibleTurnMeasure(2);
-        schedulePinReservationReconcile(2);
-        return;
-      }
+      // Note: in follow-output mode we still run the full collapse pre-compensation
+      // path. Pinning the upper visual anchor during the collapse animation keeps
+      // the conversation visually stable; the continuous follow loop is gated by
+      // `shouldSuspendAutoFollow` while the layout transition is in progress, and
+      // resumes bottom-tracking via the deferred-follow path after the transition
+      // ends and the collapse reservation is consumed.
       const baseTotalCompensationPx = getTotalBottomCompensationPx();
       const distanceFromBottom = Math.max(
         0,
@@ -1559,14 +1625,41 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
   const scrollToLatestEndPositionInternal = useCallback((behavior: 'auto' | 'smooth') => {
     const scroller = scrollerElementRef.current;
-    if (scroller) {
-      clearAllBottomReservationsForUserNavigation();
-      scroller.scrollTo({
-        top: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
-        behavior,
-      });
+    if (!scroller) return;
+
+    const compensationPx = getTotalBottomCompensationPx();
+    // Auto-follow during streaming with active collapse compensation: scroll
+    // to the EFFECTIVE bottom (the top edge of the footer reservation), and
+    // preserve the reservation. Clearing it here would shrink `scrollHeight`
+    // by the full compensation amount in one frame, which clamps `scrollTop`
+    // downward and produces a visible whole-conversation "sink-down" jump.
+    // The reservation drains organically as the grow branch in
+    // `measureHeightChange` consumes it while new tokens stream in.
+    // 'smooth' is reserved for explicit user navigation ("jump to latest"),
+    // which intentionally clears reservations.
+    if (behavior === 'auto' && compensationPx > COMPENSATION_EPSILON_PX) {
+      const effectiveBottomTop = Math.max(
+        0,
+        scroller.scrollHeight - scroller.clientHeight - compensationPx,
+      );
+      // Only ever move DOWNWARD here. If `effectiveBottomTop` is above the
+      // current scrollTop (e.g. because the bottom reservation just grew to
+      // absorb an unsignaled shrink via the handleScroll auto-clamp restore),
+      // pulling scrollTop upward would itself produce a visible "sink-down"
+      // jump. Hold position; the reservation will be drained by future grow
+      // events.
+      if (effectiveBottomTop - scroller.scrollTop > COMPENSATION_EPSILON_PX) {
+        scroller.scrollTo({ top: effectiveBottomTop, behavior: 'auto' });
+      }
+      return;
     }
-  }, [clearAllBottomReservationsForUserNavigation]);
+
+    clearAllBottomReservationsForUserNavigation();
+    scroller.scrollTo({
+      top: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+      behavior,
+    });
+  }, [clearAllBottomReservationsForUserNavigation, getTotalBottomCompensationPx]);
 
   const requestTurnPinToTop = useCallback((turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }) => {
     const requestedPinMode = options?.pinMode ?? 'transient';
@@ -1628,9 +1721,23 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       }
     },
     shouldSuspendAutoFollow,
-    getAutoFollowDistanceFromBottom: (scroller) => (
-      Math.max(0, scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop)
-    ),
+    // Subtract the bottom-reservation footer so the follow controller treats
+    // synthetic footer space as "already at the bottom". Without this, the
+    // post-collapse footer (kept around to preserve the upper anchor) would be
+    // classified as "user fell behind the tail" and trigger
+    // `performAutoFollowScroll` -> `clearAllBottomReservationsForUserNavigation`,
+    // which snaps scrollTop down by the entire compensation amount and produces
+    // the visible "sink-down" jump the user reported. With this subtraction,
+    // the loop and the deferred-follow path stay quiet while the grow-branch in
+    // `measureHeightChange` consumes the footer organically as streaming tokens
+    // refill the bottom space.
+    getAutoFollowDistanceFromBottom: (scroller) => {
+      const compensationPx = getTotalBottomCompensationPx();
+      return Math.max(
+        0,
+        scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop - compensationPx,
+      );
+    },
     onContinuousFollowFrame: undefined,
   });
 

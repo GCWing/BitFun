@@ -54,6 +54,8 @@ export interface SessionUsageReport {
     totalTokens?: number;
     cachedTokens?: number;
     cacheCoverage: 'available' | 'partial' | 'unavailable';
+    /** `cached / input` over records that explicitly report cached tokens. Range 0–1. */
+    cacheHitRate?: number;
   };
   models: Array<{
     modelId: string;
@@ -63,6 +65,8 @@ export interface SessionUsageReport {
     outputTokens?: number;
     totalTokens?: number;
     cachedTokens?: number;
+    /** Per-model hit rate. Same semantic as `tokens.cacheHitRate`. */
+    cacheHitRate?: number;
     durationMs?: number;
     sampleTurnId?: string;
     sampleTurnIndex?: number;

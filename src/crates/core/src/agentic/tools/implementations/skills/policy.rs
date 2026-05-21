@@ -9,6 +9,7 @@ use super::catalog::{builtin_skill_spec, BuiltinSkillGroup, BuiltinSkillId, Buil
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkillModeId {
     Agentic,
+    Multitask,
     Cowork,
     Plan,
     Debug,
@@ -23,6 +24,7 @@ impl SkillModeId {
     pub fn parse(mode_id: &str) -> Self {
         match mode_id.trim() {
             "agentic" => Self::Agentic,
+            "Multitask" => Self::Multitask,
             "Cowork" => Self::Cowork,
             "Plan" => Self::Plan,
             "debug" => Self::Debug,
@@ -121,7 +123,7 @@ pub fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
     match SkillModeId::parse(mode_id) {
         SkillModeId::Plan => PLAN_POLICY,
         SkillModeId::Debug => DEBUG_POLICY,
-        SkillModeId::Agentic | SkillModeId::Claw => AGENTIC_POLICY,
+        SkillModeId::Agentic | SkillModeId::Multitask | SkillModeId::Claw => AGENTIC_POLICY,
         SkillModeId::Cowork => COWORK_POLICY,
         SkillModeId::Team => TEAM_POLICY,
         SkillModeId::ComputerUse | SkillModeId::DeepResearch | SkillModeId::Other => {

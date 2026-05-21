@@ -172,6 +172,7 @@
       "canvas": "Editor Canvas",
       "editor": "Code editor (text focus)",
       "chat": "Agent Session",
+      "terminal": "Terminal",
       "filetree": "File Tree",
       "git": "Git"
     },

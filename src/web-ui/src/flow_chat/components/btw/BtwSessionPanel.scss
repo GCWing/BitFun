@@ -21,7 +21,7 @@
       justify-content: center;
       padding: 0 16px;
       color: var(--color-text-muted);
-      font-size: 13px;
+      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       text-align: center;
     }
   }
@@ -64,7 +64,7 @@
   &__badge {
     padding: 2px 6px;
     border-radius: 4px;
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
     color: var(--color-text-secondary);
     background: rgba(255, 255, 255, 0.08);
@@ -72,7 +72,7 @@
   }
 
   &__title {
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 500;
     color: var(--color-text-primary);
     overflow: hidden;
@@ -88,7 +88,7 @@
     gap: 4px;
     min-width: 0;
     max-width: 100%;
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -168,7 +168,7 @@
     justify-content: center;
     min-height: 120px;
     color: var(--color-text-muted);
-    font-size: 13px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     text-align: center;
   }
 
@@ -204,7 +204,7 @@
     background: var(--color-bg-secondary);
     border: 1px solid var(--border-base);
     color: var(--color-text-primary);
-    font-size: 12px;
+    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     font-weight: 500;
     cursor: pointer;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
@@ -229,7 +229,7 @@
     padding: 2px 8px;
     border-radius: 10px;
     background: var(--element-bg-soft);
-    font-size: 11px;
+    font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-secondary);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;

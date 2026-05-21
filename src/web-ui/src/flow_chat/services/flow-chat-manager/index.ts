@@ -29,15 +29,6 @@ export {
 } from './ToolEventModule';
 
 export {
-  routeModelRoundStartedToToolCard,
-  routeTextChunkToToolCard,
-  routeToolEventToToolCard,
-  routeModelRoundStartedToToolCardInternal,
-  routeTextChunkToToolCardInternal,
-  routeToolEventToToolCardInternal
-} from './SubagentModule';
-
-export {
   getModelMaxTokens,
   createChatSession,
   switchChatSession,

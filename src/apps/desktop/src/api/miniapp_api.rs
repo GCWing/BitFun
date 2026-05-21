@@ -235,6 +235,14 @@ pub struct MiniAppDraftStorageSetRequest {
     pub value: Value,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppDeclineBuiltinUpdateRequest {
+    pub app_id: String,
+    pub builtin_version: u32,
+    pub source_hash: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct RuntimeStatus {
     pub available: bool,
@@ -1078,6 +1086,23 @@ pub async fn miniapp_get_customization_metadata(
     state
         .miniapp_manager
         .load_customization_metadata(&app_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn miniapp_decline_builtin_update(
+    state: State<'_, AppState>,
+    request: MiniAppDeclineBuiltinUpdateRequest,
+) -> Result<Option<MiniAppCustomizationMetadata>, String> {
+    state
+        .miniapp_manager
+        .decline_builtin_update(
+            &request.app_id,
+            request.builtin_version,
+            &request.source_hash,
+            now_ms() as i64,
+        )
         .await
         .map_err(|e| e.to_string())
 }

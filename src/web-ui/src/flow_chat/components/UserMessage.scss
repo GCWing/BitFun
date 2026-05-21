@@ -46,7 +46,7 @@
 
 .message-content {
   font-weight: 500;
-  line-height: 1.6;
+  line-height: var(--flowchat-text-line-height, 1.58);
   color: var(--color-text-primary);
   position: relative;
   z-index: 1;
@@ -55,7 +55,7 @@
 }
 
 .message-inline-content {
-  line-height: 1.8;
+  line-height: var(--flowchat-text-line-height, 1.58);
   word-break: break-word;
   white-space: pre-wrap;
 }

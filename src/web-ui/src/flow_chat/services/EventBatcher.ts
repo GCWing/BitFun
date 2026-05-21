@@ -353,14 +353,13 @@ export interface TextChunkEventData {
   text: string;
   contentType: 'text' | 'thinking';
   isThinkingEnd?: boolean;
-  subagentParentInfo?: SubagentParentInfo;
 }
 
 export interface ToolEventData {
   sessionId: string;
   turnId: string;
+  roundId: string;
   toolEvent: FlowToolEvent;
-  subagentParentInfo?: SubagentParentInfo;
 }
 
 /**
@@ -368,17 +367,11 @@ export interface ToolEventData {
  * 
  * Key structure:
  * - Normal text: text:{sessionId}:{roundId}:{contentType}
- * - Subagent text: subagent:text:{parentSessionId}:{parentToolId}:{subSessionId}:{roundId}:{contentType}
+ * - Subagent text: subagent:text:{sessionId}:{roundId}:{contentType}
  */
 export function generateTextChunkKey(data: TextChunkEventData): string {
-  const { sessionId, roundId, contentType, subagentParentInfo } = data;
-
-  if (subagentParentInfo) {
-    const { sessionId: parentSessionId, toolCallId: parentToolId } = subagentParentInfo;
-    return `subagent:text:${parentSessionId}:${parentToolId}:${sessionId}:${roundId}:${contentType}`;
-  } else {
-    return `text:${sessionId}:${roundId}:${contentType}`;
-  }
+  const { sessionId, roundId, contentType } = data;
+  return `text:${sessionId}:${roundId}:${contentType}`;
 }
 
 /**
@@ -388,12 +381,12 @@ export function generateTextChunkKey(data: TextChunkEventData): string {
  * 
  * Key structure:
  * - Tool params: tool:params:{sessionId}:{toolUseId}
- * - Subagent tool params: subagent:tool:params:{parentSessionId}:{parentToolId}:{subToolUseId}
+ * - Subagent tool params: subagent:tool:params:{sessionId}:{subToolUseId}
  * - Tool progress: tool:progress:{sessionId}:{toolUseId}
- * - Subagent tool progress: subagent:tool:progress:{parentSessionId}:{parentToolId}:{subToolUseId}
+ * - Subagent tool progress: subagent:tool:progress:{sessionId}:{subToolUseId}
  */
 export function generateToolEventKey(data: ToolEventData): { key: string; strategy: MergeStrategy } | null {
-  const { sessionId, toolEvent, subagentParentInfo } = data;
+  const { sessionId, toolEvent } = data;
   const toolUseId = toolEvent.tool_id;
   const eventType = toolEvent.event_type;
 
@@ -402,38 +395,19 @@ export function generateToolEventKey(data: ToolEventData): { key: string; strate
     return null;
   }
 
-  if (subagentParentInfo) {
-    const { sessionId: parentSessionId, toolCallId: parentToolId } = subagentParentInfo;
-
-    if (eventType === 'ParamsPartial') {
-      const toolName = (toolEvent as any).tool_name || '';
-      const isWriteLike = ['write', 'write_notebook', 'file_write', 'Write'].includes(toolName);
-      return {
-        key: `subagent:tool:params:${parentSessionId}:${parentToolId}:${toolUseId}`,
-        strategy: isWriteLike ? 'replace' : 'accumulate'
-      };
-    }
-    if (eventType === 'Progress') {
-      return {
-        key: `subagent:tool:progress:${parentSessionId}:${parentToolId}:${toolUseId}`,
-        strategy: 'replace'
-      };
-    }
-  } else {
-    if (eventType === 'ParamsPartial') {
-      const toolName = (toolEvent as any).tool_name || '';
-      const isWriteLike = ['write', 'write_notebook', 'file_write', 'Write'].includes(toolName);
-      return {
-        key: `tool:params:${sessionId}:${toolUseId}`,
-        strategy: isWriteLike ? 'replace' : 'accumulate'
-      };
-    }
-    if (eventType === 'Progress') {
-      return {
-        key: `tool:progress:${sessionId}:${toolUseId}`,
-        strategy: 'replace'
-      };
-    }
+  if (eventType === 'ParamsPartial') {
+    const toolName = (toolEvent as any).tool_name || '';
+    const isWriteLike = ['write', 'write_notebook', 'file_write', 'Write'].includes(toolName);
+    return {
+      key: `tool:params:${sessionId}:${toolUseId}`,
+      strategy: isWriteLike ? 'replace' : 'accumulate'
+    };
+  }
+  if (eventType === 'Progress') {
+    return {
+      key: `tool:progress:${sessionId}:${toolUseId}`,
+      strategy: 'replace'
+    };
   }
 
   return null;
@@ -450,19 +424,17 @@ export function parseEventKey(key: string): {
   const parts = key.split(':');
 
   if (parts[0] === 'subagent') {
-    // subagent:text:parentSessionId:parentToolId:subSessionId:roundId:contentType
-    // subagent:tool:params:parentSessionId:parentToolId:subToolUseId
-    // subagent:tool:progress:parentSessionId:parentToolId:subToolUseId
+    // subagent:text:sessionId:roundId:contentType
+    // subagent:tool:params:sessionId:subToolUseId
+    // subagent:tool:progress:sessionId:subToolUseId
     if (parts[1] === 'text') {
       return {
         isSubagent: true,
         eventType: 'text',
         ids: {
-          parentSessionId: parts[2],
-          parentToolId: parts[3],
-          subSessionId: parts[4],
-          roundId: parts[5],
-          contentType: parts[6]
+          sessionId: parts[2],
+          roundId: parts[3],
+          contentType: parts[4]
         }
       };
     } else if (parts[1] === 'tool' && parts[2] === 'params') {
@@ -470,9 +442,8 @@ export function parseEventKey(key: string): {
         isSubagent: true,
         eventType: 'tool:params',
         ids: {
-          parentSessionId: parts[3],
-          parentToolId: parts[4],
-          subToolUseId: parts[5]
+          sessionId: parts[3],
+          subToolUseId: parts[4]
         }
       };
     } else if (parts[1] === 'tool' && parts[2] === 'progress') {
@@ -480,9 +451,8 @@ export function parseEventKey(key: string): {
         isSubagent: true,
         eventType: 'tool:progress',
         ids: {
-          parentSessionId: parts[3],
-          parentToolId: parts[4],
-          subToolUseId: parts[5]
+          sessionId: parts[3],
+          subToolUseId: parts[4]
         }
       };
     }

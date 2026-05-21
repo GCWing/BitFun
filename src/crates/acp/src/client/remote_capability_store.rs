@@ -69,6 +69,14 @@ impl RemoteAcpCapabilityStore {
         self.persist(entries).await
     }
 
+    pub(crate) async fn clear(&self) -> BitFunResult<()> {
+        {
+            let mut guard = self.snapshots.write().await;
+            guard.clear();
+        }
+        self.persist(Vec::new()).await
+    }
+
     async fn persist(
         &self,
         snapshots: Vec<RemoteAcpClientRequirementSnapshot>,

@@ -1,8 +1,8 @@
-use crate::agentic::tools::ToolPathOperation;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tool_runtime::fs::edit_file::{apply_edit_to_content, edit_file};
 
 pub struct FileEditTool;
@@ -73,8 +73,9 @@ Usage:
                 },
                 "old_string": {
                     "type": "string",
+                    "minLength": 1,
                     "default": "",
-                    "description": "The exact current text to replace. It must match the current file contents exactly, including whitespace and indentation, and must be unique unless replace_all is true. Copy it from a fresh Read result, excluding the line-number prefix. If this file was edited earlier in the turn, read the target area again before building old_string. Include stable surrounding context when a short snippet may appear multiple times."
+                    "description": "The non-empty exact current text to replace. It must match the current file contents exactly, including whitespace and indentation, and must be unique unless replace_all is true. Copy it from a fresh Read result, excluding the line-number prefix. If this file was edited earlier in the turn, read the target area again before building old_string. Include stable surrounding context when a short snippet may appear multiple times."
                 },
                 "new_string": {
                     "type": "string",
@@ -169,6 +170,23 @@ Usage:
             .get("new_string")
             .and_then(|v| v.as_str())
             .unwrap_or("");
+        if old_string.is_empty() {
+            return ValidationResult {
+                result: false,
+                message: Some("old_string cannot be empty".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+        if old_string == new_string {
+            return ValidationResult {
+                result: false,
+                message: Some("new_string must be different from old_string".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
         let largest_lines = old_string.lines().count().max(new_string.lines().count());
         let largest_bytes = old_string.len().max(new_string.len());
         if largest_lines > LARGE_EDIT_SOFT_LINE_LIMIT || largest_bytes > LARGE_EDIT_SOFT_BYTE_LIMIT
@@ -308,10 +326,12 @@ mod tests {
     fn edit_multiple_match_error_includes_unique_context_guidance() {
         let message = FileEditTool::enhance_edit_error(
             "src/lib.rs",
-            "`old_string` appears 2 times in file".to_string(),
+            "`old_string` appears 2 times in file\nMatched contexts:\n[match 1 starts at line 4]"
+                .to_string(),
         );
 
         assert!(message.contains("old_string"));
+        assert!(message.contains("[match 1 starts at line 4]"));
         assert!(message.contains("include more surrounding context"));
         assert!(message.contains("replace_all only when every occurrence should change"));
     }

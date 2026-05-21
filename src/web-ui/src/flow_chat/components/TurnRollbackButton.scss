@@ -1,6 +1,6 @@
 .turn-rollback-button {
   padding: 4px 12px;
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
   background: #3b82f6;
   color: white;
@@ -30,7 +30,7 @@
 
 .turn-rollback-button-current {
   padding: 4px 12px;
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
   background: #22c55e;
   color: white;

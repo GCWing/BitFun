@@ -411,8 +411,6 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               timestamp: item.timestamp,
               status: item.status || 'completed',
               orderIndex: index,
-              isSubagentItem: (item as any).isSubagentItem,
-              parentTaskToolId: (item as any).parentTaskToolId,
               subagentSessionId: (item as any).subagentSessionId,
             };
           }),
@@ -435,8 +433,6 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               endTime: toolItem.endTime,
               status: item.status || 'completed',
               orderIndex: index,
-              isSubagentItem: toolItem.isSubagentItem,
-              parentTaskToolId: toolItem.parentTaskToolId,
               subagentSessionId: toolItem.subagentSessionId,
               subagentModelId: toolItem.subagentModelId,
               subagentModelAlias: toolItem.subagentModelAlias,
@@ -455,8 +451,6 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               timestamp: item.timestamp,
               status: item.status || 'completed',
               orderIndex: index,
-              isSubagentItem: thinkingItem.isSubagentItem,
-              parentTaskToolId: thinkingItem.parentTaskToolId,
               subagentSessionId: thinkingItem.subagentSessionId,
             };
           }),

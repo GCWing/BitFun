@@ -1008,10 +1008,27 @@ impl RemoteWorkspaceSearchService {
                 local_bundle.sha256,
                 remote_sha256.as_deref().unwrap_or("missing")
             );
+            let temp_remote_binary_path = format!(
+                "{}.upload-{}.tmp",
+                remote_binary_path, local_bundle.sha256
+            );
             self.remote_file_service
-                .write_file(connection_id, &remote_binary_path, &local_bundle.bytes)
+                .write_file(connection_id, &temp_remote_binary_path, &local_bundle.bytes)
                 .await
                 .map_err(|error| format!("Failed to upload flashgrep to remote host: {error}"))?;
+            self.ssh_manager
+                .execute_command(
+                    connection_id,
+                    &format!(
+                        "mv -f {} {}",
+                        shell_escape(&temp_remote_binary_path),
+                        shell_escape(&remote_binary_path)
+                    ),
+                )
+                .await
+                .map_err(|error| {
+                    format!("Failed to install uploaded flashgrep on remote host: {error}")
+                })?;
         }
         self.ssh_manager
             .execute_command(
@@ -1612,8 +1629,9 @@ fn shell_escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        looks_like_linux_workspace_root, parse_remote_architecture_output, parse_remote_os_output,
-        remote_flashgrep_install_dir, should_retry_remote_scan_fallback_as_files_with_matches,
+        looks_like_linux_workspace_root, parse_remote_architecture_output,
+        parse_remote_os_output, remote_flashgrep_install_dir,
+        should_retry_remote_scan_fallback_as_files_with_matches,
     };
     use crate::service::search::flashgrep::{
         drain_content_length_messages, FileCount, SearchBackend, SearchHit, SearchModeConfig,

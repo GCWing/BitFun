@@ -2,6 +2,9 @@
 
 use crate::agentic::agents::{Agent, RequestContextPolicy};
 use async_trait::async_trait;
+
+const PLAN_MODE_PROMPT_TEMPLATE: &str = "plan_mode";
+
 pub struct PlanMode {
     default_tools: Vec<String>,
 }
@@ -29,6 +32,7 @@ impl PlanMode {
             ],
         }
     }
+
 }
 
 #[async_trait]
@@ -50,7 +54,7 @@ impl Agent for PlanMode {
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
-        "plan_mode"
+        PLAN_MODE_PROMPT_TEMPLATE
     }
 
     fn default_tools(&self) -> Vec<String> {

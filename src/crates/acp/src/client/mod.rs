@@ -3,6 +3,7 @@ mod config;
 mod manager;
 mod remote_capability_store;
 mod remote_session;
+mod remote_shell;
 mod requirements;
 mod session_options;
 mod session_persistence;

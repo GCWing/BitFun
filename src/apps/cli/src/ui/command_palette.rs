@@ -3,11 +3,10 @@
 /// A centered overlay with a search box at the top and grouped command items below.
 /// Unlike the slash command menu which appears inline, this is a full-screen centered popup.
 /// Supports viewport scrolling when content exceeds visible area.
-
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
@@ -64,7 +63,7 @@ pub fn default_palette_items() -> Vec<PaletteItem> {
         PaletteItem {
             id: "subagents".into(),
             label: "Subagents".into(),
-            description: "Browse and launch subagents".into(),
+            description: "List and configure subagents".into(),
             group: "Prompt".into(),
         },
         // Models group
@@ -79,6 +78,13 @@ pub fn default_palette_items() -> Vec<PaletteItem> {
             label: "Add model".into(),
             description: "Add a new AI model configuration".into(),
             group: "Models".into(),
+        },
+        // Appearance group
+        PaletteItem {
+            id: "theme".into(),
+            label: "Theme".into(),
+            description: "Switch UI theme".into(),
+            group: "Appearance".into(),
         },
         // Agent group
         PaletteItem {
@@ -123,6 +129,12 @@ fn build_suggested_items() -> Vec<PaletteItem> {
             id: "switch_agent".into(),
             label: "Switch agent".into(),
             description: "Switch agent mode".into(),
+            group: "Suggested".into(),
+        },
+        PaletteItem {
+            id: "theme".into(),
+            label: "Theme".into(),
+            description: "Switch UI theme".into(),
             group: "Suggested".into(),
         },
         PaletteItem {
@@ -558,12 +570,18 @@ impl CommandPaletteState {
         // Row 0: Search box
         let search_display = if self.search_input.is_empty() {
             Line::from(vec![
-                Span::styled("> ", theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "> ",
+                    theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
+                ),
                 Span::styled("Search commands...", theme.style(StyleKind::Muted)),
             ])
         } else {
             Line::from(vec![
-                Span::styled("> ", theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "> ",
+                    theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(&self.search_input),
             ])
         };
@@ -576,9 +594,11 @@ impl CommandPaletteState {
         frame.render_widget(Paragraph::new(search_display), search_area);
 
         // Set cursor position in search box
-        let cursor_x = inner.x + 2 + self.search_input[..self.char_to_byte(self.search_cursor)]
-            .chars()
-            .count() as u16;
+        let cursor_x = inner.x
+            + 2
+            + self.search_input[..self.char_to_byte(self.search_cursor)]
+                .chars()
+                .count() as u16;
         frame.set_cursor_position((cursor_x, inner.y));
 
         // Separator line
@@ -592,7 +612,10 @@ impl CommandPaletteState {
                 height: 1,
             };
             frame.render_widget(
-                Paragraph::new(Line::from(Span::styled(sep, theme.style(StyleKind::Border)))),
+                Paragraph::new(Line::from(Span::styled(
+                    sep,
+                    theme.style(StyleKind::Border),
+                ))),
                 sep_area,
             );
         }
@@ -631,12 +654,10 @@ impl CommandPaletteState {
 
             match row {
                 PaletteRow::GroupHeader(name) => {
-                    let header_line = Line::from(vec![
-                        Span::styled(
-                            format!("  {}", name.to_uppercase()),
-                            theme.style(StyleKind::Muted).add_modifier(Modifier::BOLD),
-                        ),
-                    ]);
+                    let header_line = Line::from(vec![Span::styled(
+                        format!("  {}", name.to_uppercase()),
+                        theme.style(StyleKind::Muted).add_modifier(Modifier::BOLD),
+                    )]);
                     frame.render_widget(Paragraph::new(header_line), row_area);
                 }
                 PaletteRow::Item(sel_idx) => {
@@ -647,14 +668,16 @@ impl CommandPaletteState {
                     let label_style = if is_selected {
                         Style::default()
                             .bg(theme.primary)
-                            .fg(Color::White)
+                            .fg(theme.selection_foreground())
                             .add_modifier(Modifier::BOLD)
                     } else {
                         theme.style(StyleKind::Primary)
                     };
 
                     let desc_style = if is_selected {
-                        Style::default().bg(theme.primary).fg(Color::White)
+                        Style::default()
+                            .bg(theme.primary)
+                            .fg(theme.selection_foreground())
                     } else {
                         theme.style(StyleKind::Muted)
                     };
@@ -699,12 +722,10 @@ impl CommandPaletteState {
                 height: 1,
             };
 
-            let mut hints = vec![
-                Span::styled(
-                    " \u{2191}\u{2193} Navigate  Enter Select  Esc Cancel",
-                    theme.style(StyleKind::Muted),
-                ),
-            ];
+            let mut hints = vec![Span::styled(
+                " \u{2191}\u{2193} Navigate  Enter Select  Esc Cancel",
+                theme.style(StyleKind::Muted),
+            )];
 
             if has_more_above || has_more_below {
                 let indicator = if has_more_above && has_more_below {
@@ -714,10 +735,7 @@ impl CommandPaletteState {
                 } else {
                     " \u{2193}"
                 };
-                hints.push(Span::styled(
-                    indicator,
-                    theme.style(StyleKind::Warning),
-                ));
+                hints.push(Span::styled(indicator, theme.style(StyleKind::Warning)));
             }
 
             let hint_line = Line::from(hints);

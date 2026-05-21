@@ -605,10 +605,10 @@ function BasicsWindowBehaviorSection() {
       try {
         setLoading(true);
         const v = await configManager.getConfig<CloseBehavior>('app.close_button_behavior');
-        if (!cancelled) setBehavior(v ?? 'quit');
+        if (!cancelled) setBehavior(v ?? 'minimize_to_tray');
       } catch {
         // Key absent on first launch — fall back to default silently.
-        if (!cancelled) setBehavior('quit');
+        if (!cancelled) setBehavior('minimize_to_tray');
       } finally {
         if (!cancelled) setLoading(false);
       }

@@ -49,11 +49,11 @@
 
   .flow-text-block--subagent-compact {
     margin-bottom: 0.15rem;
-    line-height: 1.45;
+    line-height: var(--flowchat-support-line-height, 1.45);
 
     .markdown-renderer,
     .text-content {
-      line-height: 1.45;
+      line-height: var(--flowchat-support-line-height, 1.45);
     }
 
     .markdown-renderer {

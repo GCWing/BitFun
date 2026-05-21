@@ -494,7 +494,8 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
                 workspace.remotePath,
                 workspace.connectionId,
                 workspace.sshHost?.trim() ||
-                  sshHostForRemoteWorkspace(workspace.connectionId, workspace.remotePath)
+                  sshHostForRemoteWorkspace(workspace.connectionId, workspace.remotePath),
+                'ssh_remote_auto_restore_existing'
               )
               .catch(() => {});
 
@@ -544,7 +545,8 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
                   sshHostForRemoteWorkspace(
                     result.workspace.connectionId,
                     result.workspace.remotePath
-                  )
+                  ),
+                'ssh_remote_auto_restore_reconnected'
               )
               .catch(() => {});
 

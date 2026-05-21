@@ -16,7 +16,7 @@
   .todo-progress {
     color: var(--color-text-muted);
     font-size: inherit;
-    margin-left: 4px;
+    margin-left: var(--flowchat-inline-gap, 0.35rem);
     font-family: var(--tool-card-font-mono);
   }
 }
@@ -42,7 +42,7 @@
   }
 
   .compact-card-content .todo-header-more {
-    padding: 0 5px;
+    padding: 0 0.32rem;
   }
 
   .todo-write-card {
@@ -68,7 +68,7 @@
   .todo-header-action-cluster {
     display: inline-flex;
     align-items: baseline;
-    gap: 4px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     min-width: 0;
   }
 
@@ -90,7 +90,7 @@
 
     /* Tighter icon rail → text (expanded todo header) */
     &.todo-write-card .base-tool-card-header {
-      gap: 3px;
+      gap: 0.18rem;
     }
 
     &.todo-write-card .tool-card-icon-slot {
@@ -103,7 +103,7 @@
   .todo-header-content {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
@@ -177,7 +177,7 @@
   .todo-item {
     display: flex;
     align-items: center;
-    padding: 7px 12px;
+    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     font-size: var(--tool-card-action-font-size);
     line-height: var(--tool-card-action-line-height);
     font-weight: 400;
@@ -222,7 +222,7 @@
   .todo-item-left {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     flex: 1;
     min-width: 0;
   }

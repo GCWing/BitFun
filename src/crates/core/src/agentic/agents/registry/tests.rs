@@ -1,7 +1,7 @@
 use super::support::merge_dynamic_mcp_tools;
 use super::AgentRegistry;
-use crate::agentic::agents::registry::builtin::default_model_id_for_builtin_agent;
 use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
+use crate::agentic::agents::registry::builtin::default_model_id_for_builtin_agent;
 use crate::agentic::agents::registry::types::{
     AgentCategory, AgentEntry, CustomSubagentConfig, SubAgentSource, SubagentListScope,
     SubagentQueryContext,
@@ -71,6 +71,7 @@ fn insert_project_subagent(registry: &AgentRegistry, workspace: &Path, id: &str,
 fn top_level_modes_default_to_auto() {
     for agent_type in [
         "agentic",
+        "Multitask",
         "Cowork",
         "Plan",
         "debug",
@@ -117,6 +118,14 @@ fn non_deep_review_builtin_subagents_default_to_primary() {
             "{agent_type} should default to the primary model slot"
         );
     }
+}
+
+#[test]
+fn general_purpose_builtin_subagent_defaults_to_fast() {
+    assert_eq!(
+        default_model_id_for_builtin_agent("GeneralPurpose"),
+        "fast"
+    );
 }
 
 #[test]
@@ -185,7 +194,12 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
         })
         .await;
     assert!(agentic_visible.iter().any(|agent| agent.id == "Explore"));
-    assert!(!agentic_visible.iter().any(|agent| agent.id == "ReviewSecurity"));
+    assert!(agentic_visible
+        .iter()
+        .any(|agent| agent.id == "GeneralPurpose"));
+    assert!(!agentic_visible
+        .iter()
+        .any(|agent| agent.id == "ReviewSecurity"));
     assert!(!agentic_visible
         .iter()
         .any(|agent| agent.id == "ResearchSpecialist"));
@@ -298,8 +312,14 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
     );
 
     let mut project_entries = HashMap::new();
-    project_entries.insert("zProject".to_string(), test_project_entry("zProject", "fast"));
-    project_entries.insert("AProject".to_string(), test_project_entry("AProject", "fast"));
+    project_entries.insert(
+        "zProject".to_string(),
+        test_project_entry("zProject", "fast"),
+    );
+    project_entries.insert(
+        "AProject".to_string(),
+        test_project_entry("AProject", "fast"),
+    );
     registry
         .write_project_subagents()
         .insert(workspace.clone(), project_entries);
@@ -339,6 +359,7 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
         "ABuiltin",
         "Explore",
         "FileFinder",
+        "GeneralPurpose",
         "zBuiltin",
         "AProject",
         "zProject",
@@ -408,14 +429,26 @@ async fn parent_subagent_overrides_follow_source_scopes() {
     let builtin_override_key = "builtin::builtin::Explore".to_string();
 
     let mut project_parent_map = HashMap::new();
-    project_parent_map.insert(project_override_key.clone(), AgentSubagentOverrideState::Disabled);
-    project_parent_map.insert(user_override_key.clone(), AgentSubagentOverrideState::Disabled);
-    project_parent_map.insert(builtin_override_key.clone(), AgentSubagentOverrideState::Disabled);
+    project_parent_map.insert(
+        project_override_key.clone(),
+        AgentSubagentOverrideState::Disabled,
+    );
+    project_parent_map.insert(
+        user_override_key.clone(),
+        AgentSubagentOverrideState::Disabled,
+    );
+    project_parent_map.insert(
+        builtin_override_key.clone(),
+        AgentSubagentOverrideState::Disabled,
+    );
     let mut project_overrides = HashMap::new();
     project_overrides.insert("agentic".to_string(), project_parent_map);
 
     let mut user_parent_map = HashMap::new();
-    user_parent_map.insert(project_override_key.clone(), AgentSubagentOverrideState::Enabled);
+    user_parent_map.insert(
+        project_override_key.clone(),
+        AgentSubagentOverrideState::Enabled,
+    );
     user_parent_map.insert(user_override_key, AgentSubagentOverrideState::Disabled);
     user_parent_map.insert(builtin_override_key, AgentSubagentOverrideState::Disabled);
     let mut user_overrides = HashMap::new();
@@ -435,13 +468,37 @@ async fn parent_subagent_overrides_follow_source_scopes() {
             .expect("project entry");
 
         (
-            resolve_availability(&explore, builtin_query.parent_agent_type, Some(&project_overrides), &user_overrides),
-            resolve_availability(&user, builtin_query.parent_agent_type, Some(&project_overrides), &user_overrides),
-            resolve_availability(&project, builtin_query.parent_agent_type, Some(&project_overrides), &user_overrides),
+            resolve_availability(
+                &explore,
+                builtin_query.parent_agent_type,
+                Some(&project_overrides),
+                &user_overrides,
+            ),
+            resolve_availability(
+                &user,
+                builtin_query.parent_agent_type,
+                Some(&project_overrides),
+                &user_overrides,
+            ),
+            resolve_availability(
+                &project,
+                builtin_query.parent_agent_type,
+                Some(&project_overrides),
+                &user_overrides,
+            ),
         )
     };
 
-    assert_eq!(visible.0.override_state, Some(AgentSubagentOverrideState::Disabled));
-    assert_eq!(visible.1.override_state, Some(AgentSubagentOverrideState::Disabled));
-    assert_eq!(visible.2.override_state, Some(AgentSubagentOverrideState::Disabled));
+    assert_eq!(
+        visible.0.override_state,
+        Some(AgentSubagentOverrideState::Disabled)
+    );
+    assert_eq!(
+        visible.1.override_state,
+        Some(AgentSubagentOverrideState::Disabled)
+    );
+    assert_eq!(
+        visible.2.override_state,
+        Some(AgentSubagentOverrideState::Disabled)
+    );
 }

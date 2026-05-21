@@ -1,16 +1,15 @@
-use super::types::AgentEntry;
-use super::custom_loader::CustomSubagentLoader;
 use super::availability::{prune_override_config, resolve_default_enabled, set_override_state};
+use super::custom_loader::CustomSubagentLoader;
 use super::support::{
-    get_subagent_overrides, load_project_subagent_overrides_local, save_project_subagent_overrides_local,
+    get_subagent_overrides, load_project_subagent_overrides_local,
+    save_project_subagent_overrides_local,
 };
-use super::{CustomSubagentDetail, AgentRegistry};
-use crate::agentic::agents::{
-    Agent, AgentCategory, CustomSubagentConfig, SubAgentSource,
-};
+use super::types::AgentEntry;
+use super::{AgentRegistry, CustomSubagentDetail};
 use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
 use crate::agentic::agents::registry::types::subagent_key_for;
 use crate::agentic::agents::registry::visibility::SubagentVisibilityPolicy;
+use crate::agentic::agents::{Agent, AgentCategory, CustomSubagentConfig, SubAgentSource};
 use crate::agentic::tools::{get_all_registered_tool_names, get_readonly_registered_tool_names};
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::AgentSubagentOverrideState;
@@ -590,9 +589,10 @@ impl AgentRegistry {
             )));
         }
 
-        let subagent_key = subagent_key_for(entry.subagent_source, entry.agent.as_ref()).ok_or_else(
-            || BitFunError::agent(format!("Failed to resolve subagent key for '{}'", agent_id)),
-        )?;
+        let subagent_key = subagent_key_for(entry.subagent_source, entry.agent.as_ref())
+            .ok_or_else(|| {
+                BitFunError::agent(format!("Failed to resolve subagent key for '{}'", agent_id))
+            })?;
         let default_enabled = resolve_default_enabled(&entry, Some(parent_agent_type));
         let state = if enabled {
             AgentSubagentOverrideState::Enabled
@@ -608,11 +608,17 @@ impl AgentRegistry {
                         agent_id
                     ))
                 })?;
-                let mut project_overrides = load_project_subagent_overrides_local(workspace_root).await?;
+                let mut project_overrides =
+                    load_project_subagent_overrides_local(workspace_root).await?;
                 if enabled == default_enabled {
                     prune_override_config(&mut project_overrides, parent_agent_type, &subagent_key);
                 } else {
-                    set_override_state(&mut project_overrides, parent_agent_type, &subagent_key, state);
+                    set_override_state(
+                        &mut project_overrides,
+                        parent_agent_type,
+                        &subagent_key,
+                        state,
+                    );
                 }
                 save_project_subagent_overrides_local(workspace_root, &project_overrides).await?;
                 Ok(())
@@ -623,7 +629,12 @@ impl AgentRegistry {
                 if enabled == default_enabled {
                     prune_override_config(&mut user_overrides, parent_agent_type, &subagent_key);
                 } else {
-                    set_override_state(&mut user_overrides, parent_agent_type, &subagent_key, state);
+                    set_override_state(
+                        &mut user_overrides,
+                        parent_agent_type,
+                        &subagent_key,
+                        state,
+                    );
                 }
                 config_service
                     .set_config("ai.agent_subagent_overrides", &user_overrides)

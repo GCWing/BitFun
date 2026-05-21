@@ -341,6 +341,14 @@ const forbiddenContentRules = [
         regex: /\bpub struct ToolPathResolution\b/,
         message: 'core tool framework must not redefine ToolPathResolution; use bitfun-agent-tools',
       },
+      {
+        regex: /\bpub struct ToolContextFacts\b/,
+        message: 'core tool framework must not redefine ToolContextFacts; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bpub enum ToolWorkspaceKind\b/,
+        message: 'core tool framework must not redefine ToolWorkspaceKind; use bitfun-agent-tools',
+      },
     ],
   },
   {
@@ -488,6 +496,41 @@ const forbiddenContentRules = [
       {
         regex: /\bpartial_cmp\b/,
         message: 'core MCP context provider must not own resource ranking logic; use the integrations helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/function_agents/git-func-agent/commit_generator.rs',
+    patterns: [
+      {
+        regex: /\bGitService::get_status\b/,
+        message:
+          'Git function-agent commit generator must use CoreFunctionAgentGitAdapter through FunctionAgentRuntimeFacade',
+      },
+      {
+        regex: /\bAIAnalysisService::new_with_agent_config\b/,
+        message:
+          'Git function-agent commit generator must use CoreFunctionAgentAiAdapter through FunctionAgentRuntimeFacade',
+      },
+      {
+        regex: /\bto_string_lossy\b/,
+        message:
+          'Git function-agent commit generator must preserve PathBuf paths when routing through the facade',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
+    patterns: [
+      {
+        regex: /\bAIWorkStateService::new_with_agent_config\b/,
+        message:
+          'Startchat work-state analyzer must use CoreFunctionAgentAiAdapter through FunctionAgentRuntimeFacade',
+      },
+      {
+        regex: /\bcreate_command\("git"\)/,
+        message:
+          'Startchat work-state analyzer must use CoreFunctionAgentGitAdapter through FunctionAgentRuntimeFacade',
       },
     ],
   },
@@ -1004,15 +1047,11 @@ const forbiddenContentUnderRules = [
   {
     path: 'src/crates/agent-tools/src',
     reason:
-      'agent-tools must not own product tool manifest/exposure or GetToolSpec runtime without an approved provider migration',
+      'agent-tools may own pure tool manifest contracts, but not product manifest runtime or GetToolSpec execution without an approved provider migration',
     patterns: [
       {
         regex: /\bGetToolSpecTool\b/,
         message: 'GetToolSpec implementation stays in core product tool runtime',
-      },
-      {
-        regex: /\bGET_TOOL_SPEC_TOOL_NAME\b/,
-        message: 'GetToolSpec manifest insertion stays in core product tool runtime',
       },
       {
         regex: /\bmanifest_resolver\b/,
@@ -1023,10 +1062,6 @@ const forbiddenContentUnderRules = [
         message: 'collapsed-tool unlock state stays in core ToolUseContext/runtime',
       },
       {
-        regex: /\bToolExposure\b/,
-        message: 'expanded/collapsed exposure policy stays in core until provider migration',
-      },
-      {
         regex: /\bToolUseContext\b/,
         message: 'ToolUseContext stays in core until a portable context port is reviewed',
       },
@@ -1035,7 +1070,7 @@ const forbiddenContentUnderRules = [
   {
     path: 'src/crates/tool-packs/src',
     reason:
-      'tool-packs must not own product tool manifest/exposure or GetToolSpec runtime without an approved provider migration',
+      'tool-packs may own provider group plans, but not product tool manifest/exposure or GetToolSpec runtime',
     patterns: [
       {
         regex: /\bGetToolSpecTool\b/,
@@ -1086,6 +1121,233 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/agent-tools/src/framework.rs',
+    reason:
+      'agent-tools may own pure and generic prompt-visible tool manifest contracts without owning product registry or execution',
+    patterns: [
+      {
+        regex: /\bpub const GET_TOOL_SPEC_TOOL_NAME\b/,
+        message: 'missing shared GetToolSpec manifest name contract',
+      },
+      {
+        regex: /\bpub enum ToolExposure\b/,
+        message: 'missing lightweight tool exposure contract',
+      },
+      {
+        regex: /\bpub struct ToolManifestPolicyTool\b/,
+        message: 'missing pure tool manifest policy input contract',
+      },
+      {
+        regex: /\bpub fn resolve_tool_manifest_policy\b/,
+        message: 'missing pure tool manifest policy resolver',
+      },
+      {
+        regex: /\bfn default_exposure\b/,
+        message: 'missing generic tool exposure contract',
+      },
+      {
+        regex: /\bpub fn build_tool_manifest_policy_tools\b/,
+        message: 'missing registry snapshot to manifest policy input helper',
+      },
+      {
+        regex: /\bpub fn build_collapsed_tool_stub_definition\b/,
+        message: 'missing collapsed-tool prompt stub contract',
+      },
+      {
+        regex: /\bpub enum PromptVisibleToolManifestItem\b/,
+        message: 'missing prompt-visible manifest item contract',
+      },
+      {
+        regex: /\bpub fn build_prompt_visible_tool_manifest_definitions\b/,
+        message: 'missing prompt-visible manifest definition builder',
+      },
+      {
+        regex: /\bpub trait ContextualToolManifestItem\b/,
+        message: 'missing generic contextual manifest item adapter contract',
+      },
+      {
+        regex: /\bpub trait ToolCatalogSnapshotProvider\b/,
+        message: 'missing generic tool catalog snapshot provider contract',
+      },
+      {
+        regex: /\bpub trait GetToolSpecCatalogProvider\b/,
+        message: 'missing generic GetToolSpec catalog provider contract',
+      },
+      {
+        regex: /\bpub struct ContextualVisibleTools\b/,
+        message: 'missing generic contextual visible-tools result contract',
+      },
+      {
+        regex: /\bpub struct ContextualToolManifest\b/,
+        message: 'missing generic contextual tool manifest result contract',
+      },
+      {
+        regex: /\bpub async fn resolve_contextual_visible_tools\b/,
+        message: 'missing generic contextual visible-tools resolver',
+      },
+      {
+        regex: /\bpub async fn resolve_contextual_tool_manifest\b/,
+        message: 'missing generic contextual tool manifest resolver',
+      },
+      {
+        regex: /\bpub async fn resolve_contextual_visible_tools_from_provider\b/,
+        message: 'missing provider-backed contextual visible-tools resolver',
+      },
+      {
+        regex: /\bpub async fn resolve_contextual_tool_manifest_from_provider\b/,
+        message: 'missing provider-backed contextual manifest resolver',
+      },
+      {
+        regex: /\bpub async fn build_get_tool_spec_catalog_description_from_provider\b/,
+        message: 'missing provider-backed GetToolSpec catalog description builder',
+      },
+      {
+        regex: /\bpub async fn resolve_get_tool_spec_detail_from_provider\b/,
+        message: 'missing provider-backed GetToolSpec detail resolver',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_description\b/,
+        message: 'missing pure GetToolSpec prompt description contract',
+      },
+      {
+        regex: /\bpub struct GetToolSpecCollapsedToolSummary\b/,
+        message: 'missing pure GetToolSpec collapsed catalog summary',
+      },
+      {
+        regex: /\bpub struct GetToolSpecDetail\b/,
+        message: 'missing pure GetToolSpec detail contract',
+      },
+      {
+        regex: /\bpub fn summarize_get_tool_spec_collapsed_tools\b/,
+        message: 'missing pure GetToolSpec collapsed summary helper',
+      },
+      {
+        regex: /\bpub async fn resolve_get_tool_spec_detail\b/,
+        message: 'missing generic GetToolSpec detail resolver',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_catalog_description\b/,
+        message: 'missing pure GetToolSpec catalog description builder',
+      },
+      {
+        regex: /\bpub fn get_tool_spec_input_schema\b/,
+        message: 'missing pure GetToolSpec input schema contract',
+      },
+      {
+        regex: /\bpub fn get_tool_spec_short_description\b/,
+        message: 'missing pure GetToolSpec short description contract',
+      },
+      {
+        regex: /\bpub fn render_get_tool_spec_tool_use_message\b/,
+        message: 'missing pure GetToolSpec tool-use message renderer',
+      },
+      {
+        regex: /\bpub fn get_tool_spec_is_readonly\b/,
+        message: 'missing pure GetToolSpec readonly metadata contract',
+      },
+      {
+        regex: /\bpub fn get_tool_spec_is_concurrency_safe\b/,
+        message: 'missing pure GetToolSpec concurrency metadata contract',
+      },
+      {
+        regex: /\bpub fn get_tool_spec_needs_permissions\b/,
+        message: 'missing pure GetToolSpec permission metadata contract',
+      },
+      {
+        regex: /\bpub fn validate_get_tool_spec_input\b/,
+        message: 'missing pure GetToolSpec input validation contract',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_assistant_detail\b/,
+        message: 'missing pure GetToolSpec assistant detail rendering contract',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_duplicate_load_result\b/,
+        message: 'missing pure GetToolSpec duplicate-load result assembly contract',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_detail_result\b/,
+        message: 'missing pure GetToolSpec detail result assembly contract',
+      },
+      {
+        regex: /\bpub enum GetToolSpecExecutionPlan\b/,
+        message: 'missing pure GetToolSpec execution plan contract',
+      },
+      {
+        regex: /\bpub enum GetToolSpecExecutionError\b/,
+        message: 'missing pure GetToolSpec execution error contract',
+      },
+      {
+        regex: /\bpub fn resolve_get_tool_spec_execution_plan\b/,
+        message: 'missing pure GetToolSpec execution plan resolver',
+      },
+      {
+        regex: /\bpub async fn resolve_get_tool_spec_execution_result_from_provider\b/,
+        message: 'missing provider-backed GetToolSpec execution result resolver',
+      },
+      {
+        regex: /\bpub struct GetToolSpecRuntime\b/,
+        message: 'missing provider-backed GetToolSpec runtime facade',
+      },
+      {
+        regex: /\bpub async fn call_results\b/,
+        message: 'missing provider-backed GetToolSpec Tool-result vector adapter facade',
+      },
+      {
+        regex: /\bpub struct GetToolSpecLoadObservation\b/,
+        message: 'missing pure GetToolSpec load observation contract',
+      },
+      {
+        regex: /\bpub fn collect_loaded_collapsed_tool_names\b/,
+        message: 'missing pure collapsed-tool load collection contract',
+      },
+      {
+        regex: /\bpub fn sort_tool_manifest_definitions\b/,
+        message: 'missing prompt-visible manifest ordering helper',
+      },
+      {
+        regex: /\bpub struct StaticToolProviderGroup\b/,
+        message: 'missing generic static provider group container',
+      },
+      {
+        regex: /\bpub struct ToolRuntimeAssembly\b/,
+        message: 'missing generic tool runtime assembly owner',
+      },
+      {
+        regex: /\bpub type ToolDecoratorRef\b/,
+        message: 'missing generic tool decorator reference contract',
+      },
+      {
+        regex: /\bpub trait SnapshotToolWrapper\b/,
+        message: 'missing generic snapshot wrapper port',
+      },
+      {
+        regex: /\bpub struct SnapshotToolDecorator\b/,
+        message: 'missing generic snapshot decorator adapter',
+      },
+      {
+        regex: /\bcreate_registry_from_static_providers\b/,
+        message: 'missing generic static-provider runtime assembly helper',
+      },
+      {
+        regex: /\bpub fn is_tool_collapsed\b/,
+        message: 'missing generic collapsed-tool registry query',
+      },
+      {
+        regex: /\bpub fn get_collapsed_tool_names\b/,
+        message: 'missing generic collapsed-tool registry catalog query',
+      },
+      {
+        regex: /\bpub async fn resolve_readonly_enabled_tools\b/,
+        message: 'missing generic readonly enabled tool filter',
+      },
+      {
+        regex: /\bpub struct ToolCatalogRuntime\b/,
+        message: 'missing provider-backed tool catalog runtime facade',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
     reason:
       'core must keep current coordinator port adapters and attachment guard until remote runtime migration is reviewed',
@@ -1115,30 +1377,299 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/tools/registry.rs',
     reason:
-      'core must continue owning product tool registry assembly until an approved product-provider migration exists',
+      'core registry must stay a compatibility container that delegates product tool runtime assembly through the core owner module',
     patterns: [
       {
-        regex: /\bfn register_all_tools\b/,
-        message: 'missing product tool registration owner',
+        regex: /\bfrom_inner\b/,
+        message: 'missing generic agent-tools registry adapter hook',
       },
       {
-        regex: /\bGetToolSpecTool::new\(\)/,
-        message: 'missing GetToolSpec registration anchor',
+        regex: /\bProductToolDecoratorRef\b/,
+        message: 'missing product decorator ref alias using agent-tools contract',
+      },
+      {
+        regex: /\bProductToolRuntimeAssembly\b/,
+        message: 'missing product tool runtime assembly delegation',
       },
       {
         regex: /\bget_collapsed_tool_names\b/,
         message: 'missing collapsed-tool catalog owner',
       },
       {
-        regex: /\bToolExposure::Collapsed\b/,
-        message: 'missing collapsed exposure lookup',
+        regex: /\bresolve_product_readonly_enabled_tools\b/,
+        message: 'missing product tool catalog readonly facade delegation',
+      },
+      {
+        regex: /\bregistry_preserves_collapsed_tool_manifest_for_owner_migration\b/,
+        message: 'missing collapsed-tool manifest migration baseline',
+      },
+      {
+        regex: /\binner\.is_tool_collapsed\b/,
+        message: 'missing collapsed exposure lookup delegation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/runtime_assembly.rs',
+    reason:
+      'core must keep product tool runtime assembly explicit until ToolUseContext and concrete tool-pack migration are reviewed',
+    patterns: [
+      {
+        regex: /\bProductToolRuntimeAssembly\b/,
+        message: 'missing core product tool runtime assembly owner',
+      },
+      {
+        regex: /\bSnapshotToolDecorator\b/,
+        message: 'missing generic snapshot decorator injection',
+      },
+      {
+        regex: /\bProductSnapshotToolWrapper\b/,
+        message: 'missing core product snapshot wrapper adapter',
+      },
+      {
+        regex: /\bbuiltin_static_tool_providers\b/,
+        message: 'missing builtin provider assembly input',
+      },
+      {
+        regex: /\bToolRuntimeAssembly\b/,
+        message: 'missing generic agent-tools runtime assembly delegation',
+      },
+      {
+        regex: /\bcreate_registry_from_static_providers\b/,
+        message: 'missing generic static provider assembly delegation',
+      },
+      {
+        regex: /\bwrap_tool_for_snapshot_tracking\b/,
+        message: 'missing snapshot wrapper boundary',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/static_providers.rs',
+    reason:
+      'core materializes concrete tools from the tool-pack provider plan until concrete tools migrate',
+    patterns: [
+      {
+        regex: /\bbuiltin_static_tool_providers\b/,
+        message: 'missing builtin static tool provider owner',
+      },
+      {
+        regex: /\bStaticToolProviderGroup\b/,
+        message: 'missing generic static provider group contract use',
+      },
+      {
+        regex: /\bproduct_tool_provider_group_plan\b/,
+        message: 'missing tool-pack provider group plan delegation',
+      },
+      {
+        regex: /\bmaterialize_tool\b/,
+        message: 'missing core concrete tool materialization boundary',
+      },
+      {
+        regex: /\bGetToolSpecTool::new\(\)/,
+        message: 'missing GetToolSpec registration anchor',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_adapter.rs',
+    reason:
+      'core must keep the product Tool-to-agent-tools adapters explicit until ToolUseContext and concrete tools migrate',
+    patterns: [
+      {
+        regex: /\bimpl ToolRegistryItem for dyn Tool\b/,
+        message: 'missing core Tool registry adapter',
+      },
+      {
+        regex: /\bimpl ContextualToolManifestItem<ToolUseContext> for dyn Tool\b/,
+        message: 'missing core ToolUseContext contextual manifest adapter',
+      },
+      {
+        regex: /\bTool::dynamic_tool_info\b/,
+        message: 'missing dynamic tool metadata adapter',
+      },
+      {
+        regex: /\bTool::is_readonly\b/,
+        message: 'missing readonly metadata adapter',
+      },
+      {
+        regex: /\bTool::is_enabled\b/,
+        message: 'missing enabled-state metadata adapter',
+      },
+      {
+        regex: /\bTool::description_with_context\b/,
+        message: 'missing context-aware tool description adapter',
+      },
+      {
+        regex: /\bTool::input_schema_for_model_with_context\b/,
+        message: 'missing context-aware tool schema adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/catalog_provider.rs',
+    reason:
+      'core must keep the product tool catalog provider explicit until ToolUseContext, manifest assembly, and GetToolSpec execution migration are reviewed',
+    patterns: [
+      {
+        regex: /\bProductToolCatalogProvider\b/,
+        message: 'missing core product tool catalog provider owner',
+      },
+      {
+        regex: /\bimpl ToolCatalogSnapshotProvider<dyn Tool> for ProductToolCatalogProvider\b/,
+        message: 'missing core tool catalog snapshot provider implementation',
+      },
+      {
+        regex: /\bimpl GetToolSpecCatalogProvider<dyn Tool, ToolUseContext> for ProductToolCatalogProvider\b/,
+        message: 'missing core product GetToolSpec catalog provider implementation',
+      },
+      {
+        regex: /\bget_global_tool_registry\b/,
+        message: 'missing core product registry snapshot access',
+      },
+      {
+        regex: /\bget_agent_registry\b/,
+        message: 'missing core agent policy source for contextual catalog',
+      },
+      {
+        regex: /\bToolCatalogRuntime\b/,
+        message: 'missing agent-tools product catalog runtime facade delegation',
+      },
+      {
+        regex: /\bproduct_tool_catalog_runtime\b/,
+        message: 'missing product catalog runtime factory',
+      },
+      {
+        regex: /\bGetToolSpecRuntime\b/,
+        message: 'missing agent-tools GetToolSpec runtime facade delegation',
+      },
+      {
+        regex: /\bproduct_get_tool_spec_runtime\b/,
+        message: 'missing product GetToolSpec runtime factory',
+      },
+      {
+        regex: /\bresolve_product_tool_manifest\b/,
+        message: 'missing product manifest facade',
+      },
+      {
+        regex: /\bresolve_product_readonly_enabled_tools\b/,
+        message: 'missing product readonly enabled tools facade',
+      },
+      {
+        regex: /\bresolve_product_get_tool_spec_results\b/,
+        message: 'missing product GetToolSpec Tool-result vector facade',
+      },
+      {
+        regex: /\bunlocked_collapsed_tools\b/,
+        message: 'missing core-owned collapsed-tool unlock state source',
+      },
+      {
+        regex: /\bproduct_catalog_provider_default_get_tool_spec_catalog_matches_registry\b/,
+        message: 'missing product catalog provider collapsed catalog regression',
+      },
+      {
+        regex: /\bGetToolSpec requires agent type context\b/,
+        message: 'missing contextual GetToolSpec catalog validation boundary',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-tools/src/framework.rs',
+    reason: 'agent-tools owns portable tool facts plus generic registry and provider contracts',
+    patterns: [
+      {
+        regex: /\bpub struct ToolContextFacts\b/,
+        message: 'missing portable tool context facts contract',
+      },
+      {
+        regex: /\bpub trait PortableToolContextProvider\b/,
+        message: 'missing portable tool context provider contract',
+      },
+      {
+        regex: /\bpub enum ToolWorkspaceKind\b/,
+        message: 'missing portable workspace kind contract',
+      },
+      {
+        regex: /\bpub trait StaticToolProvider\b/,
+        message: 'missing static tool provider contract',
+      },
+      {
+        regex: /\bpub struct ToolRuntimeAssembly\b/,
+        message: 'missing generic runtime assembly contract',
+      },
+      {
+        regex: /\bpub type ToolDecoratorRef\b/,
+        message: 'missing generic decorator ref contract',
+      },
+      {
+        regex: /\bpub trait SnapshotToolWrapper\b/,
+        message: 'missing generic snapshot wrapper contract',
+      },
+      {
+        regex: /\bpub struct SnapshotToolDecorator\b/,
+        message: 'missing generic snapshot decorator contract',
+      },
+      {
+        regex: /\bcreate_registry_from_static_providers\b/,
+        message: 'missing generic static-provider assembly helper',
+      },
+      {
+        regex: /\bpub fn install_static_provider\b/,
+        message: 'missing static provider registry installer',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_duplicate_load_result\b/,
+        message: 'missing provider-neutral GetToolSpec duplicate-load result helper',
+      },
+      {
+        regex: /\bpub fn build_get_tool_spec_detail_result\b/,
+        message: 'missing provider-neutral GetToolSpec detail result helper',
+      },
+      {
+        regex: /\bpub fn resolve_get_tool_spec_execution_plan\b/,
+        message: 'missing provider-neutral GetToolSpec execution plan helper',
+      },
+      {
+        regex: /\bpub async fn resolve_get_tool_spec_execution_result_from_provider\b/,
+        message: 'missing provider-backed GetToolSpec execution result helper',
+      },
+      {
+        regex: /\bpub struct GetToolSpecRuntime\b/,
+        message: 'missing provider-backed GetToolSpec runtime facade',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/tool-packs/src/lib.rs',
+    reason:
+      'tool-packs must keep its feature-group scaffold explicit without owning concrete tools yet',
+    patterns: [
+      {
+        regex: /\bpub enum ToolPackFeatureGroup\b/,
+        message: 'missing tool-pack feature group scaffold',
+      },
+      {
+        regex: /\bpub fn all_feature_groups\b/,
+        message: 'missing tool-pack full feature group metadata helper',
+      },
+      {
+        regex: /\bpub fn enabled_feature_groups\b/,
+        message: 'missing tool-pack compile-time feature metadata helper',
+      },
+      {
+        regex: /\bpub struct ToolProviderGroupPlan\b/,
+        message: 'missing tool-pack provider group plan contract',
+      },
+      {
+        regex: /\bpub fn product_tool_provider_group_plan\b/,
+        message: 'missing product tool provider group plan',
       },
     ],
   },
   {
     path: 'src/crates/core/src/agentic/tools/manifest_resolver.rs',
     reason:
-      'core must continue owning prompt-visible tool manifest assembly until an approved provider migration exists',
+      'core must continue owning manifest resolver wrappers while delegating product catalog access and generic manifest assembly',
     patterns: [
       {
         regex: /\bpub async fn resolve_tool_manifest\b/,
@@ -1149,50 +1680,82 @@ const requiredContentRules = [
         message: 'missing GetToolSpec manifest insertion anchor',
       },
       {
-        regex: /\bToolExposure::Collapsed\b/,
-        message: 'missing collapsed exposure branch',
+        regex: /\bresolve_product_visible_tools\b/,
+        message: 'missing core product visible-tools facade delegation',
+      },
+      {
+        regex: /\bresolve_product_tool_manifest\b/,
+        message: 'missing core product manifest facade delegation',
       },
       {
         regex: /\bcollapsed_tool_names\b/,
         message: 'missing collapsed-tool name tracking',
       },
       {
-        regex: /Call `GetToolSpec` first/,
-        message: 'missing collapsed-tool prompt stub',
+        regex: /\bmanifest_preserves_explicit_get_tool_spec_runtime_contract\b/,
+        message: 'missing core GetToolSpec manifest insertion regression',
       },
     ],
   },
   {
     path: 'src/crates/core/src/agentic/tools/implementations/get_tool_spec_tool.rs',
     reason:
-      'core must continue owning GetToolSpec runtime until an approved provider migration exists',
+      'core must continue owning the GetToolSpec Tool adapter and product boundary while delegating generic runtime surface to agent-tools',
     patterns: [
       {
         regex: /\bpub struct GetToolSpecTool\b/,
         message: 'missing GetToolSpec owner type',
       },
       {
-        regex: /\bunlocked_collapsed_tools\b/,
-        message: 'missing collapsed-tool duplicate-load guard',
+        regex: /\bresolve_product_get_tool_spec_results\b/,
+        message: 'missing product GetToolSpec Tool-result vector facade delegation',
       },
       {
-        regex: /\balready_loaded\b/,
-        message: 'missing duplicate-load assistant result contract',
+        regex: /\bmap_get_tool_spec_execution_error\b/,
+        message: 'missing core GetToolSpec execution error mapping boundary',
+      },
+      {
+        regex: /\bbuild_product_get_tool_spec_catalog_description\b/,
+        message: 'missing core product GetToolSpec catalog facade delegation',
+      },
+      {
+        regex: /\bproduct_get_tool_spec_runtime\b/,
+        message: 'missing product GetToolSpec runtime facade delegation',
+      },
+      {
+        regex: /\bwith_runtime\b/,
+        message: 'missing core GetToolSpec static surface facade boundary',
       },
     ],
   },
   {
     path: 'src/crates/core/src/agentic/tools/framework.rs',
     reason:
-      'core must continue owning ToolUseContext and exposure policy until a portable context port is reviewed',
+      'core must continue owning ToolUseContext while re-exporting pure exposure contracts until a portable context port is reviewed',
     patterns: [
       {
-        regex: /\bpub enum ToolExposure\b/,
-        message: 'missing ToolExposure owner type',
+        regex: /\bToolExposure\b/,
+        message: 'missing ToolExposure compatibility re-export',
       },
       {
         regex: /\bpub struct ToolUseContext\b/,
         message: 'missing ToolUseContext owner type',
+      },
+      {
+        regex: /\bto_tool_context_facts\b/,
+        message: 'missing portable ToolUseContext facts projection',
+      },
+      {
+        regex: /\btool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated\b/,
+        message: 'missing portable facts runtime-owner leak guard',
+      },
+      {
+        regex: /customData/,
+        message: 'missing custom data runtime-only facts guard',
+      },
+      {
+        regex: /cancellationToken/,
+        message: 'missing cancellation token runtime-only facts guard',
       },
       {
         regex: /\bunlocked_collapsed_tools\b/,
@@ -1214,6 +1777,10 @@ const requiredContentRules = [
         message: 'missing collapsed-tool unlock state propagation',
       },
       {
+        regex: /\bpipeline_preserves_core_owned_tool_context_without_portable_runtime_leak\b/,
+        message: 'missing ToolUseContext runtime boundary regression',
+      },
+      {
         regex: /\bGetToolSpec\b/,
         message: 'missing GetToolSpec gating contract',
       },
@@ -1227,6 +1794,10 @@ const requiredContentRules = [
       {
         regex: /\bfn collect_unlocked_collapsed_tools\b/,
         message: 'missing GetToolSpec result unlock collector',
+      },
+      {
+        regex: /\bcollect_unlocked_collapsed_tools_dedupes_and_filters_runtime_unlocks\b/,
+        message: 'missing GetToolSpec unlock filtering regression',
       },
       {
         regex: /\bcollapsed_tool_names\b/,
@@ -1289,6 +1860,155 @@ const requiredContentRules = [
       {
         regex: /\bpub enum SubagentStateReason\b/,
         message: 'missing availability reason wire contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/definitions/modes/mod.rs',
+    reason:
+      'core agent mode definitions must continue exposing Multitask mode until an approved agent-runtime migration preserves mode registration semantics',
+    patterns: [
+      {
+        regex: /\bmod multitask\b/,
+        message: 'missing Multitask mode module',
+      },
+      {
+        regex: /\bpub use multitask::MultitaskMode\b/,
+        message: 'missing Multitask mode export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/definitions/subagents/mod.rs',
+    reason:
+      'core subagent definitions must continue exposing the built-in GeneralPurpose subagent until registry ownership migration has equivalence coverage',
+    patterns: [
+      {
+        regex: /\bmod general_purpose\b/,
+        message: 'missing GeneralPurpose subagent module',
+      },
+      {
+        regex: /\bpub use general_purpose::GeneralPurposeAgent\b/,
+        message: 'missing GeneralPurpose subagent export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/registry/builtin.rs',
+    reason:
+      'core builtin registry must continue registering latest-main mode and subagent defaults until agent registry ownership migrates with API equivalence tests',
+    patterns: [
+      {
+        regex: /\bbuiltin_agent_specs\(\)/,
+        message: 'missing builtin agent spec registration source',
+      },
+      {
+        regex: /"Multitask"\s*=>\s*"auto"/,
+        message: 'missing Multitask default model mapping',
+      },
+      {
+        regex: /"GeneralPurpose"\s*=>\s*"fast"/,
+        message: 'missing GeneralPurpose default model mapping',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/implementations/task_tool.rs',
+    reason:
+      'core Task tool must continue owning background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
+    patterns: [
+      {
+        regex: /"run_in_background"/,
+        message: 'missing Task run_in_background schema flag',
+      },
+      {
+        regex: /\bstart_background_subagent\b/,
+        message: 'missing background subagent launch path',
+      },
+      {
+        regex: /\bbackground_task_id\b/,
+        message: 'missing background task id result contract',
+      },
+      {
+        regex: /Background subagent/,
+        message: 'missing assistant-visible background subagent acknowledgement',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+    reason:
+      'core scheduler must continue owning background subagent result delivery until running-turn and idle-session routing equivalence tests exist',
+    patterns: [
+      {
+        regex: /\bdeliver_background_subagent_result\b/,
+        message: 'missing background subagent delivery entry point',
+      },
+      {
+        regex: /RoundInjectionKind::BackgroundSubagentResult/,
+        message: 'missing running-turn background result injection',
+      },
+      {
+        regex: /RoundInjectionTarget::CurrentRunningTurn/,
+        message: 'missing current-turn injection target',
+      },
+      {
+        regex: /DialogTriggerSource::AgentSession/,
+        message: 'missing idle-session agent-session follow-up turn source',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/cli/src/ui/startup.rs',
+    reason:
+      'CLI mode-aware subagent management remains an app-layer product surface until agent registry migration has CLI equivalence coverage',
+    patterns: [
+      {
+        regex: /\bfn show_available_subagent_list\b/,
+        message: 'missing CLI subagent list surface',
+      },
+      {
+        regex: /\bfn show_subagent_config_selector\b/,
+        message: 'missing CLI subagent config surface',
+      },
+      {
+        regex: /\bget_subagents_for_query\b/,
+        message: 'missing CLI mode-scoped subagent query',
+      },
+      {
+        regex: /\bSubagentQueryContext\b/,
+        message: 'missing CLI subagent query context',
+      },
+      {
+        regex: /\bupdate_subagent_override\b/,
+        message: 'missing CLI subagent availability update path',
+      },
+    ],
+  },
+  {
+    path: 'src/apps/cli/src/ui/subagent_selector.rs',
+    reason:
+      'CLI subagent selector presentation must remain app-layer UI while registry availability semantics stay in core',
+    patterns: [
+      {
+        regex: /\bpub enum SubagentSelectorAction\b/,
+        message: 'missing CLI subagent selector action contract',
+      },
+      {
+        regex: /\bpub fn show_list\b/,
+        message: 'missing CLI subagent list mode',
+      },
+      {
+        regex: /\bpub fn show_config\b/,
+        message: 'missing CLI subagent config mode',
+      },
+      {
+        regex: /\bdefault_enabled\b/,
+        message: 'missing CLI default availability display',
+      },
+      {
+        regex: /\bfn render_subagent_line\b/,
+        message: 'missing CLI subagent presentation renderer',
       },
     ],
   },
@@ -1427,6 +2147,144 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/web-ui/src/main.tsx',
+    reason:
+      'web startup scheduling and trace orchestration remain web product-surface behavior, not core contract runtime',
+    patterns: [
+      {
+        regex: /\bstartupTrace\b/,
+        message: 'missing web startup trace surface',
+      },
+      {
+        regex: /\bbackgroundTaskScheduler\b/,
+        message: 'missing deferred startup scheduler surface',
+      },
+      {
+        regex: /\binitializeAllTools\b/,
+        message: 'missing narrow tool-startup entry integration',
+      },
+      {
+        regex: /\bafter_render_start\b/,
+        message: 'missing post-render startup phase',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui/src/shared/utils/startupTrace.ts',
+    reason:
+      'web startup trace classification and redaction remain web infrastructure behavior until a telemetry contract is reviewed',
+    patterns: [
+      {
+        regex: /\bfunction sanitizeTraceData\b/,
+        message: 'missing startup trace sanitization',
+      },
+      {
+        regex: /\bexport function isRemoteTraceRequest\b/,
+        message: 'missing remote request classifier',
+      },
+      {
+        regex: /\brecordApiCall\b/,
+        message: 'missing startup API-call trace recorder',
+      },
+      {
+        regex: /\bflushSummary\b/,
+        message: 'missing bounded startup summary flush',
+      },
+      {
+        regex: /\bmarkPhaseAfterAnimationFrames\b/,
+        message: 'missing frame-delayed startup marker',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui/src/shared/utils/backgroundTaskScheduler.ts',
+    reason:
+      'web background startup scheduling remains web infrastructure behavior and must preserve dedupe/cancel semantics',
+    patterns: [
+      {
+        regex: /\bexport class BackgroundTaskScheduler\b/,
+        message: 'missing background task scheduler',
+      },
+      {
+        regex: /\binFlightKey\b/,
+        message: 'missing in-flight dedupe key',
+      },
+      {
+        regex: /\bAbortController\b/,
+        message: 'missing cancellation controller',
+      },
+      {
+        regex: /\bBackgroundTaskCancelledError\b/,
+        message: 'missing cancellation error contract',
+      },
+      {
+        regex: /\bcancelIdle\b/,
+        message: 'missing idle callback cancellation',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui/src/tools/initializeTools.ts',
+    reason:
+      'web tool startup must stay behind a narrow app-layer entry instead of importing product tools through shared contracts',
+    patterns: [
+      {
+        regex: /\bexport async function initializeAllTools\b/,
+        message: 'missing narrow tool startup entry',
+      },
+      {
+        regex: /\binitializeLsp\b/,
+        message: 'missing LSP startup initializer call',
+      },
+      {
+        regex: /\binitializeGit\b/,
+        message: 'missing Git startup initializer call',
+      },
+      {
+        regex: /does not import every tool/,
+        message: 'missing narrow startup import guard',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui/src/tools/editor/services/MonacoStartupWarmup.ts',
+    reason:
+      'Monaco startup warmup remains a deferred web-app optimization, not a core runtime dependency',
+    patterns: [
+      {
+        regex: /\bexport function scheduleMonacoStartupWarmup\b/,
+        message: 'missing deferred Monaco warmup entry',
+      },
+      {
+        regex: /\bbackgroundTaskScheduler\b/,
+        message: 'missing background scheduler integration',
+      },
+      {
+        regex: /startup:monaco-warmup/,
+        message: 'missing Monaco warmup dedupe key',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui/src/flow_chat/services/flow-chat-manager/SessionModule.ts',
+    reason:
+      'flow-chat history hydration remains web startup/product-surface behavior until a UI equivalence plan exists',
+    patterns: [
+      {
+        regex: /\bhistorical_session_hydrate_request\b/,
+        message: 'missing historical session hydrate trace',
+      },
+      {
+        regex: /Load history in the background/,
+        message: 'missing non-blocking history load contract',
+      },
+      {
+        regex: /\bhistoryState: 'ready'/,
+        message: 'missing history-ready state contract',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/miniapp/storage.rs',
     reason:
       'core must continue owning MiniApp storage runtime adapter until storage IO migration is reviewed',
@@ -1434,6 +2292,100 @@ const requiredContentRules = [
       {
         regex: /\bimpl MiniAppStoragePort for MiniAppStorage\b/,
         message: 'missing MiniApp storage port adapter owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/builtin/mod.rs',
+    reason:
+      'core must continue owning built-in MiniApp asset includes, seeding IO, marker writes, and recompilation until builtin asset runtime migration is reviewed',
+    patterns: [
+      {
+        regex: /id: "builtin-pr-review"/,
+        message: 'missing built-in PR Review MiniApp anchor',
+      },
+      {
+        regex: /\bBUILTIN_APPS\b/,
+        message: 'missing built-in MiniApp asset include owner',
+      },
+      {
+        regex: /\bbuiltin_content_hash\b/,
+        message: 'missing product-domain built-in MiniApp content hash use',
+      },
+      {
+        regex: /\bshould_seed_builtin_app\b/,
+        message: 'missing product-domain built-in MiniApp seed decision use',
+      },
+      {
+        regex: /\bresolve_builtin_seed_check\b/,
+        message: 'missing product-domain built-in MiniApp seed check use',
+      },
+      {
+        regex: /\bresolve_builtin_seed_action\b/,
+        message: 'missing product-domain built-in MiniApp seed action use',
+      },
+      {
+        regex: /\bbuiltin_source_files\b/,
+        message: 'missing product-domain built-in MiniApp source payload use',
+      },
+      {
+        regex: /\bBUILTIN_PLACEHOLDER_COMPILED_HTML\b/,
+        message: 'missing product-domain built-in MiniApp placeholder payload use',
+      },
+      {
+        regex: /\bread_builtin_install_marker\b/,
+        message: 'missing core-owned built-in MiniApp marker read IO',
+      },
+      {
+        regex: /\bparse_builtin_install_marker\b/,
+        message: 'missing product-domain built-in MiniApp marker parse helper use',
+      },
+      {
+        regex: /\bwrite_builtin_install_marker\b/,
+        message: 'missing core-owned built-in MiniApp marker write IO',
+      },
+      {
+        regex: /\bserialize_builtin_install_marker\b/,
+        message: 'missing product-domain built-in MiniApp marker serialization helper use',
+      },
+      {
+        regex: /\brecompile\b/,
+        message: 'missing core-owned built-in MiniApp recompile orchestration',
+      },
+      {
+        regex: /\bload_customization_metadata\b/,
+        message: 'missing customized built-in preservation path',
+      },
+      {
+        regex: /\bavailable_builtin_update\b/,
+        message: 'missing customized built-in update metadata path',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/host_dispatch.rs',
+    reason:
+      'core must continue owning MiniApp host-dispatch execution until host/runtime migration is reviewed',
+    patterns: [
+      {
+        regex: /\bpub async fn dispatch_host\b/,
+        message: 'missing MiniApp host dispatch entry',
+      },
+      {
+        regex: /\basync fn dispatch_fs\b/,
+        message: 'missing MiniApp fs host dispatch',
+      },
+      {
+        regex: /\basync fn dispatch_shell\b/,
+        message: 'missing MiniApp shell host dispatch',
+      },
+      {
+        regex: /\bcommand_basename_allowed\b/,
+        message: 'missing MiniApp shell allowlist policy use',
+      },
+      {
+        regex: /\bhost_allowed_by_allowlist\b/,
+        message: 'missing MiniApp net allowlist policy use',
       },
     ],
   },
@@ -1489,6 +2441,107 @@ const requiredContentRules = [
         regex: /\bpub fn versions_dir\b/,
         message: 'missing MiniApp versions directory layout helper',
       },
+      {
+        regex: /\bpub const DRAFT_JSON\b/,
+        message: 'missing MiniApp draft manifest filename contract',
+      },
+      {
+        regex: /\bpub const REQUIRED_SOURCE_FILES\b/,
+        message: 'missing MiniApp import source file list contract',
+      },
+      {
+        regex: /\bpub const PLACEHOLDER_COMPILED_HTML\b/,
+        message: 'missing MiniApp placeholder compiled HTML contract',
+      },
+      {
+        regex: /\bpub struct MiniAppImportLayout\b/,
+        message: 'missing MiniApp import layout contract',
+      },
+      {
+        regex: /\bpub fn build_import_fallbacks\b/,
+        message: 'missing MiniApp import fallback payload helper',
+      },
+      {
+        regex: /\bpub fn draft_dir\b/,
+        message: 'missing MiniApp draft directory layout helper',
+      },
+      {
+        regex: /\bpub fn customization_path\b/,
+        message: 'missing MiniApp customization metadata path helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/miniapp/lifecycle.rs',
+    reason:
+      'product-domains owns pure MiniApp lifecycle state transitions while core keeps compile, storage IO, and runtime execution',
+    patterns: [
+      {
+        regex: /\bpub fn mark_deps_installed_state\b/,
+        message: 'missing MiniApp deps-installed state helper',
+      },
+      {
+        regex: /\bpub fn clear_worker_restart_required_state\b/,
+        message: 'missing MiniApp worker-restart clear state helper',
+      },
+      {
+        regex: /\bpub fn prepare_rollback_app\b/,
+        message: 'missing MiniApp rollback state helper',
+      },
+      {
+        regex: /\bpub fn apply_recompile_result\b/,
+        message: 'missing MiniApp recompile result state helper',
+      },
+      {
+        regex: /\bpub fn apply_sync_from_fs_result\b/,
+        message: 'missing MiniApp sync-from-fs state helper',
+      },
+      {
+        regex: /\bpub fn apply_import_runtime_state\b/,
+        message: 'missing MiniApp import runtime state helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/miniapp/draft.rs',
+    reason:
+      'product-domains owns MiniApp draft DTO and response shape while core keeps draft filesystem IO',
+    patterns: [
+      {
+        regex: /\bpub struct MiniAppDraftManifest\b/,
+        message: 'missing MiniApp draft manifest DTO',
+      },
+      {
+        regex: /\bpub struct MiniAppDraft\b/,
+        message: 'missing MiniApp draft response DTO',
+      },
+      {
+        regex: /\bpub fn build_draft_manifest\b/,
+        message: 'missing MiniApp draft manifest helper',
+      },
+      {
+        regex: /\bpub fn build_draft_response\b/,
+        message: 'missing MiniApp draft response helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/miniapp/runtime.rs',
+    reason:
+      'product-domains owns MiniApp runtime search-plan contracts while core keeps executable lookup and version process execution',
+    patterns: [
+      {
+        regex: /\bpub fn runtime_lookup_order\b/,
+        message: 'missing MiniApp runtime lookup order contract',
+      },
+      {
+        regex: /\bpub fn candidate_executable_path\b/,
+        message: 'missing MiniApp runtime candidate executable helper',
+      },
+      {
+        regex: /\bpub fn versioned_executable_candidate\b/,
+        message: 'missing MiniApp version-manager executable helper',
+      },
     ],
   },
   {
@@ -1513,11 +2566,15 @@ const requiredContentRules = [
   {
     path: 'src/crates/product-domains/src/miniapp/customization.rs',
     reason:
-      'product-domains owns MiniApp customization metadata and permission-diff contracts while core keeps draft storage/runtime',
+      'product-domains owns MiniApp customization metadata, built-in update policy, and permission-diff contracts while core keeps draft storage/runtime',
     patterns: [
       {
         regex: /\bpub struct MiniAppCustomizationMetadata\b/,
         message: 'missing MiniApp customization metadata contract',
+      },
+      {
+        regex: /\bpub struct MiniAppDeclinedBuiltinUpdate\b/,
+        message: 'missing MiniApp declined built-in update contract',
       },
       {
         regex: /\bpub struct MiniAppPermissionDiff\b/,
@@ -1527,13 +2584,320 @@ const requiredContentRules = [
         regex: /\bpub fn diff_permissions\b/,
         message: 'missing MiniApp permission diff helper',
       },
+      {
+        regex: /\bpub fn apply_draft_customization_metadata\b/,
+        message: 'missing MiniApp customization draft-apply helper',
+      },
+      {
+        regex: /\bpub fn mark_builtin_update_available_metadata\b/,
+        message: 'missing MiniApp built-in update availability helper',
+      },
+      {
+        regex: /\bpub fn decline_builtin_update_metadata\b/,
+        message: 'missing MiniApp built-in update decline helper',
+      },
+      {
+        regex: /\bpub fn is_current_declined_builtin_update\b/,
+        message: 'missing MiniApp declined update current-state helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/manager.rs',
+    reason:
+      'core MiniApp manager must use product-domain policy/facade helpers while retaining compile, storage IO, and built-in source-hash lookup',
+    patterns: [
+      {
+        regex: /\bapply_draft_customization_metadata\b/,
+        message: 'missing product-domain draft customization helper use',
+      },
+      {
+        regex: /\bmark_builtin_update_available_metadata\b/,
+        message: 'missing product-domain built-in update availability helper use',
+      },
+      {
+        regex: /\bdecline_builtin_update_metadata\b/,
+        message: 'missing product-domain built-in update decline helper use',
+      },
+      {
+        regex: /\bMiniAppRuntimeFacade\b/,
+        message: 'missing product-domain MiniApp runtime-state facade use',
+      },
+      {
+        regex: /\bpersist_sync_from_fs_result_for_app\b/,
+        message: 'missing product-domain MiniApp sync-from-fs facade delegation',
+      },
+      {
+        regex: /\bcompile_source\b/,
+        message: 'missing core-owned MiniApp compile orchestration',
+      },
+      {
+        regex: /\bREQUIRED_SOURCE_FILES\b/,
+        message: 'missing product-domain MiniApp import file-shape contract use',
+      },
+      {
+        regex: /\bMiniAppImportLayout\b/,
+        message: 'missing product-domain MiniApp import layout helper use',
+      },
+      {
+        regex: /\bbuild_import_fallbacks\b/,
+        message: 'missing product-domain MiniApp import fallback helper use',
+      },
+      {
+        regex: /\bapply_import_runtime_state\b/,
+        message: 'missing product-domain MiniApp import runtime state helper use',
+      },
+      {
+        regex: /\bstorage\.load_customization_metadata\b/,
+        message: 'missing core-owned customization metadata storage IO',
+      },
+      {
+        regex: /\bruntime_preflight_preserves_recompile_sync_rollback_and_deps_state\b/,
+        message: 'missing MiniApp manager runtime preflight regression test',
+      },
+      {
+        regex: /\bimport_from_path_preserves_fallback_files_recompile_and_runtime_state\b/,
+        message: 'missing MiniApp import runtime preflight regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/miniapp/ports.rs',
+    reason:
+      'product-domains owns MiniApp runtime-state port facade while core keeps concrete storage IO, compile, worker, and host execution',
+    patterns: [
+      {
+        regex: /\bpub struct MiniAppRuntimeFacade\b/,
+        message: 'missing MiniApp runtime-state facade',
+      },
+      {
+        regex: /\bmark_deps_installed_state\b/,
+        message: 'missing MiniApp deps-installed state transition in facade',
+      },
+      {
+        regex: /\bpersist_sync_from_fs_result_for_app\b/,
+        message: 'missing MiniApp sync-from-fs preloaded snapshot facade path',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/function_agents/git-func-agent/ai_service.rs',
+    reason:
+      'core must continue owning Git function-agent AI client calls while product-domains owns prompt and response policy',
+    patterns: [
+      {
+        regex: /\bprepare_commit_ai_prompt\b/,
+        message: 'missing product-domain Git function-agent prompt policy use',
+      },
+      {
+        regex: /\bparse_commit_ai_response\b/,
+        message: 'missing product-domain Git function-agent response policy use',
+      },
+      {
+        regex: /\bai_client\s*\.\s*send_message\b/,
+        message: 'missing core-owned function-agent AI call',
+      },
+      {
+        regex: /\bAgentError::internal_error\b/,
+        message: 'missing core-owned function-agent AI transport error mapping',
+      },
+      {
+        regex: /\bparse_commit_response_preserves_product_domain_response_policy\b/,
+        message: 'missing Git function-agent AI response boundary regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/function_agents/startchat-func-agent/ai_service.rs',
+    reason:
+      'core must continue owning Startchat AI client calls while product-domains owns prompt and response policy',
+    patterns: [
+      {
+        regex: /\bbuild_work_state_analysis_prompt\b/,
+        message: 'missing product-domain Startchat prompt policy use',
+      },
+      {
+        regex: /\bparse_work_state_analysis_response\b/,
+        message: 'missing product-domain Startchat response policy use',
+      },
+      {
+        regex: /\bai_client\s*\.\s*send_message\b/,
+        message: 'missing core-owned Startchat AI call',
+      },
+      {
+        regex: /\bAgentError::internal_error\b/,
+        message: 'missing core-owned Startchat AI transport error mapping',
+      },
+      {
+        regex: /\bparse_complete_analysis_preserves_product_domain_response_policy\b/,
+        message: 'missing Startchat AI response boundary regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/function_agents/git-func-agent/commit_generator.rs',
+    reason:
+      'Git function-agent commit generation must route through the product-domain runtime facade while core keeps concrete adapters',
+    patterns: [
+      {
+        regex: /\bFunctionAgentRuntimeFacade\b/,
+        message: 'missing product-domain function-agent runtime facade routing',
+      },
+      {
+        regex: /\bCoreFunctionAgentGitAdapter\b/,
+        message: 'missing core-owned Git adapter wiring',
+      },
+      {
+        regex: /\bCoreFunctionAgentAiAdapter\b/,
+        message: 'missing core-owned AI adapter wiring',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/miniapp/builtin.rs',
+    reason:
+      'product-domains owns pure built-in MiniApp bundle, marker, hash, and seed-decision contracts while core keeps asset seeding IO and recompilation',
+    patterns: [
+      {
+        regex: /\bpub struct BuiltinMiniAppBundle\b/,
+        message: 'missing built-in MiniApp bundle contract',
+      },
+      {
+        regex: /\bpub struct BuiltinInstallMarker\b/,
+        message: 'missing built-in MiniApp install marker contract',
+      },
+      {
+        regex: /\bpub const BUILTIN_INSTALL_MARKER\b/,
+        message: 'missing built-in MiniApp marker filename contract',
+      },
+      {
+        regex: /\bpub fn builtin_content_hash\b/,
+        message: 'missing built-in MiniApp content hash helper',
+      },
+      {
+        regex: /\bpub fn should_seed_builtin_app\b/,
+        message: 'missing built-in MiniApp seed decision helper',
+      },
+      {
+        regex: /\bpub struct BuiltinSeedArtifacts\b/,
+        message: 'missing built-in MiniApp seed artifacts contract',
+      },
+      {
+        regex: /\bpub enum BuiltinSeedCheck\b/,
+        message: 'missing built-in MiniApp seed check contract',
+      },
+      {
+        regex: /\bpub enum BuiltinSeedAction\b/,
+        message: 'missing built-in MiniApp seed action contract',
+      },
+      {
+        regex: /\bpub fn resolve_builtin_seed_check\b/,
+        message: 'missing built-in MiniApp seed check helper',
+      },
+      {
+        regex: /\bpub fn resolve_builtin_seed_action\b/,
+        message: 'missing built-in MiniApp seed action helper',
+      },
+      {
+        regex: /\bpub fn serialize_builtin_install_marker\b/,
+        message: 'missing built-in MiniApp marker serialization helper',
+      },
+      {
+        regex: /\bpub fn parse_builtin_install_marker\b/,
+        message: 'missing built-in MiniApp marker parse helper',
+      },
+      {
+        regex: /\bpub fn builtin_source_files\b/,
+        message: 'missing built-in MiniApp source payload helper',
+      },
+      {
+        regex: /\bpub const BUILTIN_PLACEHOLDER_COMPILED_HTML\b/,
+        message: 'missing built-in MiniApp placeholder payload contract',
+      },
+      {
+        regex: /\bpub fn build_builtin_package_json\b/,
+        message: 'missing built-in MiniApp package payload helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
+    reason:
+      'Startchat work-state analysis must route through the product-domain runtime facade while core keeps concrete adapters',
+    patterns: [
+      {
+        regex: /\bFunctionAgentRuntimeFacade\b/,
+        message: 'missing product-domain function-agent runtime facade routing',
+      },
+      {
+        regex: /\bCoreFunctionAgentGitAdapter\b/,
+        message: 'missing core-owned Git adapter wiring',
+      },
+      {
+        regex: /\bCoreFunctionAgentAiAdapter\b/,
+        message: 'missing core-owned AI adapter wiring',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/function_agents/ports.rs',
+    reason:
+      'product-domains owns port-backed function-agent facade orchestration while core keeps concrete Git/AI runtime calls',
+    patterns: [
+      {
+        regex: /\bpub struct FunctionAgentRuntimeFacade\b/,
+        message: 'missing function-agent runtime facade',
+      },
+      {
+        regex: /\bgenerate_commit_message\b/,
+        message: 'missing function-agent commit facade orchestration',
+      },
+      {
+        regex: /\banalyze_work_state\b/,
+        message: 'missing function-agent work-state facade orchestration',
+      },
+      {
+        regex: /\bgit_work_state_from_snapshot\b/,
+        message: 'missing Startchat Git snapshot projection helper',
+      },
+      {
+        regex: /\bStartchatTimeSnapshot\b/,
+        message: 'missing Startchat time snapshot contract',
+      },
+      {
+        regex: /\bstartchat_time_snapshot\b/,
+        message: 'missing Startchat time snapshot port',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/function_agents/common.rs',
+    reason:
+      'product-domains owns function-agent AI response JSON extraction while core keeps concrete AI clients',
+    patterns: [
+      {
+        regex: /\bfn extract_json_from_ai_response\b/,
+        message: 'missing function-agent AI response JSON extraction helper',
+      },
+      {
+        regex: /\bfn try_repair_json\b/,
+        message: 'missing function-agent AI response JSON repair helper',
+      },
     ],
   },
   {
     path: 'src/crates/product-domains/src/function_agents/startchat_func_agent/utils.rs',
     reason:
-      'product-domains owns pure Startchat function-agent parsing policy while core keeps AI calls and error mapping',
+      'product-domains owns Startchat function-agent prompt and response policy while core keeps AI calls',
     patterns: [
+      {
+        regex: /\bpub const WORK_STATE_ANALYSIS_PROMPT\b/,
+        message: 'missing product-domain Startchat prompt template',
+      },
+      {
+        regex: /\bpub fn build_work_state_analysis_prompt\b/,
+        message: 'missing product-domain Startchat prompt builder',
+      },
       {
         regex: /\bpub struct ParsedCompleteAnalysis\b/,
         message: 'missing Startchat complete-analysis parse result contract',
@@ -1542,16 +2906,79 @@ const requiredContentRules = [
         regex: /\bpub fn parse_complete_analysis_value\b/,
         message: 'missing Startchat complete-analysis value parser',
       },
+      {
+        regex: /\bpub fn parse_complete_analysis_json\b/,
+        message: 'missing Startchat complete-analysis JSON parser',
+      },
+      {
+        regex: /\bpub fn parse_work_state_analysis_response\b/,
+        message: 'missing Startchat AI response policy',
+      },
+      {
+        regex: /\bwork_state_ai_response_policy_extracts_json_and_maps_domain_errors\b/,
+        message: 'missing Startchat AI response policy regression test',
+      },
     ],
   },
   {
     path: 'src/crates/product-domains/src/function_agents/git_func_agent/utils.rs',
     reason:
-      'product-domains owns pure Git function-agent response parsing policy while core keeps AI calls and error mapping',
+      'product-domains owns Git function-agent prompt and response policy while core keeps AI calls',
     patterns: [
+      {
+        regex: /\bpub const COMMIT_MESSAGE_PROMPT\b/,
+        message: 'missing product-domain Git function-agent prompt template',
+      },
       {
         regex: /\bpub fn parse_commit_analysis_value\b/,
         message: 'missing Git function-agent commit analysis value parser',
+      },
+      {
+        regex: /\bpub fn parse_commit_analysis_json\b/,
+        message: 'missing Git function-agent commit analysis JSON parser',
+      },
+      {
+        regex: /\bpub fn truncate_diff_for_commit_prompt\b/,
+        message: 'missing Git function-agent diff truncation helper',
+      },
+      {
+        regex: /\bpub fn prepare_commit_prompt\b/,
+        message: 'missing Git function-agent prompt preparation helper',
+      },
+      {
+        regex: /\bpub fn prepare_commit_ai_prompt\b/,
+        message: 'missing Git function-agent AI prompt policy',
+      },
+      {
+        regex: /\bpub fn parse_commit_ai_response\b/,
+        message: 'missing Git function-agent AI response policy',
+      },
+      {
+        regex: /\bcommit_ai_response_policy_extracts_json_and_maps_domain_errors\b/,
+        message: 'missing Git function-agent AI response policy regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/runtime_detect.rs',
+    reason:
+      'core MiniApp runtime detection must use product-domain search-plan helpers while retaining process-backed executable/version checks',
+    patterns: [
+      {
+        regex: /\bruntime_lookup_order\b/,
+        message: 'missing product-domain runtime lookup order use',
+      },
+      {
+        regex: /\bcandidate_executable_path\b/,
+        message: 'missing product-domain candidate executable helper use',
+      },
+      {
+        regex: /\bversioned_executable_candidate\b/,
+        message: 'missing product-domain version-manager executable helper use',
+      },
+      {
+        regex: /\bget_version\b/,
+        message: 'missing core-owned version process execution',
       },
     ],
   },
@@ -1569,7 +2996,7 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/function_agents/port_adapters.rs',
     reason:
-      'core must continue owning function-agent Git runtime adapter until Git/AI service migration is reviewed',
+      'core must continue owning function-agent Git/AI runtime adapters until Git/AI service migration is reviewed',
     patterns: [
       {
         regex: /\bpub struct CoreFunctionAgentGitAdapter\b/,
@@ -1578,6 +3005,22 @@ const requiredContentRules = [
       {
         regex: /\bimpl FunctionAgentGitPort for CoreFunctionAgentGitAdapter\b/,
         message: 'missing function-agent Git port adapter owner',
+      },
+      {
+        regex: /\bpub struct CoreFunctionAgentAiAdapter\b/,
+        message: 'missing core function-agent AI adapter type',
+      },
+      {
+        regex: /\bimpl FunctionAgentAiPort for CoreFunctionAgentAiAdapter\b/,
+        message: 'missing function-agent AI port adapter owner',
+      },
+      {
+        regex: /\bgit_adapter_commit_snapshot_keeps_staged_diff_and_unstaged_count_separate\b/,
+        message: 'missing function-agent Git snapshot boundary regression test',
+      },
+      {
+        regex: /\bgit_adapter_startchat_snapshot_preserves_git_state_when_diff_has_no_head\b/,
+        message: 'missing Startchat Git diff fallback regression test',
       },
     ],
   },
@@ -1918,16 +3361,16 @@ function runManifestParserSelfTest() {
   if (!agentToolsManifestRule) {
     throw new Error('missing agent-tools manifest-owner boundary rule');
   }
-  const toolManifestContracts = [
+  const agentToolsRuntimeForbiddenContracts = [
     'GetToolSpecTool',
-    'GET_TOOL_SPEC_TOOL_NAME',
     'manifest_resolver',
     'unlocked_collapsed_tools',
+    'ToolUseContext',
   ];
   const agentToolsManifestRuleText = agentToolsManifestRule.patterns
     .map((pattern) => pattern.regex.source)
     .join('\n');
-  for (const contract of toolManifestContracts) {
+  for (const contract of agentToolsRuntimeForbiddenContracts) {
     if (!agentToolsManifestRuleText.includes(contract)) {
       throw new Error(`agent-tools manifest boundary rule must forbid: ${contract}`);
     }
@@ -1941,7 +3384,14 @@ function runManifestParserSelfTest() {
   const toolPacksManifestRuleText = toolPacksManifestRule.patterns
     .map((pattern) => pattern.regex.source)
     .join('\n');
-  for (const contract of toolManifestContracts) {
+  const toolPacksManifestContracts = [
+    'GetToolSpecTool',
+    'GET_TOOL_SPEC_TOOL_NAME',
+    'manifest_resolver',
+    'unlocked_collapsed_tools',
+    'ToolExposure',
+  ];
+  for (const contract of toolPacksManifestContracts) {
     if (!toolPacksManifestRuleText.includes(contract)) {
       throw new Error(`tool-packs manifest boundary rule must forbid: ${contract}`);
     }
@@ -1955,6 +3405,58 @@ function runManifestParserSelfTest() {
         'RemoteControlStatePort',
         'RuntimeEventSink',
         'remote_image',
+      ],
+    },
+    {
+      path: 'src/crates/agent-tools/src/framework.rs',
+      contracts: [
+        'GET_TOOL_SPEC_TOOL_NAME',
+        'ToolExposure',
+        'ToolManifestPolicyTool',
+        'resolve_tool_manifest_policy',
+        'default_exposure',
+        'build_tool_manifest_policy_tools',
+        'build_collapsed_tool_stub_definition',
+        'PromptVisibleToolManifestItem',
+        'build_prompt_visible_tool_manifest_definitions',
+        'ContextualToolManifestItem',
+        'ToolCatalogSnapshotProvider',
+        'GetToolSpecCatalogProvider',
+        'ContextualVisibleTools',
+        'ContextualToolManifest',
+        'resolve_contextual_visible_tools',
+        'resolve_contextual_tool_manifest',
+        'resolve_contextual_visible_tools_from_provider',
+        'resolve_contextual_tool_manifest_from_provider',
+        'build_get_tool_spec_catalog_description_from_provider',
+        'resolve_get_tool_spec_detail_from_provider',
+        'build_get_tool_spec_description',
+        'GetToolSpecCollapsedToolSummary',
+        'GetToolSpecDetail',
+        'summarize_get_tool_spec_collapsed_tools',
+        'resolve_get_tool_spec_detail',
+        'build_get_tool_spec_catalog_description',
+        'get_tool_spec_input_schema',
+        'get_tool_spec_short_description',
+        'render_get_tool_spec_tool_use_message',
+        'get_tool_spec_is_readonly',
+        'get_tool_spec_is_concurrency_safe',
+        'get_tool_spec_needs_permissions',
+        'validate_get_tool_spec_input',
+        'build_get_tool_spec_assistant_detail',
+        'build_get_tool_spec_duplicate_load_result',
+        'build_get_tool_spec_detail_result',
+        'GetToolSpecExecutionPlan',
+        'GetToolSpecExecutionError',
+        'resolve_get_tool_spec_execution_plan',
+        'resolve_get_tool_spec_execution_result_from_provider',
+        'GetToolSpecRuntime',
+        'call_results',
+        'GetToolSpecLoadObservation',
+        'collect_loaded_collapsed_tool_names',
+        'sort_tool_manifest_definitions',
+        'is_tool_collapsed',
+        'get_collapsed_tool_names',
       ],
     },
     {
@@ -2034,19 +3536,134 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/agentic/tools/registry.rs',
-      contracts: ['register_all_tools', 'GetToolSpecTool', 'get_collapsed_tool_names'],
+      contracts: [
+        'from_inner',
+        'ProductToolDecoratorRef',
+        'ProductToolRuntimeAssembly',
+        'get_collapsed_tool_names',
+        'resolve_product_readonly_enabled_tools',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/runtime_assembly.rs',
+      contracts: [
+        'ProductToolRuntimeAssembly',
+        'SnapshotToolDecorator',
+        'ProductSnapshotToolWrapper',
+        'builtin_static_tool_providers',
+        'ToolRuntimeAssembly',
+        'create_registry_from_static_providers',
+        'wrap_tool_for_snapshot_tracking',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/static_providers.rs',
+      contracts: [
+        'builtin_static_tool_providers',
+        'StaticToolProviderGroup',
+        'product_tool_provider_group_plan',
+        'materialize_tool',
+        'GetToolSpecTool',
+      ],
+    },
+    {
+      path: 'src/crates/agent-tools/src/framework.rs',
+      contracts: [
+        'ToolContextFacts',
+        'PortableToolContextProvider',
+        'ToolWorkspaceKind',
+        'StaticToolProvider',
+        'StaticToolProviderGroup',
+        'ToolRuntimeAssembly',
+        'ToolCatalogRuntime',
+        'ToolDecoratorRef',
+        'SnapshotToolWrapper',
+        'SnapshotToolDecorator',
+        'create_registry_from_static_providers',
+        'install_static_provider',
+        'resolve_readonly_enabled_tools',
+        'build_get_tool_spec_duplicate_load_result',
+        'build_get_tool_spec_detail_result',
+        'resolve_get_tool_spec_execution_plan',
+        'resolve_get_tool_spec_execution_result_from_provider',
+        'GetToolSpecRuntime',
+        'call_results',
+      ],
+    },
+    {
+      path: 'src/crates/tool-packs/src/lib.rs',
+      contracts: [
+        'ToolPackFeatureGroup',
+        'ToolProviderGroupPlan',
+        'all_feature_groups',
+        'enabled_feature_groups',
+        'product_tool_provider_group_plan',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/tool_adapter.rs',
+      contracts: [
+        'ToolRegistryItem',
+        'ContextualToolManifestItem',
+        'Tool::dynamic_tool_info',
+        'Tool::is_readonly',
+        'Tool::is_enabled',
+        'Tool::description_with_context',
+        'Tool::input_schema_for_model_with_context',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/catalog_provider.rs',
+      contracts: [
+        'ProductToolCatalogProvider',
+        'ToolCatalogSnapshotProvider',
+        'GetToolSpecCatalogProvider',
+        'get_global_tool_registry',
+        'get_agent_registry',
+        'ToolCatalogRuntime',
+        'product_tool_catalog_runtime',
+        'GetToolSpecRuntime',
+        'product_get_tool_spec_runtime',
+        'resolve_product_tool_manifest',
+        'resolve_product_readonly_enabled_tools',
+        'resolve_product_get_tool_spec_results',
+        'unlocked_collapsed_tools',
+        'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
+        'GetToolSpec requires agent type context',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/tools/manifest_resolver.rs',
-      contracts: ['resolve_tool_manifest', 'GET_TOOL_SPEC_TOOL_NAME', 'ToolExposure'],
+      contracts: [
+        'resolve_tool_manifest',
+        'GET_TOOL_SPEC_TOOL_NAME',
+        'resolve_product_visible_tools',
+        'resolve_product_tool_manifest',
+        'collapsed_tool_names',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/tools/implementations/get_tool_spec_tool.rs',
-      contracts: ['GetToolSpecTool', 'unlocked_collapsed_tools', 'already_loaded'],
+      contracts: [
+        'GetToolSpecTool',
+        'build_product_get_tool_spec_catalog_description',
+        'product_get_tool_spec_runtime',
+        'with_runtime',
+        'resolve_product_get_tool_spec_results',
+        'map_get_tool_spec_execution_error',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/tools/framework.rs',
-      contracts: ['ToolExposure', 'ToolUseContext', 'unlocked_collapsed_tools'],
+      contracts: [
+        'ToolExposure',
+        'ToolUseContext',
+        'to_tool_context_facts',
+        'tool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated',
+        'customData',
+        'cancellationToken',
+        'unlocked_collapsed_tools',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
@@ -2054,7 +3671,13 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/agentic/execution/execution_engine.rs',
-      contracts: ['collect_unlocked_collapsed_tools', 'collapsed_tool_names', 'GetToolSpec', 'citation_renumber'],
+      contracts: [
+        'collect_unlocked_collapsed_tools',
+        'collect_unlocked_collapsed_tools_dedupes_and_filters_runtime_unlocks',
+        'collapsed_tool_names',
+        'GetToolSpec',
+        'citation_renumber',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/agents/registry/availability.rs',
@@ -2063,6 +3686,51 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/src/agentic/agents/registry/types.rs',
       contracts: ['SubagentQueryContext', 'SubagentListScope', 'default_enabled', 'effective_enabled', 'SubagentStateReason'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/agents/definitions/modes/mod.rs',
+      contracts: ['mod multitask', 'MultitaskMode'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/agents/definitions/subagents/mod.rs',
+      contracts: ['mod general_purpose', 'GeneralPurposeAgent'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/agents/registry/builtin.rs',
+      contracts: ['builtin_agent_specs', 'Multitask', 'GeneralPurpose'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/implementations/task_tool.rs',
+      contracts: ['run_in_background', 'start_background_subagent', 'background_task_id', 'Background subagent'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+      contracts: [
+        'deliver_background_subagent_result',
+        'BackgroundSubagentResult',
+        'CurrentRunningTurn',
+        'AgentSession',
+      ],
+    },
+    {
+      path: 'src/apps/cli/src/ui/startup.rs',
+      contracts: [
+        'show_available_subagent_list',
+        'show_subagent_config_selector',
+        'get_subagents_for_query',
+        'SubagentQueryContext',
+        'update_subagent_override',
+      ],
+    },
+    {
+      path: 'src/apps/cli/src/ui/subagent_selector.rs',
+      contracts: [
+        'SubagentSelectorAction',
+        'show_list',
+        'show_config',
+        'default_enabled',
+        'render_subagent_line',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/agents/citation_renumber.rs',
@@ -2089,8 +3757,94 @@ function runManifestParserSelfTest() {
       contracts: ['openLocalDiff', 'snapshotAPI\\.getOperationDiff', 'Snapshot diff unavailable', 'localDiffContent'],
     },
     {
+      path: 'src/web-ui/src/main.tsx',
+      contracts: ['startupTrace', 'backgroundTaskScheduler', 'initializeAllTools', 'after_render_start'],
+    },
+    {
+      path: 'src/web-ui/src/shared/utils/startupTrace.ts',
+      contracts: [
+        'sanitizeTraceData',
+        'isRemoteTraceRequest',
+        'recordApiCall',
+        'flushSummary',
+        'markPhaseAfterAnimationFrames',
+      ],
+    },
+    {
+      path: 'src/web-ui/src/shared/utils/backgroundTaskScheduler.ts',
+      contracts: [
+        'BackgroundTaskScheduler',
+        'inFlightKey',
+        'AbortController',
+        'BackgroundTaskCancelledError',
+        'cancelIdle',
+      ],
+    },
+    {
+      path: 'src/web-ui/src/tools/initializeTools.ts',
+      contracts: ['initializeAllTools', 'initializeLsp', 'initializeGit', 'does not import every tool'],
+    },
+    {
+      path: 'src/web-ui/src/tools/editor/services/MonacoStartupWarmup.ts',
+      contracts: ['scheduleMonacoStartupWarmup', 'backgroundTaskScheduler', 'startup:monaco-warmup'],
+    },
+    {
+      path: 'src/web-ui/src/flow_chat/services/flow-chat-manager/SessionModule.ts',
+      contracts: ['historical_session_hydrate_request', 'Load history in the background', "historyState: 'ready'"],
+    },
+    {
       path: 'src/crates/core/src/miniapp/storage.rs',
       contracts: ['MiniAppStoragePort'],
+    },
+    {
+      path: 'src/crates/core/src/miniapp/builtin/mod.rs',
+      contracts: [
+        'builtin-pr-review',
+        'BUILTIN_APPS',
+        'builtin_content_hash',
+        'should_seed_builtin_app',
+        'resolve_builtin_seed_check',
+        'resolve_builtin_seed_action',
+        'builtin_source_files',
+        'BUILTIN_PLACEHOLDER_COMPILED_HTML',
+        'read_builtin_install_marker',
+        'parse_builtin_install_marker',
+        'write_builtin_install_marker',
+        'serialize_builtin_install_marker',
+        'recompile',
+        'load_customization_metadata',
+        'available_builtin_update',
+      ],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/builtin.rs',
+      contracts: [
+        'BuiltinMiniAppBundle',
+        'BuiltinInstallMarker',
+        'BUILTIN_INSTALL_MARKER',
+        'builtin_content_hash',
+        'should_seed_builtin_app',
+        'BuiltinSeedArtifacts',
+        'BuiltinSeedCheck',
+        'BuiltinSeedAction',
+        'resolve_builtin_seed_check',
+        'resolve_builtin_seed_action',
+        'serialize_builtin_install_marker',
+        'parse_builtin_install_marker',
+        'builtin_source_files',
+        'BUILTIN_PLACEHOLDER_COMPILED_HTML',
+        'build_builtin_package_json',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/miniapp/host_dispatch.rs',
+      contracts: [
+        'dispatch_host',
+        'dispatch_fs',
+        'dispatch_shell',
+        'command_basename_allowed',
+        'host_allowed_by_allowlist',
+      ],
     },
     {
       path: 'src/crates/core/src/miniapp/js_worker_pool.rs',
@@ -2098,7 +3852,13 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/function_agents/port_adapters.rs',
-      contracts: ['CoreFunctionAgentGitAdapter', 'FunctionAgentGitPort'],
+      contracts: [
+        'CoreFunctionAgentGitAdapter',
+        'FunctionAgentGitPort',
+        'CoreFunctionAgentAiAdapter',
+        'FunctionAgentAiPort',
+        'git_adapter_commit_snapshot_keeps_staged_diff_and_unstaged_count_separate',
+      ],
     },
     {
       path: 'src/crates/services-integrations/src/remote_ssh/paths.rs',
@@ -2112,8 +3872,47 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/product-domains/src/miniapp/ports.rs',
+      contracts: [
+        'MiniAppRuntimeFacade',
+        'mark_deps_installed_state',
+        'persist_sync_from_fs_result_for_app',
+      ],
+    },
+    {
       path: 'src/crates/product-domains/src/miniapp/storage.rs',
-      contracts: ['MiniAppStorageLayout', 'META_JSON', 'source_file_path', 'versions_dir'],
+      contracts: [
+        'MiniAppStorageLayout',
+        'META_JSON',
+        'source_file_path',
+        'versions_dir',
+        'DRAFT_JSON',
+        'draft_dir',
+        'customization_path',
+        'REQUIRED_SOURCE_FILES',
+        'PLACEHOLDER_COMPILED_HTML',
+        'MiniAppImportLayout',
+        'build_import_fallbacks',
+      ],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/lifecycle.rs',
+      contracts: [
+        'mark_deps_installed_state',
+        'clear_worker_restart_required_state',
+        'prepare_rollback_app',
+        'apply_recompile_result',
+        'apply_sync_from_fs_result',
+        'apply_import_runtime_state',
+      ],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/draft.rs',
+      contracts: ['MiniAppDraftManifest', 'MiniAppDraft', 'build_draft_manifest', 'build_draft_response'],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/runtime.rs',
+      contracts: ['runtime_lookup_order', 'candidate_executable_path', 'versioned_executable_candidate'],
     },
     {
       path: 'src/crates/product-domains/src/miniapp/host_routing.rs',
@@ -2127,17 +3926,102 @@ function runManifestParserSelfTest() {
       path: 'src/crates/product-domains/src/miniapp/customization.rs',
       contracts: [
         'MiniAppCustomizationMetadata',
+        'MiniAppDeclinedBuiltinUpdate',
         'MiniAppPermissionDiff',
         'diff_permissions',
+        'apply_draft_customization_metadata',
+        'mark_builtin_update_available_metadata',
+        'decline_builtin_update_metadata',
+        'is_current_declined_builtin_update',
       ],
     },
     {
+      path: 'src/crates/core/src/miniapp/manager.rs',
+      contracts: [
+        'apply_draft_customization_metadata',
+        'mark_builtin_update_available_metadata',
+        'decline_builtin_update_metadata',
+        'storage.load_customization_metadata',
+        'MiniAppRuntimeFacade',
+        'persist_sync_from_fs_result_for_app',
+        'compile_source',
+        'REQUIRED_SOURCE_FILES',
+        'MiniAppImportLayout',
+        'build_import_fallbacks',
+        'apply_import_runtime_state',
+        'runtime_preflight_preserves_recompile_sync_rollback_and_deps_state',
+        'import_from_path_preserves_fallback_files_recompile_and_runtime_state',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/function_agents/git-func-agent/ai_service.rs',
+      contracts: [
+        'prepare_commit_ai_prompt',
+        'parse_commit_ai_response',
+        'send_message',
+        'AgentError::internal_error',
+        'parse_commit_response_preserves_product_domain_response_policy',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/function_agents/startchat-func-agent/ai_service.rs',
+      contracts: [
+        'build_work_state_analysis_prompt',
+        'parse_work_state_analysis_response',
+        'send_message',
+        'AgentError::internal_error',
+        'parse_complete_analysis_preserves_product_domain_response_policy',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/function_agents/git-func-agent/commit_generator.rs',
+      contracts: [
+        'FunctionAgentRuntimeFacade',
+        'CoreFunctionAgentGitAdapter',
+        'CoreFunctionAgentAiAdapter',
+      ],
+    },
+    {
+      path: 'src/crates/product-domains/src/function_agents/ports.rs',
+      contracts: [
+        'FunctionAgentRuntimeFacade',
+        'generate_commit_message',
+        'analyze_work_state',
+        'git_work_state_from_snapshot',
+        'StartchatTimeSnapshot',
+        'startchat_time_snapshot',
+      ],
+    },
+    {
+      path: 'src/crates/product-domains/src/function_agents/common.rs',
+      contracts: ['extract_json_from_ai_response', 'try_repair_json'],
+    },
+    {
       path: 'src/crates/product-domains/src/function_agents/startchat_func_agent/utils.rs',
-      contracts: ['ParsedCompleteAnalysis', 'parse_complete_analysis_value'],
+      contracts: [
+        'WORK_STATE_ANALYSIS_PROMPT',
+        'build_work_state_analysis_prompt',
+        'ParsedCompleteAnalysis',
+        'parse_complete_analysis_value',
+        'parse_complete_analysis_json',
+        'parse_work_state_analysis_response',
+      ],
     },
     {
       path: 'src/crates/product-domains/src/function_agents/git_func_agent/utils.rs',
-      contracts: ['parse_commit_analysis_value'],
+      contracts: [
+        'COMMIT_MESSAGE_PROMPT',
+        'parse_commit_analysis_value',
+        'parse_commit_analysis_json',
+        'truncate_diff_for_commit_prompt',
+        'prepare_commit_prompt',
+        'prepare_commit_ai_prompt',
+        'parse_commit_ai_response',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/miniapp/runtime_detect.rs',
+      contracts: ['runtime_lookup_order', 'candidate_executable_path', 'versioned_executable_candidate', 'get_version'],
     },
   ];
   for (const { path, contracts } of requiredContentContracts) {

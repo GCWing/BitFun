@@ -28,4 +28,13 @@ describe('BtwSessionPanel layout styles', () => {
     expect(stylesheet).toContain('&__action-bar-wrapper > .deep-review-action-bar');
     expect(stylesheet).toContain('max-height: 100%;');
   });
+
+  it('keeps header-right aligned for child-session variants that hide origin metadata', () => {
+    const stylesheet = readBtwSessionPanelStylesheet();
+    const headerRight = extractBlock(stylesheet, '&__header-right');
+
+    expect(headerRight).toContain('display: flex;');
+    expect(headerRight).toContain('align-items: center;');
+    expect(headerRight).toContain('justify-content: flex-end;');
+  });
 });

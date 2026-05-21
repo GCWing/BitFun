@@ -4,27 +4,27 @@
 
 use crate::agentic::core::{
     strip_prompt_markup, CompressionState, Message, MessageContent, Session, SessionConfig,
-    SessionState, SessionSummary,
+    SessionKind, SessionState, SessionSummary,
 };
 use crate::infrastructure::PathManager;
 use crate::service::remote_ssh::workspace_state::{
     resolve_workspace_session_identity, LOCAL_WORKSPACE_SSH_HOST,
 };
 use crate::service::session::{
-    DialogTurnData, SessionMetadata, SessionStatus, SessionTranscriptExport,
+    DialogTurnData, SessionMetadata, SessionRelationship, SessionRelationshipKind, SessionStatus, SessionTranscriptExport,
     SessionTranscriptExportOptions, SessionTranscriptIndexEntry, StoredSessionIndexFile,
     StoredSessionMetadataFile, ToolItemData, TranscriptLineRange, SESSION_STORAGE_SCHEMA_VERSION,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{BitFunError, BitFunResult};
-use log::{info, warn};
+use log::{debug, info, warn};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::fs;
 use tokio::sync::Mutex;
 
@@ -35,6 +35,8 @@ const SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT: usize = 120;
 
 static JSON_FILE_WRITE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
 static SESSION_INDEX_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
+static SESSION_METADATA_UPDATE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
+    OnceLock::new();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct StoredDialogTurnFile {
@@ -48,6 +50,10 @@ struct StoredSessionStateFile {
     schema_version: u32,
     config: SessionConfig,
     snapshot_session_id: Option<String>,
+    // Derived runtime cache for reminder semantics. The source of truth lives
+    // on persisted dialog turns via `DialogTurnData.agent_type`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_user_dialog_agent_type: Option<String>,
     compression_state: CompressionState,
     runtime_state: SessionState,
 }
@@ -58,6 +64,83 @@ struct StoredTurnContextSnapshotFile {
     session_id: String,
     turn_index: usize,
     messages: Vec<Message>,
+}
+
+#[derive(Debug, Default)]
+struct ContextSnapshotPayloadStats {
+    tool_result_count: usize,
+    raw_result_string_chars: usize,
+    result_for_assistant_chars: usize,
+    largest_raw_result_chars: usize,
+    largest_raw_result_path: String,
+}
+
+fn collect_json_string_stats(
+    value: &serde_json::Value,
+    path: &str,
+    total: &mut usize,
+    largest: &mut (usize, String),
+) {
+    match value {
+        serde_json::Value::String(text) => {
+            let char_count = text.chars().count();
+            *total += char_count;
+            if char_count > largest.0 {
+                *largest = (char_count, path.to_string());
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                collect_json_string_stats(item, &format!("{}[{}]", path, index), total, largest);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (key, item) in map {
+                let next_path = if path.is_empty() {
+                    key.to_string()
+                } else {
+                    format!("{}.{}", path, key)
+                };
+                collect_json_string_stats(item, &next_path, total, largest);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn context_snapshot_payload_stats(messages: &[Message]) -> ContextSnapshotPayloadStats {
+    let mut stats = ContextSnapshotPayloadStats::default();
+    for (message_index, message) in messages.iter().enumerate() {
+        let MessageContent::ToolResult {
+            tool_name,
+            result,
+            result_for_assistant,
+            ..
+        } = &message.content
+        else {
+            continue;
+        };
+
+        stats.tool_result_count += 1;
+        if let Some(text) = result_for_assistant.as_deref() {
+            stats.result_for_assistant_chars += text.chars().count();
+        }
+
+        let mut raw_chars = 0usize;
+        let mut largest = (0usize, String::new());
+        collect_json_string_stats(
+            result,
+            &format!("message[{}].{}", message_index, tool_name),
+            &mut raw_chars,
+            &mut largest,
+        );
+        stats.raw_result_string_chars += raw_chars;
+        if largest.0 > stats.largest_raw_result_chars {
+            stats.largest_raw_result_chars = largest.0;
+            stats.largest_raw_result_path = largest.1;
+        }
+    }
+    stats
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,6 +240,98 @@ pub struct PersistenceManager {
 }
 
 impl PersistenceManager {
+    fn build_session_relationship(
+        session: &Session,
+        existing: Option<&SessionMetadata>,
+    ) -> Option<SessionRelationship> {
+        let existing_relationship = existing.and_then(|value| value.relationship.clone());
+        let existing_custom_metadata = existing.and_then(|value| value.custom_metadata.as_ref());
+
+        let kind = match session.kind {
+            SessionKind::Subagent => Some(SessionRelationshipKind::Subagent),
+            SessionKind::EphemeralChild => Some(SessionRelationshipKind::Btw),
+            SessionKind::Standard => existing_relationship
+                .as_ref()
+                .and_then(|value| value.kind.clone()),
+        };
+
+        let parent_session_id = existing_relationship
+            .as_ref()
+            .and_then(|value| value.parent_session_id.clone())
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("parentSessionId"))
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            });
+        let parent_request_id = existing_relationship
+            .as_ref()
+            .and_then(|value| value.parent_request_id.clone())
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("parentRequestId"))
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            });
+        let parent_dialog_turn_id = existing_relationship
+            .as_ref()
+            .and_then(|value| value.parent_dialog_turn_id.clone())
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("parentDialogTurnId"))
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            });
+        let parent_turn_index = existing_relationship
+            .as_ref()
+            .and_then(|value| value.parent_turn_index)
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("parentTurnIndex"))
+                    .and_then(|value| value.as_u64())
+                    .map(|value| value as usize)
+            });
+        let parent_tool_call_id = existing_relationship
+            .as_ref()
+            .and_then(|value| value.parent_tool_call_id.clone())
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("parentToolCallId"))
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            });
+        let subagent_type = existing_relationship
+            .as_ref()
+            .and_then(|value| value.subagent_type.clone())
+            .or_else(|| {
+                existing_custom_metadata
+                    .and_then(|value| value.get("subagentType"))
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            });
+
+        if kind.is_none()
+            && parent_session_id.is_none()
+            && parent_request_id.is_none()
+            && parent_dialog_turn_id.is_none()
+            && parent_turn_index.is_none()
+            && parent_tool_call_id.is_none()
+            && subagent_type.is_none()
+        {
+            return None;
+        }
+
+        Some(SessionRelationship {
+            kind,
+            parent_session_id,
+            parent_request_id,
+            parent_dialog_turn_id,
+            parent_turn_index,
+            parent_tool_call_id,
+            subagent_type,
+        })
+    }
+
     pub fn new(path_manager: Arc<PathManager>) -> BitFunResult<Self> {
         Ok(Self {
             runtime_service: Arc::new(WorkspaceRuntimeService::new(path_manager.clone())),
@@ -322,10 +497,22 @@ impl PersistenceManager {
         &self,
         path: &Path,
     ) -> BitFunResult<Option<T>> {
-        if !path.exists() {
-            return Ok(None);
-        }
+        let started_at = Instant::now();
+        let metadata_started_at = Instant::now();
+        let metadata = match fs::metadata(path).await {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+            Err(error) => {
+                return Err(BitFunError::io(format!(
+                    "Failed to read JSON metadata {}: {}",
+                    path.display(),
+                    error
+                )));
+            }
+        };
+        let metadata_duration = metadata_started_at.elapsed();
 
+        let read_started_at = Instant::now();
         let content = fs::read_to_string(path).await.map_err(|e| {
             BitFunError::io(format!(
                 "Failed to read JSON file {}: {}",
@@ -333,7 +520,9 @@ impl PersistenceManager {
                 e
             ))
         })?;
+        let read_duration = read_started_at.elapsed();
 
+        let parse_started_at = Instant::now();
         let value = serde_json::from_str::<T>(&content).map_err(|e| {
             BitFunError::Deserialization(format!(
                 "Failed to deserialize JSON file {}: {}",
@@ -341,6 +530,21 @@ impl PersistenceManager {
                 e
             ))
         })?;
+        let parse_duration = parse_started_at.elapsed();
+        let total_duration = started_at.elapsed();
+
+        if total_duration >= Duration::from_millis(80) || metadata.len() >= 1024 * 1024 {
+            debug!(
+                "Read JSON file: path={} type={} size_bytes={} metadata_duration_ms={} read_duration_ms={} parse_duration_ms={} total_duration_ms={}",
+                path.display(),
+                std::any::type_name::<T>(),
+                metadata.len(),
+                metadata_duration.as_millis(),
+                read_duration.as_millis(),
+                parse_duration.as_millis(),
+                total_duration.as_millis()
+            );
+        }
 
         Ok(Some(value))
     }
@@ -438,6 +642,20 @@ impl PersistenceManager {
         let mut registry_guard = registry.lock().await;
         registry_guard
             .entry(index_path)
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    }
+
+    async fn get_session_metadata_update_lock(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> Arc<Mutex<()>> {
+        let metadata_path = self.metadata_path(workspace_path, session_id);
+        let registry = SESSION_METADATA_UPDATE_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+        let mut registry_guard = registry.lock().await;
+        registry_guard
+            .entry(metadata_path)
             .or_insert_with(|| Arc::new(Mutex::new(())))
             .clone()
     }
@@ -656,6 +874,7 @@ impl PersistenceManager {
                 .or_else(|| existing.and_then(|value| value.snapshot_session_id.clone())),
             tags: existing.map(|value| value.tags.clone()).unwrap_or_default(),
             custom_metadata: existing.and_then(|value| value.custom_metadata.clone()),
+            relationship: Self::build_session_relationship(session, existing),
             todos: existing.and_then(|value| value.todos.clone()),
             deep_review_run_manifest: existing
                 .and_then(|value| value.deep_review_run_manifest.clone()),
@@ -1521,12 +1740,15 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
+        let started_at = Instant::now();
         let dir = self.snapshots_dir(workspace_path, session_id);
         if !dir.exists() {
             return Ok(None);
         }
 
+        let scan_started_at = Instant::now();
         let mut latest: Option<usize> = None;
+        let mut snapshot_file_count = 0usize;
         let mut rd = fs::read_dir(&dir)
             .await
             .map_err(|e| BitFunError::io(format!("Failed to read snapshots directory: {}", e)))?;
@@ -1547,20 +1769,44 @@ impl PersistenceManager {
                 continue;
             };
             if let Ok(index) = index_str.parse::<usize>() {
+                snapshot_file_count += 1;
                 latest = Some(latest.map(|value| value.max(index)).unwrap_or(index));
             }
         }
+        let scan_duration = scan_started_at.elapsed();
 
         let Some(turn_index) = latest else {
             return Ok(None);
         };
 
+        let load_started_at = Instant::now();
         let Some(messages) = self
             .load_turn_context_snapshot(workspace_path, session_id, turn_index)
             .await?
         else {
             return Ok(None);
         };
+        let load_duration = load_started_at.elapsed();
+        let total_duration = started_at.elapsed();
+
+        if total_duration >= Duration::from_millis(80) || snapshot_file_count >= 10 {
+            let payload_stats = context_snapshot_payload_stats(&messages);
+            debug!(
+                "Loaded latest context snapshot: session_id={} turn_index={} snapshot_file_count={} scan_duration_ms={} load_duration_ms={} total_duration_ms={} message_count={} tool_result_count={} raw_result_string_chars={} result_for_assistant_chars={} largest_raw_result_chars={} largest_raw_result_path={}",
+                session_id,
+                turn_index,
+                snapshot_file_count,
+                scan_duration.as_millis(),
+                load_duration.as_millis(),
+                total_duration.as_millis(),
+                messages.len(),
+                payload_stats.tool_result_count,
+                payload_stats.raw_result_string_chars,
+                payload_stats.result_for_assistant_chars,
+                payload_stats.largest_raw_result_chars,
+                payload_stats.largest_raw_result_path
+            );
+        }
 
         Ok(Some((turn_index, messages)))
     }
@@ -1626,6 +1872,7 @@ impl PersistenceManager {
             schema_version: SESSION_STORAGE_SCHEMA_VERSION,
             config: session.config.clone(),
             snapshot_session_id: session.snapshot_session_id.clone(),
+            last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),
             compression_state: session.compression_state.clone(),
             runtime_state: Self::sanitize_runtime_state(&session.state),
         };
@@ -1639,6 +1886,18 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Session> {
+        let (session, _) = self
+            .load_session_with_turns(workspace_path, session_id)
+            .await?;
+        Ok(session)
+    }
+
+    /// Load session and return the persisted turns read while rebuilding the session header.
+    pub async fn load_session_with_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
         let metadata = self
             .load_session_metadata(workspace_path, session_id)
             .await?
@@ -1678,23 +1937,29 @@ impl PersistenceManager {
         let created_at = Self::unix_ms_to_system_time(metadata.created_at);
         let last_activity_at = Self::unix_ms_to_system_time(metadata.last_active_at);
 
-        Ok(Session {
+        let dialog_turn_ids = turns.iter().map(|turn| turn.turn_id.clone()).collect();
+        let session = Session {
             session_id: metadata.session_id.clone(),
             session_name: metadata.session_name.clone(),
             agent_type: metadata.agent_type.clone(),
+            last_user_dialog_agent_type: stored_state
+                .as_ref()
+                .and_then(|value| value.last_user_dialog_agent_type.clone()),
             created_by: metadata.created_by.clone(),
             kind: metadata.session_kind,
             snapshot_session_id: stored_state
                 .and_then(|value| value.snapshot_session_id)
                 .or(metadata.snapshot_session_id.clone()),
-            dialog_turn_ids: turns.into_iter().map(|turn| turn.turn_id).collect(),
+            dialog_turn_ids,
             state: runtime_state,
             config,
             compression_state,
             created_at,
             updated_at: last_activity_at,
             last_activity_at,
-        })
+        };
+
+        Ok((session, turns))
     }
 
     /// Save session state
@@ -1715,6 +1980,7 @@ impl PersistenceManager {
                     ..Default::default()
                 },
                 snapshot_session_id: None,
+                last_user_dialog_agent_type: None,
                 compression_state: CompressionState::default(),
                 runtime_state: SessionState::Idle,
             });
@@ -1780,12 +2046,74 @@ impl PersistenceManager {
         1 + assistant_text_count
     }
 
+    fn refresh_metadata_from_turns(
+        metadata: &mut SessionMetadata,
+        workspace_path: &Path,
+        turns: &[DialogTurnData],
+        last_active_at: u64,
+    ) {
+        metadata.turn_count = turns.len();
+        metadata.message_count = turns.iter().map(Self::estimate_turn_message_count).sum();
+        metadata.tool_call_count = turns.iter().map(DialogTurnData::count_tool_calls).sum();
+        metadata.last_active_at = last_active_at;
+        if metadata.workspace_path.is_none() {
+            metadata.workspace_path = Some(workspace_path.to_string_lossy().to_string());
+        }
+    }
+
+    fn try_refresh_metadata_for_saved_turn(
+        metadata: &mut SessionMetadata,
+        workspace_path: &Path,
+        previous_turn: Option<&DialogTurnData>,
+        turn: &DialogTurnData,
+        last_active_at: u64,
+    ) -> bool {
+        let new_message_count = Self::estimate_turn_message_count(turn);
+        let new_tool_call_count = turn.count_tool_calls();
+
+        match previous_turn {
+            Some(previous)
+                if previous.session_id == turn.session_id
+                    && previous.turn_index == turn.turn_index
+                    && turn.turn_index < metadata.turn_count =>
+            {
+                metadata.message_count = metadata
+                    .message_count
+                    .saturating_sub(Self::estimate_turn_message_count(previous))
+                    .saturating_add(new_message_count);
+                metadata.tool_call_count = metadata
+                    .tool_call_count
+                    .saturating_sub(previous.count_tool_calls())
+                    .saturating_add(new_tool_call_count);
+            }
+            None if turn.turn_index == metadata.turn_count => {
+                metadata.turn_count += 1;
+                metadata.message_count = metadata.message_count.saturating_add(new_message_count);
+                metadata.tool_call_count =
+                    metadata.tool_call_count.saturating_add(new_tool_call_count);
+            }
+            _ => return false,
+        }
+
+        metadata.last_active_at = last_active_at;
+        if metadata.workspace_path.is_none() {
+            metadata.workspace_path = Some(workspace_path.to_string_lossy().to_string());
+        }
+
+        true
+    }
+
     pub async fn save_dialog_turn(
         &self,
         workspace_path: &Path,
         turn: &DialogTurnData,
     ) -> BitFunResult<()> {
+        let save_started_at = Instant::now();
         self.ensure_runtime_for_write(workspace_path).await?;
+        let metadata_update_lock = self
+            .get_session_metadata_update_lock(workspace_path, &turn.session_id)
+            .await;
+        let _metadata_update_guard = metadata_update_lock.lock().await;
         let mut metadata = self
             .load_session_metadata(workspace_path, &turn.session_id)
             .await?
@@ -1796,32 +2124,81 @@ impl PersistenceManager {
         self.ensure_turns_dir(workspace_path, &turn.session_id)
             .await?;
 
+        let previous_turn = match self
+            .load_dialog_turn(workspace_path, &turn.session_id, turn.turn_index)
+            .await
+        {
+            Ok(turn) => turn,
+            Err(error) => {
+                warn!(
+                    "Failed to load existing dialog turn before save; falling back to full metadata refresh: session_id={} turn_index={} error={}",
+                    turn.session_id,
+                    turn.turn_index,
+                    error
+                );
+                None
+            }
+        };
+        let previous_turn_load_failed = previous_turn.is_none()
+            && self
+                .turn_path(workspace_path, &turn.session_id, turn.turn_index)
+                .exists();
+
         let file = StoredDialogTurnFile {
             schema_version: SESSION_STORAGE_SCHEMA_VERSION,
             turn: turn.clone(),
         };
+        let write_started_at = Instant::now();
         self.write_json_atomic(
             &self.turn_path(workspace_path, &turn.session_id, turn.turn_index),
             &file,
         )
         .await?;
+        let write_duration = write_started_at.elapsed();
 
-        let turns = self
-            .load_session_turns(workspace_path, &turn.session_id)
-            .await?;
-        metadata.turn_count = turns.len();
-        metadata.message_count = turns.iter().map(Self::estimate_turn_message_count).sum();
-        metadata.tool_call_count = turns.iter().map(DialogTurnData::count_tool_calls).sum();
-        metadata.last_active_at = turn
+        let last_active_at = turn
             .end_time
             .unwrap_or_else(|| Self::system_time_to_unix_ms(SystemTime::now()));
-        metadata.workspace_path = metadata.workspace_path.clone().or_else(|| {
-            turns
-                .first()
-                .and(None::<String>)
-                .or_else(|| Some(workspace_path.to_string_lossy().to_string()))
-        });
-        self.save_session_metadata(workspace_path, &metadata).await
+        let mut metadata_refresh_mode = "incremental";
+        if previous_turn_load_failed
+            || !Self::try_refresh_metadata_for_saved_turn(
+                &mut metadata,
+                workspace_path,
+                previous_turn.as_ref(),
+                turn,
+                last_active_at,
+            )
+        {
+            metadata_refresh_mode = "full_scan";
+            let turns = self
+                .load_session_turns(workspace_path, &turn.session_id)
+                .await?;
+            Self::refresh_metadata_from_turns(
+                &mut metadata,
+                workspace_path,
+                &turns,
+                last_active_at,
+            );
+        }
+
+        let metadata_started_at = Instant::now();
+        self.save_session_metadata(workspace_path, &metadata)
+            .await?;
+        let metadata_duration = metadata_started_at.elapsed();
+        let total_duration = save_started_at.elapsed();
+        if total_duration >= Duration::from_millis(80) || metadata_refresh_mode == "full_scan" {
+            debug!(
+                "Saved dialog turn: session_id={} turn_index={} metadata_refresh={} write_duration_ms={} metadata_duration_ms={} total_duration_ms={}",
+                turn.session_id,
+                turn.turn_index,
+                metadata_refresh_mode,
+                write_duration.as_millis(),
+                metadata_duration.as_millis(),
+                total_duration.as_millis()
+            );
+        }
+
+        Ok(())
     }
 
     pub async fn load_dialog_turn(
@@ -1845,11 +2222,13 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Vec<DialogTurnData>> {
+        let started_at = Instant::now();
         let turns_dir = self.turns_dir(workspace_path, session_id);
         if !turns_dir.exists() {
             return Ok(Vec::new());
         }
 
+        let scan_started_at = Instant::now();
         let mut indexed_paths = Vec::new();
         let mut entries = fs::read_dir(&turns_dir)
             .await
@@ -1877,8 +2256,11 @@ impl PersistenceManager {
         }
 
         indexed_paths.sort_by_key(|(index, _)| *index);
+        let scan_duration = scan_started_at.elapsed();
 
+        let read_started_at = Instant::now();
         let mut turns = Vec::with_capacity(indexed_paths.len());
+        let turn_file_count = indexed_paths.len();
         for (_, path) in indexed_paths {
             if let Some(file) = self
                 .read_json_optional::<StoredDialogTurnFile>(&path)
@@ -1886,6 +2268,19 @@ impl PersistenceManager {
             {
                 turns.push(file.turn);
             }
+        }
+        let read_duration = read_started_at.elapsed();
+        let total_duration = started_at.elapsed();
+        if total_duration >= Duration::from_millis(80) || turn_file_count >= 50 {
+            debug!(
+                "Loaded session turns: session_id={} turn_count={} turn_file_count={} scan_duration_ms={} read_duration_ms={} total_duration_ms={}",
+                session_id,
+                turns.len(),
+                turn_file_count,
+                scan_duration.as_millis(),
+                read_duration.as_millis(),
+                total_duration.as_millis()
+            );
         }
 
         Ok(turns)
@@ -2252,11 +2647,12 @@ impl PersistenceManager {
 
 #[cfg(test)]
 mod tests {
-    use super::PersistenceManager;
-    use crate::agentic::core::SessionKind;
+    use super::{context_snapshot_payload_stats, PersistenceManager};
+    use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
     use crate::infrastructure::PathManager;
     use crate::service::session::{
-        DialogTurnData, SessionMetadata, SessionTranscriptExportOptions, UserMessageData,
+        DialogTurnData, ModelRoundData, SessionMetadata, SessionTranscriptExportOptions,
+        TextItemData, UserMessageData,
     };
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
@@ -2276,6 +2672,12 @@ mod tests {
 
         fn path(&self) -> &Path {
             &self.path
+        }
+
+        fn path_manager(&self) -> Arc<PathManager> {
+            Arc::new(PathManager::with_user_root_for_tests(
+                self.path.join("user-root"),
+            ))
         }
     }
 
@@ -2327,8 +2729,8 @@ mod tests {
     #[tokio::test]
     async fn export_session_transcript_handles_first_selected_turn_without_panicking() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
         let session_id = Uuid::new_v4().to_string();
 
         let metadata = SessionMetadata::new(
@@ -2375,10 +2777,287 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn subagent_session_kind_is_hidden_from_visible_session_index() {
+    async fn load_session_with_turns_returns_session_and_persisted_turns() {
         let workspace = TestWorkspace::new();
         let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
             .expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Load once".to_string(),
+            "agent".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+
+        let user_message = UserMessageData {
+            id: "user-1".to_string(),
+            content: "hello once".to_string(),
+            timestamp: 0,
+            metadata: None,
+        };
+        let mut turn =
+            DialogTurnData::new("turn-1".to_string(), 0, session_id.clone(), user_message);
+        turn.mark_completed();
+        manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+
+        let (loaded_session, loaded_turns) = manager
+            .load_session_with_turns(workspace.path(), &session_id)
+            .await
+            .expect("session and turns should load together");
+
+        assert_eq!(loaded_session.dialog_turn_ids, vec!["turn-1".to_string()]);
+        assert_eq!(loaded_turns.len(), 1);
+        assert_eq!(loaded_turns[0].turn_id, "turn-1");
+    }
+
+    fn user_message(content: &str) -> UserMessageData {
+        UserMessageData {
+            id: format!("user-{}", content),
+            content: content.to_string(),
+            timestamp: 0,
+            metadata: None,
+        }
+    }
+
+    fn text_item(id: &str, content: &str) -> TextItemData {
+        TextItemData {
+            id: id.to_string(),
+            content: content.to_string(),
+            is_streaming: false,
+            timestamp: 0,
+            is_markdown: true,
+            order_index: None,
+            is_subagent_item: None,
+            parent_task_tool_id: None,
+            subagent_session_id: None,
+            status: None,
+        }
+    }
+
+    fn round_with_text(turn_id: &str, text_items: Vec<TextItemData>) -> ModelRoundData {
+        ModelRoundData {
+            id: format!("round-{}", turn_id),
+            turn_id: turn_id.to_string(),
+            round_index: 0,
+            timestamp: 0,
+            text_items,
+            tool_items: Vec::new(),
+            thinking_items: Vec::new(),
+            start_time: 0,
+            end_time: Some(0),
+            duration_ms: Some(0),
+            provider_id: None,
+            model_id: None,
+            model_alias: None,
+            first_chunk_ms: None,
+            first_visible_output_ms: None,
+            stream_duration_ms: None,
+            attempt_count: None,
+            failure_category: None,
+            token_details: None,
+            status: "completed".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn save_dialog_turn_updates_metadata_without_scanning_unrelated_turn_files() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+            .expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Incremental metadata".to_string(),
+            "agent".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+
+        let mut turn_0 = DialogTurnData::new(
+            "turn-0".to_string(),
+            0,
+            session_id.clone(),
+            user_message("first"),
+        );
+        turn_0.model_rounds.push(round_with_text(
+            "turn-0",
+            vec![text_item("text-0", "first response")],
+        ));
+        turn_0.mark_completed();
+        manager
+            .save_dialog_turn(workspace.path(), &turn_0)
+            .await
+            .expect("first turn should save");
+
+        let mut turn_1 = DialogTurnData::new(
+            "turn-1".to_string(),
+            1,
+            session_id.clone(),
+            user_message("second"),
+        );
+        turn_1.model_rounds.push(round_with_text(
+            "turn-1",
+            vec![text_item("text-1", "second response")],
+        ));
+        turn_1.mark_completed();
+        manager
+            .save_dialog_turn(workspace.path(), &turn_1)
+            .await
+            .expect("second turn should save");
+
+        std::fs::write(
+            manager.turn_path(workspace.path(), &session_id, 0),
+            "{ not valid json",
+        )
+        .expect("old turn file should be replaceable for test");
+
+        turn_1.model_rounds[0]
+            .text_items
+            .push(text_item("text-2", "additional response"));
+        manager
+            .save_dialog_turn(workspace.path(), &turn_1)
+            .await
+            .expect("saving current turn should not scan unrelated old turn files");
+
+        let metadata = manager
+            .load_session_metadata(workspace.path(), &session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.turn_count, 2);
+        assert_eq!(metadata.message_count, 5);
+    }
+
+    #[tokio::test]
+    async fn concurrent_dialog_turn_saves_keep_metadata_counts_consistent() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+            .expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Concurrent metadata".to_string(),
+            "agent".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+
+        let mut turn_0 = DialogTurnData::new(
+            "turn-0".to_string(),
+            0,
+            session_id.clone(),
+            user_message("first"),
+        );
+        turn_0.model_rounds.push(round_with_text(
+            "turn-0",
+            vec![text_item("text-0", "first response")],
+        ));
+        turn_0.mark_completed();
+        manager
+            .save_dialog_turn(workspace.path(), &turn_0)
+            .await
+            .expect("first turn should save");
+
+        let mut turn_1 = DialogTurnData::new(
+            "turn-1".to_string(),
+            1,
+            session_id.clone(),
+            user_message("second"),
+        );
+        turn_1.model_rounds.push(round_with_text(
+            "turn-1",
+            vec![text_item("text-1", "second response")],
+        ));
+        turn_1.mark_completed();
+        manager
+            .save_dialog_turn(workspace.path(), &turn_1)
+            .await
+            .expect("second turn should save");
+
+        let mut updated_turn_0 = turn_0.clone();
+        updated_turn_0.model_rounds[0]
+            .text_items
+            .push(text_item("text-0b", "first follow-up"));
+
+        let mut updated_turn_1 = turn_1.clone();
+        updated_turn_1.model_rounds[0]
+            .text_items
+            .push(text_item("text-1b", "second follow-up"));
+        updated_turn_1.model_rounds[0]
+            .text_items
+            .push(text_item("text-1c", "second final"));
+
+        let (first_result, second_result) = tokio::join!(
+            manager.save_dialog_turn(workspace.path(), &updated_turn_0),
+            manager.save_dialog_turn(workspace.path(), &updated_turn_1)
+        );
+        first_result.expect("first concurrent save should succeed");
+        second_result.expect("second concurrent save should succeed");
+
+        let metadata = manager
+            .load_session_metadata(workspace.path(), &session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.turn_count, 2);
+        assert_eq!(metadata.message_count, 7);
+    }
+
+    #[test]
+    fn context_snapshot_payload_stats_counts_tool_result_payloads_without_contents() {
+        let messages = vec![
+            Message::assistant("hello".to_string()),
+            Message::tool_result(ToolResult {
+                tool_id: "tool-1".to_string(),
+                tool_name: "Bash".to_string(),
+                result: serde_json::json!({ "output": "x".repeat(40) }),
+                result_for_assistant: Some("assistant summary".to_string()),
+                is_error: false,
+                duration_ms: Some(1),
+                image_attachments: None,
+            }),
+        ];
+
+        let stats = context_snapshot_payload_stats(&messages);
+
+        assert_eq!(stats.tool_result_count, 1);
+        assert_eq!(stats.raw_result_string_chars, 40);
+        assert_eq!(stats.result_for_assistant_chars, 17);
+        assert_eq!(stats.largest_raw_result_chars, 40);
+        assert_eq!(stats.largest_raw_result_path, "message[1].Bash.output");
+        assert!(!stats.largest_raw_result_path.contains(&"x".repeat(40)));
+    }
+
+    #[tokio::test]
+    async fn subagent_session_kind_is_hidden_from_visible_session_index() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
 
         let mut metadata = SessionMetadata::new(
             Uuid::new_v4().to_string(),
@@ -2410,8 +3089,8 @@ mod tests {
     #[tokio::test]
     async fn legacy_leaked_subagent_is_hidden_from_visible_session_index() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
 
         let mut metadata = SessionMetadata::new(
             Uuid::new_v4().to_string(),
@@ -2443,8 +3122,8 @@ mod tests {
     #[tokio::test]
     async fn listing_sessions_does_not_create_sessions_dir_for_uninitialized_runtime() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
 
         let visible = manager
             .list_session_metadata(workspace.path())
@@ -2466,8 +3145,8 @@ mod tests {
     #[tokio::test]
     async fn saving_session_metadata_ensures_runtime_layout_before_writing() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
 
         let metadata = SessionMetadata::new(
             Uuid::new_v4().to_string(),

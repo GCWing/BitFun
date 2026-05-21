@@ -111,7 +111,7 @@ pub(crate) async fn send_stream(
 
     let (instructions, response_input) =
         OpenAIMessageConverter::convert_messages_to_responses_input(messages);
-    let openai_tools = OpenAIMessageConverter::convert_tools(tools);
+    let openai_tools = common::convert_tools_flat(tools);
     let request_body = build_request_body(
         client,
         instructions,
@@ -132,4 +132,65 @@ pub(crate) async fn send_stream(
         },
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_request_body;
+    use crate::types::{ReasoningMode, ToolDefinition};
+    use crate::{client::AIClient, types::AIConfig};
+    use serde_json::json;
+
+    fn test_client() -> AIClient {
+        AIClient::new(AIConfig {
+            name: "test".to_string(),
+            base_url: "https://api.openai.com/v1".to_string(),
+            request_url: "https://api.openai.com/v1/responses".to_string(),
+            api_key: "test-key".to_string(),
+            model: "gpt-5.4".to_string(),
+            format: "responses".to_string(),
+            context_window: 128_000,
+            max_tokens: None,
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Default,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        })
+    }
+
+    #[test]
+    fn attaches_flat_tool_schema_for_responses_api() {
+        let client = test_client();
+        let request_body = build_request_body(
+            &client,
+            None,
+            vec![json!({
+                "type": "message",
+                "role": "user",
+                "content": [{ "type": "input_text", "text": "hello" }]
+            })],
+            crate::providers::openai::common::convert_tools_flat(Some(vec![ToolDefinition {
+                name: "get_weather".to_string(),
+                description: "Get weather".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "city": { "type": "string" }
+                    }
+                }),
+            }])),
+            None,
+        );
+
+        assert_eq!(request_body["tools"][0]["name"], json!("get_weather"));
+        assert_eq!(request_body["tools"][0]["type"], json!("function"));
+        assert!(request_body["tools"][0].get("function").is_none());
+    }
 }

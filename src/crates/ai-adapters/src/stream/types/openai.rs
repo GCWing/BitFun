@@ -15,18 +15,34 @@ struct OpenAIUsage {
     #[serde(default)]
     total_tokens: u32,
     prompt_tokens_details: Option<PromptTokensDetails>,
+    /// DeepSeek extension. Subset of `prompt_tokens`. Absent on non-DeepSeek
+    /// providers. Prefer this over `prompt_tokens_details.cached_tokens` when
+    /// both are present — DeepSeek-native is the authoritative source.
+    #[serde(default)]
+    prompt_cache_hit_tokens: Option<u32>,
+    /// DeepSeek extension. Equals `prompt_tokens - prompt_cache_hit_tokens`.
+    /// Deserialized so a future strict serde lint doesn't reject the payload;
+    /// not propagated (the miss count is derivable from the other two).
+    #[serde(default)]
+    #[allow(dead_code)]
+    prompt_cache_miss_tokens: Option<u32>,
 }
 
 impl From<OpenAIUsage> for UnifiedTokenUsage {
     fn from(usage: OpenAIUsage) -> Self {
+        let standard_cached = usage
+            .prompt_tokens_details
+            .and_then(|details| details.cached_tokens);
+        // DeepSeek extension wins when both present.
+        let cache_read = usage.prompt_cache_hit_tokens.or(standard_cached);
+
         Self {
             prompt_token_count: usage.prompt_tokens,
             candidates_token_count: usage.completion_tokens,
             total_token_count: usage.total_tokens,
             reasoning_token_count: None,
-            cached_content_token_count: usage
-                .prompt_tokens_details
-                .and_then(|prompt_tokens_details| prompt_tokens_details.cached_tokens),
+            cached_content_token_count: cache_read,
+            cache_creation_token_count: None,
         }
     }
 }
@@ -35,6 +51,13 @@ impl From<OpenAIUsage> for UnifiedTokenUsage {
 struct Choice {
     #[allow(dead_code)]
     index: usize,
+    /// MiniMax's last SSE frame switches to non-streaming `chat.completion`
+    /// shape and puts the content under `message` instead of `delta`. We don't
+    /// need that frame's content (earlier chunks already streamed it), but the
+    /// frame also carries the only authoritative `usage` block. Default the
+    /// field so such frames deserialize cleanly and the top-level usage flows
+    /// through.
+    #[serde(default)]
     delta: Delta,
     finish_reason: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_stringish")]
@@ -50,7 +73,7 @@ struct ReasoningDetail {
     text: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct Delta {
     #[allow(dead_code)]
     role: Option<String>,
@@ -439,6 +462,57 @@ mod tests {
     }
 
     #[test]
+    fn parses_minimax_final_chunk_with_message_field_instead_of_delta() {
+        // MiniMax's last SSE frame uses non-streaming `chat.completion` shape:
+        // choice has `message` instead of `delta`, and the real usage lives at
+        // the top level. Pre-fix this chunk failed to deserialize (`delta` was
+        // a required field), so the real prompt/completion tokens were silently
+        // dropped. After the fix, the chunk parses cleanly and usage flows
+        // through.
+        let raw = r#"{
+            "id": "065b58b7a16cf30f1e20c8f1942efeae",
+            "created": 1779180983,
+            "model": "MiniMax-M2.7-highspeed",
+            "object": "chat.completion",
+            "choices": [{
+                "finish_reason": "stop",
+                "index": 0,
+                "message": {
+                    "content": "hi",
+                    "role": "assistant",
+                    "name": "MiniMax AI",
+                    "reasoning_content": "The user wants hi."
+                }
+            }],
+            "usage": {
+                "total_tokens": 92,
+                "prompt_tokens": 45,
+                "completion_tokens": 47,
+                "completion_tokens_details": {"reasoning_tokens": 45}
+            }
+        }"#;
+
+        let sse_data: OpenAISSEData = serde_json::from_str(raw)
+            .expect("MiniMax final chunk must deserialize even without delta");
+        let responses = sse_data.into_unified_responses();
+
+        // Critical: the usage from this chunk must propagate.
+        let usage = responses
+            .iter()
+            .find_map(|r| r.usage.as_ref())
+            .expect("usage from MiniMax final chunk must be preserved");
+        assert_eq!(usage.prompt_token_count, 45);
+        assert_eq!(usage.candidates_token_count, 47);
+        assert_eq!(usage.total_token_count, 92);
+
+        // finish_reason should also be preserved (lives at choice top level).
+        assert!(
+            responses.iter().any(|r| r.finish_reason.as_deref() == Some("stop")),
+            "finish_reason from MiniMax final chunk must be preserved"
+        );
+    }
+
+    #[test]
     fn handles_empty_choices_without_usage_chunk() {
         let raw = r#"{
             "id": "chatcmpl_test",
@@ -691,5 +765,86 @@ mod tests {
 
         assert_eq!(responses.len(), 1);
         assert!(responses[0].tool_call.is_some());
+    }
+
+    #[test]
+    fn standard_openai_cached_tokens_maps_through() {
+        let raw = r#"{
+            "id": "chatcmpl_test",
+            "created": 1,
+            "model": "gpt-test",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+                "prompt_tokens_details": { "cached_tokens": 40 }
+            }
+        }"#;
+        let data: OpenAISSEData = serde_json::from_str(raw).expect("valid openai sse data");
+        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        assert_eq!(usage.cached_content_token_count, Some(40));
+        assert_eq!(usage.cache_creation_token_count, None);
+    }
+
+    #[test]
+    fn deepseek_prompt_cache_hit_tokens_is_captured() {
+        // Pre-fix this field was silently dropped (strict serde, unknown key).
+        let raw = r#"{
+            "id": "chatcmpl_test",
+            "created": 1,
+            "model": "deepseek-chat",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+                "prompt_cache_hit_tokens": 64,
+                "prompt_cache_miss_tokens": 36
+            }
+        }"#;
+        let data: OpenAISSEData = serde_json::from_str(raw).expect("valid deepseek sse data");
+        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        assert_eq!(usage.cached_content_token_count, Some(64));
+    }
+
+    #[test]
+    fn deepseek_extension_preferred_over_standard_cached_tokens_if_both() {
+        // Defensive: if a proxy forwards both, prefer the DeepSeek-native field.
+        let raw = r#"{
+            "id": "chatcmpl_test",
+            "created": 1,
+            "model": "deepseek-chat",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+                "prompt_cache_hit_tokens": 64,
+                "prompt_tokens_details": { "cached_tokens": 0 }
+            }
+        }"#;
+        let data: OpenAISSEData = serde_json::from_str(raw).expect("valid proxy payload");
+        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        assert_eq!(usage.cached_content_token_count, Some(64));
+    }
+
+    #[test]
+    fn openai_no_cache_fields_stays_none() {
+        let raw = r#"{
+            "id": "chatcmpl_test",
+            "created": 1,
+            "model": "gpt-test",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120
+            }
+        }"#;
+        let data: OpenAISSEData = serde_json::from_str(raw).expect("valid openai sse data");
+        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        assert_eq!(usage.cached_content_token_count, None);
+        assert_eq!(usage.cache_creation_token_count, None);
     }
 }

@@ -6,8 +6,9 @@ use bitfun_core_types::ToolImageAttachment;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::fmt;
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -31,6 +32,513 @@ pub struct DynamicToolInfo {
     pub mcp: Option<DynamicMcpToolInfo>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolWorkspaceKind {
+    Local,
+    Remote,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolContextFacts {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dialog_turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_kind: Option<ToolWorkspaceKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_root: Option<String>,
+    #[serde(default)]
+    pub runtime_tool_restrictions: ToolRuntimeRestrictions,
+}
+
+pub trait PortableToolContextProvider: Send + Sync {
+    fn tool_context_facts(&self) -> ToolContextFacts;
+}
+
+pub const GET_TOOL_SPEC_TOOL_NAME: &str = "GetToolSpec";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ToolExposure {
+    Expanded,
+    Collapsed,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ToolManifestDefinition {
+    pub name: String,
+    pub description: String,
+    pub parameters: Value,
+}
+
+impl ToolManifestDefinition {
+    pub fn new(name: impl Into<String>, description: impl Into<String>, parameters: Value) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            parameters,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PromptVisibleToolManifestItem {
+    Expanded(ToolManifestDefinition),
+    Collapsed {
+        name: String,
+        short_description: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolManifestPolicyTool {
+    pub name: String,
+    pub default_exposure: ToolExposure,
+    pub available: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolManifestPolicyResolution {
+    pub allowed_tool_names: Vec<String>,
+    pub expanded_tool_names: Vec<String>,
+    pub collapsed_tool_names: Vec<String>,
+}
+
+#[derive(Clone)]
+pub struct ContextualVisibleTools<Tool: ?Sized> {
+    pub allowed_tool_names: Vec<String>,
+    pub expanded_tools: Vec<ToolRef<Tool>>,
+    pub collapsed_tool_names: Vec<String>,
+    pub collapsed_tools: Vec<ToolRef<Tool>>,
+}
+
+#[derive(Clone)]
+pub struct ContextualToolManifest<Tool: ?Sized> {
+    pub allowed_tool_names: Vec<String>,
+    pub expanded_tools: Vec<ToolRef<Tool>>,
+    pub collapsed_tool_names: Vec<String>,
+    pub collapsed_tools: Vec<ToolRef<Tool>>,
+    pub tool_definitions: Vec<ToolManifestDefinition>,
+}
+
+pub fn resolve_tool_manifest_policy(
+    tool_snapshot: &[ToolManifestPolicyTool],
+    allowed_tools: &[String],
+    exposure_overrides: &IndexMap<String, ToolExposure>,
+    get_tool_spec_tool_name: &str,
+) -> ToolManifestPolicyResolution {
+    let allowed_set = allowed_tools
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::HashSet<_>>();
+    let mut allowed_tool_names = allowed_tools.to_vec();
+    let mut expanded_tool_names = Vec::new();
+    let mut collapsed_tool_names = Vec::new();
+
+    for tool in tool_snapshot {
+        if !tool.available || !allowed_set.contains(tool.name.as_str()) {
+            continue;
+        }
+
+        let exposure = exposure_overrides
+            .get(&tool.name)
+            .copied()
+            .unwrap_or(tool.default_exposure);
+        match exposure {
+            ToolExposure::Expanded => expanded_tool_names.push(tool.name.clone()),
+            ToolExposure::Collapsed => collapsed_tool_names.push(tool.name.clone()),
+        }
+    }
+
+    if !collapsed_tool_names.is_empty() {
+        if !allowed_tool_names
+            .iter()
+            .any(|name| name == get_tool_spec_tool_name)
+        {
+            allowed_tool_names.push(get_tool_spec_tool_name.to_string());
+        }
+        if tool_snapshot
+            .iter()
+            .any(|tool| tool.name == get_tool_spec_tool_name)
+        {
+            expanded_tool_names.push(get_tool_spec_tool_name.to_string());
+        }
+    }
+
+    ToolManifestPolicyResolution {
+        allowed_tool_names,
+        expanded_tool_names,
+        collapsed_tool_names,
+    }
+}
+
+pub fn build_tool_manifest_policy_tools<Tool: ToolRegistryItem + ?Sized>(
+    tool_snapshot: &[ToolRef<Tool>],
+    available_tool_names: &HashSet<String>,
+) -> Vec<ToolManifestPolicyTool> {
+    tool_snapshot
+        .iter()
+        .map(|tool| {
+            let name = tool.name().to_string();
+            ToolManifestPolicyTool {
+                available: available_tool_names.contains(&name),
+                default_exposure: tool.default_exposure(),
+                name,
+            }
+        })
+        .collect()
+}
+
+fn tools_by_name<Tool: ToolRegistryItem + ?Sized>(
+    tool_snapshot: &[ToolRef<Tool>],
+    tool_names: &[String],
+) -> Vec<ToolRef<Tool>> {
+    tool_names
+        .iter()
+        .filter_map(|name| {
+            tool_snapshot
+                .iter()
+                .find(|tool| tool.name() == name)
+                .cloned()
+        })
+        .collect()
+}
+
+pub fn build_collapsed_tool_stub_definition(
+    tool_name: &str,
+    short_description: &str,
+) -> ToolManifestDefinition {
+    ToolManifestDefinition::new(
+        tool_name,
+        format!(
+            "{} [This tool is collapsed. Do not call `{}` directly yet. First call `GetToolSpec` with {{\"tool_name\":\"{}\"}} to load its full description and input schema, then retry `{}` using the returned schema.]",
+            short_description, tool_name, tool_name, tool_name
+        ),
+        serde_json::json!({
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "tool_name": {
+                    "type": "string",
+                    "description": format!(
+                        "Do not supply {} arguments here while the tool is collapsed. Use GetToolSpec with {{\"tool_name\":\"{}\"}} first.",
+                        tool_name,
+                        tool_name
+                    )
+                }
+            }
+        }),
+    )
+}
+
+pub fn build_get_tool_spec_collapsed_tool_entry(
+    tool_name: &str,
+    short_description: &str,
+) -> String {
+    format!("- {}: {}", tool_name, short_description)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GetToolSpecCollapsedToolSummary {
+    pub name: String,
+    pub short_description: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GetToolSpecDetail {
+    pub tool_name: String,
+    pub description: String,
+    pub input_schema: Value,
+}
+
+impl GetToolSpecDetail {
+    pub fn to_value(&self) -> Value {
+        serde_json::json!({
+            "tool_name": self.tool_name.clone(),
+            "description": self.description.clone(),
+            "input_schema": self.input_schema.clone(),
+        })
+    }
+}
+
+pub fn build_get_tool_spec_catalog_description(
+    collapsed_tools: &[GetToolSpecCollapsedToolSummary],
+) -> String {
+    let collapsed_tools_list = if collapsed_tools.is_empty() {
+        "No additional tools are available.".to_string()
+    } else {
+        collapsed_tools
+            .iter()
+            .map(|tool| {
+                build_get_tool_spec_collapsed_tool_entry(&tool.name, &tool.short_description)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    build_get_tool_spec_description(&collapsed_tools_list)
+}
+
+pub fn build_get_tool_spec_description(collapsed_tools_list: &str) -> String {
+    format!(
+        r#"Read usage instructions for additional tools.
+
+You have access to the additional tools listed below. These tools are collapsed:
+their names may appear in the tool list, but you must not call them directly
+until you have loaded their definition with GetToolSpec.
+
+<collapsed_tools>
+{}
+</collapsed_tools>
+
+Before using one of these tools, first call GetToolSpec with its exact tool name
+to read its full description and input schema. If a direct call to a collapsed
+tool fails with a message like "Tool 'Git' is collapsed", make the next tool
+call `GetToolSpec` with `{{"tool_name":"Git"}}`, then retry the real tool after
+reading the returned schema.
+
+After reading the returned definition, call the real tool directly using its own name.
+
+Do not call GetToolSpec again for a tool whose definition is already loaded in the current conversation.
+
+Example:
+- Suppose the catalog includes a tool named `GetWeather` and you need to use it.
+- First call `GetToolSpec` with `{{"tool_name":"GetWeather"}}`
+- Then read the returned schema and call `GetWeather` itself with the appropriate arguments
+"#,
+        collapsed_tools_list
+    )
+}
+
+pub fn get_tool_spec_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tool_name"],
+        "properties": {
+            "tool_name": {
+                "type": "string",
+                "description": "Exact collapsed tool name to load, using the tool's canonical casing from the catalog (for example, \"Git\"). Do not pass a command such as \"git status\" or an operation such as \"status\" here."
+            }
+        }
+    })
+}
+
+pub fn get_tool_spec_short_description() -> String {
+    "Discover collapsed tools and read their detailed definitions.".to_string()
+}
+
+pub fn get_tool_spec_is_readonly() -> bool {
+    true
+}
+
+pub fn get_tool_spec_is_concurrency_safe(_input: Option<&Value>) -> bool {
+    true
+}
+
+pub fn get_tool_spec_needs_permissions(_input: Option<&Value>) -> bool {
+    false
+}
+
+pub fn render_get_tool_spec_tool_use_message(input: &Value) -> String {
+    let tool_name = input
+        .get("tool_name")
+        .and_then(|value| value.as_str())
+        .unwrap_or("?");
+    format!("Reading tool spec for '{}'.", tool_name)
+}
+
+pub fn validate_get_tool_spec_input(input: &Value) -> ValidationResult {
+    let Some(tool_name) = input.get("tool_name").and_then(|value| value.as_str()) else {
+        return ValidationResult {
+            result: false,
+            message: Some("tool_name is required and cannot be empty".to_string()),
+            error_code: Some(400),
+            meta: None,
+        };
+    };
+
+    if tool_name.is_empty() {
+        return ValidationResult {
+            result: false,
+            message: Some("tool_name is required and cannot be empty".to_string()),
+            error_code: Some(400),
+            meta: None,
+        };
+    }
+
+    ValidationResult::default()
+}
+
+pub fn build_get_tool_spec_duplicate_load_hint(tool_name: &str) -> String {
+    format!(
+        "Tool '{}' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use '{}' directly.",
+        tool_name, tool_name
+    )
+}
+
+pub fn build_get_tool_spec_duplicate_load_result(tool_name: &str) -> ToolResult {
+    ToolResult::Result {
+        data: serde_json::json!({
+            "tool_name": tool_name,
+            "already_loaded": true
+        }),
+        result_for_assistant: Some(build_get_tool_spec_duplicate_load_hint(tool_name)),
+        image_attachments: None,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GetToolSpecExecutionError {
+    MissingToolName,
+    Detail(String),
+}
+
+impl fmt::Display for GetToolSpecExecutionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GetToolSpecExecutionError::MissingToolName => write!(f, "tool_name is required"),
+            GetToolSpecExecutionError::Detail(message) => write!(f, "{message}"),
+        }
+    }
+}
+
+impl std::error::Error for GetToolSpecExecutionError {}
+
+#[derive(Debug, Clone)]
+pub enum GetToolSpecExecutionPlan<'a> {
+    DuplicateLoad(ToolResult),
+    LoadDetail { tool_name: &'a str },
+}
+
+pub fn resolve_get_tool_spec_execution_plan<'a>(
+    input: &'a Value,
+    loaded_collapsed_tools: &[String],
+) -> Result<GetToolSpecExecutionPlan<'a>, GetToolSpecExecutionError> {
+    let tool_name = input
+        .get("tool_name")
+        .and_then(|value| value.as_str())
+        .ok_or(GetToolSpecExecutionError::MissingToolName)?;
+
+    if loaded_collapsed_tools
+        .iter()
+        .any(|loaded| loaded == tool_name)
+    {
+        return Ok(GetToolSpecExecutionPlan::DuplicateLoad(
+            build_get_tool_spec_duplicate_load_result(tool_name),
+        ));
+    }
+
+    Ok(GetToolSpecExecutionPlan::LoadDetail { tool_name })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GetToolSpecLoadObservation<'a> {
+    pub tool_name: &'a str,
+    pub loaded_tool_name: Option<&'a str>,
+    pub is_error: bool,
+}
+
+pub fn collect_loaded_collapsed_tool_names(
+    observations: &[GetToolSpecLoadObservation<'_>],
+    collapsed_tool_names: &[String],
+    get_tool_spec_tool_name: &str,
+) -> Vec<String> {
+    let collapsed_set: HashSet<&str> = collapsed_tool_names.iter().map(String::as_str).collect();
+    let mut loaded = BTreeSet::new();
+
+    for observation in observations {
+        if observation.is_error || observation.tool_name != get_tool_spec_tool_name {
+            continue;
+        }
+
+        let Some(tool_name) = observation.loaded_tool_name else {
+            continue;
+        };
+
+        if collapsed_set.contains(tool_name) {
+            loaded.insert(tool_name.to_string());
+        }
+    }
+
+    loaded.into_iter().collect()
+}
+
+pub fn build_get_tool_spec_assistant_detail(description: &str, input_schema: &Value) -> String {
+    format!(
+        "<description>\n{}\n</description>\n<input_schema>\n{}\n</input_schema>",
+        escape_get_tool_spec_xml_text(description),
+        escape_get_tool_spec_xml_text(&input_schema.to_string())
+    )
+}
+
+pub fn build_get_tool_spec_detail_result(detail: &GetToolSpecDetail) -> ToolResult {
+    ToolResult::Result {
+        data: detail.to_value(),
+        result_for_assistant: Some(build_get_tool_spec_assistant_detail(
+            &detail.description,
+            &detail.input_schema,
+        )),
+        image_attachments: None,
+    }
+}
+
+fn escape_get_tool_spec_xml_text(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+pub fn tool_manifest_sort_rank(tool_name: &str) -> usize {
+    match tool_name {
+        "Task" => 1,
+        "Bash" => 2,
+        "TerminalControl" => 3,
+        "Glob" => 4,
+        "Grep" => 5,
+        "Read" => 6,
+        "Edit" => 7,
+        "Write" => 8,
+        "Delete" => 9,
+        "WebFetch" => 10,
+        "WebSearch" => 11,
+        "TodoWrite" => 12,
+        "Skill" => 13,
+        "Log" => 14,
+        GET_TOOL_SPEC_TOOL_NAME => 15,
+        "ControlHub" => 16,
+        _ => 100,
+    }
+}
+
+pub fn sort_tool_manifest_definitions(tool_definitions: &mut [ToolManifestDefinition]) {
+    tool_definitions.sort_by_key(|tool| tool_manifest_sort_rank(&tool.name));
+}
+
+pub fn build_prompt_visible_tool_manifest_definitions(
+    items: &[PromptVisibleToolManifestItem],
+) -> Vec<ToolManifestDefinition> {
+    let mut definitions = items
+        .iter()
+        .map(|item| match item {
+            PromptVisibleToolManifestItem::Expanded(definition) => definition.clone(),
+            PromptVisibleToolManifestItem::Collapsed {
+                name,
+                short_description,
+            } => build_collapsed_tool_stub_definition(name, short_description),
+        })
+        .collect::<Vec<_>>();
+    sort_tool_manifest_definitions(&mut definitions);
+    definitions
+}
+
 #[async_trait]
 pub trait ToolRegistryItem: Send + Sync {
     fn name(&self) -> &str;
@@ -38,6 +546,22 @@ pub trait ToolRegistryItem: Send + Sync {
     async fn description(&self) -> Result<String, String>;
 
     fn input_schema(&self) -> Value;
+
+    fn short_description(&self) -> String {
+        self.name().to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Expanded
+    }
+
+    fn is_readonly(&self) -> bool {
+        false
+    }
+
+    async fn is_enabled(&self) -> bool {
+        true
+    }
 
     async fn input_schema_for_model(&self) -> Value {
         self.input_schema()
@@ -57,6 +581,463 @@ pub trait ToolRegistryItem: Send + Sync {
     }
 }
 
+#[async_trait]
+pub trait ContextualToolManifestItem<Context>: ToolRegistryItem
+where
+    Context: Sync,
+{
+    async fn is_available_in_context(&self, _context: &Context) -> bool {
+        true
+    }
+
+    async fn description_with_context(&self, _context: &Context) -> Result<String, String> {
+        self.description().await
+    }
+
+    async fn input_schema_for_model_with_context(&self, _context: &Context) -> Value {
+        self.input_schema_for_model().await
+    }
+}
+
+#[async_trait]
+pub trait ToolCatalogSnapshotProvider<Tool: ?Sized>: Send + Sync {
+    async fn tool_snapshot(&self) -> Vec<ToolRef<Tool>>;
+}
+
+#[async_trait]
+pub trait GetToolSpecCatalogProvider<Tool: ?Sized, Context>: Send + Sync
+where
+    Context: Sync,
+{
+    async fn collapsed_tools_for_get_tool_spec(
+        &self,
+        context: Option<&Context>,
+    ) -> Result<Vec<ToolRef<Tool>>, String>;
+}
+
+pub fn summarize_get_tool_spec_collapsed_tools<Tool: ToolRegistryItem + ?Sized>(
+    collapsed_tools: &[ToolRef<Tool>],
+) -> Vec<GetToolSpecCollapsedToolSummary> {
+    collapsed_tools
+        .iter()
+        .map(|tool| GetToolSpecCollapsedToolSummary {
+            name: tool.name().to_string(),
+            short_description: tool.short_description(),
+        })
+        .collect()
+}
+
+pub async fn resolve_readonly_enabled_tools<Tool: ToolRegistryItem + ?Sized>(
+    tool_snapshot: &[ToolRef<Tool>],
+) -> Vec<ToolRef<Tool>> {
+    let mut readonly_tools = Vec::new();
+
+    for tool in tool_snapshot {
+        if tool.is_readonly() && tool.is_enabled().await {
+            readonly_tools.push(tool.clone());
+        }
+    }
+
+    readonly_tools
+}
+
+pub struct ToolCatalogRuntime<'a, Tool: ?Sized, Context, Provider: ?Sized> {
+    provider: &'a Provider,
+    get_tool_spec_tool_name: &'a str,
+    _marker: PhantomData<fn(&Tool, &Context)>,
+}
+
+impl<'a, Tool: ?Sized, Context, Provider: ?Sized> ToolCatalogRuntime<'a, Tool, Context, Provider> {
+    pub fn new(provider: &'a Provider, get_tool_spec_tool_name: &'a str) -> Self {
+        Self {
+            provider,
+            get_tool_spec_tool_name,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, Tool, Context, Provider> ToolCatalogRuntime<'a, Tool, Context, Provider>
+where
+    Tool: ToolRegistryItem + ?Sized,
+    Provider: ToolCatalogSnapshotProvider<Tool> + ?Sized,
+{
+    pub async fn readonly_enabled_tools(&self) -> Vec<ToolRef<Tool>> {
+        let tool_snapshot = self.provider.tool_snapshot().await;
+        resolve_readonly_enabled_tools(&tool_snapshot).await
+    }
+}
+
+impl<'a, Tool, Context, Provider> ToolCatalogRuntime<'a, Tool, Context, Provider>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+    Provider: ToolCatalogSnapshotProvider<Tool> + ?Sized,
+{
+    pub async fn visible_tools(
+        &self,
+        allowed_tools: &[String],
+        exposure_overrides: &IndexMap<String, ToolExposure>,
+        context: &Context,
+    ) -> ContextualVisibleTools<Tool> {
+        resolve_contextual_visible_tools_from_provider(
+            self.provider,
+            allowed_tools,
+            exposure_overrides,
+            context,
+            self.get_tool_spec_tool_name,
+        )
+        .await
+    }
+
+    pub async fn tool_manifest(
+        &self,
+        allowed_tools: &[String],
+        exposure_overrides: &IndexMap<String, ToolExposure>,
+        context: &Context,
+    ) -> ContextualToolManifest<Tool> {
+        resolve_contextual_tool_manifest_from_provider(
+            self.provider,
+            allowed_tools,
+            exposure_overrides,
+            context,
+            self.get_tool_spec_tool_name,
+        )
+        .await
+    }
+}
+
+pub async fn resolve_get_tool_spec_detail<Tool, Context>(
+    collapsed_tools: &[ToolRef<Tool>],
+    tool_name: &str,
+    context: &Context,
+    get_tool_spec_tool_name: &str,
+) -> Result<GetToolSpecDetail, String>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+{
+    let tool = collapsed_tools
+        .iter()
+        .find(|tool| tool.name() == tool_name)
+        .ok_or_else(|| {
+            format!("Tool '{tool_name}' is not an available collapsed tool in the current context")
+        })?;
+
+    if tool.name() == get_tool_spec_tool_name {
+        return Err(format!("Tool '{tool_name}' cannot inspect itself"));
+    }
+
+    let description = tool
+        .description_with_context(context)
+        .await
+        .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
+    let input_schema = tool.input_schema_for_model_with_context(context).await;
+
+    Ok(GetToolSpecDetail {
+        tool_name: tool_name.to_string(),
+        description,
+        input_schema,
+    })
+}
+
+pub async fn build_get_tool_spec_catalog_description_from_provider<Tool, Context, Provider>(
+    provider: &Provider,
+    context: Option<&Context>,
+) -> String
+where
+    Tool: ToolRegistryItem + ?Sized,
+    Context: Sync,
+    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
+{
+    let summaries = provider
+        .collapsed_tools_for_get_tool_spec(context)
+        .await
+        .map(|tools| summarize_get_tool_spec_collapsed_tools(&tools))
+        .unwrap_or_default();
+
+    build_get_tool_spec_catalog_description(&summaries)
+}
+
+pub async fn resolve_get_tool_spec_detail_from_provider<Tool, Context, Provider>(
+    provider: &Provider,
+    tool_name: &str,
+    context: &Context,
+    get_tool_spec_tool_name: &str,
+) -> Result<GetToolSpecDetail, String>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
+{
+    let collapsed_tools = provider
+        .collapsed_tools_for_get_tool_spec(Some(context))
+        .await?;
+    resolve_get_tool_spec_detail(
+        &collapsed_tools,
+        tool_name,
+        context,
+        get_tool_spec_tool_name,
+    )
+    .await
+}
+
+pub async fn resolve_get_tool_spec_execution_result_from_provider<Tool, Context, Provider>(
+    provider: &Provider,
+    input: &Value,
+    loaded_collapsed_tools: &[String],
+    context: &Context,
+    get_tool_spec_tool_name: &str,
+) -> Result<ToolResult, GetToolSpecExecutionError>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
+{
+    match resolve_get_tool_spec_execution_plan(input, loaded_collapsed_tools)? {
+        GetToolSpecExecutionPlan::DuplicateLoad(result) => Ok(result),
+        GetToolSpecExecutionPlan::LoadDetail { tool_name } => {
+            let detail = resolve_get_tool_spec_detail_from_provider(
+                provider,
+                tool_name,
+                context,
+                get_tool_spec_tool_name,
+            )
+            .await
+            .map_err(GetToolSpecExecutionError::Detail)?;
+            Ok(build_get_tool_spec_detail_result(&detail))
+        }
+    }
+}
+
+pub struct GetToolSpecRuntime<'a, Tool: ?Sized, Context, Provider: ?Sized> {
+    provider: &'a Provider,
+    tool_name: &'a str,
+    _marker: PhantomData<fn(&Tool, &Context)>,
+}
+
+impl<'a, Tool: ?Sized, Context, Provider: ?Sized> GetToolSpecRuntime<'a, Tool, Context, Provider> {
+    pub fn new(provider: &'a Provider, tool_name: &'a str) -> Self {
+        Self {
+            provider,
+            tool_name,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        self.tool_name
+    }
+
+    pub fn short_description(&self) -> String {
+        get_tool_spec_short_description()
+    }
+
+    pub fn input_schema(&self) -> Value {
+        get_tool_spec_input_schema()
+    }
+
+    pub fn is_readonly(&self) -> bool {
+        get_tool_spec_is_readonly()
+    }
+
+    pub fn is_concurrency_safe(&self, input: Option<&Value>) -> bool {
+        get_tool_spec_is_concurrency_safe(input)
+    }
+
+    pub fn needs_permissions(&self, input: Option<&Value>) -> bool {
+        get_tool_spec_needs_permissions(input)
+    }
+
+    pub fn render_tool_use_message(&self, input: &Value) -> String {
+        render_get_tool_spec_tool_use_message(input)
+    }
+
+    pub fn validate_input(&self, input: &Value) -> ValidationResult {
+        validate_get_tool_spec_input(input)
+    }
+}
+
+impl<'a, Tool, Context, Provider> GetToolSpecRuntime<'a, Tool, Context, Provider>
+where
+    Tool: ToolRegistryItem + ?Sized,
+    Context: Sync,
+    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
+{
+    pub async fn catalog_description(&self, context: Option<&Context>) -> String {
+        build_get_tool_spec_catalog_description_from_provider(self.provider, context).await
+    }
+}
+
+impl<'a, Tool, Context, Provider> GetToolSpecRuntime<'a, Tool, Context, Provider>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
+{
+    pub async fn execute(
+        &self,
+        input: &Value,
+        loaded_collapsed_tools: &[String],
+        context: &Context,
+    ) -> Result<ToolResult, GetToolSpecExecutionError> {
+        resolve_get_tool_spec_execution_result_from_provider(
+            self.provider,
+            input,
+            loaded_collapsed_tools,
+            context,
+            self.tool_name,
+        )
+        .await
+    }
+
+    pub async fn call_results(
+        &self,
+        input: &Value,
+        loaded_collapsed_tools: &[String],
+        context: &Context,
+    ) -> Result<Vec<ToolResult>, GetToolSpecExecutionError> {
+        self.execute(input, loaded_collapsed_tools, context)
+            .await
+            .map(|result| vec![result])
+    }
+}
+
+pub async fn resolve_contextual_visible_tools_from_provider<Tool, Context, Provider>(
+    provider: &Provider,
+    allowed_tools: &[String],
+    exposure_overrides: &IndexMap<String, ToolExposure>,
+    context: &Context,
+    get_tool_spec_tool_name: &str,
+) -> ContextualVisibleTools<Tool>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+    Provider: ToolCatalogSnapshotProvider<Tool> + ?Sized,
+{
+    let tool_snapshot = provider.tool_snapshot().await;
+    resolve_contextual_visible_tools(
+        &tool_snapshot,
+        allowed_tools,
+        exposure_overrides,
+        context,
+        get_tool_spec_tool_name,
+    )
+    .await
+}
+
+pub async fn resolve_contextual_tool_manifest_from_provider<Tool, Context, Provider>(
+    provider: &Provider,
+    allowed_tools: &[String],
+    exposure_overrides: &IndexMap<String, ToolExposure>,
+    context: &Context,
+    get_tool_spec_tool_name: &str,
+) -> ContextualToolManifest<Tool>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+    Provider: ToolCatalogSnapshotProvider<Tool> + ?Sized,
+{
+    let tool_snapshot = provider.tool_snapshot().await;
+    resolve_contextual_tool_manifest(
+        &tool_snapshot,
+        allowed_tools,
+        exposure_overrides,
+        context,
+        get_tool_spec_tool_name,
+    )
+    .await
+}
+
+pub async fn resolve_contextual_visible_tools<Tool, Context>(
+    tool_snapshot: &[ToolRef<Tool>],
+    allowed_tools: &[String],
+    exposure_overrides: &IndexMap<String, ToolExposure>,
+    context: &Context,
+    get_tool_spec_tool_name: &str,
+) -> ContextualVisibleTools<Tool>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+{
+    let mut available_tool_names = HashSet::new();
+    for tool in tool_snapshot {
+        if tool.is_available_in_context(context).await {
+            available_tool_names.insert(tool.name().to_string());
+        }
+    }
+
+    let policy_tools = build_tool_manifest_policy_tools(tool_snapshot, &available_tool_names);
+    let policy = resolve_tool_manifest_policy(
+        &policy_tools,
+        allowed_tools,
+        exposure_overrides,
+        get_tool_spec_tool_name,
+    );
+    let expanded_tools = tools_by_name(tool_snapshot, &policy.expanded_tool_names);
+    let collapsed_tools = tools_by_name(tool_snapshot, &policy.collapsed_tool_names);
+
+    ContextualVisibleTools {
+        allowed_tool_names: policy.allowed_tool_names,
+        expanded_tools,
+        collapsed_tool_names: policy.collapsed_tool_names,
+        collapsed_tools,
+    }
+}
+
+pub async fn resolve_contextual_tool_manifest<Tool, Context>(
+    tool_snapshot: &[ToolRef<Tool>],
+    allowed_tools: &[String],
+    exposure_overrides: &IndexMap<String, ToolExposure>,
+    context: &Context,
+    get_tool_spec_tool_name: &str,
+) -> ContextualToolManifest<Tool>
+where
+    Tool: ContextualToolManifestItem<Context> + ?Sized,
+    Context: Sync,
+{
+    let visible_tools = resolve_contextual_visible_tools(
+        tool_snapshot,
+        allowed_tools,
+        exposure_overrides,
+        context,
+        get_tool_spec_tool_name,
+    )
+    .await;
+
+    let mut manifest_items = Vec::with_capacity(
+        visible_tools.expanded_tools.len() + visible_tools.collapsed_tools.len(),
+    );
+    for tool in &visible_tools.expanded_tools {
+        let description = tool
+            .description_with_context(context)
+            .await
+            .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
+        let parameters = tool.input_schema_for_model_with_context(context).await;
+
+        manifest_items.push(PromptVisibleToolManifestItem::Expanded(
+            ToolManifestDefinition::new(tool.name().to_string(), description, parameters),
+        ));
+    }
+
+    for tool in &visible_tools.collapsed_tools {
+        manifest_items.push(PromptVisibleToolManifestItem::Collapsed {
+            name: tool.name().to_string(),
+            short_description: tool.short_description(),
+        });
+    }
+
+    let tool_definitions = build_prompt_visible_tool_manifest_definitions(&manifest_items);
+
+    ContextualToolManifest {
+        allowed_tool_names: visible_tools.allowed_tool_names,
+        expanded_tools: visible_tools.expanded_tools,
+        collapsed_tool_names: visible_tools.collapsed_tool_names,
+        collapsed_tools: visible_tools.collapsed_tools,
+        tool_definitions,
+    }
+}
+
 #[derive(Debug, Clone)]
 struct DynamicToolMetadata {
     provider_id: String,
@@ -73,6 +1054,89 @@ impl<Tool> ToolDecorator<Tool> for IdentityToolDecorator {
 
 pub type ToolRef<Tool> = Arc<Tool>;
 pub type ToolDecoratorRef<Tool> = Arc<dyn ToolDecorator<ToolRef<Tool>>>;
+
+pub trait SnapshotToolWrapper<Tool: ?Sized>: Send + Sync {
+    fn wrap_for_snapshot_tracking(&self, tool: ToolRef<Tool>) -> ToolRef<Tool>;
+}
+
+pub type SnapshotToolWrapperRef<Tool> = Arc<dyn SnapshotToolWrapper<Tool>>;
+
+pub struct SnapshotToolDecorator<Tool: ?Sized> {
+    wrapper: SnapshotToolWrapperRef<Tool>,
+}
+
+impl<Tool: ?Sized> SnapshotToolDecorator<Tool> {
+    pub fn new(wrapper: SnapshotToolWrapperRef<Tool>) -> Self {
+        Self { wrapper }
+    }
+}
+
+impl<Tool: ?Sized> ToolDecorator<ToolRef<Tool>> for SnapshotToolDecorator<Tool> {
+    fn decorate(&self, tool: ToolRef<Tool>) -> ToolRef<Tool> {
+        self.wrapper.wrap_for_snapshot_tracking(tool)
+    }
+}
+
+pub trait StaticToolProvider<Tool: ?Sized>: Send + Sync {
+    fn provider_id(&self) -> &'static str;
+
+    fn tools(&self) -> Vec<ToolRef<Tool>>;
+}
+
+pub struct StaticToolProviderGroup<Tool: ?Sized> {
+    provider_id: &'static str,
+    tools: Vec<ToolRef<Tool>>,
+}
+
+impl<Tool: ?Sized> StaticToolProviderGroup<Tool> {
+    pub fn new(provider_id: &'static str, tools: Vec<ToolRef<Tool>>) -> Self {
+        Self { provider_id, tools }
+    }
+}
+
+impl<Tool: ?Sized + Send + Sync> StaticToolProvider<Tool> for StaticToolProviderGroup<Tool> {
+    fn provider_id(&self) -> &'static str {
+        self.provider_id
+    }
+
+    fn tools(&self) -> Vec<ToolRef<Tool>> {
+        self.tools.clone()
+    }
+}
+
+pub struct ToolRuntimeAssembly<Tool: ToolRegistryItem + ?Sized> {
+    tool_decorator: ToolDecoratorRef<Tool>,
+}
+
+impl<Tool: ToolRegistryItem + ?Sized> Default for ToolRuntimeAssembly<Tool> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<Tool: ToolRegistryItem + ?Sized> ToolRuntimeAssembly<Tool> {
+    pub fn new() -> Self {
+        Self::with_tool_decorator(Arc::new(IdentityToolDecorator))
+    }
+
+    pub fn with_tool_decorator(tool_decorator: ToolDecoratorRef<Tool>) -> Self {
+        Self { tool_decorator }
+    }
+
+    pub fn create_registry_from_static_providers<Provider>(
+        &self,
+        providers: &[Provider],
+    ) -> ToolRegistry<Tool>
+    where
+        Provider: StaticToolProvider<Tool>,
+    {
+        let mut registry = ToolRegistry::with_tool_decorator(self.tool_decorator.clone());
+        for provider in providers {
+            registry.install_static_provider(provider);
+        }
+        registry
+    }
+}
 
 pub struct ToolRegistry<Tool: ToolRegistryItem + ?Sized> {
     tools: IndexMap<String, ToolRef<Tool>>,
@@ -124,6 +1188,15 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRegistry<Tool> {
         self.tools.insert(name, tool);
     }
 
+    pub fn install_static_provider<Provider>(&mut self, provider: &Provider)
+    where
+        Provider: StaticToolProvider<Tool> + ?Sized,
+    {
+        for tool in provider.tools() {
+            self.register_tool(tool);
+        }
+    }
+
     pub fn unregister_mcp_server_tools(&mut self, server_id: &str) {
         let to_remove = self
             .dynamic_tools
@@ -169,6 +1242,21 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRegistry<Tool> {
         self.dynamic_tools
             .get(name)
             .map(|metadata| metadata.info.clone())
+    }
+
+    pub fn is_tool_collapsed(&self, name: &str) -> bool {
+        self.tools
+            .get(name)
+            .is_some_and(|tool| tool.default_exposure() == ToolExposure::Collapsed)
+    }
+
+    pub fn get_collapsed_tool_names(&self) -> Vec<String> {
+        self.tools
+            .iter()
+            .filter_map(|(name, tool)| {
+                (tool.default_exposure() == ToolExposure::Collapsed).then(|| name.clone())
+            })
+            .collect()
     }
 
     pub fn get_tool_names(&self) -> Vec<String> {

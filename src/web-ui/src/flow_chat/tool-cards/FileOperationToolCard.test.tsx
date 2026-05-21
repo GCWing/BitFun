@@ -314,4 +314,54 @@ describe('FileOperationToolCard', () => {
       },
     );
   });
+
+  it('renders completed ACP file cards from result locations when input has no path', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      toolCall: {
+        id: 'call-1',
+        name: 'Write',
+        input: {
+          title: 'Run Write',
+        },
+      },
+      toolResult: {
+        success: true,
+        result: {
+          content: [],
+          locations: [
+            {
+              path: 'src/from-acp-location.ts',
+            },
+          ],
+        },
+      },
+    } as FlowToolItem;
+
+    const config: ToolCardConfig = {
+      toolName: 'Write',
+      displayName: 'Write',
+      icon: 'WRITE',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Write a file',
+      displayMode: 'standard',
+    };
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    expect(container.textContent).toContain('from-acp-location.ts');
+    expect(container.textContent).not.toContain('toolCards.file.parsingPath');
+  });
 });

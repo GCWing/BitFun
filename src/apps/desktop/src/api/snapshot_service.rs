@@ -8,6 +8,7 @@ use bitfun_core::service::snapshot::{
 };
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use tauri::{AppHandle, Emitter};
 
@@ -233,9 +234,11 @@ async fn resolve_workspace_dir(workspace_path: &str) -> Result<PathBuf, String> 
     Ok(workspace_dir)
 }
 
-async fn ensure_snapshot_manager_ready(
+async fn ensure_snapshot_manager_ready_for(
     workspace_path: &str,
+    caller: &str,
 ) -> Result<Arc<SnapshotManager>, String> {
+    let started_at = std::time::Instant::now();
     // Remote workspaces don't support the snapshot system
     if is_remote_path(workspace_path).await {
         return Err(format!(
@@ -247,11 +250,21 @@ async fn ensure_snapshot_manager_ready(
     let workspace_dir = resolve_workspace_dir(workspace_path).await?;
 
     if let Some(manager) = get_snapshot_manager_for_workspace(&workspace_dir) {
+        let duration_ms = started_at.elapsed().as_millis();
+        if duration_ms >= 20 {
+            log::debug!(
+                "Snapshot manager ready: caller={}, workspace={}, source=cache, duration_ms={}",
+                caller,
+                workspace_dir.display(),
+                duration_ms
+            );
+        }
         return Ok(manager);
     }
 
     info!(
-        "Snapshot manager missing, initializing lazily: workspace={}",
+        "Snapshot manager missing, initializing lazily: caller={}, workspace={}",
+        caller,
         workspace_dir.display()
     );
 
@@ -265,8 +278,21 @@ async fn ensure_snapshot_manager_ready(
             )
         })?;
 
-    ensure_snapshot_manager_for_workspace(&workspace_dir)
-        .map_err(|e| format!("Failed to get snapshot manager: {}", e))
+    let manager = ensure_snapshot_manager_for_workspace(&workspace_dir)
+        .map_err(|e| format!("Failed to get snapshot manager: {}", e))?;
+    log::debug!(
+        "Snapshot manager ready: caller={}, workspace={}, source=lazy_init, duration_ms={}",
+        caller,
+        workspace_dir.display(),
+        started_at.elapsed().as_millis()
+    );
+    Ok(manager)
+}
+
+async fn ensure_snapshot_manager_ready(
+    workspace_path: &str,
+) -> Result<Arc<SnapshotManager>, String> {
+    ensure_snapshot_manager_ready_for(workspace_path, "unspecified").await
 }
 
 #[tauri::command]
@@ -274,7 +300,8 @@ pub async fn record_file_change(
     app_handle: AppHandle,
     request: RecordFileChangeRequest,
 ) -> Result<String, String> {
-    let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
+    let manager =
+        ensure_snapshot_manager_ready_for(&request.workspace_path, "record_file_change").await?;
 
     let operation_type = match request.operation_type.as_str() {
         "Create" => OperationType::Create,
@@ -323,7 +350,8 @@ pub async fn rollback_session(
         return Ok(vec![]);
     }
 
-    let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
+    let manager =
+        ensure_snapshot_manager_ready_for(&request.workspace_path, "rollback_session").await?;
 
     let restored_files = manager
         .rollback_session(&request.session_id)
@@ -373,7 +401,8 @@ pub async fn rollback_to_turn(
         }
     }
 
-    let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
+    let manager =
+        ensure_snapshot_manager_ready_for(&request.workspace_path, "rollback_to_turn").await?;
 
     let restored_files = manager
         .rollback_to_turn(&request.session_id, request.turn_index)
@@ -388,10 +417,61 @@ pub async fn rollback_to_turn(
     let mut deleted_turns_count = 0;
     if request.delete_turns {
         let workspace_path = PathBuf::from(&request.workspace_path);
+        let mut rolled_back_parent_turn_ids = HashSet::new();
+
+        use bitfun_core::agentic::persistence::PersistenceManager;
+
+        match try_get_path_manager_arc() {
+            Ok(path_manager) => match PersistenceManager::new(path_manager) {
+                Ok(persistence_manager) => {
+                    match persistence_manager
+                        .load_session_turns(&workspace_path, &request.session_id)
+                        .await
+                    {
+                        Ok(turns) => {
+                            rolled_back_parent_turn_ids = turns
+                                .into_iter()
+                                .filter(|turn| turn.turn_index >= request.turn_index)
+                                .map(|turn| turn.turn_id)
+                                .collect();
+                        }
+                        Err(e) => {
+                            warn!(
+                                "Failed to load parent turns before rollback cleanup: session_id={}, turn_index={}, error={}",
+                                request.session_id, request.turn_index, e
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to create PersistenceManager: error={}", e);
+                }
+            },
+            Err(e) => {
+                warn!("Failed to create PathManager: error={}", e);
+            }
+        }
+
         {
             use bitfun_core::agentic::coordination::get_global_coordinator;
 
             if let Some(coordinator) = get_global_coordinator() {
+                if !rolled_back_parent_turn_ids.is_empty() {
+                    if let Err(e) = coordinator
+                        .delete_hidden_subagent_sessions_for_parent_turns(
+                            &workspace_path,
+                            &request.session_id,
+                            &rolled_back_parent_turn_ids,
+                        )
+                        .await
+                    {
+                        warn!(
+                            "Failed to delete hidden subagent sessions during rollback: session_id={}, turn_index={}, error={}",
+                            request.session_id, request.turn_index, e
+                        );
+                    }
+                }
+
                 if let Err(e) = coordinator
                     .get_session_manager()
                     .rollback_context_to_turn_start(
@@ -410,8 +490,6 @@ pub async fn rollback_to_turn(
                 warn!("Global coordinator not initialized, skipping agentic context rollback");
             }
         }
-
-        use bitfun_core::agentic::persistence::PersistenceManager;
 
         match try_get_path_manager_arc() {
             Ok(path_manager) => match PersistenceManager::new(path_manager) {
@@ -469,7 +547,8 @@ pub async fn accept_session(
     app_handle: AppHandle,
     request: AcceptSessionRequest,
 ) -> Result<serde_json::Value, String> {
-    let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
+    let manager =
+        ensure_snapshot_manager_ready_for(&request.workspace_path, "accept_session").await?;
 
     manager
         .accept_session(&request.session_id)
@@ -553,7 +632,8 @@ pub async fn get_session_files(request: GetSessionFilesRequest) -> Result<Vec<St
         return Ok(vec![]);
     }
 
-    let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
+    let manager =
+        ensure_snapshot_manager_ready_for(&request.workspace_path, "get_session_files").await?;
 
     let files = manager
         .get_session_files(&request.session_id)
@@ -690,7 +770,9 @@ pub async fn get_operation_diff(
 pub async fn get_session_file_diff_stats(
     request: GetSessionFileDiffStatsRequest,
 ) -> Result<serde_json::Value, String> {
-    let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
+    let manager =
+        ensure_snapshot_manager_ready_for(&request.workspace_path, "get_session_file_diff_stats")
+            .await?;
 
     let stats = manager
         .get_session_file_diff_stats(&request.sessionId, &request.filePath)
@@ -704,7 +786,8 @@ pub async fn get_session_file_diff_stats(
 pub async fn get_operation_summary(
     request: GetOperationSummaryRequest,
 ) -> Result<serde_json::Value, String> {
-    let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
+    let manager =
+        ensure_snapshot_manager_ready_for(&request.workspace_path, "get_operation_summary").await?;
 
     let summary = manager
         .get_operation_summary(&request.sessionId, &request.operationId)
@@ -859,7 +942,8 @@ pub async fn get_session_stats(
         }));
     }
 
-    let manager = ensure_snapshot_manager_ready(&request.workspace_path).await?;
+    let manager =
+        ensure_snapshot_manager_ready_for(&request.workspace_path, "get_session_stats").await?;
 
     let stats = manager
         .get_session_stats(&request.session_id)

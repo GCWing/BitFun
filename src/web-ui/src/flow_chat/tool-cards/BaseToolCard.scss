@@ -9,8 +9,8 @@
 .base-tool-card-wrapper {
   display: flex;
   flex-direction: column;
-  margin: 4px 0;
-  border-radius: 8px;
+  margin: var(--flowchat-card-gap, 0.42rem) 0;
+  border-radius: var(--flowchat-card-radius, 8px);
   border: 1px solid var(--border-base);
   background: var(--color-bg-flowchat);
   backdrop-filter: blur(10px);
@@ -94,14 +94,14 @@
 .base-tool-card-header {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--flowchat-inline-gap, 0.35rem);
   padding: var(--tool-card-header-pad-y) var(--tool-card-header-pad-right) var(--tool-card-header-pad-y) var(--tool-card-header-pad-x);
   position: relative;
   z-index: 11;
   flex-shrink: 0;
   min-height: 0;
   /* 1.2 clips CJK / some Latin descenders inside overflow:hidden; keep room for em-box */
-  line-height: 1.45;
+  line-height: var(--flowchat-support-line-height, 1.45);
   width: 100%;
   box-sizing: border-box;
   background: transparent;
@@ -138,28 +138,28 @@
 
 /* Action text */
 .tool-card-action {
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
   color: var(--color-text-primary);
   transition: color 0.2s ease;
   letter-spacing: -0.01em;
   flex-shrink: 0;
-  line-height: 1.45;
+  line-height: var(--tool-card-action-line-height, var(--flowchat-support-line-height, 1.45));
 }
 
 /* Main content */
 .tool-card-content {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--flowchat-inline-gap, 0.35rem);
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
   color: var(--color-text-primary);
   transition: color 0.2s ease;
   letter-spacing: -0.01em;
-  line-height: 1.45;
+  line-height: var(--tool-card-action-line-height, var(--flowchat-support-line-height, 1.45));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -177,7 +177,7 @@
 .tool-card-extra {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0.125rem;
   flex-shrink: 0;
   min-width: 0;
 
@@ -189,8 +189,8 @@
 /* ========== Expanded content area ========== */
 .base-tool-card-expanded {
   /* Full-bleed dividers in children use these (header pad-x is 0; do not conflate). */
-  --tool-card-expanded-pad-x: 9px;
-  --tool-card-expanded-pad-y: 8px;
+  --tool-card-expanded-pad-x: var(--flowchat-card-expanded-pad-x, 0.625rem);
+  --tool-card-expanded-pad-y: var(--flowchat-card-expanded-pad-y, 0.5rem);
   padding: var(--tool-card-expanded-pad-y) var(--tool-card-expanded-pad-x);
   background: transparent;
   position: relative;
@@ -201,9 +201,13 @@
 
 /* ========== Error details area ========== */
 .base-tool-card-error {
-  margin-top: 6px;
-  padding: 7px 10px 7px 20px;
-  margin-left: 6px;
+  margin-top: var(--flowchat-inline-gap, 0.35rem);
+  padding:
+    var(--flowchat-card-expanded-pad-y, 0.5rem)
+    var(--flowchat-card-expanded-pad-x, 0.625rem)
+    var(--flowchat-card-expanded-pad-y, 0.5rem)
+    calc(var(--flowchat-card-expanded-pad-x, 0.625rem) + var(--flowchat-card-expanded-pad-x, 0.625rem));
+  margin-left: var(--flowchat-inline-gap, 0.35rem);
   background: none !important;
   border: none !important;
   box-shadow: none !important;
@@ -213,15 +217,15 @@
   .error-content {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     background: none !important;
     border: none !important;
     padding: 0 !important;
   }
 
   .error-message {
-    font-size: 12px !important;
-    line-height: 1.5 !important;
+    font-size: var(--flowchat-font-size-sm) !important;
+    line-height: var(--flowchat-support-line-height, 1.45) !important;
     color: var(--color-text-muted) !important;
     white-space: pre-wrap !important;
     word-break: break-word !important;
@@ -316,4 +320,3 @@
     opacity: 0.25;
   }
 }
-

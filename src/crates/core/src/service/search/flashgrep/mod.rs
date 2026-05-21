@@ -49,7 +49,7 @@ pub(crate) use protocol::{
     RepoRef, Request, Response, SearchHit, SearchLine, SearchParams, TaskRef,
 };
 pub(crate) use repo_session::FlashgrepRepoSession;
-pub(crate) use rpc_client::{ProtocolClient, drain_content_length_messages};
+pub(crate) use rpc_client::{drain_content_length_messages, ProtocolClient};
 pub(crate) use types::{
     ConsistencyMode, DirtyFileStats, FileCount, GlobOutcome, GlobRequest, OpenRepoParams,
     PathScope, QuerySpec, RefreshPolicyConfig, RepoConfig, RepoPhase, RepoStatus, SearchBackend,

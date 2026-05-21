@@ -15,6 +15,14 @@ impl ChatView {
         self.pending_theme_preview.take()
     }
 
+    pub fn take_pending_skill_action(&mut self) -> Option<SkillSelectorAction> {
+        self.pending_skill_action.take()
+    }
+
+    pub fn take_pending_subagent_action(&mut self) -> Option<SubagentSelectorAction> {
+        self.pending_subagent_action.take()
+    }
+
     pub fn handle_mouse_event(&mut self, mouse: &crossterm::event::MouseEvent) -> bool {
         // Popups take priority when visible
         if self.model_selector.captures_mouse(mouse) {
@@ -35,19 +43,14 @@ impl ChatView {
             return true;
         }
         if self.skill_selector.captures_mouse(mouse) {
-            if let Some(selected) = self.skill_selector.handle_mouse_event(mouse) {
-                self.skill_selector.hide();
-                self.set_input(&format!("Execute the {} skill.", selected.name));
+            if let Some(action) = self.skill_selector.handle_mouse_event(mouse) {
+                self.pending_skill_action = Some(action);
             }
             return true;
         }
         if self.subagent_selector.captures_mouse(mouse) {
-            if let Some(selected) = self.subagent_selector.handle_mouse_event(mouse) {
-                self.subagent_selector.hide();
-                self.set_input(&format!(
-                    "Launch subagent {} to finish task: ",
-                    selected.name
-                ));
+            if let Some(action) = self.subagent_selector.handle_mouse_event(mouse) {
+                self.pending_subagent_action = Some(action);
             }
             return true;
         }
@@ -140,7 +143,9 @@ impl ChatView {
 
     fn selection_text(&self) -> Option<String> {
         let (start, end) = self.selection_bounds()?;
-        if start.line >= self.visible_plain_lines.len() || end.line >= self.visible_plain_lines.len() {
+        if start.line >= self.visible_plain_lines.len()
+            || end.line >= self.visible_plain_lines.len()
+        {
             return None;
         }
 
@@ -236,7 +241,8 @@ impl ChatView {
         let Some((start, end)) = self.selection_bounds() else {
             return;
         };
-        let dragging = self.selection_mouse_down.is_some() && (self.selection_dragged || start != end);
+        let dragging =
+            self.selection_mouse_down.is_some() && (self.selection_dragged || start != end);
         if !dragging {
             return;
         }
@@ -247,7 +253,8 @@ impl ChatView {
             return;
         }
 
-        let style = ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::REVERSED);
+        let style =
+            ratatui::style::Style::default().add_modifier(ratatui::style::Modifier::REVERSED);
 
         for line_idx in start.line..=end.line {
             if line_idx < list_offset {

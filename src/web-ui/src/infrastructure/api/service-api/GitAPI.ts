@@ -200,6 +200,17 @@ export class GitAPI {
     }
   }
 
+
+  async getRepositoryBasic(repositoryPath: string): Promise<GitRepository> {
+    try {
+      return await api.invoke('git_get_repository_basic', {
+        request: { repositoryPath }
+      });
+    } catch (error) {
+      throw createTauriCommandError('git_get_repository_basic', error, { repositoryPath });
+    }
+  }
+
    
   async getStatus(repositoryPath: string): Promise<GitStatus> {
     try {

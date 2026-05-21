@@ -26,6 +26,7 @@ import type {
   ImageAnalysisEvent,
   ModelRoundCompletedEvent,
   SessionModelAutoMigratedEvent,
+  SubagentSessionLinkedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
@@ -65,12 +66,6 @@ import {
 } from './ToolEventModule';
 import { handleAcpPermissionRequestForToolCard } from './AcpPermissionToolCardModule';
 import {
-  routeModelRoundStartedToToolCardInternal,
-  routeTextChunkToToolCardInternal,
-  routeToolEventToToolCardInternal
-} from './SubagentModule';
-import { normalizeSubagentParentInfo } from './subagentParentInfo';
-import {
   clearRuntimeStatus,
   scheduleModelResponseStatus,
 } from './RuntimeStatusModule';
@@ -104,6 +99,23 @@ export function isAppWindowFocused(): boolean {
 
   return document.visibilityState === 'visible' && document.hasFocus();
 }
+
+function resolveDialogTurnDisplayContent(
+  userInput: unknown,
+  originalUserInput: unknown,
+  _userMessageMetadata: unknown,
+): string {
+  const cleanedUserInput = cleanRemoteUserInput(typeof userInput === 'string' ? userInput : '');
+  const cleanedOriginalUserInput = cleanRemoteUserInput(
+    typeof originalUserInput === 'string' ? originalUserInput : ''
+  );
+
+  return cleanedOriginalUserInput || cleanedUserInput;
+}
+
+export const __test_only__ = {
+  resolveDialogTurnDisplayContent,
+};
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
   const activeSessionId = FlowChatStore.getInstance().getState().activeSessionId;
@@ -247,112 +259,194 @@ function attachSubagentSessionToParentTool(
   );
 }
 
-function settleSubagentItems(
-  context: FlowChatContext,
-  parentInfo: SubagentParentInfo,
-  subagentSessionId: string,
-  status: 'completed' | 'cancelled' | 'error',
-  errorMessage?: string,
-): void {
+function readTaskInputString(
+  value: unknown,
+  ...keys: string[]
+): string {
+  if (!value || typeof value !== 'object') {
+    return '';
+  }
+  const record = value as Record<string, unknown>;
+  for (const key of keys) {
+    const candidate = record[key];
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return '';
+}
+
+function getParentTaskTool(parentInfo: SubagentParentInfo): FlowToolItem | null {
   const store = FlowChatStore.getInstance();
-  const parentSession = store.getState().sessions.get(parentInfo.sessionId);
-  if (!parentSession) {
-    return;
+  const item = store.findToolItem(
+    parentInfo.sessionId,
+    parentInfo.dialogTurnId,
+    parentInfo.toolCallId,
+  );
+  return item?.type === 'tool' ? item as FlowToolItem : null;
+}
+
+function isBackgroundSubagent(parentInfo: SubagentParentInfo): boolean {
+  const parentTool = getParentTaskTool(parentInfo);
+  if (!parentTool) {
+    return false;
   }
 
-  const parentTurn = parentSession.dialogTurns.find((turn) => turn.id === parentInfo.dialogTurnId);
-  if (!parentTurn) {
-    return;
-  }
-
-  const parentTaskToolIds = new Set<string>([parentInfo.toolCallId]);
-  for (const round of parentTurn.modelRounds) {
-    for (const item of round.items) {
-      if (
-        item.type === 'tool' &&
-        (item.id === parentInfo.toolCallId || (item as FlowToolItem).toolCall?.id === parentInfo.toolCallId)
-      ) {
-        parentTaskToolIds.add(item.id);
-      }
+  const inputValue = parentTool.toolCall?.input;
+  if (inputValue && typeof inputValue === 'object') {
+    const runInBackground = (inputValue as Record<string, unknown>).run_in_background;
+    if (typeof runInBackground === 'boolean') {
+      return runInBackground;
     }
   }
 
-  const timestamp = Date.now();
-  let changed = false;
-
-  store.updateDialogTurn(parentInfo.sessionId, parentInfo.dialogTurnId, (turn) => {
-    const updatedRounds = turn.modelRounds.map((round) => {
-      let roundChanged = false;
-      const updatedItems = round.items.map((item) => {
-        if (
-          !item.isSubagentItem
-          || !parentTaskToolIds.has(item.parentTaskToolId || '')
-          || item.subagentSessionId !== subagentSessionId
-        ) {
-          return item;
-        }
-
-        if (item.status === 'completed' || item.status === 'cancelled' || item.status === 'error') {
-          return item;
-        }
-
-        changed = true;
-
-        if (item.type === 'text') {
-          roundChanged = true;
-          return {
-            ...item,
-            status,
-            isStreaming: false,
-            timestamp,
-          };
-        }
-
-        if (item.type === 'thinking') {
-          roundChanged = true;
-          return {
-            ...item,
-            status,
-            isStreaming: false,
-            isCollapsed: true,
-            timestamp,
-          };
-        }
-
-        if (item.type === 'tool') {
-          roundChanged = true;
-          const nextToolResult = status === 'completed'
-            ? item.toolResult
-            : {
-              result: null,
-              success: false,
-              error: errorMessage || (status === 'cancelled'
-                ? 'Subagent was cancelled.'
-                : 'Subagent failed before this tool finished.'),
-            };
-
-          return {
-            ...item,
-            status,
-            isParamsStreaming: false,
-            endTime: item.endTime || timestamp,
-            toolResult: nextToolResult,
-            timestamp,
-          };
-        }
-
-        return item;
-      });
-
-      return roundChanged ? { ...round, items: updatedItems } : round;
-    });
-
-    return changed ? { ...turn, modelRounds: updatedRounds } : turn;
-  });
-
-  if (changed) {
-    debouncedSaveDialogTurn(context, parentInfo.sessionId, parentInfo.dialogTurnId, 800);
+  const resultValue = parentTool.toolResult?.result;
+  if (resultValue && typeof resultValue === 'object') {
+    const runInBackground = (resultValue as Record<string, unknown>).run_in_background;
+    if (typeof runInBackground === 'boolean') {
+      return runInBackground;
+    }
   }
+
+  return false;
+}
+
+function resolveSubagentType(
+  parentInfo: SubagentParentInfo,
+  explicitSubagentType?: string,
+): string | undefined {
+  const normalizedExplicitType = explicitSubagentType?.trim();
+  if (normalizedExplicitType) {
+    return normalizedExplicitType;
+  }
+
+  const parentTool = getParentTaskTool(parentInfo);
+  const input = parentTool?.toolCall?.input;
+  const inferredType = readTaskInputString(
+    input,
+    'subagent_type',
+    'subagentType',
+    'agent_type',
+    'agentType',
+  );
+  return inferredType || undefined;
+}
+
+function buildSubagentSessionTitleWithType(
+  parentInfo: SubagentParentInfo,
+  explicitSubagentType?: string,
+): string {
+  const parentTool = getParentTaskTool(parentInfo);
+  const input = parentTool?.toolCall?.input;
+  const subagentType = resolveSubagentType(parentInfo, explicitSubagentType);
+  const description = readTaskInputString(input, 'description');
+  const fallback = subagentType || 'Subagent';
+  const rawTitle = description ? `${fallback}: ${description}` : fallback;
+  return rawTitle.length > 72 ? `${rawTitle.slice(0, 69)}...` : rawTitle;
+}
+
+function ensureSubagentSession(
+  context: FlowChatContext,
+  parentInfo: SubagentParentInfo,
+  subagentSessionId: string,
+  event?: Record<string, unknown>,
+  explicitSubagentType?: string,
+): void {
+  const store = FlowChatStore.getInstance();
+  const existing = store.getState().sessions.get(subagentSessionId);
+  const subagentType = resolveSubagentType(parentInfo, explicitSubagentType);
+  if (existing) {
+    if (
+      existing.sessionKind !== 'subagent' ||
+      existing.parentSessionId !== parentInfo.sessionId ||
+      existing.parentToolCallId !== parentInfo.toolCallId ||
+      existing.subagentType !== (subagentType || existing.subagentType)
+    ) {
+      store.updateSessionRelationship(subagentSessionId, {
+        parentSessionId: parentInfo.sessionId,
+        sessionKind: 'subagent',
+        parentToolCallId: parentInfo.toolCallId,
+        subagentType: subagentType || undefined,
+      });
+    }
+    return;
+  }
+
+  const parentSession = store.getState().sessions.get(parentInfo.sessionId);
+  const parentTurnIndex = parentSession
+    ?.dialogTurns
+    .findIndex(turn => turn.id === parentInfo.dialogTurnId);
+
+  store.addExternalSession(
+    subagentSessionId,
+    buildSubagentSessionTitleWithType(parentInfo, explicitSubagentType),
+    subagentType || parentSession?.mode || 'agentic',
+    parentSession?.workspacePath || resolveExternalSessionWorkspacePath(context, event),
+    {
+      parentSessionId: parentInfo.sessionId,
+      sessionKind: 'subagent',
+      parentToolCallId: parentInfo.toolCallId,
+      subagentType: subagentType || undefined,
+      btwOrigin: {
+        parentSessionId: parentInfo.sessionId,
+        parentDialogTurnId: parentInfo.dialogTurnId,
+        parentTurnIndex: typeof parentTurnIndex === 'number' && parentTurnIndex >= 0
+          ? parentTurnIndex + 1
+          : undefined,
+      },
+    },
+    parentSession?.remoteConnectionId || extractEventRemoteConnectionId(event),
+    parentSession?.remoteSshHost || extractEventRemoteSshHost(event),
+  );
+}
+
+function handleSubagentSessionLinked(
+  context: FlowChatContext,
+  event: SubagentSessionLinkedEvent,
+): void {
+  const childSessionId = event?.sessionId ?? (event as any)?.childSessionId;
+  const parentSessionId = event?.parentSessionId ?? (event as any)?.parent_session_id;
+  const parentDialogTurnId =
+    event?.parentDialogTurnId ?? (event as any)?.parent_dialog_turn_id;
+  const parentToolCallId = event?.parentToolCallId ?? (event as any)?.parent_tool_call_id;
+  const agentType = event?.agentType ?? (event as any)?.agent_type;
+
+  if (!childSessionId || !parentSessionId || !parentDialogTurnId || !parentToolCallId) {
+    log.warn('SubagentSessionLinked missing required fields', { event });
+    return;
+  }
+
+  const parentInfo: SubagentParentInfo = {
+    sessionId: parentSessionId,
+    dialogTurnId: parentDialogTurnId,
+    toolCallId: parentToolCallId,
+  };
+
+  attachSubagentSessionToParentTool(parentInfo, childSessionId);
+  ensureSubagentSession(context, parentInfo, childSessionId, event as Record<string, unknown>, agentType);
+}
+
+function getLinkedSubagentParentInfo(sessionId: string): SubagentParentInfo | undefined {
+  const session = FlowChatStore.getInstance().getState().sessions.get(sessionId);
+  if (
+    !session ||
+    session.sessionKind !== 'subagent' ||
+    !session.parentSessionId ||
+    !session.parentToolCallId
+  ) {
+    return undefined;
+  }
+
+  const parentTurnId = session.btwOrigin?.parentDialogTurnId;
+  if (!parentTurnId) {
+    return undefined;
+  }
+
+  return {
+    sessionId: session.parentSessionId,
+    dialogTurnId: parentTurnId,
+    toolCallId: session.parentToolCallId,
+  };
 }
 
 /**
@@ -506,6 +600,9 @@ export async function initializeEventListeners(
     },
     onToolEvent: (event) => {
       handleToolEvent(context, event, onTodoWriteResult);
+    },
+    onSubagentSessionLinked: (event) => {
+      handleSubagentSessionLinked(context, event);
     },
     onDeepReviewQueueStateChanged: (event) => {
       handleDeepReviewQueueStateChanged(event);
@@ -1207,12 +1304,6 @@ function cleanRemoteUserInput(raw: string): string {
 
 function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   const { sessionId, turnId, turnIndex, userInput, originalUserInput, userMessageMetadata } = event;
-  const subagentParentInfo = normalizeSubagentParentInfo(event);
-
-  if (subagentParentInfo) {
-    attachSubagentSessionToParentTool(subagentParentInfo, sessionId);
-    return;
-  }
 
   finalizePendingTurnCompletionNow(context, sessionId);
   clearPendingTurnCompletion(context, sessionId, turnId);
@@ -1269,9 +1360,11 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
         mimeType: img.mime_type,
       }))
     : undefined;
-  const displayContent = originalUserInput
-    ? cleanRemoteUserInput(originalUserInput)
-    : cleanRemoteUserInput(userInput || '');
+  const displayContent = resolveDialogTurnDisplayContent(
+    userInput,
+    originalUserInput,
+    userMessageMetadata,
+  );
   const turnKind =
     userMessageMetadata?.kind === 'manual_compaction' ? 'manual_compaction' : 'user_dialog';
 
@@ -1346,45 +1439,35 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
  */
 function handleTextChunk(context: FlowChatContext, event: any): void {
   const { sessionId, turnId, roundId, text, contentType = 'text', isThinkingEnd = false } = event;
-  const subagentParentInfo = normalizeSubagentParentInfo(event);
-  
-  const parentSessionId = subagentParentInfo?.sessionId;
-  const parentTurnId = subagentParentInfo?.dialogTurnId;
-  
-  const targetSessionId = parentSessionId || sessionId;
-  const targetTurnId = parentTurnId || turnId;
-  
-  if (!shouldProcessEvent(targetSessionId, targetTurnId, 'data', 'TextChunk')) {
+  if (!shouldProcessEvent(sessionId, turnId, 'data', 'TextChunk')) {
     return;
   }
   
   const store = FlowChatStore.getInstance();
-  const session = store.getState().sessions.get(targetSessionId);
+  const session = store.getState().sessions.get(sessionId);
   
   if (!session) {
-    if (!context.contentBuffers.has(targetSessionId)) {
-      log.debug('Session not found (text chunk event)', { sessionId: targetSessionId });
+    if (!context.contentBuffers.has(sessionId)) {
+      log.debug('Session not found (text chunk event)', { sessionId });
     }
     return;
   }
 
-  const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === targetTurnId);
+  const dialogTurn = session.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   if (!dialogTurn) {
-    log.debug('Dialog turn not found', { turnId: targetTurnId });
+    log.debug('Dialog turn not found', { turnId });
     return;
   }
 
-  if (!subagentParentInfo) {
-    clearRuntimeStatus(context, sessionId, turnId, { roundId });
-    touchPendingTurnCompletion(context, sessionId, turnId);
-    const currentState = stateMachineManager.getCurrentState(sessionId);
-    if (isStreamingExecutionState(currentState)) {
-      stateMachineManager.transition(sessionId, SessionExecutionEvent.TEXT_CHUNK_RECEIVED, {
-        content: text,
-      }).catch(error => {
-        log.error('State machine transition failed on text chunk', { sessionId, error });
-      });
-    }
+  clearRuntimeStatus(context, sessionId, turnId, { roundId });
+  touchPendingTurnCompletion(context, sessionId, turnId);
+  const currentState = stateMachineManager.getCurrentState(sessionId);
+  if (isStreamingExecutionState(currentState)) {
+    stateMachineManager.transition(sessionId, SessionExecutionEvent.TEXT_CHUNK_RECEIVED, {
+      content: text,
+    }).catch(error => {
+      log.error('State machine transition failed on text chunk', { sessionId, error });
+    });
   }
 
   const eventData: TextChunkEventData = {
@@ -1394,7 +1477,6 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
     text,
     contentType: contentType as 'text' | 'thinking',
     isThinkingEnd,
-    subagentParentInfo
   };
   
   const key = generateTextChunkKey(eventData);
@@ -1417,7 +1499,7 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
 export function processBatchedEvents(
   context: FlowChatContext,
   events: Array<{ key: string; payload: any }>,
-  onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
+  _onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
 ): void {
   if (events.length === 0) return;
   
@@ -1428,60 +1510,23 @@ export function processBatchedEvents(
       const parsed = parseEventKey(key);
       if (!parsed) continue;
       
-      const { isSubagent, eventType } = parsed;
+      const { eventType } = parsed;
       
       if (eventType === 'text') {
-        if (isSubagent) {
-          const { sessionId, turnId, roundId, text, contentType, isThinkingEnd, subagentParentInfo } = payload;
-          const parentSessionId = subagentParentInfo?.sessionId;
-          const parentToolId = subagentParentInfo?.toolCallId;
-          
-          if (parentSessionId && parentToolId) {
-            routeTextChunkToToolCardInternal(context, parentSessionId, parentToolId, {
-              sessionId,
-              turnId,
-              roundId,
-              text,
-              contentType,
-              isThinkingEnd
-            });
-          }
+        const { sessionId, turnId, roundId, text, contentType, isThinkingEnd } = payload;
+        if (contentType === 'thinking') {
+          processThinkingChunkInternal(context, sessionId, turnId, roundId, text, isThinkingEnd);
         } else {
-          const { sessionId, turnId, roundId, text, contentType, isThinkingEnd } = payload;
-          if (contentType === 'thinking') {
-            processThinkingChunkInternal(context, sessionId, turnId, roundId, text, isThinkingEnd);
-          } else {
-            processNormalTextChunkInternal(context, sessionId, turnId, roundId, text);
-          }
-          
-          debouncedSaveDialogTurn(context, sessionId, turnId, 2000);
+          processNormalTextChunkInternal(context, sessionId, turnId, roundId, text);
         }
+        
+        debouncedSaveDialogTurn(context, sessionId, turnId, 2000);
       } else if (eventType === 'tool:params') {
-        if (isSubagent) {
-          const { subagentParentInfo } = payload;
-          const parentSessionId = subagentParentInfo?.sessionId;
-          const parentToolId = subagentParentInfo?.toolCallId;
-          
-          if (parentSessionId && parentToolId) {
-            routeToolEventToToolCardInternal(context, parentSessionId, parentToolId, payload, onTodoWriteResult);
-          }
-        } else {
-          const { sessionId, turnId, toolEvent } = payload;
-          processToolParamsPartialInternal(sessionId, turnId, toolEvent);
-        }
+        const { sessionId, turnId, toolEvent } = payload;
+        processToolParamsPartialInternal(sessionId, turnId, toolEvent);
       } else if (eventType === 'tool:progress') {
-        if (isSubagent) {
-          const { subagentParentInfo } = payload;
-          const parentSessionId = subagentParentInfo?.sessionId;
-          const parentToolId = subagentParentInfo?.toolCallId;
-          
-          if (parentSessionId && parentToolId) {
-            routeToolEventToToolCardInternal(context, parentSessionId, parentToolId, payload, onTodoWriteResult);
-          }
-        } else {
-          const { sessionId, turnId, toolEvent } = payload;
-          processToolProgressInternal(sessionId, turnId, toolEvent);
-        }
+        const { sessionId, turnId, toolEvent } = payload;
+        processToolProgressInternal(sessionId, turnId, toolEvent);
       }
     }
   } finally {
@@ -1497,39 +1542,38 @@ function handleToolEvent(
   event: {
     sessionId: string;
     turnId?: string;
+    roundId?: string;
     toolEvent: FlowToolEvent;
-    subagentParentInfo?: SubagentParentInfo;
   },
   onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
 ): void {
-  const { sessionId, turnId, toolEvent } = event;
-  const subagentParentInfo = normalizeSubagentParentInfo(event);
+  const { sessionId, turnId, roundId, toolEvent } = event;
   if (!turnId) {
     log.debug('Tool event missing turnId', { sessionId, toolId: toolEvent.tool_id, eventType: toolEvent.event_type });
     return;
   }
-  
-  const parentSessionId = subagentParentInfo?.sessionId;
-  const parentToolId = subagentParentInfo?.toolCallId;
-  const parentTurnId = subagentParentInfo?.dialogTurnId;
-  
-  const targetSessionId = parentSessionId || sessionId;
-  const targetTurnId = parentTurnId || turnId;
-  
-  if (!shouldProcessEvent(targetSessionId, targetTurnId, 'data', 'ToolEvent')) {
+  if (!roundId) {
+    log.error('Tool event missing roundId (backend bug)', {
+      sessionId,
+      turnId,
+      toolId: toolEvent.tool_id,
+      eventType: toolEvent.event_type,
+    });
     return;
   }
 
-  if (!subagentParentInfo) {
-    clearRuntimeStatus(context, sessionId, turnId);
-    touchPendingTurnCompletion(context, sessionId, turnId);
+  if (!shouldProcessEvent(sessionId, turnId, 'data', 'ToolEvent')) {
+    return;
   }
+
+  clearRuntimeStatus(context, sessionId, turnId);
+  touchPendingTurnCompletion(context, sessionId, turnId);
   
   const eventData: ToolEventData = {
     sessionId,
     turnId,
+    roundId,
     toolEvent,
-    subagentParentInfo
   };
   
   const keyInfo = generateToolEventKey(eventData);
@@ -1557,20 +1601,8 @@ function handleToolEvent(
     }
     return;
   }
-  
-  if (parentSessionId && parentToolId) {
-    import('./SubagentModule').then(({ routeToolEventToToolCard }) => {
-      routeToolEventToToolCard(context, parentSessionId, parentToolId, {
-        sessionId,
-        turnId,
-        toolEvent
-      }, onTodoWriteResult);
-    }).catch(error => {
-      log.error('Failed to load SubagentModule or route tool event', { sessionId, turnId, error });
-    });
-  } else {
-    processToolEvent(context, sessionId, turnId, toolEvent, undefined, onTodoWriteResult);
-  }
+
+  processToolEvent(context, sessionId, turnId, roundId, toolEvent, undefined, onTodoWriteResult);
 }
 
 /**
@@ -1578,30 +1610,6 @@ function handleToolEvent(
  */
 function handleModelRoundStart(context: FlowChatContext, event: any): void {
   const { sessionId, turnId, roundId, roundIndex } = event;
-  const subagentParentInfo = normalizeSubagentParentInfo(event);
-
-  if (subagentParentInfo) {
-    attachSubagentSessionToParentTool(subagentParentInfo, sessionId);
-    routeModelRoundStartedToToolCardInternal(
-      context,
-      subagentParentInfo.sessionId,
-      subagentParentInfo.toolCallId,
-      { sessionId, turnId, roundId },
-    );
-
-    const modelIdRaw = event.modelId ?? (event as any).model_id;
-    const modelId = typeof modelIdRaw === 'string' ? modelIdRaw.trim() : '';
-    if (modelId) {
-      const store = FlowChatStore.getInstance();
-      store.updateModelRoundItem(
-        subagentParentInfo.sessionId,
-        subagentParentInfo.dialogTurnId,
-        subagentParentInfo.toolCallId,
-        { subagentModelId: modelId, subagentModelAlias: modelId } as Partial<FlowToolItem>,
-      );
-    }
-    return;
-  }
   
   if (!shouldProcessEvent(sessionId, turnId, 'data', 'ModelRoundStarted')) {
     return;
@@ -1654,6 +1662,18 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
 
   context.flowChatStore.addModelRound(sessionId, turnId, modelRound);
   scheduleModelResponseStatus(context, sessionId, turnId, roundId);
+
+  const linkedParentInfo = getLinkedSubagentParentInfo(sessionId);
+  const modelIdRaw = event.modelId ?? (event as any).model_id;
+  const modelId = typeof modelIdRaw === 'string' ? modelIdRaw.trim() : '';
+  if (linkedParentInfo && modelId) {
+    store.updateModelRoundItem(
+      linkedParentInfo.sessionId,
+      linkedParentInfo.dialogTurnId,
+      linkedParentInfo.toolCallId,
+      { subagentModelId: modelId, subagentModelAlias: modelId } as Partial<FlowToolItem>,
+    );
+  }
   
   immediateSaveDialogTurn(context, sessionId, turnId);
 }
@@ -1669,13 +1689,6 @@ function handleModelRoundComplete(context: FlowChatContext, event: ModelRoundCom
   const sessionId = event?.sessionId ?? (event as any)?.session_id;
   const turnId = event?.turnId ?? (event as any)?.turn_id;
   const roundId = event?.roundId ?? (event as any)?.round_id;
-  const subagentParentInfo = normalizeSubagentParentInfo(event);
-
-  if (subagentParentInfo) {
-    attachSubagentSessionToParentTool(subagentParentInfo, sessionId);
-    immediateSaveDialogTurn(context, subagentParentInfo.sessionId, subagentParentInfo.dialogTurnId);
-    return;
-  }
 
   if (!sessionId || !turnId || !roundId) {
     log.warn('ModelRoundCompleted missing identity fields', { event });
@@ -1720,6 +1733,11 @@ function handleModelRoundComplete(context: FlowChatContext, event: ModelRoundCom
   }));
 
   immediateSaveDialogTurn(context, sessionId, turnId);
+
+  const linkedParentInfo = getLinkedSubagentParentInfo(sessionId);
+  if (linkedParentInfo && !isBackgroundSubagent(linkedParentInfo)) {
+    immediateSaveDialogTurn(context, linkedParentInfo.sessionId, linkedParentInfo.dialogTurnId);
+  }
 }
 
 /**
@@ -1898,29 +1916,10 @@ export function handleDialogTurnComplete(
 ): void {
   const sessionId = event?.sessionId ?? event?.session_id;
   const turnId = event?.turnId ?? event?.turn_id;
-  const subagentParentInfo = normalizeSubagentParentInfo(event);
   // Partial recovery reason from backend (stream was interrupted mid-way)
   const partialRecoveryReason = event?.partialRecoveryReason ?? event?.partial_recovery_reason;
   const success = event?.success;
   const finishReason = event?.finishReason ?? event?.finish_reason;
-
-  if (subagentParentInfo) {
-    if (sessionId) {
-      attachSubagentSessionToParentTool(subagentParentInfo, sessionId);
-      if (success === false) {
-        settleSubagentItems(
-          context,
-          subagentParentInfo,
-          sessionId,
-          'error',
-          buildUnsuccessfulCompletionError(finishReason),
-        );
-      } else {
-        settleSubagentItems(context, subagentParentInfo, sessionId, 'completed');
-      }
-    }
-    return;
-  }
 
   if (!sessionId || !turnId) {
     log.warn('DialogTurnCompleted missing sessionId or turnId', { event });
@@ -2086,15 +2085,6 @@ function buildDialogErrorActions(diagnostics: string): NotificationAction[] | un
 function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
   const { sessionId, turnId, error } = event;
   const errorDetail = normalizeDialogErrorDetail(event);
-  const subagentParentInfo = normalizeSubagentParentInfo(event);
-
-  if (subagentParentInfo) {
-    if (sessionId) {
-      attachSubagentSessionToParentTool(subagentParentInfo, sessionId);
-      settleSubagentItems(context, subagentParentInfo, sessionId, 'error', error);
-    }
-    return;
-  }
 
   // P1-11: Idempotent terminal-event handling.
   if (sessionId && turnId) {
@@ -2231,15 +2221,6 @@ function handleDialogTurnCancelled(
   _onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
 ): void {
   const { sessionId, turnId } = event;
-  const subagentParentInfo = normalizeSubagentParentInfo(event);
-
-  if (subagentParentInfo) {
-    if (sessionId) {
-      attachSubagentSessionToParentTool(subagentParentInfo, sessionId);
-      settleSubagentItems(context, subagentParentInfo, sessionId, 'cancelled');
-    }
-    return;
-  }
 
   // P1-11: Idempotent terminal-event handling. The execution engine may emit
   // DialogTurnCancelled when it detects cancellation between rounds, and the

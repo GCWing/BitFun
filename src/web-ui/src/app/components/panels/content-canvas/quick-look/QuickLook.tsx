@@ -18,6 +18,7 @@ import { createPortal } from 'react-dom';
 import { X, Pin, ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
+import { useDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import FlexiblePanel from '../../base/FlexiblePanel';
 import type { PanelContent } from '../types';
 import './QuickLook.scss';
@@ -53,6 +54,13 @@ export const QuickLook: React.FC<QuickLookProps> = ({
   const [adjustedPosition, setAdjustedPosition] = useState(position);
   const [hasEdited, setHasEdited] = useState(false);
 
+  useDismissibleLayer({
+    enabled: isOpen,
+    scope: 'canvas',
+    onDismiss: onClose,
+    id: 'canvas-quick-look',
+  });
+
   // Adjust position to stay within viewport
   useEffect(() => {
     if (!isOpen || !containerRef.current) return;
@@ -84,23 +92,10 @@ export const QuickLook: React.FC<QuickLookProps> = ({
     setAdjustedPosition({ x, y });
   }, [isOpen, position]);
 
-  // Keyboard handling
   useEffect(() => {
     if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      } else if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        onPin();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, onPin]);
+    containerRef.current?.focus({ preventScroll: true });
+  }, [isOpen]);
 
   // Close on outside click
   useEffect(() => {
@@ -154,6 +149,8 @@ export const QuickLook: React.FC<QuickLookProps> = ({
     <div
       ref={containerRef}
       className="canvas-quick-look"
+      data-shortcut-scope="canvas"
+      tabIndex={-1}
       style={{
         left: `${adjustedPosition.x}px`,
         top: `${adjustedPosition.y}px`,

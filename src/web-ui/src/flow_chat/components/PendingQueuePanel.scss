@@ -56,8 +56,8 @@
 
   &__title {
     flex: 1 1 auto;
-    font-size: 10px;
-    line-height: 1.25;
+    font-size: var(--flowchat-font-size-xxs);
+    line-height: var(--flowchat-compact-line-height, 1.32);
     font-weight: 600;
     letter-spacing: 0.03em;
     text-transform: uppercase;
@@ -65,8 +65,8 @@
   }
 
   &__hint {
-    font-size: 9px;
-    line-height: 1.25;
+    font-size: var(--flowchat-font-size-2xs);
+    line-height: var(--flowchat-compact-line-height, 1.32);
     color: var(--color-text-muted);
     font-weight: 400;
     text-transform: none;
@@ -139,7 +139,7 @@
 
   &__preview {
     font-size: var(--flowchat-font-size-base, 13px);
-    line-height: 1.45;
+    line-height: var(--flowchat-support-line-height, 1.45);
     color: var(--color-text-primary);
     white-space: pre-wrap;
     word-break: break-word;
@@ -182,7 +182,7 @@
     padding: 6px 8px;
     font-size: var(--flowchat-font-size-base, 13px);
     font-family: inherit;
-    line-height: 1.45;
+    line-height: var(--flowchat-support-line-height, 1.45);
     color: var(--color-text-primary);
     border: 1px solid color-mix(in srgb, var(--color-accent-400) 28%, transparent);
     border-radius: 6px;

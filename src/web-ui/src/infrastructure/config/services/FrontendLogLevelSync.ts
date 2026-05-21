@@ -1,4 +1,4 @@
-import { configAPI } from '@/infrastructure/api';
+import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import {
   LogLevel,
   createLogger,
@@ -6,13 +6,13 @@ import {
   setIncludeSensitiveDiagnostics,
 } from '@/shared/utils/logger';
 import type { BackendLogLevel } from '../types';
-import { configManager } from './ConfigManager';
 
 const log = createLogger('FrontendLogLevelSync');
 const LOGGING_LEVEL_PATH = 'app.logging.level';
 const LOGGING_INCLUDE_SENSITIVE_PATH = 'app.logging.include_sensitive_diagnostics';
 
-let initialized = false;
+let initialSettingsLoaded = false;
+let configWatcherInstalled = false;
 
 function toFrontendLogLevel(level: string | null | undefined): LogLevel | null {
   switch (level?.trim().toLowerCase()) {
@@ -74,7 +74,7 @@ function applyFrontendLogLevel(level: string | null | undefined, source: string)
 
 async function resolveInitialLogLevel(): Promise<string | undefined> {
   const [savedLevelResult, runtimeInfoResult] = await Promise.allSettled([
-    configManager.getConfig<BackendLogLevel>(LOGGING_LEVEL_PATH),
+    configAPI.getConfig(LOGGING_LEVEL_PATH) as Promise<BackendLogLevel>,
     configAPI.getRuntimeLoggingInfo(),
   ]);
 
@@ -93,27 +93,16 @@ async function resolveInitialLogLevel(): Promise<string | undefined> {
 }
 
 async function resolveInitialSensitiveDiagnosticsPreference(): Promise<boolean> {
-  const value = await configManager.getConfig<boolean>(LOGGING_INCLUDE_SENSITIVE_PATH);
+  const value = await configAPI.getConfig(LOGGING_INCLUDE_SENSITIVE_PATH) as boolean | undefined;
   return value ?? true;
 }
 
 export async function initializeFrontendLogLevelSync(): Promise<void> {
-  if (initialized) {
+  if (initialSettingsLoaded) {
     return;
   }
 
-  initialized = true;
-
-  configManager.onConfigChange((path, _oldValue, newValue) => {
-    if (path === LOGGING_LEVEL_PATH) {
-      applyFrontendLogLevel(typeof newValue === 'string' ? newValue : undefined, 'config_change');
-      return;
-    }
-
-    if (path === LOGGING_INCLUDE_SENSITIVE_PATH) {
-      setIncludeSensitiveDiagnostics(typeof newValue === 'boolean' ? newValue : true);
-    }
-  });
+  initialSettingsLoaded = true;
 
   try {
     const [initialLevel, includeSensitiveDiagnostics] = await Promise.all([
@@ -124,5 +113,30 @@ export async function initializeFrontendLogLevelSync(): Promise<void> {
     setIncludeSensitiveDiagnostics(includeSensitiveDiagnostics);
   } catch (error) {
     log.error('Failed to initialize frontend log level sync', error);
+  }
+}
+
+export async function installFrontendLogLevelConfigWatcher(): Promise<void> {
+  if (configWatcherInstalled) {
+    return;
+  }
+
+  configWatcherInstalled = true;
+
+  try {
+    const { configManager } = await import('./ConfigManager');
+    configManager.onConfigChange((path, _oldValue, newValue) => {
+      if (path === LOGGING_LEVEL_PATH) {
+        applyFrontendLogLevel(typeof newValue === 'string' ? newValue : undefined, 'config_change');
+        return;
+      }
+
+      if (path === LOGGING_INCLUDE_SENSITIVE_PATH) {
+        setIncludeSensitiveDiagnostics(typeof newValue === 'boolean' ? newValue : true);
+      }
+    });
+  } catch (error) {
+    configWatcherInstalled = false;
+    log.error('Failed to install frontend log level config watcher', error);
   }
 }

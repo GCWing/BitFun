@@ -1,0 +1,38 @@
+import { describe, expect, it, vi } from 'vitest';
+
+const workspaceManagerMock = vi.hoisted(() => ({
+  addEventListener: vi.fn(() => vi.fn()),
+  getState: vi.fn(() => ({
+    currentWorkspace: {
+      rootPath: 'D:/workspace/BitFun',
+    },
+  })),
+}));
+
+const gitStateManagerMock = vi.hoisted(() => ({
+  refresh: vi.fn(async () => undefined),
+  invalidateCache: vi.fn(),
+}));
+
+vi.mock('@/infrastructure/services/business/workspaceManager', () => ({
+  workspaceManager: workspaceManagerMock,
+}));
+
+vi.mock('../state/GitStateManager', () => ({
+  gitStateManager: gitStateManagerMock,
+}));
+
+import { workspaceGitInitializer } from './WorkspaceGitInitializer';
+
+describe('WorkspaceGitInitializer startup refresh', () => {
+  it('refreshes only the basic Git layer for the current workspace on startup', async () => {
+    workspaceGitInitializer.start();
+    await Promise.resolve();
+
+    expect(gitStateManagerMock.refresh).toHaveBeenCalledWith('D:/workspace/BitFun', {
+      layers: ['basic'],
+      reason: 'mount',
+      force: true,
+    });
+  });
+});

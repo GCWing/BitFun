@@ -1,5 +1,5 @@
-use crate::service::config::global::GlobalConfigManager;
 use crate::infrastructure::get_path_manager_arc;
+use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{AgentSubagentOverrideConfig, ModeConfig};
 use crate::util::errors::{BitFunError, BitFunResult};
 use serde_json::{Map, Value};
@@ -73,7 +73,10 @@ pub(super) fn merge_dynamic_mcp_tools(
             continue;
         }
 
-        if configured_tools.iter().any(|existing| existing == tool_name) {
+        if configured_tools
+            .iter()
+            .any(|existing| existing == tool_name)
+        {
             continue;
         }
 

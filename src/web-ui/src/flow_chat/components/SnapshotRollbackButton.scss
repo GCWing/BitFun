@@ -7,9 +7,9 @@
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  font-size: 12px;
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
-  line-height: 1.5;
+  line-height: var(--flowchat-support-line-height, 1.45);
   border-radius: 6px;
   border: 1px solid var(--color-border, #e5e7eb);
   background: var(--color-bg-elevated, #ffffff);

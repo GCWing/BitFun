@@ -9,7 +9,7 @@ use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use base64::{Engine, engine::general_purpose::STANDARD as B64};
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use rand::RngCore;
 use rmcp::transport::auth::{AuthorizationManager, CredentialStore, OAuthState, StoredCredentials};
 use serde::{Deserialize, Serialize};

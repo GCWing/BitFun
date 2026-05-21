@@ -65,7 +65,7 @@ class WorkspaceGitInitializer {
     try {
       this.currentWorkspacePath = workspacePath;
       await gitStateManager.refresh(workspacePath, {
-        layers: ['basic', 'status'],
+        layers: ['basic'],
         reason: 'mount',
         force: true,
       });
@@ -92,7 +92,7 @@ class WorkspaceGitInitializer {
       }
       this.currentWorkspacePath = workspacePath;
       await gitStateManager.refresh(workspacePath, {
-        layers: ['basic', 'status'],
+        layers: ['basic'],
         reason: 'mount',
         force: true,
       });

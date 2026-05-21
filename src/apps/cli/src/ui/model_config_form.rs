@@ -850,7 +850,7 @@ impl ModelConfigFormState {
                     let style = if selected && is_active {
                         Style::default()
                             .bg(theme.primary)
-                            .fg(Color::White)
+                            .fg(theme.selection_foreground())
                             .add_modifier(Modifier::BOLD)
                     } else if selected {
                         theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD)
@@ -881,7 +881,7 @@ impl ModelConfigFormState {
                     let style = if selected && is_active {
                         Style::default()
                             .bg(theme.primary)
-                            .fg(Color::White)
+                            .fg(theme.selection_foreground())
                             .add_modifier(Modifier::BOLD)
                     } else if selected {
                         theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD)
@@ -919,7 +919,7 @@ impl ModelConfigFormState {
                         if is_active {
                             Style::default()
                                 .bg(theme.primary)
-                                .fg(Color::White)
+                                .fg(theme.selection_foreground())
                                 .add_modifier(Modifier::BOLD)
                         } else {
                             Style::default()
@@ -933,7 +933,7 @@ impl ModelConfigFormState {
                         if is_active {
                             Style::default()
                                 .bg(theme.primary)
-                                .fg(Color::White)
+                                .fg(theme.selection_foreground())
                                 .add_modifier(Modifier::BOLD)
                         } else {
                             theme.style(StyleKind::Muted)

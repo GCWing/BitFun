@@ -253,12 +253,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     : undefined;
   const effectiveTargetRelationship = resolveSessionRelationship(effectiveTargetSession);
   const isBtwSession = effectiveTargetRelationship.displayAsChild;
-  const showTargetSwitcher = !!activeBtwSessionId;
   const currentSessionTitle = currentSession?.title?.trim() || t('session.untitled');
   const activeBtwSession = activeBtwSessionId
     ? flowChatState.sessions.get(activeBtwSessionId)
     : undefined;
   const activeBtwRelationship = resolveSessionRelationship(activeBtwSession);
+  const canInteractWithActiveChildSession = activeBtwRelationship.kind !== 'subagent';
+  const showTargetSwitcher = !!activeBtwSessionId && canInteractWithActiveChildSession;
   const activeBtwKind = activeBtwRelationship.kind === 'review' || activeBtwRelationship.kind === 'deep_review'
     ? activeBtwRelationship.kind
     : 'btw';
@@ -350,9 +351,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [isAssistantWorkspace, modeState.available]
   );
 
+  // Stable refs for Shift+Tab mode cycling (avoids adding deps to handleKeyDown)
+  const switchableModesRef = useRef(switchableModes);
+  switchableModesRef.current = switchableModes;
+  const currentModeRef = useRef(currentMode);
+  currentModeRef.current = currentMode;
+  const applyModeChangeRef = useRef<((modeId: string) => void) | null>(null);
+
   /** Code session: modes switchable on top of default agentic */
   const incrementalCodeModes = useMemo(
-    () => switchableModes.filter(m => m.id === 'Plan' || m.id === 'debug' || m.id === 'DeepResearch' || m.id === 'Team'),
+    () =>
+      switchableModes.filter(
+        m => m.id !== 'agentic'
+      ),
     [switchableModes]
   );
 
@@ -1895,6 +1906,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [effectiveTargetSessionId]);
 
+  applyModeChangeRef.current = applyModeChange;
+
   const requestModeChange = useCallback((modeId: string) => {
     if (!canSwitchModes) {
       dispatchMode({ type: 'CLOSE_DROPDOWN' });
@@ -2033,6 +2046,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       || nativeEvt.keyCode === 229;
 
     if (e.key === 'Escape' && isComposing) {
+      return;
+    }
+
+    if (e.key === 'Tab' && e.shiftKey) {
+      const modes = switchableModesRef.current;
+      const modeNow = currentModeRef.current;
+      const apply = applyModeChangeRef.current;
+      if (!(canSwitchModes && apply && modes.length > 1)) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Dismiss slash command if open
+      if (slashCommandState.isActive) {
+        setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+        dispatchInput({ type: 'CLEAR_VALUE' });
+      }
+
+      const currentIdx = modes.findIndex(m => m.id === modeNow);
+      if (currentIdx === -1) {
+        apply(modes[0].id);
+        return;
+      }
+      const nextIdx = (currentIdx + 1) % modes.length;
+      apply(modes[nextIdx].id);
       return;
     }
 

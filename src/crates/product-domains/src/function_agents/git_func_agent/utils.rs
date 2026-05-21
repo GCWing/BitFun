@@ -1,7 +1,12 @@
 //! Pure Git function-agent helper utilities.
 
+use crate::function_agents::common::extract_json_from_ai_response;
 use crate::function_agents::git_func_agent::types::*;
 use std::path::Path;
+
+pub const COMMIT_MESSAGE_PROMPT: &str = include_str!("prompts/commit_message.md");
+
+const COMMIT_MESSAGE_PROMPT_MAX_CHARS: usize = 50_000;
 
 pub fn infer_file_type(path: &str) -> String {
     Path::new(path)
@@ -225,6 +230,56 @@ pub fn build_commit_prompt(
         .replace("{max_title_length}", &options.max_title_length.to_string())
 }
 
+pub fn truncate_diff_for_commit_prompt(diff: &str, max_chars: usize) -> String {
+    if diff.len() <= max_chars {
+        return diff.to_string();
+    }
+
+    let keep_chars = max_chars.saturating_sub(100);
+    let mut truncated = diff.chars().take(keep_chars).collect::<String>();
+    truncated.push_str("\n\n... [content truncated] ...");
+    truncated
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedCommitPrompt {
+    pub prompt: String,
+    pub diff_content: String,
+    pub truncated: bool,
+}
+
+pub fn prepare_commit_prompt(
+    template: &str,
+    diff_content: &str,
+    project_context: &ProjectContext,
+    options: &CommitMessageOptions,
+    max_chars: usize,
+) -> PreparedCommitPrompt {
+    let truncated = diff_content.len() > max_chars;
+    let diff_content = truncate_diff_for_commit_prompt(diff_content, max_chars);
+    let prompt = build_commit_prompt(template, &diff_content, project_context, options);
+
+    PreparedCommitPrompt {
+        prompt,
+        diff_content,
+        truncated,
+    }
+}
+
+pub fn prepare_commit_ai_prompt(
+    diff_content: &str,
+    project_context: &ProjectContext,
+    options: &CommitMessageOptions,
+) -> PreparedCommitPrompt {
+    prepare_commit_prompt(
+        COMMIT_MESSAGE_PROMPT,
+        diff_content,
+        project_context,
+        options,
+        COMMIT_MESSAGE_PROMPT_MAX_CHARS,
+    )
+}
+
 pub fn parse_commit_type_label(label: &str) -> CommitType {
     match label.to_lowercase().as_str() {
         "feat" | "feature" => CommitType::Feat,
@@ -257,4 +312,86 @@ pub fn parse_commit_analysis_value(value: &serde_json::Value) -> Result<AICommit
             .to_string(),
         confidence: value["confidence"].as_f64().unwrap_or(0.8) as f32,
     })
+}
+
+pub fn parse_commit_analysis_json(json: &str) -> Result<AICommitAnalysis, String> {
+    let value = serde_json::from_str::<serde_json::Value>(json)
+        .map_err(|error| format!("Failed to parse AI response: {}", error))?;
+    parse_commit_analysis_value(&value)
+}
+
+pub fn parse_commit_ai_response(response: &str) -> AgentResult<AICommitAnalysis> {
+    let json_str = extract_json_from_ai_response(response)
+        .ok_or_else(|| AgentError::analysis_error("Cannot extract JSON from response"))?;
+
+    parse_commit_analysis_json(&json_str).map_err(AgentError::analysis_error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::function_agents::common::AgentErrorType;
+
+    fn project_context() -> ProjectContext {
+        ProjectContext {
+            project_type: "Rust workspace".to_string(),
+            tech_stack: vec!["Rust".to_string()],
+            project_docs: None,
+            code_standards: None,
+        }
+    }
+
+    fn commit_options() -> CommitMessageOptions {
+        CommitMessageOptions {
+            format: CommitFormat::Conventional,
+            language: Language::English,
+            max_title_length: 72,
+            include_body: true,
+            include_files: true,
+        }
+    }
+
+    #[test]
+    fn commit_ai_prompt_uses_product_domain_template_and_truncation_policy() {
+        let large_diff = "a".repeat(50_010);
+        let prompt = prepare_commit_ai_prompt(&large_diff, &project_context(), &commit_options());
+
+        assert!(prompt.truncated);
+        assert!(prompt.prompt.contains("Commit Message Generation Prompt"));
+        assert!(prompt.prompt.contains("... [content truncated] ..."));
+        assert!(prompt.diff_content.len() < 50_010);
+    }
+
+    #[test]
+    fn commit_ai_response_policy_extracts_json_and_maps_domain_errors() {
+        let parsed = parse_commit_ai_response(
+            r#"The answer is:
+```json
+{
+  "type": "refactor",
+  "title": "refactor(product-domains): move response policy",
+  "body": "Keep behavior stable.",
+  "confidence": 0.91
+}
+```
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            parsed.title,
+            "refactor(product-domains): move response policy"
+        );
+        assert_eq!(parsed.body.as_deref(), Some("Keep behavior stable."));
+        assert_eq!(parsed.confidence, 0.91);
+
+        let missing_json = parse_commit_ai_response("no json here").unwrap_err();
+        assert_eq!(missing_json.error_type, AgentErrorType::AnalysisError);
+        assert_eq!(missing_json.message, "Cannot extract JSON from response");
+
+        let missing_title =
+            parse_commit_ai_response(r#"{"type":"refactor","body":"missing title"}"#).unwrap_err();
+        assert_eq!(missing_title.error_type, AgentErrorType::AnalysisError);
+        assert_eq!(missing_title.message, "Missing title field");
+    }
 }

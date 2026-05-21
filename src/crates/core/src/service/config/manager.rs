@@ -4,7 +4,7 @@
 
 use super::providers::ConfigProviderRegistry;
 use super::types::*;
-use crate::infrastructure::{PathManager, try_get_path_manager_arc};
+use crate::infrastructure::{try_get_path_manager_arc, PathManager};
 use crate::util::errors::*;
 use log::{debug, info, warn};
 

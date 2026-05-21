@@ -165,27 +165,42 @@ During those transitions, the DOM may report intermediate sizes for multiple fra
 ## C. Follow-Output Mode (continuous tail)
 
 When the viewport is in follow-output mode and the latest turn is still
-streaming, the user's intent is "keep the tail visible", which is the
-opposite of "preserve the upper anchor". To avoid the visible
-"stutter then jump" behavior caused by collapse pre-compensation
-freezing the viewport mid-animation, follow mode short-circuits the
-protection path:
+streaming, the user's intent is "keep the tail visible". A naive
+implementation that simply pins `scrollTop = maxScrollTop` every frame
+produces a very visible "conversation sinks down" jitter every time a
+tool card above the viewport auto-collapses: the browser clamps
+`scrollTop` to the new (smaller) max, the loop re-pins to the new max
+the next frame, and the upper content visibly drifts during the
+320 ms collapse animation.
 
-1. `handleToolCardCollapseIntent` returns early without writing
-   `pendingCollapseIntent`, without adding `collapse` reservation, and
-   without activating anchor lock.
-2. The shrink branch of `measureHeightChange` returns early without
-   adding fallback footer compensation.
-3. A continuous RAF loop in `useFlowChatFollowOutput` runs every frame
-   while `isFollowing && isStreaming`, calling `performAutoFollowScroll`
-   to chase the bottom and `reconcileStickyPinReservation` to keep the
-   sticky-latest pin floor aligned with the live DOM.
-4. The loop is cancelled as soon as follow exits (user upward scroll,
+To eliminate that jitter, follow mode uses the same collapse-protection
+path as the rest of the list during a known collapse, and only resumes
+bottom-tracking once the animation settles:
+
+1. `handleToolCardCollapseIntent` always writes `pendingCollapseIntent`,
+   adds a `collapse` bottom reservation, and activates an anchor lock —
+   regardless of whether follow mode is active. This freezes the upper
+   visual anchor so the conversation does not appear to move while the
+   card animates away.
+2. The shrink branch of `measureHeightChange` runs the full compensation
+   reconciliation even in follow mode, so the synthetic footer absorbs
+   the real measured shrink.
+3. The continuous RAF loop in `useFlowChatFollowOutput` honours
+   `shouldSuspendAutoFollow`. While a collapse intent / layout
+   transition is in flight, the loop keeps re-arming frames but skips
+   the `performAutoFollowScroll` call, so it does not fight the anchor
+   lock.
+4. When the collapse transition finishes, `handleTransitionFinish`
+   clears `pendingCollapseIntent` and dispatches the deferred follow
+   reason via `scheduleFollowToLatest`. That single programmatic
+   bottom-snap releases the collapse reservation and re-aligns the
+   viewport with the live tail. Subsequent streaming tokens are
+   followed normally by the continuous loop.
+5. The loop is cancelled as soon as follow exits (user upward scroll,
    session change, streaming ends, or an explicit navigation).
 
-This branch coexists with the legacy collapse compensation path. Outside
-follow mode (user reading older content), all original protections still
-apply unchanged.
+Outside follow mode (user reading older content), all original
+protections still apply unchanged.
 
 ## Why `overflow-anchor: none` Must Stay
 
@@ -242,11 +257,16 @@ If a future collapsible component shows the same "header drops" or "flash on col
 - Removing `overflow-anchor: none`.
 - Removing transition-aware delayed measurement.
 - Simplifying anchor restore to a one-shot restore without the scroll listener fallback.
-- Removing the follow-mode short-circuit in `handleToolCardCollapseIntent` /
-  `measureHeightChange`. Without it, follow-output streaming will visibly stall
-  during collapse animations and then snap to the latest token.
+- Re-introducing a follow-mode short-circuit in `handleToolCardCollapseIntent`
+  or `measureHeightChange`. Without the collapse compensation + anchor lock,
+  follow-output bottom-tracking causes the conversation to visibly "sink down"
+  every time a tool card above the viewport auto-collapses.
+- Removing the `shouldSuspendAutoFollow` gate from the continuous RAF follow
+  loop. Without it, the loop will fight the anchor lock during the collapse
+  animation and reintroduce the same jitter.
 - Removing the continuous RAF follow loop. Event-driven follow alone cannot
-  keep up with collapse animations + dense token streams without visible jitter.
+  keep up with dense token streams without visible jitter outside collapse
+  windows.
 
 ## If You Need To Change This Logic
 

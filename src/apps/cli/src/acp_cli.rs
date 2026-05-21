@@ -50,7 +50,10 @@ impl ExternalAcpClient {
     fn config(self) -> AcpClientConfig {
         let (command, args) = match self {
             Self::Opencode => ("opencode", vec!["acp"]),
-            Self::ClaudeCode => ("npx", vec!["--yes", "@zed-industries/claude-code-acp@latest"]),
+            Self::ClaudeCode => (
+                "npx",
+                vec!["--yes", "@zed-industries/claude-code-acp@latest"],
+            ),
             Self::Codex => ("npx", vec!["--yes", "@zed-industries/codex-acp@latest"]),
         };
         AcpClientConfig {
@@ -251,10 +254,7 @@ pub async fn list_external_clients() -> Result<()> {
     }
 
     for info in configured.values() {
-        if !matches!(
-            info.id.as_str(),
-            "opencode" | "claude-code" | "codex"
-        ) {
+        if !matches!(info.id.as_str(), "opencode" | "claude-code" | "codex") {
             print_client_info(info);
         }
     }
@@ -287,7 +287,9 @@ pub async fn doctor_external_clients() -> Result<bool> {
     if has_runnable {
         println!("At least one external ACP agent is runnable.");
     } else {
-        println!("No external ACP agent is runnable yet. Install opencode, Claude Code, or Codex first.");
+        println!(
+            "No external ACP agent is runnable yet. Install opencode, Claude Code, or Codex first."
+        );
     }
     Ok(has_runnable)
 }
@@ -410,7 +412,7 @@ pub async fn run_external_client(
     if output.trim().is_empty() {
         println!("External ACP agent completed without text output.");
     } else {
-    println!("{}", output);
+        println!("{}", output);
     }
     Ok(())
 }
@@ -489,7 +491,10 @@ fn update_client_config_json(
 
     entry_object.insert("enabled".to_string(), json!(enabled));
     if let Some(permission_mode) = permission_mode {
-        entry_object.insert("permissionMode".to_string(), serde_json::to_value(permission_mode)?);
+        entry_object.insert(
+            "permissionMode".to_string(),
+            serde_json::to_value(permission_mode)?,
+        );
     }
 
     Ok(value)
@@ -542,7 +547,11 @@ fn print_requirement_probe(probe: &AcpClientRequirementProbe) {
 }
 
 fn print_requirement_item(label: &str, item: &bitfun_acp::client::AcpRequirementProbeItem) {
-    let installed = if item.installed { "installed" } else { "missing" };
+    let installed = if item.installed {
+        "installed"
+    } else {
+        "missing"
+    };
     let mut details = Vec::new();
     if let Some(version) = item.version.as_ref().filter(|value| !value.is_empty()) {
         details.push(format!("version {}", version));

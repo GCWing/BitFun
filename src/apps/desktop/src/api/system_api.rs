@@ -102,7 +102,7 @@ pub async fn check_for_updates(
         release_notes: None,
         release_date: None,
     })
-    
+
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -158,14 +158,14 @@ pub async fn install_update(app: AppHandle, request: InstallUpdateRequest) -> Re
                 },
             )
             .await
-            .map_err(|e| e.to_string()) 
+            .map_err(|e| e.to_string())
     }
-    
+
     #[cfg(target_env = "ohos")]
     {
         Err("Not supported on this platform".to_string())
     }
-    
+
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -464,7 +464,7 @@ pub async fn toggle_main_window_fullscreen(
     request: ToggleMainWindowFullscreenRequest,
 ) -> Result<ToggleMainWindowFullscreenResponse, String> {
     #[cfg(target_env = "ohos")]
-    { 
+    {
         Err("Do not support the toggle main_window_fullscreen".to_string())
     }
     #[cfg(not(target_env = "ohos"))]
@@ -474,15 +474,15 @@ pub async fn toggle_main_window_fullscreen(
             return Err("Main window not found".to_string());
         };
 
-        let current_fullscreen = window.is_fullscreen().map_err(|error| {
-            format!("Failed to read main window fullscreen state: {}", error)
-        })?;
-        let current_maximized = window.is_maximized().map_err(|error| {
-            format!("Failed to read main window maximize state: {}", error)
-        })?;
-        let restore_maximized_after_fullscreen = *crate::api::system_api::main_window_fullscreen_restore_maximized()
-            .lock()
-            .map_err(|_| "Main window fullscreen restore state is unavailable".to_string())?;
+    let current_fullscreen = window
+        .is_fullscreen()
+        .map_err(|error| format!("Failed to read main window fullscreen state: {}", error))?;
+    let current_maximized = window
+        .is_maximized()
+        .map_err(|error| format!("Failed to read main window maximize state: {}", error))?;
+    let restore_maximized_after_fullscreen = *main_window_fullscreen_restore_maximized()
+        .lock()
+        .map_err(|_| "Main window fullscreen restore state is unavailable".to_string())?;
 
         let transition = crate::api::system_api::plan_main_window_fullscreen_transition(
             current_fullscreen,
@@ -505,12 +505,8 @@ pub async fn toggle_main_window_fullscreen(
                 .map_err(|_| "Main window fullscreen restore state is unavailable".to_string())? =
                 transition.next_restore_maximized_after_fullscreen;
 
-            return Ok(crate::api::system_api::read_main_window_fullscreen_response(
-                &window,
-                true,
-                false,
-            ));
-        }
+        return Ok(read_main_window_fullscreen_response(&window, true, false));
+    }
 
         window
             .set_fullscreen(false)
@@ -538,7 +534,7 @@ pub async fn toggle_main_window_fullscreen(
             restored_maximized,
         ))
     }
-    
+
 }
 
 fn apply_main_window_fullscreen_monitor_bounds(
@@ -556,14 +552,14 @@ fn apply_main_window_fullscreen_monitor_bounds(
             .map_err(|error| format!("Failed to read current monitor for fullscreen: {}", error))?
             .or_else(|| app.primary_monitor().ok().flatten())
             .ok_or_else(|| "Failed to resolve monitor for fullscreen".to_string())?;
-    
+
         window
             .set_position(Position::Physical(*monitor.position()))
             .map_err(|error| format!("Failed to align fullscreen window position: {}", error))?;
         window
             .set_size(Size::Physical(*monitor.size()))
             .map_err(|error| format!("Failed to align fullscreen window size: {}", error))?;
-    
+
         Ok(())
     }
 }

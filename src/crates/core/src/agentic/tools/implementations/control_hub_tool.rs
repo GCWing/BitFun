@@ -1222,8 +1222,7 @@ impl Tool for ControlHubTool {
     }
 
     fn short_description(&self) -> String {
-        "Control browser, terminal, and desktop helper domains through one tool."
-            .to_string()
+        "Control browser, terminal, and desktop helper domains through one tool.".to_string()
     }
 
     fn default_exposure(&self) -> ToolExposure {

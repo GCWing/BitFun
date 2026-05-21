@@ -2,15 +2,15 @@
 ///
 /// Single command execution mode (non-interactive).
 /// Consumes core events directly from EventQueue.
-
 use anyhow::Result;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use bitfun_events::AgenticEvent;
 
+use crate::agent::{agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter, Agent};
 use crate::config::CliConfig;
-use crate::agent::{Agent, core_adapter::CoreAgentAdapter, agentic_system::AgenticSystem};
 
 pub struct ExecMode {
     #[allow(dead_code)]
@@ -87,10 +87,14 @@ impl ExecMode {
 
         println!("Thinking...");
 
-        let _turn_id = self.agent.send_message(self.message.clone(), &self.agent_type).await?;
+        let _turn_id = self
+            .agent
+            .send_message(self.message.clone(), &self.agent_type)
+            .await?;
 
         // Consume events from EventQueue until turn completes
         let mut total_tool_calls = 0usize;
+        let mut subagent_parent_sessions: HashMap<String, String> = HashMap::new();
 
         loop {
             // Wait for events (efficient, uses Notify internally)
@@ -100,15 +104,25 @@ impl ExecMode {
             for envelope in events {
                 let event = &envelope.event;
 
+                if let AgenticEvent::SubagentSessionLinked {
+                    session_id: subagent_session_id,
+                    parent_session_id,
+                    ..
+                } = event
+                {
+                    subagent_parent_sessions
+                        .insert(subagent_session_id.clone(), parent_session_id.clone());
+                    continue;
+                }
+
                 // Only process events for our session
                 if event.session_id() != Some(&session_id) {
                     // Check if this is a subagent event whose parent is in our session
-                    if let AgenticEvent::ToolEvent { tool_event, subagent_parent_info, .. } = event {
-                        if subagent_parent_info
-                            .as_ref()
-                            .map(|info| info.session_id.as_str())
-                            == Some(session_id.as_str())
-                        {
+                    if let AgenticEvent::ToolEvent { tool_event, .. } = event {
+                        let parent_session_id = event.session_id().and_then(|event_session_id| {
+                            subagent_parent_sessions.get(event_session_id)
+                        });
+                        if parent_session_id.map(String::as_str) == Some(session_id.as_str()) {
                             use bitfun_events::ToolEventData;
                             match tool_event {
                                 ToolEventData::Started { tool_name, .. } => {
@@ -125,7 +139,9 @@ impl ExecMode {
                                         .unwrap_or_else(|| result.to_string());
                                     println!("   [subagent] {} ✓ {}", tool_name, summary);
                                 }
-                                ToolEventData::Failed { tool_name, error, .. } => {
+                                ToolEventData::Failed {
+                                    tool_name, error, ..
+                                } => {
                                     println!("   [subagent] {} ✗ {}", tool_name, error);
                                 }
                                 _ => {}
@@ -184,10 +200,7 @@ impl ExecMode {
                         println!("\n");
                         println!("Execution complete");
                         if total_tool_calls > 0 {
-                            println!(
-                                "\nTool call statistics: {} tools invoked",
-                                total_tool_calls
-                            );
+                            println!("\nTool call statistics: {} tools invoked", total_tool_calls);
                         }
                         // Break out of the event loop
                         self.output_patch_if_needed();

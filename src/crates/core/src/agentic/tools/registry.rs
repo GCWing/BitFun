@@ -1,29 +1,19 @@
 //! Tool registry
 
-use crate::agentic::tools::framework::{DynamicToolInfo, Tool, ToolExposure};
-use crate::agentic::tools::implementations::*;
+use crate::agentic::tools::catalog_provider::resolve_product_readonly_enabled_tools;
+use crate::agentic::tools::framework::{DynamicToolInfo, Tool};
 use crate::util::errors::BitFunResult;
 use bitfun_agent_tools::{
-    DynamicToolDescriptor, DynamicToolProvider, PortResult, ToolDecorator,
-    ToolRegistry as AgentToolRegistry, ToolRegistryItem,
+    DynamicToolDescriptor, DynamicToolProvider, PortResult, ToolDecoratorRef,
+    ToolRegistry as AgentToolRegistry,
 };
 use log::{debug, info, trace, warn};
-use serde_json::Value;
 use std::sync::Arc;
 
-type ToolRef = Arc<dyn Tool>;
-type ToolDecoratorRef = Arc<dyn ToolDecorator<ToolRef>>;
+pub(in crate::agentic::tools) type ToolRef = Arc<dyn Tool>;
+pub(in crate::agentic::tools) type ProductToolDecoratorRef = ToolDecoratorRef<dyn Tool>;
 
-pub const GET_TOOL_SPEC_TOOL_NAME: &str = "GetToolSpec";
-
-#[derive(Debug, Clone)]
-struct SnapshotToolDecorator;
-
-impl ToolDecorator<ToolRef> for SnapshotToolDecorator {
-    fn decorate(&self, tool: ToolRef) -> ToolRef {
-        crate::service::snapshot::wrap_tool_for_snapshot_tracking(tool)
-    }
-}
+pub use bitfun_agent_tools::GET_TOOL_SPEC_TOOL_NAME;
 
 /// Tool registry - manages all available tools (using IndexMap to maintain registration order)
 pub struct ToolRegistry {
@@ -39,7 +29,8 @@ impl Default for ToolRegistry {
 impl ToolRegistry {
     /// Create a new tool registry
     pub fn new() -> Self {
-        Self::with_tool_decorator(Arc::new(SnapshotToolDecorator))
+        crate::agentic::tools::runtime_assembly::ProductToolRuntimeAssembly::default()
+            .create_registry()
     }
 
     /// Create a registry with an injected decoration boundary.
@@ -47,14 +38,15 @@ impl ToolRegistry {
     /// The default production decorator preserves snapshot-aware wrapping while
     /// allowing future owner crates to replace this concrete service coupling
     /// through the `bitfun-runtime-ports` interface.
-    pub fn with_tool_decorator(tool_decorator: ToolDecoratorRef) -> Self {
-        let mut registry = Self {
-            inner: AgentToolRegistry::with_tool_decorator(tool_decorator),
-        };
+    pub fn with_tool_decorator(tool_decorator: ProductToolDecoratorRef) -> Self {
+        crate::agentic::tools::runtime_assembly::ProductToolRuntimeAssembly::with_tool_decorator(
+            tool_decorator,
+        )
+        .create_registry()
+    }
 
-        // Register all tools
-        registry.register_all_tools();
-        registry
+    pub(in crate::agentic::tools) fn from_inner(inner: AgentToolRegistry<dyn Tool>) -> Self {
+        Self { inner }
     }
 
     /// Dynamically register MCP tools
@@ -130,75 +122,6 @@ impl ToolRegistry {
         count
     }
 
-    /// Register all tools
-    fn register_all_tools(&mut self) {
-        // Basic tool set
-        self.register_tool(Arc::new(LSTool::new()));
-        self.register_tool(Arc::new(FileReadTool::new()));
-        self.register_tool(Arc::new(GlobTool::new()));
-        self.register_tool(Arc::new(GrepTool::new()));
-        self.register_tool(Arc::new(FileWriteTool::new()));
-        self.register_tool(Arc::new(FileEditTool::new()));
-        self.register_tool(Arc::new(DeleteFileTool::new()));
-        self.register_tool(Arc::new(BashTool::new()));
-        // TaskTool, execute subagent
-        self.register_tool(Arc::new(TaskTool::new()));
-        // Skill tool
-        self.register_tool(Arc::new(SkillTool::new()));
-        // AskUserQuestion tool
-        self.register_tool(Arc::new(AskUserQuestionTool::new()));
-        // TodoWrite tool
-        self.register_tool(Arc::new(TodoWriteTool::new()));
-        // CreatePlan tool
-        self.register_tool(Arc::new(CreatePlanTool::new()));
-        // Code review submit tool
-        self.register_tool(Arc::new(CodeReviewTool::new()));
-
-        // GetToolSpec — the discovery entry point for collapsed tools.
-        self.register_tool(Arc::new(GetToolSpecTool::new()));
-
-        // GetFileDiff tool
-        self.register_tool(Arc::new(GetFileDiffTool::new()));
-        // Log tool (debug mode only)
-        self.register_tool(Arc::new(LogTool::new()));
-
-        // TerminalControl is now accessible via ControlHub's "terminal" domain,
-        // but we keep it registered separately for backward compatibility.
-        self.register_tool(Arc::new(TerminalControlTool::new()));
-
-        self.register_tool(Arc::new(SessionControlTool::new()));
-        self.register_tool(Arc::new(SessionMessageTool::new()));
-        self.register_tool(Arc::new(SessionHistoryTool::new()));
-
-        // Cron scheduled jobs tool
-        self.register_tool(Arc::new(CronTool::new()));
-
-        // Web tool
-        self.register_tool(Arc::new(WebSearchTool::new()));
-        self.register_tool(Arc::new(WebFetchTool::new()));
-
-        self.register_tool(Arc::new(ListMCPResourcesTool::new()));
-        self.register_tool(Arc::new(ReadMCPResourceTool::new()));
-        self.register_tool(Arc::new(ListMCPPromptsTool::new()));
-        self.register_tool(Arc::new(GetMCPPromptTool::new()));
-
-        self.register_tool(Arc::new(GenerativeUITool::new()));
-
-        // Git version control tool
-        self.register_tool(Arc::new(GitTool::new()));
-
-        // MiniApp Agent tool (single InitMiniApp)
-        self.register_tool(Arc::new(InitMiniAppTool::new()));
-
-        // ControlHub — unified browser/terminal/meta control entry point.
-        // Local desktop and OS/system Computer Use is exposed as a dedicated tool.
-        self.register_tool(Arc::new(ControlHubTool::new()));
-        self.register_tool(Arc::new(ComputerUseTool::new()));
-
-        // Playbook — predefined step-by-step operation guides for common tasks.
-        self.register_tool(Arc::new(PlaybookTool::new()));
-    }
-
     /// Register a single tool
     pub fn register_tool(&mut self, tool: ToolRef) {
         self.inner.register_tool(tool);
@@ -214,16 +137,11 @@ impl ToolRegistry {
     }
 
     pub fn is_tool_collapsed(&self, name: &str) -> bool {
-        self.inner
-            .get_tool(name)
-            .is_some_and(|tool| tool.default_exposure() == ToolExposure::Collapsed)
+        self.inner.is_tool_collapsed(name)
     }
 
     pub fn get_collapsed_tool_names(&self) -> Vec<String> {
-        self.get_tool_names()
-            .into_iter()
-            .filter(|name| self.is_tool_collapsed(name))
-            .collect()
+        self.inner.get_collapsed_tool_names()
     }
 
     /// Get all tool names
@@ -239,42 +157,12 @@ impl ToolRegistry {
         );
         self.inner.get_all_tools()
     }
-
 }
 
 #[async_trait::async_trait]
 impl DynamicToolProvider for ToolRegistry {
     async fn list_dynamic_tools(&self) -> PortResult<Vec<DynamicToolDescriptor>> {
         self.inner.list_dynamic_tools().await
-    }
-}
-
-#[async_trait::async_trait]
-impl ToolRegistryItem for dyn Tool {
-    fn name(&self) -> &str {
-        Tool::name(self)
-    }
-
-    async fn description(&self) -> Result<String, String> {
-        Tool::description(self)
-            .await
-            .map_err(|error| error.to_string())
-    }
-
-    fn input_schema(&self) -> Value {
-        Tool::input_schema(self)
-    }
-
-    async fn input_schema_for_model(&self) -> Value {
-        Tool::input_schema_for_model(self).await
-    }
-
-    fn dynamic_provider_id(&self) -> Option<&str> {
-        Tool::dynamic_provider_id(self)
-    }
-
-    fn dynamic_tool_info(&self) -> Option<DynamicToolInfo> {
-        Tool::dynamic_tool_info(self)
     }
 }
 
@@ -286,8 +174,10 @@ mod tests {
     use crate::agentic::tools::framework::{
         DynamicMcpToolInfo, DynamicToolInfo, Tool, ToolResult, ToolUseContext, ValidationResult,
     };
+    use crate::agentic::tools::runtime_assembly::ProductToolRuntimeAssembly;
+    use crate::agentic::tools::static_providers::builtin_static_tool_providers;
     use async_trait::async_trait;
-    use bitfun_agent_tools::DynamicToolProvider;
+    use bitfun_agent_tools::{DynamicToolProvider, StaticToolProvider, ToolDecorator};
     use serde_json::json;
     use serde_json::Value;
     use std::sync::Arc;
@@ -379,6 +269,60 @@ mod tests {
         })
     }
 
+    #[derive(Debug, Clone)]
+    struct MarkerToolDecorator;
+
+    impl ToolDecorator<ToolRef> for MarkerToolDecorator {
+        fn decorate(&self, tool: ToolRef) -> ToolRef {
+            Arc::new(DecoratedMarkerTool {
+                name: tool.name().to_string(),
+                exposure: tool.default_exposure(),
+                readonly: tool.is_readonly(),
+            })
+        }
+    }
+
+    struct DecoratedMarkerTool {
+        name: String,
+        exposure: crate::agentic::tools::framework::ToolExposure,
+        readonly: bool,
+    }
+
+    #[async_trait]
+    impl Tool for DecoratedMarkerTool {
+        fn name(&self) -> &str {
+            &self.name
+        }
+
+        async fn description(&self) -> crate::util::errors::BitFunResult<String> {
+            Ok("decorated test tool".to_string())
+        }
+
+        fn short_description(&self) -> String {
+            "decorated test tool".to_string()
+        }
+
+        fn default_exposure(&self) -> crate::agentic::tools::framework::ToolExposure {
+            self.exposure
+        }
+
+        fn input_schema(&self) -> Value {
+            json!({ "type": "object" })
+        }
+
+        fn is_readonly(&self) -> bool {
+            self.readonly
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &Value,
+            _context: &ToolUseContext,
+        ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+            Ok(Vec::new())
+        }
+    }
+
     #[test]
     fn registry_includes_webfetch_tool() {
         let registry = create_tool_registry();
@@ -449,6 +393,132 @@ mod tests {
     }
 
     #[test]
+    fn builtin_static_tool_providers_cover_registry_manifest_in_order() {
+        let provider_tools = builtin_static_tool_providers()
+            .into_iter()
+            .flat_map(|provider| provider.tools())
+            .map(|tool| tool.name().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            provider_tools,
+            create_tool_registry().get_tool_names(),
+            "provider-based assembly must preserve the existing builtin registry order"
+        );
+    }
+
+    #[test]
+    fn builtin_static_tool_providers_keep_owner_group_order() {
+        let provider_ids = builtin_static_tool_providers()
+            .into_iter()
+            .map(|provider| provider.provider_id())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            provider_ids,
+            vec![
+                "core.basic",
+                "core.agent",
+                "core.session",
+                "core.integration"
+            ],
+            "provider groups must stay stable until concrete tool-pack owners exist"
+        );
+    }
+
+    #[test]
+    fn builtin_static_tool_providers_follow_tool_pack_group_plan() {
+        let provider_ids = builtin_static_tool_providers()
+            .into_iter()
+            .map(|provider| provider.provider_id())
+            .collect::<Vec<_>>();
+        let planned_provider_ids = bitfun_tool_packs::product_tool_provider_group_plan()
+            .iter()
+            .map(|group| group.provider_id())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            provider_ids, planned_provider_ids,
+            "core must materialize provider groups from the tool-pack plan"
+        );
+    }
+
+    #[test]
+    fn product_tool_runtime_assembly_preserves_core_owned_registry_contract() {
+        let assembly = ProductToolRuntimeAssembly::default();
+
+        assert_eq!(
+            assembly.provider_group_ids(),
+            vec![
+                "core.basic",
+                "core.agent",
+                "core.session",
+                "core.integration"
+            ],
+            "runtime assembly must keep core-owned provider group order explicit"
+        );
+
+        let assembled_registry = assembly.create_registry();
+        let compatibility_registry = create_tool_registry();
+
+        assert_eq!(
+            assembled_registry.get_tool_names(),
+            compatibility_registry.get_tool_names(),
+            "runtime assembly must preserve legacy create_tool_registry output"
+        );
+        assert_eq!(
+            assembled_registry.get_collapsed_tool_names(),
+            compatibility_registry.get_collapsed_tool_names(),
+            "runtime assembly must preserve product collapsed-tool catalog"
+        );
+
+        for tool_name in ["Write", "Edit", "Delete"] {
+            let tool = assembled_registry
+                .get_tool(tool_name)
+                .unwrap_or_else(|| panic!("{tool_name} tool should be registered"));
+            let assistant_text = tool.render_result_for_assistant(&json!({
+                "success": true,
+                "file_path": "E:/Projects/demo.txt"
+            }));
+
+            assert!(
+                assistant_text.contains("snapshot system"),
+                "runtime assembly must preserve snapshot wrapping for {tool_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn product_tool_runtime_assembly_keeps_custom_decorator_provider_contract() {
+        let registry =
+            ProductToolRuntimeAssembly::with_tool_decorator(Arc::new(MarkerToolDecorator))
+                .create_registry();
+        let compatibility_registry = create_tool_registry();
+
+        assert_eq!(
+            registry.get_tool_names(),
+            compatibility_registry.get_tool_names(),
+            "custom decorator assembly must keep provider tool order stable"
+        );
+        assert_eq!(
+            registry.get_collapsed_tool_names(),
+            compatibility_registry.get_collapsed_tool_names(),
+            "custom decorator assembly must keep collapsed exposure stable"
+        );
+
+        for tool_name in ["Write", "GetToolSpec", "WebFetch"] {
+            let tool = registry
+                .get_tool(tool_name)
+                .unwrap_or_else(|| panic!("{tool_name} tool should be registered"));
+            assert_eq!(
+                tool.short_description(),
+                "decorated test tool",
+                "custom decorator must be applied while preserving provider installation"
+            );
+        }
+    }
+
+    #[test]
     fn registry_marks_collapsed_tools_for_get_tool_spec() {
         let registry = create_tool_registry();
 
@@ -456,6 +526,37 @@ mod tests {
         assert!(registry.is_tool_collapsed("GetFileDiff"));
         assert!(!registry.is_tool_collapsed("GetToolSpec"));
         assert!(registry.is_tool_collapsed("Git"));
+    }
+
+    #[test]
+    fn registry_preserves_collapsed_tool_manifest_for_owner_migration() {
+        let registry = create_tool_registry();
+
+        assert_eq!(
+            registry.get_collapsed_tool_names(),
+            vec![
+                "GetFileDiff",
+                "Log",
+                "TerminalControl",
+                "SessionControl",
+                "SessionMessage",
+                "SessionHistory",
+                "Cron",
+                "WebSearch",
+                "WebFetch",
+                "ListMCPResources",
+                "ReadMCPResource",
+                "ListMCPPrompts",
+                "GetMCPPrompt",
+                "GenerativeUI",
+                "Git",
+                "InitMiniApp",
+                "ControlHub",
+                "ComputerUse",
+                "Playbook",
+            ],
+            "collapsed tool manifest must stay stable before moving registry or manifest ownership"
+        );
     }
 
     #[tokio::test]
@@ -686,16 +787,7 @@ pub async fn get_all_tools() -> Vec<Arc<dyn Tool>> {
 
 /// Get readonly tools
 pub async fn get_readonly_tools() -> BitFunResult<Vec<Arc<dyn Tool>>> {
-    let all_tools = get_all_tools().await;
-    let mut readonly_tools = Vec::new();
-
-    for tool in all_tools {
-        if tool.is_readonly() && tool.is_enabled().await {
-            readonly_tools.push(tool);
-        }
-    }
-
-    Ok(readonly_tools)
+    Ok(resolve_product_readonly_enabled_tools().await)
 }
 
 /// Create default tool registry - factory function

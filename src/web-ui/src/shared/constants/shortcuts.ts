@@ -321,13 +321,14 @@ export function getShortcutDescriptionI18nKey(id: string): string | undefined {
 }
 
 /** Scope display order for the settings UI. */
-export const SCOPE_ORDER: ShortcutScope[] = ['app', 'chat', 'editor', 'canvas', 'filetree', 'git'];
+export const SCOPE_ORDER: ShortcutScope[] = ['app', 'chat', 'editor', 'terminal', 'canvas', 'filetree', 'git'];
 
 /** i18n keys for scope group labels in the settings UI. */
 export const SCOPE_LABEL_KEYS: Record<ShortcutScope, string> = {
   app:      'keyboard.scopes.app',
   chat:     'keyboard.scopes.chat',
   editor:   'keyboard.scopes.editor',
+  terminal: 'keyboard.scopes.terminal',
   canvas:   'keyboard.scopes.canvas',
   filetree: 'keyboard.scopes.filetree',
   git:      'keyboard.scopes.git',

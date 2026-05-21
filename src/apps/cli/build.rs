@@ -38,7 +38,10 @@ fn read_prompt_files(
 
         if path.is_dir() {
             read_prompt_files(&path, base_dir, prompts)?;
-        } else if matches!(path.extension().and_then(|e| e.to_str()), Some("md" | "txt")) {
+        } else if matches!(
+            path.extension().and_then(|e| e.to_str()),
+            Some("md" | "txt")
+        ) {
             let content = fs::read_to_string(&path)?;
             let relative = path
                 .strip_prefix(base_dir)?
@@ -67,11 +70,18 @@ fn generate_prompts_code(
     writeln!(f, "use std::collections::HashMap;")?;
     writeln!(f, "use once_cell::sync::Lazy;")?;
     writeln!(f)?;
-    writeln!(f, "pub static CLI_PROMPTS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {{")?;
+    writeln!(
+        f,
+        "pub static CLI_PROMPTS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {{"
+    )?;
     writeln!(f, "    let mut m = HashMap::new();")?;
 
     for (key, content) in prompts {
-        writeln!(f, "    m.insert(r###\"{}\"###, r###\"{}\"###);", key, content)?;
+        writeln!(
+            f,
+            "    m.insert(r###\"{}\"###, r###\"{}\"###);",
+            key, content
+        )?;
     }
 
     writeln!(f, "    m")?;
@@ -79,7 +89,10 @@ fn generate_prompts_code(
     writeln!(f)?;
 
     writeln!(f, "/// Get an embedded CLI prompt by name")?;
-    writeln!(f, "pub fn get_cli_prompt(name: &str) -> Option<&'static str> {{")?;
+    writeln!(
+        f,
+        "pub fn get_cli_prompt(name: &str) -> Option<&'static str> {{"
+    )?;
     writeln!(f, "    CLI_PROMPTS.get(name).copied()")?;
     writeln!(f, "}}")?;
 

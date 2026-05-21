@@ -6,9 +6,9 @@
 .tool-display-compact {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--flowchat-control-gap, 0.5rem);
   font-size: var(--flowchat-font-size-base);
-  line-height: 1.65;
+  line-height: var(--flowchat-text-line-height, 1.58);
   position: relative;
 }
 
@@ -66,16 +66,16 @@
 
 /* ========== Shared header icon variables ========== */
 :root {
-  --tool-card-header-pad-y: 7px;
-  --tool-card-header-pad-x: 0px;
-  --tool-card-header-pad-right: 10px;
+  --tool-card-header-pad-y: var(--flowchat-card-header-pad-y, 0.44rem);
+  --tool-card-header-pad-x: var(--flowchat-card-header-pad-x, 0);
+  --tool-card-header-pad-right: var(--flowchat-card-header-pad-right, 0.625rem);
   --tool-card-header-icon-rail: 24px;
   --tool-card-header-icon-slot: calc(var(--tool-card-header-icon-rail) + 10px);
 
   /* Shared icon & text sizing — dense-command variants only override spacing, not these */
   --tool-card-icon-size: 16px;
-  --tool-card-action-font-size: var(--flowchat-font-size-base);
-  --tool-card-action-line-height: 1.65;
+  --tool-card-action-font-size: var(--flowchat-font-size-sm);
+  --tool-card-action-line-height: var(--flowchat-support-line-height, 1.45);
   --tool-card-action-font-weight: 500;
 }
 

@@ -62,12 +62,73 @@
     gap: 0;
   }
 
+  &__subagent-nav {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
   &__turn-nav-button {
     flex: 0 0 auto;
 
     &:not(:disabled):hover,
     &--active {
       background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+    }
+  }
+
+  &__subagent-nav-button {
+    flex: 0 0 auto;
+
+    &:not(:disabled):hover,
+    &--active {
+      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+    }
+  }
+
+  &__subagent-nav-button-inner {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__subagent-status-dot {
+    position: absolute;
+    right: -2px;
+    bottom: -1px;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-success, #22c55e) 92%, white 8%);
+    box-shadow:
+      0 0 0 1px var(--color-bg-elevated),
+      0 0 0 0 color-mix(in srgb, var(--color-success, #22c55e) 42%, transparent);
+    animation: flowchat-header-subagent-pulse 1.45s ease-out infinite;
+  }
+
+  @keyframes flowchat-header-subagent-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 0.9;
+      box-shadow:
+        0 0 0 1px var(--color-bg-elevated),
+        0 0 0 0 color-mix(in srgb, var(--color-success, #22c55e) 40%, transparent);
+    }
+
+    50% {
+      transform: scale(1.22);
+      opacity: 1;
+      box-shadow:
+        0 0 0 1px var(--color-bg-elevated),
+        0 0 0 5px color-mix(in srgb, var(--color-success, #22c55e) 0%, transparent);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &__subagent-status-dot {
+      animation: none;
     }
   }
 
@@ -186,7 +247,36 @@
     z-index: 30;
   }
 
+  &__subagent-list-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(340px, calc(100vw - 32px));
+    max-height: min(360px, calc(100vh - 96px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-lg;
+    background: color-mix(in srgb, var(--color-bg-elevated) 94%, transparent);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    z-index: 30;
+  }
+
   &__turn-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
+    border-bottom: 1px solid var(--border-base);
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-secondary);
+  }
+
+  &__subagent-list-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -203,6 +293,15 @@
     overflow-y: auto;
     padding: $size-gap-1;
     max-height: calc(7 * 40px);
+    scrollbar-gutter: stable;
+  }
+
+  &__subagent-list {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: $size-gap-1;
+    max-height: calc(6 * 48px);
     scrollbar-gutter: stable;
   }
 
@@ -246,6 +345,44 @@
     flex: 1;
     font-size: var(--flowchat-font-size-sm);
     color: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__subagent-list-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    padding: $size-gap-2;
+    border: 0;
+    border-radius: $size-radius-base;
+    background: transparent;
+    color: var(--color-text-primary);
+    text-align: left;
+    cursor: pointer;
+    transition: background $motion-base $easing-standard;
+
+    &:hover {
+      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+    }
+  }
+
+  &__subagent-list-title {
+    width: 100%;
+    font-size: var(--flowchat-font-size-sm);
+    color: inherit;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__subagent-list-meta {
+    width: 100%;
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

@@ -1,16 +1,16 @@
 //! GetToolSpec tool implementation
 
-use crate::agentic::agents::get_agent_registry;
+use crate::agentic::tools::catalog_provider::{
+    build_product_get_tool_spec_catalog_description, product_get_tool_spec_runtime,
+    resolve_product_get_tool_spec_results, ProductGetToolSpecRuntime, ProductToolCatalogProvider,
+};
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::resolve_visible_tools;
-use crate::agentic::tools::registry::get_global_tool_registry;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use log::debug;
-use serde_json::{json, Value};
-use std::sync::Arc;
+use bitfun_agent_tools::{GetToolSpecExecutionError, GET_TOOL_SPEC_TOOL_NAME};
+use serde_json::Value;
 
 pub struct GetToolSpecTool;
 
@@ -19,130 +19,8 @@ impl GetToolSpecTool {
         Self
     }
 
-    fn escape_xml_text(value: &str) -> String {
-        value
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-    }
-
-    fn render_collapsed_tools_description(&self, collapsed_tools_list: String) -> String {
-        format!(
-            r#"Read usage instructions for additional tools.
-
-You have access to an additional tools listed below.
-
-<collapsed_tools>
-{}
-</collapsed_tools>
-
-Before using one of these tools, first call GetToolSpec with its exact tool name to read its full description and input schema.
-
-After reading the returned definition, call the real tool directly using its own name.
-
-Do not call GetToolSpec again for a tool whose definition is already loaded in the current conversation.
-
-Example:
-- Suppose the catalog includes a tool named `GetWeather` and you need to use it.
-- First call `GetToolSpec` with `{{"tool_name":"GetWeather"}}`
-- Then read the returned schema and call `GetWeather` itself with the appropriate arguments
-"#,
-            collapsed_tools_list
-        )
-    }
-
-    async fn get_contextual_collapsed_tools(
-        &self,
-        context: &ToolUseContext,
-    ) -> BitFunResult<Vec<Arc<dyn Tool>>> {
-        let agent_type = context.agent_type.as_deref().ok_or_else(|| {
-            BitFunError::Validation("GetToolSpec requires agent type context".to_string())
-        })?;
-        let workspace_root = context.workspace_root();
-        let agent_registry = get_agent_registry();
-        let policy = agent_registry
-            .get_agent_tool_policy(agent_type, workspace_root)
-            .await;
-        let visible_tools =
-            resolve_visible_tools(&policy.allowed_tools, &policy.exposure_overrides, context).await;
-        Ok(visible_tools.collapsed_tools)
-    }
-
     async fn build_collapsed_tools_description(&self, context: Option<&ToolUseContext>) -> String {
-        let mut entries = Vec::new();
-
-        if let Some(context) = context {
-            if let Ok(collapsed_tools) = self.get_contextual_collapsed_tools(context).await {
-                for tool in collapsed_tools {
-                    entries.push(format!("- {}", tool.name()));
-                }
-            }
-        } else {
-            let registry = get_global_tool_registry();
-            let collapsed_tools = {
-                let registry = registry.read().await;
-                registry
-                    .get_all_tools()
-                    .into_iter()
-                    .filter(|tool| {
-                        tool.default_exposure()
-                            == crate::agentic::tools::framework::ToolExposure::Collapsed
-                    })
-                    .map(|tool| (tool.name().to_string(), tool.short_description()))
-                    .collect::<Vec<_>>()
-            };
-
-            for (tool_name, short_description) in collapsed_tools {
-                entries.push(format!("- {}: {}", tool_name, short_description));
-            }
-        }
-
-        let collapsed_tools_list = if entries.is_empty() {
-            "No additional tools are available.".to_string()
-        } else {
-            entries.join("\n")
-        };
-
-        self.render_collapsed_tools_description(collapsed_tools_list)
-    }
-
-    async fn build_tool_detail(
-        &self,
-        tool_name: &str,
-        context: Option<&ToolUseContext>,
-    ) -> BitFunResult<Value> {
-        let context = context.ok_or_else(|| {
-            BitFunError::Validation("GetToolSpec requires execution context".to_string())
-        })?;
-        let collapsed_tools = self.get_contextual_collapsed_tools(context).await?;
-        let tool = collapsed_tools
-            .into_iter()
-            .find(|tool| tool.name() == tool_name)
-            .ok_or_else(|| {
-                BitFunError::Validation(format!(
-                    "Tool '{}' is not an available collapsed tool in the current context",
-                    tool_name
-                ))
-            })?;
-
-        if tool.name() == self.name() {
-            return Err(BitFunError::Validation(format!(
-                "Tool '{}' cannot inspect itself",
-                tool_name
-            )));
-        }
-
-        let description = tool
-            .description_with_context(Some(context))
-            .await
-            .unwrap_or_else(|_| format!("Tool: {}", tool.name()));
-        let input_schema = tool.input_schema_for_model_with_context(Some(context)).await;
-
-        Ok(json!({
-            "tool_name": tool_name,
-            "description": description,
-            "input_schema": input_schema
-        }))
+        build_product_get_tool_spec_catalog_description(context).await
     }
 }
 
@@ -152,10 +30,15 @@ impl Default for GetToolSpecTool {
     }
 }
 
+fn with_runtime<Result>(operation: impl FnOnce(ProductGetToolSpecRuntime<'_>) -> Result) -> Result {
+    let provider = ProductToolCatalogProvider;
+    operation(product_get_tool_spec_runtime(&provider))
+}
+
 #[async_trait]
 impl Tool for GetToolSpecTool {
     fn name(&self) -> &str {
-        "GetToolSpec"
+        GET_TOOL_SPEC_TOOL_NAME
     }
 
     async fn description(&self) -> BitFunResult<String> {
@@ -163,7 +46,7 @@ impl Tool for GetToolSpecTool {
     }
 
     fn short_description(&self) -> String {
-        "Discover collapsed tools and read their detailed definitions.".to_string()
+        with_runtime(|runtime| runtime.short_description())
     }
 
     async fn description_with_context(
@@ -174,37 +57,23 @@ impl Tool for GetToolSpecTool {
     }
 
     fn input_schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["tool_name"],
-            "properties": {
-                "tool_name": {
-                    "type": "string",
-                    "description": "The exact tool name to read details for."
-                }
-            }
-        })
+        with_runtime(|runtime| runtime.input_schema())
     }
 
     fn is_readonly(&self) -> bool {
-        true
+        with_runtime(|runtime| runtime.is_readonly())
     }
 
-    fn is_concurrency_safe(&self, _input: Option<&Value>) -> bool {
-        true
+    fn is_concurrency_safe(&self, input: Option<&Value>) -> bool {
+        with_runtime(|runtime| runtime.is_concurrency_safe(input))
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
+    fn needs_permissions(&self, input: Option<&Value>) -> bool {
+        with_runtime(|runtime| runtime.needs_permissions(input))
     }
 
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
-        let tool_name = input
-            .get("tool_name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("?");
-        format!("Reading tool spec for '{}'.", tool_name)
+        with_runtime(|runtime| runtime.render_tool_use_message(input))
     }
 
     async fn validate_input(
@@ -212,25 +81,7 @@ impl Tool for GetToolSpecTool {
         input: &Value,
         _context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        let Some(tool_name) = input.get("tool_name").and_then(|v| v.as_str()) else {
-            return ValidationResult {
-                result: false,
-                message: Some("tool_name is required and cannot be empty".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
-        };
-
-        if tool_name.is_empty() {
-            return ValidationResult {
-                result: false,
-                message: Some("tool_name is required and cannot be empty".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
-        }
-
-        ValidationResult::default()
+        with_runtime(|runtime| runtime.validate_input(input))
     }
 
     async fn call_impl(
@@ -238,50 +89,16 @@ impl Tool for GetToolSpecTool {
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let tool_name = input
-            .get("tool_name")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("tool_name is required".to_string()))?;
+        resolve_product_get_tool_spec_results(input, context, self.name())
+            .await
+            .map_err(map_get_tool_spec_execution_error)
+    }
+}
 
-        if context
-            .unlocked_collapsed_tools
-            .iter()
-            .any(|loaded| loaded == tool_name)
-        {
-            return Ok(vec![ToolResult::Result {
-                data: json!({
-                    "tool_name": tool_name,
-                    "already_loaded": true
-                }),
-                result_for_assistant: Some(format!(
-                    "Tool '{}' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use '{}' directly.",
-                    tool_name, tool_name
-                )),
-                image_attachments: None,
-            }]);
-        }
-
-        debug!("GetToolSpec reading tool: {}", tool_name);
-        let detail = self.build_tool_detail(tool_name, Some(context)).await?;
-        let description = detail
-            .get("description")
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
-        let input_schema = detail
-            .get("input_schema")
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| "{}".to_string());
-        let assistant_detail = format!(
-            "<description>\n{}\n</description>\n<input_schema>\n{}\n</input_schema>",
-            Self::escape_xml_text(description),
-            Self::escape_xml_text(&input_schema)
-        );
-
-        Ok(vec![ToolResult::Result {
-            data: detail,
-            result_for_assistant: Some(assistant_detail),
-            image_attachments: None,
-        }])
+fn map_get_tool_spec_execution_error(error: GetToolSpecExecutionError) -> BitFunError {
+    match error {
+        GetToolSpecExecutionError::MissingToolName => BitFunError::tool(error.to_string()),
+        GetToolSpecExecutionError::Detail(message) => BitFunError::Validation(message),
     }
 }
 
@@ -358,10 +175,7 @@ mod tests {
             .await;
 
         assert!(description.contains(&format!("- {}: Concise catalog entry.", tool_name)));
-        assert!(!description.contains(&format!(
-            "- {}: Verbose description first line.",
-            tool_name
-        )));
+        assert!(!description.contains(&format!("- {}: Verbose description first line.", tool_name)));
     }
 
     #[tokio::test]

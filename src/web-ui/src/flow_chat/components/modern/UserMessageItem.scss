@@ -3,11 +3,15 @@
  */
 
 .user-message-item {
-  padding: 0.28rem 0.75rem;
+  padding: var(--flowchat-user-message-pad-y, 0.32rem) var(--flowchat-user-message-pad-x, 0.75rem);
   background: color-mix(in srgb, var(--element-bg-medium) 86%, var(--color-bg-flowchat, transparent));
   border: 1px solid color-mix(in srgb, var(--border-muted, transparent) 38%, transparent);
-  border-radius: 8px;
-  margin: 0.06rem 3rem var(--flowchat-turn-gap, 0.28rem) 3rem;
+  border-radius: var(--flowchat-card-radius, 8px);
+  margin:
+    0.06rem
+    var(--flowchat-content-inline-pad, 3rem)
+    var(--flowchat-turn-gap, 0.46rem)
+    var(--flowchat-content-inline-pad, 3rem);
   box-shadow: 0 1px 0 color-mix(in srgb, #fff 4%, transparent) inset;
   transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   animation: slideInUp 0.3s ease;
@@ -24,27 +28,32 @@
     .user-message-item__rollback-btn {
       opacity: 1;
     }
+
+    .user-message-item__copy-btn:disabled,
+    .user-message-item__edit-btn:disabled {
+      opacity: 0.35;
+    }
   }
   
   // Responsive: reduce margins on smaller screens.
   @media (max-width: 768px) {
-    margin-left: 1.5rem;
-    margin-right: 1.5rem;
+    margin-left: var(--flowchat-content-inline-pad-mobile, 1.5rem);
+    margin-right: var(--flowchat-content-inline-pad-mobile, 1.5rem);
   }
 }
 
 .user-message-item__timestamp {
-  font-size: 0.75em;
+  font-size: var(--flowchat-font-size-xxs);
   color: var(--color-text-muted, #888);
   font-weight: 400;
-  margin-bottom: 0.1rem;
-  line-height: 1.25;
+  margin-bottom: 0.12rem;
+  line-height: var(--flowchat-compact-line-height, 1.32);
 }
 
 .user-message-item__main {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--flowchat-inline-gap, 0.35rem);
 }
 
 // Bridges children to `.user-message-item__main` flex without an extra layout box.
@@ -57,12 +66,12 @@
   align-items: center;
   flex-shrink: 0;
   width: fit-content;
-  padding: 2px 7px;
+  padding: 0.12rem 0.44rem;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: var(--flowchat-font-size-xxs);
   font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: 0.01em;
+  line-height: var(--flowchat-compact-line-height, 1.32);
+  letter-spacing: 0;
   user-select: none;
 }
 
@@ -75,19 +84,19 @@
 .user-message-item__actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0.125rem;
   flex-shrink: 0;
 }
 
 .user-message-item__blocks {
-  margin-top: 6px;
+  margin-top: var(--flowchat-flow-item-gap, 0.42rem);
 }
 
 .user-message-item__content {
   flex: 1;
   font-size: var(--flowchat-font-size-base);
   font-weight: 500;
-  line-height: 1.52;
+  line-height: var(--flowchat-text-line-height, 1.58);
   color: var(--color-text-primary, #e0e0e0);
   white-space: pre-wrap;
   display: -webkit-box;
@@ -98,7 +107,7 @@
   text-overflow: ellipsis;
   word-break: break-word;
   min-width: 0; /* Ensures the content can shrink properly. */
-  max-height: calc(1.52em * 3); /* Collapsed: up to 3 lines at compact line-height. */
+  max-height: 4.75em; /* Collapsed: up to 3 compact lines. */
   user-select: text;
   transition: all 0.2s ease;
 }
@@ -123,7 +132,7 @@
 
   .user-message-item__main {
     align-items: flex-start;
-    gap: 0.45rem;
+    gap: var(--flowchat-flow-item-gap, 0.42rem);
   }
 
   // Text column + actions row: actions sit beside text; optional vertical nudge vs first line.
@@ -131,8 +140,8 @@
     display: flex;
     flex-flow: row wrap;
     align-items: flex-start;
-    column-gap: 0.35rem;
-    row-gap: 0.25rem;
+    column-gap: var(--flowchat-inline-gap, 0.35rem);
+    row-gap: var(--flowchat-markdown-paragraph-gap, 0.28em);
     flex: 1;
     min-width: 0;
   }
@@ -143,7 +152,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.35rem;
+    gap: var(--flowchat-inline-gap, 0.35rem);
   }
 
   .user-message-item__failed-avatar {
@@ -202,7 +211,8 @@
   overflow-wrap: break-word;
 }
 
-.user-message-item__copy-btn {
+.user-message-item__copy-btn,
+.user-message-item__edit-btn {
   // Align with the IconButton ghost variant.
   display: inline-flex;
   align-items: center;
@@ -230,14 +240,13 @@
     box-shadow: none;
   }
   
-  &:active {
+  &:active:not(:disabled) {
     transform: scale(0.95);
   }
-  
-  &.copied {
-    color: var(--color-success);
-    background: var(--color-success-bg);
-    opacity: 1;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.35;
   }
   
   svg {
@@ -246,6 +255,84 @@
     display: block;
     flex-shrink: 0;
   }
+}
+
+.user-message-item__copy-btn.copied {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  opacity: 1;
+}
+
+.user-message-item__edit-btn {
+  opacity: 1;
+}
+
+.user-message-edit-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--flowchat-inline-gap, 0.35rem);
+  width: 100%;
+}
+
+.user-message-edit-composer__textarea {
+  width: 100%;
+
+  .bitfun-textarea__field {
+    min-height: 5.5rem;
+    max-height: 45vh;
+    font-size: var(--flowchat-font-size-base);
+    line-height: var(--flowchat-text-line-height, 1.58);
+    resize: vertical;
+  }
+}
+
+.user-message-edit-composer__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.user-message-edit-composer__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: var(--size-radius-sm, 6px);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+
+  &:hover:not(:disabled) {
+    color: var(--color-text-primary);
+    background: color-mix(in srgb, var(--element-bg-hover, #fff) 10%, transparent);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+}
+
+.user-message-edit-composer__icon-button--confirm {
+  color: var(--color-success, #22c55e);
+
+  &:hover:not(:disabled) {
+    color: var(--color-success, #22c55e);
+    background: color-mix(in srgb, var(--color-success, #22c55e) 12%, transparent);
+  }
+}
+
+.user-message-edit-composer__spinner {
+  animation: user-message-item-spin 1s linear infinite;
 }
 
 .user-message-item__rollback-btn {
@@ -391,4 +478,3 @@
     transform: translateY(0);
   }
 }
-

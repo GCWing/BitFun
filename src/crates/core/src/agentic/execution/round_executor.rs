@@ -4,15 +4,15 @@
 
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
-use crate::agentic::MessageContent;
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
-use crate::agentic::tools::ToolPathOperation;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{ToolPathResolution, ToolUseContext};
 use crate::agentic::tools::implementations::file_write_tool::FileWriteTool;
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
+use crate::agentic::tools::ToolPathOperation;
+use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
 use crate::service::config::GlobalConfigManager;
 use crate::util::elapsed_ms_u64;
@@ -75,7 +75,6 @@ impl RoundExecutor {
         let round_started_at = Instant::now();
         let subagent_parent_info = context.subagent_parent_info.clone();
         let is_subagent = subagent_parent_info.is_some();
-        let event_subagent_parent_info = subagent_parent_info.clone().map(|info| info.into());
 
         let round_id = uuid::Uuid::new_v4().to_string();
 
@@ -100,7 +99,6 @@ impl RoundExecutor {
                 turn_id: context.dialog_turn_id.clone(),
                 round_id: round_id.clone(),
                 round_index: context.round_number,
-                subagent_parent_info: event_subagent_parent_info.clone(),
                 model_id: Some(context.model_name.clone()),
             },
             EventPriority::High,
@@ -192,7 +190,6 @@ impl RoundExecutor {
                     context.session_id.clone(),
                     context.dialog_turn_id.clone(),
                     round_id.clone(),
-                    subagent_parent_info.clone(),
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
@@ -245,9 +242,9 @@ impl RoundExecutor {
                             );
                             self.emit_failed_partial_tool_calls(
                                 &context,
+                                &round_id,
                                 &result.tool_calls,
                                 &err_msg,
-                                event_subagent_parent_info.clone(),
                             )
                             .await;
                             let mut recovered = result;
@@ -259,9 +256,9 @@ impl RoundExecutor {
 
                         self.emit_failed_partial_tool_calls(
                             &context,
+                            &round_id,
                             &result.tool_calls,
                             &err_msg,
-                            event_subagent_parent_info.clone(),
                         )
                         .await;
                         return Err(BitFunError::AIClient(format!(
@@ -317,9 +314,9 @@ impl RoundExecutor {
                         let err_msg = "Provider returned only invalid tool arguments";
                         self.emit_failed_partial_tool_calls(
                             &context,
+                            &round_id,
                             &result.tool_calls,
                             err_msg,
-                            event_subagent_parent_info.clone(),
                         )
                         .await;
                         return Err(BitFunError::AIClient(format!(
@@ -469,7 +466,6 @@ impl RoundExecutor {
                 turn_id: context.dialog_turn_id.clone(),
                 round_id: round_id.clone(),
                 has_tool_calls: !stream_result.tool_calls.is_empty(),
-                subagent_parent_info: event_subagent_parent_info.clone(),
                 duration_ms: Some(elapsed_ms_u64(round_started_at)),
                 provider_id: None,
                 model_id: Some(context.model_name.clone()),
@@ -563,10 +559,10 @@ impl RoundExecutor {
             .generate_write_tool_contents(
                 ai_client.clone(),
                 &context,
+                &round_id,
                 &ai_messages,
                 tool_calls,
                 &cancel_token,
-                event_subagent_parent_info.clone(),
             )
             .await?;
 
@@ -582,6 +578,7 @@ impl RoundExecutor {
             let tool_context = ToolExecutionContext {
                 session_id: context.session_id.clone(),
                 dialog_turn_id: context.dialog_turn_id.clone(),
+                round_id: round_id.clone(),
                 agent_type: context.agent_type.clone(),
                 workspace: context.workspace.clone(),
                 context_vars: context.context_vars.clone(),
@@ -837,10 +834,10 @@ impl RoundExecutor {
         &self,
         ai_client: Arc<AIClient>,
         context: &RoundContext,
+        round_id: &str,
         ai_messages: &[AIMessage],
         mut tool_calls: Vec<ToolCall>,
         cancel_token: &CancellationToken,
-        subagent_parent_info: Option<crate::agentic::events::SubagentParentInfo>,
     ) -> BitFunResult<Vec<ToolCall>> {
         // Find indices of Write tool calls that need content generation
         let write_indices: Vec<usize> = tool_calls
@@ -899,13 +896,13 @@ impl RoundExecutor {
                 AgenticEvent::ToolEvent {
                     session_id: context.session_id.clone(),
                     turn_id: context.dialog_turn_id.clone(),
+                    round_id: round_id.to_string(),
                     tool_event: ToolEventData::Started {
                         tool_id: tool_id.clone(),
                         tool_name: "Write".to_string(),
                         params: tc.arguments.clone(),
                         timeout_seconds: None,
                     },
-                    subagent_parent_info: subagent_parent_info.clone(),
                 },
                 EventPriority::High,
             )
@@ -926,11 +923,36 @@ impl RoundExecutor {
                  5. Do NOT output anything outside the <bitfun_contents> tags — no explanations, no commentary, \
                  no thinking blocks, no markdown fences (```), no extra XML wrapper tags.\n\
                  6. The text between the tags must be EXACTLY what gets written to disk — raw file content only.\n\
+                 7. Do NOT output any tool_call XML, JSON tool invocations, or agent framework syntax inside the tags. \
+                 You are not calling a tool here — you are outputting raw file content.\n\
                  <bitfun_contents>\n",
                 file_path = file_path
             );
 
-            let mut content_messages = ai_messages.to_vec();
+            // Strip tool_calls and tool results from history to prevent weak models
+            // from imitating tool-call format inside the generated file content.
+            let mut content_messages: Vec<AIMessage> = ai_messages
+                .iter()
+                .filter_map(|m| {
+                    if m.role == "tool" {
+                        // Drop tool result messages entirely
+                        None
+                    } else if m.tool_calls.is_some() {
+                        // Replace assistant tool-call messages with a plain-text summary
+                        let names = m
+                            .tool_calls
+                            .as_ref()
+                            .unwrap()
+                            .iter()
+                            .map(|tc| tc.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        Some(AIMessage::assistant(format!("[called tools: {names}]")))
+                    } else {
+                        Some(m.clone())
+                    }
+                })
+                .collect();
             // Add an assistant prefill to prime the model to output content directly
             // inside the tags, reducing the chance of preamble text.
             content_messages.push(AIMessage::user(content_prompt));
@@ -982,12 +1004,12 @@ impl RoundExecutor {
                                         AgenticEvent::ToolEvent {
                                             session_id: context.session_id.clone(),
                                             turn_id: context.dialog_turn_id.clone(),
+                                            round_id: round_id.to_string(),
                                             tool_event: ToolEventData::ParamsPartial {
                                                 tool_id: tool_id.clone(),
                                                 tool_name: "Write".to_string(),
                                                 params: params.to_string(),
                                             },
-                                            subagent_parent_info: subagent_parent_info.clone(),
                                         },
                                         EventPriority::Normal,
                                     )
@@ -1040,12 +1062,12 @@ impl RoundExecutor {
                 AgenticEvent::ToolEvent {
                     session_id: context.session_id.clone(),
                     turn_id: context.dialog_turn_id.clone(),
+                    round_id: round_id.to_string(),
                     tool_event: ToolEventData::ParamsPartial {
                         tool_id: tool_id.clone(),
                         tool_name: "Write".to_string(),
                         params: final_params.to_string(),
                     },
-                    subagent_parent_info: subagent_parent_info.clone(),
                 },
                 EventPriority::Normal,
             )
@@ -1168,15 +1190,16 @@ impl RoundExecutor {
     async fn emit_failed_partial_tool_calls(
         &self,
         context: &RoundContext,
+        round_id: &str,
         tool_calls: &[ToolCall],
         error: &str,
-        subagent_parent_info: Option<crate::agentic::events::SubagentParentInfo>,
     ) {
         for tool_call in tool_calls {
             self.emit_event(
                 AgenticEvent::ToolEvent {
                     session_id: context.session_id.clone(),
                     turn_id: context.dialog_turn_id.clone(),
+                    round_id: round_id.to_string(),
                     tool_event: ToolEventData::Failed {
                         tool_id: tool_call.tool_id.clone(),
                         tool_name: tool_call.tool_name.clone(),
@@ -1187,7 +1210,6 @@ impl RoundExecutor {
                         confirmation_wait_ms: None,
                         execution_ms: None,
                     },
-                    subagent_parent_info: subagent_parent_info.clone(),
                 },
                 EventPriority::High,
             )
@@ -1329,6 +1351,13 @@ fn token_details_from_usage(
         details.insert(
             "cachedContentTokenCount".to_string(),
             serde_json::json!(cached_tokens),
+        );
+    }
+    // Cache writes (Anthropic only at the moment). Disjoint from reads.
+    if let Some(creation_tokens) = usage.cache_creation_token_count {
+        details.insert(
+            "cacheCreationTokenCount".to_string(),
+            serde_json::json!(creation_tokens),
         );
     }
 
@@ -1577,12 +1606,12 @@ fn detect_placeholder_patterns(content: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RoundExecutor, StreamProcessor, extract_bitfun_contents};
-    use crate::agentic::WorkspaceBinding;
+    use super::{extract_bitfun_contents, RoundExecutor, StreamProcessor};
     use crate::agentic::core::ToolCall;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::execution::types::RoundContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
     use dashmap::DashMap;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -1666,12 +1695,10 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&root);
 
-        assert!(
-            error
-                .as_deref()
-                .unwrap_or_default()
-                .contains("already exists")
-        );
+        assert!(error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("already exists"));
     }
 
     #[tokio::test]
@@ -1949,5 +1976,51 @@ mod tests {
     fn detect_placeholder_empty_content() {
         use super::detect_placeholder_patterns;
         assert!(detect_placeholder_patterns("").is_none());
+    }
+
+    #[test]
+    fn token_details_emits_both_cache_keys_when_present() {
+        use crate::util::types::ai::GeminiUsage;
+        let usage = GeminiUsage {
+            prompt_token_count: 100,
+            candidates_token_count: 20,
+            total_token_count: 120,
+            reasoning_token_count: None,
+            cached_content_token_count: Some(30),
+            cache_creation_token_count: Some(20),
+        };
+        let details = super::token_details_from_usage(&usage).expect("details");
+        assert_eq!(details.get("cachedContentTokenCount").and_then(|v| v.as_u64()), Some(30));
+        assert_eq!(details.get("cacheCreationTokenCount").and_then(|v| v.as_u64()), Some(20));
+    }
+
+    #[test]
+    fn token_details_emits_only_read_when_creation_absent() {
+        use crate::util::types::ai::GeminiUsage;
+        let usage = GeminiUsage {
+            prompt_token_count: 100,
+            candidates_token_count: 20,
+            total_token_count: 120,
+            reasoning_token_count: None,
+            cached_content_token_count: Some(30),
+            cache_creation_token_count: None,
+        };
+        let details = super::token_details_from_usage(&usage).expect("details");
+        assert_eq!(details.get("cachedContentTokenCount").and_then(|v| v.as_u64()), Some(30));
+        assert!(details.get("cacheCreationTokenCount").is_none());
+    }
+
+    #[test]
+    fn token_details_is_none_when_no_cache_info() {
+        use crate::util::types::ai::GeminiUsage;
+        let usage = GeminiUsage {
+            prompt_token_count: 100,
+            candidates_token_count: 20,
+            total_token_count: 120,
+            reasoning_token_count: None,
+            cached_content_token_count: None,
+            cache_creation_token_count: None,
+        };
+        assert!(super::token_details_from_usage(&usage).is_none());
     }
 }

@@ -39,6 +39,13 @@
   "runtimeStatus": {
     "waitingForModelResponse": "等待模型回應..."
   },
+  "historyState": {
+    "loadingTitle": "正在載入歷史會話",
+    "loadingDescription": "正在準備該會話的歷史內容。",
+    "failedTitle": "歷史會話載入失敗",
+    "failedDescription": "可以重新載入已儲存的會話內容。",
+    "retry": "重試"
+  },
   "usage": {
     "title": "工作階段用量",
     "unavailable": "不可用",
@@ -193,6 +200,7 @@
       "input": "輸入",
       "output": "輸出",
       "cached": "快取",
+      "hitRate": "命中率",
       "duration": "記錄耗時",
       "p95": "P95",
       "execution": "執行",
@@ -337,7 +345,23 @@
     "rollbackPanelBulletUndo": "撤銷從該輪開始的所有文件變更",
     "rollbackPanelBulletHistory": "保留會話歷史（之後仍可繼續對話）",
     "rollbackSuccess": "已回滾並刪除後續對話記錄",
-    "rollbackFailed": "回滾失敗"
+    "rollbackFailed": "回滾失敗",
+    "saveEdit": "儲存並重跑",
+    "cancelEdit": "取消",
+    "editPlaceholder": "編輯你的消息...",
+    "cannotEdit": "無法編輯該消息",
+    "editDisabledImages": "暫不支援編輯圖片消息",
+    "editDisabledRemote": "遠端會話暫不支援消息編輯",
+    "editDisabledLocalCommand": "無法編輯本機命令消息",
+    "editDisabledHistoryNotReady": "會話歷史尚未就緒",
+    "editDialogTitle": "從第 {{index}} 輪編輯並重跑？",
+    "editDialogIntro": "將執行：",
+    "editDialogBulletStopRunning": "停止目前正在執行的任務",
+    "editDialogBulletFiles": "將文件恢復到該輪開始前的狀態",
+    "editDialogBulletHistory": "刪除該輪及之後的對話記錄",
+    "editDialogBulletRerun": "使用編輯後的消息啟動新一輪對話",
+    "editSuccess": "已編輯消息並重新執行",
+    "editFailed": "編輯消息失敗"
   },
   "contextMenu": {
     "copySelection": "複製選中內容",
@@ -492,6 +516,7 @@
     "sendingToBtw": "側問會話：{{title}}",
     "modeDescriptions": {
       "agentic": "AI 主導執行，自動規劃和完成編碼任務，擁有完整的工具訪問能力",
+      "Multitask": "多工模式：將工作拆成正交分支或 DAG，並在合適時主動並行調度子 Agent 推進",
       "Claw": "個人助理模式：面向個人工作區和日常事務，使用獨立的助理上下文",
       "Plan": "先規劃後執行，先明確需求並制定實施計劃，再進行編碼",
       "debug": "證據驅動的系統化調試：提出假設、收集運行時證據、精準定位並修復問題",
@@ -502,6 +527,7 @@
     },
     "modeNames": {
       "agentic": "Agentic",
+      "Multitask": "Multitask",
       "Claw": "Claw",
       "Plan": "Plan",
       "debug": "Debug",
@@ -908,7 +934,11 @@
     "searchNext": "下一個匹配結果",
     "searchClose": "關閉搜索",
     "searchOpen": "搜索消息",
-    "jumpToCurrentTurn": "跳轉到第 {{turn}} 輪"
+    "jumpToCurrentTurn": "跳轉到第 {{turn}} 輪",
+    "backgroundSubagents": "背景子 Agent（{{count}}）",
+    "backgroundSubagentUntitled": "背景子 Agent",
+    "subagentStatusProcessing": "運行中",
+    "subagentStatusFinishing": "收尾中"
   },
   "stickyTaskIndicator": {
     "tooltip": "跳轉到當前任務"

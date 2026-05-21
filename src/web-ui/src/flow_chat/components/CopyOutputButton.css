@@ -18,7 +18,7 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   color: rgba(255, 255, 255, 0.8);
-  font-size: 11px;
+  font-size: var(--flowchat-font-size-xs);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -89,7 +89,7 @@
 @media (max-width: 768px) {
   .copy-output-button {
     padding: 5px 8px;
-    font-size: 10px;
+    font-size: var(--flowchat-font-size-xxs);
     min-width: 50px;
     bottom: 6px;
     right: 8px;

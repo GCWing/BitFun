@@ -594,8 +594,7 @@ impl Tool for GetMCPPromptTool {
     }
 
     fn short_description(&self) -> String {
-        "Fetch and render a named MCP prompt template from a connected MCP server."
-            .to_string()
+        "Fetch and render a named MCP prompt template from a connected MCP server.".to_string()
     }
 
     fn default_exposure(&self) -> ToolExposure {

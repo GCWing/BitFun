@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { getToolCardConfig, getToolCardComponent } from '../tool-cards';
-import type { FlowToolItem } from '../types/flow-chat';
+import type { FlowToolItem, ToolCardDisplayContext } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { FlowToolCardErrorBoundary } from './FlowToolCardErrorBoundary';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +23,7 @@ interface FlowToolCardProps {
   sessionId?: string;
   turnId?: string;
   className?: string;
+  displayContext?: ToolCardDisplayContext;
 }
 
 export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
@@ -33,7 +34,8 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   onOpenInPanel,
   onExpand,
   sessionId,
-  className = ''
+  className = '',
+  displayContext = 'default',
 }) => {
   const { t } = useTranslation('flow-chat');
   const config = getToolCardConfig(toolItem.toolName);
@@ -78,6 +80,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
           onOpenInPanel={onOpenInPanel}
           onExpand={handleExpand}
           sessionId={sessionId}
+          displayContext={displayContext}
         />
       </FlowToolCardErrorBoundary>
       {interruptionNote && !cardHandlesInterruptionNote && (
@@ -104,6 +107,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
     prevProps.toolItem.subagentSessionId === nextProps.toolItem.subagentSessionId &&
     prevProps.toolItem.subagentModelId === nextProps.toolItem.subagentModelId &&
     prevProps.toolItem.subagentModelAlias === nextProps.toolItem.subagentModelAlias &&
+    prevProps.displayContext === nextProps.displayContext &&
     prevProgress === nextProgress &&
     prevProps.toolItem.partialParams === nextProps.toolItem.partialParams &&
     prevProps.toolItem.toolResult === nextProps.toolItem.toolResult

@@ -2,7 +2,7 @@ use crate::client::quirks::apply_openai_compatible_reasoning_fields;
 use crate::client::utils::{dedupe_remote_models, normalize_base_url_for_discovery};
 use crate::client::AIClient;
 use crate::providers::shared;
-use crate::types::RemoteModelInfo;
+use crate::types::{RemoteModelInfo, ToolDefinition};
 use anyhow::Result;
 use log::warn;
 use reqwest::RequestBuilder;
@@ -335,6 +335,7 @@ pub(crate) fn extract_tool_name(tool: &serde_json::Value) -> String {
     tool.get("function")
         .and_then(|function| function.get("name"))
         .and_then(|name| name.as_str())
+        .or_else(|| tool.get("name").and_then(|name| name.as_str()))
         .unwrap_or("unknown")
         .to_string()
 }
@@ -357,4 +358,22 @@ pub(crate) fn attach_tools(
             }
         }
     }
+}
+
+pub(crate) fn convert_tools_flat(
+    tools: Option<Vec<ToolDefinition>>,
+) -> Option<Vec<serde_json::Value>> {
+    tools.map(|defs| {
+        defs.into_iter()
+            .map(|tool| {
+                serde_json::json!({
+                    "type": "function",
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.parameters,
+                    "strict": false,
+                })
+            })
+            .collect()
+    })
 }

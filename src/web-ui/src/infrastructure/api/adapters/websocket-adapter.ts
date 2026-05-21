@@ -145,10 +145,36 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
             });
           }
         }
+
+        const mappedEventName = this.mapLegacyTypeToEventName(message.type);
+        if (mappedEventName) {
+          const listeners = this.eventListeners.get(mappedEventName);
+          if (listeners && listeners.size > 0) {
+            listeners.forEach(callback => {
+              try {
+                callback(message);
+              } catch (error) {
+                log.error('Error in WebSocket type-mapped event listener', {
+                  event: mappedEventName,
+                  rawType: message.type,
+                  error,
+                });
+              }
+            });
+          }
+        }
       } catch (error) {
         log.error('Failed to parse message', { data: event.data, error });
       }
     };
+  }
+
+  private mapLegacyTypeToEventName(type: unknown): string | null {
+    if (typeof type !== 'string' || !type.trim()) {
+      return null;
+    }
+
+    return `agentic://${type.trim()}`;
   }
   
    

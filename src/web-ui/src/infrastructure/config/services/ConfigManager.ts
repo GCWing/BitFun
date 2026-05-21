@@ -5,7 +5,7 @@ import {
   ConfigValidationResult,
   ConfigExport,
 } from '../types';
-import { configAPI } from '@/infrastructure/api';
+import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { i18nService } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { extractProviderSegmentFromBaseUrl, matchProviderCatalogItemByBaseUrl } from './providerCatalog';
@@ -15,6 +15,7 @@ const log = createLogger('ConfigManager');
 class ConfigManagerImpl implements IConfigManager {
   
   private configCache: Map<string, any> = new Map();
+  private inFlightReads: Map<string, Promise<unknown>> = new Map();
   private listeners: Set<(path: string, oldValue: any, newValue: any) => void> = new Set();
   private pathListeners: Map<string, Set<() => void>> = new Map();
 
@@ -67,6 +68,39 @@ class ConfigManagerImpl implements IConfigManager {
 
   
 
+  private getReadKey(path?: string): string {
+    return path ?? '<root>';
+  }
+
+  private async readConfig<T = any>(path?: string): Promise<T> {
+    const config = await configAPI.getConfig(path);
+    const resolvedConfig = path === 'ai.models'
+      ? await this.migrateLegacyAiModelsIfNeeded(config)
+      : config;
+
+    if (path) {
+      this.configCache.set(path, resolvedConfig);
+    }
+
+    return resolvedConfig as T;
+  }
+
+  private async readConfigs(paths: string[]): Promise<Record<string, unknown>> {
+    const configs = await configAPI.getConfigs(paths);
+    const resolvedConfigs: Record<string, unknown> = {};
+
+    for (const path of paths) {
+      const resolvedConfig = path === 'ai.models'
+        ? await this.migrateLegacyAiModelsIfNeeded(configs[path])
+        : configs[path];
+
+      this.configCache.set(path, resolvedConfig);
+      resolvedConfigs[path] = resolvedConfig;
+    }
+
+    return resolvedConfigs;
+  }
+
   async getConfig<T = any>(path?: string): Promise<T> {
     try {
       
@@ -74,18 +108,21 @@ class ConfigManagerImpl implements IConfigManager {
         return this.configCache.get(path);
       }
 
-      
-      const config = await configAPI.getConfig(path);
-      const resolvedConfig = path === 'ai.models'
-        ? await this.migrateLegacyAiModelsIfNeeded(config)
-        : config;
-
-      
-      if (path) {
-        this.configCache.set(path, resolvedConfig);
+      const readKey = this.getReadKey(path);
+      const existingRead = this.inFlightReads.get(readKey);
+      if (existingRead) {
+        return (await existingRead) as T;
       }
-      
-      return resolvedConfig as T;
+
+      const readPromise = this.readConfig<T>(path);
+      this.inFlightReads.set(readKey, readPromise);
+      try {
+        return await readPromise;
+      } finally {
+        if (this.inFlightReads.get(readKey) === readPromise) {
+          this.inFlightReads.delete(readKey);
+        }
+      }
     } catch (error) {
       log.error('Failed to get config', { path, error });
       // Return defaults to avoid breaking the UI.
@@ -108,6 +145,7 @@ class ConfigManagerImpl implements IConfigManager {
   async setConfig<T = any>(path: string, value: T): Promise<void> {
     try {
       const oldValue = this.configCache.get(path);
+      this.inFlightReads.delete(this.getReadKey(path));
       
       
       await configAPI.setConfig(path, value);
@@ -130,8 +168,10 @@ class ConfigManagerImpl implements IConfigManager {
       
       if (path) {
         this.configCache.delete(path);
+        this.inFlightReads.delete(this.getReadKey(path));
       } else {
         this.configCache.clear();
+        this.inFlightReads.clear();
       }
     } catch (error) {
       log.error('Failed to reset config', { path, error });
@@ -189,6 +229,7 @@ class ConfigManagerImpl implements IConfigManager {
   async refreshCache(): Promise<void> {
     try {
       this.configCache.clear();
+      this.inFlightReads.clear();
     } catch (error) {
       log.error('Failed to refresh cache', error);
     }
@@ -196,6 +237,7 @@ class ConfigManagerImpl implements IConfigManager {
 
   clearCache(): void {
     this.configCache.clear();
+    this.inFlightReads.clear();
   }
 
   
@@ -259,11 +301,14 @@ class ConfigManagerImpl implements IConfigManager {
   async reload(): Promise<void> {
     try {
       this.configCache.clear();
-      
-      await this.getConfig('ai.models');
-      await this.getConfig('ai.agent_models');
-      await this.getConfig('ai.func_agent_models');
-      await this.getConfig('ai.default_models');
+      this.inFlightReads.clear();
+
+      await this.readConfigs([
+        'ai.models',
+        'ai.agent_models',
+        'ai.func_agent_models',
+        'ai.default_models',
+      ]);
     } catch (error) {
       log.error('Failed to reload config', error);
       throw error;
