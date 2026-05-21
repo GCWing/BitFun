@@ -41,7 +41,8 @@ impl AnthropicMessageConverter {
         }
 
         // Anthropic requires user/assistant messages to alternate
-        let merged_messages = Self::merge_consecutive_messages(anthropic_messages);
+        let mut merged_messages = Self::merge_consecutive_messages(anthropic_messages);
+        Self::trim_final_assistant_trailing_whitespace(&mut merged_messages);
 
         (system_message, merged_messages)
     }
@@ -105,6 +106,36 @@ impl AnthropicMessageConverter {
         }
 
         merged
+    }
+
+    fn trim_final_assistant_trailing_whitespace(messages: &mut [Value]) {
+        // Anthropic allows assistant prefill, but rejects final assistant text that ends in whitespace.
+        let Some(last) = messages.last_mut() else {
+            return;
+        };
+        if last.get("role").and_then(|role| role.as_str()) != Some("assistant") {
+            return;
+        }
+
+        match last.get_mut("content") {
+            Some(Value::String(text)) => {
+                let trimmed_len = text.trim_end().len();
+                text.truncate(trimmed_len);
+            }
+            Some(Value::Array(blocks)) => {
+                let Some(Value::Object(block)) = blocks.last_mut() else {
+                    return;
+                };
+                if block.get("type").and_then(|value| value.as_str()) != Some("text") {
+                    return;
+                }
+                if let Some(Value::String(text)) = block.get_mut("text") {
+                    let trimmed_len = text.trim_end().len();
+                    text.truncate(trimmed_len);
+                }
+            }
+            _ => {}
+        }
     }
 
     fn convert_user_message(msg: Message) -> Value {
@@ -256,5 +287,23 @@ mod tests {
         assert_eq!(content[0]["type"], json!("thinking"));
         assert_eq!(content[0]["thinking"], json!(""));
         assert_eq!(content[0]["signature"], json!("sig_1"));
+    }
+
+    #[test]
+    fn trims_trailing_whitespace_from_final_assistant_prefill() {
+        let (_, messages) = AnthropicMessageConverter::convert_messages(vec![
+            Message::user("Generate the file content.".to_string()),
+            Message::assistant("<bitfun_contents>\n".to_string()),
+        ]);
+
+        let content = messages
+            .last()
+            .expect("final assistant message")
+            .get("content")
+            .and_then(|value| value.as_array())
+            .expect("assistant content");
+
+        assert_eq!(content[0]["type"], json!("text"));
+        assert_eq!(content[0]["text"], json!("<bitfun_contents>"));
     }
 }
