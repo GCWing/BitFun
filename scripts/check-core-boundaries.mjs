@@ -505,12 +505,12 @@ const forbiddenContentRules = [
       {
         regex: /\bGitService::get_status\b/,
         message:
-          'Git function-agent commit generator must use CoreFunctionAgentGitAdapter through FunctionAgentRuntimeFacade',
+          'Git function-agent commit generator must use CoreProductDomainRuntime for Git adapter wiring',
       },
       {
         regex: /\bAIAnalysisService::new_with_agent_config\b/,
         message:
-          'Git function-agent commit generator must use CoreFunctionAgentAiAdapter through FunctionAgentRuntimeFacade',
+          'Git function-agent commit generator must use CoreProductDomainRuntime for AI adapter wiring',
       },
       {
         regex: /\bto_string_lossy\b/,
@@ -525,12 +525,12 @@ const forbiddenContentRules = [
       {
         regex: /\bAIWorkStateService::new_with_agent_config\b/,
         message:
-          'Startchat work-state analyzer must use CoreFunctionAgentAiAdapter through FunctionAgentRuntimeFacade',
+          'Startchat work-state analyzer must use CoreProductDomainRuntime for AI adapter wiring',
       },
       {
         regex: /\bcreate_command\("git"\)/,
         message:
-          'Startchat work-state analyzer must use CoreFunctionAgentGitAdapter through FunctionAgentRuntimeFacade',
+          'Startchat work-state analyzer must use CoreProductDomainRuntime for Git adapter wiring',
       },
     ],
   },
@@ -1424,6 +1424,65 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/service_agent_runtime.rs',
+    reason:
+      'core service/agent runtime owner must centralize concrete remote-connect and agent runtime port bindings without moving runtime behavior',
+    patterns: [
+      {
+        regex: /\bpub\(crate\) struct CoreServiceAgentRuntime\b/,
+        message: 'missing core service/agent runtime owner type',
+      },
+      {
+        regex: /\bfn remote_dialog_host\b/,
+        message: 'missing remote dialog host owner factory',
+      },
+      {
+        regex: /\bfn remote_image_context\b/,
+        message: 'missing remote image context owner adapter',
+      },
+      {
+        regex: /\bfn agent_submission_port\b/,
+        message: 'missing agent submission port owner binding',
+      },
+      {
+        regex: /\bCoreRemoteDialogRuntimeHost\b/,
+        message: 'missing core remote dialog host binding',
+      },
+      {
+        regex: /\bRemoteExecutionDispatcher\b/,
+        message: 'missing remote execution dispatcher binding',
+      },
+      {
+        regex: /\bImageContextData\b/,
+        message: 'missing core image context binding',
+      },
+      {
+        regex: /\bRemoteImageContextAdapter\b/,
+        message: 'missing remote image context adapter implementation',
+      },
+      {
+        regex: /\bAgentSubmissionPort\b/,
+        message: 'missing agent submission port binding',
+      },
+      {
+        regex: /\bAgentTurnCancellationPort\b/,
+        message: 'missing agent turn cancellation port contract guard',
+      },
+      {
+        regex: /\bRemoteControlStatePort\b/,
+        message: 'missing remote control state port contract guard',
+      },
+      {
+        regex: /\bSessionTranscriptReader\b/,
+        message: 'missing session transcript reader contract guard',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_keeps_coordinator_port_contracts\b/,
+        message: 'missing coordinator runtime port contract regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/services-integrations/src/remote_connect.rs',
     reason:
       'services-integrations must own remote-connect wire, tracker, dialog, file, and image adapter contracts',
@@ -1666,6 +1725,10 @@ const requiredContentRules = [
       'core remote-connect server must remain a product runtime adapter around integrations-owned contracts',
     patterns: [
       {
+        regex: /\bCoreServiceAgentRuntime\b/,
+        message: 'missing core service/agent runtime owner routing',
+      },
+      {
         regex: /\bstruct CoreRemoteDialogRuntimeHost\b/,
         message: 'missing core remote dialog runtime adapter',
       },
@@ -1690,8 +1753,12 @@ const requiredContentRules = [
         message: 'missing remote file info helper delegation',
       },
       {
-        regex: /\bImageContextData::from_remote_image_context\b/,
+        regex: /\bremote_image_context\b/,
         message: 'missing image context adapter contract delegation',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_maps_remote_image_context\b/,
+        message: 'missing core service/agent image-context owner regression',
       },
       {
         regex: /\bremote_execution_prefers_unified_image_contexts_over_legacy_images\b/,
@@ -1716,6 +1783,25 @@ const requiredContentRules = [
       {
         regex: /\bremote_response_snapshot_preserves_active_turn_and_result_shapes\b/,
         message: 'missing remote response snapshot regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_connect/bot/command_router.rs',
+    reason:
+      'remote-connect bot must route concrete agent runtime port bindings through the core service/agent runtime owner',
+    patterns: [
+      {
+        regex: /\bCoreServiceAgentRuntime\b/,
+        message: 'missing core service/agent runtime owner routing',
+      },
+      {
+        regex: /\bagent_submission_port\b/,
+        message: 'missing agent submission port owner binding',
+      },
+      {
+        regex: /\bbuild_remote_session_create_request\b/,
+        message: 'missing integrations-owned remote session create request builder',
       },
     ],
   },
@@ -2966,6 +3052,10 @@ const requiredContentRules = [
         message: 'missing product-domain MiniApp runtime-state facade use',
       },
       {
+        regex: /\bCoreProductDomainRuntime\b/,
+        message: 'missing core-owned product-domain runtime owner delegation',
+      },
+      {
         regex: /\bpersist_sync_from_fs_result_for_app\b/,
         message: 'missing product-domain MiniApp sync-from-fs facade delegation',
       },
@@ -3079,19 +3169,23 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/function_agents/git-func-agent/commit_generator.rs',
     reason:
-      'Git function-agent commit generation must route through the product-domain runtime facade while core keeps concrete adapters',
+      'Git function-agent commit generation must route through the core product-domain runtime owner while core keeps concrete adapters',
     patterns: [
       {
-        regex: /\bFunctionAgentRuntimeFacade\b/,
-        message: 'missing product-domain function-agent runtime facade routing',
+        regex: /\bCoreProductDomainRuntime\b/,
+        message: 'missing core product-domain runtime owner routing',
       },
       {
-        regex: /\bCoreFunctionAgentGitAdapter\b/,
-        message: 'missing core-owned Git adapter wiring',
+        regex: /\bfunction_agent_git_adapter\b/,
+        message: 'missing core-owned Git adapter factory wiring',
       },
       {
-        regex: /\bCoreFunctionAgentAiAdapter\b/,
-        message: 'missing core-owned AI adapter wiring',
+        regex: /\bfunction_agent_ai_adapter\b/,
+        message: 'missing core-owned AI adapter factory wiring',
+      },
+      {
+        regex: /\bfunction_agent_runtime_facade\b/,
+        message: 'missing product-domain function-agent runtime facade owner routing',
       },
     ],
   },
@@ -3165,19 +3259,23 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
     reason:
-      'Startchat work-state analysis must route through the product-domain runtime facade while core keeps concrete adapters',
+      'Startchat work-state analysis must route through the core product-domain runtime owner while core keeps concrete adapters',
     patterns: [
       {
-        regex: /\bFunctionAgentRuntimeFacade\b/,
-        message: 'missing product-domain function-agent runtime facade routing',
+        regex: /\bCoreProductDomainRuntime\b/,
+        message: 'missing core product-domain runtime owner routing',
       },
       {
-        regex: /\bCoreFunctionAgentGitAdapter\b/,
-        message: 'missing core-owned Git adapter wiring',
+        regex: /\bfunction_agent_git_adapter\b/,
+        message: 'missing core-owned Git adapter factory wiring',
       },
       {
-        regex: /\bCoreFunctionAgentAiAdapter\b/,
-        message: 'missing core-owned AI adapter wiring',
+        regex: /\bfunction_agent_ai_adapter\b/,
+        message: 'missing core-owned AI adapter factory wiring',
+      },
+      {
+        regex: /\bfunction_agent_runtime_facade\b/,
+        message: 'missing product-domain function-agent runtime facade owner routing',
       },
     ],
   },
@@ -3363,6 +3461,61 @@ const requiredContentRules = [
       {
         regex: /\bgit_adapter_startchat_snapshot_preserves_git_state_when_diff_has_no_head\b/,
         message: 'missing Startchat Git diff fallback regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/product_domain_runtime.rs',
+    reason:
+      'core product-domain runtime owner must centralize concrete MiniApp and function-agent runtime port bindings without moving runtime behavior',
+    patterns: [
+      {
+        regex: /\bpub\(crate\) struct CoreProductDomainRuntime\b/,
+        message: 'missing core product-domain runtime owner type',
+      },
+      {
+        regex: /\bfn miniapp_runtime_facade\b/,
+        message: 'missing MiniApp runtime facade owner factory',
+      },
+      {
+        regex: /\bfn function_agent_git_adapter\b/,
+        message: 'missing function-agent Git adapter owner factory',
+      },
+      {
+        regex: /\bfn function_agent_ai_adapter\b/,
+        message: 'missing function-agent AI adapter owner factory',
+      },
+      {
+        regex: /\bfn function_agent_runtime_facade\b/,
+        message: 'missing function-agent runtime facade owner factory',
+      },
+      {
+        regex: /\bCoreFunctionAgentGitAdapter\b/,
+        message: 'missing core-owned Git adapter binding',
+      },
+      {
+        regex: /\bCoreFunctionAgentAiAdapter\b/,
+        message: 'missing core-owned AI adapter binding',
+      },
+      {
+        regex: /\bMiniAppRuntimeFacade\b/,
+        message: 'missing MiniApp product-domain facade binding',
+      },
+      {
+        regex: /\bMiniAppStoragePort\b/,
+        message: 'missing MiniApp storage port owner binding',
+      },
+      {
+        regex: /\bFunctionAgentRuntimeFacade\b/,
+        message: 'missing function-agent product-domain facade binding',
+      },
+      {
+        regex: /\bFunctionAgentGitPort\b/,
+        message: 'missing function-agent Git port owner binding',
+      },
+      {
+        regex: /\bFunctionAgentAiPort\b/,
+        message: 'missing function-agent AI port owner binding',
       },
     ],
   },
@@ -3812,6 +3965,24 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/core/src/service_agent_runtime.rs',
+      contracts: [
+        'CoreServiceAgentRuntime',
+        'remote_dialog_host',
+        'remote_image_context',
+        'agent_submission_port',
+        'CoreRemoteDialogRuntimeHost',
+        'RemoteExecutionDispatcher',
+        'ImageContextData',
+        'RemoteImageContextAdapter',
+        'AgentSubmissionPort',
+        'AgentTurnCancellationPort',
+        'RemoteControlStatePort',
+        'SessionTranscriptReader',
+        'core_service_agent_runtime_owner_keeps_coordinator_port_contracts',
+      ],
+    },
+    {
       path: 'src/crates/services-integrations/src/remote_connect.rs',
       contracts: [
         'RemoteSessionStateTracker',
@@ -3865,6 +4036,9 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/src/service/remote_connect/remote_server.rs',
       contracts: [
+        'CoreServiceAgentRuntime',
+        'remote_image_context',
+        'core_service_agent_runtime_owner_maps_remote_image_context',
         'remote_execution_prefers_unified_image_contexts_over_legacy_images',
         'remote_cancel_decision_preserves_current_turn_boundaries',
         'remote_restore_target_only_restores_cold_sessions_with_workspace_binding',
@@ -4193,6 +4367,31 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/core/src/service/remote_connect/bot/command_router.rs',
+      contracts: [
+        'CoreServiceAgentRuntime',
+        'agent_submission_port',
+        'build_remote_session_create_request',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/product_domain_runtime.rs',
+      contracts: [
+        'CoreProductDomainRuntime',
+        'miniapp_runtime_facade',
+        'function_agent_git_adapter',
+        'function_agent_ai_adapter',
+        'function_agent_runtime_facade',
+        'CoreFunctionAgentGitAdapter',
+        'CoreFunctionAgentAiAdapter',
+        'MiniAppRuntimeFacade',
+        'MiniAppStoragePort',
+        'FunctionAgentRuntimeFacade',
+        'FunctionAgentGitPort',
+        'FunctionAgentAiPort',
+      ],
+    },
+    {
       path: 'src/crates/services-integrations/src/remote_ssh/paths.rs',
       contracts: [
         'remote_workspace_runtime_root',
@@ -4274,6 +4473,7 @@ function runManifestParserSelfTest() {
         'mark_builtin_update_available_metadata',
         'decline_builtin_update_metadata',
         'storage.load_customization_metadata',
+        'CoreProductDomainRuntime',
         'MiniAppRuntimeFacade',
         'persist_sync_from_fs_result_for_app',
         'compile_source',
@@ -4308,9 +4508,19 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/src/function_agents/git-func-agent/commit_generator.rs',
       contracts: [
-        'FunctionAgentRuntimeFacade',
-        'CoreFunctionAgentGitAdapter',
-        'CoreFunctionAgentAiAdapter',
+        'CoreProductDomainRuntime',
+        'function_agent_git_adapter',
+        'function_agent_ai_adapter',
+        'function_agent_runtime_facade',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
+      contracts: [
+        'CoreProductDomainRuntime',
+        'function_agent_git_adapter',
+        'function_agent_ai_adapter',
+        'function_agent_runtime_facade',
       ],
     },
     {

@@ -8,6 +8,7 @@
 //! for state changes using the `PollSession` command, receiving only
 //! incremental updates (new messages + current active turn snapshot).
 
+use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use anyhow::{anyhow, Result};
 use log::{debug, error, info};
 use serde_json::Value;
@@ -22,8 +23,8 @@ use bitfun_services_integrations::remote_connect::{
     RemoteCancelDecision, RemoteConnectSubmissionSource, RemoteDialogQueuePriority,
     RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy,
     RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
-    RemoteImageContextAdapter, RemoteSessionTrackerHost, RemoteSessionTrackerRegistry,
-    RemoteTerminalPrewarmRequest, REMOTE_FILE_MAX_READ_BYTES,
+    RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest,
+    REMOTE_FILE_MAX_READ_BYTES,
 };
 pub use bitfun_services_integrations::remote_connect::{
     ActiveTurnSnapshot, AssistantEntry, ChatImageAttachment, ChatMessage, ChatMessageItem,
@@ -506,19 +507,7 @@ fn build_core_image_contexts(
 fn remote_image_context_to_core(
     context: RemoteImageContext,
 ) -> crate::agentic::image_analysis::ImageContextData {
-    crate::agentic::image_analysis::ImageContextData::from_remote_image_context(context)
-}
-
-impl RemoteImageContextAdapter for crate::agentic::image_analysis::ImageContextData {
-    fn from_remote_image_context(context: RemoteImageContext) -> Self {
-        Self {
-            id: context.id,
-            image_path: context.image_path,
-            data_url: context.data_url,
-            mime_type: context.mime_type,
-            metadata: context.metadata,
-        }
-    }
+    CoreServiceAgentRuntime::remote_image_context(context)
 }
 
 // ── RemoteSessionStateTracker subscriber adapter ─────────────────
@@ -571,14 +560,16 @@ impl RemoteSessionTrackerHost for CoreRemoteSessionTrackerHost {
     }
 }
 
-struct CoreRemoteDialogRuntimeHost<'a> {
+pub(crate) struct CoreRemoteDialogRuntimeHost<'a> {
     dispatcher: &'a RemoteExecutionDispatcher,
     coordinator: Arc<crate::agentic::coordination::ConversationCoordinator>,
     scheduler: Arc<crate::agentic::coordination::DialogScheduler>,
 }
 
 impl<'a> CoreRemoteDialogRuntimeHost<'a> {
-    fn new(dispatcher: &'a RemoteExecutionDispatcher) -> std::result::Result<Self, String> {
+    pub(crate) fn new(
+        dispatcher: &'a RemoteExecutionDispatcher,
+    ) -> std::result::Result<Self, String> {
         use crate::agentic::coordination::{get_global_coordinator, get_global_scheduler};
 
         let coordinator = get_global_coordinator()
@@ -806,7 +797,7 @@ impl RemoteExecutionDispatcher {
         source: RemoteConnectSubmissionSource,
         turn_id: Option<String>,
     ) -> std::result::Result<RemoteDialogSubmitOutcome, String> {
-        let host = CoreRemoteDialogRuntimeHost::new(self)?;
+        let host = CoreServiceAgentRuntime::remote_dialog_host(self)?;
 
         submit_remote_dialog(
             &host,
@@ -1378,7 +1369,6 @@ impl RemoteServer {
 
     async fn handle_session_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
         use crate::agentic::coordination::get_global_coordinator;
-        use bitfun_runtime_ports::AgentSubmissionPort;
         use bitfun_services_integrations::remote_connect::{
             build_remote_session_create_request, RemoteConnectSubmissionSource,
         };
@@ -1542,7 +1532,8 @@ impl RemoteServer {
                     Some(binding_ws_str),
                     RemoteConnectSubmissionSource::Relay,
                 );
-                let submission_port: &dyn AgentSubmissionPort = coordinator.as_ref();
+                let submission_port =
+                    CoreServiceAgentRuntime::agent_submission_port(coordinator.as_ref());
                 match submission_port.create_session(request).await {
                     Ok(session) => RemoteResponse::SessionCreated {
                         session_id: session.session_id,
@@ -1900,6 +1891,29 @@ mod tests {
         let value: Value = serde_json::from_str(&json).unwrap();
         assert_eq!(value["resp"], "pong");
         assert_eq!(value["_request_id"], "req_xyz");
+    }
+
+    #[test]
+    fn core_service_agent_runtime_owner_maps_remote_image_context() {
+        let metadata = serde_json::json!({ "source": "relay" });
+        let context = RemoteImageContext {
+            id: "image-1".to_string(),
+            image_path: Some("/workspace/screenshot.png".to_string()),
+            data_url: None,
+            mime_type: "image/png".to_string(),
+            metadata: Some(metadata.clone()),
+        };
+
+        let mapped =
+            crate::service_agent_runtime::CoreServiceAgentRuntime::remote_image_context(context);
+
+        assert_eq!(mapped.id, "image-1");
+        assert_eq!(
+            mapped.image_path.as_deref(),
+            Some("/workspace/screenshot.png")
+        );
+        assert_eq!(mapped.mime_type, "image/png");
+        assert_eq!(mapped.metadata, Some(metadata));
     }
 
     #[test]

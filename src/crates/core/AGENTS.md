@@ -74,7 +74,8 @@ SessionManager → Session → DialogTurn → ModelRound
   contracts may live in `bitfun-services-integrations`; keep workspace-root
   source selection, response wrapping, concrete scheduler/session restore,
   terminal pre-warm adapters, and product execution core-owned until a reviewed
-  migration proves equivalence.
+  migration proves equivalence. Core service/agent runtime bindings are
+  centralized in `src/crates/core/src/service_agent_runtime.rs`.
 - Do not add new cross-layer references from `service` to `agentic` without a
   small port/interface boundary.
 - Do not move platform-specific logic, build-script behavior, or product

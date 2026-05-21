@@ -1380,7 +1380,7 @@ async fn guarded_new(
 async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleResult {
     use crate::agentic::coordination::get_global_coordinator;
     use crate::service::workspace::get_global_workspace_service;
-    use bitfun_runtime_ports::AgentSubmissionPort;
+    use crate::service_agent_runtime::CoreServiceAgentRuntime;
     use bitfun_services_integrations::remote_connect::{
         build_remote_session_create_request, RemoteConnectSubmissionSource,
     };
@@ -1486,7 +1486,7 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
         Some(workspace_path.clone()),
         RemoteConnectSubmissionSource::Bot,
     );
-    let submission_port: &dyn AgentSubmissionPort = coordinator.as_ref();
+    let submission_port = CoreServiceAgentRuntime::agent_submission_port(coordinator.as_ref());
     match submission_port.create_session(request).await {
         Ok(session) => {
             state.current_session_id = Some(session.session_id.clone());
@@ -1977,10 +1977,10 @@ async fn submit_question_answers(
 /// to the safe default ("agentic"), so chat keeps working.
 async fn resolve_session_agent_type(session_id: &str) -> Option<String> {
     use crate::agentic::coordination::get_global_coordinator;
-    use bitfun_runtime_ports::AgentSubmissionPort;
+    use crate::service_agent_runtime::CoreServiceAgentRuntime;
 
     let coordinator = get_global_coordinator()?;
-    let submission_port: &dyn AgentSubmissionPort = coordinator.as_ref();
+    let submission_port = CoreServiceAgentRuntime::agent_submission_port(coordinator.as_ref());
     submission_port
         .resolve_session_agent_type(session_id)
         .await

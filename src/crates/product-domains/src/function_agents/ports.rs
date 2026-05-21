@@ -1,8 +1,10 @@
 //! Function-agent service ports for future runtime migration.
 //!
-//! The current core implementation still owns Git commands, AI clients, prompt
-//! templates, JSON extraction, and error mapping. These ports define the seam
-//! that future adapters must satisfy before those implementations move.
+//! The current core implementation still owns Git commands, AI clients,
+//! provider acquisition, and AI transport error mapping. Product-domain modules
+//! own prompt templates, JSON extraction, and domain error mapping policy; these
+//! ports define the runtime boundary that future adapters must satisfy before
+//! concrete Git/AI implementations move.
 
 use crate::function_agents::common::{AgentError, AgentResult, Language};
 use crate::function_agents::git_func_agent::{
@@ -80,7 +82,7 @@ pub trait FunctionAgentGitPort: Send + Sync {
 
 /// Future AI boundary for function agents.
 ///
-/// Core still owns AI client selection, prompt templates, response parsing, and
+/// Core still owns AI client selection, provider acquisition, and AI transport
 /// error mapping. Product call sites may route through this trait only after
 /// focused equivalence tests cover the specific facade path.
 pub trait FunctionAgentAiPort: Send + Sync {
@@ -97,10 +99,10 @@ pub trait FunctionAgentAiPort: Send + Sync {
 /// Port-backed function-agent facade for future runtime owner migration.
 ///
 /// It owns only pure orchestration over function-agent ports and DTO helpers.
-/// Core still owns Git/AI service calls, prompt templates, JSON extraction,
-/// and concrete error mapping. Startchat product-path rewiring depends on core
-/// adapters preserving legacy Git state, diff fallback, time-info, and
-/// `analyzed_at` timing semantics.
+/// Core still owns Git/AI service calls, provider acquisition, and AI transport
+/// errors. Startchat product-path rewiring depends on core adapters preserving
+/// legacy Git state, diff fallback, time-info, and `analyzed_at` timing
+/// semantics.
 pub struct FunctionAgentRuntimeFacade<'a> {
     git: &'a dyn FunctionAgentGitPort,
     ai: &'a dyn FunctionAgentAiPort,

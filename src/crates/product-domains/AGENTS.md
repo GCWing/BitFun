@@ -50,7 +50,8 @@ moves here gradually.
   execution, built-in asset includes/seeding, marker IO, recompile orchestration,
   source-hash input lookup, `PathManager` integration, function-agent Git/AI
   service adapters, AI client calls, provider acquisition, and AI transport
-  error mapping.
+  error mapping. Core product-domain runtime bindings are centralized in
+  `src/crates/core/src/product_domain_runtime.rs`.
 
 ## Verification
 

@@ -234,6 +234,8 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
+    use crate::product_domain_runtime::CoreProductDomainRuntime;
+
     use super::CoreFunctionAgentGitAdapter;
 
     struct TestTempDir {
@@ -380,6 +382,11 @@ mod tests {
         assert_eq!(snapshot.unpushed_commits, 0);
         assert!(snapshot.ahead_behind.is_none());
         assert!(snapshot.last_commit_timestamp.is_none());
+    }
+
+    #[test]
+    fn core_product_domain_runtime_owner_constructs_function_agent_git_adapter() {
+        let _adapter = CoreProductDomainRuntime::function_agent_git_adapter();
     }
 
     fn init_git_repo(repo: &std::path::Path) {

@@ -19,7 +19,9 @@ slices that are outside pure product logic but still platform-neutral.
   workspace-file path/read/chunk/info helpers may live here. Workspace-root
   source selection, response/base64 wrapping, concrete scheduler submission,
   concrete terminal pre-warm adapters, and product execution remain core-owned
-  unless a later reviewed port/provider moves them with equivalence tests.
+  unless a later reviewed port/provider moves them with equivalence tests. Core
+  bindings for these runtime adapters are centralized in
+  `src/crates/core/src/service_agent_runtime.rs`.
 - Remote-SSH path/session identity helpers may live here; SSH channels, SFTP,
   remote FS, remote terminal, and manager assembly remain core-owned unless a
   later reviewed port/provider migration proves equivalence.

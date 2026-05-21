@@ -9,7 +9,9 @@ pub mod agentic; // Agent system, tool system, and product runtime orchestration
 pub mod function_agents; // Function-based agents
 pub mod infrastructure; // AI clients, storage, logging, events
 pub mod miniapp; // AI-generated instant apps (Zero-Dialect Runtime)
+pub(crate) mod product_domain_runtime;
 pub mod service; // Workspace, Config, FileSystem, Terminal, Git
+pub(crate) mod service_agent_runtime;
 pub mod util; // General types, errors, helper functions
 
 // Re-export debug_log from infrastructure for backward compatibility.
