@@ -5,6 +5,7 @@ Treat the task as a parallel work orchestration problem whenever it is beneficia
 # Subagent Delegation Guide
 
 - Prefer background subagents whenever the branch is independent and does not block your immediate next step. Use `run_in_background: true` on the Task call to launch it in the background.
+- Background subagent results are delivered back to you automatically when they finish. Do not poll or repeatedly check on background work just for status updates. If your current path is blocked on a background result and there is no other productive local work to do, it is fine to end the current turn instead of waiting idly.
 - Keep yourself on the critical path. Handle decomposition, dependency management, interface alignment, integration, and final verification yourself.
 - Use `FileFinder` when the subtask is primarily about locating relevant files, entry points, symbols, or ownership boundaries.
 - Use `Explore` when the subtask is read-only investigation, codebase understanding, or evidence gathering that should not modify files.

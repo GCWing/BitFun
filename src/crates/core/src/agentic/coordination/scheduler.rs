@@ -15,9 +15,8 @@ use super::turn_outcome::{TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus
 use crate::agentic::core::{PromptEnvelope, SessionState};
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{
-    DialogRoundInjectionSource, DialogRoundPreemptSource, RoundInjection,
-    RoundInjectionKind, RoundInjectionTarget, SessionRoundInjectionBuffer,
-    SessionRoundYieldFlags,
+    DialogRoundInjectionSource, DialogRoundPreemptSource, RoundInjection, RoundInjectionKind,
+    RoundInjectionTarget, SessionRoundInjectionBuffer, SessionRoundYieldFlags,
 };
 use crate::agentic::session::SessionManager;
 use dashmap::DashMap;
@@ -291,12 +290,12 @@ impl DialogScheduler {
         })
     }
 
-    /// Deliver a completed background subagent result back to the parent
-    /// session. If the session is currently processing, inject the result into
-    /// the running turn at the next model-round boundary. Otherwise, start a
-    /// new turn immediately so the result is handled without waiting for an
+    /// Deliver a completed background result back to the parent session.
+    /// If the session is currently processing, inject the result into the
+    /// running turn at the next model-round boundary. Otherwise, start a new
+    /// turn immediately so the result is handled without waiting for an
     /// unrelated future message.
-    pub async fn deliver_background_subagent_result(
+    pub async fn deliver_background_result(
         &self,
         session_id: String,
         agent_type: String,
@@ -318,7 +317,7 @@ impl DialogScheduler {
                     &session_id,
                     RoundInjection {
                         id: injection_id,
-                        kind: RoundInjectionKind::BackgroundSubagentResult,
+                        kind: RoundInjectionKind::BackgroundResult,
                         target: RoundInjectionTarget::CurrentRunningTurn,
                         content,
                         display_content: display,
@@ -327,8 +326,8 @@ impl DialogScheduler {
                 );
                 Ok(())
             }
-            _ => {
-                self.submit(
+            _ => self
+                .submit(
                     session_id,
                     content,
                     Some(display),
@@ -341,8 +340,7 @@ impl DialogScheduler {
                     None,
                 )
                 .await
-                .map(|_| ())
-            }
+                .map(|_| ()),
         }
     }
 

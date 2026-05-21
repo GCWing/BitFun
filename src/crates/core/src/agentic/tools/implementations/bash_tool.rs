@@ -1,3 +1,4 @@
+use crate::agentic::coordination::scheduler::get_global_scheduler;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -19,8 +20,8 @@ use std::time::{Duration, Instant};
 use terminal_core::session::SessionSource;
 use terminal_core::shell::{ShellDetector, ShellType};
 use terminal_core::{
-    CommandCompletionReason, CommandStreamEvent, ExecuteCommandRequest, SendCommandRequest,
-    SignalRequest, TerminalApi, TerminalBindingOptions, TerminalSessionBinding,
+    CommandCompletionReason, CommandStreamEvent, ExecuteCommandRequest, SignalRequest, TerminalApi,
+    TerminalBindingOptions, TerminalSessionBinding,
 };
 use tokio::io::AsyncWriteExt;
 use tool_runtime::util::ansi_cleaner::strip_ansi;
@@ -354,6 +355,91 @@ impl BashTool {
     fn cancellation_error(stage: &str) -> BitFunError {
         BitFunError::cancelled(format!("Bash tool execution cancelled {}", stage))
     }
+
+    fn background_output_file_reference(
+        context: &ToolUseContext,
+        chat_session_id: &str,
+        tool_use_id: &str,
+        output_file_path: &Path,
+    ) -> String {
+        context
+            .build_session_runtime_artifact_reference(
+                chat_session_id,
+                &format!("tool-results/{}.txt", tool_use_id),
+            )
+            .unwrap_or_else(|_| output_file_path.display().to_string())
+    }
+
+    fn format_background_command_delivery_text(
+        command: &str,
+        terminal_session_id: &str,
+        working_directory: &str,
+        exit_code: Option<i32>,
+        timed_out: bool,
+        interrupted: bool,
+        output_file_reference: &str,
+        output_persist_error: Option<&str>,
+    ) -> String {
+        let (status, summary) = if timed_out {
+            ("timeout", "Background Bash command timed out.")
+        } else if interrupted {
+            ("interrupted", "Background Bash command was interrupted.")
+        } else if exit_code == Some(0) {
+            (
+                "completed",
+                "Background Bash command completed successfully.",
+            )
+        } else {
+            (
+                "failed",
+                "Background Bash command completed with a non-zero exit code.",
+            )
+        };
+        let exit_code_attr = exit_code
+            .map(|code| format!(" exit_code=\"{}\"", code))
+            .unwrap_or_default();
+        let persistence_line = output_persist_error.map_or_else(
+            || format!("Full output was saved to: {}", output_file_reference),
+            |error| {
+                format!(
+                    "Output persistence encountered an error while writing {}: {}",
+                    output_file_reference, error
+                )
+            },
+        );
+
+        format!(
+            "{summary}\n<background_command status=\"{status}\" terminal_session_id=\"{terminal_session_id}\"{exit_code_attr}>\nCommand: {command}\nWorking directory: {working_directory}\n{persistence_line}\n</background_command>"
+        )
+    }
+
+    fn format_background_command_error_text(
+        command: &str,
+        terminal_session_id: &str,
+        working_directory: &str,
+        output_file_reference: &str,
+        error: &str,
+        output_persist_error: Option<&str>,
+    ) -> String {
+        let persistence_line = output_persist_error.map_or_else(
+            || {
+                format!(
+                    "Any captured output was saved to: {}",
+                    output_file_reference
+                )
+            },
+            |persist_error| {
+                format!(
+                    "Output persistence encountered an error while writing {}: {}",
+                    output_file_reference, persist_error
+                )
+            },
+        );
+
+        format!(
+            "Background Bash command failed before producing a final completion result.\n<background_command status=\"error\" terminal_session_id=\"{terminal_session_id}\">\nCommand: {command}\nWorking directory: {working_directory}\n{persistence_line}\nError: {error}\n</background_command>"
+        )
+    }
 }
 
 #[async_trait]
@@ -394,7 +480,7 @@ Usage notes:
   - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
   - It is very helpful if you write a clear, concise description of what this command does. For simple commands, keep it brief (5-10 words). For complex commands (piped commands, obscure flags, or anything hard to understand at a glance), add enough context to clarify what it does.
   - If the output exceeds {MAX_OUTPUT_LENGTH} characters, output will be truncated before being returned to you, with the tail of the output preserved because the ending is usually more important.
-  - You can use the `run_in_background` parameter to run the command in a new dedicated background terminal session. The tool returns the background session ID immediately without waiting for the command to finish. Only use this for long-running processes (e.g., dev servers, watchers) where you don't need the output right away. You do not need to append '&' to the command. NOTE: `timeout_ms` is ignored when `run_in_background` is true.
+  - You can use the `run_in_background` parameter to run the command in a new dedicated background terminal session. The tool returns immediately without waiting for the command to finish. The final completion result will be delivered back to you automatically when it is done, and the full output will be saved to a session runtime file instead of being pasted back into chat. Only use this for long-running processes (e.g., dev servers, watchers) where you do not need the output right away. You do not need to append '&' to the command. NOTE: `timeout_ms` is ignored when `run_in_background` is true.
   - Each result includes a `<terminal_session_id>` tag identifying the terminal session. The persistent shell session ID remains constant throughout the entire conversation; background sessions each have their own unique ID.
   - The output may include the command echo and/or the shell prompt (e.g., `PS C:\path>`). Do not treat these as part of the command's actual result.
   - Avoid interactive commands that may block waiting for user input or open a pager/editor. Prefer non-interactive variants and explicit flags. For example, use `git --no-pager diff` instead of `git diff`, and avoid commands that prompt for confirmation unless the User explicitly asks for them.
@@ -454,7 +540,7 @@ Usage notes:
                 },
                 "run_in_background": {
                     "type": "boolean",
-                    "description": "If true, runs the command in a new dedicated background terminal session and returns the session ID immediately without waiting for completion. Useful for long-running processes like dev servers or file watchers. timeout_ms is ignored when this is true."
+                    "description": "If true, runs the command in a new dedicated background terminal session and returns immediately. The final completion result is delivered back automatically when the command finishes, and the full output is saved to a session runtime file instead of being injected into chat. Useful for long-running processes like dev servers or file watchers. timeout_ms is ignored when this is true."
                 },
                 "working_directory": {
                     "type": "string",
@@ -842,7 +928,6 @@ Usage notes:
                     &initial_cwd,
                     context,
                     shell_type,
-                    &terminal_api,
                     &binding,
                     start_time,
                 )
@@ -1147,7 +1232,6 @@ impl BashTool {
         initial_cwd: &str,
         context: &ToolUseContext,
         shell_type: Option<ShellType>,
-        terminal_api: &TerminalApi,
         binding: &TerminalSessionBinding,
         start_time: Instant,
     ) -> BitFunResult<Vec<ToolResult>> {
@@ -1190,10 +1274,9 @@ impl BashTool {
             .unwrap_or_else(|| format!("bash_{}", uuid::Uuid::new_v4()));
         Self::emit_terminal_ready_event(&tool_use_id, &bg_session_id);
 
-        // Subscribe to session output before sending the command so no data is missed
-        let mut output_rx = terminal_api.subscribe_session_output(&bg_session_id);
-
         if Self::cancellation_requested(context) {
+            let terminal_api = TerminalApi::from_singleton()
+                .map_err(|e| BitFunError::tool(format!("Terminal not initialized: {}", e)))?;
             let _ = terminal_api
                 .close_session(terminal_core::CloseSessionRequest {
                     session_id: bg_session_id.clone(),
@@ -1205,98 +1288,287 @@ impl BashTool {
             ));
         }
 
-        // Fire-and-forget: write the command to the PTY without waiting for completion
-        terminal_api
-            .send_command(SendCommandRequest {
-                session_id: bg_session_id.clone(),
-                command: command_str.to_string(),
-            })
+        // Store background output under the session-scoped runtime tool-results tree:
+        // local:  ~/.bitfun/projects/<project-slug>/sessions/<chat-session-id>/tool-results/<tool-use-id>.txt
+        // remote: ~/.bitfun/remote_ssh/<host>/<remote-path>/sessions/<chat-session-id>/tool-results/<tool-use-id>.txt
+        let output_file_path =
+            Self::background_output_file_path(context, chat_session_id, &tool_use_id).ok_or_else(
+                || {
+                    BitFunError::tool(
+                        "Failed to prepare a background output file for Bash tool".to_string(),
+                    )
+                },
+            )?;
+        if let Some(parent) = output_file_path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                BitFunError::tool(format!(
+                    "Failed to create background output directory: {}",
+                    e
+                ))
+            })?;
+        }
+        let output_file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&output_file_path)
             .await
-            .map_err(|e| BitFunError::tool(format!("Failed to send background command: {}", e)))?;
+            .map_err(|e| {
+                BitFunError::tool(format!("Failed to open background output file: {}", e))
+            })?;
+        let output_file_reference = Self::background_output_file_reference(
+            context,
+            chat_session_id,
+            &tool_use_id,
+            &output_file_path,
+        );
 
         debug!(
             "Background command started, session_id: {}, owner: {}",
             bg_session_id, chat_session_id
         );
 
-        // Store background output under the session-scoped runtime tool-results tree:
-        // local:  ~/.bitfun/projects/<project-slug>/sessions/<chat-session-id>/tool-results/<tool-use-id>.txt
-        // remote: ~/.bitfun/remote_ssh/<host>/<remote-path>/sessions/<chat-session-id>/tool-results/<tool-use-id>.txt
-        let output_file_path =
-            Self::background_output_file_path(context, chat_session_id, &tool_use_id);
+        let parent_session_id = chat_session_id.to_string();
+        let parent_agent_type = context
+            .agent_type
+            .clone()
+            .unwrap_or_else(|| "Agentic".to_string());
+        let parent_workspace_path = context
+            .workspace_root()
+            .map(|path| path.to_string_lossy().to_string());
+        let command = command_str.to_string();
+        let working_directory = initial_cwd.to_string();
+        let terminal_session_id = bg_session_id.clone();
+        let output_file_reference_for_task = output_file_reference.clone();
+        let tool_use_id_for_task = tool_use_id.clone();
 
-        // Spawn task: write PTY output to file, delete when session ends
-        if let Some(file_path) = output_file_path.clone() {
-            let bg_id_for_log = bg_session_id.clone();
-            tokio::spawn(async move {
-                if let Some(parent) = file_path.parent() {
-                    if let Err(e) = tokio::fs::create_dir_all(parent).await {
-                        error!(
-                            "Failed to create tool-results output dir for bg session {}: {}",
-                            bg_id_for_log, e
-                        );
-                        return;
-                    }
+        tokio::spawn(async move {
+            let mut writer = tokio::io::BufWriter::new(output_file);
+            let mut output_persist_error: Option<String> = None;
+            let mut saw_output_event = false;
+            let mut saw_completion = false;
+            let mut delivery_sent = false;
+
+            let terminal_api = match TerminalApi::from_singleton() {
+                Ok(api) => api,
+                Err(error) => {
+                    error!(
+                        "Background Bash command could not access terminal singleton: session_id={}, error={}",
+                        terminal_session_id, error
+                    );
+                    return;
                 }
+            };
 
-                let file = match tokio::fs::OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(&file_path)
-                    .await
-                {
-                    Ok(f) => f,
-                    Err(e) => {
-                        error!(
-                            "Failed to open output file for bg session {}: {}",
-                            bg_id_for_log, e
+            let mut stream = terminal_api.execute_command_stream(ExecuteCommandRequest {
+                session_id: terminal_session_id.clone(),
+                command: command.clone(),
+                timeout_ms: None,
+                prevent_history: Some(true),
+            });
+
+            while let Some(event) = stream.next().await {
+                match event {
+                    CommandStreamEvent::Started { command_id } => {
+                        debug!(
+                            "Background Bash command started execution, session_id={}, command_id={}",
+                            terminal_session_id, command_id
                         );
-                        return;
                     }
-                };
+                    CommandStreamEvent::Output { data } => {
+                        saw_output_event = true;
+                        if output_persist_error.is_none() {
+                            if let Err(error) = writer.write_all(data.as_bytes()).await {
+                                output_persist_error = Some(error.to_string());
+                                error!(
+                                    "Failed to write background Bash output: session_id={}, error={}",
+                                    terminal_session_id, error
+                                );
+                            } else if let Err(error) = writer.flush().await {
+                                output_persist_error = Some(error.to_string());
+                                error!(
+                                    "Failed to flush background Bash output: session_id={}, error={}",
+                                    terminal_session_id, error
+                                );
+                            }
+                        }
+                    }
+                    CommandStreamEvent::Completed {
+                        exit_code,
+                        total_output,
+                        completion_reason,
+                        shell_state: _,
+                    } => {
+                        saw_completion = true;
 
-                let mut writer = tokio::io::BufWriter::new(file);
+                        if !saw_output_event
+                            && !total_output.is_empty()
+                            && output_persist_error.is_none()
+                        {
+                            if let Err(error) = writer.write_all(total_output.as_bytes()).await {
+                                output_persist_error = Some(error.to_string());
+                                error!(
+                                    "Failed to persist background Bash completion output: session_id={}, error={}",
+                                    terminal_session_id, error
+                                );
+                            } else if let Err(error) = writer.flush().await {
+                                output_persist_error = Some(error.to_string());
+                                error!(
+                                    "Failed to flush background Bash completion output: session_id={}, error={}",
+                                    terminal_session_id, error
+                                );
+                            }
+                        }
 
-                while let Some(data) = output_rx.recv().await {
-                    if let Err(e) = writer.write_all(data.as_bytes()).await {
-                        error!(
-                            "Failed to write output for bg session {}: {}",
-                            bg_id_for_log, e
+                        let timed_out = completion_reason == CommandCompletionReason::TimedOut;
+                        let interrupted =
+                            !timed_out && matches!(exit_code, Some(130) | Some(-1073741510));
+                        let delivery_text = Self::format_background_command_delivery_text(
+                            &command,
+                            &terminal_session_id,
+                            &working_directory,
+                            exit_code,
+                            timed_out,
+                            interrupted,
+                            &output_file_reference_for_task,
+                            output_persist_error.as_deref(),
                         );
+                        let metadata = json!({
+                            "kind": "background_result",
+                            "sourceKind": "bash_command",
+                            "toolName": "Bash",
+                            "toolCallId": tool_use_id_for_task.clone(),
+                            "terminalSessionId": terminal_session_id.clone(),
+                            "command": command.clone(),
+                            "workingDirectory": working_directory.clone(),
+                            "outputFile": output_file_reference_for_task.clone(),
+                        });
+
+                        if let Some(scheduler) = get_global_scheduler() {
+                            if let Err(error) = scheduler
+                                .deliver_background_result(
+                                    parent_session_id.clone(),
+                                    parent_agent_type.clone(),
+                                    parent_workspace_path.clone(),
+                                    delivery_text,
+                                    None,
+                                    Some(metadata),
+                                )
+                                .await
+                            {
+                                error!(
+                                    "Failed to deliver background Bash result: session_id={}, terminal_session_id={}, error={}",
+                                    parent_session_id, terminal_session_id, error
+                                );
+                            }
+                        } else {
+                            error!(
+                                "Scheduler not initialized; background Bash result dropped: session_id={}, terminal_session_id={}",
+                                parent_session_id, terminal_session_id
+                            );
+                        }
+                        delivery_sent = true;
                         break;
                     }
-                    let _ = writer.flush().await;
-                }
+                    CommandStreamEvent::Error { message } => {
+                        let delivery_text = Self::format_background_command_error_text(
+                            &command,
+                            &terminal_session_id,
+                            &working_directory,
+                            &output_file_reference_for_task,
+                            &message,
+                            output_persist_error.as_deref(),
+                        );
+                        let metadata = json!({
+                            "kind": "background_result",
+                            "sourceKind": "bash_command",
+                            "toolName": "Bash",
+                            "toolCallId": tool_use_id_for_task.clone(),
+                            "terminalSessionId": terminal_session_id.clone(),
+                            "command": command.clone(),
+                            "workingDirectory": working_directory.clone(),
+                            "outputFile": output_file_reference_for_task.clone(),
+                            "error": message.clone(),
+                        });
 
-                // Channel closed means session was destroyed - delete the log file
-                drop(writer);
-                if let Err(e) = tokio::fs::remove_file(&file_path).await {
-                    debug!(
-                        "Could not remove output file for bg session {} (may already be gone): {}",
-                        bg_id_for_log, e
-                    );
-                } else {
-                    debug!("Removed output file for bg session {}", bg_id_for_log);
+                        if let Some(scheduler) = get_global_scheduler() {
+                            if let Err(error) = scheduler
+                                .deliver_background_result(
+                                    parent_session_id.clone(),
+                                    parent_agent_type.clone(),
+                                    parent_workspace_path.clone(),
+                                    delivery_text,
+                                    None,
+                                    Some(metadata),
+                                )
+                                .await
+                            {
+                                error!(
+                                    "Failed to deliver background Bash error result: session_id={}, terminal_session_id={}, error={}",
+                                    parent_session_id, terminal_session_id, error
+                                );
+                            }
+                        } else {
+                            error!(
+                                "Scheduler not initialized; background Bash error result dropped: session_id={}, terminal_session_id={}",
+                                parent_session_id, terminal_session_id
+                            );
+                        }
+                        delivery_sent = true;
+                        break;
+                    }
                 }
-            });
-        }
+            }
+
+            if !saw_completion && !delivery_sent {
+                let delivery_text = Self::format_background_command_error_text(
+                    &command,
+                    &terminal_session_id,
+                    &working_directory,
+                    &output_file_reference_for_task,
+                    "Background Bash command stream ended without a completion event.",
+                    output_persist_error.as_deref(),
+                );
+                let metadata = json!({
+                    "kind": "background_result",
+                    "sourceKind": "bash_command",
+                    "toolName": "Bash",
+                    "toolCallId": tool_use_id_for_task,
+                    "terminalSessionId": terminal_session_id.clone(),
+                    "command": command.clone(),
+                    "workingDirectory": working_directory.clone(),
+                    "outputFile": output_file_reference_for_task.clone(),
+                    "error": "stream_ended_without_completion",
+                });
+
+                if let Some(scheduler) = get_global_scheduler() {
+                    if let Err(error) = scheduler
+                        .deliver_background_result(
+                            parent_session_id.clone(),
+                            parent_agent_type.clone(),
+                            parent_workspace_path.clone(),
+                            delivery_text,
+                            None,
+                            Some(metadata),
+                        )
+                        .await
+                    {
+                        error!(
+                            "Failed to deliver background Bash terminal stream-end result: session_id={}, terminal_session_id={}, error={}",
+                            parent_session_id, terminal_session_id, error
+                        );
+                    }
+                } else {
+                    error!(
+                        "Scheduler not initialized; background Bash stream-end result dropped: session_id={}, terminal_session_id={}",
+                        parent_session_id, terminal_session_id
+                    );
+                }
+            }
+        });
 
         let execution_time_ms = elapsed_ms_u64(start_time);
-
-        let output_file_str = output_file_path.as_deref().map(|p| p.display().to_string());
-        let output_file_reference = context
-            .build_session_runtime_artifact_reference(
-                chat_session_id,
-                &format!("tool-results/{}.txt", tool_use_id),
-            )
-            .ok()
-            .or_else(|| output_file_str.clone());
-
-        let output_file_note = output_file_reference
-            .as_deref()
-            .map(|s| format!("\nOutput is being written to: {}", s))
-            .unwrap_or_default();
+        let output_file_note = format!("\nFull output will be saved to: {}", output_file_reference);
 
         let result_data = json!({
             "success": true,
@@ -1308,10 +1580,11 @@ impl BashTool {
             "execution_time_ms": execution_time_ms,
             "terminal_session_id": bg_session_id,
             "output_file": output_file_reference,
+            "run_in_background": true,
         });
 
         let result_for_assistant = format!(
-            "Command started in background terminal session (id: {}). Working directory: {}.{}",
+            "Command started in background terminal session (id: {}). Working directory: {}.{} Its final result will be delivered back automatically when it finishes. Do not poll for status updates. If your current path is blocked on this result and there is no other useful local work to do, it is fine to end the current turn.",
             bg_session_id, initial_cwd, output_file_note
         );
 
@@ -1448,5 +1721,26 @@ mod tests {
         assert!(rendered.contains("<exit_code>1</exit_code>"));
         assert!(rendered.contains("<working_directory>/private/tmp</working_directory>"));
         assert!(rendered.contains("ERR_PNPM_NO_PKG_MANIFEST"));
+    }
+
+    #[test]
+    fn background_delivery_text_points_to_saved_output_file() {
+        let rendered = BashTool::format_background_command_delivery_text(
+            "pnpm test",
+            "bg-session-1",
+            "/repo",
+            Some(0),
+            false,
+            false,
+            "/runtime/sessions/session/tool-results/bash_123.txt",
+            None,
+        );
+
+        assert!(rendered.contains("Background Bash command completed successfully."));
+        assert!(rendered.contains("status=\"completed\""));
+        assert!(rendered.contains("terminal_session_id=\"bg-session-1\""));
+        assert!(rendered.contains(
+            "Full output was saved to: /runtime/sessions/session/tool-results/bash_123.txt"
+        ));
     }
 }

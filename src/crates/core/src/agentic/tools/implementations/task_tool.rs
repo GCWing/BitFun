@@ -1139,7 +1139,7 @@ impl Tool for TaskTool {
                     "background_task_id": background_result.background_task_id,
                 }),
                 result_for_assistant: Some(format!(
-                    "Background subagent '{}' started successfully.\n<background_task status=\"started\" id=\"{}\">Its final result will be delivered back automatically to you when it is finished.</background_task>",
+                    "Background subagent '{}' started successfully.\n<background_task status=\"started\" id=\"{}\">Its final result will be delivered back automatically to you when it is finished. Do not poll for status updates. If your current path is blocked on this result and there is no other useful local work to do, it is fine to end the current turn.</background_task>",
                     subagent_type, background_result.background_task_id
                 )),
                 image_attachments: None,
