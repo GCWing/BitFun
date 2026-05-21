@@ -4,9 +4,9 @@
  * Height matches side panel headers (40px).
  */
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { ChevronDown, ChevronUp, List, Search, X } from 'lucide-react';
-import { Tooltip, IconButton, Input } from '@/component-library';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp, List } from 'lucide-react';
+import { Tooltip, IconButton } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import './FlowChatHeader.scss';
@@ -66,13 +66,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   onJumpToCurrentTurn,
   onJumpToPreviousTurn,
   onJumpToNextTurn,
-  searchQuery = '',
-  onSearchChange,
-  searchMatchCount = 0,
-  searchCurrentMatch = 0,
-  onSearchNext,
-  onSearchPrev,
-  onSearchClose,
   searchOpenRequest = 0,
 }) => {
   const { t } = useTranslation('flow-chat');
@@ -105,8 +98,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       title: turn.title.trim() || untitledTurnLabel,
     }))
   ), [turns, untitledTurnLabel]);
-  const hasNoResults = searchQuery.trim().length > 0 && searchMatchCount === 0;
-
   useEffect(() => {
     if (!isTurnListOpen) return;
 
@@ -171,35 +162,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     };
   }, [currentTurn, displayTurns.length, isTurnListOpen]);
 
-  const handleOpenSearch = useCallback(() => {
-    setIsSearchOpen(true);
-  }, []);
-
-  const handleCloseSearch = useCallback(() => {
-    setIsSearchOpen(false);
-    onSearchClose?.();
-  }, [onSearchClose]);
-
-  const handleSearchKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Escape') {
-        handleCloseSearch();
-        e.preventDefault();
-        return;
-      }
-
-      if (e.key === 'Enter') {
-        if (e.shiftKey) {
-          onSearchPrev?.();
-        } else {
-          onSearchNext?.();
-        }
-        e.preventDefault();
-      }
-    },
-    [handleCloseSearch, onSearchNext, onSearchPrev],
-  );
-
   const handleToggleTurnList = () => {
     if (!hasTurnNavigation) return;
     setIsTurnListOpen(prev => !prev);
@@ -248,83 +210,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       </Tooltip>
 
       <div className="flowchat-header__actions">
-        {isSearchOpen ? (
-          <div className="flowchat-header__search" role="search" data-testid="flowchat-header-search-bar">
-            <Input
-              ref={searchInputRef}
-              className="flowchat-header__search-field"
-              variant="filled"
-              inputSize="small"
-              prefix={<Search size={12} className="flowchat-header__search-prefix-icon" aria-hidden="true" />}
-              suffix={
-                <span className="flowchat-header__search-inline-controls">
-                  <span className="flowchat-header__search-count" aria-live="polite">
-                    {searchQuery.trim()
-                      ? hasNoResults
-                        ? t('flowChatHeader.searchNoResults', { defaultValue: 'No results' })
-                        : t('flowChatHeader.searchResult', {
-                          current: searchCurrentMatch,
-                          total: searchMatchCount,
-                          defaultValue: `${searchCurrentMatch} / ${searchMatchCount}`,
-                        })
-                      : null}
-                  </span>
-                  <span className="flowchat-header__search-nav">
-                    <button
-                      className="flowchat-header__search-nav-btn"
-                      onClick={onSearchPrev}
-                      disabled={searchMatchCount === 0}
-                      title={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
-                      aria-label={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
-                      type="button"
-                    >
-                      <ChevronUp size={10} />
-                    </button>
-                    <button
-                      className="flowchat-header__search-nav-btn"
-                      onClick={onSearchNext}
-                      disabled={searchMatchCount === 0}
-                      title={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
-                      aria-label={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
-                      type="button"
-                    >
-                      <ChevronDown size={10} />
-                    </button>
-                  </span>
-                </span>
-              }
-              type="text"
-              value={searchQuery}
-              onChange={e => onSearchChange?.(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              placeholder={t('flowChatHeader.searchPlaceholder', { defaultValue: 'Search messages' })}
-              aria-label={t('flowChatHeader.searchPlaceholder', { defaultValue: 'Search messages' })}
-              error={hasNoResults}
-            />
-            <IconButton
-              className="flowchat-header__search-close"
-              variant="ghost"
-              size="xs"
-              onClick={handleCloseSearch}
-              tooltip={t('flowChatHeader.searchClose', { defaultValue: 'Close search' })}
-              aria-label={t('flowChatHeader.searchClose', { defaultValue: 'Close search' })}
-            >
-              <X size={14} />
-            </IconButton>
-          </div>
-        ) : (
-          <IconButton
-            className="flowchat-header__search-btn"
-            variant="ghost"
-            size="xs"
-            onClick={handleOpenSearch}
-            tooltip={t('flowChatHeader.searchOpen', { defaultValue: 'Search messages' })}
-            aria-label={t('flowChatHeader.searchOpen', { defaultValue: 'Search messages' })}
-            data-testid="flowchat-header-search"
-          >
-            <Search size={14} />
-          </IconButton>
-        )}
         <div className="flowchat-header__turn-nav" ref={turnListRef}>
           <IconButton
             className={`flowchat-header__turn-nav-button${isTurnListOpen ? ' flowchat-header__turn-nav-button--active' : ''}`}
