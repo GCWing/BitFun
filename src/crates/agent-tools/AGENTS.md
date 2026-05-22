@@ -10,7 +10,9 @@ the product tool runtime.
 - Do not depend on `bitfun-core`, concrete service crates, `tool-packs`, app
   crates, Tauri, Git, MCP, network clients, or CLI UI dependencies.
 - This crate may own `ToolResult`, validation DTOs, runtime restriction DTOs,
-  path-resolution DTOs, generic/static/dynamic provider contracts, pure
+  path-resolution DTOs, host path normalization, runtime artifact URI,
+  remote POSIX path pure contracts, allowed-list / collapsed-tool execution gate policy,
+  generic/static/dynamic provider contracts, pure
   manifest/exposure helpers, generic contextual prompt-manifest resolver
   contracts, generic catalog snapshot provider contracts, generic GetToolSpec
   catalog provider/detail/summary helpers, provider-backed GetToolSpec runtime

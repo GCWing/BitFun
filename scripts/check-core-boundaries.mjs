@@ -512,6 +512,36 @@ const forbiddenContentRules = [
         message:
           'core tool restrictions must not redefine ToolRuntimeRestrictions; use bitfun-agent-tools',
       },
+      {
+        regex: /\bfn\s+normalize_absolute_posix_path\b/,
+        message:
+          'core tool restrictions must not redefine remote POSIX path normalization; use bitfun-agent-tools',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/workspace_paths.rs',
+    patterns: [
+      {
+        regex: /\bpub const BITFUN_RUNTIME_URI_PREFIX\b/,
+        message:
+          'core workspace path facade must not redefine the runtime URI prefix; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bpub struct ParsedBitFunRuntimeUri\b/,
+        message:
+          'core workspace path facade must not redefine ParsedBitFunRuntimeUri; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn\s+posix_normalize_components\b/,
+        message:
+          'core workspace path facade must not redefine remote POSIX path normalization; use bitfun-agent-tools',
+      },
+      {
+        regex: /Component::ParentDir/,
+        message:
+          'core workspace path facade must not redefine host path normalization; use bitfun-agent-tools',
+      },
     ],
   },
   {
@@ -1502,7 +1532,7 @@ const requiredContentRules = [
   {
     path: 'src/crates/agent-tools/src/framework.rs',
     reason:
-      'agent-tools may own pure and generic prompt-visible tool manifest contracts without owning product registry or execution',
+      'agent-tools may own pure and generic prompt-visible tool contracts and provider-neutral execution gate policy without owning product registry or concrete execution',
     patterns: [
       {
         regex: /\bpub const GET_TOOL_SPEC_TOOL_NAME\b/,
@@ -1679,6 +1709,22 @@ const requiredContentRules = [
       {
         regex: /\bpub fn collect_loaded_collapsed_tool_names\b/,
         message: 'missing pure collapsed-tool load collection contract',
+      },
+      {
+        regex: /\bpub enum CollapsedToolUsageError\b/,
+        message: 'missing collapsed-tool execution gate error contract',
+      },
+      {
+        regex: /\bpub enum ToolExecutionAccessError\b/,
+        message: 'missing tool execution allowed-list gate error contract',
+      },
+      {
+        regex: /\bpub fn validate_tool_allowed_by_list\b/,
+        message: 'missing tool execution allowed-list gate policy',
+      },
+      {
+        regex: /\bpub fn validate_collapsed_tool_usage\b/,
+        message: 'missing collapsed-tool execution gate policy',
       },
       {
         regex: /\bpub fn sort_tool_manifest_definitions\b/,
@@ -2524,11 +2570,11 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
-      'core must continue owning collapsed-tool execution gating until manifest/runtime migration is reviewed',
+      'core must continue carrying collapsed-tool unlock state while delegating provider-neutral execution gate policy to agent-tools',
     patterns: [
       {
         regex: /\bfn validate_collapsed_tool_usage\b/,
-        message: 'missing collapsed-tool execution gate',
+        message: 'missing collapsed-tool execution gate compatibility wrapper',
       },
       {
         regex: /\bunlocked_collapsed_tools\b/,
@@ -2699,11 +2745,11 @@ const requiredContentRules = [
       'core scheduler must continue owning background subagent result delivery until running-turn and idle-session routing equivalence tests exist',
     patterns: [
       {
-        regex: /\bdeliver_background_subagent_result\b/,
+        regex: /\bdeliver_background_result\b/,
         message: 'missing background subagent delivery entry point',
       },
       {
-        regex: /RoundInjectionKind::BackgroundSubagentResult/,
+        regex: /RoundInjectionKind::BackgroundResult/,
         message: 'missing running-turn background result injection',
       },
       {
@@ -4365,6 +4411,7 @@ function runManifestParserSelfTest() {
     'ToolPathOperation',
     'ToolPathPolicy',
     'ToolRuntimeRestrictions',
+    'normalize_absolute_posix_path',
   ];
   const coreToolRestrictionRuleText = coreToolRestrictionRule.patterns
     .map((pattern) => pattern.regex.source)
@@ -4372,6 +4419,26 @@ function runManifestParserSelfTest() {
   for (const contract of coreToolRestrictionContracts) {
     if (!coreToolRestrictionRuleText.includes(contract)) {
       throw new Error(`core tool restrictions boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreWorkspacePathRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/tools/workspace_paths.rs',
+  );
+  if (!coreWorkspacePathRule) {
+    throw new Error('missing core workspace path boundary rule');
+  }
+  const coreWorkspacePathContracts = [
+    'BITFUN_RUNTIME_URI_PREFIX',
+    'ParsedBitFunRuntimeUri',
+    'posix_normalize_components',
+    'Component::ParentDir',
+  ];
+  const coreWorkspacePathRuleText = coreWorkspacePathRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of coreWorkspacePathContracts) {
+    if (!coreWorkspacePathRuleText.includes(contract)) {
+      throw new Error(`core workspace path boundary rule must forbid contract: ${contract}`);
     }
   }
   const coreToolRegistryRule = forbiddenContentRules.find(
@@ -4550,6 +4617,10 @@ function runManifestParserSelfTest() {
         'call_results',
         'GetToolSpecLoadObservation',
         'collect_loaded_collapsed_tool_names',
+        'CollapsedToolUsageError',
+        'ToolExecutionAccessError',
+        'validate_tool_allowed_by_list',
+        'validate_collapsed_tool_usage',
         'sort_tool_manifest_definitions',
         'is_tool_collapsed',
         'get_collapsed_tool_names',
@@ -4813,8 +4884,8 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
       contracts: [
-        'deliver_background_subagent_result',
-        'BackgroundSubagentResult',
+        'deliver_background_result',
+        'BackgroundResult',
         'CurrentRunningTurn',
         'AgentSession',
       ],

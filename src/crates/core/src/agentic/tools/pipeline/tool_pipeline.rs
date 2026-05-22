@@ -13,14 +13,17 @@ use crate::agentic::tools::framework::{ToolResult as FrameworkToolResult, ToolUs
 use crate::agentic::tools::registry::ToolRegistry;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_tools::{
+    GET_TOOL_SPEC_TOOL_NAME, validate_collapsed_tool_usage, validate_tool_allowed_by_list,
+};
 use dashmap::DashMap;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
-use tokio::sync::{oneshot, RwLock as TokioRwLock};
-use tokio::time::{timeout, Duration};
+use tokio::sync::{RwLock as TokioRwLock, oneshot};
+use tokio::time::{Duration, timeout};
 use tokio_util::sync::CancellationToken;
 
 /// A batch of tool tasks to execute together.
@@ -314,33 +317,13 @@ pub struct ToolPipeline {
 
 impl ToolPipeline {
     fn validate_collapsed_tool_usage(task: &ToolTask) -> BitFunResult<()> {
-        let tool_name = task.tool_call.tool_name.as_str();
-        if tool_name == "GetToolSpec" {
-            return Ok(());
-        }
-
-        if !task
-            .context
-            .collapsed_tools
-            .iter()
-            .any(|collapsed| collapsed == tool_name)
-        {
-            return Ok(());
-        }
-
-        if task
-            .context
-            .unlocked_collapsed_tools
-            .iter()
-            .any(|loaded| loaded == tool_name)
-        {
-            return Ok(());
-        }
-
-        Err(BitFunError::Validation(format!(
-            "Tool '{}' is collapsed. Call GetToolSpec first with {{\"tool_name\":\"{}\"}} to read its full usage instructions and input schema, then try again.",
-            tool_name, tool_name
-        )))
+        validate_collapsed_tool_usage(
+            task.tool_call.tool_name.as_str(),
+            &task.context.collapsed_tools,
+            &task.context.unlocked_collapsed_tools,
+            GET_TOOL_SPEC_TOOL_NAME,
+        )
+        .map_err(|error| BitFunError::Validation(error.to_string()))
     }
 
     pub fn new(
@@ -755,15 +738,8 @@ impl ToolPipeline {
             return Err(BitFunError::Validation(error_msg));
         }
 
-        // Security check: check if the tool is in the allowed list
-        // If allowed_tools is not empty, only allow execution of tools in the whitelist
-        if !task.context.allowed_tools.is_empty()
-            && !task.context.allowed_tools.contains(&tool_name)
-        {
-            let error_msg = format!(
-                "Tool '{}' is not in the allowed list: {:?}",
-                tool_name, task.context.allowed_tools
-            );
+        if let Err(err) = validate_tool_allowed_by_list(&tool_name, &task.context.allowed_tools) {
+            let error_msg = err.to_string();
             warn!("Tool not allowed: {}", error_msg);
 
             // Update state to failed
@@ -1665,12 +1641,14 @@ mod tests {
             result.result.result["provided_arguments"],
             serde_json::Value::String("{\"operation\":\"log\"".to_string())
         );
-        assert!(result
-            .result
-            .result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .contains("Provided arguments: {\"operation\":\"log\""));
+        assert!(
+            result
+                .result
+                .result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .contains("Provided arguments: {\"operation\":\"log\"")
+        );
     }
 
     #[test]
@@ -1733,9 +1711,11 @@ mod tests {
         assert_eq!(context.dialog_turn_id.as_deref(), Some("turn_1"));
         assert_eq!(context.unlocked_collapsed_tools, vec!["WebFetch"]);
         assert!(context.cancellation_token.is_some());
-        assert!(context
-            .runtime_tool_restrictions
-            .is_tool_allowed("WebFetch"));
+        assert!(
+            context
+                .runtime_tool_restrictions
+                .is_tool_allowed("WebFetch")
+        );
         assert!(!context.runtime_tool_restrictions.is_tool_allowed("Bash"));
         assert_eq!(context.custom_data["turn_index"], json!(7));
         assert_eq!(
@@ -1770,9 +1750,10 @@ mod tests {
         let err = ToolPipeline::validate_collapsed_tool_usage(&task)
             .expect_err("collapsed tool should require GetToolSpec unlock");
 
-        assert!(err
-            .to_string()
-            .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}"));
+        assert!(
+            err.to_string()
+                .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}")
+        );
     }
 
     #[test]

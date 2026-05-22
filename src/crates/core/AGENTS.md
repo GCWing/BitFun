@@ -51,6 +51,13 @@ SessionManager → Session → DialogTurn → ModelRound
   reviewed port/provider plan and equivalence tests exist. `ToolContextFacts`
   / `PortableToolContextProvider` are only portable projections; they must not
   carry runtime handles, workspace services, or cancellation tokens.
+- Host path normalization, runtime artifact URI parsing/building, and remote
+  POSIX path containment are portable `bitfun-agent-tools` contracts. Core
+  keeps compatibility wrappers for `BitFunError`, workspace runtime-root
+  lookup, and `ToolUseContext` integration.
+- Tool allowed-list and collapsed-tool direct execution gating delegate to
+  `bitfun-agent-tools`; core still owns the unlock-state source and maps gate
+  results into pipeline failure state.
 - Any tool migration must preserve expanded/collapsed exposure, prompt-visible
   manifests, `ToolUseContext.unlocked_collapsed_tools`, and desktop/MCP/ACP
   tool catalog behavior.
