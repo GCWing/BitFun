@@ -15,6 +15,7 @@ pub(crate) mod product_runtime;
 pub mod registry;
 pub mod restrictions;
 pub(crate) mod tool_adapter;
+pub(crate) mod tool_context_runtime;
 pub mod user_input_manager;
 pub mod workspace_paths;
 pub use bitfun_agent_tools::input_validator;
@@ -26,7 +27,7 @@ pub use framework::{
 pub use image_context::{ImageContextData, ImageContextProvider, ImageContextProviderRef};
 pub use input_validator::InputValidator;
 pub use manifest_resolver::{
-    resolve_tool_manifest, resolve_visible_tools, ResolvedToolManifest, ResolvedVisibleTools,
+    ResolvedToolManifest, ResolvedVisibleTools, resolve_tool_manifest, resolve_visible_tools,
 };
 pub use pipeline::*;
 pub use registry::{

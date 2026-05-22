@@ -6,11 +6,11 @@
 use super::state_manager::ToolStateManager;
 use super::types::*;
 use crate::agentic::core::{ToolCall, ToolExecutionState, ToolResult as ModelToolResult};
-use crate::agentic::deep_review::tool_context;
 use crate::agentic::events::types::ToolEventData;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{ToolResult as FrameworkToolResult, ToolUseContext};
 use crate::agentic::tools::registry::ToolRegistry;
+use crate::agentic::tools::tool_context_runtime;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_tools::{
@@ -19,7 +19,7 @@ use bitfun_agent_tools::{
 use dashmap::DashMap;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 use tokio::sync::{RwLock as TokioRwLock, oneshot};
@@ -1259,77 +1259,11 @@ impl ToolPipeline {
         task: &ToolTask,
         cancellation_token: CancellationToken,
     ) -> ToolUseContext {
-        ToolUseContext {
-            tool_call_id: Some(task.tool_call.tool_id.clone()),
-            agent_type: Some(task.context.agent_type.clone()),
-            session_id: Some(task.context.session_id.clone()),
-            dialog_turn_id: Some(task.context.dialog_turn_id.clone()),
-            workspace: task.context.workspace.clone(),
-            unlocked_collapsed_tools: task.context.unlocked_collapsed_tools.clone(),
-            custom_data: {
-                let mut map = HashMap::new();
-
-                if let Some(turn_index) = task.context.context_vars.get("turn_index") {
-                    if let Ok(n) = turn_index.parse::<u64>() {
-                        map.insert("turn_index".to_string(), serde_json::json!(n));
-                    }
-                }
-
-                if let Some(provider) = task.context.context_vars.get("primary_model_provider") {
-                    if !provider.is_empty() {
-                        map.insert(
-                            "primary_model_provider".to_string(),
-                            serde_json::json!(provider),
-                        );
-                    }
-                }
-                if let Some(supports_images) = task
-                    .context
-                    .context_vars
-                    .get("primary_model_supports_image_understanding")
-                {
-                    if let Ok(flag) = supports_images.parse::<bool>() {
-                        map.insert(
-                            "primary_model_supports_image_understanding".to_string(),
-                            serde_json::json!(flag),
-                        );
-                    }
-                }
-                if let Some(write_tool_mode) = task.context.context_vars.get("write_tool_mode") {
-                    if !write_tool_mode.is_empty() {
-                        map.insert(
-                            "write_tool_mode".to_string(),
-                            serde_json::json!(write_tool_mode),
-                        );
-                    }
-                }
-                if let Some(acp_transport) = task.context.context_vars.get("acp_transport") {
-                    if let Ok(flag) = acp_transport.parse::<bool>() {
-                        map.insert("acp_transport".to_string(), serde_json::json!(flag));
-                    }
-                }
-                let deep_review_parent_context =
-                    task.context
-                        .subagent_parent_info
-                        .as_ref()
-                        .map(|parent_info| tool_context::DeepReviewToolParentContext {
-                            tool_call_id: parent_info.tool_call_id.as_str(),
-                            session_id: parent_info.session_id.as_str(),
-                            dialog_turn_id: parent_info.dialog_turn_id.as_str(),
-                        });
-                tool_context::append_tool_use_context_data(
-                    &task.context.context_vars,
-                    deep_review_parent_context,
-                    &mut map,
-                );
-
-                map
-            },
-            computer_use_host: self.computer_use_host.clone(),
-            cancellation_token: Some(cancellation_token),
-            runtime_tool_restrictions: task.context.runtime_tool_restrictions.clone(),
-            workspace_services: task.context.workspace_services.clone(),
-        }
+        tool_context_runtime::build_tool_use_context_for_task(
+            task,
+            self.computer_use_host.clone(),
+            cancellation_token,
+        )
     }
 
     /// Handle streaming results

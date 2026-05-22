@@ -51,6 +51,12 @@ SessionManager → Session → DialogTurn → ModelRound
   reviewed port/provider plan and equivalence tests exist. `ToolContextFacts`
   / `PortableToolContextProvider` are only portable projections; they must not
   carry runtime handles, workspace services, or cancellation tokens.
+- Keep `ToolUseContext` runtime/service bindings centralized in
+  `src/agentic/tools/tool_context_runtime.rs`. `framework.rs` should define the
+  context shape, portable facts projection, and tool trait, not own workspace
+  runtime lookup, path enforcement, pipeline/description/preflight context
+  materialization, cancellation wrapping, post-call hooks, or checkpoint
+  collection.
 - Host path normalization, runtime artifact URI parsing/building, and remote
   POSIX path containment are portable `bitfun-agent-tools` contracts. Core
   keeps compatibility wrappers for `BitFunError`, workspace runtime-root

@@ -4,8 +4,10 @@
 
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
+use crate::agentic::MessageContent;
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
+use crate::agentic::tools::ToolPathOperation;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{ToolPathResolution, ToolUseContext};
 use crate::agentic::tools::implementations::file_write_tool::{
@@ -13,18 +15,16 @@ use crate::agentic::tools::implementations::file_write_tool::{
 };
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
-use crate::agentic::tools::ToolPathOperation;
-use crate::agentic::MessageContent;
+use crate::agentic::tools::tool_context_runtime;
 use crate::infrastructure::ai::AIClient;
-use crate::service::config::types::WriteToolMode;
 use crate::service::config::GlobalConfigManager;
+use crate::service::config::types::WriteToolMode;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
@@ -999,10 +999,10 @@ impl RoundExecutor {
                             Ok(None) => break,
                             Err(_) => {
                                 return Err(BitFunError::Timeout(format!(
-                                        "Write content generation timed out for {} after {} seconds without stream progress",
-                                        file_path,
-                                        watchdog_timeout.as_secs()
-                                    )));
+                                    "Write content generation timed out for {} after {} seconds without stream progress",
+                                    file_path,
+                                    watchdog_timeout.as_secs()
+                                )));
                             }
                         };
 
@@ -1185,19 +1185,15 @@ impl RoundExecutor {
     }
 
     fn build_write_preflight_context(context: &RoundContext) -> ToolUseContext {
-        ToolUseContext {
-            tool_call_id: None,
-            agent_type: Some(context.agent_type.clone()),
-            session_id: Some(context.session_id.clone()),
-            dialog_turn_id: Some(context.dialog_turn_id.clone()),
-            workspace: context.workspace.clone(),
-            unlocked_collapsed_tools: context.unlocked_collapsed_tools.clone(),
-            custom_data: HashMap::new(),
-            computer_use_host: None,
-            cancellation_token: None,
-            runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
-            workspace_services: context.workspace_services.clone(),
-        }
+        tool_context_runtime::build_write_preflight_context(
+            &context.agent_type,
+            &context.session_id,
+            &context.dialog_turn_id,
+            context.workspace.clone(),
+            context.unlocked_collapsed_tools.clone(),
+            context.runtime_tool_restrictions.clone(),
+            context.workspace_services.clone(),
+        )
     }
 
     /// Emit event
@@ -1624,12 +1620,12 @@ fn detect_placeholder_patterns(content: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_bitfun_contents, RoundExecutor, StreamProcessor};
+    use super::{RoundExecutor, StreamProcessor, extract_bitfun_contents};
+    use crate::agentic::WorkspaceBinding;
     use crate::agentic::core::ToolCall;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::execution::types::RoundContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
-    use crate::agentic::WorkspaceBinding;
     use dashmap::DashMap;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -1713,10 +1709,12 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&root);
 
-        assert!(error
-            .as_deref()
-            .unwrap_or_default()
-            .contains("already exists"));
+        assert!(
+            error
+                .as_deref()
+                .unwrap_or_default()
+                .contains("already exists")
+        );
     }
 
     #[tokio::test]

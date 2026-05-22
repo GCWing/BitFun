@@ -5,23 +5,23 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
-    get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
+    PromptBuilder, PromptBuilderContext, RemoteExecutionHints, get_agent_registry,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
-    render_system_reminder, Message, MessageContent, MessageHelper, MessageRole,
-    MessageSemanticKind, RequestReasoningTokenPolicy, Session,
+    Message, MessageContent, MessageHelper, MessageRole, MessageSemanticKind,
+    RequestReasoningTokenPolicy, Session, render_system_reminder,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::execution::types::FinishReason;
 use crate::agentic::image_analysis::{
-    build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
-    ImageLimits,
+    ImageContextData, ImageLimits, build_multimodal_message_with_images,
+    process_image_contexts_for_provider,
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
 use crate::agentic::tools::{
-    resolve_tool_manifest, ResolvedToolManifest, SubagentParentInfo, ToolRuntimeRestrictions,
+    ResolvedToolManifest, SubagentParentInfo, resolve_tool_manifest, tool_context_runtime,
 };
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
@@ -34,7 +34,7 @@ use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
-use bitfun_agent_tools::{collect_loaded_collapsed_tool_names, GetToolSpecLoadObservation};
+use bitfun_agent_tools::{GetToolSpecLoadObservation, collect_loaded_collapsed_tool_names};
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -2510,27 +2510,13 @@ impl ExecutionEngine {
         primary_supports_image_understanding: bool,
         context_vars: &HashMap<String, String>,
     ) -> ResolvedToolManifest {
-        let mut tool_opts_custom = HashMap::new();
-        tool_opts_custom.insert(
-            "primary_model_supports_image_understanding".to_string(),
-            serde_json::Value::Bool(primary_supports_image_understanding),
+        let description_context = tool_context_runtime::build_tool_description_context(
+            agent_type,
+            workspace,
+            workspace_services,
+            primary_supports_image_understanding,
+            context_vars,
         );
-        for (key, value) in context_vars {
-            tool_opts_custom.insert(key.clone(), serde_json::Value::String(value.clone()));
-        }
-        let description_context = crate::agentic::tools::framework::ToolUseContext {
-            tool_call_id: None,
-            agent_type: Some(agent_type.to_string()),
-            session_id: None,
-            dialog_turn_id: None,
-            workspace: workspace.cloned(),
-            unlocked_collapsed_tools: Vec::new(),
-            custom_data: tool_opts_custom,
-            computer_use_host: None,
-            cancellation_token: None,
-            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: workspace_services.cloned(),
-        };
         resolve_tool_manifest(allowed_tools, exposure_overrides, &description_context).await
     }
 

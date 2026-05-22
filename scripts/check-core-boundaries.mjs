@@ -494,6 +494,36 @@ const forbiddenContentRules = [
         regex: /\bpub enum ToolWorkspaceKind\b/,
         message: 'core tool framework must not redefine ToolWorkspaceKind; use bitfun-agent-tools',
       },
+      {
+        regex: /\bget_global_coordinator\b/,
+        message:
+          'core tool framework must not own runtime checkpoint coordination; keep it in tool_context_runtime',
+      },
+      {
+        regex: /\bGitService\b/,
+        message:
+          'core tool framework must not own git-backed checkpoint runtime; keep it in tool_context_runtime',
+      },
+      {
+        regex: /\bget_workspace_runtime_service_arc\b/,
+        message:
+          'core tool framework must not own workspace runtime lookup; keep it in tool_context_runtime',
+      },
+      {
+        regex: /\bremote_workspace_runtime_root\b/,
+        message:
+          'core tool framework must not own remote runtime-root lookup; keep it in tool_context_runtime',
+      },
+      {
+        regex: /\bget_path_manager_arc\b/,
+        message:
+          'core tool framework must not own host runtime-root lookup; keep it in tool_context_runtime',
+      },
+      {
+        regex: /\bpost_call_hooks::record_successful_tool_call\b/,
+        message:
+          'core tool framework must not own post-call runtime hooks; keep them in tool_context_runtime',
+      },
     ],
   },
   {
@@ -2568,6 +2598,77 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/agentic/tools/tool_context_runtime.rs',
+    reason:
+      'core must keep ToolUseContext runtime/service bindings centralized while ToolUseContext and concrete tools remain core-owned',
+    patterns: [
+      {
+        regex: /\bimpl ToolUseContext\b/,
+        message: 'missing ToolUseContext runtime binding owner impl',
+      },
+      {
+        regex: /\brecord_light_checkpoint\b/,
+        message: 'missing Deep Review checkpoint binding',
+      },
+      {
+        regex: /\bcall_with_tool_runtime_hooks\b/,
+        message: 'missing tool-call cancellation/post-call hook binding',
+      },
+      {
+        regex: /\bbuild_tool_use_context_for_task\b/,
+        message: 'missing tool pipeline context materialization binding',
+      },
+      {
+        regex: /\bbuild_tool_description_context\b/,
+        message: 'missing tool manifest description context materialization binding',
+      },
+      {
+        regex: /\bbuild_write_preflight_context\b/,
+        message: 'missing write preflight context materialization binding',
+      },
+      {
+        regex: /\bensure_current_workspace_runtime\b/,
+        message: 'missing workspace runtime ensure binding',
+      },
+      {
+        regex: /\bresolve_tool_path\b/,
+        message: 'missing tool path resolution binding',
+      },
+      {
+        regex: /\benforce_path_operation\b/,
+        message: 'missing runtime path policy binding',
+      },
+      {
+        regex: /\bworkspace_path_resolution_rejects_absolute_paths_outside_remote_workspace\b/,
+        message: 'missing remote workspace containment regression',
+      },
+      {
+        regex: /\bruntime_uri_resolution_rejects_different_workspace_scope\b/,
+        message: 'missing runtime artifact scope regression',
+      },
+      {
+        regex: /\bpath_policy_allows_only_configured_local_roots\b/,
+        message: 'missing path policy enforcement regression',
+      },
+      {
+        regex: /\btool_call_runtime_hook_returns_cancelled_before_impl_completes\b/,
+        message: 'missing tool-call cancellation regression',
+      },
+      {
+        regex: /\btool_task_context_materialization_preserves_runtime_fields\b/,
+        message: 'missing tool task context materialization regression',
+      },
+      {
+        regex: /\btool_description_context_preserves_manifest_custom_data_shape\b/,
+        message: 'missing tool description context regression',
+      },
+      {
+        regex: /\bwrite_preflight_context_preserves_minimal_runtime_fields\b/,
+        message: 'missing write preflight context regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
       'core must continue carrying collapsed-tool unlock state while delegating provider-neutral execution gate policy to agent-tools',
@@ -4392,6 +4493,12 @@ function runManifestParserSelfTest() {
     'ToolRenderOptions',
     'ToolPathBackend',
     'ToolPathResolution',
+    'get_global_coordinator',
+    'GitService',
+    'get_workspace_runtime_service_arc',
+    'remote_workspace_runtime_root',
+    'get_path_manager_arc',
+    'post_call_hooks::record_successful_tool_call',
   ];
   const coreToolFrameworkRuleText = coreToolFrameworkRule.patterns
     .map((pattern) => pattern.regex.source)
@@ -4841,6 +4948,27 @@ function runManifestParserSelfTest() {
         'customData',
         'cancellationToken',
         'unlocked_collapsed_tools',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/tool_context_runtime.rs',
+      contracts: [
+        'impl ToolUseContext',
+        'record_light_checkpoint',
+        'call_with_tool_runtime_hooks',
+        'build_tool_use_context_for_task',
+        'build_tool_description_context',
+        'build_write_preflight_context',
+        'ensure_current_workspace_runtime',
+        'resolve_tool_path',
+        'enforce_path_operation',
+        'workspace_path_resolution_rejects_absolute_paths_outside_remote_workspace',
+        'runtime_uri_resolution_rejects_different_workspace_scope',
+        'path_policy_allows_only_configured_local_roots',
+        'tool_call_runtime_hook_returns_cancelled_before_impl_completes',
+        'tool_task_context_materialization_preserves_runtime_fields',
+        'tool_description_context_preserves_manifest_custom_data_shape',
+        'write_preflight_context_preserves_minimal_runtime_fields',
       ],
     },
     {
