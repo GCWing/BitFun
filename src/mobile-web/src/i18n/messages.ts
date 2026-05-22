@@ -143,6 +143,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       fileDownloading: 'Downloading...',
       fileDownloaded: 'Downloaded',
       clickToDownload: 'Click to download',
+      scrollToBottom: 'Scroll to bottom',
     },
     tools: {
       explore: 'Explore',
@@ -297,6 +298,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       fileDownloading: '下载中...',
       fileDownloaded: '已下载',
       clickToDownload: '点击下载',
+      scrollToBottom: '滚动到底部',
     },
     tools: {
       explore: '探索',
@@ -451,6 +453,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       fileDownloading: '下載中...',
       fileDownloaded: '已下載',
       clickToDownload: '點擊下載',
+      scrollToBottom: '捲動到底部',
     },
     tools: {
       explore: '探索',

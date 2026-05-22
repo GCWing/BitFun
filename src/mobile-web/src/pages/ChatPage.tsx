@@ -2001,6 +2001,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [expandedMsgIds, setExpandedMsgIds] = useState<Set<string>>(new Set());
   const [infoToast, setInfoToast] = useState<string | null>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const isStreaming = activeTurn != null && activeTurn.status === 'active';
 
@@ -2137,6 +2138,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   }, [sessionMgr, sessionId, setMessages, setError, getMessages]);
 
   const isNearBottomRef = useRef(true);
+  const programmaticScrollRef = useRef(false);
+  const lastShowScrollToBottomRef = useRef(false);
   const BOTTOM_THRESHOLD = 80;
 
   const handleScroll = useCallback(() => {
@@ -2144,13 +2147,32 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
     if (!container) return;
 
     const gap = container.scrollHeight - container.scrollTop - container.clientHeight;
-    isNearBottomRef.current = gap < BOTTOM_THRESHOLD;
+    const nearBottom = gap < BOTTOM_THRESHOLD;
+    isNearBottomRef.current = nearBottom;
+    if (nearBottom) {
+      programmaticScrollRef.current = false;
+    }
+    if (!programmaticScrollRef.current) {
+      const show = !nearBottom;
+      if (show !== lastShowScrollToBottomRef.current) {
+        lastShowScrollToBottomRef.current = show;
+        setShowScrollToBottom(show);
+      }
+    }
 
     if (container.scrollTop < 100 && hasMore && !isLoadingMore) {
       const msgs = getMessages(sessionId);
       if (msgs.length > 0) loadMessages(msgs[0].id);
     }
   }, [hasMore, isLoadingMore, getMessages, sessionId, loadMessages]);
+
+  const scrollToBottom = useCallback(() => {
+    programmaticScrollRef.current = true;
+    isNearBottomRef.current = true;
+    setShowScrollToBottom(false);
+    lastShowScrollToBottomRef.current = false;
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
 
   // Initial load + start poller
   const initialScrollDone = useRef(false);
@@ -2231,6 +2253,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       const isNewAppend = messages.length > prevMsgCountRef.current;
       prevMsgCountRef.current = messages.length;
       if (isNewAppend && !isLoadingMore && isNearBottomRef.current) {
+        programmaticScrollRef.current = true;
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }
     }
@@ -2239,11 +2262,13 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   useEffect(() => {
     if (!initialScrollDone.current || !isStreaming) return;
     if (!isNearBottomRef.current) return;
+    programmaticScrollRef.current = true;
     messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
   }, [activeTurn, isStreaming]);
 
   useEffect(() => {
     if (optimisticMsg) {
+      programmaticScrollRef.current = true;
       isNearBottomRef.current = true;
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
@@ -2257,6 +2282,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       if (!isNearBottomRef.current) return;
       const gap = container.scrollHeight - container.scrollTop - container.clientHeight;
       if (gap > 10 && gap < 400) {
+        programmaticScrollRef.current = true;
         container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
       }
     }, 300);
@@ -2692,7 +2718,21 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
         )}
 
         <div ref={messagesEndRef} />
+
       </div>
+
+      {showScrollToBottom && (
+        <button
+          type="button"
+          className="chat-page__scroll-to-bottom"
+          onClick={scrollToBottom}
+          aria-label={t('chat.scrollToBottom')}
+        >
+          <svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      )}
 
       {/* Floating Input Bar — two-stage (matches desktop ChatInput) */}
       <input
