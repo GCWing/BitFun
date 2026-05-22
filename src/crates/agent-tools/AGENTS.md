@@ -11,8 +11,9 @@ the product tool runtime.
   crates, Tauri, Git, MCP, network clients, or CLI UI dependencies.
 - This crate may own `ToolResult`, validation DTOs, runtime restriction DTOs,
   path-resolution DTOs, host path normalization, runtime artifact URI,
-  remote POSIX path pure contracts, allowed-list / collapsed-tool execution gate policy,
-  generic/static/dynamic provider contracts, pure
+  remote POSIX path pure contracts, provider-neutral path resolution /
+  absolute-path checks, runtime artifact reference assembly, allowed-list /
+  collapsed-tool execution gate policy, generic/static/dynamic provider contracts, pure
   manifest/exposure helpers, generic contextual prompt-manifest resolver
   contracts, generic catalog snapshot provider contracts, generic GetToolSpec
   catalog provider/detail/summary helpers, provider-backed GetToolSpec runtime

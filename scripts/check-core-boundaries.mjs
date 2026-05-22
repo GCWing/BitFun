@@ -240,6 +240,8 @@ const dependencyProfileRules = [
     reason: 'product-domains default profile must not compile runtime/platform helpers',
     forbiddenNonOptionalDeps: [
       'dirs',
+      'log',
+      'sha2',
       'reqwest',
       'git2',
       'rmcp',
@@ -277,6 +279,7 @@ const dependencyProfileRules = [
       'thiserror',
       'tokio-util',
       'tokio-tungstenite',
+      'uuid',
       'bitfun-relay-server',
     ],
   },
@@ -325,6 +328,42 @@ const optionalDependencyFeatureOwnerRules = [
       { depName: 'x25519-dalek', ownerFeatures: ['service-integrations'] },
     ],
   },
+  {
+    crateName: 'services-integrations',
+    reason:
+      'services-integrations optional runtime dependencies must stay owned by explicit integration features',
+    dependencies: [
+      { depName: 'aes-gcm', ownerFeatures: ['mcp'] },
+      { depName: 'anyhow', ownerFeatures: ['mcp'] },
+      { depName: 'async-trait', ownerFeatures: ['mcp', 'remote-connect'] },
+      { depName: 'base64', ownerFeatures: ['mcp'] },
+      { depName: 'bitfun-runtime-ports', ownerFeatures: ['remote-connect'] },
+      { depName: 'bitfun-services-core', ownerFeatures: ['git', 'mcp'] },
+      { depName: 'chrono', ownerFeatures: ['git'] },
+      { depName: 'dunce', ownerFeatures: ['remote-ssh'] },
+      { depName: 'futures', ownerFeatures: ['mcp'] },
+      { depName: 'git2', ownerFeatures: ['git'] },
+      { depName: 'notify', ownerFeatures: ['file-watch'] },
+      { depName: 'rand', ownerFeatures: ['mcp'] },
+      { depName: 'reqwest', ownerFeatures: ['mcp'] },
+      { depName: 'rmcp', ownerFeatures: ['mcp'] },
+      { depName: 'sha2', ownerFeatures: ['remote-ssh'] },
+      { depName: 'sse-stream', ownerFeatures: ['mcp'] },
+      { depName: 'thiserror', ownerFeatures: ['git'] },
+      { depName: 'tokio-util', ownerFeatures: ['remote-ssh'] },
+      { depName: 'uuid', ownerFeatures: ['remote-connect'] },
+    ],
+  },
+  {
+    crateName: 'product-domains',
+    reason:
+      'product-domains optional runtime dependencies must stay owned by explicit product-domain features',
+    dependencies: [
+      { depName: 'dirs', ownerFeatures: ['miniapp'] },
+      { depName: 'log', ownerFeatures: ['function-agents'] },
+      { depName: 'sha2', ownerFeatures: ['miniapp'] },
+    ],
+  },
 ];
 
 const productCoreFeatureAssemblyRules = [
@@ -349,6 +388,13 @@ const productCoreFeatureAssemblyRules = [
 ];
 
 const productCoreFeatureAssemblyScanRoots = ['src/apps', 'src/crates/acp'];
+
+const coreProductFullFeatureAssemblyRule = {
+  manifestPath: 'src/crates/core/Cargo.toml',
+  featureName: 'product-full',
+  requiredFeatureRefs: ['ssh-remote', 'product-domains', 'service-integrations', 'tool-packs'],
+  reason: 'bitfun-core product-full must explicitly assemble current owner feature groups',
+};
 
 const ownerCrateFeatureAssemblyRules = [
   {
@@ -1757,6 +1803,30 @@ const requiredContentRules = [
         message: 'missing collapsed-tool execution gate policy',
       },
       {
+        regex: /\bpub fn is_tool_path_allowed_by_resolved_roots\b/,
+        message: 'missing provider-neutral path policy root matcher',
+      },
+      {
+        regex: /\bpub fn build_tool_path_policy_denial_message\b/,
+        message: 'missing provider-neutral path policy denial message',
+      },
+      {
+        regex: /\bpub fn resolve_tool_path_with_context\b/,
+        message: 'missing provider-neutral tool path resolution owner',
+      },
+      {
+        regex: /\bpub fn tool_path_is_effectively_absolute\b/,
+        message: 'missing provider-neutral tool path absolute check',
+      },
+      {
+        regex: /\bpub fn build_tool_runtime_artifact_reference\b/,
+        message: 'missing provider-neutral runtime artifact reference builder',
+      },
+      {
+        regex: /\bpub fn build_tool_session_runtime_artifact_reference\b/,
+        message: 'missing provider-neutral session runtime artifact reference builder',
+      },
+      {
         regex: /\bpub fn sort_tool_manifest_definitions\b/,
         message: 'missing prompt-visible manifest ordering helper',
       },
@@ -2637,6 +2707,30 @@ const requiredContentRules = [
       {
         regex: /\benforce_path_operation\b/,
         message: 'missing runtime path policy binding',
+      },
+      {
+        regex: /\bis_tool_path_allowed_by_resolved_roots\b/,
+        message: 'missing path policy owner delegation to agent-tools',
+      },
+      {
+        regex: /\bbuild_tool_path_policy_denial_message\b/,
+        message: 'missing shared path policy denial contract',
+      },
+      {
+        regex: /\bresolve_tool_path_with_context\b/,
+        message: 'missing shared tool path resolution owner delegation',
+      },
+      {
+        regex: /\btool_path_is_effectively_absolute\b/,
+        message: 'missing shared tool path absolute owner delegation',
+      },
+      {
+        regex: /\bbuild_tool_runtime_artifact_reference\b/,
+        message: 'missing runtime artifact reference owner delegation',
+      },
+      {
+        regex: /\bbuild_tool_session_runtime_artifact_reference\b/,
+        message: 'missing session runtime artifact reference owner delegation',
       },
       {
         regex: /\bworkspace_path_resolution_rejects_absolute_paths_outside_remote_workspace\b/,
@@ -4376,6 +4470,11 @@ function runManifestParserSelfTest() {
       throw new Error(`${rule.manifestPath} must require bitfun-core product-full`);
     }
   }
+  for (const featureName of ['ssh-remote', 'product-domains', 'service-integrations', 'tool-packs']) {
+    if (!coreProductFullFeatureAssemblyRule.requiredFeatureRefs.includes(featureName)) {
+      throw new Error(`core product-full assembly rule must require ${featureName}`);
+    }
+  }
   const discoveredProductCoreManifests = collectProductCoreDependencyManifestPaths([
     {
       manifestPath: 'src/apps/desktop/Cargo.toml',
@@ -4404,6 +4503,15 @@ function runManifestParserSelfTest() {
   ]) {
     if (!ownerFeatureRulePaths.has(manifestPath)) {
       throw new Error(`owner crate feature assembly rule must cover ${manifestPath}`);
+    }
+  }
+  for (const rule of ownerCrateFeatureAssemblyRules) {
+    const declaredFeatures = new Set(rule.requiredProductFullFeatures);
+    if (declaredFeatures.size !== rule.requiredProductFullFeatures.length) {
+      throw new Error(`${rule.manifestPath} product-full guard must not duplicate feature groups`);
+    }
+    if (rule.requiredProductFullFeatures.some((featureName) => featureName.startsWith('dep:'))) {
+      throw new Error(`${rule.manifestPath} product-full guard must track owner feature groups only`);
     }
   }
 
@@ -4528,6 +4636,28 @@ function runManifestParserSelfTest() {
       throw new Error(`core tool restrictions boundary rule must forbid contract: ${contract}`);
     }
   }
+  const agentToolsFrameworkRule = requiredContentRules.find(
+    (rule) => rule.path === 'src/crates/agent-tools/src/framework.rs',
+  );
+  if (!agentToolsFrameworkRule) {
+    throw new Error('missing agent-tools framework boundary rule');
+  }
+  const agentToolsFrameworkContracts = [
+    'is_tool_path_allowed_by_resolved_roots',
+    'build_tool_path_policy_denial_message',
+    'resolve_tool_path_with_context',
+    'tool_path_is_effectively_absolute',
+    'build_tool_runtime_artifact_reference',
+    'build_tool_session_runtime_artifact_reference',
+  ];
+  const agentToolsFrameworkRuleText = agentToolsFrameworkRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of agentToolsFrameworkContracts) {
+    if (!agentToolsFrameworkRuleText.includes(contract)) {
+      throw new Error(`agent-tools framework boundary rule must require contract: ${contract}`);
+    }
+  }
   const coreWorkspacePathRule = forbiddenContentRules.find(
     (rule) => rule.path === 'src/crates/core/src/agentic/tools/workspace_paths.rs',
   );
@@ -4571,8 +4701,16 @@ function runManifestParserSelfTest() {
   const productDomainProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'product-domains',
   );
-  if (!productDomainProfile?.forbiddenNonOptionalDeps.includes('dirs')) {
-    throw new Error('product-domains default profile must forbid non-optional dirs');
+  for (const dep of ['dirs', 'log', 'sha2']) {
+    if (!productDomainProfile?.forbiddenNonOptionalDeps.includes(dep)) {
+      throw new Error(`product-domains default profile must forbid non-optional ${dep}`);
+    }
+  }
+  const servicesIntegrationsDefaultProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'services-integrations',
+  );
+  if (!servicesIntegrationsDefaultProfile?.forbiddenNonOptionalDeps.includes('uuid')) {
+    throw new Error('services-integrations default profile must forbid non-optional uuid');
   }
   const coreProfile = dependencyProfileRules.find((rule) => rule.crateName === 'core');
   for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
@@ -4583,8 +4721,16 @@ function runManifestParserSelfTest() {
   const coreOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'core',
   );
+  const coreOptionalOwnerDeps = new Set(
+    coreOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
+  );
+  for (const dep of coreProfile?.forbiddenNonOptionalDeps ?? []) {
+    if (!coreOptionalOwnerDeps.has(dep)) {
+      throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
+    }
+  }
   for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
-    if (!coreOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
+    if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover ${dep}`);
     }
   }
@@ -4593,6 +4739,22 @@ function runManifestParserSelfTest() {
   );
   if (!coreGit2Owner?.ownerFeatures.includes('service-integrations')) {
     throw new Error('core optional dependency owner rule must keep git2 under service-integrations');
+  }
+  const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'services-integrations',
+  );
+  for (const dep of ['bitfun-runtime-ports', 'git2', 'notify', 'rmcp']) {
+    if (!servicesOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
+      throw new Error(`services-integrations optional dependency owner rule must cover ${dep}`);
+    }
+  }
+  const productDomainsOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'product-domains',
+  );
+  for (const dep of ['dirs', 'log', 'sha2']) {
+    if (!productDomainsOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
+      throw new Error(`product-domains optional dependency owner rule must cover ${dep}`);
+    }
   }
   const productDomainRuntimeRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/product-domains/src',
@@ -5883,6 +6045,7 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
   const deps = parseManifestDependencies(lines);
   const depsByName = new Map(deps.map((dep) => [dep.name, dep]));
   const features = parseManifestFeatures(lines);
+  const declaredOwnerDeps = new Set(rule.dependencies.map((dependency) => dependency.depName));
 
   for (const dependency of rule.dependencies) {
     const dep = depsByName.get(dependency.depName);
@@ -5903,14 +6066,41 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
     }
     for (const featureName of dependency.ownerFeatures) {
       const feature = features.get(featureName);
+      if (!feature) {
+        failures.push({
+          path: manifestPath,
+          line: dep?.line ?? 1,
+          message: `${rule.reason}; missing owner feature ${featureName} for ${dependency.depName}`,
+        });
+        continue;
+      }
       if (!featureReferencesDependency(feature, dependency.depName)) {
         failures.push({
           path: manifestPath,
-          line: feature?.line ?? dep.line,
+          line: feature.line,
           message: `${rule.reason}; ${featureName} must explicitly enable ${dependency.depName}`,
         });
       }
     }
+  }
+
+  const profileRule = dependencyProfileRules.find((profile) => profile.crateName === rule.crateName);
+  const depsRequiringOwner = new Set(profileRule?.forbiddenNonOptionalDeps ?? []);
+  const uncoveredDeps = new Map();
+  for (const dep of deps) {
+    if (!dep.optional || !depsRequiringOwner.has(dep.name) || declaredOwnerDeps.has(dep.name)) {
+      continue;
+    }
+    if (!uncoveredDeps.has(dep.name)) {
+      uncoveredDeps.set(dep.name, dep);
+    }
+  }
+  for (const [depName, dep] of uncoveredDeps.entries()) {
+    failures.push({
+      path: manifestPath,
+      line: dep.line,
+      message: `${rule.reason}; optional runtime dependency must declare owner feature coverage: ${depName}`,
+    });
   }
 }
 
@@ -5974,9 +6164,33 @@ function checkCoreDefaultProductFullFeature() {
   }
 }
 
+function checkCoreProductFullFeatureAssembly(rule) {
+  const manifestPath = join(ROOT, ...rule.manifestPath.split('/'));
+  const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
+  const productFull = features.get(rule.featureName);
+  if (!productFull) {
+    failures.push({
+      path: manifestPath,
+      line: 1,
+      message: `${rule.reason}; missing ${rule.featureName} feature declaration`,
+    });
+    return;
+  }
+  for (const featureName of rule.requiredFeatureRefs) {
+    if (!featureReferencesFeature(productFull, featureName)) {
+      failures.push({
+        path: manifestPath,
+        line: productFull.line,
+        message: `${rule.reason}; ${rule.featureName} must explicitly enable ${featureName}`,
+      });
+    }
+  }
+}
+
 function checkOwnerCrateFeatureAssembly(rule) {
   const manifestPath = join(ROOT, ...rule.manifestPath.split('/'));
   const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
+  const allowedProductFullFeatures = new Set(rule.requiredProductFullFeatures);
   const defaultFeature = features.get('default');
   if (!defaultFeature) {
     failures.push({
@@ -6008,6 +6222,15 @@ function checkOwnerCrateFeatureAssembly(rule) {
         path: manifestPath,
         line: productFull.line,
         message: `${rule.reason}; product-full must explicitly enable ${featureName}`,
+      });
+    }
+  }
+  for (const featureName of productFull.refs) {
+    if (!allowedProductFullFeatures.has(featureName)) {
+      failures.push({
+        path: manifestPath,
+        line: productFull.line,
+        message: `${rule.reason}; product-full must not include undeclared feature group ${featureName}`,
       });
     }
   }
@@ -6234,6 +6457,7 @@ for (const rule of productCoreFeatureAssemblyRules) {
 }
 checkProductCoreFeatureAssemblyCoverage();
 checkCoreDefaultProductFullFeature();
+checkCoreProductFullFeatureAssembly(coreProductFullFeatureAssemblyRule);
 for (const rule of ownerCrateFeatureAssemblyRules) {
   checkOwnerCrateFeatureAssembly(rule);
 }

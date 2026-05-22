@@ -1442,6 +1442,8 @@ pub enum ToolPathContractError {
     MissingRuntimeUriWorkspaceScope,
     MissingRuntimeUriArtifactPath,
     EmptyRuntimeWorkspaceScope,
+    RuntimeUriScopeMismatch { workspace_scope: String },
+    MissingRuntimeRoot,
     EmptyPath,
     MissingWorkspaceRoot { path: String },
 }
@@ -1466,6 +1468,18 @@ impl fmt::Display for ToolPathContractError {
             }
             Self::EmptyRuntimeWorkspaceScope => {
                 write!(formatter, "Runtime URI workspace scope cannot be empty")
+            }
+            Self::RuntimeUriScopeMismatch { workspace_scope } => {
+                write!(
+                    formatter,
+                    "Runtime URI scope '{workspace_scope}' does not match the current workspace"
+                )
+            }
+            Self::MissingRuntimeRoot => {
+                write!(
+                    formatter,
+                    "A workspace is required to resolve runtime artifacts"
+                )
             }
             Self::EmptyPath => write!(formatter, "path cannot be empty"),
             Self::MissingWorkspaceRoot { path } => {
@@ -1539,6 +1553,71 @@ pub fn resolve_workspace_tool_path(
     }
 }
 
+pub fn resolve_tool_path_with_context(
+    path: &str,
+    workspace_root: Option<&str>,
+    workspace_is_remote: bool,
+    workspace_scope: Option<&str>,
+    runtime_root: Option<PathBuf>,
+) -> Result<ToolPathResolution, ToolPathContractError> {
+    if is_bitfun_runtime_uri(path) {
+        let parsed = parse_bitfun_runtime_uri(path)?;
+        let scope_matches = parsed.workspace_scope == "current"
+            || workspace_scope == Some(parsed.workspace_scope.as_str());
+        if !scope_matches {
+            return Err(ToolPathContractError::RuntimeUriScopeMismatch {
+                workspace_scope: parsed.workspace_scope,
+            });
+        }
+
+        let runtime_root = runtime_root.ok_or(ToolPathContractError::MissingRuntimeRoot)?;
+        let mut resolved_path = runtime_root.clone();
+        for segment in parsed.relative_path.split('/') {
+            resolved_path.push(segment);
+        }
+
+        let effective_scope = workspace_scope
+            .map(str::to_string)
+            .unwrap_or_else(|| parsed.workspace_scope.clone());
+        let logical_path = build_bitfun_runtime_uri(&effective_scope, &parsed.relative_path)?;
+
+        return Ok(ToolPathResolution {
+            requested_path: path.to_string(),
+            logical_path,
+            resolved_path: resolved_path.to_string_lossy().to_string(),
+            backend: ToolPathBackend::Local,
+            runtime_scope: Some(effective_scope),
+            runtime_root: Some(runtime_root),
+        });
+    }
+
+    let resolved_path = resolve_workspace_tool_path(path, workspace_root, workspace_is_remote)?;
+    Ok(ToolPathResolution {
+        requested_path: path.to_string(),
+        logical_path: resolved_path.clone(),
+        resolved_path,
+        backend: if workspace_is_remote {
+            ToolPathBackend::RemoteWorkspace
+        } else {
+            ToolPathBackend::Local
+        },
+        runtime_scope: None,
+        runtime_root: None,
+    })
+}
+
+pub fn tool_path_is_effectively_absolute(path: &str, workspace_is_remote: bool) -> bool {
+    if is_bitfun_runtime_uri(path) {
+        return true;
+    }
+
+    if workspace_is_remote {
+        posix_style_path_is_absolute(path)
+    } else {
+        Path::new(path).is_absolute()
+    }
+}
+
 pub fn normalize_runtime_relative_path(path: &str) -> Result<String, ToolPathContractError> {
     let normalized = path.trim().replace('\\', "/");
     let trimmed = normalized.trim_matches('/');
@@ -1604,6 +1683,45 @@ pub fn build_bitfun_runtime_uri(
         scope,
         normalize_runtime_relative_path(relative_path)?
     ))
+}
+
+pub fn build_tool_runtime_artifact_reference(
+    relative_path: &str,
+    runtime_root: Option<&Path>,
+    workspace_scope: Option<&str>,
+    emit_runtime_uri: bool,
+) -> Result<String, ToolPathContractError> {
+    let normalized_relative_path = normalize_runtime_relative_path(relative_path)?;
+    if emit_runtime_uri {
+        return build_bitfun_runtime_uri(
+            workspace_scope.unwrap_or("current"),
+            &normalized_relative_path,
+        );
+    }
+
+    let runtime_root = runtime_root.ok_or(ToolPathContractError::MissingRuntimeRoot)?;
+    let mut resolved_path = runtime_root.to_path_buf();
+    for segment in normalized_relative_path.split('/') {
+        resolved_path.push(segment);
+    }
+
+    Ok(resolved_path.to_string_lossy().to_string())
+}
+
+pub fn build_tool_session_runtime_artifact_reference(
+    session_id: &str,
+    relative_path: &str,
+    runtime_root: Option<&Path>,
+    workspace_scope: Option<&str>,
+    emit_runtime_uri: bool,
+) -> Result<String, ToolPathContractError> {
+    let normalized_relative_path = normalize_runtime_relative_path(relative_path)?;
+    build_tool_runtime_artifact_reference(
+        &format!("sessions/{}/{}", session_id, normalized_relative_path),
+        runtime_root,
+        workspace_scope,
+        emit_runtime_uri,
+    )
 }
 
 pub fn posix_style_path_is_absolute(path: &str) -> bool {
@@ -1724,6 +1842,37 @@ impl ToolPathPolicy {
     pub fn is_restricted(&self, operation: ToolPathOperation) -> bool {
         !self.roots_for(operation).is_empty()
     }
+}
+
+pub fn is_tool_path_allowed_by_resolved_roots<E>(
+    resolution: &ToolPathResolution,
+    resolved_roots: &[ToolPathResolution],
+    mut root_contains_path: impl FnMut(&ToolPathResolution, &ToolPathResolution) -> Result<bool, E>,
+) -> Result<bool, E> {
+    for root in resolved_roots {
+        if root.backend != resolution.backend {
+            continue;
+        }
+
+        if root_contains_path(resolution, root)? {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+pub fn build_tool_path_policy_denial_message(
+    logical_path: &str,
+    operation: ToolPathOperation,
+    allowed_roots: &[String],
+) -> String {
+    format!(
+        "Path '{}' is not allowed for {}. Allowed roots: {}",
+        logical_path,
+        operation.verb(),
+        allowed_roots.join(", ")
+    )
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

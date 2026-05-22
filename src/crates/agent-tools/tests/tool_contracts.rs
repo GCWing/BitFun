@@ -9,24 +9,26 @@ use bitfun_agent_tools::{
     GetToolSpecExecutionError, GetToolSpecExecutionPlan, GetToolSpecLoadObservation,
     GetToolSpecRuntime, InputValidator, PromptVisibleToolManifestItem, ToolContextFacts,
     ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
-    ToolPathBackend, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
-    ToolWorkspaceKind, ValidationResult, build_bitfun_runtime_uri,
+    ToolPathBackend, ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult,
+    ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult, build_bitfun_runtime_uri,
     build_collapsed_tool_stub_definition, build_get_tool_spec_assistant_detail,
     build_get_tool_spec_catalog_description, build_get_tool_spec_catalog_description_from_provider,
     build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
     build_get_tool_spec_detail_result, build_get_tool_spec_duplicate_load_hint,
     build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
-    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema,
-    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
-    get_tool_spec_short_description, is_bitfun_runtime_uri, is_remote_posix_path_within_root,
-    normalize_host_path, normalize_runtime_relative_path, parse_bitfun_runtime_uri,
-    posix_resolve_path_with_workspace, posix_style_path_is_absolute,
-    render_get_tool_spec_tool_use_message, resolve_contextual_tool_manifest,
-    resolve_contextual_tool_manifest_from_provider, resolve_get_tool_spec_detail,
-    resolve_get_tool_spec_detail_from_provider,
+    build_tool_path_policy_denial_message, build_tool_runtime_artifact_reference,
+    build_tool_session_runtime_artifact_reference, collect_loaded_collapsed_tool_names,
+    get_tool_spec_input_schema, get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly,
+    get_tool_spec_needs_permissions, get_tool_spec_short_description, is_bitfun_runtime_uri,
+    is_remote_posix_path_within_root, is_tool_path_allowed_by_resolved_roots, normalize_host_path,
+    normalize_runtime_relative_path, parse_bitfun_runtime_uri, posix_resolve_path_with_workspace,
+    posix_style_path_is_absolute, render_get_tool_spec_tool_use_message,
+    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
+    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
     resolve_get_tool_spec_execution_result_from_provider, resolve_host_path_with_workspace,
-    resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_workspace_tool_path,
-    sort_tool_manifest_definitions, summarize_get_tool_spec_collapsed_tools,
+    resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_tool_path_with_context,
+    resolve_workspace_tool_path, sort_tool_manifest_definitions,
+    summarize_get_tool_spec_collapsed_tools, tool_path_is_effectively_absolute,
     validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_tool_allowed_by_list,
 };
 use serde_json::json;
@@ -287,6 +289,179 @@ fn path_resolution_contract_keeps_backend_and_runtime_helpers() {
 }
 
 #[test]
+fn tool_path_policy_owner_matches_resolved_roots_by_backend() {
+    let target = ToolPathResolution {
+        requested_path: "src/lib.rs".to_string(),
+        logical_path: "/workspace/src/lib.rs".to_string(),
+        resolved_path: "/workspace/src/lib.rs".to_string(),
+        backend: ToolPathBackend::RemoteWorkspace,
+        runtime_scope: None,
+        runtime_root: None,
+    };
+    let local_root = ToolPathResolution {
+        requested_path: "src".to_string(),
+        logical_path: "/workspace/src".to_string(),
+        resolved_path: "/workspace/src".to_string(),
+        backend: ToolPathBackend::Local,
+        runtime_scope: None,
+        runtime_root: None,
+    };
+    let remote_root = ToolPathResolution {
+        requested_path: "src".to_string(),
+        logical_path: "/workspace/src".to_string(),
+        resolved_path: "/workspace/src".to_string(),
+        backend: ToolPathBackend::RemoteWorkspace,
+        runtime_scope: None,
+        runtime_root: None,
+    };
+
+    let allowed = is_tool_path_allowed_by_resolved_roots(
+        &target,
+        &[local_root, remote_root],
+        |resolution, root| -> Result<bool, ()> {
+            Ok(is_remote_posix_path_within_root(
+                &resolution.resolved_path,
+                &root.resolved_path,
+            ))
+        },
+    )
+    .expect("containment callback should succeed");
+
+    assert!(allowed);
+}
+
+#[test]
+fn tool_path_policy_owner_ignores_mismatched_backend_roots() {
+    let target = ToolPathResolution {
+        requested_path: "src/lib.rs".to_string(),
+        logical_path: "/workspace/src/lib.rs".to_string(),
+        resolved_path: "/workspace/src/lib.rs".to_string(),
+        backend: ToolPathBackend::RemoteWorkspace,
+        runtime_scope: None,
+        runtime_root: None,
+    };
+    let local_root = ToolPathResolution {
+        requested_path: "src".to_string(),
+        logical_path: "/workspace/src".to_string(),
+        resolved_path: "/workspace/src".to_string(),
+        backend: ToolPathBackend::Local,
+        runtime_scope: None,
+        runtime_root: None,
+    };
+
+    let allowed = is_tool_path_allowed_by_resolved_roots(
+        &target,
+        &[local_root],
+        |_, _| -> Result<bool, ()> {
+            panic!("mismatched backend roots must not call the containment callback");
+        },
+    )
+    .expect("backend mismatch should not invoke containment");
+
+    assert!(!allowed);
+}
+
+#[test]
+fn tool_path_policy_owner_preserves_denial_message() {
+    let message = build_tool_path_policy_denial_message(
+        "/workspace/blocked/file.txt",
+        ToolPathOperation::Write,
+        &["/workspace/allowed".to_string()],
+    );
+
+    assert_eq!(
+        message,
+        "Path '/workspace/blocked/file.txt' is not allowed for write. Allowed roots: /workspace/allowed"
+    );
+}
+
+#[test]
+fn tool_path_resolution_owner_preserves_runtime_uri_scope_and_backend() {
+    let runtime_root = PathBuf::from("/runtime/workspace");
+
+    let resolution = resolve_tool_path_with_context(
+        "bitfun://runtime/workspace-123/plans/demo.plan.md",
+        Some("/home/project"),
+        true,
+        Some("workspace-123"),
+        Some(runtime_root.clone()),
+    )
+    .expect("runtime URI should resolve through the provider-neutral owner");
+
+    assert_eq!(
+        resolution.requested_path,
+        "bitfun://runtime/workspace-123/plans/demo.plan.md"
+    );
+    assert_eq!(
+        resolution.logical_path,
+        "bitfun://runtime/workspace-123/plans/demo.plan.md"
+    );
+    assert_eq!(
+        PathBuf::from(&resolution.resolved_path),
+        runtime_root.join("plans").join("demo.plan.md")
+    );
+    assert_eq!(resolution.backend, ToolPathBackend::Local);
+    assert_eq!(resolution.runtime_scope.as_deref(), Some("workspace-123"));
+    assert_eq!(
+        resolution.runtime_root.as_deref(),
+        Some(runtime_root.as_path())
+    );
+}
+
+#[test]
+fn tool_path_resolution_owner_rejects_mismatched_runtime_scope() {
+    let err = resolve_tool_path_with_context(
+        "bitfun://runtime/workspace-456/plans/demo.plan.md",
+        Some("/home/project"),
+        true,
+        Some("workspace-123"),
+        Some(PathBuf::from("/runtime/workspace")),
+    )
+    .expect_err("runtime artifact scopes must match the active workspace");
+
+    assert_eq!(
+        err.to_string(),
+        "Runtime URI scope 'workspace-456' does not match the current workspace"
+    );
+}
+
+#[test]
+fn tool_path_resolution_owner_selects_workspace_backend_semantics() {
+    let local =
+        resolve_tool_path_with_context("src/lib.rs", Some("/repo/project"), false, None, None)
+            .expect("local path should resolve through host semantics");
+    assert_eq!(local.backend, ToolPathBackend::Local);
+    assert_eq!(
+        PathBuf::from(local.resolved_path),
+        PathBuf::from("/repo/project").join("src").join("lib.rs")
+    );
+
+    let remote =
+        resolve_tool_path_with_context(r"src\lib.rs", Some("/home/project"), true, None, None)
+            .expect("remote path should resolve through POSIX workspace semantics");
+    assert_eq!(remote.backend, ToolPathBackend::RemoteWorkspace);
+    assert_eq!(remote.resolved_path, "/home/project/src/lib.rs");
+    assert_eq!(remote.logical_path, "/home/project/src/lib.rs");
+}
+
+#[test]
+fn tool_path_absolute_contract_keeps_remote_posix_and_runtime_uri_semantics() {
+    assert!(tool_path_is_effectively_absolute(
+        "bitfun://runtime/current/logs/tool.txt",
+        false
+    ));
+    assert!(tool_path_is_effectively_absolute(
+        r"\home\workspace\src\lib.rs",
+        true
+    ));
+    assert!(!tool_path_is_effectively_absolute("src/lib.rs", true));
+    assert_eq!(
+        tool_path_is_effectively_absolute("src/lib.rs", false),
+        PathBuf::from("src/lib.rs").is_absolute()
+    );
+}
+
+#[test]
 fn runtime_uri_contract_is_provider_neutral_and_normalized() {
     let uri = build_bitfun_runtime_uri("workspace-123", r"plans\demo.plan.md")
         .expect("runtime URI should build");
@@ -325,6 +500,75 @@ fn runtime_uri_contract_rejects_escape_and_invalid_scope() {
     assert_eq!(
         unsupported.to_string(),
         "Unsupported runtime URI: /tmp/result.txt"
+    );
+}
+
+#[test]
+fn runtime_artifact_reference_owner_preserves_remote_uri_shape() {
+    let reference = build_tool_runtime_artifact_reference(
+        r"plans\demo.plan.md",
+        None,
+        Some("workspace-123"),
+        true,
+    )
+    .expect("remote artifact reference should build as runtime URI");
+
+    assert_eq!(
+        reference,
+        "bitfun://runtime/workspace-123/plans/demo.plan.md"
+    );
+}
+
+#[test]
+fn runtime_artifact_reference_owner_preserves_local_path_shape() {
+    let runtime_root = PathBuf::from("/runtime/workspace");
+
+    let reference = build_tool_runtime_artifact_reference(
+        r"sessions\session-1\tool-results\result.json",
+        Some(runtime_root.as_path()),
+        None,
+        false,
+    )
+    .expect("local artifact reference should build as host path");
+
+    assert_eq!(
+        PathBuf::from(reference),
+        runtime_root
+            .join("sessions")
+            .join("session-1")
+            .join("tool-results")
+            .join("result.json")
+    );
+}
+
+#[test]
+fn runtime_artifact_reference_owner_preserves_session_prefix_and_rejects_escape() {
+    let session_reference = build_tool_session_runtime_artifact_reference(
+        "session-1",
+        "tool-results/result.json",
+        None,
+        Some("workspace-123"),
+        true,
+    )
+    .expect("session artifact reference should build");
+
+    assert_eq!(
+        session_reference,
+        "bitfun://runtime/workspace-123/sessions/session-1/tool-results/result.json"
+    );
+
+    let runtime_root = PathBuf::from("/runtime/workspace");
+    let escape = build_tool_runtime_artifact_reference(
+        "../secret.txt",
+        Some(runtime_root.as_path()),
+        None,
+        false,
+    )
+    .expect_err("artifact references must not escape the runtime root");
+
+    assert_eq!(
+        escape.to_string(),
+        "Runtime artifact path cannot escape its root"
     );
 }
 

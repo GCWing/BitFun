@@ -7,7 +7,10 @@ use async_trait::async_trait;
 pub use bitfun_agent_tools::{
     DynamicMcpToolInfo, DynamicToolInfo, PortableToolContextProvider, ToolContextFacts,
     ToolExposure, ToolPathBackend, ToolPathResolution, ToolRenderOptions, ToolResult,
-    ToolWorkspaceKind, ValidationResult,
+    ToolWorkspaceKind, ValidationResult, build_tool_path_policy_denial_message,
+    build_tool_runtime_artifact_reference, build_tool_session_runtime_artifact_reference,
+    is_tool_path_allowed_by_resolved_roots, resolve_tool_path_with_context,
+    tool_path_is_effectively_absolute,
 };
 use serde_json::Value;
 use std::collections::HashMap;
