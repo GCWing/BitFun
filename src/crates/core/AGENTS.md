@@ -97,6 +97,12 @@ SessionManager → Session → DialogTurn → ModelRound
   MiniApp/function-agent, Git/MCP, remote-connect, review-platform, snapshot,
   token usage, and mode canonicalization stay behind `product-full` or their
   owner feature group.
+- Provider-neutral tool path resolution, effective absolute-path checks,
+  runtime artifact reference assembly, path policy root matching, and denial
+  text may live in `bitfun-agent-tools`; keep workspace/runtime root lookup,
+  allowed-root resolution, local canonicalization, remote POSIX containment
+  callbacks, `BitFunError` mapping, and `ToolUseContext` runtime/service
+  bindings in core unless a separate migration proves equivalence.
 - Product/runtime dependencies that are only used behind those feature gates
   should stay optional in `bitfun-core` and be enabled by `product-full`,
   `service-integrations`, or `ssh-remote`; do not treat that as permission to
@@ -110,9 +116,16 @@ SessionManager → Session → DialogTurn → ModelRound
   dependencies and requires matching assembly rules.
 - Keep `default = ["product-full"]` until a separate product matrix review
   explicitly changes default capability selection.
+- Keep `bitfun-core/product-full` explicitly wired to the current owner feature
+  groups: `ssh-remote`, `product-domains`, `service-integrations`, and
+  `tool-packs`.
 - Owner crate feature graph guards keep `tool-packs`, `services-integrations`,
   and `product-domains` default-light while allowing `product-full` to
-  explicitly aggregate current owner feature groups.
+  explicitly aggregate current owner feature groups. When adding an owner
+  feature group, update `scripts/check-core-boundaries.mjs`; `product-full`
+  must not include undeclared feature groups or dependency shortcuts. Optional
+  runtime/domain dependencies in owner crates must stay owned by explicit
+  feature groups.
 - `service-integrations` is not a standalone product shape in core yet; MCP,
   remote-connect, and review-platform still depend on agentic/product runtime
   owners through `product-full`.
