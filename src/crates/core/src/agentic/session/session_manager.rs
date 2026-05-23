@@ -2811,31 +2811,50 @@ impl SessionManager {
         // Append the evidence as a proxy IntentAssignment for traceability.
         // The actual terminal status assignment is done post-hoc by the scoring
         // functions; here we just record that evidence was collected.
-        tracking.assignments.push(
-            bitfun_services_core::session::hidden_intent_types::IntentAssignment {
-                intent_id: format!("turn-{}", evidence.turn_index),
-                terminal_status:
-                    if evidence.asked_user_question {
-                        bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Inferred
-                    } else if evidence.proactive_tool_calls > 0 && evidence.produced_output {
-                        bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Completed
-                    } else {
-                        bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Provided
-                    },
-                assigned_at_turn: evidence.turn_index,
-                trigger_description: Some(format!(
-                    "asked={} proactive_tools={} output={} rounds={}",
-                    evidence.asked_user_question,
-                    evidence.proactive_tool_calls,
-                    evidence.produced_output,
-                    evidence.round_count
-                )),
-            },
-        );
+        let assignment = bitfun_services_core::session::hidden_intent_types::IntentAssignment {
+            intent_id: format!("turn-{}", evidence.turn_index),
+            terminal_status:
+                if evidence.asked_user_question {
+                    bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Inferred
+                } else if evidence.proactive_tool_calls > 0 && evidence.produced_output {
+                    bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Completed
+                } else {
+                    bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Provided
+                },
+            assigned_at_turn: evidence.turn_index,
+            trigger_description: Some(format!(
+                "asked={} proactive_tools={} output={} rounds={}",
+                evidence.asked_user_question,
+                evidence.proactive_tool_calls,
+                evidence.produced_output,
+                evidence.round_count
+            )),
+        };
+
+        tracking.assignments.push(assignment.clone());
 
         self.persistence_manager
             .save_session_metadata(&workspace_path, &metadata)
             .await?;
+
+        // ALSO update the turn file on disk so that session usage report can load it!
+        if let Ok(Some(mut turn)) = self
+            .persistence_manager
+            .load_dialog_turn(&workspace_path, session_id, evidence.turn_index)
+            .await
+        {
+            turn.intent_assignments.push(assignment);
+            if let Err(e) = self
+                .persistence_manager
+                .save_dialog_turn(&workspace_path, &turn)
+                .await
+            {
+                warn!(
+                    "Failed to save dialog turn with intent evidence: session_id={}, turn_index={}, error={}",
+                    session_id, evidence.turn_index, e
+                );
+            }
+        }
 
         debug!(
             "Intent evidence recorded: session_id={}, turn_index={}, asked_user_question={}, proactive_tools={}",
