@@ -14,6 +14,7 @@ use crate::infrastructure::ai::{get_global_ai_client_factory, AIClient};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use anyhow;
+use futures::{stream, StreamExt, TryStreamExt};
 use log::{debug, trace, warn};
 use std::sync::Arc;
 
@@ -28,6 +29,7 @@ pub struct CompressionConfig {
     pub fallback_assistant_chars: usize,
     pub fallback_tool_arg_chars: usize,
     pub fallback_tool_command_chars: usize,
+    pub map_reduce_max_parallel_requests: usize,
 }
 
 impl Default for CompressionConfig {
@@ -41,6 +43,7 @@ impl Default for CompressionConfig {
             fallback_assistant_chars: 1000,
             fallback_tool_arg_chars: 100,
             fallback_tool_command_chars: 100,
+            map_reduce_max_parallel_requests: 4,
         }
     }
 }
@@ -463,25 +466,16 @@ impl ContextCompressor {
         Some(trimmed.to_string())
     }
 
-    async fn execute_compression(
-        &self,
-        ai_client: Arc<AIClient>,
-        turns_to_compress: Vec<TurnWithTokens>,
-        context_window: usize,
-        contract: Option<&CompressionContract>,
-    ) -> BitFunResult<String> {
-        debug!("Compressing {} turn(s)", turns_to_compress.len());
+    fn gen_first_system_message() -> Message {
+        Message::system(
+            "You are a helpful AI assistant tasked with creating a detailed summary of the conversation so far."
+                .to_string(),
+        )
+    }
 
-        fn gen_first_system_message() -> Message {
-            Message::system(
-                "You are a helpful AI assistant tasked with creating a detailed summary of the conversation so far."
-                    .to_string(),
-            )
-        }
-
-        fn gen_reduce_system_message() -> Message {
-            Message::system(
-                r#"You are a conversation summarization manager performing a REDUCE and MERGE phase.
+    fn gen_reduce_system_message() -> Message {
+        Message::system(
+            r#"You are a conversation summarization manager performing a REDUCE and MERGE phase.
 Your task is to take multiple separate summaries of different segments of the same conversation, and merge them into a single, cohesive, chronological, and comprehensive final summary.
 
 ## Your Task
@@ -500,8 +494,148 @@ Your job is to:
 - The final output should be ONE cohesive summary, not a list of separate summaries.
 
 Be thorough and precise."#.to_string()
-            )
+        )
+    }
+
+    fn build_reduce_prompt(segment_summaries: &[String]) -> String {
+        let mut reduce_prompt = "Below are the individual summaries of different chronological segments of the conversation. Please merge them into a single cohesive final summary:\n\n".to_string();
+        for (idx, segment_summary) in segment_summaries.iter().enumerate() {
+            reduce_prompt.push_str(&format!(
+                "<segment_summary index={}>\n{}\n</segment_summary>\n\n",
+                idx + 1,
+                segment_summary.trim()
+            ));
         }
+        reduce_prompt
+    }
+
+    fn estimate_reduce_request_tokens(
+        &self,
+        segment_summaries: &[String],
+        contract: Option<&CompressionContract>,
+    ) -> usize {
+        let mut system_message = Self::gen_reduce_system_message();
+        let mut reduce_message = Message::user(Self::build_reduce_prompt(segment_summaries));
+        let mut compact_prompt = Message::user(self.get_compact_prompt(contract));
+        system_message.get_tokens() + reduce_message.get_tokens() + compact_prompt.get_tokens()
+    }
+
+    fn build_reduce_batches(
+        &self,
+        segment_summaries: Vec<String>,
+        token_limit: usize,
+    ) -> BitFunResult<Vec<Vec<String>>> {
+        let mut batches = Vec::new();
+        let mut current_batch: Vec<String> = Vec::new();
+
+        for summary in segment_summaries {
+            let mut candidate = current_batch.clone();
+            candidate.push(summary.clone());
+            if self.estimate_reduce_request_tokens(&candidate, None) <= token_limit {
+                current_batch = candidate;
+                continue;
+            }
+
+            if current_batch.is_empty() {
+                return Err(BitFunError::AIClient(
+                    "Reduce phase segment summary exceeds compression request token budget"
+                        .to_string(),
+                ));
+            }
+
+            batches.push(current_batch);
+            current_batch = vec![summary];
+        }
+
+        if !current_batch.is_empty() {
+            batches.push(current_batch);
+        }
+
+        Ok(batches)
+    }
+
+    async fn reduce_segment_summaries(
+        &self,
+        ai_client: Arc<AIClient>,
+        mut segment_summaries: Vec<String>,
+        token_limit: usize,
+        contract: Option<&CompressionContract>,
+    ) -> BitFunResult<String> {
+        let max_parallel = self
+            .config
+            .map_reduce_max_parallel_requests
+            .max(1)
+            .min(segment_summaries.len().max(1));
+
+        for pass in 1..=8 {
+            if self.estimate_reduce_request_tokens(&segment_summaries, contract) <= token_limit {
+                let reduce_messages =
+                    vec![Message::user(Self::build_reduce_prompt(&segment_summaries))];
+                return self
+                    .generate_summary(
+                        ai_client,
+                        Self::gen_reduce_system_message(),
+                        reduce_messages,
+                        contract,
+                    )
+                    .await;
+            }
+
+            let previous_count = segment_summaries.len();
+            let batches = self.build_reduce_batches(segment_summaries, token_limit)?;
+            if batches.len() >= previous_count {
+                return Err(BitFunError::AIClient(format!(
+                    "Reduce phase could not fit {} segment summaries into the compression request token budget",
+                    previous_count
+                )));
+            }
+
+            debug!(
+                "Reduce prompt exceeds budget; running pass {} across {} batch(es)",
+                pass,
+                batches.len()
+            );
+
+            let reduce_futures = batches.into_iter().enumerate().map(|(idx, batch)| {
+                let ai_client = ai_client.clone();
+                async move {
+                    let reduce_messages = vec![Message::user(Self::build_reduce_prompt(&batch))];
+                    self.generate_summary(
+                        ai_client,
+                        Self::gen_reduce_system_message(),
+                        reduce_messages,
+                        None,
+                    )
+                    .await
+                    .map_err(|e| {
+                        BitFunError::AIClient(format!(
+                            "Reduce phase failed for batch {}: {}",
+                            idx + 1,
+                            e
+                        ))
+                    })
+                }
+            });
+
+            segment_summaries = stream::iter(reduce_futures)
+                .buffered(max_parallel)
+                .try_collect::<Vec<_>>()
+                .await?;
+        }
+
+        Err(BitFunError::AIClient(
+            "Reduce phase exceeded maximum compression reduce passes".to_string(),
+        ))
+    }
+
+    async fn execute_compression(
+        &self,
+        ai_client: Arc<AIClient>,
+        turns_to_compress: Vec<TurnWithTokens>,
+        context_window: usize,
+        contract: Option<&CompressionContract>,
+    ) -> BitFunResult<String> {
+        debug!("Compressing {} turn(s)", turns_to_compress.len());
 
         let max_tokens_in_one_request =
             (context_window as f32 * self.config.single_request_max_tokens_ratio) as usize;
@@ -551,7 +685,7 @@ Be thorough and precise."#.to_string()
             let summary = self
                 .generate_summary(
                     ai_client,
-                    gen_first_system_message(),
+                    Self::gen_first_system_message(),
                     single_chunk,
                     contract,
                 )
@@ -566,51 +700,34 @@ Be thorough and precise."#.to_string()
         );
 
         // 3.1. Map Phase (Parallel summarization of each chunk)
-        let map_futures: Vec<_> = chunks
-            .into_iter()
-            .enumerate()
-            .map(|(idx, chunk)| {
-                let ai_client = ai_client.clone();
-                let sys_msg = gen_first_system_message();
-                async move {
-                    self.generate_summary(
-                        ai_client,
-                        sys_msg,
-                        chunk,
-                        None, // Contract will be applied in the Reduce phase instead
-                    )
-                    .await
-                    .map_err(|e| {
-                        BitFunError::AIClient(format!(
-                            "Map phase failed for chunk {}: {}",
-                            idx + 1,
-                            e
-                        ))
-                    })
-                }
-            })
-            .collect();
+        let max_parallel = self
+            .config
+            .map_reduce_max_parallel_requests
+            .max(1)
+            .min(chunks.len());
+        let map_futures = chunks.into_iter().enumerate().map(|(idx, chunk)| {
+            let ai_client = ai_client.clone();
+            let sys_msg = Self::gen_first_system_message();
+            async move {
+                self.generate_summary(
+                    ai_client, sys_msg, chunk,
+                    None, // Contract will be applied in the Reduce phase instead
+                )
+                .await
+                .map_err(|e| {
+                    BitFunError::AIClient(format!("Map phase failed for chunk {}: {}", idx + 1, e))
+                })
+            }
+        });
 
-        let map_results = futures::future::try_join_all(map_futures).await?;
+        let map_results = stream::iter(map_futures)
+            .buffered(max_parallel)
+            .try_collect::<Vec<_>>()
+            .await?;
 
         // 3.2. Reduce Phase (Chronologically merge and unify segment summaries into a single final summary)
-        let mut reduce_prompt = "Below are the individual summaries of different chronological segments of the conversation. Please merge them into a single cohesive final summary:\n\n".to_string();
-        for (idx, segment_summary) in map_results.iter().enumerate() {
-            reduce_prompt.push_str(&format!(
-                "<segment_summary index={}>\n{}\n</segment_summary>\n\n",
-                idx + 1,
-                segment_summary.trim()
-            ));
-        }
-
-        let reduce_messages = vec![Message::user(reduce_prompt)];
         let final_summary = self
-            .generate_summary(
-                ai_client,
-                gen_reduce_system_message(),
-                reduce_messages,
-                contract, // authoritative contract applied here
-            )
+            .reduce_segment_summaries(ai_client, map_results, max_tokens_in_one_request, contract)
             .await?;
 
         Ok(final_summary)

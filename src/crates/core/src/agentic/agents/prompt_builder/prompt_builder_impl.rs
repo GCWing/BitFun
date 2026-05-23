@@ -151,11 +151,7 @@ impl PromptBuilder {
 </environment_details>
 
 "#,
-                self.context.workspace_path,
-                host_os,
-                host_family,
-                host_arch,
-                computer_use_keys
+                self.context.workspace_path, host_os, host_family, host_arch, computer_use_keys
             )
         }
     }
@@ -197,15 +193,6 @@ impl PromptBuilder {
         policy: &RequestContextPolicy,
     ) -> Option<String> {
         let mut sections = Vec::new();
-
-        // 💡 Optimizing for prompt caching (e.g. DeepSeek): date and time change on every execution,
-        // so we push it here into the dynamic User reminder context rather than the static System Prompt.
-        let now = chrono::Local::now();
-        sections.push(format!(
-            "# Current Time\n<current_time>\n- Current Date: {}\n- Local Time: {}\n</current_time>",
-            now.format("%Y-%m-%d"),
-            now.format("%H:%M:%S")
-        ));
 
         let mut instruction_sections = Vec::new();
         let mut override_sections = Vec::new();
@@ -255,6 +242,15 @@ impl PromptBuilder {
         } else {
             Some(sections.join("\n\n"))
         }
+    }
+
+    pub fn build_current_time_reminder(&self) -> String {
+        let now = chrono::Local::now();
+        format!(
+            "# Current Time\n<current_time>\n- Current Date: {}\n- Local Time: {}\n</current_time>",
+            now.format("%Y-%m-%d"),
+            now.format("%H:%M:%S")
+        )
     }
 
     /// Get visual mode instruction from user config
