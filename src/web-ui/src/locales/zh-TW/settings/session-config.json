@@ -5,7 +5,7 @@
   },
   "permissionsPage": {
     "title": "權限管理",
-    "subtitle": "加速工作區搜尋、工具執行、Computer use、瀏覽器控制與偵錯模式"
+    "subtitle": "加速工作區搜尋、工具執行、瀏覽器控制與偵錯模式"
   },
   "features": {
     "sessionTitle": {
@@ -49,22 +49,6 @@
   "toolExecution": {
     "sectionTitle": "工具執行行為",
     "sectionDescription": "本會話中 AI 調用工具時的確認與超時策略。"
-  },
-  "computerUse": {
-    "sectionTitle": "Computer use（桌面自動化）",
-    "sectionDescription": "在 BitFun 桌面端允許助理截取屏幕並控制鍵鼠；需多模態模型理解畫面。",
-    "enable": "啟用 Computer use",
-    "enableDesc": "關閉時，任何會話模式都不會啟用 ComputerUse 工具。",
-    "accessibility": "輔助功能",
-    "accessibilityDesc": "",
-    "screenCapture": "屏幕錄製",
-    "screenCaptureDesc": "",
-    "granted": "已授權",
-    "notGranted": "未授權",
-    "openSettings": "系統設置",
-    "refreshStatus": "刷新狀態",
-    "desktopOnly": "Computer use 僅在 BitFun 桌面應用中可用。",
-    "platformNote": "說明"
   },
   "browserControl": {
     "sectionTitle": "瀏覽器控制",

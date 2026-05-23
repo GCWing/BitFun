@@ -5,7 +5,7 @@
   },
   "permissionsPage": {
     "title": "Permission management",
-    "subtitle": "Accelerated workspace search, tool execution, Computer use, browser control, and debug mode"
+    "subtitle": "Accelerated workspace search, tool execution, browser control, and debug mode"
   },
   "features": {
     "sessionTitle": {
@@ -49,22 +49,6 @@
   "toolExecution": {
     "sectionTitle": "Tool execution behavior",
     "sectionDescription": "Confirmation and timeout settings when tools run in a session."
-  },
-  "computerUse": {
-    "sectionTitle": "Computer use (desktop)",
-    "sectionDescription": "In the BitFun desktop app, the assistant can capture the screen and control the mouse and keyboard; requires a multimodal model for vision.",
-    "enable": "Enable Computer use",
-    "enableDesc": "When off, the ComputerUse tool stays disabled in every session mode.",
-    "accessibility": "Accessibility",
-    "accessibilityDesc": "",
-    "screenCapture": "Screen recording",
-    "screenCaptureDesc": "",
-    "granted": "Granted",
-    "notGranted": "Not granted",
-    "openSettings": "Setting",
-    "refreshStatus": "Refresh status",
-    "desktopOnly": "Computer use settings are only available in the BitFun desktop app.",
-    "platformNote": "Note"
   },
   "browserControl": {
     "sectionTitle": "Browser control",
