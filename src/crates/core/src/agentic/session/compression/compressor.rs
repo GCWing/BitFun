@@ -472,127 +472,148 @@ impl ContextCompressor {
     ) -> BitFunResult<String> {
         debug!("Compressing {} turn(s)", turns_to_compress.len());
 
-        fn gen_system_message_for_summary(prev_summary: &str) -> Message {
-            if prev_summary.is_empty() {
-                Message::system(
-                    "You are a helpful AI assistant tasked with summarizing conversations."
-                        .to_string(),
-                )
-            } else {
-                Message::system(format!(
-                    r#"You are a conversation summarization assistant performing an INCREMENTAL summary update.
+        fn gen_first_system_message() -> Message {
+            Message::system(
+                "You are a helpful AI assistant tasked with creating a detailed summary of the conversation so far."
+                    .to_string(),
+            )
+        }
 
-## Previous Summary
-The conversation has already been partially summarized. Here is the existing summary:
-
-<previous_summary>
-{}
-</previous_summary>
+        fn gen_reduce_system_message() -> Message {
+            Message::system(
+                r#"You are a conversation summarization manager performing a REDUCE and MERGE phase.
+Your task is to take multiple separate summaries of different segments of the same conversation, and merge them into a single, cohesive, chronological, and comprehensive final summary.
 
 ## Your Task
-You will be given the CONTINUATION of this conversation. Your job is to:
-1. Read and understand the new conversation segment
-2. MERGE the new information into the existing summary
-3. Output a single, unified summary that combines both the previous summary and the new conversation
+You will be given:
+- A list of individual summaries representing chronological segments of the conversation (inside `<segment_summary>` tags in a User message)
+
+Your job is to:
+1. Chronologically merge and unify these segment summaries.
+2. Remove any duplicate details or redundant explanations.
+3. Output a single, unified, comprehensive summary.
 
 ## Important Guidelines
-- Preserve all important information from the previous summary
-- Add new details from the current conversation segment
-- If new information contradicts or updates previous information, use the newer information
-- Maintain the same summary structure/format as specified in the user instructions
-- The final output should be ONE cohesive summary, not two separate summaries
-- Do not mention "previous summary" or "new conversation" in your output - write as if summarizing the entire conversation from the start
+- Preserve all important technical details, code patterns, and decisions from all segments.
+- Make the final summary cohesive and chronological.
+- Maintain the same summary structure/format as specified in the user instructions.
+- The final output should be ONE cohesive summary, not a list of separate summaries.
 
-Be thorough and precise. Do not lose important technical details from either the previous summary or the new conversation."#,
-                    prev_summary
-                ))
-            }
+Be thorough and precise."#.to_string()
+            )
         }
 
         let max_tokens_in_one_request =
             (context_window as f32 * self.config.single_request_max_tokens_ratio) as usize;
+
+        // Step 1: Slice turns into independent chunks based on token limits
+        let mut chunks = Vec::new();
+        let mut cur_chunk_messages = Vec::new();
         let mut current_tokens = 0;
-        let mut cur_messages = Vec::new();
-        let mut summary = String::new();
-        let mut request_cnt = 0;
-        for (idx, turn) in turns_to_compress.into_iter().enumerate() {
+
+        for turn in turns_to_compress {
             if current_tokens + turn.tokens <= max_tokens_in_one_request {
-                cur_messages.extend(turn.messages);
+                cur_chunk_messages.extend(turn.messages);
                 current_tokens += turn.tokens;
             } else {
-                if !cur_messages.is_empty() {
-                    summary = self
-                        .generate_summary(
-                            ai_client.clone(),
-                            gen_system_message_for_summary(&summary),
-                            cur_messages,
-                            contract,
-                        )
-                        .await?;
-                    cur_messages = Vec::new();
+                if !cur_chunk_messages.is_empty() {
+                    chunks.push(cur_chunk_messages);
+                    cur_chunk_messages = Vec::new();
                     current_tokens = 0;
-                    request_cnt += 1;
-                    trace!(
-                        "Compression request {} completed: turn_idx={}",
-                        request_cnt,
-                        idx
-                    );
                 }
 
                 if turn.tokens <= max_tokens_in_one_request {
-                    cur_messages.extend(turn.messages);
+                    cur_chunk_messages = turn.messages;
                     current_tokens = turn.tokens;
                 } else if let Some((messages_part1, messages_part2)) =
                     MessageHelper::split_messages_in_middle(turn.messages)
                 {
-                    summary = self
-                        .generate_summary(
-                            ai_client.clone(),
-                            gen_system_message_for_summary(&summary),
-                            messages_part1,
-                            contract,
-                        )
-                        .await?;
-                    request_cnt += 1;
-                    debug!(
-                        "[execute_compression] request_cnt={}, turn_idx={}, summary: \n{}",
-                        request_cnt, idx, summary
-                    );
-                    summary = self
-                        .generate_summary(
-                            ai_client.clone(),
-                            gen_system_message_for_summary(&summary),
-                            messages_part2,
-                            contract,
-                        )
-                        .await?;
-                    request_cnt += 1;
-                    debug!(
-                        "[execute_compression] request_cnt={}, turn_idx={}, summary: \n{}",
-                        request_cnt, idx, summary
-                    );
+                    chunks.push(messages_part1);
+                    chunks.push(messages_part2);
                 } else {
-                    return Err(BitFunError::Service(format!(
-                        "Compression Failed, turn {} cannot be split in middle",
-                        idx
-                    )));
+                    return Err(BitFunError::Service(
+                        "Compression Failed, turn cannot be split in middle".to_string(),
+                    ));
                 }
             }
         }
+        if !cur_chunk_messages.is_empty() {
+            chunks.push(cur_chunk_messages);
+        }
 
-        if !cur_messages.is_empty() {
-            summary = self
+        if chunks.is_empty() {
+            return Ok(String::new());
+        }
+
+        // Step 2: If there is only 1 chunk, perform a single direct summarization (O(1) latency)
+        if chunks.len() == 1 {
+            let single_chunk = chunks.into_iter().next().unwrap();
+            let summary = self
                 .generate_summary(
-                    ai_client.clone(),
-                    gen_system_message_for_summary(&summary),
-                    cur_messages,
+                    ai_client,
+                    gen_first_system_message(),
+                    single_chunk,
                     contract,
                 )
                 .await?;
-            request_cnt += 1;
-            trace!("Compression request {} completed", request_cnt);
+            return Ok(summary);
         }
-        Ok(summary)
+
+        // Step 3: If there are multiple chunks, perform Parallel Map-Reduce (O(1) parallel latency)
+        debug!(
+            "Executing Parallel Map-Reduce compression across {} chunks",
+            chunks.len()
+        );
+
+        // 3.1. Map Phase (Parallel summarization of each chunk)
+        let map_futures: Vec<_> = chunks
+            .into_iter()
+            .enumerate()
+            .map(|(idx, chunk)| {
+                let ai_client = ai_client.clone();
+                let sys_msg = gen_first_system_message();
+                async move {
+                    self.generate_summary(
+                        ai_client,
+                        sys_msg,
+                        chunk,
+                        None, // Contract will be applied in the Reduce phase instead
+                    )
+                    .await
+                    .map_err(|e| {
+                        BitFunError::AIClient(format!(
+                            "Map phase failed for chunk {}: {}",
+                            idx + 1,
+                            e
+                        ))
+                    })
+                }
+            })
+            .collect();
+
+        let map_results = futures::future::try_join_all(map_futures).await?;
+
+        // 3.2. Reduce Phase (Chronologically merge and unify segment summaries into a single final summary)
+        let mut reduce_prompt = "Below are the individual summaries of different chronological segments of the conversation. Please merge them into a single cohesive final summary:\n\n".to_string();
+        for (idx, segment_summary) in map_results.iter().enumerate() {
+            reduce_prompt.push_str(&format!(
+                "<segment_summary index={}>\n{}\n</segment_summary>\n\n",
+                idx + 1,
+                segment_summary.trim()
+            ));
+        }
+
+        let reduce_messages = vec![Message::user(reduce_prompt)];
+        let final_summary = self
+            .generate_summary(
+                ai_client,
+                gen_reduce_system_message(),
+                reduce_messages,
+                contract, // authoritative contract applied here
+            )
+            .await?;
+
+        Ok(final_summary)
     }
 
     async fn generate_summary(
