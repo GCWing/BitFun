@@ -6,17 +6,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   type LucideIcon,
-  Image,
   Plane,
   Presentation,
   ListTodo,
   CalendarDays,
   ClipboardList,
-  Mail,
-  FileSpreadsheet,
   HandCoins,
   TrendingUp,
-  FileText,
   X,
   RotateCcw,
   Plus,
@@ -25,16 +21,12 @@ import { Card, IconButton, Tooltip } from '@/component-library';
 import './CoworkExampleCards.scss';
 
 type ExampleId =
-  | 'desktop_cleanup'
   | 'vacation_plan'
   | 'make_ppt'
   | 'todo_breakdown'
   | 'optimize_week'
   | 'weekly_plan'
   | 'meeting_minutes'
-  | 'reply_email'
-  | 'make_docx'
-  | 'make_spreadsheet'
   | 'budget_plan';
 
 interface ExampleItem {
@@ -43,16 +35,12 @@ interface ExampleItem {
 }
 
 const EXAMPLES: ExampleItem[] = [
-  { id: 'desktop_cleanup', icon: Image },
   { id: 'vacation_plan', icon: Plane },
   { id: 'make_ppt', icon: Presentation },
   { id: 'todo_breakdown', icon: ListTodo },
   { id: 'optimize_week', icon: TrendingUp },
   { id: 'weekly_plan', icon: CalendarDays },
   { id: 'meeting_minutes', icon: ClipboardList },
-  { id: 'reply_email', icon: Mail },
-  { id: 'make_docx', icon: FileText },
-  { id: 'make_spreadsheet', icon: FileSpreadsheet },
   { id: 'budget_plan', icon: HandCoins },
 ];
 

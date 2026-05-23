@@ -1896,11 +1896,6 @@
     "refresh": "Shuffle",
     "close": "Close",
     "items": {
-      "desktop_cleanup": {
-        "title": "Organize desktop screenshots",
-        "description": "Rename, group, and file recent screenshots.",
-        "prompt": "Help me organize recent screenshots on my Desktop.\n\nFirst, scan my Desktop and count how many screenshots/images are there. Show me:\n\n- Total count\n\n- Date range (oldest to newest)\n\nThen, focus only on screenshots from the last 14 days. For each one:\n\n- Identify what it shows\n\n- Suggest a descriptive filename\n\n- Propose which folder it belongs in (or if it can be deleted)\n\nGroup similar screenshots together. Show me the plan before making any changes.\n\nAfter I approve, start by organizing just 10 files as a preview. If there are more than 10 files, check in with me before continuing with the rest."
-      },
       "vacation_plan": {
         "title": "Plan my vacation",
         "description": "Build a day-by-day itinerary with budget + backups.",
@@ -1930,21 +1925,6 @@
         "title": "Write meeting minutes",
         "description": "Summarize decisions, action items, and open questions.",
         "prompt": "Turn my meeting notes into clear meeting minutes.\n\nTopic:\nAttendees:\nTime:\nRaw notes (paste here):\n\nOutput:\n1) Key outcomes (3–6)\n2) Decisions\n3) Action items (owner / due date / acceptance criteria)\n4) Risks + open questions\n5) Suggested agenda for the next meeting"
-      },
-      "reply_email": {
-        "title": "Reply to an email",
-        "description": "Generate a polite, clear email template (two tones).",
-        "prompt": "Help me write an email reply.\n\nOriginal email (paste here):\nMy goal (confirm / decline / push forward / clarify):\nTone (formal / friendly / firm but polite):\nKey points to include:\n\nOutput:\n1) Subject line suggestions\n2) Body (2 versions: more formal / more concise)\n3) Questions for the recipient to confirm (if any)"
-      },
-      "make_docx": {
-        "title": "Draft a DOCX",
-        "description": "Write a structured document and export as DOCX.",
-        "prompt": "Help me write a document and export it as a .docx file.\n\nDocument type (PRD / proposal / meeting summary / report / SOP):\nAudience:\nTone (formal / friendly / concise):\nMust-include points:\nLength target:\n\nDeliverable:\n1) Suggested outline\n2) Full content\n3) Export as a .docx file (save it under artifacts/)"
-      },
-      "make_spreadsheet": {
-        "title": "Design a spreadsheet",
-        "description": "Define fields and formulas for reusable tracking.",
-        "prompt": "Design a spreadsheet schema (columns + example rows) for the following purpose.\n\nPurpose:\nData sources:\nMetrics / aggregation needs:\nPreferred output (weekly report / dashboard / checklist):\n\nOutput:\n1) Recommended columns (type + notes)\n2) Example data (3–5 rows)\n3) Useful formulas / pivot suggestions\n4) Data validation + filling guidelines"
       },
       "budget_plan": {
         "title": "Create a budget plan",
