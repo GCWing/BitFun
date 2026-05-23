@@ -106,6 +106,17 @@ export interface IntentAssignment {
   triggerDescription?: string;
 }
 
+export interface IntentTurnEvidence {
+  turnIndex: number;
+  askedUserQuestion: boolean;
+  questionTopics?: string[];
+  proactiveToolCalls: number;
+  toolNamesUsed?: string[];
+  producedOutput: boolean;
+  roundCount: number;
+  askedFollowUpInText: boolean;
+}
+
 export type LocalCommandKind = 'usage_report' | 'goal_pending' | 'goal_verifying';
 
 export interface LocalCommandMetadata {
@@ -139,6 +150,7 @@ export interface DialogTurnData {
   durationMs?: number;
   status: TurnStatus;
   intentAssignments?: IntentAssignment[];
+  intentEvidence?: IntentTurnEvidence;
 }
 
 export interface UserMessageData {

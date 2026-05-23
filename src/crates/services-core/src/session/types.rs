@@ -20,17 +20,41 @@ pub enum SessionRelationshipKind {
 pub struct SessionRelationship {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<SessionRelationshipKind>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_session_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_session_id"
+    )]
     pub parent_session_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_request_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_request_id"
+    )]
     pub parent_request_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_dialog_turn_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_dialog_turn_id"
+    )]
     pub parent_dialog_turn_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_turn_index")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_turn_index"
+    )]
     pub parent_turn_index: Option<usize>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_tool_call_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_tool_call_id"
+    )]
     pub parent_tool_call_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "subagent_type")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "subagent_type"
+    )]
     pub subagent_type: Option<String>,
 }
 
@@ -326,6 +350,18 @@ pub struct DialogTurnData {
         alias = "intent_assignments"
     )]
     pub intent_assignments: Vec<crate::session::hidden_intent_types::IntentAssignment>,
+
+    /// Raw hidden-intent evidence collected during this turn.
+    ///
+    /// Evidence is intentionally separate from `intent_assignments`: assigning
+    /// completed / inferred / provided requires comparing the trajectory
+    /// against concrete hidden intents.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "intent_evidence"
+    )]
+    pub intent_evidence: Option<crate::session::hidden_intent_types::IntentTurnEvidence>,
 }
 
 /// Persisted dialog turn kind.
@@ -829,6 +865,7 @@ impl DialogTurnData {
             duration_ms: None,
             status: TurnStatus::InProgress,
             intent_assignments: Vec::new(),
+            intent_evidence: None,
         }
     }
 

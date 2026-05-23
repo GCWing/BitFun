@@ -2,7 +2,6 @@
 //!
 //! Executes complete dialog turns, managing loops of multiple model rounds
 
-use super::intent_evidence::IntentTurnEvidence;
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
@@ -2448,18 +2447,15 @@ impl ExecutionEngine {
         // Hook B: Persist collected intent evidence for this turn.
         // Called after the dialog turn loop exits (all rounds complete).
         let evidence = context.intent_evidence.as_ref().and_then(|collector| {
-            collector.lock().ok().map(|c| {
-                IntentTurnEvidence::from(&*c).with_turn_index(context.turn_index)
-            })
+            collector
+                .lock()
+                .ok()
+                .map(|c| c.snapshot(context.turn_index))
         });
         if let Some(evidence) = evidence {
             if let Err(e) = self
                 .session_manager
-                .record_intent_evidence(
-                    &context.session_id,
-                    &context.dialog_turn_id,
-                    evidence,
-                )
+                .record_intent_evidence(&context.session_id, &context.dialog_turn_id, evidence)
                 .await
             {
                 warn!(

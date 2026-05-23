@@ -115,7 +115,6 @@ pub fn build_session_usage_report_from_sources(
     report.errors = build_error_breakdown(turns);
     report.slowest = build_slowest_spans(turns);
     report.proactivity = build_proactivity_report(turns);
-    report.completeness = build_completeness_report(turns);
     report.privacy = UsagePrivacy {
         prompt_content_included: false,
         tool_inputs_included: false,
@@ -955,7 +954,11 @@ fn build_proactivity_report(turns: &[DialogTurnData]) -> Option<ProactivityRepor
         let mut asked_question = false;
         let mut proactive_tools = 0usize;
 
-        for assignment in &turn.intent_assignments {
+        for assignment in turn
+            .intent_assignments
+            .iter()
+            .filter(|assignment| !is_legacy_proxy_intent_assignment(assignment))
+        {
             match assignment.terminal_status {
                 bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Completed => {
                     turn_completed += 1;
@@ -1028,38 +1031,6 @@ fn build_proactivity_report(turns: &[DialogTurnData]) -> Option<ProactivityRepor
     })
 }
 
-fn build_completeness_report(turns: &[DialogTurnData]) -> Option<CompletenessReport> {
-    let mut satisfied: u32 = 0;
-    let mut missed: u32 = 0;
-
-    for turn in turns {
-        for assignment in &turn.intent_assignments {
-            match assignment.terminal_status {
-                bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Completed
-                | bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Inferred => {
-                    satisfied += 1;
-                }
-                bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Provided => {
-                    missed += 1;
-                }
-            }
-        }
-    }
-
-    if satisfied + missed == 0 {
-        return None;
-    }
-
-    let score = satisfied as f32 / (satisfied + missed).max(1) as f32;
-
-    Some(CompletenessReport {
-        requirements_satisfied: satisfied,
-        requirements_missed: missed,
-        score,
-        level: completeness_level_label(score),
-    })
-}
-
 fn proactivity_level_label(score: f32) -> String {
     (if score >= 0.8 {
         "high"
@@ -1073,17 +1044,14 @@ fn proactivity_level_label(score: f32) -> String {
     .to_string()
 }
 
-fn completeness_level_label(score: f32) -> String {
-    (if (score - 1.0).abs() < f32::EPSILON {
-        "full"
-    } else if score >= 0.7 {
-        "partial"
-    } else if score >= 0.3 {
-        "minimal"
-    } else {
-        "incomplete"
-    })
-    .to_string()
+fn is_legacy_proxy_intent_assignment(
+    assignment: &bitfun_services_core::session::hidden_intent_types::IntentAssignment,
+) -> bool {
+    assignment.intent_id.starts_with("turn-")
+        && assignment
+            .trigger_description
+            .as_ref()
+            .is_some_and(|desc| desc.contains("proactive_tools=") && desc.contains("rounds="))
 }
 
 fn iter_tools(turns: &[DialogTurnData]) -> impl Iterator<Item = &ToolItemData> {
@@ -1252,10 +1220,12 @@ mod tests {
             report.tokens.cache_coverage,
             UsageCacheCoverage::Unavailable
         );
-        assert!(report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::CachedTokens));
+        assert!(
+            report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::CachedTokens)
+        );
     }
 
     #[test]
@@ -1274,10 +1244,12 @@ mod tests {
         assert_eq!(report.tokens.cached_tokens, Some(12));
         assert_eq!(report.tokens.cache_coverage, UsageCacheCoverage::Available);
         assert_eq!(report.models[0].cached_tokens, Some(12));
-        assert!(report
-            .coverage
-            .available
-            .contains(&UsageCoverageKey::CachedTokens));
+        assert!(
+            report
+                .coverage
+                .available
+                .contains(&UsageCoverageKey::CachedTokens)
+        );
     }
 
     #[test]
@@ -1292,10 +1264,12 @@ mod tests {
         );
 
         assert_eq!(report.workspace.kind, UsageWorkspaceKind::RemoteSsh);
-        assert!(report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::RemoteSnapshotStats));
+        assert!(
+            report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::RemoteSnapshotStats)
+        );
     }
 
     #[test]
@@ -1318,6 +1292,27 @@ mod tests {
         let request = test_request(None);
         let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
         turn.intent_assignments.push(IntentAssignment {
+            intent_id: "intent-0".to_string(),
+            terminal_status: IntentTerminalStatus::Completed,
+            assigned_at_turn: 0,
+            trigger_description: Some("matched annotated hidden intent".to_string()),
+        });
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+
+        assert_eq!(
+            report.proactivity.as_ref().map(|value| value.completed),
+            Some(1)
+        );
+        assert_eq!(report.completeness, None);
+    }
+
+    #[test]
+    fn report_ignores_legacy_proxy_intent_assignments() {
+        let request = test_request(None);
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.intent_assignments.push(IntentAssignment {
             intent_id: "turn-0".to_string(),
             terminal_status: IntentTerminalStatus::Completed,
             assigned_at_turn: 0,
@@ -1329,17 +1324,8 @@ mod tests {
         let report =
             build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
 
-        assert_eq!(
-            report.proactivity.as_ref().map(|value| value.completed),
-            Some(1)
-        );
-        assert_eq!(
-            report
-                .completeness
-                .as_ref()
-                .map(|value| value.requirements_satisfied),
-            Some(1)
-        );
+        assert_eq!(report.proactivity, None);
+        assert_eq!(report.completeness, None);
     }
 
     #[test]
@@ -1444,14 +1430,18 @@ mod tests {
         let report =
             build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
 
-        assert!(report
-            .coverage
-            .available
-            .contains(&UsageCoverageKey::ModelRoundTiming));
-        assert!(!report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::ModelRoundTiming));
+        assert!(
+            report
+                .coverage
+                .available
+                .contains(&UsageCoverageKey::ModelRoundTiming)
+        );
+        assert!(
+            !report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::ModelRoundTiming)
+        );
         assert_eq!(
             report
                 .models
@@ -1743,14 +1733,18 @@ mod tests {
         assert_eq!(write.preflight_ms, Some(16));
         assert_eq!(write.confirmation_wait_ms, Some(13));
         assert_eq!(write.execution_ms, Some(141));
-        assert!(report
-            .coverage
-            .available
-            .contains(&UsageCoverageKey::ToolPhaseTiming));
-        assert!(!report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::ToolPhaseTiming));
+        assert!(
+            report
+                .coverage
+                .available
+                .contains(&UsageCoverageKey::ToolPhaseTiming)
+        );
+        assert!(
+            !report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::ToolPhaseTiming)
+        );
     }
 
     #[test]
@@ -1774,14 +1768,18 @@ mod tests {
         assert_eq!(report.files.changed_files, Some(2));
         assert_eq!(report.files.added_lines, Some(19));
         assert_eq!(report.files.deleted_lines, Some(3));
-        assert!(report
-            .coverage
-            .available
-            .contains(&UsageCoverageKey::FileLineStats));
-        assert!(!report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::FileLineStats));
+        assert!(
+            report
+                .coverage
+                .available
+                .contains(&UsageCoverageKey::FileLineStats)
+        );
+        assert!(
+            !report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::FileLineStats)
+        );
 
         let main_row = report
             .files
@@ -1810,14 +1808,18 @@ mod tests {
         assert_eq!(report.files.scope, UsageFileScope::ToolInputsOnly);
         assert_eq!(report.files.changed_files, Some(1));
         assert_eq!(report.files.added_lines, None);
-        assert!(report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::FileLineStats));
-        assert!(report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::RemoteSnapshotStats));
+        assert!(
+            report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::FileLineStats)
+        );
+        assert!(
+            report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::RemoteSnapshotStats)
+        );
     }
 
     #[test]
@@ -2027,6 +2029,7 @@ mod tests {
             duration_ms: Some(300),
             status: TurnStatus::Completed,
             intent_assignments: vec![],
+            intent_evidence: None,
         }
     }
 

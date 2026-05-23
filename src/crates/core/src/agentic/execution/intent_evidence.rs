@@ -1,15 +1,14 @@
 //! Intent evidence collection for proactive assistance evaluation.
 //!
-//! Provides lightweight evidence collectors that run at round/turn boundaries
-//! to gather raw signals for later intent analysis. The collectors do NOT
-//! perform real-time intent status assignment; that is done post-hoc by
-//! facet extraction or scoring functions.
+//! This module collects lightweight trajectory signals during execution. It
+//! intentionally does not assign hidden-intent terminal statuses: pi-Bench style
+//! assignment requires comparing a turn against concrete hidden intents with a
+//! two-stage evaluator (direct satisfaction before targeted elicitation).
 
 use bitfun_services_core::session::hidden_intent_types::{
-    CompletenessLevel, CompletenessScore, IntentTerminalStatus, ProactivityLevel,
-    ProactivityScore, SessionIntentTracking,
+    IntentTerminalStatus, IntentTurnEvidence, ProactivityLevel, ProactivityScore,
+    SessionIntentTracking,
 };
-use serde::{Deserialize, Serialize};
 
 /// Evidence collected during a single dialog turn for later intent analysis.
 /// The collector is stateless per-turn: it gathers raw signals from model
@@ -25,41 +24,18 @@ pub struct IntentEvidenceCollector {
     pub asked_follow_up_in_text: bool,
 }
 
-/// Snapshot of evidence collected during one turn.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct IntentTurnEvidence {
-    pub turn_index: usize,
-    pub asked_user_question: bool,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub question_topics: Vec<String>,
-    pub proactive_tool_calls: usize,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tool_names_used: Vec<String>,
-    pub produced_output: bool,
-    pub round_count: usize,
-    pub asked_follow_up_in_text: bool,
-}
-
-impl From<&IntentEvidenceCollector> for IntentTurnEvidence {
-    fn from(c: &IntentEvidenceCollector) -> Self {
-        Self {
-            turn_index: 0,
-            asked_user_question: c.asked_user_question,
-            question_topics: c.question_topics.clone(),
-            proactive_tool_calls: c.proactive_tool_calls,
-            tool_names_used: c.tool_names_used.clone(),
-            produced_output: c.produced_output,
-            round_count: c.round_count,
-            asked_follow_up_in_text: c.asked_follow_up_in_text,
+impl IntentEvidenceCollector {
+    pub fn snapshot(&self, turn_index: usize) -> IntentTurnEvidence {
+        IntentTurnEvidence {
+            turn_index,
+            asked_user_question: self.asked_user_question,
+            question_topics: self.question_topics.clone(),
+            proactive_tool_calls: self.proactive_tool_calls,
+            tool_names_used: self.tool_names_used.clone(),
+            produced_output: self.produced_output,
+            round_count: self.round_count,
+            asked_follow_up_in_text: self.asked_follow_up_in_text,
         }
-    }
-}
-
-impl IntentTurnEvidence {
-    pub fn with_turn_index(mut self, turn_index: usize) -> Self {
-        self.turn_index = turn_index;
-        self
     }
 }
 
@@ -67,58 +43,53 @@ impl IntentTurnEvidence {
 // Scoring functions
 // ---------------------------------------------------------------------------
 
-pub fn compute_proactivity_score(
-    tracking: &SessionIntentTracking,
-) -> Option<ProactivityScore> {
+pub fn compute_proactivity_score(tracking: &SessionIntentTracking) -> Option<ProactivityScore> {
     if !tracking.enabled || tracking.hidden_intents.is_empty() {
         return None;
     }
+    if !tracking.all_intents_resolved() {
+        return None;
+    }
+
     let completed = tracking.count_by_status(IntentTerminalStatus::Completed) as u32;
     let inferred = tracking.count_by_status(IntentTerminalStatus::Inferred) as u32;
     let provided = tracking.count_by_status(IntentTerminalStatus::Provided) as u32;
-    let total = (completed + inferred + provided).max(1);
+    let total = tracking.hidden_intents.len() as u32;
+
     let score = (completed + inferred) as f32 / total as f32;
     Some(ProactivityScore {
-        completed, inferred, provided, score,
+        completed,
+        inferred,
+        provided,
+        score,
         level: Some(classify_proactivity_level(score)),
     })
 }
 
-pub fn compute_completeness_score(
-    tracking: &SessionIntentTracking,
-) -> Option<CompletenessScore> {
-    if !tracking.enabled || tracking.hidden_intents.is_empty() {
-        return None;
-    }
-    let total = tracking.hidden_intents.len() as u32;
-    let resolved = tracking.hidden_intents.iter()
-        .filter(|i| i.terminal_status.is_some()).count() as u32;
-    let missed = total.saturating_sub(resolved);
-    let score = if total == 0 { 1.0 } else { resolved as f32 / total as f32 };
-    Some(CompletenessScore {
-        requirements_satisfied: resolved, requirements_missed: missed, score,
-        level: Some(classify_completeness_level(score)),
-    })
-}
-
 pub fn classify_proactivity_level(score: f32) -> ProactivityLevel {
-    if score >= 0.8 { ProactivityLevel::High }
-    else if score >= 0.5 { ProactivityLevel::Moderate }
-    else if score >= 0.2 { ProactivityLevel::Low }
-    else { ProactivityLevel::Reactive }
-}
-
-pub fn classify_completeness_level(score: f32) -> CompletenessLevel {
-    if (score - 1.0).abs() < f32::EPSILON { CompletenessLevel::Full }
-    else if score >= 0.7 { CompletenessLevel::Partial }
-    else if score >= 0.3 { CompletenessLevel::Minimal }
-    else { CompletenessLevel::Incomplete }
+    if score >= 0.8 {
+        ProactivityLevel::High
+    } else if score >= 0.5 {
+        ProactivityLevel::Moderate
+    } else if score >= 0.2 {
+        ProactivityLevel::Low
+    } else {
+        ProactivityLevel::Reactive
+    }
 }
 
 pub fn is_proactive_tool(tool_name: &str) -> bool {
-    matches!(tool_name,
-        "Write" | "Edit" | "Delete" | "Bash" | "Git" | "WebSearch"
-        | "WebFetch" | "GenerativeUI" | "CreatePlan"
+    matches!(
+        tool_name,
+        "Write"
+            | "Edit"
+            | "Delete"
+            | "Bash"
+            | "Git"
+            | "WebSearch"
+            | "WebFetch"
+            | "GenerativeUI"
+            | "CreatePlan"
     )
 }
 
@@ -143,11 +114,15 @@ mod tests {
 
     #[test]
     fn collector_records_ask_user_question() {
-        let mut c = IntentEvidenceCollector::default();
-        c.asked_user_question = true;
+        let mut c = IntentEvidenceCollector {
+            asked_user_question: true,
+            ..Default::default()
+        };
         c.question_topics.push("What approach?".into());
         c.question_topics.push("Which library?".into());
-        let evidence = IntentTurnEvidence::from(&c).with_turn_index(1);
+
+        let evidence = c.snapshot(1);
+
         assert!(evidence.asked_user_question);
         assert_eq!(evidence.question_topics.len(), 2);
         assert_eq!(evidence.turn_index, 1);
@@ -176,7 +151,8 @@ mod tests {
     #[test]
     fn compute_proactivity_score_all_completed() {
         let tracking = make_tracking(vec![
-            IntentTerminalStatus::Completed, IntentTerminalStatus::Completed,
+            IntentTerminalStatus::Completed,
+            IntentTerminalStatus::Completed,
             IntentTerminalStatus::Completed,
         ]);
         let s = compute_proactivity_score(&tracking).unwrap();
@@ -190,7 +166,8 @@ mod tests {
     #[test]
     fn compute_proactivity_score_all_provided() {
         let tracking = make_tracking(vec![
-            IntentTerminalStatus::Provided, IntentTerminalStatus::Provided,
+            IntentTerminalStatus::Provided,
+            IntentTerminalStatus::Provided,
         ]);
         let s = compute_proactivity_score(&tracking).unwrap();
         assert!((s.score - 0.0).abs() < f32::EPSILON);
@@ -201,8 +178,10 @@ mod tests {
     #[test]
     fn compute_proactivity_score_mixed() {
         let tracking = make_tracking(vec![
-            IntentTerminalStatus::Completed, IntentTerminalStatus::Completed,
-            IntentTerminalStatus::Inferred, IntentTerminalStatus::Provided,
+            IntentTerminalStatus::Completed,
+            IntentTerminalStatus::Completed,
+            IntentTerminalStatus::Inferred,
+            IntentTerminalStatus::Provided,
         ]);
         let s = compute_proactivity_score(&tracking).unwrap();
         assert!((s.score - 0.75).abs() < f32::EPSILON);
@@ -214,32 +193,28 @@ mod tests {
 
     #[test]
     fn compute_proactivity_score_empty() {
-        assert_eq!(compute_proactivity_score(&SessionIntentTracking::default()), None);
+        assert_eq!(
+            compute_proactivity_score(&SessionIntentTracking::default()),
+            None
+        );
     }
 
     #[test]
-    fn compute_completeness_score_full() {
-        let tracking = make_tracking(vec![
-            IntentTerminalStatus::Completed, IntentTerminalStatus::Completed,
-        ]);
-        let s = compute_completeness_score(&tracking).unwrap();
-        assert!((s.score - 1.0).abs() < f32::EPSILON);
-        assert_eq!(s.level, Some(CompletenessLevel::Full));
-    }
-
-    #[test]
-    fn compute_completeness_score_partial() {
+    fn compute_proactivity_score_requires_resolved_intents() {
         let mut tracking = make_tracking(vec![
-            IntentTerminalStatus::Completed, IntentTerminalStatus::Completed,
+            IntentTerminalStatus::Completed,
+            IntentTerminalStatus::Provided,
         ]);
         tracking.hidden_intents.push(HiddenIntent {
-            intent_id: "i3".into(), description: "unresolved".into(),
+            intent_id: "i-unresolved".into(),
+            description: "unresolved intent".into(),
             scope: IntentScope::SessionLocal,
-            terminal_status: None, resolved_at_turn: None, source: None,
+            terminal_status: None,
+            resolved_at_turn: None,
+            source: None,
         });
-        let s = compute_completeness_score(&tracking).unwrap();
-        assert!((s.score - 2.0 / 3.0).abs() < f32::EPSILON);
-        assert_eq!(s.requirements_missed, 1);
+
+        assert_eq!(compute_proactivity_score(&tracking), None);
     }
 
     #[test]
@@ -252,16 +227,6 @@ mod tests {
         assert_eq!(classify_proactivity_level(0.2), ProactivityLevel::Low);
         assert_eq!(classify_proactivity_level(0.19), ProactivityLevel::Reactive);
         assert_eq!(classify_proactivity_level(0.0), ProactivityLevel::Reactive);
-    }
-
-    #[test]
-    fn classify_completeness_level_edges() {
-        assert_eq!(classify_completeness_level(1.0), CompletenessLevel::Full);
-        assert_eq!(classify_completeness_level(0.7), CompletenessLevel::Partial);
-        assert_eq!(classify_completeness_level(0.69), CompletenessLevel::Minimal);
-        assert_eq!(classify_completeness_level(0.3), CompletenessLevel::Minimal);
-        assert_eq!(classify_completeness_level(0.29), CompletenessLevel::Incomplete);
-        assert_eq!(classify_completeness_level(0.0), CompletenessLevel::Incomplete);
     }
 
     #[test]
@@ -294,16 +259,18 @@ mod tests {
     fn make_tracking(statuses: Vec<IntentTerminalStatus>) -> SessionIntentTracking {
         SessionIntentTracking {
             enabled: true,
-            hidden_intents: statuses.into_iter().enumerate().map(|(i, status)| {
-                HiddenIntent {
+            hidden_intents: statuses
+                .into_iter()
+                .enumerate()
+                .map(|(i, status)| HiddenIntent {
                     intent_id: format!("i{}", i),
                     description: format!("test intent {}", i),
                     scope: IntentScope::SessionLocal,
                     terminal_status: Some(status),
                     resolved_at_turn: Some(i),
                     source: None,
-                }
-            }).collect(),
+                })
+                .collect(),
             ..Default::default()
         }
     }

@@ -3,8 +3,8 @@
 //! Responsible for session CRUD, lifecycle management, and resource association
 
 use crate::agentic::core::{
-    new_turn_id, CompressionContract, CompressionState, Message, MessageSemanticKind,
-    ProcessingPhase, Session, SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
+    CompressionContract, CompressionState, Message, MessageSemanticKind, ProcessingPhase, Session,
+    SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats, new_turn_id,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
@@ -15,8 +15,8 @@ use crate::agentic::session::{
 };
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::{
-    get_app_language_code, get_global_config_service, short_model_user_language_instruction,
-    subscribe_config_updates, ConfigUpdateEvent,
+    ConfigUpdateEvent, get_app_language_code, get_global_config_service,
+    short_model_user_language_instruction, subscribe_config_updates,
 };
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
@@ -115,8 +115,7 @@ struct SessionCleanupCandidate {
 }
 
 impl SessionManager {
-    async fn load_ai_config_for_model_resolution()
-        -> Option<crate::service::config::types::AIConfig>
+    async fn load_ai_config_for_model_resolution() -> Option<crate::service::config::types::AIConfig>
     {
         let config_service = get_global_config_service().await.ok()?;
         config_service.get_config(Some("ai")).await.ok()
@@ -1243,9 +1242,7 @@ impl SessionManager {
         if session.session_name != expected_current_title {
             debug!(
                 "Skipping auto-generated title because current title changed: session_id={}, expected_title={}, current_title={}",
-                session_id,
-                expected_current_title,
-                session.session_name
+                session_id, expected_current_title, session.session_name
             );
             return Ok(false);
         }
@@ -2145,19 +2142,26 @@ impl SessionManager {
                     .sessions
                     .get(session_id)
                     .map(|value| value.clone())
-                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!("Session not found: {}", session_id))
+                    })?;
                 self.persistence_manager
                     .save_session(&workspace_path, &session)
                     .await?;
                 self.persistence_manager
                     .load_session_metadata(&workspace_path, session_id)
                     .await?
-                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!("Session not found: {}", session_id))
+                    })?
             }
         };
 
         metadata.custom_metadata = Some(match (metadata.custom_metadata.take(), patch) {
-            (Some(serde_json::Value::Object(mut existing)), serde_json::Value::Object(patch_obj)) => {
+            (
+                Some(serde_json::Value::Object(mut existing)),
+                serde_json::Value::Object(patch_obj),
+            ) => {
                 for (key, value) in patch_obj {
                     existing.insert(key, value);
                 }
@@ -2201,14 +2205,18 @@ impl SessionManager {
                     .sessions
                     .get(session_id)
                     .map(|value| value.clone())
-                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!("Session not found: {}", session_id))
+                    })?;
                 self.persistence_manager
                     .save_session(&workspace_path, &session)
                     .await?;
                 self.persistence_manager
                     .load_session_metadata(&workspace_path, session_id)
                     .await?
-                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!("Session not found: {}", session_id))
+                    })?
             }
         };
 
@@ -2248,20 +2256,26 @@ impl SessionManager {
                     .sessions
                     .get(session_id)
                     .map(|value| value.clone())
-                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!("Session not found: {}", session_id))
+                    })?;
                 self.persistence_manager
                     .save_session(&workspace_path, &session)
                     .await?;
                 self.persistence_manager
                     .load_session_metadata(&workspace_path, session_id)
                     .await?
-                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!("Session not found: {}", session_id))
+                    })?
             }
         };
 
         metadata.relationship = Some(relationship);
 
-        if let Some(serde_json::Value::Object(mut custom_metadata)) = metadata.custom_metadata.take() {
+        if let Some(serde_json::Value::Object(mut custom_metadata)) =
+            metadata.custom_metadata.take()
+        {
             for key in [
                 "kind",
                 "parentSessionId",
@@ -2273,8 +2287,8 @@ impl SessionManager {
             ] {
                 custom_metadata.remove(key);
             }
-            metadata.custom_metadata = (!custom_metadata.is_empty())
-                .then_some(serde_json::Value::Object(custom_metadata));
+            metadata.custom_metadata =
+                (!custom_metadata.is_empty()).then_some(serde_json::Value::Object(custom_metadata));
         }
 
         self.persistence_manager
@@ -2392,14 +2406,18 @@ impl SessionManager {
                     .sessions
                     .get(session_id)
                     .map(|value| value.clone())
-                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!("Session not found: {}", session_id))
+                    })?;
                 self.persistence_manager
                     .save_session(&workspace_path, &session)
                     .await?;
                 self.persistence_manager
                     .load_session_metadata(&workspace_path, session_id)
                     .await?
-                    .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!("Session not found: {}", session_id))
+                    })?
             }
         };
 
@@ -2776,7 +2794,7 @@ impl SessionManager {
         &self,
         session_id: &str,
         _turn_id: &str,
-        evidence: crate::agentic::execution::intent_evidence::IntentTurnEvidence,
+        evidence: bitfun_services_core::session::hidden_intent_types::IntentTurnEvidence,
     ) -> BitFunResult<()> {
         if !self.should_persist_session_id(session_id) {
             return Ok(());
@@ -2807,43 +2825,25 @@ impl SessionManager {
                 ..Default::default()
             }
         });
+        tracking.enabled = true;
 
-        // Append the evidence as a proxy IntentAssignment for traceability.
-        // The actual terminal status assignment is done post-hoc by the scoring
-        // functions; here we just record that evidence was collected.
-        let assignment = bitfun_services_core::session::hidden_intent_types::IntentAssignment {
-            intent_id: format!("turn-{}", evidence.turn_index),
-            terminal_status:
-                if evidence.asked_user_question {
-                    bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Inferred
-                } else if evidence.proactive_tool_calls > 0 && evidence.produced_output {
-                    bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Completed
-                } else {
-                    bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Provided
-                },
-            assigned_at_turn: evidence.turn_index,
-            trigger_description: Some(format!(
-                "asked={} proactive_tools={} output={} rounds={}",
-                evidence.asked_user_question,
-                evidence.proactive_tool_calls,
-                evidence.produced_output,
-                evidence.round_count
-            )),
-        };
-
-        tracking.assignments.push(assignment.clone());
+        tracking
+            .turn_evidence
+            .retain(|existing| existing.turn_index != evidence.turn_index);
+        tracking.turn_evidence.push(evidence.clone());
 
         self.persistence_manager
             .save_session_metadata(&workspace_path, &metadata)
             .await?;
 
-        // ALSO update the turn file on disk so that session usage report can load it!
+        // Also update the turn file so future trajectory evaluators can load
+        // turn-local evidence without reading session metadata first.
         if let Ok(Some(mut turn)) = self
             .persistence_manager
             .load_dialog_turn(&workspace_path, session_id, evidence.turn_index)
             .await
         {
-            turn.intent_assignments.push(assignment);
+            turn.intent_evidence = Some(evidence.clone());
             if let Err(e) = self
                 .persistence_manager
                 .save_dialog_turn(&workspace_path, &turn)
@@ -2858,7 +2858,10 @@ impl SessionManager {
 
         debug!(
             "Intent evidence recorded: session_id={}, turn_index={}, asked_user_question={}, proactive_tools={}",
-            session_id, evidence.turn_index, evidence.asked_user_question, evidence.proactive_tool_calls
+            session_id,
+            evidence.turn_index,
+            evidence.asked_user_question,
+            evidence.proactive_tool_calls
         );
 
         Ok(())
@@ -3407,8 +3410,7 @@ impl SessionManager {
         // Construct system prompt
         let system_prompt = format!(
             "You are a professional session title generation assistant. Based on the user's message content, generate a concise and accurate session title.\n\nRequirements:\n- Title should not exceed {} characters\n- {}\n- Concise and accurate, reflecting the conversation topic\n- Do not add quotes or other decorative symbols\n- Return only the title text, no other content",
-            max_length,
-            language_instruction
+            max_length, language_instruction
         );
 
         // Truncate message to save tokens (max 200 characters)
@@ -3865,9 +3867,11 @@ mod tests {
             .expect("session should create");
 
         let snapshots = SessionManager::collect_auto_save_snapshots(&manager.sessions);
-        assert!(snapshots
-            .iter()
-            .any(|snapshot| snapshot.session_id == session.session_id));
+        assert!(
+            snapshots
+                .iter()
+                .any(|snapshot| snapshot.session_id == session.session_id)
+        );
 
         match manager.sessions.try_get_mut(&session.session_id) {
             TryResult::Present(_) => {}
@@ -4032,10 +4036,12 @@ mod tests {
             .get_session(&session.session_id)
             .expect("session should remain active");
         assert_eq!(active.dialog_turn_ids, vec!["local-usage-1".to_string()]);
-        assert!(manager
-            .context_store
-            .get_context_messages(&session.session_id)
-            .is_empty());
+        assert!(
+            manager
+                .context_store
+                .get_context_messages(&session.session_id)
+                .is_empty()
+        );
 
         let persisted_turns = persistence_manager
             .load_session_turns(workspace.path(), &session.session_id)
@@ -4122,15 +4128,18 @@ mod tests {
             .expect("ephemeral child session should create");
 
         assert!(manager.get_session(&session.session_id).is_some());
-        assert!(persistence_manager
-            .load_session_metadata(workspace.path(), &session.session_id)
-            .await
-            .expect("metadata lookup should succeed")
-            .is_none());
+        assert!(
+            persistence_manager
+                .load_session_metadata(workspace.path(), &session.session_id)
+                .await
+                .expect("metadata lookup should succeed")
+                .is_none()
+        );
     }
 
     #[tokio::test]
-    async fn persist_session_lineage_updates_structured_relationship_and_clears_legacy_projection() {
+    async fn persist_session_lineage_updates_structured_relationship_and_clears_legacy_projection()
+    {
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
             PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
@@ -4381,10 +4390,12 @@ mod tests {
         assert_eq!(view_session.dialog_turn_ids, vec!["turn-1".to_string()]);
         assert_eq!(turns.len(), 1);
         assert!(manager.get_session(&session_id).is_none());
-        assert!(manager
-            .context_store
-            .get_context_messages(&session_id)
-            .is_empty());
+        assert!(
+            manager
+                .context_store
+                .get_context_messages(&session_id)
+                .is_empty()
+        );
     }
 
     #[tokio::test]
@@ -4600,11 +4611,13 @@ mod tests {
         assert_eq!(turns.len(), 1);
         assert_eq!(turns[0].user_message.content, "prompt 0");
         assert_eq!(turns[0].agent_type.as_deref(), Some("agentic"));
-        assert!(persistence_manager
-            .load_turn_context_snapshot(workspace.path(), &session.session_id, 1)
-            .await
-            .expect("snapshot load should succeed")
-            .is_none());
+        assert!(
+            persistence_manager
+                .load_turn_context_snapshot(workspace.path(), &session.session_id, 1)
+                .await
+                .expect("snapshot load should succeed")
+                .is_none()
+        );
 
         manager.sessions.remove(&session.session_id);
         let restored = manager
@@ -4719,10 +4732,12 @@ mod tests {
             .await
             .expect("session should delete");
 
-        assert!(manager
-            .session_workspace_index
-            .get(&session.session_id)
-            .is_none());
+        assert!(
+            manager
+                .session_workspace_index
+                .get(&session.session_id)
+                .is_none()
+        );
     }
 
     #[test]
