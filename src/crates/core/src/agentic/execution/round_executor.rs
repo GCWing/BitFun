@@ -48,6 +48,29 @@ impl RoundExecutor {
         !text.trim().is_empty()
     }
 
+    /// Detects AskUserQuestion calls in a set of tool calls.
+    /// Returns (used_ask_user_question, extracted_question_topics).
+    fn detect_ask_user_question(
+        tool_calls: &[crate::agentic::core::ToolCall],
+    ) -> (bool, Vec<String>) {
+        let mut topics = Vec::new();
+        for tc in tool_calls {
+            if tc.tool_name == "AskUserQuestion" {
+                // Extract question topics from the arguments
+                if let Some(questions) = tc.arguments.get("questions") {
+                    if let Some(arr) = questions.as_array() {
+                        for q in arr {
+                            if let Some(header) = q.get("header").and_then(|v| v.as_str()) {
+                                topics.push(header.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        (!topics.is_empty(), topics)
+    }
+
     fn write_tool_mode(context: &RoundContext) -> WriteToolMode {
         WriteToolMode::from_context_var(
             context
@@ -569,6 +592,8 @@ impl RoundExecutor {
                 partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
                 had_assistant_text: Self::has_user_visible_assistant_text(&stream_result.full_text),
                 had_thinking_content: !stream_result.full_thinking.is_empty(),
+                used_ask_user_question: false,
+                ask_user_question_topics: vec![],
             });
         }
 
@@ -818,6 +843,10 @@ impl RoundExecutor {
         // Note: Do not cleanup cancellation token here, as there may be subsequent model rounds
         // Cancellation token will be cleaned up by ExecutionEngine when the entire dialog turn ends
 
+        // Detect AskUserQuestion calls for intent evidence collection
+        let (used_ask_user_question, ask_user_question_topics) =
+            Self::detect_ask_user_question(&tool_calls);
+
         Ok(RoundResult {
             assistant_message,
             tool_calls: tool_calls.clone(),
@@ -833,6 +862,8 @@ impl RoundExecutor {
             partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
             had_assistant_text: Self::has_user_visible_assistant_text(&stream_result.full_text),
             had_thinking_content: !stream_result.full_thinking.is_empty(),
+            used_ask_user_question,
+            ask_user_question_topics,
         })
     }
 

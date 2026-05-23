@@ -1254,6 +1254,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 workspace_hostname: None,
                 unread_completion: None,
                 needs_user_attention: None,
+                intent_tracking: None,
+                proactivity_score: None,
+                completeness_score: None,
             };
             if let Err(e) = persistence_manager
                 .save_session_metadata(&workspace_path_buf, &metadata)
@@ -2358,6 +2361,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             round_preempt: self.round_preempt_source.get().cloned(),
             round_injection: self.round_injection_source.get().cloned(),
             recover_partial_on_cancel: false,
+            intent_evidence: if session.config.enable_intent_tracking {
+                Some(std::sync::Arc::new(std::sync::Mutex::new(
+                    crate::agentic::execution::intent_evidence::IntentEvidenceCollector::default(),
+                )))
+            } else {
+                None
+            },
         };
 
         // Auto-generate session title on first message
@@ -3707,6 +3717,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             // that belong to a different (parent) session/turn.
             round_injection: None,
             recover_partial_on_cancel: true,
+            intent_evidence: None,
         };
 
         let execution_engine = self.execution_engine.clone();

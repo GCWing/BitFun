@@ -28,6 +28,15 @@ pub struct SessionUsageReport {
     #[serde(default)]
     pub slowest: Vec<UsageSlowSpan>,
     pub privacy: UsagePrivacy,
+
+    /// Proactivity analysis: how much the agent drove requirement discovery
+    /// vs passively waited for user instructions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proactivity: Option<ProactivityReport>,
+
+    /// Completeness analysis: how many requirements were satisfied.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completeness: Option<CompletenessReport>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -335,6 +344,44 @@ pub struct UsagePrivacy {
     pub redacted_fields: Vec<String>,
 }
 
+// ---------------------------------------------------------------------------
+// Proactivity & Completeness report types
+// ---------------------------------------------------------------------------
+
+/// Proactivity report section in the session usage report.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProactivityReport {
+    pub completed: u32,
+    pub inferred: u32,
+    pub provided: u32,
+    pub score: f32,
+    pub level: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub turn_details: Vec<TurnProactivityDetail>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnProactivityDetail {
+    pub turn_index: usize,
+    pub asked_question: bool,
+    pub proactive_tool_count: usize,
+    pub intents_completed: u32,
+    pub intents_inferred: u32,
+    pub intents_provided: u32,
+}
+
+/// Completeness report section in the session usage report.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletenessReport {
+    pub requirements_satisfied: u32,
+    pub requirements_missed: u32,
+    pub score: f32,
+    pub level: String,
+}
+
 impl SessionUsageReport {
     pub fn partial_unavailable(session_id: impl Into<String>, generated_at: i64) -> Self {
         Self {
@@ -416,6 +463,8 @@ impl SessionUsageReport {
                 file_contents_included: false,
                 redacted_fields: vec![],
             },
+            proactivity: None,
+            completeness: None,
         }
     }
 }

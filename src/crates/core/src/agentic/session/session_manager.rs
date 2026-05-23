@@ -2770,6 +2770,81 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Record intent evidence collected during a dialog turn.
+    /// Appends the evidence to the session's intent tracking state.
+    pub async fn record_intent_evidence(
+        &self,
+        session_id: &str,
+        _turn_id: &str,
+        evidence: crate::agentic::execution::intent_evidence::IntentTurnEvidence,
+    ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(());
+        }
+
+        let workspace_path = self
+            .effective_session_workspace_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+
+        let mut metadata = self
+            .persistence_manager
+            .load_session_metadata(&workspace_path, session_id)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+            })?;
+
+        // Initialize intent tracking if not present
+        let tracking = metadata.intent_tracking.get_or_insert_with(|| {
+            bitfun_services_core::session::hidden_intent_types::SessionIntentTracking {
+                enabled: true,
+                ..Default::default()
+            }
+        });
+
+        // Append the evidence as a proxy IntentAssignment for traceability.
+        // The actual terminal status assignment is done post-hoc by the scoring
+        // functions; here we just record that evidence was collected.
+        tracking.assignments.push(
+            bitfun_services_core::session::hidden_intent_types::IntentAssignment {
+                intent_id: format!("turn-{}", evidence.turn_index),
+                terminal_status:
+                    if evidence.asked_user_question {
+                        bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Inferred
+                    } else if evidence.proactive_tool_calls > 0 && evidence.produced_output {
+                        bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Completed
+                    } else {
+                        bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Provided
+                    },
+                assigned_at_turn: evidence.turn_index,
+                trigger_description: Some(format!(
+                    "asked={} proactive_tools={} output={} rounds={}",
+                    evidence.asked_user_question,
+                    evidence.proactive_tool_calls,
+                    evidence.produced_output,
+                    evidence.round_count
+                )),
+            },
+        );
+
+        self.persistence_manager
+            .save_session_metadata(&workspace_path, &metadata)
+            .await?;
+
+        debug!(
+            "Intent evidence recorded: session_id={}, turn_index={}, asked_user_question={}, proactive_tools={}",
+            session_id, evidence.turn_index, evidence.asked_user_question, evidence.proactive_tool_calls
+        );
+
+        Ok(())
+    }
+
     /// Mark a dialog turn as failed and persist it.
     /// Unlike `complete_dialog_turn`, this sets the state to `Failed` with an error message.
     pub async fn fail_dialog_turn(

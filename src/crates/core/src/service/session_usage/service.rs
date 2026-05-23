@@ -114,6 +114,8 @@ pub fn build_session_usage_report_from_sources(
     report.compression = build_compression_breakdown(turns);
     report.errors = build_error_breakdown(turns);
     report.slowest = build_slowest_spans(turns);
+    report.proactivity = build_proactivity_report(turns);
+    report.completeness = build_completeness_report(turns);
     report.privacy = UsagePrivacy {
         prompt_content_included: false,
         tool_inputs_included: false,
@@ -937,6 +939,137 @@ fn collect_redacted_fields(report: &SessionUsageReport) -> Vec<String> {
     let mut fields: Vec<_> = fields.into_iter().collect();
     fields.sort();
     fields
+}
+
+fn build_proactivity_report(
+    turns: &[DialogTurnData],
+) -> Option<ProactivityReport> {
+    // Collect intent assignments from all turns
+    let mut completed: u32 = 0;
+    let mut inferred: u32 = 0;
+    let mut provided: u32 = 0;
+    let mut turn_details: Vec<TurnProactivityDetail> = Vec::new();
+
+    for turn in turns {
+        let mut turn_completed: u32 = 0;
+        let mut turn_inferred: u32 = 0;
+        let mut turn_provided: u32 = 0;
+        let mut asked_question = false;
+        let mut proactive_tools = 0usize;
+
+        for assignment in &turn.intent_assignments {
+            match assignment.terminal_status {
+                bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Completed => {
+                    turn_completed += 1;
+                    completed += 1;
+                }
+                bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Inferred => {
+                    turn_inferred += 1;
+                    inferred += 1;
+                    asked_question = true;
+                }
+                bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Provided => {
+                    turn_provided += 1;
+                    provided += 1;
+                }
+            }
+            // Extract proactive tool count from trigger description
+            if let Some(ref desc) = assignment.trigger_description {
+                if let Some(proactive_str) = desc
+                    .split_whitespace()
+                    .find(|w| w.starts_with("proactive_tools="))
+                {
+                    if let Some(val) = proactive_str
+                        .strip_prefix("proactive_tools=")
+                        .and_then(|s| s.parse::<usize>().ok())
+                    {
+                        proactive_tools = val;
+                    }
+                }
+            }
+            if assignment.trigger_description.as_ref().is_some_and(|d| d.contains("asked=true")) {
+                asked_question = true;
+            }
+        }
+
+        if turn_completed + turn_inferred + turn_provided > 0 {
+            turn_details.push(TurnProactivityDetail {
+                turn_index: turn.turn_index,
+                asked_question,
+                proactive_tool_count: proactive_tools,
+                intents_completed: turn_completed,
+                intents_inferred: turn_inferred,
+                intents_provided: turn_provided,
+            });
+        }
+    }
+
+    let total = (completed + inferred + provided).max(1);
+    let score = (completed + inferred) as f32 / total as f32;
+
+    if total == 1 && provided == 1 && completed == 0 && inferred == 0 {
+        // Only one "provided" entry is not meaningful
+        return None;
+    }
+
+    Some(ProactivityReport {
+        completed,
+        inferred,
+        provided,
+        score,
+        level: proactivity_level_label(score),
+        turn_details,
+    })
+}
+
+fn build_completeness_report(
+    turns: &[DialogTurnData],
+) -> Option<CompletenessReport> {
+    let mut satisfied: u32 = 0;
+    let mut missed: u32 = 0;
+
+    for turn in turns {
+        for assignment in &turn.intent_assignments {
+            match assignment.terminal_status {
+                bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Completed
+                | bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Inferred => {
+                    satisfied += 1;
+                }
+                bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Provided => {
+                    missed += 1;
+                }
+            }
+        }
+    }
+
+    if satisfied + missed == 0 {
+        return None;
+    }
+
+    let score = satisfied as f32 / (satisfied + missed).max(1) as f32;
+
+    Some(CompletenessReport {
+        requirements_satisfied: satisfied,
+        requirements_missed: missed,
+        score,
+        level: completeness_level_label(score),
+    })
+}
+
+fn proactivity_level_label(score: f32) -> String {
+    (if score >= 0.8 { "high" }
+    else if score >= 0.5 { "moderate" }
+    else if score >= 0.2 { "low" }
+    else { "reactive" })
+    .to_string()
+}
+
+fn completeness_level_label(score: f32) -> String {
+    (if (score - 1.0).abs() < f32::EPSILON { "full" }
+    else if score >= 0.7 { "partial" }
+    else if score >= 0.3 { "minimal" }
+    else { "incomplete" })
+    .to_string()
 }
 
 fn iter_tools(turns: &[DialogTurnData]) -> impl Iterator<Item = &ToolItemData> {
@@ -1832,6 +1965,7 @@ mod tests {
             end_time: Some(1_300 + turn_index as u64),
             duration_ms: Some(300),
             status: TurnStatus::Completed,
+            intent_assignments: vec![],
         }
     }
 

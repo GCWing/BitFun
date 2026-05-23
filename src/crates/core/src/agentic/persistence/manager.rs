@@ -883,6 +883,12 @@ impl PersistenceManager {
             workspace_hostname,
             unread_completion: existing.and_then(|value| value.unread_completion.clone()),
             needs_user_attention: existing.and_then(|value| value.needs_user_attention.clone()),
+            intent_tracking: existing
+                .and_then(|value| value.intent_tracking.clone()),
+            proactivity_score: existing
+                .and_then(|value| value.proactivity_score.clone()),
+            completeness_score: existing
+                .and_then(|value| value.completeness_score.clone()),
         }
     }
 
