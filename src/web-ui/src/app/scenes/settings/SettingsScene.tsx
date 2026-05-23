@@ -15,7 +15,7 @@ import {
   SessionPermissionsConfig,
 } from '../../../infrastructure/config/components/SessionConfig';
 import McpToolsConfig from '../../../infrastructure/config/components/McpToolsConfig';
-import AcpAgentsConfig from '../../../infrastructure/config/components/AcpAgentsConfig';
+// import AcpAgentsConfig from '../../../infrastructure/config/components/AcpAgentsConfig'; // temporarily hidden
 import EditorConfig from '../../../infrastructure/config/components/EditorConfig';
 import BasicsConfig from '../../../infrastructure/config/components/BasicsConfig';
 import AppearanceConfig from '../../../infrastructure/config/components/AppearanceConfig';
@@ -61,7 +61,7 @@ const SettingsScene: React.FC = () => {
     case 'quick-actions':    Content = QuickActionsConfig;   break;
     case 'review':           Content = ReviewConfig;         break;
     case 'mcp-tools':        Content = McpToolsConfig;      break;
-    case 'acp-agents':       Content = AcpAgentsConfig;     break;
+    // case 'acp-agents':       Content = AcpAgentsConfig;     break; // temporarily hidden
     case 'editor':           Content = EditorConfig;         break;
   }
 

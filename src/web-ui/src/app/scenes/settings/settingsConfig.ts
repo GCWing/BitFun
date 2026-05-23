@@ -14,7 +14,7 @@ export type ConfigTab =
   | 'quick-actions'
   | 'review'
   | 'mcp-tools'
-  | 'acp-agents'
+  // | 'acp-agents' // temporarily hidden from config center
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
   | 'keyboard';
@@ -192,20 +192,21 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         descriptionKey: 'configCenter.tabDescriptions.mcpTools',
         keywords: ['mcp', 'server', 'plugin', 'stdio', 'sse', 'tools'],
       },
-      {
-        id: 'acp-agents',
-        labelKey: 'configCenter.tabs.acpAgents',
-        descriptionKey: 'configCenter.tabDescriptions.acpAgents',
-        keywords: [
-          'acp',
-          'agent client protocol',
-          'external agent',
-          'opencode',
-          'claude code',
-          'codex',
-          'stdio',
-        ],
-      },
+      // ACP Agent settings — temporarily hidden from nav
+      // {
+      //   id: 'acp-agents',
+      //   labelKey: 'configCenter.tabs.acpAgents',
+      //   descriptionKey: 'configCenter.tabDescriptions.acpAgents',
+      //   keywords: [
+      //     'acp',
+      //     'agent client protocol',
+      //     'external agent',
+      //     'opencode',
+      //     'claude code',
+      //     'codex',
+      //     'stdio',
+      //   ],
+      // },
     ],
   },
   {
@@ -247,6 +248,7 @@ export function normalizeSettingsTab(section: string): ConfigTab {
   if (section === 'theme' || section === 'font' || section === 'fonts') return 'appearance';
   if (section === 'logging' || section === 'terminal') return 'basics';
   if (section === 'lsp') return DEFAULT_SETTINGS_TAB;
+  if (section === 'acp-agents') return DEFAULT_SETTINGS_TAB;
   if (section === 'session-config') return 'session-personalization';
   if (section === 'deep-review' || section === 'code-review' || section === 'review-team') return 'review';
   if (section === 'shortcuts' || section === 'keybindings' || section === 'hotkeys') return 'keyboard';
