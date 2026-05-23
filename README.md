@@ -133,6 +133,7 @@ Desktop is built on Tauri for Windows / macOS / Linux; remote control works from
 - [pnpm](https://pnpm.io/)
 - [Rust toolchain](https://rustup.rs/)
 - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) (required for desktop development)
+- [ohos-rs](https://ohos.rs/docs/basic/quick-start)
 
 **Commands:**
 
