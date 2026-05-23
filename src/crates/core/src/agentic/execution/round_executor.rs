@@ -4,10 +4,8 @@
 
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
-use crate::agentic::MessageContent;
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
-use crate::agentic::tools::ToolPathOperation;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{ToolPathResolution, ToolUseContext};
 use crate::agentic::tools::implementations::file_write_tool::{
@@ -16,9 +14,12 @@ use crate::agentic::tools::implementations::file_write_tool::{
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
 use crate::agentic::tools::tool_context_runtime;
+use crate::agentic::tools::tool_result_storage;
+use crate::agentic::tools::ToolPathOperation;
+use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
-use crate::service::config::GlobalConfigManager;
 use crate::service::config::types::WriteToolMode;
+use crate::service::config::GlobalConfigManager;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
@@ -669,6 +670,14 @@ impl RoundExecutor {
                 ..ToolExecutionOptions::default()
             };
 
+            let storage_context =
+                tool_context_runtime::build_tool_use_context_for_execution_context(
+                    &tool_context,
+                    Some(format!("round-budget-{}", round_id)),
+                    self.computer_use_host(),
+                    CancellationToken::new(),
+                );
+
             // Execute tools — convert pipeline-level Err into per-tool error results
             // so the model always receives a tool_result for every tool_call.
             let execution_results = match tool_pipeline
@@ -705,8 +714,10 @@ impl RoundExecutor {
                 }
             };
 
-            // Convert to ToolResult
-            execution_results.into_iter().map(|r| r.result).collect()
+            // Convert to ToolResult, then enforce the aggregate budget for this model round.
+            let tool_results = execution_results.into_iter().map(|r| r.result).collect();
+            tool_result_storage::apply_round_tool_result_budget(tool_results, &storage_context)
+                .await
         } else {
             vec![]
         };
@@ -1620,12 +1631,12 @@ fn detect_placeholder_patterns(content: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RoundExecutor, StreamProcessor, extract_bitfun_contents};
-    use crate::agentic::WorkspaceBinding;
+    use super::{extract_bitfun_contents, RoundExecutor, StreamProcessor};
     use crate::agentic::core::ToolCall;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::execution::types::RoundContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
     use dashmap::DashMap;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -1709,12 +1720,10 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&root);
 
-        assert!(
-            error
-                .as_deref()
-                .unwrap_or_default()
-                .contains("already exists")
-        );
+        assert!(error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("already exists"));
     }
 
     #[tokio::test]

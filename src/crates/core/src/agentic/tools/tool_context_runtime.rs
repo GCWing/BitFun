@@ -5,11 +5,9 @@
 //! core. The portable facts projection stays in `framework.rs` and
 //! `bitfun-agent-tools`.
 
-use crate::agentic::WorkspaceBinding;
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::deep_review::tool_context;
 use crate::agentic::session::EvidenceLedgerCheckpoint;
-use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{
     ToolPathBackend, ToolPathResolution, ToolResult, ToolUseContext,
@@ -17,17 +15,19 @@ use crate::agentic::tools::framework::{
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolTask};
 use crate::agentic::tools::post_call_hooks;
 use crate::agentic::tools::restrictions::{
-    ToolPathOperation, is_local_path_within_root, is_remote_posix_path_within_root,
+    is_local_path_within_root, is_remote_posix_path_within_root, ToolPathOperation,
 };
 use crate::agentic::tools::workspace_paths::{
     build_bitfun_runtime_uri, is_bitfun_runtime_uri, normalize_runtime_relative_path,
     parse_bitfun_runtime_uri,
 };
+use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
+use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::get_path_manager_arc;
 use crate::service::git::{GitDiffParams, GitService};
 use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
-use crate::service::{WorkspaceRuntimeContext, get_workspace_runtime_service_arc};
+use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::warn;
 use serde_json::Value;
@@ -69,18 +69,32 @@ pub(crate) fn build_tool_use_context_for_task(
     computer_use_host: Option<ComputerUseHostRef>,
     cancellation_token: CancellationToken,
 ) -> ToolUseContext {
+    build_tool_use_context_for_execution_context(
+        &task.context,
+        Some(task.tool_call.tool_id.clone()),
+        computer_use_host,
+        cancellation_token,
+    )
+}
+
+pub(crate) fn build_tool_use_context_for_execution_context(
+    context: &ToolExecutionContext,
+    tool_call_id: Option<String>,
+    computer_use_host: Option<ComputerUseHostRef>,
+    cancellation_token: CancellationToken,
+) -> ToolUseContext {
     ToolUseContext {
-        tool_call_id: Some(task.tool_call.tool_id.clone()),
-        agent_type: Some(task.context.agent_type.clone()),
-        session_id: Some(task.context.session_id.clone()),
-        dialog_turn_id: Some(task.context.dialog_turn_id.clone()),
-        workspace: task.context.workspace.clone(),
-        unlocked_collapsed_tools: task.context.unlocked_collapsed_tools.clone(),
-        custom_data: build_tool_context_custom_data(&task.context),
+        tool_call_id,
+        agent_type: Some(context.agent_type.clone()),
+        session_id: Some(context.session_id.clone()),
+        dialog_turn_id: Some(context.dialog_turn_id.clone()),
+        workspace: context.workspace.clone(),
+        unlocked_collapsed_tools: context.unlocked_collapsed_tools.clone(),
+        custom_data: build_tool_context_custom_data(context),
         computer_use_host,
         cancellation_token: Some(cancellation_token),
-        runtime_tool_restrictions: task.context.runtime_tool_restrictions.clone(),
-        workspace_services: task.context.workspace_services.clone(),
+        runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
+        workspace_services: context.workspace_services.clone(),
     }
 }
 
@@ -573,9 +587,9 @@ fn git_relative_path(workspace_root: &Path, path: &str) -> Option<String> {
 
 #[cfg(test)]
 mod path_resolution_tests {
-    use crate::agentic::WorkspaceBinding;
     use crate::agentic::tools::framework::ToolUseContext;
     use crate::agentic::tools::{ToolPathOperation, ToolPathPolicy, ToolRuntimeRestrictions};
+    use crate::agentic::WorkspaceBinding;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -715,10 +729,9 @@ mod path_resolution_tests {
             .resolve_tool_path("bitfun://runtime/workspace-456/plans/demo.plan.md")
             .expect_err("runtime artifact scopes must match the active workspace");
 
-        assert!(
-            err.to_string()
-                .contains("does not match the current workspace")
-        );
+        assert!(err
+            .to_string()
+            .contains("does not match the current workspace"));
     }
 
     #[test]
@@ -773,12 +786,12 @@ mod path_resolution_tests {
 #[cfg(test)]
 mod call_runtime_tests {
     use super::call_with_tool_runtime_hooks;
-    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::tools::framework::{ToolResult, ToolUseContext};
+    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::errors::{BitFunError, BitFunResult};
     use serde_json::json;
     use std::collections::HashMap;
-    use tokio::time::{Duration, sleep};
+    use tokio::time::{sleep, Duration};
     use tokio_util::sync::CancellationToken;
 
     fn context_with_cancellation(cancellation_token: CancellationToken) -> ToolUseContext {
@@ -917,10 +930,10 @@ mod context_builder_tests {
 mod task_context_tests {
     use super::build_tool_use_context_for_task;
     use crate::agentic::core::ToolCall;
-    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::tools::pipeline::{
         SubagentParentInfo, ToolExecutionContext, ToolExecutionOptions, ToolTask,
     };
+    use crate::agentic::tools::ToolRuntimeRestrictions;
     use serde_json::json;
     use std::collections::{BTreeSet, HashMap};
     use tokio_util::sync::CancellationToken;
@@ -996,11 +1009,9 @@ mod task_context_tests {
         assert_eq!(context.dialog_turn_id.as_deref(), Some("turn_1"));
         assert_eq!(context.unlocked_collapsed_tools, vec!["WebFetch"]);
         assert!(context.cancellation_token.is_some());
-        assert!(
-            context
-                .runtime_tool_restrictions
-                .is_tool_allowed("WebFetch")
-        );
+        assert!(context
+            .runtime_tool_restrictions
+            .is_tool_allowed("WebFetch"));
         assert!(!context.runtime_tool_restrictions.is_tool_allowed("Bash"));
         assert_eq!(context.custom_data["turn_index"], json!(7));
         assert_eq!(

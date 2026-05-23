@@ -26,6 +26,9 @@ use terminal_core::{
 use tokio::io::AsyncWriteExt;
 use tool_runtime::util::ansi_cleaner::strip_ansi;
 
+// Inline rendering budget for Bash's own result formatter. When the shared
+// oversized tool-result pipeline can persist the result, it stores the raw
+// `output` field instead of this rendered/truncated fallback.
 const MAX_OUTPUT_LENGTH: usize = 30000;
 const INTERRUPT_OUTPUT_DRAIN_MS: u64 = 500;
 
@@ -325,6 +328,87 @@ impl BashTool {
             "<terminal_session_id>{}</terminal_session_id>",
             terminal_session_id
         ));
+
+        result_string
+    }
+
+    fn render_output_block_with_limit(
+        tag: &str,
+        output_text: &str,
+        max_chars: usize,
+    ) -> Option<String> {
+        if output_text.is_empty() {
+            return None;
+        }
+
+        let cleaned_output = strip_ansi(output_text);
+        let output_len = cleaned_output.chars().count();
+        if max_chars == 0 {
+            Some(format!(
+                "<{tag} truncated=\"true\">... [truncated, no budget remaining] ...</{tag}>"
+            ))
+        } else if output_len > max_chars {
+            let truncated = truncate_output_preserving_tail(&cleaned_output, max_chars);
+            Some(format!("<{tag} truncated=\"true\">{}</{tag}>", truncated))
+        } else {
+            Some(format!("<{tag}>{}</{tag}>", cleaned_output))
+        }
+    }
+
+    fn remote_stream_budgets(stdout: &str, stderr: &str) -> (usize, usize) {
+        let stdout_len = strip_ansi(stdout).chars().count();
+        let stderr_len = strip_ansi(stderr).chars().count();
+
+        if stderr_len >= MAX_OUTPUT_LENGTH {
+            return (0, MAX_OUTPUT_LENGTH);
+        }
+
+        let stderr_budget = stderr_len;
+        let stdout_budget = MAX_OUTPUT_LENGTH.saturating_sub(stderr_budget);
+        (stdout_budget.min(stdout_len), stderr_budget)
+    }
+
+    fn render_remote_result(
+        &self,
+        working_directory: &str,
+        stdout: &str,
+        stderr: &str,
+        interrupted: bool,
+        timed_out: bool,
+        exit_code: i32,
+    ) -> String {
+        let mut result_string = String::new();
+        result_string.push_str("<remote_ssh>true</remote_ssh>");
+        result_string.push_str(&format!("<exit_code>{}</exit_code>", exit_code));
+        if !working_directory.is_empty() {
+            result_string.push_str(&format!(
+                "<working_directory>{}</working_directory>",
+                working_directory
+            ));
+        }
+
+        let (stdout_budget, stderr_budget) = Self::remote_stream_budgets(stdout, stderr);
+
+        if let Some(stdout_block) =
+            Self::render_output_block_with_limit("stdout", stdout, stdout_budget)
+        {
+            result_string.push_str(&stdout_block);
+        }
+        if let Some(stderr_block) =
+            Self::render_output_block_with_limit("stderr", stderr, stderr_budget)
+        {
+            result_string.push_str(&stderr_block);
+        }
+
+        if timed_out {
+            result_string.push_str(
+                "<status type=\"timeout\">Command timed out before completion. Partial stdout/stderr, if any, is included above.</status>",
+            );
+        } else if interrupted {
+            result_string.push_str(
+                "<status type=\"interrupted\">Command was canceled before completion. ASK THE USER what they would like to do next.</status>",
+            );
+        }
 
         result_string
     }
@@ -829,6 +913,14 @@ Usage notes:
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_default();
             let working_directory = requested_working_directory.unwrap_or(working_directory);
+            let result_for_assistant = self.render_remote_result(
+                &working_directory,
+                &exec_result.stdout,
+                &exec_result.stderr,
+                exec_result.interrupted,
+                exec_result.timed_out,
+                exec_result.exit_code,
+            );
 
             let result = ToolResult::Result {
                 data: json!({
@@ -845,22 +937,7 @@ Usage notes:
                     "duration_ms": execution_time_ms,
                     "is_remote": true
                 }),
-                result_for_assistant: Some(if exec_result.timed_out {
-                    format!(
-                        "[Remote SSH] Command timed out on remote server in {}:\n{}\n\nExit code: {}",
-                        working_directory, output, exec_result.exit_code
-                    )
-                } else if exec_result.interrupted {
-                    format!(
-                        "[Remote SSH] Command was cancelled on remote server in {}:\n{}\n\nExit code: {}",
-                        working_directory, output, exec_result.exit_code
-                    )
-                } else {
-                    format!(
-                        "[Remote SSH] Command executed on remote server in {}:\n{}\n\nExit code: {}",
-                        working_directory, output, exec_result.exit_code
-                    )
-                }),
+                result_for_assistant: Some(result_for_assistant),
                 image_attachments: None,
             };
             return Ok(vec![result]);
@@ -1677,6 +1754,53 @@ mod tests {
         assert!(rendered.contains("tail preserved"));
         assert!(rendered.contains("final-error"));
         assert!(rendered.contains("<exit_code>1</exit_code>"));
+    }
+
+    #[test]
+    fn render_remote_result_keeps_stdout_and_stderr_separate() {
+        let tool = BashTool::new();
+
+        let rendered =
+            tool.render_remote_result("/repo", "stdout text", "stderr text", false, false, 2);
+
+        assert!(rendered.contains("<remote_ssh>true</remote_ssh>"));
+        assert!(rendered.contains("<exit_code>2</exit_code>"));
+        assert!(rendered.contains("<stdout>stdout text</stdout>"));
+        assert!(rendered.contains("<stderr>stderr text</stderr>"));
+        assert!(!rendered.contains("<terminal_session_id>"));
+    }
+
+    #[test]
+    fn render_remote_result_uses_shared_budget_with_stderr_priority() {
+        let tool = BashTool::new();
+        let long_stdout =
+            "prefix\n".to_string() + &"x".repeat(MAX_OUTPUT_LENGTH + 100) + "\nstdout-tail";
+        let long_stderr =
+            "prefix\n".to_string() + &"z".repeat(MAX_OUTPUT_LENGTH / 2) + "\nstderr-tail";
+
+        let rendered =
+            tool.render_remote_result("/repo", &long_stdout, &long_stderr, false, false, 1);
+
+        assert!(rendered.contains("<stdout truncated=\"true\">"));
+        assert!(rendered.contains("stdout-tail"));
+        assert!(!rendered.contains("<stderr truncated=\"true\">"));
+        assert!(rendered.contains("stderr-tail"));
+    }
+
+    #[test]
+    fn render_remote_result_gives_all_budget_to_oversized_stderr() {
+        let tool = BashTool::new();
+        let long_stderr =
+            "prefix\n".to_string() + &"z".repeat(MAX_OUTPUT_LENGTH + 100) + "\nremote-final-error";
+
+        let rendered =
+            tool.render_remote_result("/repo", "stdout text", &long_stderr, false, false, 1);
+
+        assert!(rendered.contains("<stdout truncated=\"true\">"));
+        assert!(rendered.contains("no budget remaining"));
+        assert!(rendered.contains("<stderr truncated=\"true\">"));
+        assert!(rendered.contains("tail preserved"));
+        assert!(rendered.contains("remote-final-error"));
     }
 
     #[test]

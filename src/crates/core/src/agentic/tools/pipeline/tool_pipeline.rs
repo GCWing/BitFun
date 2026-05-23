@@ -11,10 +11,11 @@ use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{ToolResult as FrameworkToolResult, ToolUseContext};
 use crate::agentic::tools::registry::ToolRegistry;
 use crate::agentic::tools::tool_context_runtime;
+use crate::agentic::tools::tool_result_storage;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_tools::{
-    GET_TOOL_SPEC_TOOL_NAME, validate_collapsed_tool_usage, validate_tool_allowed_by_list,
+    validate_collapsed_tool_usage, validate_tool_allowed_by_list, GET_TOOL_SPEC_TOOL_NAME,
 };
 use dashmap::DashMap;
 use futures::future::join_all;
@@ -22,8 +23,8 @@ use log::{debug, error, info, warn};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
-use tokio::sync::{RwLock as TokioRwLock, oneshot};
-use tokio::time::{Duration, timeout};
+use tokio::sync::{oneshot, RwLock as TokioRwLock};
+use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
 /// A batch of tool tasks to execute together.
@@ -1032,6 +1033,7 @@ impl ToolPipeline {
         }
 
         let execution_started_at = Instant::now();
+        let tool_context = self.build_tool_use_context(&task, cancellation_token.clone());
         let result = self
             .execute_with_retry(&task, cancellation_token.clone(), tool)
             .await;
@@ -1042,7 +1044,11 @@ impl ToolPipeline {
         match result {
             Ok(tool_result) => {
                 let duration_ms = elapsed_ms_u64(start_time);
-                let mut tool_result = tool_result;
+                let mut tool_result = tool_result_storage::maybe_persist_large_tool_result(
+                    tool_result,
+                    &tool_context,
+                )
+                .await;
                 tool_result.duration_ms = Some(duration_ms);
 
                 // The tool call succeeded with arguments that we patched
@@ -1575,14 +1581,12 @@ mod tests {
             result.result.result["provided_arguments"],
             serde_json::Value::String("{\"operation\":\"log\"".to_string())
         );
-        assert!(
-            result
-                .result
-                .result_for_assistant
-                .as_deref()
-                .unwrap_or_default()
-                .contains("Provided arguments: {\"operation\":\"log\"")
-        );
+        assert!(result
+            .result
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Provided arguments: {\"operation\":\"log\""));
     }
 
     #[test]
@@ -1645,11 +1649,9 @@ mod tests {
         assert_eq!(context.dialog_turn_id.as_deref(), Some("turn_1"));
         assert_eq!(context.unlocked_collapsed_tools, vec!["WebFetch"]);
         assert!(context.cancellation_token.is_some());
-        assert!(
-            context
-                .runtime_tool_restrictions
-                .is_tool_allowed("WebFetch")
-        );
+        assert!(context
+            .runtime_tool_restrictions
+            .is_tool_allowed("WebFetch"));
         assert!(!context.runtime_tool_restrictions.is_tool_allowed("Bash"));
         assert_eq!(context.custom_data["turn_index"], json!(7));
         assert_eq!(
@@ -1684,10 +1686,9 @@ mod tests {
         let err = ToolPipeline::validate_collapsed_tool_usage(&task)
             .expect_err("collapsed tool should require GetToolSpec unlock");
 
-        assert!(
-            err.to_string()
-                .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}")
-        );
+        assert!(err
+            .to_string()
+            .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}"));
     }
 
     #[test]
