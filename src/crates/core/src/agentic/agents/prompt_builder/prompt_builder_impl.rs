@@ -110,9 +110,6 @@ impl PromptBuilder {
         let host_family = std::env::consts::FAMILY;
         let host_arch = std::env::consts::ARCH;
 
-        let now = chrono::Local::now();
-        let current_date = now.format("%Y-%m-%d").to_string();
-
         let computer_use_keys = match host_os {
             "macos" => "Computer use / `key_chord`: the **local BitFun desktop** is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use Bash tool for `osascript`, AppleScript, shell scripts) 2) Keyboard shortcuts: command+a/c/x/v (clipboard), command+space (Spotlight), command+tab (switch app) 3) UI control (AX/OCR/mouse) only when above fail.",
             "windows" => "Computer use / `key_chord`: the **local BitFun desktop** is **Windows** — use `meta`/`super` for Windows key, `alt`, `control`, `shift`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use Bash tool for PowerShell, cmd, scripts) 2) Keyboard shortcuts: control+a/c/x/v (clipboard), meta (Start menu), Alt+Tab (switch) 3) UI control only when above fail.",
@@ -130,7 +127,6 @@ impl PromptBuilder {
 - **Paths and shell:** POSIX on the remote server — use forward slashes and Unix shell syntax (bash/sh). Do **not** use PowerShell, `cmd.exe`, or Windows-style paths for workspace operations.
 - Local BitFun client OS: {} ({}) — applies to Computer use / UI automation on this machine only, not to workspace file or terminal tools.
 - Local client architecture: {}
-- Current Date: {}
 - {}
 </environment_details>
 
@@ -142,7 +138,6 @@ impl PromptBuilder {
                 host_os,
                 host_family,
                 host_arch,
-                current_date,
                 computer_use_keys
             )
         } else {
@@ -152,7 +147,6 @@ impl PromptBuilder {
 - Current Working Directory: {}
 - Operating System: {} ({})
 - Architecture: {}
-- Current Date: {}
 - {}
 </environment_details>
 
@@ -161,7 +155,6 @@ impl PromptBuilder {
                 host_os,
                 host_family,
                 host_arch,
-                current_date,
                 computer_use_keys
             )
         }
@@ -204,6 +197,16 @@ impl PromptBuilder {
         policy: &RequestContextPolicy,
     ) -> Option<String> {
         let mut sections = Vec::new();
+
+        // 💡 Optimizing for prompt caching (e.g. DeepSeek): date and time change on every execution,
+        // so we push it here into the dynamic User reminder context rather than the static System Prompt.
+        let now = chrono::Local::now();
+        sections.push(format!(
+            "# Current Time\n<current_time>\n- Current Date: {}\n- Local Time: {}\n</current_time>",
+            now.format("%Y-%m-%d"),
+            now.format("%H:%M:%S")
+        ));
+
         let mut instruction_sections = Vec::new();
         let mut override_sections = Vec::new();
         let mut trailing_sections = Vec::new();
