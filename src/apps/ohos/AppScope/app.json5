@@ -5,7 +5,7 @@
     "versionCode": 1000000,
     "versionName": "1.0.0",
     "buildVersion": "1",
-    "icon": "$media:bitfun_icon",
+    "icon": "$media:bitfun_icon_dark",
     "label": "$string:app_name"
   }
 }
