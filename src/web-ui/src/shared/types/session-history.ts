@@ -97,6 +97,14 @@ export interface ReviewActionPersistedState {
 
 export type SessionStatus = 'active' | 'archived' | 'completed';
 export type DialogTurnKind = 'user_dialog' | 'manual_compaction' | 'local_command';
+export type IntentTerminalStatus = 'completed' | 'inferred' | 'provided';
+
+export interface IntentAssignment {
+  intentId: string;
+  terminalStatus: IntentTerminalStatus;
+  assignedAtTurn: number;
+  triggerDescription?: string;
+}
 
 export type LocalCommandKind = 'usage_report' | 'goal_pending' | 'goal_verifying';
 
@@ -130,6 +138,7 @@ export interface DialogTurnData {
   endTime?: number;
   durationMs?: number;
   status: TurnStatus;
+  intentAssignments?: IntentAssignment[];
 }
 
 export interface UserMessageData {

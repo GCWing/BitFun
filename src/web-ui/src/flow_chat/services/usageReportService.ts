@@ -290,6 +290,7 @@ function toPersistedLocalReportTurn(turn: DialogTurn): DialogTurnData {
     endTime: turn.endTime,
     durationMs: 0,
     status: 'completed',
+    intentAssignments: [],
   };
 }
 

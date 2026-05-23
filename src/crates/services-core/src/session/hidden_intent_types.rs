@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn all_intents_resolved_with_intents() {
-        let mut tracking = SessionIntentTracking {
+        let tracking = SessionIntentTracking {
             enabled: true,
             hidden_intents: vec![HiddenIntent {
                 intent_id: "i1".into(),
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn all_intents_not_resolved() {
-        let mut tracking = SessionIntentTracking {
+        let tracking = SessionIntentTracking {
             enabled: true,
             hidden_intents: vec![
                 HiddenIntent {
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn proactivity_score_full() {
-        let mut tracking = SessionIntentTracking {
+        let tracking = SessionIntentTracking {
             enabled: true,
             hidden_intents: (0..4).map(|i| HiddenIntent {
                 intent_id: format!("i{}", i),
@@ -264,7 +264,7 @@ mod tests {
 
     #[test]
     fn proactivity_score_mixed() {
-        let mut tracking = SessionIntentTracking {
+        let tracking = SessionIntentTracking {
             enabled: true,
             hidden_intents: vec![
                 HiddenIntent {

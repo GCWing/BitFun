@@ -139,6 +139,27 @@ export interface SessionUsageReport {
     fileContentsIncluded: boolean;
     redactedFields: string[];
   };
+  proactivity?: {
+    completed: number;
+    inferred: number;
+    provided: number;
+    score: number;
+    level: 'high' | 'moderate' | 'low' | 'reactive';
+    turnDetails?: Array<{
+      turnIndex: number;
+      askedQuestion: boolean;
+      proactiveToolCount: number;
+      intentsCompleted: number;
+      intentsInferred: number;
+      intentsProvided: number;
+    }>;
+  };
+  completeness?: {
+    requirementsSatisfied: number;
+    requirementsMissed: number;
+    score: number;
+    level: 'full' | 'partial' | 'minimal' | 'incomplete';
+  };
 }
 
 function remoteSessionFields(

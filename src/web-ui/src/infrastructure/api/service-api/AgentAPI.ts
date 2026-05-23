@@ -34,6 +34,7 @@ export interface SessionConfig {
   compressionThreshold?: number;
   remoteConnectionId?: string;
   remoteSshHost?: string;
+  enableIntentTracking?: boolean;
 }
 
  

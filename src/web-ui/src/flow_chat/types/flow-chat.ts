@@ -413,6 +413,7 @@ export interface SessionConfig {
   /** Disambiguates sessions when multiple remote workspaces share the same `workspacePath`. */
   remoteConnectionId?: string;
   remoteSshHost?: string;
+  enableIntentTracking?: boolean;
 }
 
 /**

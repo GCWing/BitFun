@@ -941,9 +941,7 @@ fn collect_redacted_fields(report: &SessionUsageReport) -> Vec<String> {
     fields
 }
 
-fn build_proactivity_report(
-    turns: &[DialogTurnData],
-) -> Option<ProactivityReport> {
+fn build_proactivity_report(turns: &[DialogTurnData]) -> Option<ProactivityReport> {
     // Collect intent assignments from all turns
     let mut completed: u32 = 0;
     let mut inferred: u32 = 0;
@@ -987,7 +985,11 @@ fn build_proactivity_report(
                     }
                 }
             }
-            if assignment.trigger_description.as_ref().is_some_and(|d| d.contains("asked=true")) {
+            if assignment
+                .trigger_description
+                .as_ref()
+                .is_some_and(|d| d.contains("asked=true"))
+            {
                 asked_question = true;
             }
         }
@@ -1004,7 +1006,11 @@ fn build_proactivity_report(
         }
     }
 
-    let total = (completed + inferred + provided).max(1);
+    let total = completed + inferred + provided;
+    if total == 0 {
+        return None;
+    }
+
     let score = (completed + inferred) as f32 / total as f32;
 
     if total == 1 && provided == 1 && completed == 0 && inferred == 0 {
@@ -1022,9 +1028,7 @@ fn build_proactivity_report(
     })
 }
 
-fn build_completeness_report(
-    turns: &[DialogTurnData],
-) -> Option<CompletenessReport> {
+fn build_completeness_report(turns: &[DialogTurnData]) -> Option<CompletenessReport> {
     let mut satisfied: u32 = 0;
     let mut missed: u32 = 0;
 
@@ -1057,18 +1061,28 @@ fn build_completeness_report(
 }
 
 fn proactivity_level_label(score: f32) -> String {
-    (if score >= 0.8 { "high" }
-    else if score >= 0.5 { "moderate" }
-    else if score >= 0.2 { "low" }
-    else { "reactive" })
+    (if score >= 0.8 {
+        "high"
+    } else if score >= 0.5 {
+        "moderate"
+    } else if score >= 0.2 {
+        "low"
+    } else {
+        "reactive"
+    })
     .to_string()
 }
 
 fn completeness_level_label(score: f32) -> String {
-    (if (score - 1.0).abs() < f32::EPSILON { "full" }
-    else if score >= 0.7 { "partial" }
-    else if score >= 0.3 { "minimal" }
-    else { "incomplete" })
+    (if (score - 1.0).abs() < f32::EPSILON {
+        "full"
+    } else if score >= 0.7 {
+        "partial"
+    } else if score >= 0.3 {
+        "minimal"
+    } else {
+        "incomplete"
+    })
     .to_string()
 }
 
@@ -1215,6 +1229,9 @@ mod tests {
     use crate::service::session::{
         DialogTurnData, ModelRoundData, ToolCallData, ToolItemData, ToolResultData, UserMessageData,
     };
+    use bitfun_services_core::session::hidden_intent_types::{
+        IntentAssignment, IntentTerminalStatus,
+    };
     use chrono::TimeZone;
 
     #[test]
@@ -1279,6 +1296,50 @@ mod tests {
             .coverage
             .missing
             .contains(&UsageCoverageKey::RemoteSnapshotStats));
+    }
+
+    #[test]
+    fn report_omits_proactivity_when_no_intent_assignments_exist() {
+        let request = test_request(None);
+
+        let report = build_session_usage_report_from_turns(
+            request,
+            &[test_turn("turn-1", 0, DialogTurnKind::UserDialog)],
+            &[],
+            1_778_347_200_000,
+        );
+
+        assert_eq!(report.proactivity, None);
+        assert_eq!(report.completeness, None);
+    }
+
+    #[test]
+    fn report_includes_proactivity_when_intent_assignments_exist() {
+        let request = test_request(None);
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.intent_assignments.push(IntentAssignment {
+            intent_id: "turn-0".to_string(),
+            terminal_status: IntentTerminalStatus::Completed,
+            assigned_at_turn: 0,
+            trigger_description: Some(
+                "asked=false proactive_tools=1 output=true rounds=1".to_string(),
+            ),
+        });
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+
+        assert_eq!(
+            report.proactivity.as_ref().map(|value| value.completed),
+            Some(1)
+        );
+        assert_eq!(
+            report
+                .completeness
+                .as_ref()
+                .map(|value| value.requirements_satisfied),
+            Some(1)
+        );
     }
 
     #[test]

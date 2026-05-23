@@ -63,6 +63,8 @@ pub struct SessionConfigDTO {
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub enable_intent_tracking: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -574,7 +576,7 @@ pub async fn create_session(
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
             model_id: c.model_name,
-            enable_intent_tracking: false,
+            enable_intent_tracking: c.enable_intent_tracking.unwrap_or(false),
         })
         .unwrap_or(SessionConfig {
             workspace_path: Some(request.workspace_path.clone()),
@@ -721,13 +723,13 @@ pub async fn ensure_coordinator_session(
     )
     .await;
     let restore_result = if request.include_internal {
-        coordinator.restore_internal_session(&effective, session_id).await
+        coordinator
+            .restore_internal_session(&effective, session_id)
+            .await
     } else {
         coordinator.restore_session(&effective, session_id).await
     };
-    restore_result
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    restore_result.map(|_| ()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1636,6 +1638,7 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             status: TurnStatus::Completed,
+            intent_assignments: vec![],
         };
 
         let stats = restore_turn_payload_stats(&[turn]);
@@ -1698,6 +1701,7 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             status: TurnStatus::Completed,
+            intent_assignments: vec![],
         }];
 
         omit_assistant_only_tool_results_for_session_view(&mut turns);
@@ -1756,6 +1760,7 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             status: TurnStatus::Completed,
+            intent_assignments: vec![],
         }];
 
         omit_assistant_only_tool_results_for_session_view(&mut turns);
