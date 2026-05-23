@@ -41,6 +41,7 @@ interface SelectedModelDraft {
 }
 
 interface ProviderGroup {
+  key: string;
   providerName: string;
   providerId?: string;
   models: AIModelConfigType[];
@@ -115,35 +116,12 @@ function modelNameLookupKey(name: string): string {
   return name.trim().toLowerCase();
 }
 
-/** Map lowercased model_name -> config (first wins if duplicates exist in storage). */
-function buildConfiguredModelsByLowerName(models: AIModelConfigType[]): Map<string, AIModelConfigType> {
-  const map = new Map<string, AIModelConfigType>();
-  for (const model of models) {
-    const key = modelNameLookupKey(model.model_name);
-    if (!map.has(key)) {
-      map.set(key, model);
-    }
-  }
-  return map;
-}
-
-function resolveModelNameWithExisting(
-  rawName: string,
-  configuredByLower: Map<string, AIModelConfigType>
-): string {
-  const trimmed = rawName.trim();
-  if (!trimmed) return trimmed;
-  const configured = configuredByLower.get(modelNameLookupKey(trimmed));
-  return configured?.model_name.trim() ?? trimmed;
-}
-
 /**
- * Trim, optionally collapse to single selection, resolve each name against existing provider models
- * (case-insensitive), then dedupe so one provider cannot list the same logical model twice.
+ * Trim, optionally collapse to single selection, then dedupe so one provider
+ * instance cannot list the same logical model twice.
  */
 function normalizeProviderModelNameList(
   modelNames: string[],
-  configuredByLower: Map<string, AIModelConfigType>,
   singleSelection: boolean
 ): string[] {
   let list = uniqModelNames(modelNames);
@@ -153,7 +131,7 @@ function normalizeProviderModelNameList(
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of list) {
-    const resolved = resolveModelNameWithExisting(raw, configuredByLower);
+    const resolved = raw.trim();
     if (!resolved) continue;
     const key = modelNameLookupKey(resolved);
     if (seen.has(key)) continue;
@@ -200,6 +178,21 @@ function parseOptionalPositiveIntegerInput(value: string): number | null | undef
 }
 
 const DEEPSEEK_REASONING_EFFORT_MODE_PREFIX = 'deepseek-effort:';
+const PROVIDER_INSTANCE_METADATA_KEY = 'provider_instance_id';
+
+function generateProviderInstanceId(): string {
+  return `provider_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function getProviderInstanceId(config: AIModelConfigType | Partial<AIModelConfigType> | null | undefined): string | undefined {
+  if (!config) return undefined;
+  const value = config.metadata?.[PROVIDER_INSTANCE_METADATA_KEY];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function getProviderGroupKey(config: AIModelConfigType): string {
+  return getProviderInstanceId(config) || config.id || `${config.name}:${config.model_name}`;
+}
 
 function getDeepSeekReasoningModeSelectValue(draft: SelectedModelDraft): string {
   if (draft.reasoningMode === 'enabled' && draft.reasoningEffort) {
@@ -324,6 +317,7 @@ const AIModelConfig: React.FC = () => {
   const [remoteModelsError, setRemoteModelsError] = useState<string | null>(null);
   const [hasAttemptedRemoteFetch, setHasAttemptedRemoteFetch] = useState(false);
   const [selectedModelDrafts, setSelectedModelDrafts] = useState<SelectedModelDraft[]>([]);
+  const [editingProviderModelIds, setEditingProviderModelIds] = useState<Set<string>>(new Set());
   const [manualModelInput, setManualModelInput] = useState('');
   const [expandedModelCards, setExpandedModelCards] = useState<Set<string>>(new Set());
   const [discoveredCli, setDiscoveredCli] = useState<DiscoveredCliCredential[]>([]);
@@ -522,17 +516,6 @@ const AIModelConfig: React.FC = () => {
     };
   }, [selectedProviderId, t]);
 
-  const getConfiguredModelsForProvider = (providerName: string) => {
-    const normalizedProviderName = providerName.trim();
-    if (!normalizedProviderName) {
-      return [];
-    }
-
-    return aiModels
-      .filter(model => getProviderDisplayName(model) === normalizedProviderName)
-      .sort((a, b) => a.model_name.localeCompare(b.model_name));
-  };
-
   const createDraftsFromConfigs = (configs: AIModelConfigType[]) => (
     configs.map(config => createModelDraft(config.model_name, config, {
       configId: config.id,
@@ -563,18 +546,8 @@ const AIModelConfig: React.FC = () => {
       provider: baseConfig?.provider ?? editingConfig?.provider ?? currentTemplate?.format,
       base_url: baseConfig?.base_url ?? editingConfig?.base_url ?? currentTemplate?.baseUrl,
     };
-    const providerName = (
-      baseConfig?.name ||
-      editingConfig?.name ||
-      currentTemplate?.name ||
-      ''
-    ).trim();
-    const configuredByLower = buildConfiguredModelsByLowerName(
-      getConfiguredModelsForProvider(providerName)
-    );
     const nextModelNames = normalizeProviderModelNameList(
       modelNames,
-      configuredByLower,
       singleSelection
     );
 
@@ -587,10 +560,9 @@ const AIModelConfig: React.FC = () => {
         const existingDraft = prevDrafts.find(
           draft => modelNameLookupKey(draft.modelName) === lookupKey
         );
-        const configuredModel = configuredByLower.get(lookupKey);
 
         if (existingDraft) {
-          const configId = pinnedRowId ?? configuredModel?.id ?? existingDraft.configId;
+          const configId = pinnedRowId ?? existingDraft.configId;
           return normalizeDraftReasoningForProvider({
             ...existingDraft,
             modelName,
@@ -599,8 +571,8 @@ const AIModelConfig: React.FC = () => {
           }, reasoningProviderConfig);
         }
 
-        return normalizeDraftReasoningForProvider(createModelDraft(modelName, configuredModel || baseConfig, {
-          configId: pinnedRowId ?? configuredModel?.id,
+        return normalizeDraftReasoningForProvider(createModelDraft(modelName, baseConfig, {
+          configId: pinnedRowId,
         }), reasoningProviderConfig);
       })
     );
@@ -671,16 +643,6 @@ const AIModelConfig: React.FC = () => {
     const trimmedModelName = manualModelInput.trim();
     if (!trimmedModelName) return;
 
-    const providerName = (
-      editingConfig?.name ||
-      currentTemplate?.name ||
-      ''
-    ).trim();
-    const configuredByLower = buildConfiguredModelsByLowerName(
-      getConfiguredModelsForProvider(providerName)
-    );
-    const resolvedName = resolveModelNameWithExisting(trimmedModelName, configuredByLower);
-    const matchesExistingSaved = configuredByLower.has(modelNameLookupKey(trimmedModelName));
     const alreadyInDrafts = selectedModelDrafts.some(
       draft => modelNameLookupKey(draft.modelName) === modelNameLookupKey(trimmedModelName)
     );
@@ -692,17 +654,14 @@ const AIModelConfig: React.FC = () => {
     }
 
     const nextModelNames = editingConfig?.id
-      ? [resolvedName]
+      ? [trimmedModelName]
       : uniqModelNames([
           ...selectedModelDrafts.map(draft => draft.modelName),
-          resolvedName,
+          trimmedModelName,
         ]);
 
     syncSelectedModelDrafts(nextModelNames, editingConfig || undefined, !!editingConfig?.id);
     setManualModelInput('');
-    if (matchesExistingSaved) {
-      notification.info(t('providerSelection.reusedExistingModel'));
-    }
   };
 
   const buildModelDiscoveryConfig = (config: Partial<AIModelConfigType>): AIModelConfigType | null => {
@@ -833,6 +792,7 @@ const AIModelConfig: React.FC = () => {
   const handleCreateNew = () => {
     resetRemoteModelDiscovery();
     setSelectedModelDrafts([]);
+    setEditingProviderModelIds(new Set());
     setManualModelInput('');
     setShowApiKey(false);
     setSelectedProviderId(null);
@@ -865,6 +825,7 @@ const AIModelConfig: React.FC = () => {
       auth: { type: authType },
     });
     setSelectedModelDrafts([]);
+    setEditingProviderModelIds(new Set());
     setShowAdvancedSettings(false);
     setCreationMode('form');
     setIsEditing(true);
@@ -891,21 +852,19 @@ const AIModelConfig: React.FC = () => {
     
     // Dynamically get translated name
     const providerName = t(`providers.${template.id}.name`);
-    const configuredProviderModels = getConfiguredModelsForProvider(providerName);
-    const primaryConfiguredModel = configuredProviderModels[0];
-    const defaultModel = primaryConfiguredModel?.model_name || template.models[0] || '';
+    const defaultModel = template.models[0] || '';
     
     setEditingConfig({
       name: providerName,
-      base_url: primaryConfiguredModel?.base_url || template.baseUrl,
+      base_url: template.baseUrl,
       request_url: resolveRequestUrl(
-        primaryConfiguredModel?.base_url || template.baseUrl,
-        primaryConfiguredModel?.provider || template.format,
+        template.baseUrl,
+        template.format,
         defaultModel
       ),
-      api_key: primaryConfiguredModel?.api_key || '',
+      api_key: '',
       model_name: defaultModel,
-      provider: primaryConfiguredModel?.provider || template.format,
+      provider: template.format,
       enabled: true,
       context_window: 200000,
       max_tokens: 32000,
@@ -916,14 +875,13 @@ const AIModelConfig: React.FC = () => {
       inline_think_in_text: true,
     });
     setSelectedModelDrafts(
-      configuredProviderModels.length > 0
-        ? createDraftsFromConfigs(configuredProviderModels)
-        : (defaultModel ? [createModelDraft(defaultModel, {
+      defaultModel ? [createModelDraft(defaultModel, {
             context_window: 200000,
             max_tokens: 32000,
             reasoning_mode: DEFAULT_REASONING_MODE,
-          })] : [])
+          })] : []
     );
+    setEditingProviderModelIds(new Set());
     setShowAdvancedSettings(false);
     setCreationMode('form');
     setIsEditing(true);
@@ -933,6 +891,7 @@ const AIModelConfig: React.FC = () => {
   const handleSelectCustom = () => {
     resetRemoteModelDiscovery();
     setManualModelInput('');
+    setEditingProviderModelIds(new Set());
     setShowApiKey(false);
     setSelectedProviderId(null);
     setEditingConfig({
@@ -964,8 +923,16 @@ const AIModelConfig: React.FC = () => {
     setShowApiKey(false);
 
     const providerName = getProviderDisplayName(config);
-    const configuredProviderModels = getConfiguredModelsForProvider(providerName);
+    const providerGroupKey = getProviderGroupKey(config);
+    const configuredProviderModels = aiModels
+      .filter(model => getProviderGroupKey(model) === providerGroupKey)
+      .sort((a, b) => a.model_name.localeCompare(b.model_name));
     const providerTemplateId = getProviderTemplateId(config);
+    setEditingProviderModelIds(new Set(
+      configuredProviderModels
+        .map(model => model.id)
+        .filter((id): id is string => !!id)
+    ));
     setSelectedProviderId(providerTemplateId || null);
     setEditingConfig({
       name: providerName,
@@ -1002,6 +969,7 @@ const AIModelConfig: React.FC = () => {
   const handleEdit = (config: AIModelConfigType) => {
     resetRemoteModelDiscovery();
     setManualModelInput('');
+    setEditingProviderModelIds(new Set());
     setShowApiKey(false);
     setEditingConfig({ ...config, name: getProviderDisplayName(config) });
     setSelectedModelDrafts([
@@ -1044,13 +1012,13 @@ const AIModelConfig: React.FC = () => {
         notification.warning(t('messages.fillRequired'));
         return;
       }
-      const configuredProviderModels = getConfiguredModelsForProvider(providerName);
-      const configuredProviderModelIds = new Set(
-        configuredProviderModels
-          .map(model => model.id)
-          .filter((id): id is string => !!id)
-      );
       const draftsToSave = dedupeSelectedModelDraftsByModelName(selectedModelDrafts);
+      const existingProviderInstanceId = getProviderInstanceId(editingConfig);
+      const isProviderGroupEdit = !editingConfig.id && editingProviderModelIds.size > 0;
+      const providerInstanceId = existingProviderInstanceId || generateProviderInstanceId();
+      const providerGroupModelIds = isProviderGroupEdit
+        ? editingProviderModelIds
+        : new Set<string>();
       const configsToSave: AIModelConfigType[] = draftsToSave.map((draft, index) => {
         return {
           id: editingConfig.id || draft.configId || `model_${Date.now()}_${index}`,
@@ -1070,7 +1038,10 @@ const AIModelConfig: React.FC = () => {
           category: draft.category,
           capabilities: getCapabilitiesByCategory(draft.category),
           recommended_for: editingConfig.recommended_for || [],
-          metadata: editingConfig.metadata,
+          metadata: {
+            ...(editingConfig.metadata || {}),
+            [PROVIDER_INSTANCE_METADATA_KEY]: providerInstanceId,
+          },
           reasoning_mode: draft.reasoningMode,
           inline_think_in_text: editingConfig.inline_think_in_text ?? true,
           reasoning_effort: draft.reasoningEffort,
@@ -1084,26 +1055,17 @@ const AIModelConfig: React.FC = () => {
         };
       });
 
-      if (editingConfig.id && configsToSave[0]) {
-        const dupKey = modelNameLookupKey(configsToSave[0].model_name);
-        const nameConflict = aiModels.some(
-          m =>
-            m.id !== editingConfig.id &&
-            getProviderDisplayName(m) === providerName &&
-            modelNameLookupKey(m.model_name) === dupKey
-        );
-        if (nameConflict) {
-          notification.warning(t('messages.duplicateModelNameUnderProvider'));
-          return;
-        }
-      }
-
       let updatedModels: AIModelConfigType[];
       if (editingConfig.id) {
         updatedModels = aiModels.map(m => m.id === editingConfig.id ? configsToSave[0] : m);
+      } else if (isProviderGroupEdit) {
+        updatedModels = [
+          ...aiModels.filter(model => !providerGroupModelIds.has(model.id || '')),
+          ...configsToSave,
+        ];
       } else {
         updatedModels = [
-          ...aiModels.filter(model => !configuredProviderModelIds.has(model.id || '')),
+          ...aiModels,
           ...configsToSave,
         ];
       }
@@ -1138,6 +1100,7 @@ const AIModelConfig: React.FC = () => {
         setEditingConfig(null);
         setCreationMode(null);
         setSelectedProviderId(null);
+        setEditingProviderModelIds(new Set());
         return;
       }
       
@@ -1145,6 +1108,7 @@ const AIModelConfig: React.FC = () => {
       setEditingConfig(null);
       setCreationMode(null);
       setSelectedProviderId(null);
+      setEditingProviderModelIds(new Set());
       
       
       setExpandedIds(prev => new Set([...prev, ...createdConfigIds]));
@@ -1205,6 +1169,21 @@ const AIModelConfig: React.FC = () => {
       const updatedModels = aiModels.filter(m => m.id !== id);
       await configManager.setConfig('ai.models', updatedModels);
       setAiModels(updatedModels);
+
+      const currentDefaultModels = await configManager.getConfig<Record<string, unknown>>('ai.default_models') || {};
+      const nextDefaultModels = { ...currentDefaultModels };
+      let defaultModelsChanged = false;
+
+      for (const key of ['primary', 'fast']) {
+        if (nextDefaultModels[key] === id) {
+          nextDefaultModels[key] = null;
+          defaultModelsChanged = true;
+        }
+      }
+
+      if (defaultModelsChanged) {
+        await configManager.setConfig('ai.default_models', nextDefaultModels);
+      }
     } catch (error) {
       log.error('Failed to delete config', { configId: id, error });
     }
@@ -1320,6 +1299,7 @@ const AIModelConfig: React.FC = () => {
   const closeEditingModal = () => {
     resetRemoteModelDiscovery();
     setSelectedModelDrafts([]);
+    setEditingProviderModelIds(new Set());
     setManualModelInput('');
     setShowApiKey(false);
     setIsEditing(false);
@@ -1330,14 +1310,16 @@ const AIModelConfig: React.FC = () => {
 
   const providerGroups = useMemo<ProviderGroup[]>(() => {
     const grouped = aiModels.reduce<Map<string, ProviderGroup>>((map, model) => {
+      const groupKey = getProviderGroupKey(model);
       const providerName = getProviderDisplayName(model);
-      const existingGroup = map.get(providerName);
+      const existingGroup = map.get(groupKey);
       if (existingGroup) {
         existingGroup.models.push(model);
         return map;
       }
 
-      map.set(providerName, {
+      map.set(groupKey, {
+        key: groupKey,
         providerName,
         providerId: getProviderTemplateId(model),
         models: [model],
@@ -1456,12 +1438,6 @@ const AIModelConfig: React.FC = () => {
     if (!isEditing || !editingConfig) return null;
     const isFromTemplate = !editingConfig.id && !!currentTemplate;
     const isProviderScopedEditing = !editingConfig.id;
-    const currentProviderLabel = (editingConfig.name || currentTemplate?.name || t('providerSelection.customTitle')).trim() || t('providerSelection.customTitle');
-    const configuredProviderModels = getConfiguredModelsForProvider(currentProviderLabel);
-    const configuredProviderModelOptions: SelectOption[] = configuredProviderModels.map(model => ({
-      label: model.model_name,
-      value: model.model_name,
-    }));
     const fetchedOrPresetModelOptions: SelectOption[] = remoteModelOptions.length > 0
       ? remoteModelOptions.map(model => ({
           label: model.display_name || model.id,
@@ -1472,9 +1448,13 @@ const AIModelConfig: React.FC = () => {
           label: model,
           value: model
         }));
+    const selectedModelOptions: SelectOption[] = selectedModelDrafts.map(draft => ({
+      label: draft.modelName,
+      value: draft.modelName,
+    }));
     const availableModelOptions: SelectOption[] = Array.from(
       new Map(
-        [...configuredProviderModelOptions, ...fetchedOrPresetModelOptions]
+        [...fetchedOrPresetModelOptions, ...selectedModelOptions]
           .map(option => [String(option.value), option] as const)
       ).values()
     );
@@ -1922,6 +1902,8 @@ const AIModelConfig: React.FC = () => {
                         loading={isFetchingRemoteModels}
                         emptyText={t('providerSelection.noPresetModels')}
                         searchPlaceholder={t('providerSelection.inputModelName')}
+                        allowCustomValue
+                        customValueHint={t('providerSelection.addSearchedModel')}
                         size="small"
                         onOpenChange={handleModelSelectionOpenChange}
                         renderValue={renderModelPickerValue}
@@ -2036,6 +2018,8 @@ const AIModelConfig: React.FC = () => {
                         loading={isFetchingRemoteModels}
                         emptyText={t('providerSelection.noPresetModels')}
                         searchPlaceholder={t('providerSelection.inputModelName')}
+                        allowCustomValue
+                        customValueHint={t('providerSelection.addSearchedModel')}
                         size="small"
                         onOpenChange={handleModelSelectionOpenChange}
                       />
@@ -2489,7 +2473,7 @@ const AIModelConfig: React.FC = () => {
           ) : (
             <div className="bitfun-ai-model-config__collection">
               {providerGroups.map(group => (
-                <div key={group.providerName} className="bitfun-ai-model-config__provider-group">
+                <div key={group.key} className="bitfun-ai-model-config__provider-group">
                   <div className="bitfun-ai-model-config__provider-group-header">
                     <div className="bitfun-ai-model-config__provider-group-title">
                       <span>{group.providerName}</span>
@@ -2606,7 +2590,7 @@ const AIModelConfig: React.FC = () => {
         onClose={closeEditingModal}
         title={editingConfig?.id
           ? t('editModel')
-          : (selectedModelDrafts.some(draft => !!draft.configId)
+          : (getProviderInstanceId(editingConfig)
             ? t('editProvider')
             : (currentTemplate ? `${t('newProvider')} - ${currentTemplate.name}` : t('newProvider')))}
         size="xlarge"

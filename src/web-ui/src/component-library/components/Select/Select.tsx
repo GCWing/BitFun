@@ -111,6 +111,7 @@ export const Select: React.FC<SelectProps> = ({
     const query = searchQuery.toLowerCase();
     return options.filter(opt => 
       opt.label.toLowerCase().includes(query) ||
+      String(opt.value).toLowerCase().includes(query) ||
       opt.description?.toLowerCase().includes(query)
     );
   }, [options, searchQuery, searchable]);
@@ -246,7 +247,7 @@ export const Select: React.FC<SelectProps> = ({
   }, [multiple, onChange]);
 
   const handleCustomValueSubmit = useCallback(() => {
-    if (!allowCustomValue || multiple || !searchQuery.trim()) return false;
+    if (!allowCustomValue || !searchQuery.trim()) return false;
     
     const trimmedValue = searchQuery.trim();
     const existingOption = options.find(opt => 
@@ -255,6 +256,15 @@ export const Select: React.FC<SelectProps> = ({
     
     if (existingOption) {
       handleSelect(existingOption);
+    } else if (multiple) {
+      const currentValues = selectedValue as (string | number)[];
+      if (!currentValues.includes(trimmedValue)) {
+        const newValue = [...currentValues, trimmedValue];
+        setSelectedValue(newValue);
+        onChange?.(newValue);
+      }
+      setIsOpen(false);
+      setSearchQuery('');
     } else {
       setSelectedValue(trimmedValue);
       onChange?.(trimmedValue);
@@ -262,7 +272,7 @@ export const Select: React.FC<SelectProps> = ({
       setSearchQuery('');
     }
     return true;
-  }, [allowCustomValue, multiple, searchQuery, options, handleSelect, onChange]);
+  }, [allowCustomValue, multiple, searchQuery, options, handleSelect, selectedValue, onChange]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (disabled) return;
@@ -274,7 +284,7 @@ export const Select: React.FC<SelectProps> = ({
           setIsOpen(true);
         } else if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
           handleSelect(filteredOptions[highlightedIndex]);
-        } else if (allowCustomValue && !multiple && searchQuery.trim()) {
+        } else if (allowCustomValue && searchQuery.trim()) {
           handleCustomValueSubmit();
         }
         break;
@@ -307,14 +317,14 @@ export const Select: React.FC<SelectProps> = ({
         
       case 'Tab':
         if (isOpen) {
-          if (allowCustomValue && !multiple && searchQuery.trim()) {
+          if (allowCustomValue && searchQuery.trim()) {
             handleCustomValueSubmit();
           }
           setIsOpen(false);
         }
         break;
     }
-  }, [disabled, isOpen, highlightedIndex, filteredOptions, handleSelect, allowCustomValue, multiple, searchQuery, handleCustomValueSubmit]);
+  }, [disabled, isOpen, highlightedIndex, filteredOptions, handleSelect, allowCustomValue, searchQuery, handleCustomValueSubmit]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -525,7 +535,7 @@ export const Select: React.FC<SelectProps> = ({
                     e.preventDefault();
                     if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
                       handleSelect(filteredOptions[highlightedIndex]);
-                    } else if (allowCustomValue && !multiple && searchQuery.trim()) {
+                    } else if (allowCustomValue && searchQuery.trim()) {
                       handleCustomValueSubmit();
                     }
                   } else if (e.key === 'Escape') {
@@ -580,7 +590,7 @@ export const Select: React.FC<SelectProps> = ({
                   <span className="select__loading-spinner" aria-hidden="true" />
                   <span>{t('select.loading')}</span>
                 </div>
-              ) : allowCustomValue && !multiple && searchQuery.trim() ? (
+              ) : allowCustomValue && searchQuery.trim() ? (
                 <div 
                   className="select__custom-value-hint"
                   onClick={() => handleCustomValueSubmit()}
@@ -613,13 +623,17 @@ export const Select: React.FC<SelectProps> = ({
             ) : (
               <>
                 {filteredOptions.map((option, index) => renderOptionItem(option, index))}
-                {allowCustomValue && !multiple && searchQuery.trim() && 
-                 !filteredOptions.some(opt => opt.label.toLowerCase() === searchQuery.trim().toLowerCase()) && (
+                {allowCustomValue && searchQuery.trim() && 
+                 !filteredOptions.some(opt => (
+                   opt.label.toLowerCase() === searchQuery.trim().toLowerCase() ||
+                   String(opt.value).toLowerCase() === searchQuery.trim().toLowerCase()
+                 )) && (
                   <div 
                     className="select__custom-value-hint"
                     onClick={() => handleCustomValueSubmit()}
                   >
-                    <span className="select__custom-value-text">{t('select.useCustomValue', { value: searchQuery.trim() })}</span>
+                    <span className="select__custom-value-text">"{searchQuery.trim()}"</span>
+                    <span className="select__custom-value-action">{resolvedCustomValueHint}</span>
                   </div>
                 )}
               </>

@@ -8,9 +8,40 @@ import {
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { i18nService } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
-import { extractProviderSegmentFromBaseUrl, matchProviderCatalogItemByBaseUrl } from './providerCatalog';
+import { extractProviderSegmentFromBaseUrl, matchProviderCatalogItemByBaseUrl, normalizeProviderBaseUrl } from './providerCatalog';
 
 const log = createLogger('ConfigManager');
+const PROVIDER_INSTANCE_METADATA_KEY = 'provider_instance_id';
+
+function legacyProviderInstanceId(seed: string): string {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `provider_legacy_${(hash >>> 0).toString(36)}`;
+}
+
+function readProviderInstanceId(model: Record<string, unknown>): string | undefined {
+  const metadata = model.metadata;
+  if (!metadata || typeof metadata !== 'object') {
+    return undefined;
+  }
+
+  const value = (metadata as Record<string, unknown>)[PROVIDER_INSTANCE_METADATA_KEY];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function legacyProviderGroupSeed(model: Record<string, unknown>, index: number): string {
+  const baseUrl = typeof model.base_url === 'string' ? model.base_url : '';
+  const normalizedBaseUrl = baseUrl ? normalizeProviderBaseUrl(baseUrl) : '';
+  if (normalizedBaseUrl) {
+    return `base_url:${normalizedBaseUrl}`;
+  }
+
+  const id = typeof model.id === 'string' ? model.id.trim() : '';
+  return id ? `id:${id}` : `index:${index}`;
+}
 
 class ConfigManagerImpl implements IConfigManager {
   
@@ -28,41 +59,60 @@ class ConfigManagerImpl implements IConfigManager {
       return config;
     }
 
-    let migratedCount = 0;
-    const migratedModels = config.map(item => {
+    let migratedNameCount = 0;
+    let migratedProviderInstanceCount = 0;
+    const migratedModels = config.map((item, index) => {
       if (!item || typeof item !== 'object') {
         return item;
       }
 
       const model = item as Record<string, unknown>;
+      let nextModel = model;
       const currentName = typeof model.name === 'string' ? model.name.trim() : '';
-      if (currentName) {
-        return item;
+      if (!currentName) {
+        const baseUrl = typeof model.base_url === 'string' ? model.base_url : '';
+        const matchedProvider = matchProviderCatalogItemByBaseUrl(baseUrl);
+        const inferredProviderName = matchedProvider
+          ? i18nService.t(`settings/ai-model:providers.${matchedProvider.id}.name`)
+          : extractProviderSegmentFromBaseUrl(baseUrl);
+
+        if (inferredProviderName) {
+          migratedNameCount += 1;
+          nextModel = {
+            ...nextModel,
+            name: inferredProviderName,
+          };
+        }
       }
 
-      const baseUrl = typeof model.base_url === 'string' ? model.base_url : '';
-      const matchedProvider = matchProviderCatalogItemByBaseUrl(baseUrl);
-      const inferredProviderName = matchedProvider
-        ? i18nService.t(`settings/ai-model:providers.${matchedProvider.id}.name`)
-        : extractProviderSegmentFromBaseUrl(baseUrl);
-
-      if (!inferredProviderName) {
-        return item;
+      if (readProviderInstanceId(nextModel)) {
+        return nextModel;
       }
 
-      migratedCount += 1;
+      const metadata = nextModel.metadata && typeof nextModel.metadata === 'object'
+        ? nextModel.metadata as Record<string, unknown>
+        : {};
+      migratedProviderInstanceCount += 1;
       return {
-        ...model,
-        name: inferredProviderName,
+        ...nextModel,
+        metadata: {
+          ...metadata,
+          [PROVIDER_INSTANCE_METADATA_KEY]: legacyProviderInstanceId(
+            legacyProviderGroupSeed(nextModel, index)
+          ),
+        },
       };
     });
 
-    if (migratedCount === 0) {
+    if (migratedNameCount === 0 && migratedProviderInstanceCount === 0) {
       return config;
     }
 
     await configAPI.setConfig('ai.models', migratedModels);
-    log.info('Migrated legacy ai.models provider names', { migratedCount });
+    log.info('Migrated legacy ai.models', {
+      migratedNameCount,
+      migratedProviderInstanceCount,
+    });
     return migratedModels;
   }
 
