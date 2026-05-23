@@ -128,6 +128,8 @@ const I18N = {
     errScan: '扫描失败',
     errScanReason: (r) => `原因：${r}`,
     errScanRuntime: '扫描出错',
+    errGitNotFound: '未检测到 Git',
+    errGitNotFoundDesc: '请先安装 Git 并确保已添加到系统环境变量中。',
     styleNight: '凌晨刺客',
     styleMorning: '早起鸟',
     styleAm: '上午型选手',
@@ -222,6 +224,8 @@ const I18N = {
     errScan: '掃描失敗',
     errScanReason: (r) => `原因：${r}`,
     errScanRuntime: '掃描出錯',
+    errGitNotFound: '未檢測到 Git',
+    errGitNotFoundDesc: '請先安裝 Git 並確保已添加到系統環境變量中。',
     styleNight: '凌晨刺客',
     styleMorning: '早起鳥',
     styleAm: '上午型選手',
@@ -317,6 +321,8 @@ const I18N = {
     errScan: 'Scan failed',
     errScanReason: (r) => `reason: ${r}`,
     errScanRuntime: 'Scan error',
+    errGitNotFound: 'Git not found',
+    errGitNotFoundDesc: 'Please install Git and ensure it is added to your system PATH.',
     styleNight: 'Midnight Hacker',
     styleMorning: 'Early Bird',
     styleAm: 'Morning Brew',
@@ -389,23 +395,51 @@ function greetingFor(d, name) {
   return t('greetWith')(part, name);
 }
 
-function setEmpty(state, title, desc, icon) {
+function setEmpty(state, title, desc, icon, actionLabel, actionUrl) {
   const el = $('empty');
-  el.classList.remove('is-loading', 'is-error');
-  if (state === 'loading') el.classList.add('is-loading');
-  if (state === 'error') el.classList.add('is-error');
-  $('empty-icon').innerHTML = icon || SVG.loader;
-  $('empty-title').textContent = title;
-  $('empty-desc').textContent = desc || '';
+  el.classList.remove('is-loading', 'is-error', 'has-action');
+    if (state === 'loading') el.classList.add('is-loading');
+    if (state === 'error') {
+        el.classList.add('is-error');
+        if (actionLabel && actionUrl) {
+            el.classList.add('has-action');
+        }
+    }
+    $('empty-icon').innerHTML = icon || SVG.loader;
+    $('empty-title').textContent = title;
+    $('empty-desc').textContent = desc || '';
+    
+ const actionEl = $('empty-action');
+    if (actionLabel && actionUrl) {
+        if (!actionEl) {
+            actionEl = document.createElement('button');
+            actionEl.className = 'cs-empty-action';
+            actionEl.id = 'empty-action';
+            const container = $('empty');
+            container.appendChild(actionEl);
+        }
+        actionEl.textContent = actionLabel;
+        actionEl.onclick = () => {
+            if (window.app && window.app.system && window.app.system.openExternal) {
+                window.app.system.openExternal(actionUrl);
+            } else {
+                window.open(actionUrl, '_blank');
+            }
+        };
+    } else if (actionEl) {
+        actionEl.remove();
+    }
 }
-function showEmpty(state, title, desc, icon) {
-  setEmpty(state, title, desc, icon);
-  $('empty').removeAttribute('hidden');
-  $('content').setAttribute('hidden', '');
+
+function showEmpty(state, title, desc, icon, actionLabel, actionUrl) {
+    setEmpty(state, title, desc, icon, actionLabel, actionUrl);
+    $('empty').removeAttribute('hidden');
+    $('content').setAttribute('hidden', '');
 }
+
 function hideEmpty() {
-  $('empty').setAttribute('hidden', '');
-  $('content').removeAttribute('hidden');
+    $('empty').setAttribute('hidden', '');
+    $('content').removeAttribute('hidden');
 }
 
 function renderDonut(langs) {
@@ -1280,6 +1314,15 @@ async function scanGitWorkspace(cwd) {
 let lastData = null;
 let scanning = false;
 
+async function checkGitAvailable() {
+  try {
+    await window.app.shell.exec(['git', '--version'], { timeout: 5000 });
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
 async function scan() {
   if (scanning) return;
   scanning = true;
@@ -1288,6 +1331,14 @@ async function scan() {
 
   if (!ws) {
     showEmpty('error', t('errNoWs'), t('errNoWsDesc'), SVG.folder);
+    lastData = null;
+    scanning = false;
+    return;
+  }
+
+  const gitAvailable = await checkGitAvailable();
+  if (!gitAvailable) {
+    showEmpty('error', t('errGitNotFound'), t('errGitNotFoundDesc'), SVG.gitBranch, t('errGitNotFoundAction'), t('gitDownloadUrl'));
     lastData = null;
     scanning = false;
     return;

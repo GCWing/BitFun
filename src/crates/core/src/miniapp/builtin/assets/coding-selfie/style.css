@@ -757,6 +757,39 @@ html, body {
 }
 .cs-empty.is-error .cs-empty-art { color: var(--cs-del); }
 
+.cs-empty-action {
+  margin-top: 12px;
+  padding: 8px 16px;
+  border-radius: var(--cs-radius-sm);
+  background: var(--cs-accent);
+  color: var(--cs-bg);
+  font-family: var(--cs-sans);
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 140ms ease, transform 100ms ease;
+  flex-shrink: 0;
+}
+.cs-empty-action:hover {
+  background: var(--cs-accent-2);
+}
+.cs-empty-action:active {
+  transform: scale(0.97);
+}
+.cs-empty-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.cs-empty.has-action {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 /* ─── Adaptive: gracefully shed less-essential tiles ──
    The dashboard prefers to fit on a single screen on ANY aspect ratio.
    When space gets tight we hide optional blocks instead of overflowing. */
