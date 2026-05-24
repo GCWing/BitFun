@@ -1016,8 +1016,14 @@ fn build_proactivity_report(turns: &[DialogTurnData]) -> Option<ProactivityRepor
 
     let score = (completed + inferred) as f32 / total as f32;
 
+    // A single "provided" assignment in isolation indicates the user had to
+    // supply one requirement without any agent proactivity. This is not enough
+    // signal to produce a meaningful proactivity report: the denominator (total)
+    // is 1, which inflates the score to an uninterpretable 0.0. We suppress the
+    // report in this case so consumers see `null` rather than a misleading score.
+    // A single "completed" or "inferred" assignment is kept because it
+    // unambiguously shows at least one proactive act occurred.
     if total == 1 && provided == 1 && completed == 0 && inferred == 0 {
-        // Only one "provided" entry is not meaningful
         return None;
     }
 
@@ -1032,21 +1038,21 @@ fn build_proactivity_report(turns: &[DialogTurnData]) -> Option<ProactivityRepor
 }
 
 fn proactivity_level_label(score: f32) -> String {
-    (if score >= 0.8 {
-        "high"
-    } else if score >= 0.5 {
-        "moderate"
-    } else if score >= 0.2 {
-        "low"
-    } else {
-        "reactive"
-    })
-    .to_string()
+    bitfun_services_core::session::hidden_intent_types::ProactivityLevel::from_score(score)
+        .as_str()
+        .to_string()
 }
 
 fn is_legacy_proxy_intent_assignment(
     assignment: &bitfun_services_core::session::hidden_intent_types::IntentAssignment,
 ) -> bool {
+    // Prefer the explicit flag set by new code.
+    if assignment.is_proxy {
+        return true;
+    }
+    // Fallback heuristic for older session files that pre-date the `is_proxy`
+    // field: synthetic proxy assignments were generated with a `turn-N` intent
+    // ID and a description containing the raw evidence fields.
     assignment.intent_id.starts_with("turn-")
         && assignment
             .trigger_description
@@ -1296,6 +1302,7 @@ mod tests {
             terminal_status: IntentTerminalStatus::Completed,
             assigned_at_turn: 0,
             trigger_description: Some("matched annotated hidden intent".to_string()),
+            is_proxy: false,
         });
 
         let report =
@@ -1319,6 +1326,7 @@ mod tests {
             trigger_description: Some(
                 "asked=false proactive_tools=1 output=true rounds=1".to_string(),
             ),
+            is_proxy: false, // detected via heuristic (intent_id starts with "turn-")
         });
 
         let report =
@@ -1326,6 +1334,52 @@ mod tests {
 
         assert_eq!(report.proactivity, None);
         assert_eq!(report.completeness, None);
+    }
+
+    #[test]
+    fn report_ignores_assignment_with_is_proxy_flag_regardless_of_intent_id() {
+        // An assignment whose intent_id does NOT start with "turn-" but has
+        // is_proxy=true must still be excluded. This prevents real intent IDs
+        // that happen to start with "turn-" from being wrongly excluded by the
+        // heuristic, and ensures the explicit flag takes priority.
+        let request = test_request(None);
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.intent_assignments.push(IntentAssignment {
+            intent_id: "intent-real-name".to_string(),
+            terminal_status: IntentTerminalStatus::Completed,
+            assigned_at_turn: 0,
+            trigger_description: None,
+            is_proxy: true,
+        });
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+
+        assert_eq!(report.proactivity, None, "is_proxy=true must exclude the assignment");
+    }
+
+    #[test]
+    fn report_does_not_exclude_turn_prefixed_intent_id_when_is_proxy_false() {
+        // An intent_id starting with "turn-" must NOT be excluded when the
+        // description doesn't match the legacy heuristic pattern AND is_proxy=false.
+        let request = test_request(None);
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.intent_assignments.push(IntentAssignment {
+            intent_id: "turn-based-strategy".to_string(), // starts with "turn-" but is real
+            terminal_status: IntentTerminalStatus::Completed,
+            assigned_at_turn: 0,
+            trigger_description: Some("real annotated intent".to_string()),
+            is_proxy: false,
+        });
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+
+        assert_eq!(
+            report.proactivity.as_ref().map(|p| p.completed),
+            Some(1),
+            "real intent with turn- prefix must not be filtered"
+        );
     }
 
     #[test]

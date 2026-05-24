@@ -2790,10 +2790,10 @@ impl SessionManager {
 
     /// Record intent evidence collected during a dialog turn.
     /// Appends the evidence to the session's intent tracking state.
+    /// The turn is identified via `evidence.turn_index`.
     pub async fn record_intent_evidence(
         &self,
         session_id: &str,
-        _turn_id: &str,
         evidence: bitfun_services_core::session::hidden_intent_types::IntentTurnEvidence,
     ) -> BitFunResult<()> {
         if !self.should_persist_session_id(session_id) {

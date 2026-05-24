@@ -113,6 +113,12 @@ pub struct IntentAssignment {
     pub assigned_at_turn: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trigger_description: Option<String>,
+    /// Marks this assignment as a synthetic proxy generated from raw evidence
+    /// rather than a real hidden-intent evaluation. Proxy assignments are
+    /// excluded from proactivity reports so they do not inflate scores.
+    /// Defaults to `false` so existing session files remain compatible.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_proxy: bool,
 }
 
 /// Raw per-turn signals collected during execution.
@@ -220,6 +226,37 @@ pub enum ProactivityLevel {
     Moderate,
     Low,
     Reactive,
+}
+
+impl ProactivityLevel {
+    /// Classify a proactivity score into a qualitative level.
+    ///
+    /// Thresholds (inclusive lower bound):
+    /// - High     ≥ 0.8
+    /// - Moderate ≥ 0.5
+    /// - Low      ≥ 0.2
+    /// - Reactive  < 0.2
+    pub fn from_score(score: f32) -> Self {
+        if score >= 0.8 {
+            Self::High
+        } else if score >= 0.5 {
+            Self::Moderate
+        } else if score >= 0.2 {
+            Self::Low
+        } else {
+            Self::Reactive
+        }
+    }
+
+    /// Returns the snake_case string label used in JSON/API surfaces.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::High => "high",
+            Self::Moderate => "moderate",
+            Self::Low => "low",
+            Self::Reactive => "reactive",
+        }
+    }
 }
 
 /// Completeness score breakdown for a session.

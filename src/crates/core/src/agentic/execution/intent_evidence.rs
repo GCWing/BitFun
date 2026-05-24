@@ -66,16 +66,10 @@ pub fn compute_proactivity_score(tracking: &SessionIntentTracking) -> Option<Pro
     })
 }
 
+/// Classify a proactivity score into a qualitative level.
+/// Delegates to `ProactivityLevel::from_score` so the thresholds stay in one place.
 pub fn classify_proactivity_level(score: f32) -> ProactivityLevel {
-    if score >= 0.8 {
-        ProactivityLevel::High
-    } else if score >= 0.5 {
-        ProactivityLevel::Moderate
-    } else if score >= 0.2 {
-        ProactivityLevel::Low
-    } else {
-        ProactivityLevel::Reactive
-    }
+    ProactivityLevel::from_score(score)
 }
 
 pub fn is_proactive_tool(tool_name: &str) -> bool {

@@ -2068,29 +2068,37 @@ impl ExecutionEngine {
             // Hook A: Collect intent evidence from this round
             // Only runs when intent tracking is enabled for this session.
             if let Some(ref collector) = context.intent_evidence {
-                if let Ok(mut c) = collector.lock() {
-                    if round_result.used_ask_user_question {
-                        c.asked_user_question = true;
-                        c.question_topics
-                            .extend(round_result.ask_user_question_topics.clone());
-                    }
-                    c.tool_names_used.extend(
-                        round_result
+                match collector.lock() {
+                    Ok(mut c) => {
+                        if round_result.used_ask_user_question {
+                            c.asked_user_question = true;
+                            c.question_topics
+                                .extend(round_result.ask_user_question_topics.clone());
+                        }
+                        c.tool_names_used.extend(
+                            round_result
+                                .tool_calls
+                                .iter()
+                                .map(|tc| tc.tool_name.clone()),
+                        );
+                        c.proactive_tool_calls += round_result
                             .tool_calls
                             .iter()
-                            .map(|tc| tc.tool_name.clone()),
-                    );
-                    c.proactive_tool_calls += round_result
-                        .tool_calls
-                        .iter()
-                        .filter(|tc| {
-                            crate::agentic::execution::intent_evidence::is_proactive_tool(
-                                &tc.tool_name,
-                            )
-                        })
-                        .count();
-                    c.produced_output |= round_result.had_assistant_text;
-                    c.round_count += 1;
+                            .filter(|tc| {
+                                crate::agentic::execution::intent_evidence::is_proactive_tool(
+                                    &tc.tool_name,
+                                )
+                            })
+                            .count();
+                        c.produced_output |= round_result.had_assistant_text;
+                        c.round_count += 1;
+                    }
+                    Err(_) => {
+                        warn!(
+                            "Intent evidence collector mutex poisoned, skipping round evidence: session_id={}, turn_id={}",
+                            context.session_id, context.dialog_turn_id
+                        );
+                    }
                 }
             }
 
@@ -2455,7 +2463,7 @@ impl ExecutionEngine {
         if let Some(evidence) = evidence {
             if let Err(e) = self
                 .session_manager
-                .record_intent_evidence(&context.session_id, &context.dialog_turn_id, evidence)
+                .record_intent_evidence(&context.session_id, evidence)
                 .await
             {
                 warn!(
