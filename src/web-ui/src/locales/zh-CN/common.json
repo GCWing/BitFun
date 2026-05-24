@@ -318,11 +318,35 @@
         "deleteAssistant": "删除个人助理",
         "resetWorkspace": "重置工作区",
         "initAgents": "初始化 AGENTS.md",
+        "manageRelatedPaths": "关联目录",
         "newWorktree": "新建 worktree",
         "deleteWorktree": "删除 worktree",
         "copyPath": "复制路径",
         "reveal": "在资源管理器中打开",
         "close": "关闭工作区"
+      },
+      "relatedPaths": {
+        "badge": "{{count}} 关联",
+        "dialog": {
+          "title": "关联目录",
+          "heading": "为当前工作区补充相关目录",
+          "description": "这些目录会连同说明一起进入工作区上下文，适合跨项目迁移、monorepo 子目录协作等场景。",
+          "localScope": "当前工作区是本地环境，因此这里只能关联本地目录。",
+          "remoteScope": "当前工作区是远程环境，因此这里只能关联连接“{{connectionName}}”下的目录。",
+          "empty": "还没有关联目录。添加后，AI 会在工作区上下文中看到这些目录和说明。",
+          "itemLabel": "目录 {{index}}",
+          "add": "添加目录",
+          "selectDirectoryTitle": "选择关联目录",
+          "pathPlaceholder": "输入目录路径，或使用右侧选择器",
+          "descriptionPlaceholder": "选填：简短说明这个目录为什么重要，例如：旧版 TypeScript 实现 / monorepo 中的 billing 子目录"
+        },
+        "messages": {
+          "saveFailed": "保存关联目录失败",
+          "selectFailed": "选择目录失败"
+        },
+        "validation": {
+          "pathRequired": "请为每个关联目录填写路径"
+        }
       },
       "deleteAssistantDialog": {
         "title": "删除 {{name}}？",

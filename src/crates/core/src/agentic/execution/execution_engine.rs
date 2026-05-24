@@ -31,6 +31,7 @@ use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
 use crate::service::config::types::{ModelCapability, ModelCategory, WriteToolMode};
 use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
+use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
@@ -600,11 +601,30 @@ impl ExecutionEngine {
             .as_ref()
             .map(|workspace| workspace.root_path_string())?;
 
+        let related_paths = if let Some(workspace_id) = context
+            .workspace
+            .as_ref()
+            .and_then(|workspace| workspace.workspace_id.as_deref())
+        {
+            if let Some(workspace_service) = get_global_workspace_service() {
+                workspace_service
+                    .get_workspace(workspace_id)
+                    .await
+                    .map(|workspace| workspace.related_paths)
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
+
         let base = PromptBuilderContext::new(
             workspace_path.clone(),
             Some(context.session_id.clone()),
             Some(model_name.to_string()),
         )
+        .with_related_paths(related_paths)
         .with_supports_image_understanding(supports_image_understanding)
         .with_request_context_tools(request_context_tools);
 

@@ -263,6 +263,34 @@ class WorkspaceManager {
     );
   }
 
+  private applyWorkspaceRecordUpdate(updatedWorkspace: WorkspaceInfo): void {
+    const currentWorkspace = this.state.currentWorkspace?.id === updatedWorkspace.id
+      ? updatedWorkspace
+      : this.state.currentWorkspace;
+    const openedWorkspaces = new Map(this.state.openedWorkspaces);
+    if (openedWorkspaces.has(updatedWorkspace.id)) {
+      openedWorkspaces.set(updatedWorkspace.id, updatedWorkspace);
+    }
+    const recentWorkspaces = this.state.recentWorkspaces.map(workspace =>
+      workspace.id === updatedWorkspace.id ? updatedWorkspace : workspace
+    );
+
+    this.updateState(
+      {
+        currentWorkspace,
+        openedWorkspaces,
+        recentWorkspaces,
+        activeWorkspaceId: currentWorkspace?.id ?? this.state.activeWorkspaceId,
+        lastUsedWorkspaceId: this.resolveLastUsedWorkspaceId(
+          currentWorkspace,
+          recentWorkspaces,
+          openedWorkspaces
+        ),
+      },
+      { type: 'workspace:updated', workspace: updatedWorkspace }
+    );
+  }
+
   private async ensureIdentityChangeListener(): Promise<void> {
     if (this.identityEventListening) {
       return;
@@ -873,6 +901,27 @@ class WorkspaceManager {
   public async removeWorkspaceFromRecent(workspaceId: string): Promise<void> {
     await globalStateAPI.removeWorkspaceFromRecent(workspaceId);
     await this.refreshRecentWorkspaces();
+  }
+
+  public async updateWorkspaceRelatedPaths(
+    workspaceId: string,
+    relatedPaths: WorkspaceInfo['relatedPaths']
+  ): Promise<WorkspaceInfo> {
+    try {
+      this.setError(null);
+
+      const updatedWorkspace = await globalStateAPI.updateWorkspaceInfo(workspaceId, {
+        relatedPaths,
+      });
+
+      this.applyWorkspaceRecordUpdate(updatedWorkspace);
+      return updatedWorkspace;
+    } catch (error) {
+      log.error('Failed to update workspace related paths', { workspaceId, error });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.updateState({ error: errorMessage }, { type: 'workspace:error', error: errorMessage });
+      throw error;
+    }
   }
 
   public async cleanupInvalidWorkspaces(): Promise<number> {

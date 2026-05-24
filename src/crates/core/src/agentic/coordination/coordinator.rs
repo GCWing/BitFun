@@ -34,6 +34,7 @@ use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
 use crate::service::config::global::GlobalConfigManager;
+use crate::service::remote_ssh::normalize_remote_workspace_path;
 use crate::service::session::{SessionRelationship, SessionRelationshipKind};
 use crate::service::workspace::{
     get_global_workspace_service, WorkspaceCreateOptions, WorkspaceKind,
@@ -454,6 +455,73 @@ pub struct ConversationCoordinator {
 }
 
 impl ConversationCoordinator {
+    async fn resolve_workspace_id_for_config(config: &SessionConfig) -> Option<String> {
+        let explicit = config
+            .workspace_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+        if explicit.is_some() {
+            return explicit;
+        }
+
+        let workspace_path = config.workspace_path.as_deref()?;
+        let workspace_service = get_global_workspace_service()?;
+
+        if config.remote_connection_id.is_some() || config.remote_ssh_host.is_some() {
+            let normalized_path = normalize_remote_workspace_path(workspace_path);
+            let desired_connection_id = config
+                .remote_connection_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let desired_ssh_host = config
+                .remote_ssh_host
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+
+            return workspace_service
+                .list_workspace_infos()
+                .await
+                .into_iter()
+                .find(|workspace| {
+                    if workspace.workspace_kind != WorkspaceKind::Remote {
+                        return false;
+                    }
+                    if normalize_remote_workspace_path(&workspace.root_path.to_string_lossy())
+                        != normalized_path
+                    {
+                        return false;
+                    }
+                    if let Some(connection_id) = desired_connection_id {
+                        if workspace.remote_ssh_connection_id() != Some(connection_id) {
+                            return false;
+                        }
+                    }
+                    if let Some(ssh_host) = desired_ssh_host {
+                        let workspace_ssh_host = workspace
+                            .metadata
+                            .get("sshHost")
+                            .and_then(|value| value.as_str())
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty());
+                        if workspace_ssh_host != Some(ssh_host) {
+                            return false;
+                        }
+                    }
+                    true
+                })
+                .map(|workspace| workspace.id);
+        }
+
+        workspace_service
+            .get_workspace_by_path(Path::new(workspace_path))
+            .await
+            .map(|workspace| workspace.id)
+    }
+
     async fn track_session_workspace_activity_best_effort(config: &SessionConfig, reason: &str) {
         let Some(workspace_path) = config.workspace_path.as_ref() else {
             return;
@@ -498,6 +566,7 @@ impl ConversationCoordinator {
     async fn build_workspace_binding(config: &SessionConfig) -> Option<WorkspaceBinding> {
         let workspace_path = config.workspace_path.as_ref()?;
         let path_buf = PathBuf::from(workspace_path);
+        let workspace_id = Self::resolve_workspace_id_for_config(config).await;
 
         let identity =
             crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
@@ -558,7 +627,7 @@ impl ConversationCoordinator {
                 .unwrap_or(identity);
 
             let binding = WorkspaceBinding::new_remote(
-                None,
+                workspace_id.clone(),
                 path_buf,
                 effective_rid,
                 connection_name,
@@ -568,7 +637,7 @@ impl ConversationCoordinator {
             return Some(binding);
         }
 
-        let binding = WorkspaceBinding::new(None, path_buf);
+        let binding = WorkspaceBinding::new(workspace_id, path_buf);
 
         Some(binding)
     }
@@ -1042,6 +1111,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // Persist the workspace binding inside the session config so execution can
         // consistently restore the correct workspace regardless of the entry point.
         config.workspace_path = Some(workspace_path.clone());
+        config.workspace_id = Self::resolve_workspace_id_for_config(&config).await;
         let agent_type = Self::normalize_agent_type(&agent_type);
         let session = self
             .session_manager
@@ -1085,6 +1155,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         created_by: Option<String>,
     ) -> BitFunResult<Session> {
         config.workspace_path = Some(workspace_path);
+        config.workspace_id = Self::resolve_workspace_id_for_config(&config).await;
         let agent_type = Self::normalize_agent_type(&agent_type);
         self.create_hidden_subagent_session(
             session_id,

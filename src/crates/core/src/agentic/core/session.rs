@@ -134,6 +134,9 @@ pub struct SessionConfig {
     /// without changing the desktop's foreground workspace.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    /// Stable workspace id for resolving workspace-scoped metadata such as related directories.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
     /// SSH workspace: required for remote tool I/O (file/shell). When set, `workspace_path` is
     /// interpreted as the path on that host; when unset, the workspace is always local regardless
     /// of string shape (avoids inferring remote from path alone). Also disambiguates the same
@@ -159,6 +162,7 @@ impl Default for SessionConfig {
             enable_context_compression: true,
             compression_threshold: 0.8, // 80%
             workspace_path: None,
+            workspace_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
             model_id: None,

@@ -34,6 +34,8 @@ pub struct CreateSessionRequest {
     pub agent_type: String,
     pub workspace_path: String,
     #[serde(default)]
+    pub workspace_id: Option<String>,
+    #[serde(default)]
     pub session_kind: Option<SessionKind>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -568,12 +570,14 @@ pub async fn create_session(
             enable_context_compression: c.enable_context_compression.unwrap_or(true),
             compression_threshold: c.compression_threshold.unwrap_or(0.8),
             workspace_path: Some(request.workspace_path.clone()),
+            workspace_id: request.workspace_id.clone(),
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
             model_id: c.model_name,
         })
         .unwrap_or(SessionConfig {
             workspace_path: Some(request.workspace_path.clone()),
+            workspace_id: request.workspace_id.clone(),
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
             ..Default::default()

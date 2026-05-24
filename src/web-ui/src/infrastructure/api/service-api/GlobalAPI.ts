@@ -39,6 +39,11 @@ export interface WorkspaceWorktreeInfo {
   isMain: boolean;
 }
 
+export interface RelatedPath {
+  path: string;
+  description?: string | null;
+}
+
 export interface WorkspaceInfo {
   id: string;
   name: string;
@@ -54,6 +59,7 @@ export interface WorkspaceInfo {
   statistics?: ProjectStatistics | null;
   identity?: WorkspaceIdentity | null;
   worktree?: WorkspaceWorktreeInfo | null;
+  relatedPaths?: RelatedPath[];
   connectionId?: string;
   connectionName?: string;
   /** With `rootPath`, forms logical key `{sshHost}:{rootPath}`; local uses `localhost`. */
@@ -88,6 +94,14 @@ export interface SetActiveWorkspaceRequest {
 
 export interface ReorderOpenedWorkspacesRequest {
   workspaceIds: string[];
+}
+
+export interface UpdateWorkspaceInfoRequest {
+  workspaceId: string;
+  name?: string;
+  description?: string | null;
+  tags?: string[];
+  relatedPaths?: RelatedPath[];
 }
 
 export interface DeleteAssistantWorkspaceRequest {
@@ -211,6 +225,16 @@ export class GlobalAPI {
       });
     } catch (error) {
       throw createTauriCommandError('reorder_opened_workspaces', error, { workspaceIds });
+    }
+  }
+
+  async updateWorkspaceInfo(request: UpdateWorkspaceInfoRequest): Promise<WorkspaceInfo> {
+    try {
+      return await api.invoke('update_workspace_info', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('update_workspace_info', error, { request });
     }
   }
 

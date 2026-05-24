@@ -81,6 +81,11 @@ export interface WorkspaceWorktreeInfo {
   isMain: boolean;
 }
 
+export interface RelatedPath {
+  path: string;
+  description?: string;
+}
+
 
 export interface WorkspaceInfo {
   id: string;
@@ -97,6 +102,7 @@ export interface WorkspaceInfo {
   statistics?: ProjectStatistics;
   identity?: WorkspaceIdentity | null;
   worktree?: WorkspaceWorktreeInfo | null;
+  relatedPaths?: RelatedPath[];
   connectionId?: string;
   connectionName?: string;
   /**
@@ -181,6 +187,15 @@ export interface GlobalStateAPI {
   closeWorkspace(workspaceId: string): Promise<void>;
   setActiveWorkspace(workspaceId: string): Promise<WorkspaceInfo>;
   reorderOpenedWorkspaces(workspaceIds: string[]): Promise<void>;
+  updateWorkspaceInfo(
+    workspaceId: string,
+    updates: {
+      name?: string;
+      description?: string | null;
+      tags?: string[];
+      relatedPaths?: RelatedPath[];
+    }
+  ): Promise<WorkspaceInfo>;
   getCurrentWorkspace(): Promise<WorkspaceInfo | null>;
   getOpenedWorkspaces(): Promise<WorkspaceInfo[]>;
   getRecentWorkspaces(): Promise<WorkspaceInfo[]>;
@@ -301,6 +316,10 @@ function mapWorkspaceInfo(workspace: APIWorkspaceInfo): WorkspaceInfo {
       : undefined,
     identity: mapWorkspaceIdentity(workspace.identity),
     worktree: mapWorkspaceWorktree(workspace.worktree),
+    relatedPaths: (workspace.relatedPaths ?? []).map(path => ({
+      path: path.path,
+      description: path.description ?? undefined,
+    })),
     connectionId: workspace.connectionId,
     connectionName: workspace.connectionName,
     sshHost:
@@ -387,6 +406,23 @@ export function createGlobalStateAPI(): GlobalStateAPI {
 
     async reorderOpenedWorkspaces(workspaceIds: string[]): Promise<void> {
       return await globalAPI.reorderOpenedWorkspaces(workspaceIds);
+    },
+
+    async updateWorkspaceInfo(
+      workspaceId: string,
+      updates: {
+        name?: string;
+        description?: string | null;
+        tags?: string[];
+        relatedPaths?: RelatedPath[];
+      }
+    ): Promise<WorkspaceInfo> {
+      return mapWorkspaceInfo(
+        await globalAPI.updateWorkspaceInfo({
+          workspaceId,
+          ...updates,
+        })
+      );
     },
 
     async getCurrentWorkspace(): Promise<WorkspaceInfo | null> {

@@ -75,6 +75,15 @@ pub struct WorkspaceWorktreeInfo {
     pub is_main: bool,
 }
 
+/// User-managed related directory reference for the current workspace context.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RelatedPath {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 struct WorkspaceIdentityFrontmatter {
@@ -201,6 +210,8 @@ pub struct WorkspaceInfo {
     pub identity: Option<WorkspaceIdentity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktree: Option<WorkspaceWorktreeInfo>,
+    #[serde(rename = "relatedPaths", default)]
+    pub related_paths: Vec<RelatedPath>,
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
@@ -345,6 +356,7 @@ impl WorkspaceInfo {
             statistics: None,
             identity: None,
             worktree: None,
+            related_paths: Vec::new(),
             metadata: HashMap::new(),
         };
 

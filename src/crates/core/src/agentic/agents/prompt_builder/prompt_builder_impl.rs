@@ -9,6 +9,7 @@ use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::filesystem::get_formatted_directory_listing;
 use crate::service::i18n::LocaleId;
+use crate::service::workspace::RelatedPath;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
 use std::path::Path;
@@ -100,6 +101,7 @@ pub struct RemoteExecutionHints {
 #[derive(Debug, Clone)]
 pub struct PromptBuilderContext {
     pub workspace_path: String,
+    pub related_paths: Vec<RelatedPath>,
     pub session_id: Option<String>,
     pub model_name: Option<String>,
     /// When set, file/shell tools target this remote environment; OS and path instructions follow it.
@@ -120,6 +122,7 @@ impl PromptBuilderContext {
     ) -> Self {
         Self {
             workspace_path: workspace_path.into().replace("\\", "/"),
+            related_paths: Vec::new(),
             session_id,
             model_name,
             remote_execution: None,
@@ -136,6 +139,11 @@ impl PromptBuilderContext {
 
     pub fn with_request_context_tools(mut self, tools: RequestContextToolSections) -> Self {
         self.request_context_tools = tools;
+        self
+    }
+
+    pub fn with_related_paths(mut self, related_paths: Vec<RelatedPath>) -> Self {
+        self.related_paths = related_paths;
         self
     }
 
@@ -205,29 +213,65 @@ impl PromptBuilder {
 
     /// Get workspace context that is intentionally injected outside the system prompt cache.
     pub fn get_workspace_context(&self) -> String {
+        let related_paths_section = if self.context.related_paths.is_empty() {
+            String::new()
+        } else {
+            let items = self
+                .context
+                .related_paths
+                .iter()
+                .map(|related_path| {
+                    let path = related_path.path.replace("\\", "/");
+                    match related_path.description.as_deref().map(str::trim) {
+                        Some(description) if !description.is_empty() => {
+                            format!("  - {} — {}", path, description)
+                        }
+                        _ => format!("  - {}", path),
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!(
+                "- Related directories (user-specified directories related to this workspace):\n{}",
+                items
+            )
+        };
+
         if let Some(remote) = &self.context.remote_execution {
             format!(
                 r#"## Workspace Context
 <workspace_context>
 - Workspace root (file tools, Glob, LS, Bash on workspace): {}
+{}
 - Execution environment: **Remote SSH** — connection "{}".
 - Remote host: {} (uname/kernel: {})
 - **Paths and shell:** POSIX on the remote server — use forward slashes and Unix shell syntax (bash/sh). Do **not** use PowerShell, `cmd.exe`, or Windows-style paths for workspace operations.
 </workspace_context>
 "#,
                 self.context.workspace_path,
+                if related_paths_section.is_empty() {
+                    String::new()
+                } else {
+                    format!("{}\n", related_paths_section)
+                },
                 remote.connection_display_name.replace('"', "'"),
                 remote.hostname.replace('"', "'"),
-                remote.kernel_name.replace('"', "'")
+                remote.kernel_name.replace('"', "'"),
             )
         } else {
             format!(
                 r#"## Workspace Context
 <workspace_context>
 - Current Working Directory: {}
+{}
 </workspace_context>
 "#,
-                self.context.workspace_path
+                self.context.workspace_path,
+                if related_paths_section.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n{}", related_paths_section)
+                }
             )
         }
     }
@@ -502,6 +546,7 @@ mod tests {
         TASK_TOOL_CONTEXT_TITLE,
     };
     use crate::agentic::agents::RequestContextPolicy;
+    use crate::service::workspace::RelatedPath;
 
     #[tokio::test]
     async fn renders_available_tool_context_before_additional_context() {
@@ -545,5 +590,44 @@ mod tests {
             .await;
 
         assert!(prompt.is_none());
+    }
+
+    #[test]
+    fn workspace_context_renders_related_directories() {
+        let context =
+            PromptBuilderContext::new("E:/workspace", None, None).with_related_paths(vec![
+                RelatedPath {
+                    path: r"E:\legacy-ts".to_string(),
+                    description: Some("Legacy TypeScript implementation".to_string()),
+                },
+                RelatedPath {
+                    path: r"E:\monorepo\billing".to_string(),
+                    description: Some("Billing package".to_string()),
+                },
+            ]);
+
+        let workspace_context = PromptBuilder::new(context).get_workspace_context();
+
+        assert!(workspace_context.contains("Related directories"));
+        assert!(workspace_context.contains("E:/legacy-ts"));
+        assert!(workspace_context.contains("Legacy TypeScript implementation"));
+        assert!(workspace_context.contains("E:/monorepo/billing"));
+    }
+
+    #[test]
+    fn workspace_context_renders_related_directories_without_description() {
+        let context =
+            PromptBuilderContext::new("E:/workspace", None, None).with_related_paths(vec![
+                RelatedPath {
+                    path: r"E:\monorepo\packages\payments".to_string(),
+                    description: None,
+                },
+            ]);
+
+        let workspace_context = PromptBuilder::new(context).get_workspace_context();
+
+        assert!(workspace_context.contains("Related directories"));
+        assert!(workspace_context.contains("  - E:/monorepo/packages/payments"));
+        assert!(!workspace_context.contains("payments —"));
     }
 }

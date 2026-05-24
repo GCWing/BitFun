@@ -632,6 +632,7 @@ pub async fn run() {
             refresh_model_client,
             get_app_state,
             update_app_status,
+            update_workspace_info,
             theme::show_agent_companion_desktop_pet,
             theme::hide_agent_companion_desktop_pet,
             theme::resize_agent_companion_desktop_pet,

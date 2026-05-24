@@ -318,11 +318,35 @@
         "deleteAssistant": "刪除個人助理",
         "resetWorkspace": "重置工作區",
         "initAgents": "初始化 AGENTS.md",
+        "manageRelatedPaths": "關聯目錄",
         "newWorktree": "新建 worktree",
         "deleteWorktree": "刪除 worktree",
         "copyPath": "複製路徑",
         "reveal": "在資源管理器中打開",
         "close": "關閉工作區"
+      },
+      "relatedPaths": {
+        "badge": "{{count}} 關聯",
+        "dialog": {
+          "title": "關聯目錄",
+          "heading": "為當前工作區補充相關目錄",
+          "description": "這些目錄會連同說明一起進入工作區上下文，適合跨項目遷移、monorepo 子目錄協作等場景。",
+          "localScope": "當前工作區是本地環境，因此這裡只能關聯本地目錄。",
+          "remoteScope": "當前工作區是遠程環境，因此這裡只能關聯連接「{{connectionName}}」下的目錄。",
+          "empty": "還沒有關聯目錄。添加後，AI 會在工作區上下文中看到這些目錄和說明。",
+          "itemLabel": "目錄 {{index}}",
+          "add": "添加目錄",
+          "selectDirectoryTitle": "選擇關聯目錄",
+          "pathPlaceholder": "輸入目錄路徑，或使用右側選擇器",
+          "descriptionPlaceholder": "選填：簡短說明這個目錄為什麼重要，例如：舊版 TypeScript 實現 / monorepo 中的 billing 子目錄"
+        },
+        "messages": {
+          "saveFailed": "保存關聯目錄失敗",
+          "selectFailed": "選擇目錄失敗"
+        },
+        "validation": {
+          "pathRequired": "請為每個關聯目錄填寫路徑"
+        }
       },
       "deleteAssistantDialog": {
         "title": "刪除 {{name}}？",

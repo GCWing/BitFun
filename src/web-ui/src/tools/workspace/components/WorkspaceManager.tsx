@@ -3,7 +3,7 @@ import { FolderOpen, Clock, FileText, Code, Folder, Bot } from 'lucide-react';
 import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceContext';
 import { WorkspaceInfo, WorkspaceKind, WorkspaceType } from '../../../shared/types';
 import { Modal } from '@/component-library';
-import { i18nService } from '@/infrastructure/i18n';
+import { i18nService, useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
 import './WorkspaceManager.css';
@@ -25,6 +25,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
   onClose,
   onWorkspaceSelect
 }) => {
+  const { t } = useI18n('common');
   const {
     currentWorkspace,
     recentWorkspaces,
@@ -61,6 +62,36 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
             <span className="workspace-identity__value">{entry.value}</span>
           </span>
         ))}
+      </div>
+    );
+  };
+
+  const renderRelatedPaths = (workspace: WorkspaceInfo) => {
+    const relatedPaths = workspace.relatedPaths ?? [];
+    if (relatedPaths.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="workspace-related-paths">
+        <span className="workspace-related-paths__label">
+          {t('nav.workspaces.relatedPaths.dialog.title')}
+        </span>
+        <div className="workspace-related-paths__list">
+          {relatedPaths.slice(0, 3).map(path => (
+            <div key={path.path} className="workspace-related-paths__item">
+              <span className="workspace-related-paths__path">{path.path}</span>
+              {path.description?.trim() ? (
+                <span className="workspace-related-paths__desc">{path.description}</span>
+              ) : null}
+            </div>
+          ))}
+          {relatedPaths.length > 3 ? (
+            <div className="workspace-related-paths__more">
+              +{relatedPaths.length - 3}
+            </div>
+          ) : null}
+        </div>
       </div>
     );
   };
@@ -165,6 +196,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                     )}
                   </div>
                   {renderIdentityDetails(currentWorkspace)}
+                  {renderRelatedPaths(currentWorkspace)}
                 </div>
               </div>
               
@@ -249,6 +281,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                         )}
                       </div>
                       {renderIdentityDetails(workspace)}
+                      {renderRelatedPaths(workspace)}
                     </div>
                   </div>
                 </div>
@@ -288,6 +321,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                         )}
                       </div>
                       {renderIdentityDetails(workspace)}
+                      {renderRelatedPaths(workspace)}
                     </div>
                   </div>
                 </div>

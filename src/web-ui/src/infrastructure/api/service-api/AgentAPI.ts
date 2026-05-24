@@ -42,6 +42,7 @@ export interface CreateSessionRequest {
   sessionName: string;
   agentType: string;
   workspacePath: string;
+  workspaceId?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
   sessionKind?: 'standard' | 'subagent';
