@@ -1,3 +1,6 @@
+use crate::agentic::tools::file_read_state_runtime::{
+    local_file_modification_time_ms, record_file_read_state,
+};
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -28,7 +31,7 @@ impl FileReadTool {
         Self {
             default_max_lines_to_read: 2000,
             max_line_chars: 2000,
-            max_total_chars: 50_000,
+            max_total_chars: 16_000,
         }
     }
 
@@ -408,6 +411,23 @@ Usage:
             )
             .map_err(BitFunError::tool)?
         };
+
+        let timestamp_ms = if resolved.uses_remote_workspace_backend() {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_millis() as u64)
+                .unwrap_or(0)
+        } else {
+            local_file_modification_time_ms(Path::new(&resolved.resolved_path))
+        };
+        record_file_read_state(
+            context,
+            &resolved,
+            &read_file_result,
+            start_line,
+            limit,
+            timestamp_ms,
+        );
 
         let mut result_for_assistant = format!(
             "Read lines {}-{} from {} ({} total lines)\n<file_content>\n{}\n</file_content>",

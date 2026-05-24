@@ -263,6 +263,31 @@ impl ExecutionEngine {
         )
     }
 
+    /// Estimate how full the mutable conversation portion is for compression decisions.
+    ///
+    /// System prompt and tool definitions are fixed per dialog turn and should not
+    /// count against the auto-compression threshold the same way tool results do.
+    fn estimate_auto_compression_pressure(
+        messages: &[Message],
+        tools: Option<&[ToolDefinition]>,
+        context_window: usize,
+    ) -> (usize, usize, f32) {
+        let total_tokens = Self::estimate_request_tokens_internal(messages, tools);
+        let system_tokens = messages
+            .first()
+            .filter(|message| message.role == MessageRole::System)
+            .map(|message| message.estimate_tokens_with_reasoning(false))
+            .unwrap_or(0);
+        let tool_tokens = tools
+            .map(TokenCounter::estimate_tool_definitions_tokens)
+            .unwrap_or(0);
+        let reserved_overhead = system_tokens.saturating_add(tool_tokens);
+        let conversation_tokens = total_tokens.saturating_sub(reserved_overhead);
+        let conversation_budget = context_window.saturating_sub(reserved_overhead).max(1);
+        let usage_ratio = conversation_tokens as f32 / conversation_budget as f32;
+        (total_tokens, conversation_tokens, usage_ratio)
+    }
+
     fn tool_signature_args_summary(args_str: &str) -> String {
         if args_str.len() <= 128 {
             return args_str.to_string();
@@ -1725,17 +1750,22 @@ impl ExecutionEngine {
             //   - L1: AI-summary based full compression (preserves semantics).
             //   - L2: Emergency truncation (only if tokens still exceed the
             //         provider context window after L1).
-            let current_tokens =
-                Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
+            let (current_tokens, conversation_tokens, token_usage_ratio) =
+                Self::estimate_auto_compression_pressure(
+                    &messages,
+                    tool_definitions.as_deref(),
+                    context_window,
+                );
             debug!(
-                "Round {} token usage before send: {} / {} tokens ({:.1}%)",
+                "Round {} token usage before send: total={} / {}, conversation={} / {}, usage={:.1}%",
                 round_index,
                 current_tokens,
                 context_window,
-                (current_tokens as f32 / context_window as f32) * 100.0
+                conversation_tokens,
+                context_window,
+                token_usage_ratio * 100.0
             );
 
-            let token_usage_ratio = current_tokens as f32 / context_window as f32;
             let should_compress =
                 enable_context_compression && token_usage_ratio >= compression_threshold;
 
@@ -2529,9 +2559,10 @@ impl ExecutionEngine {
 #[cfg(test)]
 mod tests {
     use super::{ContextHealthSnapshot, ExecutionEngine};
-    use crate::agentic::core::{Message, ToolCall, ToolResult};
+    use crate::agentic::core::{Message, MessageRole, ToolCall, ToolResult};
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
+    use crate::util::types::ToolDefinition;
     use serde_json::json;
     use sha2::{Digest, Sha256};
 
@@ -2576,6 +2607,26 @@ mod tests {
             ExecutionEngine::resolve_configured_model_id(&ai_config, "fast"),
             "model-primary"
         );
+    }
+
+    #[test]
+    fn auto_compression_pressure_excludes_system_and_tool_overhead() {
+        let messages = vec![
+            Message::system("system prompt".repeat(10_000)),
+            Message::user("hello".to_string()),
+        ];
+        let tools = vec![ToolDefinition {
+            name: "Read".to_string(),
+            description: "Read files".repeat(5_000),
+            parameters: json!({"type": "object"}),
+        }];
+
+        let (total_tokens, conversation_tokens, usage_ratio) =
+            ExecutionEngine::estimate_auto_compression_pressure(&messages, Some(&tools), 128_000);
+
+        assert!(total_tokens > conversation_tokens);
+        assert!(usage_ratio < total_tokens as f32 / 128_000_f32);
+        assert_eq!(messages[1].role, MessageRole::User);
     }
 
     #[test]

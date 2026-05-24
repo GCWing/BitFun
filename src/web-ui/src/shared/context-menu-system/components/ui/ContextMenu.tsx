@@ -208,7 +208,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   }, [activeSubmenuId, visible]);
 
   
-  const handleItemClick = useCallback((item: ContextMenuItem, event: React.MouseEvent) => {
+  const handleItemClick = useCallback(async (item: ContextMenuItem, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
 
@@ -224,7 +224,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
     
     if (item.onClick) {
       try {
-        item.onClick(context);
+        await Promise.resolve(item.onClick(context));
       } catch (error) {
         log.error('onClick handler failed', { itemId: item.id, error });
       }

@@ -30,6 +30,53 @@ pub struct FailedFile {
     pub error: String,
 }
 
+fn decode_file_uri(uri: &str) -> Option<String> {
+    let trimmed = uri.trim();
+    if !trimmed.starts_with("file://") {
+        return None;
+    }
+
+    let rest = trimmed.strip_prefix("file://")?;
+    let path_part = if rest.starts_with('/') {
+        rest.to_string()
+    } else if let Some(slash_idx) = rest.find('/') {
+        let host = &rest[..slash_idx];
+        if host.eq_ignore_ascii_case("localhost") {
+            rest[slash_idx..].to_string()
+        } else {
+            return None;
+        }
+    } else {
+        return None;
+    };
+
+    Some(
+        urlencoding::decode(&path_part)
+            .map(|value| value.into_owned())
+            .unwrap_or(path_part),
+    )
+}
+
+#[allow(dead_code)]
+fn parse_uri_list(content: &str) -> Vec<String> {
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .filter_map(decode_file_uri)
+        .collect()
+}
+
+fn parse_clipboard_path_segments(content: &str) -> Vec<String> {
+    content
+        .split(|c| c == '\n' || c == '\r')
+        .flat_map(|segment| segment.split(','))
+        .map(str::trim)
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| decode_file_uri(segment).unwrap_or_else(|| segment.to_string()))
+        .collect()
+}
+
 #[cfg(target_os = "windows")]
 mod windows_clipboard {
     use std::ffi::OsString;
@@ -98,9 +145,7 @@ mod windows_clipboard {
 
                 if actual_len > 0 {
                     let path = OsString::from_wide(&buffer[..actual_len as usize]);
-                    if let Some(path_str) = path.to_str() {
-                        files.push(path_str.to_string());
-                    }
+                    files.push(path.to_string_lossy().into_owned());
                 }
             }
 
@@ -111,28 +156,31 @@ mod windows_clipboard {
 
 #[cfg(target_os = "macos")]
 mod macos_clipboard {
-    pub fn get_clipboard_files() -> Result<Vec<String>, String> {
-        use std::process::Command;
+    use super::parse_clipboard_path_segments;
+    use std::process::Command;
 
+    pub fn get_clipboard_files() -> Result<Vec<String>, String> {
         let output = Command::new("osascript")
             .args(&[
                 "-e",
                 r#"
                 set theFiles to {}
+                set linefeed to ASCII character 10
+                set output to ""
                 try
                     set theClip to the clipboard as «class furl»
-                    set end of theFiles to POSIX path of theClip
+                    set output to (POSIX path of theClip) & linefeed
                 on error
                     try
                         set theClip to the clipboard as list
                         repeat with aFile in theClip
                             try
-                                set end of theFiles to POSIX path of (aFile as alias)
+                                set output to output & (POSIX path of (aFile as alias)) & linefeed
                             end try
                         end repeat
                     end try
                 end try
-                return theFiles as text
+                return output
                 "#,
             ])
             .output()
@@ -140,12 +188,7 @@ mod macos_clipboard {
 
         if output.status.success() {
             let paths_str = String::from_utf8_lossy(&output.stdout);
-            let files: Vec<String> = paths_str
-                .lines()
-                .filter(|s| !s.is_empty())
-                .map(|s| s.to_string())
-                .collect();
-            Ok(files)
+            Ok(parse_clipboard_path_segments(&paths_str))
         } else {
             Ok(Vec::new())
         }
@@ -154,30 +197,41 @@ mod macos_clipboard {
 
 #[cfg(target_os = "linux")]
 mod linux_clipboard {
-    pub fn get_clipboard_files() -> Result<Vec<String>, String> {
-        use std::process::Command;
+    use super::parse_uri_list;
+    use std::process::Command;
 
+    fn read_xclip_uri_list() -> Option<String> {
         let output = Command::new("xclip")
-            .args(&["-selection", "clipboard", "-t", "text/uri-list", "-o"])
-            .output();
+            .args(["-selection", "clipboard", "-t", "text/uri-list", "-o"])
+            .output()
+            .ok()?;
 
-        match output {
-            Ok(output) if output.status.success() => {
-                let content = String::from_utf8_lossy(&output.stdout);
-                let files: Vec<String> = content
-                    .lines()
-                    .filter(|line| line.starts_with("file://"))
-                    .map(|line| {
-                        let path = line.trim_start_matches("file://");
-                        urlencoding::decode(path)
-                            .map(|s| s.into_owned())
-                            .unwrap_or_else(|_| path.to_string())
-                    })
-                    .collect();
-                Ok(files)
-            }
-            _ => Ok(Vec::new()),
+        if output.status.success() {
+            Some(String::from_utf8_lossy(&output.stdout).into_owned())
+        } else {
+            None
         }
+    }
+
+    fn read_wl_paste_uri_list() -> Option<String> {
+        let output = Command::new("wl-paste")
+            .args(["-t", "text/uri-list"])
+            .output()
+            .ok()?;
+
+        if output.status.success() {
+            Some(String::from_utf8_lossy(&output.stdout).into_owned())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_clipboard_files() -> Result<Vec<String>, String> {
+        let content = read_xclip_uri_list()
+            .or_else(read_wl_paste_uri_list)
+            .unwrap_or_default();
+
+        Ok(parse_uri_list(&content))
     }
 }
 
@@ -313,7 +367,7 @@ fn generate_unique_path(path: &Path) -> std::path::PathBuf {
     let mut counter = 1;
     loop {
         let new_name = if let Some(ext) = extension {
-            format!("{} ({}). {}", stem, counter, ext)
+            format!("{} ({}).{}", stem, counter, ext)
         } else {
             format!("{} ({})", stem, counter)
         };
@@ -345,4 +399,41 @@ fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> 
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{decode_file_uri, parse_uri_list};
+
+    #[test]
+    fn decode_unix_file_uri() {
+        assert_eq!(
+            decode_file_uri("file:///tmp/example.txt").as_deref(),
+            Some("/tmp/example.txt")
+        );
+    }
+
+    #[test]
+    fn decode_localhost_file_uri() {
+        assert_eq!(
+            decode_file_uri("file://localhost/home/user/example.txt").as_deref(),
+            Some("/home/user/example.txt")
+        );
+    }
+
+    #[test]
+    fn decode_windows_file_uri() {
+        assert_eq!(
+            decode_file_uri("file:///C:/Users/dev/example.txt").as_deref(),
+            Some("/C:/Users/dev/example.txt")
+        );
+    }
+
+    #[test]
+    fn parse_uri_list_ignores_comments_and_blank_lines() {
+        let files = parse_uri_list(
+            "# comment\n\nfile:///tmp/a.txt\r\nfile://localhost/tmp/b.txt\n",
+        );
+        assert_eq!(files, vec!["/tmp/a.txt".to_string(), "/tmp/b.txt".to_string()]);
+    }
 }

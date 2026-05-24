@@ -10,7 +10,8 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::{
     EvidenceLedgerCheckpoint, EvidenceLedgerEvent, EvidenceLedgerEventStatus,
-    EvidenceLedgerSummary, EvidenceLedgerTargetKind, SessionContextStore, SessionEvidenceLedger,
+    EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState, FileReadStateStore,
+    SessionContextStore, SessionEvidenceLedger,
 };
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::{
@@ -90,6 +91,7 @@ pub struct SessionManager {
 
     /// Sub-components
     context_store: Arc<SessionContextStore>,
+    file_read_state_store: Arc<FileReadStateStore>,
     evidence_ledger: Arc<SessionEvidenceLedger>,
     persistence_manager: Arc<PersistenceManager>,
 
@@ -686,6 +688,7 @@ impl SessionManager {
             sessions: Arc::new(DashMap::new()),
             session_workspace_index: Arc::new(DashMap::new()),
             context_store,
+            file_read_state_store: Arc::new(FileReadStateStore::new()),
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             persistence_manager,
             config,
@@ -871,6 +874,7 @@ impl SessionManager {
         let sessions = self.sessions.clone();
         let session_workspace_index = self.session_workspace_index.clone();
         let context_store = self.context_store.clone();
+        let file_read_state_store = self.file_read_state_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
         let persistence_manager = self.persistence_manager.clone();
         let manager_config = self.config.clone();
@@ -890,6 +894,7 @@ impl SessionManager {
                 sessions,
                 session_workspace_index,
                 context_store,
+                file_read_state_store,
                 evidence_ledger,
                 persistence_manager,
                 config: manager_config,
@@ -1028,6 +1033,7 @@ impl SessionManager {
 
         // 2. Initialize the in-memory context cache.
         self.context_store.create_session(&session_id);
+        self.file_read_state_store.create_session(&session_id);
 
         // 3. Persist to local path (handles remote workspaces correctly)
         // Use the local `session` directly -- no need to re-fetch from DashMap,
@@ -1428,6 +1434,7 @@ impl SessionManager {
             session_id
         );
         self.context_store.delete_session(session_id);
+        self.file_read_state_store.delete_session(session_id);
         debug!(
             "Session deletion stage completed: session_id={}, stage=context_store_delete, duration_ms={}",
             session_id,
@@ -1874,6 +1881,7 @@ impl SessionManager {
         // If session already exists, delete old one first then create (ensure clean state)
         if session_already_in_memory {
             self.context_store.delete_session(session_id);
+            self.file_read_state_store.delete_session(session_id);
         }
 
         let context_replace_started_at = Instant::now();
@@ -3216,8 +3224,27 @@ impl SessionManager {
     /// snapshot. This is primarily used after compression rewrites the model-visible context.
     pub async fn replace_context_messages(&self, session_id: &str, messages: Vec<Message>) {
         self.context_store.replace_context(session_id, messages);
+        self.file_read_state_store.clear_session(session_id);
         self.persist_current_turn_context_snapshot_best_effort(session_id, "context_replaced")
             .await;
+    }
+
+    pub fn set_file_read_state(
+        &self,
+        session_id: &str,
+        logical_path: &str,
+        state: FileReadState,
+    ) {
+        self.file_read_state_store
+            .set(session_id, logical_path, state);
+    }
+
+    pub fn get_file_read_state(
+        &self,
+        session_id: &str,
+        logical_path: &str,
+    ) -> Option<FileReadState> {
+        self.file_read_state_store.get(session_id, logical_path)
     }
 
     /// Get dialog turn count
@@ -3455,6 +3482,7 @@ impl SessionManager {
         let persistence = self.persistence_manager.clone();
         let enable_persistence = self.config.enable_persistence;
         let context_store = self.context_store.clone();
+        let file_read_state_store = self.file_read_state_store.clone();
 
         tokio::spawn(async move {
             let mut ticker = time::interval(Duration::from_secs(60));
@@ -3511,6 +3539,7 @@ impl SessionManager {
                         .is_some()
                     {
                         context_store.delete_session(&candidate.session_id);
+                        file_read_state_store.delete_session(&candidate.session_id);
                     }
                 }
             }

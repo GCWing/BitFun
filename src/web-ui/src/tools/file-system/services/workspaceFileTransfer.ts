@@ -7,6 +7,13 @@ import { sshApi } from '@/features/ssh-remote/sshApi';
 import { workspaceAPI } from '@/infrastructure/api';
 import { i18nService } from '@/infrastructure/i18n';
 import { isRemoteWorkspace, type WorkspaceInfo } from '@/shared/types';
+import {
+  dirnameAbsolutePath,
+  normalizeLocalPathForRename,
+  normalizePath,
+  normalizeRemoteWorkspacePath,
+  pathsEquivalentFs,
+} from '@/shared/utils/pathUtils';
 
 export type TransferPhase = 'download' | 'upload';
 
@@ -19,41 +26,134 @@ export interface TransferProgressState {
   indeterminate?: boolean;
 }
 
+export interface WorkspaceTransferResult {
+  successCount: number;
+  failedFiles: Array<{ path: string; error: string }>;
+}
+
+export interface UploadToWorkspaceOptions {
+  isCut?: boolean;
+}
+
+function normalizeClipboardLocalPath(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  if (trimmed.startsWith('file://')) {
+    let normalized = normalizePath(trimmed);
+    // file:///absolute/unix/path loses its leading slash in normalizePath.
+    if (
+      /^file:\/\/\/(?!\/)/.test(trimmed)
+      && !/^[A-Za-z]:/.test(normalized)
+      && !normalized.startsWith('/')
+    ) {
+      normalized = `/${normalized}`;
+    }
+    return normalized;
+  }
+
+  if (trimmed.startsWith('\\\\')) {
+    return trimmed;
+  }
+
+  return normalizeLocalPathForRename(trimmed);
+}
+
+export function normalizeClipboardLocalPaths(paths: string[]): string[] {
+  const normalized: string[] = [];
+
+  for (const path of paths) {
+    const next = normalizeClipboardLocalPath(path);
+    if (!next || normalized.some((existing) => pathsEquivalentFs(existing, next))) {
+      continue;
+    }
+    normalized.push(next);
+  }
+
+  return normalized;
+}
+
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI__' in window;
 }
 
-export function joinWorkspaceTargetPath(dir: string, fileName: string): string {
-  const sep = dir.includes('\\') ? '\\' : '/';
-  const base = dir.replace(/[/\\]+$/, '');
+export function resolvePasteTargetDirectory<T extends { path: string; isDirectory: boolean; children?: T[] }>(options: {
+  workspacePath: string;
+  explicitTargetDir?: string;
+  selectedFile?: string;
+  fileTree: T[];
+  findNode: (nodes: T[], path: string) => T | null;
+}): string {
+  if (options.explicitTargetDir) {
+    return options.explicitTargetDir;
+  }
+
+  const targetDirectory = options.workspacePath;
+  if (!options.selectedFile) {
+    return targetDirectory;
+  }
+
+  const selectedNode = options.findNode(options.fileTree, options.selectedFile);
+  if (!selectedNode) {
+    return targetDirectory;
+  }
+
+  if (selectedNode.isDirectory) {
+    return selectedNode.path;
+  }
+
+  return dirnameAbsolutePath(selectedNode.path) || targetDirectory;
+}
+
+export function normalizeWorkspaceTargetDirectory(
+  targetDirectory: string,
+  workspace: WorkspaceInfo | null
+): string {
+  if (isRemoteWorkspace(workspace)) {
+    return normalizeRemoteWorkspacePath(targetDirectory);
+  }
+  return normalizeLocalPathForRename(targetDirectory);
+}
+
+export function joinWorkspaceTargetPath(dir: string, fileName: string, remote = false): string {
+  const sep = remote ? '/' : (dir.includes('\\') ? '\\' : '/');
+  const base = remote
+    ? normalizeRemoteWorkspacePath(dir)
+    : dir.replace(/[/\\]+$/, '');
   return `${base}${sep}${fileName}`;
 }
 
 export function getParentPathFromFile(filePath: string): string {
-  const isWin = filePath.includes('\\');
-  const sep = isWin ? '\\' : '/';
-  const parts = filePath.split(sep);
-  parts.pop();
-  return parts.join(sep);
+  return dirnameAbsolutePath(filePath);
 }
 
 export function resolveExplorerDropTargetDirectory(
   clientX: number,
   clientY: number,
-  workspacePath: string
+  workspacePath: string,
+  boundary?: HTMLElement | null
 ): string {
   const el = document.elementFromPoint(clientX, clientY);
   if (!el) {
     return workspacePath;
   }
-  const explorer = el.closest('.bitfun-file-explorer');
+
+  const explorer = boundary ?? el.closest('.bitfun-file-explorer');
   if (!explorer) {
     return workspacePath;
   }
-  const node = el.closest('[data-file-path]');
-  if (!node) {
+
+  if (!explorer.contains(el)) {
     return workspacePath;
   }
+
+  const node = el.closest('[data-file-path]');
+  if (!node || !explorer.contains(node)) {
+    return workspacePath;
+  }
+
   const path = node.getAttribute('data-file-path');
   if (!path) {
     return workspacePath;
@@ -62,7 +162,19 @@ export function resolveExplorerDropTargetDirectory(
   if (isDir) {
     return path;
   }
-  return getParentPathFromFile(path) || workspacePath;
+  return dirnameAbsolutePath(path) || workspacePath;
+}
+
+function dragPositionToLogicalCandidates(
+  position: { x: number; y: number },
+  scaleFactor: number
+): { x: number; y: number }[] {
+  const logical = new PhysicalPosition(position.x, position.y).toLogical(scaleFactor);
+  return [
+    { x: logical.x, y: logical.y },
+    { x: position.x, y: position.y },
+    { x: position.x / scaleFactor, y: position.y / scaleFactor },
+  ];
 }
 
 /**
@@ -72,24 +184,27 @@ export function resolveExplorerDropTargetDirectory(
 export function resolveDropTargetDirectoryFromDragPosition(
   position: { x: number; y: number },
   scaleFactor: number,
-  workspacePath: string
+  workspacePath: string,
+  boundary?: HTMLElement | null
 ): string {
-  const logical = new PhysicalPosition(position.x, position.y).toLogical(scaleFactor);
-  const candidates: { x: number; y: number }[] = [
-    { x: logical.x, y: logical.y },
-    { x: position.x, y: position.y },
-    { x: position.x / scaleFactor, y: position.y / scaleFactor },
-  ];
-  for (const { x, y } of candidates) {
+  for (const { x, y } of dragPositionToLogicalCandidates(position, scaleFactor)) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       continue;
     }
+
     const hit = document.elementFromPoint(x, y);
-    if (!hit?.closest('.bitfun-file-explorer')) {
+    const explorer = boundary ?? hit?.closest('.bitfun-file-explorer');
+    if (!explorer) {
       continue;
     }
-    return resolveExplorerDropTargetDirectory(x, y, workspacePath);
+
+    if (hit && !explorer.contains(hit)) {
+      continue;
+    }
+
+    return resolveExplorerDropTargetDirectory(x, y, workspacePath, explorer as HTMLElement);
   }
+
   return workspacePath;
 }
 
@@ -102,13 +217,7 @@ export function isDragPositionOverElement(
     return false;
   }
   const rect = element.getBoundingClientRect();
-  const logical = new PhysicalPosition(position.x, position.y).toLogical(scaleFactor);
-  const candidates = [
-    { x: logical.x, y: logical.y },
-    { x: position.x, y: position.y },
-    { x: position.x / scaleFactor, y: position.y / scaleFactor },
-  ];
-  for (const { x, y } of candidates) {
+  for (const { x, y } of dragPositionToLogicalCandidates(position, scaleFactor)) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       continue;
     }
@@ -170,45 +279,125 @@ export async function uploadLocalPathsToWorkspaceDirectory(
   localPaths: string[],
   targetDirectory: string,
   workspace: WorkspaceInfo | null,
-  onProgress: (state: TransferProgressState | null) => void
-): Promise<void> {
+  onProgress: (state: TransferProgressState | null) => void,
+  options: UploadToWorkspaceOptions = {}
+): Promise<WorkspaceTransferResult> {
   if (!isTauri()) {
     throw new Error(i18nService.t('common:ssh.remote.transferNeedsDesktop'));
   }
-  if (localPaths.length === 0) {
-    return;
+
+  const normalizedLocalPaths = normalizeClipboardLocalPaths(localPaths);
+  if (normalizedLocalPaths.length === 0) {
+    return { successCount: 0, failedFiles: [] };
   }
-  const total = localPaths.length;
-  for (let i = 0; i < total; i++) {
-    const lp = localPaths[i]!;
-    const name = lp.split(/[/\\]/).pop();
-    if (!name) {
-      continue;
+
+  const remote = isRemoteWorkspace(workspace);
+  const normalizedTargetDirectory = normalizeWorkspaceTargetDirectory(targetDirectory, workspace);
+  const isCut = options.isCut ?? false;
+
+  if (remote) {
+    const cid = workspace?.connectionId;
+    if (!cid) {
+      throw new Error(i18nService.t('panels/files:transfer.missingConnection'));
     }
-    const destPath = joinWorkspaceTargetPath(targetDirectory, name);
+
+    const failedFiles: WorkspaceTransferResult['failedFiles'] = [];
+    let successCount = 0;
+    const total = normalizedLocalPaths.length;
+
+    for (let i = 0; i < total; i++) {
+      const localPath = normalizedLocalPaths[i]!;
+      const name = localPath.split(/[/\\]/).pop();
+      if (!name) {
+        continue;
+      }
+
+      const destPath = joinWorkspaceTargetPath(normalizedTargetDirectory, name, true);
+      onProgress({
+        phase: 'upload',
+        current: i,
+        total,
+        label: name,
+        indeterminate: total === 1,
+      });
+
+      try {
+        await sshApi.uploadFromLocalPath(cid, localPath, destPath);
+        successCount += 1;
+      } catch (error) {
+        failedFiles.push({
+          path: localPath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     onProgress({
       phase: 'upload',
-      current: i,
+      current: total,
       total,
-      label: name,
-      indeterminate: total === 1,
+      label: '',
+      indeterminate: false,
     });
-    if (isRemoteWorkspace(workspace)) {
-      const cid = workspace?.connectionId;
-      if (!cid) {
-        throw new Error(i18nService.t('panels/files:transfer.missingConnection'));
-      }
-      await sshApi.uploadFromLocalPath(cid, lp, destPath);
-    } else {
-      await workspaceAPI.exportLocalFileToPath(lp, destPath);
+    window.setTimeout(() => onProgress(null), 450);
+
+    if (successCount === 0 && failedFiles.length > 0) {
+      const details = failedFiles.map((entry) => `${entry.path}: ${entry.error}`).join('; ');
+      throw new Error(details);
     }
+
+    return { successCount, failedFiles };
   }
+
   onProgress({
     phase: 'upload',
-    current: total,
-    total,
+    current: 0,
+    total: normalizedLocalPaths.length,
+    label: normalizedLocalPaths.length === 1
+      ? (normalizedLocalPaths[0]?.split(/[/\\]/).pop() ?? '')
+      : '',
+    indeterminate: normalizedLocalPaths.length === 1,
+  });
+
+  const result = await workspaceAPI.pasteFiles(
+    normalizedLocalPaths,
+    normalizedTargetDirectory,
+    isCut
+  );
+
+  onProgress({
+    phase: 'upload',
+    current: normalizedLocalPaths.length,
+    total: normalizedLocalPaths.length,
     label: '',
     indeterminate: false,
   });
   window.setTimeout(() => onProgress(null), 450);
+
+  if (result.successCount === 0 && result.failedFiles.length > 0) {
+    const details = result.failedFiles
+      .map((entry) => `${entry.path}: ${entry.error}`)
+      .join('; ');
+    throw new Error(details);
+  }
+
+  return {
+    successCount: result.successCount,
+    failedFiles: result.failedFiles,
+  };
+}
+
+export async function pasteClipboardFilesToWorkspaceDirectory(
+  targetDirectory: string,
+  workspace: WorkspaceInfo | null,
+  onProgress: (state: TransferProgressState | null) => void
+): Promise<WorkspaceTransferResult> {
+  const { files, isCut } = await workspaceAPI.getClipboardFiles();
+  return uploadLocalPathsToWorkspaceDirectory(
+    files,
+    targetDirectory,
+    workspace,
+    onProgress,
+    { isCut }
+  );
 }

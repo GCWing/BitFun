@@ -21,6 +21,7 @@ export interface UseFileSystemReturn {
   expandFolder: (folderPath: string, expanded?: boolean) => void;
   expandFolderLazy: (folderPath: string) => Promise<void>;
   expandFolderEnsure: (folderPath: string) => Promise<void>;
+  removePath: (path: string) => void;
   searchFiles: (query: string) => Promise<FileSystemNode[]>;
   refreshFileTree: () => Promise<void>;
   updateOptions: (options: Partial<FileSystemOptions>) => void;
@@ -78,6 +79,10 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
     return controller.expandFolderEnsure(folderPath);
   }, [controller]);
 
+  const removePath = useCallback((path: string) => {
+    controller.removePath(path);
+  }, [controller]);
+
   const refreshFileTree = useCallback(() => {
     return controller.loadFileTree(undefined, false);
   }, [controller]);
@@ -116,6 +121,7 @@ export function useFileSystem(options: UseFileSystemOptions = {}): UseFileSystem
     expandFolder,
     expandFolderLazy,
     expandFolderEnsure,
+    removePath,
     searchFiles,
     refreshFileTree,
     updateOptions,

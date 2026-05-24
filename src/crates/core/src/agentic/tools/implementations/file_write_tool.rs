@@ -1,3 +1,6 @@
+use crate::agentic::tools::file_read_state_runtime::{
+    file_mutation_timestamp_ms, update_file_read_state_after_mutation,
+};
 use crate::agentic::tools::framework::{
     Tool, ToolPathResolution, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -221,6 +224,9 @@ Usage:
                     ))
                 })?;
         }
+
+        let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
+        update_file_read_state_after_mutation(context, &resolved, content, timestamp_ms);
 
         let result = ToolResult::Result {
             data: json!({

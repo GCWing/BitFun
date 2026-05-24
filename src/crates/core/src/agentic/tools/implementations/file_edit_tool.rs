@@ -1,15 +1,30 @@
+use crate::agentic::tools::file_read_state_runtime::{
+    file_mutation_timestamp_ms, update_file_read_state_after_mutation,
+    validate_edit_against_read_state, validate_edit_has_prior_read,
+};
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use tool_runtime::fs::edit_file::{apply_edit_to_content, edit_file};
+use tool_runtime::fs::edit_file::apply_edit_to_content;
 
 pub struct FileEditTool;
 
 const LARGE_EDIT_SOFT_LINE_LIMIT: usize = 200;
 const LARGE_EDIT_SOFT_BYTE_LIMIT: usize = 20 * 1024;
-const EDIT_RETRY_GUIDANCE: &str = "Common causes: stale Read output after another edit, copied line-number prefixes, changed whitespace, or an old_string that is too broad. Recovery: read the current target area again, copy the exact current text after any line-number prefix, and retry with a uniquely matching old_string. If several edits target the same file, apply them sequentially from fresh content or replace one stable enclosing block. If the text appears more than once, include more surrounding context or set replace_all only when every occurrence should change.";
+const EDIT_TOOL_PROMPT: &str = r#"Performs exact string replacements in files.
+
+Usage:
+- You must use your `Read` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file.
+- The `file_path` parameter must be a workspace-relative path, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
+- When editing text from Read tool output, ensure you preserve the exact indentation (tabs/spaces) as it appears AFTER the line number prefix. The line number prefix format is: spaces + line number + tab. Everything after that is the actual file content to match. Never include any part of the line number prefix in the old_string or new_string.
+- ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
+- Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.
+- The edit will FAIL if `old_string` is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.
+- Use `replace_all` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance."#;
+
+const EDIT_RETRY_GUIDANCE: &str = "Common causes: stale Read output after another edit, copied Read line-number prefixes, changed whitespace, truncated Read lines, or an old_string that is too broad. Recovery: read the current target area again, copy the exact current text after the tab on each Read line, and retry with a uniquely matching old_string. If several edits target the same file, apply them sequentially from fresh content or replace one stable enclosing block. If the text appears more than once, include more surrounding context or set replace_all only when every occurrence should change.";
 
 impl Default for FileEditTool {
     fn default() -> Self {
@@ -42,25 +57,11 @@ impl Tool for FileEditTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Performs exact string replacements in files.
-
-Usage:
-- Use the Read tool before editing so `old_string` is based on current file content.
-- Treat Read output as stale after any successful edit to the same file. For multiple edits in one file, either apply them sequentially from fresh content or replace a stable enclosing block once.
-- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
-- Build `old_string` from current file contents rather than from memory, an intended final version, or a guessed retry.
-- When editing text from Read output, copy only the text after the line-number prefix and preserve indentation exactly.
-- Prefer editing existing files in the codebase; create new files only when the task genuinely calls for a new artifact.
-- Avoid adding emojis to files unless the user asks.
-- The edit requires `old_string` to be unique unless `replace_all` is true. Add surrounding context from the same stable block when a snippet may appear more than once, or use `replace_all` when every occurrence should change.
-- If an edit fails because `old_string` was not found or matched multiple places, read the current target area again before retrying. Do not retry by slightly modifying the failed `old_string` from memory.
-- Keep edits focused. Large replacements are allowed when necessary, but staged section/function/component edits are usually more reliable than one huge replacement.
-- Use `replace_all` for intentional file-wide replacements, such as renaming a variable."#
-        .to_string())
+        Ok(EDIT_TOOL_PROMPT.to_string())
     }
 
     fn short_description(&self) -> String {
-        "Apply exact string replacements to an existing file.".to_string()
+        "A tool for editing files".to_string()
     }
 
     fn input_schema(&self) -> Value {
@@ -69,22 +70,20 @@ Usage:
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "The file to modify. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
+                    "description": "The path to the file to modify"
                 },
                 "old_string": {
                     "type": "string",
-                    "minLength": 1,
-                    "default": "",
-                    "description": "The non-empty exact current text to replace. It must match the current file contents exactly, including whitespace and indentation, and must be unique unless replace_all is true. Copy it from a fresh Read result, excluding the line-number prefix. If this file was edited earlier in the turn, read the target area again before building old_string. Include stable surrounding context when a short snippet may appear multiple times."
+                    "description": "The text to replace"
                 },
                 "new_string": {
                     "type": "string",
-                    "description": "The replacement text. It must be different from old_string. Keep edits targeted. Large replacements are allowed when necessary; focused edits by section, function, or component are usually more reliable."
+                    "description": "The text to replace it with (must be different from old_string)"
                 },
                 "replace_all": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Replace all occurrences of old_string (default false). Use only when every occurrence should change."
+                    "description": "Replace all occurrences of old_string (default false)"
                 }
             },
             "required": ["file_path", "old_string", "new_string"],
@@ -156,6 +155,24 @@ Usage:
                 return ValidationResult {
                     result: false,
                     message: Some(err.to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
+
+            if let Some(message) = validate_edit_has_prior_read(ctx, &resolved) {
+                return ValidationResult {
+                    result: false,
+                    message: Some(message),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
+
+            if let Some(message) = validate_edit_against_read_state(ctx, &resolved).await {
+                return ValidationResult {
+                    result: false,
+                    message: Some(message),
                     error_code: Some(400),
                     meta: None,
                 };
@@ -263,6 +280,14 @@ Usage:
                 .await
                 .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
 
+            let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
+            update_file_read_state_after_mutation(
+                context,
+                &resolved,
+                &edit_result.new_content,
+                timestamp_ms,
+            );
+
             let result = ToolResult::Result {
                 data: json!({
                     "file_path": resolved.logical_path,
@@ -283,9 +308,32 @@ Usage:
             return Ok(vec![result]);
         }
 
-        // Local: direct local edit via tool-runtime
-        let edit_result = edit_file(&resolved.resolved_path, old_string, new_string, replace_all)
+        // Local: read → edit in memory → write back so failures can include current file context.
+        let content = std::fs::read_to_string(&resolved.resolved_path).map_err(|e| {
+            BitFunError::tool(format!(
+                "Failed to read file {}: {}",
+                resolved.logical_path, e
+            ))
+        })?;
+        let edit_result = apply_edit_to_content(&content, old_string, new_string, replace_all)
             .map_err(|e| BitFunError::tool(Self::enhance_edit_error(file_path, e)))?;
+
+        std::fs::write(&resolved.resolved_path, edit_result.new_content.as_bytes()).map_err(
+            |e| {
+                BitFunError::tool(format!(
+                    "Failed to write file {}: {}",
+                    resolved.logical_path, e
+                ))
+            },
+        )?;
+
+        let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
+        update_file_read_state_after_mutation(
+            context,
+            &resolved,
+            &edit_result.new_content,
+            timestamp_ms,
+        );
 
         let result = ToolResult::Result {
             data: json!({
@@ -293,9 +341,10 @@ Usage:
                 "old_string": old_string,
                 "new_string": new_string,
                 "success": true,
-                "start_line": edit_result.start_line,
-                "old_end_line": edit_result.old_end_line,
-                "new_end_line": edit_result.new_end_line,
+                "match_count": edit_result.match_count,
+                "start_line": edit_result.edit_result.start_line,
+                "old_end_line": edit_result.edit_result.old_end_line,
+                "new_end_line": edit_result.edit_result.new_end_line,
             }),
             result_for_assistant: Some(format!("Successfully edited {}", resolved.logical_path)),
             image_attachments: None,
@@ -307,19 +356,84 @@ Usage:
 
 #[cfg(test)]
 mod tests {
-    use super::FileEditTool;
+    use super::{FileEditTool, EDIT_TOOL_PROMPT};
+    use crate::agentic::tools::framework::Tool;
+    use serde_json::Value;
+
+    #[tokio::test]
+    async fn edit_tool_prompt_matches_claude_style() {
+        let description = FileEditTool::new().description().await.expect("description");
+
+        assert_eq!(description, EDIT_TOOL_PROMPT);
+        assert!(description.contains("You must use your `Read` tool"));
+        assert!(description.contains("spaces + line number + tab"));
+        assert!(description.contains("NEVER write new files unless explicitly required"));
+        assert!(!description.contains("Large Edit payload"));
+        assert!(!description.contains("auto-strip"));
+    }
+
+    #[test]
+    fn edit_tool_schema_uses_minimal_parameter_descriptions() {
+        let schema = FileEditTool::new().input_schema();
+        let properties = schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+
+        assert_eq!(
+            properties
+                .get("file_path")
+                .and_then(|value| value.get("description"))
+                .and_then(Value::as_str),
+            Some("The path to the file to modify")
+        );
+        assert_eq!(
+            properties
+                .get("old_string")
+                .and_then(|value| value.get("description"))
+                .and_then(Value::as_str),
+            Some("The text to replace")
+        );
+        assert_eq!(
+            properties
+                .get("new_string")
+                .and_then(|value| value.get("description"))
+                .and_then(Value::as_str),
+            Some("The text to replace it with (must be different from old_string)")
+        );
+        assert_eq!(
+            properties
+                .get("replace_all")
+                .and_then(|value| value.get("description"))
+                .and_then(Value::as_str),
+            Some("Replace all occurrences of old_string (default false)")
+        );
+        assert!(properties
+            .get("old_string")
+            .and_then(|value| value.get("minLength"))
+            .is_none());
+    }
+
+    #[test]
+    fn edit_tool_short_description_matches_claude_summary() {
+        assert_eq!(
+            FileEditTool::new().short_description(),
+            "A tool for editing files"
+        );
+    }
 
     #[test]
     fn edit_not_found_error_includes_retry_guidance() {
         let message = FileEditTool::enhance_edit_error(
             "src/lib.rs",
-            "old_string not found in file.".to_string(),
+            "old_string not found in file.\n[nearby content around line 2]\nfn main() {}".to_string(),
         );
 
         assert!(message.contains("Edit failed for src/lib.rs"));
         assert!(message.contains("Common causes"));
         assert!(message.contains("stale Read output"));
         assert!(message.contains("read the current target area again"));
+        assert!(message.contains("[nearby content around line 2]"));
     }
 
     #[test]

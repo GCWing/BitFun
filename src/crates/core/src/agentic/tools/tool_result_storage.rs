@@ -13,6 +13,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 pub(crate) const DEFAULT_MAX_TOOL_RESULT_CHARS: usize = 50_000;
+pub(crate) const READ_MAX_TOOL_RESULT_CHARS: usize = 16_000;
 pub(crate) const MAX_TOOL_RESULTS_PER_ROUND_CHARS: usize = 200_000;
 pub(crate) const TOOL_RESULT_PREVIEW_CHARS: usize = 2_000;
 pub(crate) const PERSISTED_OUTPUT_TAG: &str = "<persisted-output>";
@@ -145,8 +146,7 @@ pub(crate) async fn apply_round_tool_result_budget(
 }
 
 fn should_skip_tool_result(result: &ToolResult) -> bool {
-    result.tool_name == READ_TOOL_NAME
-        || result.tool_name == GET_TOOL_SPEC_TOOL_NAME
+    result.tool_name == GET_TOOL_SPEC_TOOL_NAME
         || result
             .image_attachments
             .as_ref()
@@ -297,6 +297,7 @@ fn serialize_tool_result_content(result: &ToolResult) -> BitFunResult<(String, b
 
 fn effective_per_tool_limit(tool_name: &str, policy: ToolResultStoragePolicy) -> usize {
     match tool_name {
+        READ_TOOL_NAME => READ_MAX_TOOL_RESULT_CHARS,
         BASH_TOOL_NAME => SHELL_MAX_TOOL_RESULT_CHARS,
         _ => policy.per_tool_limit_chars,
     }
@@ -529,10 +530,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn read_result_is_not_persisted_even_when_large() {
+    async fn read_result_is_persisted_when_over_read_limit() {
         let root = temp_workspace("read");
         let context = test_context(root.clone());
-        let text = "x".repeat(DEFAULT_MAX_TOOL_RESULT_CHARS + 1);
+        let text = "x".repeat(READ_MAX_TOOL_RESULT_CHARS + 1);
+        let result = tool_result("read_1", "Read", text);
+
+        let processed = maybe_persist_large_tool_result(result, &context).await;
+        let assistant = processed.result_for_assistant.unwrap_or_default();
+
+        assert!(assistant.starts_with(PERSISTED_OUTPUT_TAG));
+        assert!(assistant.contains("Full output saved to:"));
+        let session_dir = context
+            .current_workspace_session_tool_results_dir("session_1")
+            .expect("session tool-results dir");
+        assert!(session_dir.join("read_1.txt").exists());
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[tokio::test]
+    async fn read_result_stays_inline_when_under_read_limit() {
+        let root = temp_workspace("read-inline");
+        let context = test_context(root.clone());
+        let text = "x".repeat(READ_MAX_TOOL_RESULT_CHARS);
         let result = tool_result("read_1", "Read", text.clone());
 
         let processed = maybe_persist_large_tool_result(result, &context).await;
@@ -601,14 +622,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn round_budget_persists_largest_non_read_results() {
+    async fn round_budget_persists_largest_results_including_read() {
         let root = temp_workspace("round");
         let context = test_context(root.clone());
-        let largest = tool_result("large_1", "Bash", "a".repeat(170_000));
+        let read = tool_result("read_1", "Read", "a".repeat(170_000));
         let medium = tool_result("medium_1", "WebFetch", "b".repeat(60_000));
-        let read = tool_result("read_1", "Read", "c".repeat(170_000));
+        let bash = tool_result("bash_1", "Bash", "c".repeat(30_000));
 
-        let processed = apply_round_tool_result_budget(vec![largest, medium, read], &context).await;
+        let processed =
+            apply_round_tool_result_budget(vec![read, medium, bash], &context).await;
 
         assert!(processed[0]
             .result_for_assistant
@@ -629,9 +651,9 @@ mod tests {
         let session_dir = context
             .current_workspace_session_tool_results_dir("session_1")
             .expect("session tool-results dir");
-        assert!(session_dir.join("large_1.txt").exists());
+        assert!(session_dir.join("read_1.txt").exists());
         assert!(!session_dir.join("medium_1.txt").exists());
-        assert!(!session_dir.join("read_1.txt").exists());
+        assert!(!session_dir.join("bash_1.txt").exists());
 
         let _ = std::fs::remove_dir_all(root);
     }
