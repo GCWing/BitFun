@@ -5,23 +5,23 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
-    get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
+    PromptBuilder, PromptBuilderContext, RemoteExecutionHints, get_agent_registry,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
-    render_system_reminder, Message, MessageContent, MessageHelper, MessageRole,
-    MessageSemanticKind, RequestReasoningTokenPolicy, Session,
+    Message, MessageContent, MessageHelper, MessageRole, MessageSemanticKind,
+    RequestReasoningTokenPolicy, Session, render_system_reminder,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::execution::types::FinishReason;
 use crate::agentic::image_analysis::{
-    build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
-    ImageLimits,
+    ImageContextData, ImageLimits, build_multimodal_message_with_images,
+    process_image_contexts_for_provider,
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
 use crate::agentic::tools::{
-    resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest, SubagentParentInfo,
+    ResolvedToolManifest, SubagentParentInfo, resolve_tool_manifest, tool_context_runtime,
 };
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
@@ -34,7 +34,7 @@ use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
-use bitfun_agent_tools::{collect_loaded_collapsed_tool_names, GetToolSpecLoadObservation};
+use bitfun_agent_tools::{GetToolSpecLoadObservation, collect_loaded_collapsed_tool_names};
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -753,7 +753,6 @@ impl ExecutionEngine {
         execution_context_vars: &HashMap<String, String>,
         primary_supports_image_understanding: bool,
         request_context_reminder: Option<&str>,
-        current_time_reminder: Option<&str>,
         messages: &[Message],
         reminder_text: &str,
         context_window: usize,
@@ -768,7 +767,6 @@ impl ExecutionEngine {
             &context.dialog_turn_id,
             primary_supports_image_understanding,
             request_context_reminder,
-            current_time_reminder,
         )
         .await?;
         final_ai_messages.push(AIMessage::user(reminder_text.to_string()));
@@ -813,7 +811,6 @@ impl ExecutionEngine {
         current_turn_id: &str,
         attach_images: bool,
         prepended_user_context: Option<&str>,
-        appended_user_context: Option<&str>,
     ) -> BitFunResult<Vec<AIMessage>> {
         /// Only the last this many **messages** that contain images keep their images for the API.
         const MAX_IMAGE_BEARING_MESSAGE_ROUNDS: usize = 2;
@@ -828,19 +825,8 @@ impl ExecutionEngine {
                 Some(trimmed)
             }
         });
-        let trimmed_appended_user_context = appended_user_context.and_then(|text| {
-            let trimmed = text.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed)
-            }
-        });
-        let mut result = Vec::with_capacity(
-            messages.len()
-                + usize::from(trimmed_user_context.is_some())
-                + usize::from(trimmed_appended_user_context.is_some()),
-        );
+        let mut result =
+            Vec::with_capacity(messages.len() + usize::from(trimmed_user_context.is_some()));
         let mut attached_image_count = 0usize;
         let first_non_system_index = messages
             .iter()
@@ -986,9 +972,6 @@ impl ExecutionEngine {
             if let Some(user_context) = trimmed_user_context {
                 result.push(AIMessage::user(render_system_reminder(user_context)));
             }
-        }
-        if let Some(user_context) = trimmed_appended_user_context {
-            result.push(AIMessage::user(render_system_reminder(user_context)));
         }
 
         Ok(result)
@@ -1638,9 +1621,6 @@ impl ExecutionEngine {
         } else {
             None
         };
-        let current_time_reminder = prompt_context.as_ref().map(|prompt_context| {
-            PromptBuilder::new(prompt_context.clone()).build_current_time_reminder()
-        });
         let system_prompt = current_agent
             .get_system_prompt(prompt_context.as_ref())
             .await?;
@@ -1950,7 +1930,6 @@ impl ExecutionEngine {
                 &context.dialog_turn_id,
                 primary_supports_image_understanding,
                 request_context_reminder.as_deref(),
-                current_time_reminder.as_deref(),
             )
             .await?;
 
@@ -2348,7 +2327,6 @@ impl ExecutionEngine {
                         &execution_context_vars,
                         primary_supports_image_understanding,
                         request_context_reminder.as_deref(),
-                        current_time_reminder.as_deref(),
                         &messages,
                         Self::FINALIZE_AFTER_TOOL_USE_REMINDER,
                         context_window,
@@ -2380,7 +2358,6 @@ impl ExecutionEngine {
                             &execution_context_vars,
                             primary_supports_image_understanding,
                             request_context_reminder.as_deref(),
-                            current_time_reminder.as_deref(),
                             &messages,
                             Self::FORCE_TEXT_ONLY_REMINDER,
                             context_window,
