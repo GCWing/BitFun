@@ -63,7 +63,7 @@ impl Agent for ReviewFixerAgent {
     }
 
     fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::instructions_only()
+        RequestContextPolicy::empty().with_workspace_instructions()
     }
 
     fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
@@ -87,7 +87,7 @@ mod tests {
 
         assert_eq!(
             agent.request_context_policy(),
-            RequestContextPolicy::instructions_only()
+            RequestContextPolicy::empty().with_workspace_instructions()
         );
         assert!(tools.contains(&"Edit".to_string()));
         assert!(tools.contains(&"Write".to_string()));

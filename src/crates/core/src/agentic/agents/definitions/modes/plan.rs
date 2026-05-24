@@ -61,7 +61,11 @@ impl Agent for PlanMode {
     }
 
     fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::instructions_and_layout()
+        RequestContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
+            .with_workspace_memory_files()
+            .with_project_layout()
     }
 
     fn is_readonly(&self) -> bool {

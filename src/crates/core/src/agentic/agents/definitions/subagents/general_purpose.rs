@@ -57,7 +57,10 @@ impl Agent for GeneralPurposeAgent {
     }
 
     fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::instructions_only()
+        RequestContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
+            .with_project_layout()
     }
 
     fn is_readonly(&self) -> bool {

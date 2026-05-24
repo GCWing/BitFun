@@ -10,6 +10,7 @@ pub struct ReadonlySubagent {
     prompt_template: &'static str,
     default_tools: &'static [&'static str],
     tool_exposure_overrides: AgentToolPolicyOverrides,
+    request_context_policy: RequestContextPolicy,
 }
 
 impl ReadonlySubagent {
@@ -45,6 +46,26 @@ impl ReadonlySubagent {
             prompt_template,
             default_tools,
             tool_exposure_overrides,
+            request_context_policy: RequestContextPolicy::empty().with_workspace_instructions(),
+        }
+    }
+
+    pub fn with_policy(
+        id: &'static str,
+        name: &'static str,
+        description: &'static str,
+        prompt_template: &'static str,
+        default_tools: &'static [&'static str],
+        request_context_policy: RequestContextPolicy,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            description,
+            prompt_template,
+            default_tools,
+            tool_exposure_overrides: AgentToolPolicyOverrides::default(),
+            request_context_policy,
         }
     }
 }
@@ -76,7 +97,7 @@ impl Agent for ReadonlySubagent {
     }
 
     fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::instructions_only()
+        self.request_context_policy.clone()
     }
 
     fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
@@ -86,6 +107,85 @@ impl Agent for ReadonlySubagent {
     fn is_readonly(&self) -> bool {
         true
     }
+}
+
+#[macro_export]
+macro_rules! define_readonly_subagent_with_context_policy {
+    (
+        $struct_name:ident,
+        $id:expr,
+        $name:literal,
+        $description:literal,
+        $prompt:literal,
+        $tools:expr,
+        $request_context_policy:expr
+    ) => {
+        pub struct $struct_name {
+            inner: $crate::agentic::agents::ReadonlySubagent,
+        }
+
+        impl Default for $struct_name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
+        impl $struct_name {
+            pub fn new() -> Self {
+                Self {
+                    inner: $crate::agentic::agents::ReadonlySubagent::with_policy(
+                        $id,
+                        $name,
+                        $description,
+                        $prompt,
+                        $tools,
+                        $request_context_policy,
+                    ),
+                }
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl $crate::agentic::agents::Agent for $struct_name {
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+
+            fn id(&self) -> &str {
+                self.inner.id()
+            }
+
+            fn name(&self) -> &str {
+                self.inner.name()
+            }
+
+            fn description(&self) -> &str {
+                self.inner.description()
+            }
+
+            fn prompt_template_name(&self, model_name: Option<&str>) -> &str {
+                self.inner.prompt_template_name(model_name)
+            }
+
+            fn default_tools(&self) -> Vec<String> {
+                self.inner.default_tools()
+            }
+
+            fn request_context_policy(&self) -> $crate::agentic::agents::RequestContextPolicy {
+                self.inner.request_context_policy()
+            }
+
+            fn tool_exposure_overrides(
+                &self,
+            ) -> &$crate::agentic::agents::AgentToolPolicyOverrides {
+                self.inner.tool_exposure_overrides()
+            }
+
+            fn is_readonly(&self) -> bool {
+                self.inner.is_readonly()
+            }
+        }
+    };
 }
 
 /// Define a read-only subagent struct and its `Agent` implementation

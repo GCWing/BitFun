@@ -1,10 +1,13 @@
 use crate::agentic::agents::AgentToolPolicyOverrides;
+use crate::agentic::tools::framework::{Tool, ToolUseContext};
 use crate::agentic::tools::product_runtime::{
     resolve_product_tool_manifest, resolve_product_visible_tools,
 };
-use crate::agentic::tools::framework::{Tool, ToolUseContext};
 use crate::util::types::ToolDefinition;
-use bitfun_agent_tools::{ContextualToolManifest, ContextualVisibleTools, ToolManifestDefinition};
+use bitfun_agent_tools::{
+    ContextualToolManifest, ContextualVisibleTools, GetToolSpecCollapsedToolSummary,
+    ToolManifestDefinition,
+};
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -12,6 +15,7 @@ pub struct ResolvedToolManifest {
     pub allowed_tool_names: Vec<String>,
     pub tool_definitions: Vec<ToolDefinition>,
     pub collapsed_tool_names: Vec<String>,
+    pub collapsed_tool_summaries: Vec<GetToolSpecCollapsedToolSummary>,
 }
 
 #[derive(Clone)]
@@ -39,6 +43,15 @@ impl From<ContextualVisibleTools<dyn Tool>> for ResolvedVisibleTools {
 
 impl From<ContextualToolManifest<dyn Tool>> for ResolvedToolManifest {
     fn from(value: ContextualToolManifest<dyn Tool>) -> Self {
+        let collapsed_tool_summaries = value
+            .collapsed_tools
+            .iter()
+            .map(|tool| GetToolSpecCollapsedToolSummary {
+                name: tool.name().to_string(),
+                short_description: tool.short_description(),
+            })
+            .collect();
+
         Self {
             allowed_tool_names: value.allowed_tool_names,
             tool_definitions: value
@@ -47,6 +60,7 @@ impl From<ContextualToolManifest<dyn Tool>> for ResolvedToolManifest {
                 .map(to_core_tool_definition)
                 .collect(),
             collapsed_tool_names: value.collapsed_tool_names,
+            collapsed_tool_summaries,
         }
     }
 }
@@ -57,8 +71,8 @@ pub async fn resolve_visible_tools(
     context: &ToolUseContext,
 ) -> ResolvedVisibleTools {
     resolve_product_visible_tools(allowed_tools, exposure_overrides, context)
-    .await
-    .into()
+        .await
+        .into()
 }
 
 pub async fn resolve_tool_manifest(
@@ -67,16 +81,16 @@ pub async fn resolve_tool_manifest(
     context: &ToolUseContext,
 ) -> ResolvedToolManifest {
     resolve_product_tool_manifest(allowed_tools, exposure_overrides, context)
-    .await
-    .into()
+        .await
+        .into()
 }
 
 #[cfg(test)]
 mod tests {
     use super::resolve_tool_manifest;
     use crate::agentic::agents::AgentToolPolicyOverrides;
-    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::tools::framework::{ToolExposure, ToolUseContext};
+    use crate::agentic::tools::ToolRuntimeRestrictions;
     use bitfun_agent_tools::GET_TOOL_SPEC_TOOL_NAME;
     use serde_json::json;
     use std::collections::HashMap;
@@ -110,12 +124,10 @@ mod tests {
 
         assert!(manifest.collapsed_tool_names.is_empty());
         assert_eq!(manifest.allowed_tool_names, allowed_tools);
-        assert!(
-            !manifest
-                .tool_definitions
-                .iter()
-                .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME)
-        );
+        assert!(!manifest
+            .tool_definitions
+            .iter()
+            .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME));
     }
 
     #[tokio::test]
@@ -130,29 +142,26 @@ mod tests {
         .await;
 
         assert_eq!(manifest.collapsed_tool_names, vec!["WebFetch".to_string()]);
-        assert!(
-            manifest
-                .allowed_tool_names
-                .contains(&GET_TOOL_SPEC_TOOL_NAME.to_string())
-        );
-        assert!(
-            manifest
-                .tool_definitions
-                .iter()
-                .any(|tool| tool.name == "Read")
-        );
-        assert!(
-            manifest
-                .tool_definitions
-                .iter()
-                .any(|tool| tool.name == "WebFetch")
-        );
-        assert!(
-            manifest
-                .tool_definitions
-                .iter()
-                .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME)
-        );
+        assert_eq!(manifest.collapsed_tool_summaries.len(), 1);
+        assert_eq!(manifest.collapsed_tool_summaries[0].name, "WebFetch");
+        assert!(manifest.collapsed_tool_summaries[0]
+            .short_description
+            .contains("Fetch content from a URL"));
+        assert!(manifest
+            .allowed_tool_names
+            .contains(&GET_TOOL_SPEC_TOOL_NAME.to_string()));
+        assert!(manifest
+            .tool_definitions
+            .iter()
+            .any(|tool| tool.name == "Read"));
+        assert!(manifest
+            .tool_definitions
+            .iter()
+            .any(|tool| tool.name == "WebFetch"));
+        assert!(manifest
+            .tool_definitions
+            .iter()
+            .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME));
         let stub = manifest
             .tool_definitions
             .iter()
@@ -161,12 +170,10 @@ mod tests {
         assert!(stub.description.contains("First call `GetToolSpec`"));
         assert_eq!(stub.parameters["type"], json!("object"));
         assert_eq!(stub.parameters["additionalProperties"], json!(false));
-        assert!(
-            stub.parameters["properties"]["tool_name"]["description"]
-                .as_str()
-                .unwrap()
-                .contains("{\"tool_name\":\"WebFetch\"}")
-        );
+        assert!(stub.parameters["properties"]["tool_name"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("{\"tool_name\":\"WebFetch\"}"));
     }
 
     #[tokio::test]
@@ -216,11 +223,9 @@ mod tests {
             .iter()
             .find(|tool| tool.name == "WebFetch")
             .expect("collapsed WebFetch stub");
-        assert!(
-            web_fetch
-                .description
-                .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
-        );
+        assert!(web_fetch
+            .description
+            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
         assert_eq!(
             web_fetch.parameters,
             json!({
@@ -338,17 +343,13 @@ mod tests {
         let manifest = resolve_tool_manifest(&allowed_tools, &overrides, &tool_context()).await;
 
         assert!(manifest.collapsed_tool_names.is_empty());
-        assert!(
-            manifest
-                .tool_definitions
-                .iter()
-                .any(|tool| tool.name == "WebFetch")
-        );
-        assert!(
-            !manifest
-                .tool_definitions
-                .iter()
-                .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME)
-        );
+        assert!(manifest
+            .tool_definitions
+            .iter()
+            .any(|tool| tool.name == "WebFetch"));
+        assert!(!manifest
+            .tool_definitions
+            .iter()
+            .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME));
     }
 }

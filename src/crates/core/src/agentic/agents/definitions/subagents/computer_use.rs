@@ -2,7 +2,7 @@
 //!
 //! Dedicated agent for perceiving and operating the user's local computer.
 
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides};
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, RequestContextPolicy};
 use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
@@ -61,6 +61,12 @@ impl Agent for ComputerUseMode {
 
     fn default_tools(&self) -> Vec<String> {
         self.default_tools.clone()
+    }
+
+    fn request_context_policy(&self) -> RequestContextPolicy {
+        RequestContextPolicy::empty()
+            .with_workspace_instructions()
+            .with_project_layout()
     }
 
     fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {

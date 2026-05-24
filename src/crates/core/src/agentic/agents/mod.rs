@@ -31,7 +31,7 @@ pub use definitions::subagents::{
 use indexmap::IndexMap;
 pub use prompt_builder::{
     PromptBuilder, PromptBuilderContext, RemoteExecutionHints, RequestContextPolicy,
-    RequestContextSection,
+    RequestContextSection, RequestContextToolSections,
 };
 pub use registry::catalog::{builtin_agent_specs, BuiltinAgentSpec};
 pub use registry::types::{
@@ -99,9 +99,7 @@ pub trait Agent: Send + Sync + 'static {
         None // by default, no system reminder
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::default()
-    }
+    fn request_context_policy(&self) -> RequestContextPolicy;
 
     /// Build the system prompt for this agent
     async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {

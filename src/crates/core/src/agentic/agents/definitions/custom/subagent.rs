@@ -1,5 +1,5 @@
 use crate::agentic::agents::Agent;
-use crate::agentic::agents::{PromptBuilder, PromptBuilderContext};
+use crate::agentic::agents::{PromptBuilder, PromptBuilderContext, RequestContextPolicy};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::FrontMatterMarkdown;
 use async_trait::async_trait;
@@ -61,6 +61,13 @@ impl Agent for CustomSubagent {
 
     fn default_tools(&self) -> Vec<String> {
         self.tools.clone()
+    }
+
+    fn request_context_policy(&self) -> RequestContextPolicy {
+        RequestContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
+            .with_project_layout()
     }
 
     fn is_readonly(&self) -> bool {

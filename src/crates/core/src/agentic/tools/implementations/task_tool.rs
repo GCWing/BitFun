@@ -398,7 +398,7 @@ impl TaskTool {
         }
     }
 
-    fn format_agent_descriptions(&self, agents: &[AgentInfo]) -> String {
+    fn format_agent_descriptions(agents: &[AgentInfo]) -> String {
         if agents.is_empty() {
             return String::new();
         }
@@ -415,20 +415,12 @@ impl TaskTool {
         out
     }
 
-    fn render_description(&self, agent_descriptions: String) -> String {
-        let agent_descriptions = if agent_descriptions.is_empty() {
-            "<agents>No agents available</agents>".to_string()
-        } else {
-            agent_descriptions
-        };
-
-        format!(
-            r#"Launch a new agent to handle complex, multi-step tasks autonomously. 
+    fn render_description(&self) -> String {
+        r#"Launch a new agent to handle complex, multi-step tasks autonomously. 
 
 The Task tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.
 
-Available agents and the tools they have access to:
-{}
+The current request context includes an <available_agents> section when subagents are available. Use the exact `type` attribute from that section as `subagent_type`.
 
 When using the Task tool, you must specify `subagent_type` as a top-level tool argument to select which agent type to use. Do not put `subagent_type`, `description`, `workspace_path`, `model_id`, or `timeout_seconds` inside the prompt string.
 
@@ -462,18 +454,23 @@ assistant: Uses the Task tool with subagent_type="Explore" because this is a bro
 <example>
 user: "Find the files that implement export formatting"
 assistant: Uses the Task tool with subagent_type="FileFinder" because the exact filenames are unknown and semantic file discovery is useful. The parent agent reads the returned files before proposing edits.
-</example>"#,
-            agent_descriptions
-        )
+</example>"#
+            .to_string()
     }
 
-    async fn build_description(&self, context: Option<&ToolUseContext>) -> String {
-        let agents = self.get_enabled_agents(context).await;
-        let agent_descriptions = self.format_agent_descriptions(&agents);
-        self.render_description(agent_descriptions)
+    pub(crate) async fn build_available_agents_context_section(
+        context: Option<&ToolUseContext>,
+    ) -> Option<String> {
+        let agents = Self::get_enabled_agents(context).await;
+        let agent_descriptions = Self::format_agent_descriptions(&agents);
+        if agent_descriptions.trim().is_empty() {
+            None
+        } else {
+            Some(agent_descriptions)
+        }
     }
 
-    async fn get_enabled_agents(&self, context: Option<&ToolUseContext>) -> Vec<AgentInfo> {
+    async fn get_enabled_agents(context: Option<&ToolUseContext>) -> Vec<AgentInfo> {
         let registry = get_agent_registry();
         let workspace_root = context.and_then(|ctx| ctx.workspace_root());
         if let Some(workspace_root) = workspace_root {
@@ -490,7 +487,7 @@ assistant: Uses the Task tool with subagent_type="FileFinder" because the exact 
     }
 
     async fn get_agents_types(&self, context: Option<&ToolUseContext>) -> Vec<String> {
-        self.get_enabled_agents(context)
+        Self::get_enabled_agents(context)
             .await
             .into_iter()
             .map(|agent| agent.id)
@@ -505,7 +502,7 @@ impl Tool for TaskTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(self.build_description(None).await)
+        Ok(self.render_description())
     }
 
     fn short_description(&self) -> String {
@@ -514,9 +511,9 @@ impl Tool for TaskTool {
 
     async fn description_with_context(
         &self,
-        context: Option<&ToolUseContext>,
+        _context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        Ok(self.build_description(context).await)
+        Ok(self.render_description())
     }
 
     fn input_schema(&self) -> Value {
@@ -1551,7 +1548,9 @@ impl Tool for TaskTool {
 mod tests {
     use super::TaskTool;
     use crate::agentic::agents::CustomSubagentConfig;
-    use crate::agentic::agents::{get_agent_registry, Agent, AgentCategory, SubAgentSource};
+    use crate::agentic::agents::{
+        get_agent_registry, Agent, AgentCategory, RequestContextPolicy, SubAgentSource,
+    };
     use crate::agentic::deep_review::task_adapter as deep_review_task_adapter;
     use crate::agentic::deep_review_policy::{
         DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewSubagentRole,
@@ -1588,6 +1587,10 @@ mod tests {
 
         fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
             "test_prompt_order_agent"
+        }
+
+        fn request_context_policy(&self) -> RequestContextPolicy {
+            RequestContextPolicy::empty()
         }
 
         fn default_tools(&self) -> Vec<String> {
@@ -1693,10 +1696,7 @@ mod tests {
             TaskTool::resolve_subagent_timeout_seconds(Some(300), None),
             Some(300)
         );
-        assert_eq!(
-            TaskTool::resolve_subagent_timeout_seconds(None, None),
-            None
-        );
+        assert_eq!(TaskTool::resolve_subagent_timeout_seconds(None, None), None);
     }
 
     #[test]
@@ -1749,7 +1749,6 @@ mod tests {
 
     #[tokio::test]
     async fn description_with_context_filters_restricted_subagents_by_parent_agent() {
-        let tool = TaskTool::new();
         let agentic_context = ToolUseContext {
             tool_call_id: None,
             agent_type: Some("agentic".to_string()),
@@ -1768,25 +1767,24 @@ mod tests {
             ..agentic_context.clone()
         };
 
-        let agentic_description = tool
-            .description_with_context(Some(&agentic_context))
-            .await
-            .expect("agentic description should render");
+        let agentic_description =
+            TaskTool::build_available_agents_context_section(Some(&agentic_context))
+                .await
+                .expect("agentic available agents should render");
         assert!(agentic_description.contains("<agent type=\"Explore\">"));
         assert!(!agentic_description.contains("<agent type=\"ReviewSecurity\">"));
         assert!(!agentic_description.contains("<agent type=\"ResearchSpecialist\">"));
 
-        let deep_review_description = tool
-            .description_with_context(Some(&deep_review_context))
-            .await
-            .expect("deep review description should render");
+        let deep_review_description =
+            TaskTool::build_available_agents_context_section(Some(&deep_review_context))
+                .await
+                .expect("deep review available agents should render");
         assert!(deep_review_description.contains("<agent type=\"ReviewSecurity\">"));
         assert!(!deep_review_description.contains("<agent type=\"ResearchSpecialist\">"));
     }
 
     #[tokio::test]
     async fn prompt_stability_description_with_context_renders_available_agents_in_stable_order() {
-        let tool = TaskTool::new();
         let context = ToolUseContext {
             tool_call_id: None,
             agent_type: Some("agentic".to_string()),
@@ -1822,10 +1820,9 @@ mod tests {
             }),
         );
 
-        let description = tool
-            .description_with_context(Some(&context))
+        let description = TaskTool::build_available_agents_context_section(Some(&context))
             .await
-            .expect("description should render");
+            .expect("available agents should render");
 
         let builtin_a_index = find_agent_block_index(&description, builtin_a);
         let builtin_z_index = find_agent_block_index(&description, builtin_z);

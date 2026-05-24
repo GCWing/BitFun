@@ -5,23 +5,25 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
-    PromptBuilder, PromptBuilderContext, RemoteExecutionHints, get_agent_registry,
+    get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
+    RequestContextToolSections,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
-    Message, MessageContent, MessageHelper, MessageRole, MessageSemanticKind,
-    RequestReasoningTokenPolicy, Session, render_system_reminder,
+    render_system_reminder, Message, MessageContent, MessageHelper, MessageRole,
+    MessageSemanticKind, RequestReasoningTokenPolicy, Session,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::execution::types::FinishReason;
 use crate::agentic::image_analysis::{
-    ImageContextData, ImageLimits, build_multimodal_message_with_images,
-    process_image_contexts_for_provider,
+    build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
+    ImageLimits,
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
+use crate::agentic::tools::implementations::{GetToolSpecTool, SkillTool, TaskTool};
 use crate::agentic::tools::{
-    ResolvedToolManifest, SubagentParentInfo, resolve_tool_manifest, tool_context_runtime,
+    resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest, SubagentParentInfo,
 };
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
@@ -34,7 +36,7 @@ use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
-use bitfun_agent_tools::{GetToolSpecLoadObservation, collect_loaded_collapsed_tool_names};
+use bitfun_agent_tools::{collect_loaded_collapsed_tool_names, GetToolSpecLoadObservation};
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -555,11 +557,43 @@ impl ExecutionEngine {
         )
     }
 
+    async fn build_request_context_tool_sections(
+        manifest: &ResolvedToolManifest,
+        tool_context: &crate::agentic::tools::framework::ToolUseContext,
+    ) -> RequestContextToolSections {
+        let has_tool_definition = |tool_name: &str| {
+            manifest
+                .tool_definitions
+                .iter()
+                .any(|definition| definition.name == tool_name)
+        };
+
+        RequestContextToolSections {
+            available_skills: if has_tool_definition("Skill") {
+                SkillTool::build_available_skills_context_section(Some(tool_context)).await
+            } else {
+                None
+            },
+            available_agents: if has_tool_definition("Task") {
+                TaskTool::build_available_agents_context_section(Some(tool_context)).await
+            } else {
+                None
+            },
+            collapsed_tools: if has_tool_definition("GetToolSpec") {
+                GetToolSpecTool::build_collapsed_tools_context_section(
+                    &manifest.collapsed_tool_summaries,
+                )
+            } else {
+                None
+            },
+        }
+    }
+
     async fn build_prompt_context(
         context: &ExecutionContext,
         model_name: &str,
         supports_image_understanding: bool,
-        has_additional_tools: bool,
+        request_context_tools: RequestContextToolSections,
     ) -> Option<PromptBuilderContext> {
         let workspace_path = context
             .workspace
@@ -572,7 +606,7 @@ impl ExecutionEngine {
             Some(model_name.to_string()),
         )
         .with_supports_image_understanding(supports_image_understanding)
-        .with_additional_tools_hint(has_additional_tools);
+        .with_request_context_tools(request_context_tools);
 
         let Some(workspace) = context.workspace.as_ref() else {
             return Some(base);
@@ -1569,6 +1603,14 @@ impl ExecutionEngine {
             write_tool_mode.as_str().to_string(),
         );
 
+        let tool_description_context = tool_context_runtime::build_tool_description_context(
+            &agent_type,
+            context.workspace.as_ref(),
+            context.workspace_services.as_ref(),
+            primary_supports_image_understanding,
+            &tool_manifest_context_vars,
+        );
+
         let tool_manifest = if enable_tools {
             debug!(
                 "Agent tools: agent={}, tool_count={}",
@@ -1576,14 +1618,10 @@ impl ExecutionEngine {
                 allowed_tools.len()
             );
             Some(
-                self.get_available_tools_and_definitions(
+                resolve_tool_manifest(
                     &allowed_tools,
                     &tool_policy.exposure_overrides,
-                    context.workspace.as_ref(),
-                    context.workspace_services.as_ref(),
-                    &agent_type,
-                    primary_supports_image_understanding,
-                    &tool_manifest_context_vars,
+                    &tool_description_context,
                 )
                 .await,
             )
@@ -1594,7 +1632,11 @@ impl ExecutionEngine {
             .as_ref()
             .map(|manifest| manifest.collapsed_tool_names.clone())
             .unwrap_or_default();
-        let has_additional_tools = !collapsed_tools.is_empty();
+        let request_context_tools = if let Some(manifest) = tool_manifest.as_ref() {
+            Self::build_request_context_tool_sections(manifest, &tool_description_context).await
+        } else {
+            RequestContextToolSections::default()
+        };
         let (available_tools, tool_definitions) = if let Some(manifest) = tool_manifest {
             (manifest.allowed_tool_names, Some(manifest.tool_definitions))
         } else {
@@ -1611,7 +1653,7 @@ impl ExecutionEngine {
             &context,
             &ai_client.config.model,
             primary_supports_image_understanding,
-            has_additional_tools,
+            request_context_tools,
         )
         .await;
         let request_context_reminder = if let Some(prompt_context) = prompt_context.as_ref() {
@@ -2533,27 +2575,6 @@ impl ExecutionEngine {
         self.round_executor
             .cleanup_dialog_turn(dialog_turn_id)
             .await
-    }
-
-    /// Get available tool names and definitions: 1. Tool itself is enabled 2. Explicitly allowed in mode config
-    async fn get_available_tools_and_definitions(
-        &self,
-        allowed_tools: &[String],
-        exposure_overrides: &crate::agentic::agents::AgentToolPolicyOverrides,
-        workspace: Option<&crate::agentic::WorkspaceBinding>,
-        workspace_services: Option<&crate::agentic::workspace::WorkspaceServices>,
-        agent_type: &str,
-        primary_supports_image_understanding: bool,
-        context_vars: &HashMap<String, String>,
-    ) -> ResolvedToolManifest {
-        let description_context = tool_context_runtime::build_tool_description_context(
-            agent_type,
-            workspace,
-            workspace_services,
-            primary_supports_image_understanding,
-            context_vars,
-        );
-        resolve_tool_manifest(allowed_tools, exposure_overrides, &description_context).await
     }
 
     /// Emit event

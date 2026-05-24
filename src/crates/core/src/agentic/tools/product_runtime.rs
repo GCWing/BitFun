@@ -242,15 +242,6 @@ pub(crate) async fn resolve_product_readonly_enabled_tools() -> Vec<Arc<dyn Tool
         .await
 }
 
-pub(crate) async fn build_product_get_tool_spec_catalog_description(
-    context: Option<&ToolUseContext>,
-) -> String {
-    let provider = ProductToolCatalogProvider;
-    product_get_tool_spec_runtime(&provider)
-        .catalog_description(context)
-        .await
-}
-
 pub(crate) async fn resolve_product_get_tool_spec_results(
     input: &Value,
     context: &ToolUseContext,

@@ -1,6 +1,8 @@
 //! Debug Mode - Evidence-driven debugging mode
 
-use crate::agentic::agents::{get_embedded_prompt, Agent, PromptBuilder, PromptBuilderContext};
+use crate::agentic::agents::{
+    get_embedded_prompt, Agent, PromptBuilder, PromptBuilderContext, RequestContextPolicy,
+};
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{DebugModeConfig, LanguageDebugTemplate};
 use crate::service::lsp::project_detector::{ProjectDetector, ProjectInfo};
@@ -280,6 +282,14 @@ impl Agent for DebugMode {
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
         DEBUG_MODE_PROMPT_TEMPLATE
+    }
+
+    fn request_context_policy(&self) -> RequestContextPolicy {
+        RequestContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
+            .with_workspace_memory_files()
+            .with_project_layout()
     }
 
     async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {

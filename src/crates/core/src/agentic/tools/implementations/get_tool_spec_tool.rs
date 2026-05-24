@@ -1,16 +1,27 @@
 //! GetToolSpec tool implementation
 
-use crate::agentic::tools::product_runtime::{
-    build_product_get_tool_spec_catalog_description, product_get_tool_spec_runtime,
-    resolve_product_get_tool_spec_results, ProductGetToolSpecRuntime, ProductToolCatalogProvider,
-};
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::tools::product_runtime::{
+    product_get_tool_spec_runtime, resolve_product_get_tool_spec_results,
+    ProductGetToolSpecRuntime, ProductToolCatalogProvider,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_agent_tools::{GetToolSpecExecutionError, GET_TOOL_SPEC_TOOL_NAME};
+use bitfun_agent_tools::{
+    build_get_tool_spec_collapsed_tool_entry, GetToolSpecCollapsedToolSummary,
+    GetToolSpecExecutionError, GET_TOOL_SPEC_TOOL_NAME,
+};
 use serde_json::Value;
+
+const GET_TOOL_SPEC_DESCRIPTION: &str = r#"Read usage instructions for additional tools.
+
+Some tools are collapsed: their names may appear in the tool list, but you must not call them directly until you have loaded their definition with GetToolSpec.
+
+When the current request context includes a <collapsed_tools> section, use the exact tool names from that section. Before using one of those tools, first call GetToolSpec with its exact tool name to read its full description and input schema. After reading the returned definition, call the real tool directly using its own name.
+
+Do not call GetToolSpec again for a tool whose definition is already loaded in the current conversation."#;
 
 pub struct GetToolSpecTool;
 
@@ -19,8 +30,25 @@ impl GetToolSpecTool {
         Self
     }
 
-    async fn build_collapsed_tools_description(&self, context: Option<&ToolUseContext>) -> String {
-        build_product_get_tool_spec_catalog_description(context).await
+    pub(crate) fn build_collapsed_tools_context_section(
+        collapsed_tools: &[GetToolSpecCollapsedToolSummary],
+    ) -> Option<String> {
+        if collapsed_tools.is_empty() {
+            return None;
+        }
+
+        let collapsed_tools_list = collapsed_tools
+            .iter()
+            .map(|tool| {
+                build_get_tool_spec_collapsed_tool_entry(&tool.name, &tool.short_description)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        Some(format!(
+            "<collapsed_tools>\n{}\n</collapsed_tools>",
+            collapsed_tools_list
+        ))
     }
 }
 
@@ -42,7 +70,7 @@ impl Tool for GetToolSpecTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(self.build_collapsed_tools_description(None).await)
+        Ok(GET_TOOL_SPEC_DESCRIPTION.to_string())
     }
 
     fn short_description(&self) -> String {
@@ -51,9 +79,9 @@ impl Tool for GetToolSpecTool {
 
     async fn description_with_context(
         &self,
-        context: Option<&ToolUseContext>,
+        _context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        Ok(self.build_collapsed_tools_description(context).await)
+        Ok(GET_TOOL_SPEC_DESCRIPTION.to_string())
     }
 
     fn input_schema(&self) -> Value {
@@ -105,74 +133,21 @@ fn map_get_tool_spec_execution_error(error: GetToolSpecExecutionError) -> BitFun
 #[cfg(test)]
 mod tests {
     use super::GetToolSpecTool;
-    use crate::agentic::tools::framework::{
-        Tool, ToolExposure, ToolResult, ToolUseContext, ValidationResult,
-    };
-    use crate::agentic::tools::registry::get_global_tool_registry;
+    use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
-    use crate::util::errors::BitFunResult;
-    use async_trait::async_trait;
-    use serde_json::{json, Value};
+    use serde_json::json;
     use std::collections::HashMap;
-    use std::sync::Arc;
 
-    struct CatalogDescriptionTestTool {
-        name: String,
-    }
-
-    #[async_trait]
-    impl Tool for CatalogDescriptionTestTool {
-        fn name(&self) -> &str {
-            &self.name
-        }
-
-        async fn description(&self) -> BitFunResult<String> {
-            Ok("Verbose description first line.\nSecond line.".to_string())
-        }
-
-        fn short_description(&self) -> String {
-            "Concise catalog entry.".to_string()
-        }
-
-        fn default_exposure(&self) -> ToolExposure {
-            ToolExposure::Collapsed
-        }
-
-        fn input_schema(&self) -> Value {
-            json!({ "type": "object" })
-        }
-
-        async fn validate_input(
-            &self,
-            _input: &Value,
-            _context: Option<&ToolUseContext>,
-        ) -> ValidationResult {
-            ValidationResult::default()
-        }
-
-        async fn call_impl(
-            &self,
-            _input: &Value,
-            _context: &ToolUseContext,
-        ) -> BitFunResult<Vec<ToolResult>> {
-            Ok(Vec::new())
-        }
-    }
-
-    #[tokio::test]
-    async fn get_tool_spec_uses_explicit_short_description() {
+    #[test]
+    fn collapsed_tools_context_uses_explicit_short_description() {
         let tool_name = format!("CatalogDescriptionTestTool_{}", uuid::Uuid::new_v4());
-        let registry = get_global_tool_registry();
-        {
-            let mut registry = registry.write().await;
-            registry.register_tool(Arc::new(CatalogDescriptionTestTool {
+        let description = GetToolSpecTool::build_collapsed_tools_context_section(&[
+            bitfun_agent_tools::GetToolSpecCollapsedToolSummary {
                 name: tool_name.clone(),
-            }));
-        }
-
-        let description = GetToolSpecTool::new()
-            .build_collapsed_tools_description(None)
-            .await;
+                short_description: "Concise catalog entry.".to_string(),
+            },
+        ])
+        .expect("collapsed tools section");
 
         assert!(description.contains(&format!("- {}: Concise catalog entry.", tool_name)));
         assert!(!description.contains(&format!("- {}: Verbose description first line.", tool_name)));

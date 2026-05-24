@@ -1,7 +1,8 @@
 //! Multitask Mode
 
 use crate::agentic::agents::{
-    get_embedded_prompt, shared_coding_mode_tools, Agent, SHARED_CODING_MODE_PROMPT_TEMPLATE,
+    get_embedded_prompt, shared_coding_mode_tools, Agent, RequestContextPolicy,
+    SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
 use async_trait::async_trait;
 
@@ -9,8 +10,7 @@ pub struct MultitaskMode {
     default_tools: Vec<String>,
 }
 
-const MULTITASK_MODE_FIRST_ENTRY_REMINDER_TEMPLATE: &str =
-    "multitask_mode_first_entry_reminder";
+const MULTITASK_MODE_FIRST_ENTRY_REMINDER_TEMPLATE: &str = "multitask_mode_first_entry_reminder";
 const MULTITASK_MODE_ONGOING_REMINDER_TEMPLATE: &str = "multitask_mode_ongoing_reminder";
 
 impl Default for MultitaskMode {
@@ -61,6 +61,14 @@ impl Agent for MultitaskMode {
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
         SHARED_CODING_MODE_PROMPT_TEMPLATE
+    }
+
+    fn request_context_policy(&self) -> RequestContextPolicy {
+        RequestContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
+            .with_workspace_memory_files()
+            .with_project_layout()
     }
 
     async fn get_system_reminder(

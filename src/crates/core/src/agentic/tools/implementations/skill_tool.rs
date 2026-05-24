@@ -22,18 +22,11 @@ impl SkillTool {
         Self
     }
 
-    fn render_description(&self, skills_list: String) -> String {
-        let skills_list = if skills_list.is_empty() {
-            "No skills available".to_string()
-        } else {
-            skills_list
-        };
-
-        format!(
-            r#"Execute a skill within the main conversation
+    fn render_description(&self) -> String {
+        r#"Execute a skill within the main conversation
 
 <skills_instructions>
-When users ask you to perform tasks, check if any of the available skills below can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
+When users ask you to perform tasks, check whether any skills listed in the current request context can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
 
 How to use skills:
 - Invoke skills using this tool with the skill name only (no arguments)
@@ -44,18 +37,15 @@ How to use skills:
   - `command: "ms-office-suite:pdf"` - invoke using fully qualified name
 
 Important:
-- Only use skills listed in <available_skills> below
+- Only use skills listed in the current request context's <available_skills> section
 - Do not invoke a skill that is already running
-</skills_instructions>
-
-<available_skills>
-{}
-</available_skills>"#,
-            skills_list
-        )
+</skills_instructions>"#
+            .to_string()
     }
 
-    async fn build_description_for_context(&self, context: Option<&ToolUseContext>) -> String {
+    pub(crate) async fn resolved_skills_xml_for_context(
+        context: Option<&ToolUseContext>,
+    ) -> String {
         let registry = get_skill_registry();
         let available_skills = match context {
             Some(ctx) if ctx.is_remote() => {
@@ -93,7 +83,27 @@ Important:
             }
         };
 
-        self.render_description(available_skills.join("\n"))
+        available_skills.join("\n")
+    }
+
+    pub(crate) async fn build_available_skills_context_section(
+        context: Option<&ToolUseContext>,
+    ) -> Option<String> {
+        let skills_list = Self::resolved_skills_xml_for_context(context).await;
+        let skills_list = skills_list.trim();
+        if skills_list.is_empty() {
+            return None;
+        }
+
+        let mut section = format!("<available_skills>\n{}\n</available_skills>", skills_list);
+        if context.map(|c| c.is_remote()).unwrap_or(false)
+            && context.and_then(|c| c.ws_fs()).is_none()
+        {
+            section.push_str(
+                "\n\nRemote workspace note: Project-level skills on the server could not be indexed because workspace I/O is unavailable. Only user-level skills are shown; BitFun will not fall back to scanning the remote path on the local filesystem.",
+            );
+        }
+        Some(section)
     }
 }
 
@@ -104,7 +114,7 @@ impl Tool for SkillTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(self.build_description_for_context(None).await)
+        Ok(self.render_description())
     }
 
     fn short_description(&self) -> String {
@@ -113,17 +123,9 @@ impl Tool for SkillTool {
 
     async fn description_with_context(
         &self,
-        context: Option<&ToolUseContext>,
+        _context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        let mut s = self.build_description_for_context(context).await;
-        if context.map(|c| c.is_remote()).unwrap_or(false)
-            && context.and_then(|c| c.ws_fs()).is_none()
-        {
-            s.push_str(
-                "\n\n**Remote workspace:** Project-level skills on the server could not be indexed because workspace I/O is unavailable. Only user-level skills are shown; BitFun will not fall back to scanning the remote path on the local filesystem.",
-            );
-        }
-        Ok(s)
+        Ok(self.render_description())
     }
 
     fn input_schema(&self) -> Value {
@@ -389,10 +391,9 @@ Use the remote project skill.
             }),
         };
 
-        let description = SkillTool::new()
-            .description_with_context(Some(&context))
+        let description = SkillTool::build_available_skills_context_section(Some(&context))
             .await
-            .expect("description");
+            .expect("available skills section");
 
         assert!(description.contains("remote-only-skill-for-test"));
         assert!(
