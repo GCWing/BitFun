@@ -48,6 +48,8 @@ export interface AgenticEventCallbacks {
   onContextCompressionStarted?: (event: AgenticEvent) => void;
   onContextCompressionCompleted?: (event: AgenticEvent) => void;
   onContextCompressionFailed?: (event: AgenticEvent) => void;
+  onGoalVerificationStarted?: (event: AgenticEvent) => void;
+  onGoalVerificationFinished?: (event: AgenticEvent) => void;
   onSessionTitleGenerated?: (event: SessionTitleGeneratedEvent) => void;
   onSessionModelAutoMigrated?: (event: SessionModelAutoMigratedEvent) => void;
   onUserSteeringInjected?: (event: UserSteeringInjectedEvent) => void;
@@ -220,6 +222,22 @@ export class AgenticEventListener {
         const unlisten = agentAPI.onContextCompressionFailed((event) => {
           logger.error('Context compression failed:', event);
           callbacks.onContextCompressionFailed?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onGoalVerificationStarted) {
+        const unlisten = agentAPI.onGoalVerificationStarted((event) => {
+          logger.debug('Goal verification started:', event);
+          callbacks.onGoalVerificationStarted?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onGoalVerificationFinished) {
+        const unlisten = agentAPI.onGoalVerificationFinished((event) => {
+          logger.debug('Goal verification finished:', event);
+          callbacks.onGoalVerificationFinished?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }

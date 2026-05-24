@@ -70,6 +70,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const messageImages = useMemo(() => message?.images ?? [], [message?.images]);
     const isUsageReportMessage = message?.metadata?.localCommandKind === 'usage_report';
     const isGoalPendingMessage = message?.metadata?.localCommandKind === 'goal_pending';
+    const isGoalVerifyingMessage = message?.metadata?.localCommandKind === 'goal_verifying';
+    const isGoalLoadingMessage = isGoalPendingMessage || isGoalVerifyingMessage;
     const isUsageReportLoading = message?.metadata?.usageReportStatus === 'loading';
     const usageReport = coerceSessionUsageReport(message?.metadata?.usageReport);
     const sessionRelationship = useMemo(
@@ -358,7 +360,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       );
     }
 
-    if (isGoalPendingMessage) {
+    if (isGoalLoadingMessage) {
       return (
         <div className="session-usage-report-card session-usage-report-card--loading" aria-live="polite">
           <div className="session-usage-report-card__loading-main">

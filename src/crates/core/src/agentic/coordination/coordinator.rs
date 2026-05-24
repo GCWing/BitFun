@@ -228,6 +228,88 @@ impl Drop for CancelTokenGuard {
 }
 
 #[derive(Clone)]
+struct ActiveSubagentExecution {
+    parent_session_id: String,
+    parent_dialog_turn_id: String,
+    subagent_session_id: String,
+    subagent_dialog_turn_id: String,
+    cancel_token: CancellationToken,
+    abort_handle: tokio::task::AbortHandle,
+}
+
+/// Ensures orphaned subagent work is stopped when the parent tool await is dropped.
+struct SubagentExecutionScope {
+    execution_engine: Arc<ExecutionEngine>,
+    tool_pipeline: Arc<ToolPipeline>,
+    session_manager: Arc<SessionManager>,
+    active_subagent_executions: Arc<DashMap<String, ActiveSubagentExecution>>,
+    subagent_session_id: String,
+    subagent_dialog_turn_id: String,
+    subagent_cancel_token: CancellationToken,
+    abort_handle: tokio::task::AbortHandle,
+    disarmed: bool,
+}
+
+impl SubagentExecutionScope {
+    fn disarm(&mut self) {
+        self.disarmed = true;
+        self.active_subagent_executions
+            .remove(&self.subagent_session_id);
+    }
+}
+
+impl Drop for SubagentExecutionScope {
+    fn drop(&mut self) {
+        if self.disarmed {
+            return;
+        }
+
+        warn!(
+            "Subagent execution scope dropped without normal completion; stopping orphaned subagent: session_id={}, dialog_turn_id={}",
+            self.subagent_session_id, self.subagent_dialog_turn_id
+        );
+
+        self.subagent_cancel_token.cancel();
+        self.abort_handle.abort();
+        self.active_subagent_executions
+            .remove(&self.subagent_session_id);
+
+        let execution_engine = self.execution_engine.clone();
+        let tool_pipeline = self.tool_pipeline.clone();
+        let session_manager = self.session_manager.clone();
+        let subagent_session_id = self.subagent_session_id.clone();
+        let subagent_dialog_turn_id = self.subagent_dialog_turn_id.clone();
+
+        tokio::spawn(async move {
+            if let Err(error) = execution_engine
+                .cancel_dialog_turn(&subagent_dialog_turn_id)
+                .await
+            {
+                warn!(
+                    "Failed to cancel orphaned subagent dialog turn: session_id={}, dialog_turn_id={}, error={}",
+                    subagent_session_id, subagent_dialog_turn_id, error
+                );
+            }
+
+            if let Err(error) = tool_pipeline
+                .cancel_dialog_turn_tools(&subagent_dialog_turn_id)
+                .await
+            {
+                warn!(
+                    "Failed to cancel orphaned subagent tools: session_id={}, dialog_turn_id={}, error={}",
+                    subagent_session_id, subagent_dialog_turn_id, error
+                );
+            }
+
+            session_manager.reset_session_state_if_processing(
+                &subagent_session_id,
+                &subagent_dialog_turn_id,
+            );
+        });
+    }
+}
+
+#[derive(Clone)]
 struct SubagentConcurrencyLimiter {
     semaphore: Arc<Semaphore>,
     max_concurrency: usize,
@@ -355,6 +437,8 @@ pub struct ConversationCoordinator {
     subagent_profile_concurrency_limiters: Arc<RwLock<HashMap<usize, SubagentConcurrencyLimiter>>>,
     /// Registry for dynamically adjusting subagent timeouts.
     subagent_timeout_registry: Arc<RwLock<HashMap<String, Arc<SubagentTimeoutHandle>>>>,
+    /// Active subagent executions keyed by subagent session id.
+    active_subagent_executions: Arc<DashMap<String, ActiveSubagentExecution>>,
     /// Notifies DialogScheduler of turn outcomes; injected after construction
     scheduler_notify_tx: OnceLock<mpsc::Sender<(String, TurnOutcome)>>,
     /// Round-boundary yield (same source as scheduler's yield flags); injected after construction
@@ -808,6 +892,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             subagent_concurrency_limiter: Arc::new(RwLock::new(None)),
             subagent_profile_concurrency_limiters: Arc::new(RwLock::new(HashMap::new())),
             subagent_timeout_registry: Arc::new(RwLock::new(HashMap::new())),
+            active_subagent_executions: Arc::new(DashMap::new()),
             scheduler_notify_tx: OnceLock::new(),
             round_preempt_source: OnceLock::new(),
             round_injection_source: OnceLock::new(),
@@ -1483,6 +1568,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     pub async fn prepare_goal_continuation_after_turn(
         &self,
         session_id: &str,
+        source_turn_id: &str,
         user_input: &str,
         user_message_metadata: Option<&serde_json::Value>,
         _final_response: &str,
@@ -1511,16 +1597,37 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             self.session_manager
                 .merge_session_custom_metadata(session_id, clear_goal_mode_patch())
                 .await?;
+            self.emit_event(AgenticEvent::GoalVerificationFinished {
+                session_id: session_id.to_string(),
+                source_turn_id: source_turn_id.to_string(),
+                outcome: "limit_reached".to_string(),
+            })
+            .await;
             return Ok(None);
         }
+
+        self.emit_event(AgenticEvent::GoalVerificationStarted {
+            session_id: session_id.to_string(),
+            source_turn_id: source_turn_id.to_string(),
+        })
+        .await;
 
         let context_messages = self
             .session_manager
             .get_context_messages(session_id)
             .await?;
-        let verification = verify_goal_achievement(&goal_state, &context_messages)
-            .await
-            .map_err(user_facing_goal_mode_error)?;
+        let verification = match verify_goal_achievement(&goal_state, &context_messages).await {
+            Ok(result) => result,
+            Err(error) => {
+                self.emit_event(AgenticEvent::GoalVerificationFinished {
+                    session_id: session_id.to_string(),
+                    source_turn_id: source_turn_id.to_string(),
+                    outcome: "failed".to_string(),
+                })
+                .await;
+                return Err(user_facing_goal_mode_error(error));
+            }
+        };
 
         if verification.achieved {
             info!(
@@ -1530,6 +1637,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             self.session_manager
                 .merge_session_custom_metadata(session_id, clear_goal_mode_patch())
                 .await?;
+            self.emit_event(AgenticEvent::GoalVerificationFinished {
+                session_id: session_id.to_string(),
+                source_turn_id: source_turn_id.to_string(),
+                outcome: "achieved".to_string(),
+            })
+            .await;
             return Ok(None);
         }
 
@@ -1537,6 +1650,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.session_manager
             .merge_session_custom_metadata(session_id, goal_mode_patch(&goal_state))
             .await?;
+
+        self.emit_event(AgenticEvent::GoalVerificationFinished {
+            session_id: session_id.to_string(),
+            source_turn_id: source_turn_id.to_string(),
+            outcome: "continuing".to_string(),
+        })
+        .await;
 
         Ok(Some(build_goal_continuation_plan(
             &goal_state,
@@ -2564,6 +2684,137 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
     }
 
+    async fn cancel_active_subagents_for_parent_turn(
+        &self,
+        parent_session_id: &str,
+        parent_dialog_turn_id: &str,
+    ) {
+        let active_subagents: Vec<ActiveSubagentExecution> = self
+            .active_subagent_executions
+            .iter()
+            .filter(|entry| {
+                entry.parent_session_id == parent_session_id
+                    && entry.parent_dialog_turn_id == parent_dialog_turn_id
+            })
+            .map(|entry| entry.value().clone())
+            .collect();
+
+        if active_subagents.is_empty() {
+            return;
+        }
+
+        info!(
+            "Cancelling {} active subagent execution(s) for parent turn: parent_session_id={}, parent_dialog_turn_id={}",
+            active_subagents.len(),
+            parent_session_id,
+            parent_dialog_turn_id
+        );
+
+        for active in active_subagents {
+            self.stop_active_subagent_execution(&active, "Parent dialog turn cancelled")
+                .await;
+        }
+    }
+
+    async fn stop_active_subagent_execution(
+        &self,
+        active: &ActiveSubagentExecution,
+        reason: &str,
+    ) {
+        debug!(
+            "Stopping active subagent execution: subagent_session_id={}, subagent_dialog_turn_id={}, parent_session_id={}, parent_dialog_turn_id={}, reason={}",
+            active.subagent_session_id,
+            active.subagent_dialog_turn_id,
+            active.parent_session_id,
+            active.parent_dialog_turn_id,
+            reason
+        );
+
+        active.cancel_token.cancel();
+        active.abort_handle.abort();
+
+        if let Err(error) = self
+            .execution_engine
+            .cancel_dialog_turn(&active.subagent_dialog_turn_id)
+            .await
+        {
+            warn!(
+                "Failed to cancel active subagent dialog turn: subagent_session_id={}, subagent_dialog_turn_id={}, error={}",
+                active.subagent_session_id, active.subagent_dialog_turn_id, error
+            );
+        }
+
+        if let Err(error) = self
+            .tool_pipeline
+            .cancel_dialog_turn_tools(&active.subagent_dialog_turn_id)
+            .await
+        {
+            warn!(
+                "Failed to cancel active subagent tools: subagent_session_id={}, subagent_dialog_turn_id={}, error={}",
+                active.subagent_session_id, active.subagent_dialog_turn_id, error
+            );
+        }
+
+        match self
+            .session_manager
+            .update_session_state_for_turn_if_processing(
+                &active.subagent_session_id,
+                &active.subagent_dialog_turn_id,
+                SessionState::Idle,
+            )
+            .await
+        {
+            Ok(true) => {
+                self.emit_event(AgenticEvent::SessionStateChanged {
+                    session_id: active.subagent_session_id.clone(),
+                    new_state: "idle".to_string(),
+                })
+                .await;
+                if let Err(error) = self
+                    .event_queue
+                    .enqueue(
+                        AgenticEvent::DialogTurnCancelled {
+                            session_id: active.subagent_session_id.clone(),
+                            turn_id: active.subagent_dialog_turn_id.clone(),
+                        },
+                        Some(EventPriority::Critical),
+                    )
+                    .await
+                {
+                    warn!(
+                        "Failed to emit subagent DialogTurnCancelled event: subagent_session_id={}, subagent_dialog_turn_id={}, error={}",
+                        active.subagent_session_id, active.subagent_dialog_turn_id, error
+                    );
+                }
+            }
+            Ok(false) => {}
+            Err(error) => {
+                warn!(
+                    "Failed to set subagent session Idle after stop: subagent_session_id={}, subagent_dialog_turn_id={}, error={}",
+                    active.subagent_session_id, active.subagent_dialog_turn_id, error
+                );
+            }
+        }
+
+        if let Err(error) = self.session_manager.cancel_dialog_turn(
+            &active.subagent_session_id,
+            &active.subagent_dialog_turn_id,
+        ).await {
+            warn!(
+                "Failed to persist subagent turn cancellation: subagent_session_id={}, subagent_dialog_turn_id={}, error={}",
+                active.subagent_session_id, active.subagent_dialog_turn_id, error
+            );
+        }
+
+        self.session_manager.reset_session_state_if_processing(
+            &active.subagent_session_id,
+            &active.subagent_dialog_turn_id,
+        );
+
+        self.active_subagent_executions
+            .remove(&active.subagent_session_id);
+    }
+
     /// Cancel dialog turn execution
     /// Immediately set state to Idle to allow new dialog, old turn ends naturally via cancel token
     pub async fn cancel_dialog_turn(
@@ -2638,6 +2889,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         {
             warn!("Failed to cancel tool execution: {}", e);
         }
+
+        self.cancel_active_subagents_for_parent_turn(session_id, dialog_turn_id)
+            .await;
 
         // Step 4: Wait briefly for the spawn task that owns this turn to drain
         // its in-memory message writes before returning. Capped so the RPC
@@ -3384,6 +3638,33 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )
                 .await
         });
+        let abort_handle = execution_task.abort_handle();
+
+        if subagent_parent_info.is_some() {
+            self.active_subagent_executions.insert(
+                session_id.clone(),
+                ActiveSubagentExecution {
+                    parent_session_id: parent_session_id.to_string(),
+                    parent_dialog_turn_id: parent_dialog_turn_id.to_string(),
+                    subagent_session_id: session_id.clone(),
+                    subagent_dialog_turn_id: dialog_turn_id.clone(),
+                    cancel_token: subagent_cancel_token.clone(),
+                    abort_handle: abort_handle.clone(),
+                },
+            );
+        }
+
+        let mut execution_scope = SubagentExecutionScope {
+            execution_engine: self.execution_engine.clone(),
+            tool_pipeline: self.tool_pipeline.clone(),
+            session_manager: self.session_manager.clone(),
+            active_subagent_executions: self.active_subagent_executions.clone(),
+            subagent_session_id: session_id.clone(),
+            subagent_dialog_turn_id: dialog_turn_id.clone(),
+            subagent_cancel_token: subagent_cancel_token.clone(),
+            abort_handle,
+            disarmed: false,
+        };
 
         enum SubagentExecutionOutcome<T> {
             Completed(T),
@@ -3475,6 +3756,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     let mut registry = self.subagent_timeout_registry.write().await;
                     registry.remove(&session_id);
 
+                    execution_scope.disarm();
                     return Err(BitFunError::tool(format!(
                         "Subagent '{}' failed to join: {}",
                         agent_type, error
@@ -3537,6 +3819,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 let mut registry = self.subagent_timeout_registry.write().await;
                 registry.remove(&session_id);
 
+                execution_scope.disarm();
                 return Err(BitFunError::Cancelled(
                     "Subagent task has been cancelled".to_string(),
                 ));
@@ -3641,6 +3924,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     let mut registry = self.subagent_timeout_registry.write().await;
                     registry.remove(&session_id);
 
+                    execution_scope.disarm();
                     return Ok(partial_result);
                 }
 
@@ -3653,6 +3937,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 let mut registry = self.subagent_timeout_registry.write().await;
                 registry.remove(&session_id);
 
+                execution_scope.disarm();
                 return Err(BitFunError::Timeout(timeout_error_message.clone()));
             }
         };
@@ -3681,6 +3966,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 let mut registry = self.subagent_timeout_registry.write().await;
                 registry.remove(&session_id);
 
+                execution_scope.disarm();
                 return Err(e);
             }
         };
@@ -3749,6 +4035,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             response_text.len(),
             subagent_started_at.elapsed().as_millis()
         );
+        execution_scope.disarm();
         Ok(SubagentResult::completed(response_text))
     }
 
@@ -4016,10 +4303,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         };
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::service("Coordinator not initialized".to_string()))?;
+        let parent_cancel_token = self
+            .execution_engine
+            .cancel_token_for_dialog_turn(&subagent_parent_info.dialog_turn_id)
+            .map(|token| token.child_token());
 
         tokio::spawn(async move {
             let delivery_text = match coordinator
-                .execute_hidden_subagent_internal(request, None, timeout_seconds)
+                .execute_hidden_subagent_internal(
+                    request,
+                    parent_cancel_token.as_ref(),
+                    timeout_seconds,
+                )
                 .await
             {
                 Ok(result) => format_background_subagent_delivery_text(

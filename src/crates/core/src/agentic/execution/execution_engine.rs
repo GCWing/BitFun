@@ -2522,6 +2522,12 @@ impl ExecutionEngine {
             .register_cancel_token(dialog_turn_id, token)
     }
 
+    /// Return a clone of the cancellation token registered for a dialog turn.
+    pub fn cancel_token_for_dialog_turn(&self, dialog_turn_id: &str) -> Option<CancellationToken> {
+        self.round_executor
+            .cancel_token_for_dialog_turn(dialog_turn_id)
+    }
+
     /// Cleanup cancellation token (for external calls)
     pub async fn cleanup_cancel_token(&self, dialog_turn_id: &str) {
         self.round_executor

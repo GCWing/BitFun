@@ -1,18 +1,22 @@
 use crate::agentic::tools::file_read_state_runtime::{
-    file_mutation_timestamp_ms, update_file_read_state_after_mutation,
-    validate_edit_against_read_state, validate_edit_has_prior_read,
+    assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms,
+    get_stored_file_read_state, local_file_modification_time_ms,
+    read_current_file_content, read_state_tracking_enabled, update_file_read_state_after_mutation,
+    validate_edit_against_read_state, validate_edit_has_prior_read, FILE_UNEXPECTEDLY_MODIFIED_ERROR,
 };
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::agentic::tools::file_tool_guidance::file_tool_guidance_message;
+use crate::agentic::tools::framework::{
+    Tool, ToolPathResolution, ToolResult, ToolUseContext, ValidationResult,
+};
 use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use std::path::Path;
 use tool_runtime::fs::edit_file::apply_edit_to_content;
 
 pub struct FileEditTool;
 
-const LARGE_EDIT_SOFT_LINE_LIMIT: usize = 200;
-const LARGE_EDIT_SOFT_BYTE_LIMIT: usize = 20 * 1024;
 const EDIT_TOOL_PROMPT: &str = r#"Performs exact string replacements in files.
 
 Usage:
@@ -23,8 +27,6 @@ Usage:
 - Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.
 - The edit will FAIL if `old_string` is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.
 - Use `replace_all` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance."#;
-
-const EDIT_RETRY_GUIDANCE: &str = "Common causes: stale Read output after another edit, copied Read line-number prefixes, changed whitespace, truncated Read lines, or an old_string that is too broad. Recovery: read the current target area again, copy the exact current text after the tab on each Read line, and retry with a uniquely matching old_string. If several edits target the same file, apply them sequentially from fresh content or replace one stable enclosing block. If the text appears more than once, include more surrounding context or set replace_all only when every occurrence should change.";
 
 impl Default for FileEditTool {
     fn default() -> Self {
@@ -37,16 +39,71 @@ impl FileEditTool {
         Self
     }
 
-    fn enhance_edit_error(file_path: &str, error: String) -> String {
-        if error.contains("old_string not found in file") || error.contains("`old_string` appears")
-        {
+    fn guidance_failure(message: String) -> ValidationResult {
+        ValidationResult {
+            result: false,
+            message: Some(file_tool_guidance_message(message)),
+            error_code: Some(400),
+            meta: Some(json!({ "failure_kind": "guidance" })),
+        }
+    }
+
+    fn format_edit_freshness_guidance(logical_path: &str, error: String) -> String {
+        if error == FILE_UNEXPECTEDLY_MODIFIED_ERROR || error.contains("unexpectedly modified") {
             format!(
-                "Edit failed for {}: {}\n{}",
-                file_path, error, EDIT_RETRY_GUIDANCE
+                "The file {} changed since it was last read. Use Read again, then retry Edit.",
+                logical_path
             )
         } else {
             error
         }
+    }
+
+    fn is_edit_content_guardrail_error(error: &str) -> bool {
+        error.contains("old_string not found in file")
+            || error.contains("`old_string` appears")
+    }
+
+    async fn edit_read_state_guardrail_error(
+        context: &ToolUseContext,
+        resolved: &ToolPathResolution,
+    ) -> Option<String> {
+        if let Some(message) = validate_edit_has_prior_read(context, resolved) {
+            return Some(message);
+        }
+
+        validate_edit_against_read_state(context, resolved).await
+    }
+
+    fn assert_atomic_edit_freshness(
+        context: &ToolUseContext,
+        resolved: &ToolPathResolution,
+        content: &str,
+    ) -> BitFunResult<()> {
+        if !read_state_tracking_enabled(context) {
+            return Ok(());
+        }
+
+        let read_state = get_stored_file_read_state(context, resolved);
+        let current_mtime_ms = if resolved.uses_remote_workspace_backend() {
+            None
+        } else {
+            Some(local_file_modification_time_ms(Path::new(&resolved.resolved_path)))
+        };
+
+        if let Some(error) = assert_file_not_unexpectedly_modified(
+            read_state.as_ref(),
+            content,
+            current_mtime_ms,
+        )
+        .err()
+        {
+            return Err(BitFunError::tool(file_tool_guidance_message(
+                Self::format_edit_freshness_guidance(&resolved.logical_path, error),
+            )));
+        }
+
+        Ok(())
     }
 }
 
@@ -138,6 +195,36 @@ impl Tool for FileEditTool {
             };
         }
 
+        let old_string = input
+            .get("old_string")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let new_string = input
+            .get("new_string")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let replace_all = input
+            .get("replace_all")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        if old_string.is_empty() {
+            return ValidationResult {
+                result: false,
+                message: Some("old_string cannot be empty".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+        if old_string == new_string {
+            return ValidationResult {
+                result: false,
+                message: Some("new_string must be different from old_string".to_string()),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
+
         if let Some(ctx) = context {
             let resolved = match ctx.resolve_tool_path(file_path) {
                 Ok(resolved) => resolved,
@@ -160,69 +247,39 @@ impl Tool for FileEditTool {
                 };
             }
 
-            if let Some(message) = validate_edit_has_prior_read(ctx, &resolved) {
+            if let Some(message) = Self::edit_read_state_guardrail_error(ctx, &resolved).await {
+                return Self::guidance_failure(message);
+            }
+
+            let file_content = match read_current_file_content(ctx, &resolved).await {
+                Ok(content) => content,
+                Err(error) => {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(format!(
+                            "Failed to read file {}: {}",
+                            resolved.logical_path, error
+                        )),
+                        error_code: Some(400),
+                        meta: None,
+                    };
+                }
+            };
+
+            if let Err(error) =
+                apply_edit_to_content(&file_content, old_string, new_string, replace_all)
+            {
+                if Self::is_edit_content_guardrail_error(&error) {
+                    return Self::guidance_failure(error);
+                }
+
                 return ValidationResult {
                     result: false,
-                    message: Some(message),
+                    message: Some(error),
                     error_code: Some(400),
                     meta: None,
                 };
             }
-
-            if let Some(message) = validate_edit_against_read_state(ctx, &resolved).await {
-                return ValidationResult {
-                    result: false,
-                    message: Some(message),
-                    error_code: Some(400),
-                    meta: None,
-                };
-            }
-        }
-
-        let old_string = input
-            .get("old_string")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let new_string = input
-            .get("new_string")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        if old_string.is_empty() {
-            return ValidationResult {
-                result: false,
-                message: Some("old_string cannot be empty".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
-        }
-        if old_string == new_string {
-            return ValidationResult {
-                result: false,
-                message: Some("new_string must be different from old_string".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
-        }
-
-        let largest_lines = old_string.lines().count().max(new_string.lines().count());
-        let largest_bytes = old_string.len().max(new_string.len());
-        if largest_lines > LARGE_EDIT_SOFT_LINE_LIMIT || largest_bytes > LARGE_EDIT_SOFT_BYTE_LIMIT
-        {
-            return ValidationResult {
-                result: true,
-                message: Some(format!(
-                    "Large Edit payload: largest side is {} lines, {} bytes. This is allowed when necessary, but a staged approach is usually more reliable: edit one stable section, function, or component at a time, and refresh file context before additional edits to the same file.",
-                    largest_lines, largest_bytes
-                )),
-                error_code: None,
-                meta: Some(json!({
-                    "large_edit": true,
-                    "largest_line_count": largest_lines,
-                    "largest_byte_count": largest_bytes,
-                    "soft_line_limit": LARGE_EDIT_SOFT_LINE_LIMIT,
-                    "soft_byte_limit": LARGE_EDIT_SOFT_BYTE_LIMIT
-                })),
-            };
         }
 
         ValidationResult::default()
@@ -272,8 +329,15 @@ impl Tool for FileEditTool {
                 .read_file_text(&resolved.resolved_path)
                 .await
                 .map_err(|e| BitFunError::tool(format!("Failed to read file: {}", e)))?;
+            Self::assert_atomic_edit_freshness(context, &resolved, &content)?;
             let edit_result = apply_edit_to_content(&content, old_string, new_string, replace_all)
-                .map_err(|e| BitFunError::tool(Self::enhance_edit_error(file_path, e)))?;
+                .map_err(|error| {
+                    if Self::is_edit_content_guardrail_error(&error) {
+                        BitFunError::tool(file_tool_guidance_message(error))
+                    } else {
+                        BitFunError::tool(error)
+                    }
+                })?;
 
             ws_fs
                 .write_file(&resolved.resolved_path, edit_result.new_content.as_bytes())
@@ -315,8 +379,15 @@ impl Tool for FileEditTool {
                 resolved.logical_path, e
             ))
         })?;
+        Self::assert_atomic_edit_freshness(context, &resolved, &content)?;
         let edit_result = apply_edit_to_content(&content, old_string, new_string, replace_all)
-            .map_err(|e| BitFunError::tool(Self::enhance_edit_error(file_path, e)))?;
+            .map_err(|error| {
+                if Self::is_edit_content_guardrail_error(&error) {
+                    BitFunError::tool(file_tool_guidance_message(error))
+                } else {
+                    BitFunError::tool(error)
+                }
+            })?;
 
         std::fs::write(&resolved.resolved_path, edit_result.new_content.as_bytes()).map_err(
             |e| {
@@ -368,7 +439,6 @@ mod tests {
         assert!(description.contains("You must use your `Read` tool"));
         assert!(description.contains("spaces + line number + tab"));
         assert!(description.contains("NEVER write new files unless explicitly required"));
-        assert!(!description.contains("Large Edit payload"));
         assert!(!description.contains("auto-strip"));
     }
 
@@ -423,30 +493,13 @@ mod tests {
     }
 
     #[test]
-    fn edit_not_found_error_includes_retry_guidance() {
-        let message = FileEditTool::enhance_edit_error(
-            "src/lib.rs",
-            "old_string not found in file.\n[nearby content around line 2]\nfn main() {}".to_string(),
-        );
-
-        assert!(message.contains("Edit failed for src/lib.rs"));
-        assert!(message.contains("Common causes"));
-        assert!(message.contains("stale Read output"));
-        assert!(message.contains("read the current target area again"));
-        assert!(message.contains("[nearby content around line 2]"));
-    }
-
-    #[test]
-    fn edit_multiple_match_error_includes_unique_context_guidance() {
-        let message = FileEditTool::enhance_edit_error(
-            "src/lib.rs",
-            "`old_string` appears 2 times in file\nMatched contexts:\n[match 1 starts at line 4]"
-                .to_string(),
-        );
-
-        assert!(message.contains("old_string"));
-        assert!(message.contains("[match 1 starts at line 4]"));
-        assert!(message.contains("include more surrounding context"));
-        assert!(message.contains("replace_all only when every occurrence should change"));
+    fn edit_content_guardrail_detection_matches_apply_edit_errors() {
+        assert!(FileEditTool::is_edit_content_guardrail_error(
+            "old_string not found in file."
+        ));
+        assert!(FileEditTool::is_edit_content_guardrail_error(
+            "`old_string` appears 2 times in file, either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.\n"
+        ));
+        assert!(!FileEditTool::is_edit_content_guardrail_error("Permission denied"));
     }
 }

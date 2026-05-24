@@ -420,14 +420,7 @@ Usage:
         } else {
             local_file_modification_time_ms(Path::new(&resolved.resolved_path))
         };
-        record_file_read_state(
-            context,
-            &resolved,
-            &read_file_result,
-            start_line,
-            limit,
-            timestamp_ms,
-        );
+        record_file_read_state(context, &resolved, &read_file_result, timestamp_ms);
 
         let mut result_for_assistant = format!(
             "Read lines {}-{} from {} ({} total lines)\n<file_content>\n{}\n</file_content>",

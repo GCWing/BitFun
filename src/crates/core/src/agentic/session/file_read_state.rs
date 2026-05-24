@@ -13,6 +13,8 @@ pub struct FileReadState {
     pub start_line: usize,
     pub end_line: usize,
     pub total_lines: usize,
+    /// True when this entry was populated by auto-injection and the model has
+    /// not explicitly read the file. Range reads from the Read tool do not set this.
     pub is_partial_view: bool,
 }
 

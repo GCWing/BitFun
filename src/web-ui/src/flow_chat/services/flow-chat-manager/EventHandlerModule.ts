@@ -21,6 +21,11 @@ import {
 import { notificationService } from '../../../shared/notification-system/services/NotificationService';
 import type { NotificationAction } from '../../../shared/notification-system/types';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  handleGoalVerificationFinished,
+  handleGoalVerificationStarted,
+  type GoalVerificationOutcome,
+} from '../goalVerificationService';
 import type {
   DeepReviewQueueStateChangedEvent,
   ImageAnalysisEvent,
@@ -637,6 +642,12 @@ export async function initializeEventListeners(
     },
     onContextCompressionFailed: (event) => {
       handleCompressionFailed(context, event);
+    },
+    onGoalVerificationStarted: (event) => {
+      handleGoalVerificationStartedEvent(event);
+    },
+    onGoalVerificationFinished: (event) => {
+      handleGoalVerificationFinishedEvent(event);
     },
     onSessionTitleGenerated: (event) => {
       handleSessionTitleGenerated(event);
@@ -1309,6 +1320,8 @@ function cleanRemoteUserInput(raw: string): string {
 function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   const { sessionId, turnId, turnIndex, userInput, originalUserInput, userMessageMetadata } = event;
 
+  FlowChatStore.getInstance().removeLocalGoalVerifyingTurn(sessionId);
+
   finalizePendingTurnCompletionNow(context, sessionId);
   clearPendingTurnCompletion(context, sessionId, turnId);
 
@@ -1933,6 +1946,68 @@ function buildUnsuccessfulCompletionError(finishReason?: string): string {
   return finishReason
     ? `Dialog turn ended without a usable result. finish_reason=${finishReason}`
     : 'Dialog turn ended without a usable result.';
+}
+
+function parseGoalVerificationEvent(event: any): {
+  sessionId?: string;
+  sourceTurnId?: string;
+  outcome?: GoalVerificationOutcome;
+} {
+  const sessionId = event?.sessionId ?? event?.session_id;
+  const sourceTurnId = event?.sourceTurnId ?? event?.source_turn_id;
+  const rawOutcome = event?.outcome;
+  const outcome =
+    rawOutcome === 'achieved'
+      || rawOutcome === 'continuing'
+      || rawOutcome === 'failed'
+      || rawOutcome === 'limit_reached'
+      ? rawOutcome
+      : undefined;
+
+  return {
+    sessionId: typeof sessionId === 'string' ? sessionId : undefined,
+    sourceTurnId: typeof sourceTurnId === 'string' ? sourceTurnId : undefined,
+    outcome,
+  };
+}
+
+function handleGoalVerificationStartedEvent(event: any): void {
+  const payload = parseGoalVerificationEvent(event);
+  if (!payload.sessionId) {
+    log.warn('GoalVerificationStarted missing sessionId', { event });
+    return;
+  }
+
+  handleGoalVerificationStarted(
+    { sessionId: payload.sessionId, sourceTurnId: payload.sourceTurnId },
+    i18nService.t('flow-chat:chatInput.goalVerifying', {
+      defaultValue: 'Checking if the session goal is met...',
+    }),
+  );
+}
+
+function handleGoalVerificationFinishedEvent(event: any): void {
+  const payload = parseGoalVerificationEvent(event);
+  if (!payload.sessionId) {
+    log.warn('GoalVerificationFinished missing sessionId', { event });
+    return;
+  }
+
+  handleGoalVerificationFinished(
+    {
+      sessionId: payload.sessionId,
+      sourceTurnId: payload.sourceTurnId,
+      outcome: payload.outcome,
+    },
+    {
+      achievedTitle: i18nService.t('flow-chat:chatInput.goalAchieved', {
+        defaultValue: 'Session goal achieved',
+      }),
+      failedMessage: i18nService.t('flow-chat:chatInput.goalVerifyFailed', {
+        defaultValue: 'Goal verification failed. Check model configuration and try again.',
+      }),
+    },
+  );
 }
 
 export function handleDialogTurnComplete(

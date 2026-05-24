@@ -283,6 +283,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     if (metadata?.localCommandKind === 'goal_pending') {
       return t('chatInput.goalGenerating');
     }
+    if (metadata?.localCommandKind === 'goal_verifying') {
+      return t('chatInput.goalVerifying');
+    }
     return null;
   }, [t]);
 

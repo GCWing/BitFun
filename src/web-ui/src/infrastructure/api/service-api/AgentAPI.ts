@@ -671,6 +671,14 @@ export class AgentAPI {
     return api.listen<CompressionEvent>('agentic://context-compression-failed', callback);
   }
 
+  onGoalVerificationStarted(callback: (event: AgenticEvent) => void): () => void {
+    return api.listen<AgenticEvent>('agentic://goal-verification-started', callback);
+  }
+
+  onGoalVerificationFinished(callback: (event: AgenticEvent) => void): () => void {
+    return api.listen<AgenticEvent>('agentic://goal-verification-finished', callback);
+  }
+
   onImageAnalysisStarted(callback: (event: ImageAnalysisEvent) => void): () => void {
     return api.listen<ImageAnalysisEvent>('agentic://image-analysis-started', callback);
   }

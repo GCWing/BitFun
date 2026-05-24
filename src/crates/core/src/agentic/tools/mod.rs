@@ -1,6 +1,7 @@
 //! Tool system - includes Tool interface, tool registry and tool executor
 
 pub mod file_read_state_runtime;
+pub mod file_tool_guidance;
 pub mod browser_control;
 pub mod computer_use_capability;
 pub mod computer_use_host;

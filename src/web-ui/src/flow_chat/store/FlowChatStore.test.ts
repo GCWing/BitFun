@@ -252,6 +252,30 @@ describe('FlowChatStore local usage reports', () => {
     expect(stored?.dialogTurns).toHaveLength(0);
   });
 
+  it('can append and remove local goal verifying turns', () => {
+    const session = createSession();
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    const turn = flowChatStore.addLocalGoalVerifyingTurn({
+      sessionId: session.sessionId,
+      message: 'Checking if the session goal is met...',
+      verifyingId: 'verify-1',
+    });
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns[0];
+    expect(turn).not.toBeNull();
+    expect(stored?.userMessage.metadata).toMatchObject({
+      localCommandKind: 'goal_verifying',
+      goalVerifyingId: 'verify-1',
+    });
+
+    flowChatStore.removeLocalGoalVerifyingTurn(session.sessionId);
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns).toHaveLength(0);
+  });
+
   it('appends repeated usage reports as separate snapshots', () => {
     const session = createSession();
     flowChatStore.setState(() => ({

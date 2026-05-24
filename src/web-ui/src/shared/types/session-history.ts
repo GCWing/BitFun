@@ -98,7 +98,7 @@ export interface ReviewActionPersistedState {
 export type SessionStatus = 'active' | 'archived' | 'completed';
 export type DialogTurnKind = 'user_dialog' | 'manual_compaction' | 'local_command';
 
-export type LocalCommandKind = 'usage_report' | 'goal_pending';
+export type LocalCommandKind = 'usage_report' | 'goal_pending' | 'goal_verifying';
 
 export interface LocalCommandMetadata {
   localCommandKind: LocalCommandKind;
@@ -109,6 +109,7 @@ export interface LocalCommandMetadata {
   usageReport?: Record<string, any>;
   usageReportStatus?: 'loading' | 'completed';
   goalPendingId?: string;
+  goalVerifyingId?: string;
 }
 
 export interface SessionList {
