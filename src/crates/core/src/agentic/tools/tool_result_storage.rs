@@ -13,7 +13,8 @@ use std::collections::HashSet;
 use std::path::Path;
 
 pub(crate) const DEFAULT_MAX_TOOL_RESULT_CHARS: usize = 50_000;
-pub(crate) const READ_MAX_TOOL_RESULT_CHARS: usize = 16_000;
+/// Keep in sync with `FileReadTool::DEFAULT_READ_MAX_TOTAL_CHARS` plus wrapper overhead.
+pub(crate) const READ_MAX_TOOL_RESULT_CHARS: usize = 72_000;
 pub(crate) const MAX_TOOL_RESULTS_PER_ROUND_CHARS: usize = 200_000;
 pub(crate) const TOOL_RESULT_PREVIEW_CHARS: usize = 2_000;
 pub(crate) const PERSISTED_OUTPUT_TAG: &str = "<persisted-output>";

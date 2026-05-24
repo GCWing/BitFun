@@ -7,7 +7,7 @@ use std::fs;
 const MAX_MATCH_CONTEXTS: usize = 5;
 const CONTEXT_LINES_BEFORE: usize = 2;
 const CONTEXT_LINES_AFTER: usize = 2;
-const NOT_FOUND_DIAGNOSTIC_SNIPPETS: usize = 3;
+const NOT_FOUND_DIAGNOSTIC_SNIPPETS: usize = 1;
 const NOT_FOUND_MIN_SUBSTRING_LEN: usize = 8;
 
 /// Edit result, contains line number range information
@@ -180,17 +180,19 @@ fn snippet_context(lines: &[&str], line_idx: usize) -> String {
 }
 
 fn build_not_found_diagnostics(content: &str, old_string: &str) -> String {
-    let mut hints = Vec::new();
+    let mut hints = vec![
+        "Re-read the target lines with Read (use start_line/limit if needed), then copy the exact text after the tab on each line into old_string without reformatting indentation.".to_string(),
+    ];
 
     if contains_read_tool_line_prefixes(old_string) {
         hints.push(
-            "Detected Read-tool line-number prefixes inside `old_string`. Copy only the text after the tab on each line, or rely on the tool to strip those prefixes automatically on retry.".to_string(),
+            "Detected Read-tool line-number prefixes inside `old_string`. Copy only the text after the tab on each line.".to_string(),
         );
     }
 
     if contains_read_truncation_marker(old_string) {
         hints.push(
-            "Detected a Read-tool `[truncated]` marker inside `old_string`. Re-read the file with a narrower start_line/limit so the target lines are complete.".to_string(),
+            "Detected a Read-tool `[truncated]` marker inside `old_string`. Re-read with start_line/limit so the target lines are complete.".to_string(),
         );
     }
 
@@ -239,17 +241,13 @@ fn build_not_found_diagnostics(content: &str, old_string: &str) -> String {
 
         if !snippets.is_empty() {
             hints.push(format!(
-                "Current file snippets that may be closest to your `old_string`:\n{}",
+                "Closest current file snippet:\n{}",
                 snippets.join("\n---\n")
             ));
         }
     }
 
-    if hints.is_empty() {
-        "No close match was found in the current file contents. Re-read the target area and copy the exact current text.".to_string()
-    } else {
-        hints.join("\n\n")
-    }
+    hints.join("\n\n")
 }
 
 fn apply_match_and_replace(

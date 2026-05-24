@@ -23,10 +23,14 @@ Usage:
 - You must use your `Read` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file.
 - The `file_path` parameter must be a workspace-relative path, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
 - When editing text from Read tool output, ensure you preserve the exact indentation (tabs/spaces) as it appears AFTER the line number prefix. The line number prefix format is: spaces + line number + tab. Everything after that is the actual file content to match. Never include any part of the line number prefix in the old_string or new_string.
+- Copy `old_string` verbatim from your latest Read of this file. Do not reformat HTML/CSS/JS, do not normalize indentation, and do not reconstruct the block from memory.
+- Use the smallest `old_string` that is clearly unique — usually 2-4 adjacent lines with stable surrounding context is sufficient.
+- If Read output was truncated or used start_line/limit, re-read until the full target block is visible before editing.
 - ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
 - Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.
 - The edit will FAIL if `old_string` is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.
-- Use `replace_all` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance."#;
+- Use `replace_all` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable for instance.
+- If an edit fails because the text was not found, call Read again on the target lines and retry with a freshly copied `old_string`."#;
 
 impl Default for FileEditTool {
     fn default() -> Self {
@@ -131,11 +135,11 @@ impl Tool for FileEditTool {
                 },
                 "old_string": {
                     "type": "string",
-                    "description": "The text to replace"
+                    "description": "Exact text to replace, copied verbatim from your latest Read of this file (content after the line-number tab only). Preserve indentation; do not reformat."
                 },
                 "new_string": {
                     "type": "string",
-                    "description": "The text to replace it with (must be different from old_string)"
+                    "description": "Replacement text with the same indentation style as old_string (must be different from old_string)"
                 },
                 "replace_all": {
                     "type": "boolean",
@@ -438,12 +442,13 @@ mod tests {
         assert_eq!(description, EDIT_TOOL_PROMPT);
         assert!(description.contains("You must use your `Read` tool"));
         assert!(description.contains("spaces + line number + tab"));
+        assert!(description.contains("verbatim from your latest Read"));
         assert!(description.contains("NEVER write new files unless explicitly required"));
         assert!(!description.contains("auto-strip"));
     }
 
     #[test]
-    fn edit_tool_schema_uses_minimal_parameter_descriptions() {
+    fn edit_tool_schema_describes_exact_copy_from_read() {
         let schema = FileEditTool::new().input_schema();
         let properties = schema
             .get("properties")
@@ -457,19 +462,21 @@ mod tests {
                 .and_then(Value::as_str),
             Some("The path to the file to modify")
         );
-        assert_eq!(
+        assert!(
             properties
                 .get("old_string")
                 .and_then(|value| value.get("description"))
-                .and_then(Value::as_str),
-            Some("The text to replace")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .contains("latest Read")
         );
-        assert_eq!(
+        assert!(
             properties
                 .get("new_string")
                 .and_then(|value| value.get("description"))
-                .and_then(Value::as_str),
-            Some("The text to replace it with (must be different from old_string)")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .contains("indentation")
         );
         assert_eq!(
             properties

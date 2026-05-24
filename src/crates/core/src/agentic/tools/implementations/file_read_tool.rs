@@ -20,6 +20,9 @@ pub struct FileReadTool {
     max_total_chars: usize,
 }
 
+/// Default cap on characters returned by a single Read call (excluding wrapper text).
+pub const DEFAULT_READ_MAX_TOTAL_CHARS: usize = 64_000;
+
 impl Default for FileReadTool {
     fn default() -> Self {
         Self::new()
@@ -31,7 +34,7 @@ impl FileReadTool {
         Self {
             default_max_lines_to_read: 2000,
             max_line_chars: 2000,
-            max_total_chars: 16_000,
+            max_total_chars: DEFAULT_READ_MAX_TOTAL_CHARS,
         }
     }
 
@@ -211,14 +214,14 @@ impl Tool for FileReadTool {
 Usage:
 - The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
 - Do not read host roots or placeholder paths such as `/workspace`.
-- By default, it reads up to {} lines starting from the beginning of the file.
-- You can optionally specify a start_line and limit. For large files, prefer reading targeted ranges instead of starting over from the beginning every time.
+- By default, it reads up to {} lines starting from the beginning of the file. When you plan to Edit a file, prefer this default full read so you see the exact bytes you will need to match.
+- You can optionally specify a start_line and limit. Use a range only when you already know the target lines; the range must include every line you will copy into Edit `old_string`.
 - Any lines longer than {} characters will be truncated.
-- Total output is capped at {} characters. If that limit is hit, narrow the range with start_line and limit.
+- Total output is capped at {} characters. If that limit is hit, continue with start_line/limit until the target lines are fully visible, then Edit using only text from those Read results.
 - Results are returned using cat -n format, with line numbers starting at 1.
 - This tool can only read files, not directories. To read a directory, use an ls command via the Bash tool.
 - You can call multiple tools in a single response. It is always better to speculatively read multiple potentially useful files in parallel.
-- Avoid tiny repeated slices (e.g. 30-100 line chunks). If you need more context, read a larger window.
+- Avoid tiny repeated slices (e.g. 30-100 line chunks). If you need more context, read a larger window that covers the whole block you will edit.
 "#,
             self.default_max_lines_to_read, self.max_line_chars, self.max_total_chars
         ))
