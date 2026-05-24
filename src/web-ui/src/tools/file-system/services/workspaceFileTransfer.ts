@@ -125,10 +125,6 @@ export function joinWorkspaceTargetPath(dir: string, fileName: string, remote = 
   return `${base}${sep}${fileName}`;
 }
 
-export function getParentPathFromFile(filePath: string): string {
-  return dirnameAbsolutePath(filePath);
-}
-
 export function resolveExplorerDropTargetDirectory(
   clientX: number,
   clientY: number,

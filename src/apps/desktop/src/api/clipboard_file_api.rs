@@ -30,6 +30,32 @@ pub struct FailedFile {
     pub error: String,
 }
 
+fn normalize_decoded_file_path(mut path: String) -> String {
+    path = path.replace('\\', "/");
+
+    while path.starts_with("//") {
+        path = path[1..].to_string();
+    }
+
+    if let Some(rest) = path.strip_prefix('/') {
+        if rest.len() >= 2 {
+            let bytes = rest.as_bytes();
+            if bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+                path = rest.to_string();
+            }
+        }
+    }
+
+    if path.len() >= 2 {
+        let bytes = path.as_bytes();
+        if bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+            path = format!("{}{}", bytes[0].to_ascii_uppercase() as char, &path[1..]);
+        }
+    }
+
+    path
+}
+
 fn decode_file_uri(uri: &str) -> Option<String> {
     let trimmed = uri.trim();
     if !trimmed.starts_with("file://") {
@@ -50,11 +76,11 @@ fn decode_file_uri(uri: &str) -> Option<String> {
         return None;
     };
 
-    Some(
-        urlencoding::decode(&path_part)
-            .map(|value| value.into_owned())
-            .unwrap_or(path_part),
-    )
+    let decoded = urlencoding::decode(&path_part)
+        .map(|value| value.into_owned())
+        .unwrap_or(path_part);
+
+    Some(normalize_decoded_file_path(decoded))
 }
 
 #[allow(dead_code)]
@@ -360,7 +386,10 @@ pub async fn paste_files(request: PasteFilesRequest) -> Result<PasteFilesRespons
 }
 
 fn generate_unique_path(path: &Path) -> std::path::PathBuf {
-    let parent = path.parent().unwrap_or(Path::new(""));
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     let extension = path.extension().and_then(|s| s.to_str());
 
@@ -403,7 +432,8 @@ fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> 
 
 #[cfg(test)]
 mod tests {
-    use super::{decode_file_uri, parse_uri_list};
+    use super::{decode_file_uri, generate_unique_path, parse_clipboard_path_segments, parse_uri_list};
+    use std::path::Path;
 
     #[test]
     fn decode_unix_file_uri() {
@@ -425,8 +455,46 @@ mod tests {
     fn decode_windows_file_uri() {
         assert_eq!(
             decode_file_uri("file:///C:/Users/dev/example.txt").as_deref(),
-            Some("/C:/Users/dev/example.txt")
+            Some("C:/Users/dev/example.txt")
         );
+    }
+
+    #[test]
+    fn decode_windows_file_uri_lowercases_drive_letter() {
+        assert_eq!(
+            decode_file_uri("file:///c:/Users/dev/example.txt").as_deref(),
+            Some("C:/Users/dev/example.txt")
+        );
+    }
+
+    #[test]
+    fn parse_clipboard_path_segments_handles_posix_paths() {
+        assert_eq!(
+            parse_clipboard_path_segments("/tmp/a.txt\n/tmp/b.txt"),
+            vec!["/tmp/a.txt".to_string(), "/tmp/b.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_clipboard_path_segments_handles_comma_separated_paths() {
+        assert_eq!(
+            parse_clipboard_path_segments("/tmp/a.txt,/tmp/b.txt"),
+            vec!["/tmp/a.txt".to_string(), "/tmp/b.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_clipboard_path_segments_decodes_file_uris() {
+        assert_eq!(
+            parse_clipboard_path_segments("file:///tmp/a.txt\r\nfile:///tmp/b.txt"),
+            vec!["/tmp/a.txt".to_string(), "/tmp/b.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn generate_unique_path_uses_current_dir_when_parent_missing() {
+        let unique = generate_unique_path(Path::new("example.txt"));
+        assert_eq!(unique.file_name(), Some(std::ffi::OsStr::new("example (1).txt")));
     }
 
     #[test]

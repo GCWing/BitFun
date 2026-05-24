@@ -1587,6 +1587,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       userHint: parsed.userHint,
       failedTitle: t('chatInput.goalFailed', { defaultValue: 'Goal mode activation failed' }),
       unknownErrorMessage: t('error.unknown'),
+      aiFailedMessage: t('chatInput.goalAiFailed', {
+        defaultValue: 'Goal mode AI request failed. Check model configuration and try again.',
+      }),
       activatedTitle: t('chatInput.goalActivated', { defaultValue: 'Session goal activated' }),
     });
 

@@ -32,7 +32,7 @@ pub fn strip_read_line_number_prefix(line: &str) -> String {
 /// Convert Read-tool cat -n output into raw file content (one line at a time).
 pub fn read_tool_output_to_file_content(formatted: &str) -> String {
     formatted
-        .split('\n')
+        .lines()
         .map(strip_read_line_number_prefix)
         .collect::<Vec<_>>()
         .join("\n")
@@ -77,6 +77,14 @@ mod tests {
     fn read_tool_output_to_file_content_strips_each_line() {
         assert_eq!(
             read_tool_output_to_file_content("     1\talpha\n     2\tbeta"),
+            "alpha\nbeta"
+        );
+    }
+
+    #[test]
+    fn read_tool_output_to_file_content_strips_crlf_line_endings() {
+        assert_eq!(
+            read_tool_output_to_file_content("     1\talpha\r\n     2\tbeta\r\n"),
             "alpha\nbeta"
         );
     }

@@ -5,12 +5,15 @@ mod types;
 
 pub use types::*;
 
-use crate::agentic::core::{Message, MessageContent, MessageRole, PromptEnvelope};
+use crate::agentic::core::{
+    Message, MessageContent, MessageRole, MessageSemanticKind, PromptEnvelope,
+};
 use crate::service::config::{get_app_language_code, short_model_user_language_instruction};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::extract_json_from_ai_response;
 use crate::util::sanitize_plain_model_output;
 use crate::util::types::Message as AIMessage;
+use log::warn;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn goal_mode_from_custom_metadata(
@@ -41,41 +44,45 @@ pub fn message_text(message: &Message) -> Option<String> {
     }
 }
 
-pub fn build_recent_context_summary(messages: &[Message], max_chars: usize) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    for message in messages.iter().rev() {
-        let role = match message.role {
-            MessageRole::User => "User",
-            MessageRole::Assistant => "Assistant",
-            _ => continue,
-        };
-        let Some(text) = message_text(message) else {
-            continue;
-        };
-        let trimmed = text.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let snippet = if trimmed.chars().count() > 800 {
-            format!(
-                "{}...",
-                trimmed.chars().take(800).collect::<String>()
+/// Convert the full in-memory session transcript into provider messages, using
+/// the same omission rules as normal model sends for UI-only computer-use frames.
+pub fn build_goal_context_ai_messages(messages: &[Message]) -> Vec<AIMessage> {
+    messages
+        .iter()
+        .filter(|message| !should_skip_message_for_goal_context(message))
+        .map(AIMessage::from)
+        .collect()
+}
+
+fn should_skip_message_for_goal_context(message: &Message) -> bool {
+    matches!(
+        message.metadata.semantic_kind.as_ref(),
+        Some(MessageSemanticKind::ComputerUseVerificationScreenshot)
+            | Some(MessageSemanticKind::ComputerUsePostActionSnapshot)
+    )
+}
+
+pub fn last_assistant_message_text(messages: &[Message]) -> Option<String> {
+    messages
+        .iter()
+        .rev()
+        .filter(|message| message.role == MessageRole::Assistant)
+        .find_map(message_text)
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
+}
+
+pub fn user_facing_goal_mode_error(error: BitFunError) -> BitFunError {
+    match error {
+        BitFunError::Validation(_) | BitFunError::NotFound(_) => error,
+        other => {
+            warn!("Goal mode AI call failed: {other}");
+            BitFunError::Validation(
+                "Goal mode AI request failed. Check model configuration and try again."
+                    .to_string(),
             )
-        } else {
-            trimmed.to_string()
-        };
-        lines.push(format!("{role}: {snippet}"));
-        if lines.iter().map(|line| line.len()).sum::<usize>() >= max_chars {
-            break;
         }
     }
-    lines.reverse();
-    let mut summary = lines.join("\n\n");
-    if summary.chars().count() > max_chars {
-        summary = summary.chars().take(max_chars).collect();
-        summary.push_str("...");
-    }
-    summary
 }
 
 pub fn build_goal_system_reminder(state: &GoalModeState) -> String {
@@ -241,53 +248,68 @@ pub fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-async fn call_goal_func_agent(system_prompt: String, user_prompt: String) -> BitFunResult<String> {
-    let messages = vec![
-        AIMessage {
-            role: "system".to_string(),
-            content: Some(system_prompt),
-            reasoning_content: None,
-            thinking_signature: None,
-            tool_calls: None,
-            tool_call_id: None,
-            name: None,
-            is_error: None,
-            tool_image_attachments: None,
-        },
-        AIMessage {
-            role: "user".to_string(),
-            content: Some(user_prompt),
-            reasoning_content: None,
-            thinking_signature: None,
-            tool_calls: None,
-            tool_call_id: None,
-            name: None,
-            is_error: None,
-            tool_image_attachments: None,
-        },
-    ];
+async fn call_goal_func_agent_with_context(
+    system_prompt: String,
+    context_messages: &[Message],
+    final_user_prompt: String,
+) -> BitFunResult<String> {
+    let mut messages = Vec::with_capacity(context_messages.len() + 2);
+    messages.push(AIMessage {
+        role: "system".to_string(),
+        content: Some(system_prompt),
+        reasoning_content: None,
+        thinking_signature: None,
+        tool_calls: None,
+        tool_call_id: None,
+        name: None,
+        is_error: None,
+        tool_image_attachments: None,
+    });
+    messages.extend(build_goal_context_ai_messages(context_messages));
+    messages.push(AIMessage {
+        role: "user".to_string(),
+        content: Some(final_user_prompt),
+        reasoning_content: None,
+        thinking_signature: None,
+        tool_calls: None,
+        tool_call_id: None,
+        name: None,
+        is_error: None,
+        tool_image_attachments: None,
+    });
 
     let ai_client_factory = crate::infrastructure::ai::get_global_ai_client_factory()
         .await
-        .map_err(|error| BitFunError::AIClient(format!("Failed to get AI client factory: {error}")))?;
+        .map_err(|error| {
+            user_facing_goal_mode_error(BitFunError::AIClient(format!(
+                "Failed to get AI client factory: {error}"
+            )))
+        })?;
 
     let ai_client = ai_client_factory
         .get_client_by_func_agent(GOAL_MODE_FUNC_AGENT)
         .await
-        .map_err(|error| BitFunError::AIClient(format!("Failed to get goal func agent client: {error}")))?;
+        .map_err(|error| {
+            user_facing_goal_mode_error(BitFunError::AIClient(format!(
+                "Failed to get goal func agent client: {error}"
+            )))
+        })?;
 
     let response = ai_client
         .send_message(messages, None)
         .await
-        .map_err(|error| BitFunError::ai(format!("Goal func agent call failed: {error}")))?;
+        .map_err(|error| {
+            user_facing_goal_mode_error(BitFunError::ai(format!(
+                "Goal func agent call failed: {error}"
+            )))
+        })?;
 
     Ok(sanitize_plain_model_output(&response.text))
 }
 
 pub async fn generate_goal_from_context(
-    context_summary: &str,
+    context_messages: &[Message],
     user_hint: Option<&str>,
-    final_response: Option<&str>,
 ) -> BitFunResult<GoalGenerationResult> {
     let lang_code = get_app_language_code().await;
     let language_instruction = short_model_user_language_instruction(lang_code.as_str());
@@ -298,14 +320,15 @@ pub async fn generate_goal_from_context(
         .map(|value| format!("\nUser-provided goal focus: {value}"))
         .unwrap_or_default();
 
-    let response_block = final_response
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| format!("\nLatest assistant response:\n{value}"))
+    let latest_assistant_note = last_assistant_message_text(context_messages)
+        .map(|_| {
+            "\nUse the full conversation above, paying special attention to the latest assistant message."
+                .to_string()
+        })
         .unwrap_or_default();
 
     let system_prompt = format!(
-        "You synthesize a single actionable session goal from conversation context.\n\
+        "You synthesize a single actionable session goal from the conversation transcript above.\n\
 Return ONLY valid JSON with this shape:\n\
 {{\"goalText\":\"...\",\"successCriteria\":[\"...\",\"...\"]}}\n\
 Requirements:\n\
@@ -315,19 +338,23 @@ Requirements:\n\
 - Do not include markdown or commentary"
     );
 
-    let user_prompt = format!(
-        "Conversation context:\n{context_summary}{hint_block}{response_block}\n\n\
+    let final_user_prompt = format!(
+        "Based on the full conversation above,{latest_assistant_note}{hint_block}\n\n\
 Synthesize the session goal JSON:"
     );
 
-    let raw = call_goal_func_agent(system_prompt, user_prompt).await?;
+    let raw = call_goal_func_agent_with_context(
+        system_prompt,
+        context_messages,
+        final_user_prompt,
+    )
+    .await?;
     parse_goal_generation(&raw)
 }
 
 pub async fn verify_goal_achievement(
     state: &GoalModeState,
-    context_summary: &str,
-    final_response: &str,
+    context_messages: &[Message],
 ) -> BitFunResult<GoalVerificationResult> {
     let criteria = if state.success_criteria.is_empty() {
         "- Use the goal text itself as the completion standard.".to_string()
@@ -340,36 +367,38 @@ pub async fn verify_goal_achievement(
             .join("\n")
     };
 
-    let system_prompt = "You verify whether a coding-agent session goal has truly been achieved.\n\
+    let system_prompt = format!(
+        "You verify whether a coding-agent session goal has truly been achieved.\n\
+Active goal: {}\n\
+Success criteria:\n{criteria}\n\
+Use the full conversation transcript above, especially the latest assistant work.\n\
 Return ONLY valid JSON with this shape:\n\
-{\"achieved\":true|false,\"confidence\":0.0,\"gaps\":[\"...\"],\"guidance\":\"...\"}\n\
+{{\"achieved\":true|false,\"confidence\":0.0,\"gaps\":[\"...\"],\"guidance\":\"...\"}}\n\
 Rules:\n\
 - achieved=true ONLY when every success criterion is objectively satisfied in the actual work done\n\
 - Be strict: partial progress, plans, or explanations without completed work means achieved=false\n\
 - gaps must list concrete missing items when achieved=false\n\
 - guidance must be actionable next steps for the agent\n\
-- Do not include markdown or commentary"
-        .to_string();
-
-    let user_prompt = format!(
-        "Goal: {}\n\
-Success criteria:\n{criteria}\n\
-Conversation context:\n{context_summary}\n\
-Latest assistant response:\n{final_response}\n\n\
-Verify goal completion JSON:",
-        state.goal_text.trim(),
-        criteria = criteria,
-        context_summary = context_summary,
-        final_response = final_response,
+- Do not include markdown or commentary",
+        state.goal_text.trim()
     );
 
-    let raw = call_goal_func_agent(system_prompt, user_prompt).await?;
+    let final_user_prompt =
+        "Verify whether the active session goal has been fully achieved. Return the JSON verdict."
+            .to_string();
+
+    let raw = call_goal_func_agent_with_context(
+        system_prompt,
+        context_messages,
+        final_user_prompt,
+    )
+    .await?;
     parse_goal_verification(&raw)
 }
 
 fn parse_goal_generation(raw: &str) -> BitFunResult<GoalGenerationResult> {
     let json = extract_json_from_ai_response(raw).ok_or_else(|| {
-        BitFunError::Validation(format!("Goal generation returned non-JSON output: {raw}"))
+        BitFunError::Validation("Goal generation returned an unreadable model response.".to_string())
     })?;
     let mut parsed: GoalGenerationResult = serde_json::from_str(&json).map_err(|error| {
         BitFunError::Validation(format!("Failed to parse goal generation JSON: {error}"))
@@ -391,7 +420,9 @@ fn parse_goal_generation(raw: &str) -> BitFunResult<GoalGenerationResult> {
 
 fn parse_goal_verification(raw: &str) -> BitFunResult<GoalVerificationResult> {
     let json = extract_json_from_ai_response(raw).ok_or_else(|| {
-        BitFunError::Validation(format!("Goal verification returned non-JSON output: {raw}"))
+        BitFunError::Validation(
+            "Goal verification returned an unreadable model response.".to_string(),
+        )
     })?;
     let mut parsed: GoalVerificationResult = serde_json::from_str(&json).map_err(|error| {
         BitFunError::Validation(format!("Failed to parse goal verification JSON: {error}"))
@@ -427,14 +458,29 @@ mod tests {
     }
 
     #[test]
-    fn build_recent_context_summary_keeps_user_and_assistant_messages() {
+    fn build_goal_context_ai_messages_keeps_full_user_and_assistant_messages() {
+        let long_assistant = format!("{}END", "x".repeat(1200));
         let messages = vec![
             Message::user("Implement /goal".to_string()),
-            Message::assistant("Working on it".to_string()),
+            Message::assistant(long_assistant.clone()),
         ];
-        let summary = build_recent_context_summary(&messages, 1000);
-        assert!(summary.contains("Implement /goal"));
-        assert!(summary.contains("Working on it"));
+        let converted = build_goal_context_ai_messages(&messages);
+        assert_eq!(converted.len(), 2);
+        assert_eq!(converted[0].content.as_deref(), Some("Implement /goal"));
+        assert_eq!(converted[1].content.as_deref(), Some(long_assistant.as_str()));
+    }
+
+    #[test]
+    fn last_assistant_message_text_returns_latest_assistant() {
+        let messages = vec![
+            Message::assistant("older".to_string()),
+            Message::user("follow up".to_string()),
+            Message::assistant("latest".to_string()),
+        ];
+        assert_eq!(
+            last_assistant_message_text(&messages).as_deref(),
+            Some("latest")
+        );
     }
 
     #[test]
@@ -442,6 +488,20 @@ mod tests {
         assert!(should_skip_goal_verification_for_turn("/compact", None));
         assert!(should_skip_goal_verification_for_turn("/usage", None));
         assert!(!should_skip_goal_verification_for_turn("fix bug", None));
+    }
+
+    #[test]
+    fn user_facing_goal_mode_error_hides_ai_client_details() {
+        let mapped = user_facing_goal_mode_error(BitFunError::AIClient(
+            "provider timeout".to_string(),
+        ));
+        match mapped {
+            BitFunError::Validation(message) => {
+                assert!(!message.contains("provider timeout"));
+                assert!(message.contains("Goal mode AI request failed"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]

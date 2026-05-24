@@ -18,7 +18,60 @@ pub struct FileReadState {
 
 impl FileReadState {
     pub fn is_full_file_read(&self) -> bool {
-        !self.is_partial_view && self.start_line == 1 && self.end_line >= self.total_lines
+        if self.is_partial_view {
+            return false;
+        }
+
+        if self.total_lines == 0 {
+            return self.start_line == 0 && self.end_line == 0;
+        }
+
+        self.start_line == 1 && self.end_line >= self.total_lines
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FileReadState;
+
+    fn sample_state(
+        start_line: usize,
+        end_line: usize,
+        total_lines: usize,
+        is_partial_view: bool,
+    ) -> FileReadState {
+        FileReadState {
+            content: String::new(),
+            timestamp_ms: 0,
+            start_line,
+            end_line,
+            total_lines,
+            is_partial_view,
+        }
+    }
+
+    #[test]
+    fn is_full_file_read_accepts_nonempty_whole_file() {
+        let state = sample_state(1, 10, 10, false);
+        assert!(state.is_full_file_read());
+    }
+
+    #[test]
+    fn is_full_file_read_rejects_partial_view() {
+        let state = sample_state(1, 10, 10, true);
+        assert!(!state.is_full_file_read());
+    }
+
+    #[test]
+    fn is_full_file_read_accepts_empty_file_from_read_tool() {
+        let state = sample_state(0, 0, 0, false);
+        assert!(state.is_full_file_read());
+    }
+
+    #[test]
+    fn is_full_file_read_rejects_empty_file_with_one_based_range() {
+        let state = sample_state(1, 0, 0, false);
+        assert!(!state.is_full_file_read());
     }
 }
 

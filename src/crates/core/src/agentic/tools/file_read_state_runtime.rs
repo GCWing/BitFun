@@ -66,26 +66,48 @@ pub async fn validate_edit_against_read_state(
         ));
     }
 
-    let current_content = read_current_file_content(context, resolved).await.ok()?;
+    let current_content = match read_current_file_content(context, resolved).await {
+        Ok(content) => content,
+        Err(error) => {
+            return Some(format!(
+                "File {} could not be re-read before editing ({}). Read it again when the workspace is available.",
+                resolved.logical_path, error
+            ));
+        }
+    };
     let current_mtime_ms = file_modification_time_ms(context, resolved).await;
 
+    validate_content_freshness_against_read_state(
+        &resolved.logical_path,
+        &read_state,
+        &current_content,
+        current_mtime_ms,
+    )
+}
+
+fn validate_content_freshness_against_read_state(
+    logical_path: &str,
+    read_state: &FileReadState,
+    current_content: &str,
+    current_mtime_ms: Option<u64>,
+) -> Option<String> {
     if let Some(current_mtime_ms) = current_mtime_ms {
         if current_mtime_ms > read_state.timestamp_ms {
             if read_state.is_full_file_read()
-                && normalize_string(&current_content) == normalize_string(&read_state.content)
+                && normalize_string(current_content) == normalize_string(&read_state.content)
             {
                 return None;
             }
 
             return Some(format!(
                 "File {} has been modified since it was last read (by the user, another tool, or a linter). Read it again before editing.",
-                resolved.logical_path
+                logical_path
             ));
         }
-    } else if normalize_string(&current_content) != normalize_string(&read_state.content) {
+    } else if normalize_string(current_content) != normalize_string(&read_state.content) {
         return Some(format!(
             "File {} no longer matches the last Read result. Read it again before editing.",
-            resolved.logical_path
+            logical_path
         ));
     }
 
@@ -126,12 +148,17 @@ pub fn update_file_read_state_after_mutation(
         return;
     };
 
-    let line_count = content.lines().count().max(1);
+    let line_count = content.lines().count();
+    let (start_line, end_line) = if line_count == 0 {
+        (0, 0)
+    } else {
+        (1, line_count)
+    };
     let state = FileReadState {
         content: content.to_string(),
         timestamp_ms,
-        start_line: 1,
-        end_line: line_count,
+        start_line,
+        end_line,
         total_lines: line_count,
         is_partial_view: false,
     };
@@ -216,6 +243,7 @@ pub fn local_file_modification_time_ms(path: &Path) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agentic::session::FileReadState;
     use crate::agentic::tools::framework::{ToolPathBackend, ToolUseContext};
     use crate::agentic::WorkspaceBinding;
     use std::collections::HashMap;
@@ -269,6 +297,87 @@ mod tests {
                 runtime_root: None,
                 runtime_scope: None,
             }
+        )
+        .is_none());
+    }
+
+    fn read_state(content: &str, timestamp_ms: u64) -> FileReadState {
+        FileReadState {
+            content: content.to_string(),
+            timestamp_ms,
+            start_line: 1,
+            end_line: 1,
+            total_lines: 1,
+            is_partial_view: false,
+        }
+    }
+
+    #[test]
+    fn validate_content_freshness_allows_matching_remote_content_without_mtime() {
+        let state = read_state("alpha\n", 100);
+
+        assert!(validate_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "alpha\n",
+            None,
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn validate_content_freshness_rejects_changed_remote_content_without_mtime() {
+        let state = read_state("alpha\n", 100);
+
+        assert_eq!(
+            validate_content_freshness_against_read_state(
+                "src/main.rs",
+                &state,
+                "beta\n",
+                None,
+            )
+            .as_deref(),
+            Some(
+                "File src/main.rs no longer matches the last Read result. Read it again before editing."
+            )
+        );
+    }
+
+    #[test]
+    fn validate_content_freshness_allows_newer_mtime_when_full_read_content_matches() {
+        let state = read_state("alpha\n", 100);
+
+        assert!(validate_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "alpha\n",
+            Some(200),
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn validate_content_freshness_rejects_newer_mtime_when_content_differs() {
+        let state = read_state("alpha\n", 100);
+
+        assert!(validate_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "beta\n",
+            Some(200),
+        )
+        .is_some());
+    }
+
+    #[test]
+    fn validate_content_freshness_ignores_older_mtime_even_when_content_differs() {
+        let state = read_state("alpha\n", 200);
+
+        assert!(validate_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "beta\n",
+            Some(100),
         )
         .is_none());
     }

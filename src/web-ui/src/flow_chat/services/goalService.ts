@@ -10,6 +10,7 @@ export interface GoalCommandParams {
   userHint?: string;
   failedTitle: string;
   unknownErrorMessage: string;
+  aiFailedMessage: string;
   activatedTitle: string;
 }
 
@@ -59,19 +60,37 @@ export async function runGoalCommand(params: GoalCommandParams): Promise<GoalCom
   };
 }
 
+function resolveGoalCommandError(error: unknown, params: GoalCommandParams): string {
+  if (!(error instanceof Error)) {
+    return params.unknownErrorMessage;
+  }
+
+  const message = error.message.trim();
+  if (!message) {
+    return params.unknownErrorMessage;
+  }
+
+  if (
+    /Goal func agent|AI client factory|provider timeout|Failed to get goal func agent/i.test(
+      message
+    )
+  ) {
+    return params.aiFailedMessage;
+  }
+
+  return message;
+}
+
 export async function runGoalCommandSafely(
   params: GoalCommandParams
 ): Promise<GoalCommandResult | null> {
   try {
     return await runGoalCommand(params);
   } catch (error) {
-    notificationService.error(
-      error instanceof Error ? error.message : params.unknownErrorMessage,
-      {
-        title: params.failedTitle,
-        duration: 5000,
-      }
-    );
+    notificationService.error(resolveGoalCommandError(error, params), {
+      title: params.failedTitle,
+      duration: 5000,
+    });
     return null;
   }
 }

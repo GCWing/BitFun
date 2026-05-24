@@ -871,7 +871,7 @@ pub async fn activate_session_goal(
     let activation = coordinator
         .activate_session_goal(session_id.to_string(), user_hint)
         .await
-        .map_err(|e| format!("Failed to activate session goal mode: {e}"))?;
+        .map_err(|error| error.to_string())?;
 
     Ok(ActivateSessionGoalResponse {
         success: true,

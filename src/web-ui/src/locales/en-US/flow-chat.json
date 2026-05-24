@@ -496,6 +496,7 @@
     "goalNoSession": "No active session for /goal",
     "goalUsage": "Use /goal with optional focus text, for example /goal fix the login bug.",
     "goalFailed": "Goal mode activation failed",
+    "goalAiFailed": "Goal mode AI request failed. Check model configuration and try again.",
     "goalActivated": "Session goal activated",
     "goalNestedDisabled": "Goal mode can only be started from the main session.",
     "initAction": "Generate AGENTS.md",

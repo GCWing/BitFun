@@ -490,6 +490,7 @@
     "goalNoSession": "当前没有可用于 /goal 的会话",
     "goalUsage": "使用 /goal 并可选择附加目标描述，例如 /goal 修复登录问题。",
     "goalFailed": "目标模式激活失败",
+    "goalAiFailed": "目标模式 AI 请求失败，请检查模型配置后重试。",
     "goalActivated": "会话目标已激活",
     "goalNestedDisabled": "目标模式只能从主会话启动。",
     "initAction": "生成 AGENTS.md",
