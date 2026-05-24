@@ -318,6 +318,26 @@ export class AgentAPI {
     }
   }
 
+  async activateSessionGoal(request: {
+    sessionId: string;
+    userHint?: string;
+    workspacePath?: string;
+    remoteConnectionId?: string;
+    remoteSshHost?: string;
+  }): Promise<{
+    success: boolean;
+    goalText: string;
+    successCriteria: string[];
+    kickoffMessage: string;
+    displayMessage: string;
+  }> {
+    try {
+      return await api.invoke('activate_session_goal', { request });
+    } catch (error) {
+      throw createTauriCommandError('activate_session_goal', error, request);
+    }
+  }
+
   async ensureAssistantBootstrap(
     request: EnsureAssistantBootstrapRequest
   ): Promise<EnsureAssistantBootstrapResponse> {

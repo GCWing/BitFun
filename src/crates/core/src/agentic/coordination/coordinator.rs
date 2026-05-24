@@ -16,6 +16,13 @@ use crate::agentic::execution::{ContextCompactionOutcome, ExecutionContext, Exec
 use crate::agentic::fork_agent::{
     ForkAgentContextSnapshot, ForkAgentExecutionRequest, ForkAgentExecutionResult,
 };
+use crate::agentic::goal_mode::{
+    build_goal_kickoff_messages, build_goal_continuation_plan, build_recent_context_summary,
+    clear_goal_mode_patch, generate_goal_from_context, goal_mode_from_custom_metadata,
+    goal_mode_patch, should_skip_goal_verification_for_turn, verify_goal_achievement,
+    wrap_user_input_with_goal_reminder, GoalActivationResult, GoalContinuationPlan,
+    GoalModeState, MAX_GOAL_CONTINUATIONS, now_ms,
+};
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
 use crate::agentic::session::SessionManager;
@@ -1400,6 +1407,142 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await
     }
 
+    async fn load_active_goal_mode(&self, session_id: &str) -> BitFunResult<Option<GoalModeState>> {
+        let session = self
+            .session_manager
+            .get_session(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        let workspace_path = session.config.workspace_path.as_deref().ok_or_else(|| {
+            BitFunError::Validation(format!(
+                "Session workspace_path is missing: {session_id}"
+            ))
+        })?;
+        let metadata = self
+            .session_manager
+            .load_session_metadata(Path::new(workspace_path), session_id)
+            .await?;
+        Ok(
+            goal_mode_from_custom_metadata(metadata.as_ref().and_then(|value| value.custom_metadata.as_ref()))
+                .filter(GoalModeState::is_active),
+        )
+    }
+
+    /// Activate `/goal` mode for a session by synthesizing a goal from context.
+    pub async fn activate_session_goal(
+        &self,
+        session_id: String,
+        user_hint: Option<String>,
+    ) -> BitFunResult<GoalActivationResult> {
+        let session = self
+            .session_manager
+            .get_session(&session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+
+        if matches!(session.kind, SessionKind::Subagent | SessionKind::EphemeralChild) {
+            return Err(BitFunError::Validation(
+                "Goal mode is only available for main sessions".to_string(),
+            ));
+        }
+
+        let context_messages = self
+            .session_manager
+            .get_context_messages(&session_id)
+            .await?;
+        let context_summary = build_recent_context_summary(&context_messages, 12_000);
+        let trimmed_hint = user_hint
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+
+        let generation = generate_goal_from_context(&context_summary, trimmed_hint, None).await?;
+        let activation = build_goal_kickoff_messages(&generation, trimmed_hint);
+
+        let state = GoalModeState {
+            active: true,
+            goal_text: activation.goal_text.clone(),
+            success_criteria: activation.success_criteria.clone(),
+            user_hint: trimmed_hint.map(str::to_string),
+            activated_at_ms: now_ms(),
+            continuation_count: 0,
+        };
+
+        self.session_manager
+            .merge_session_custom_metadata(&session_id, goal_mode_patch(&state))
+            .await?;
+
+        info!(
+            "Session goal mode activated: session_id={}, goal={}",
+            session_id, activation.goal_text
+        );
+
+        Ok(activation)
+    }
+
+    /// Verify the active session goal after a dialog turn completes.
+    pub async fn prepare_goal_continuation_after_turn(
+        &self,
+        session_id: &str,
+        user_input: &str,
+        user_message_metadata: Option<&serde_json::Value>,
+        final_response: &str,
+    ) -> BitFunResult<Option<GoalContinuationPlan>> {
+        if should_skip_goal_verification_for_turn(user_input, user_message_metadata) {
+            return Ok(None);
+        }
+
+        let session = self
+            .session_manager
+            .get_session(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        if matches!(session.kind, SessionKind::Subagent | SessionKind::EphemeralChild) {
+            return Ok(None);
+        }
+
+        let Some(mut goal_state) = self.load_active_goal_mode(session_id).await? else {
+            return Ok(None);
+        };
+
+        if goal_state.continuation_count >= MAX_GOAL_CONTINUATIONS {
+            warn!(
+                "Session goal continuation limit reached; stopping auto-continue: session_id={}, goal={}",
+                session_id, goal_state.goal_text
+            );
+            self.session_manager
+                .merge_session_custom_metadata(session_id, clear_goal_mode_patch())
+                .await?;
+            return Ok(None);
+        }
+
+        let context_messages = self
+            .session_manager
+            .get_context_messages(session_id)
+            .await?;
+        let context_summary = build_recent_context_summary(&context_messages, 12_000);
+        let verification = verify_goal_achievement(&goal_state, &context_summary, final_response)
+            .await?;
+
+        if verification.achieved {
+            info!(
+                "Session goal achieved: session_id={}, goal={}",
+                session_id, goal_state.goal_text
+            );
+            self.session_manager
+                .merge_session_custom_metadata(session_id, clear_goal_mode_patch())
+                .await?;
+            return Ok(None);
+        }
+
+        goal_state.continuation_count = goal_state.continuation_count.saturating_add(1);
+        self.session_manager
+            .merge_session_custom_metadata(session_id, goal_mode_patch(&goal_state))
+            .await?;
+
+        Ok(Some(build_goal_continuation_plan(
+            &goal_state,
+            &verification,
+        )))
+    }
+
     /// Compact the active session context as a persisted maintenance turn.
     pub async fn compact_session_manually(&self, session_id: String) -> BitFunResult<()> {
         let session = self
@@ -1846,7 +1989,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         );
 
-        let wrapped_user_input = self
+        let mut wrapped_user_input = self
             .wrap_user_input(
                 &effective_agent_type,
                 previous_agent_type
@@ -1857,6 +2000,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_workspace.as_ref(),
             )
             .await?;
+
+        if let Ok(Some(goal_state)) = self.load_active_goal_mode(&session_id).await {
+            if !should_skip_goal_verification_for_turn(
+                &original_user_input,
+                user_message_metadata.as_ref(),
+            ) {
+                wrapped_user_input =
+                    wrap_user_input_with_goal_reminder(wrapped_user_input, &goal_state);
+            }
+        }
 
         if original_user_input != wrapped_user_input {
             let mut metadata =

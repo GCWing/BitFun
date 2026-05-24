@@ -125,6 +125,29 @@ pub struct CompactSessionRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ActivateSessionGoalRequest {
+    pub session_id: String,
+    #[serde(default)]
+    pub user_hint: Option<String>,
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivateSessionGoalResponse {
+    pub success: bool,
+    pub goal_text: String,
+    pub success_criteria: Vec<String>,
+    pub kickoff_message: String,
+    pub display_message: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EnsureCoordinatorSessionRequest {
     pub session_id: String,
     pub workspace_path: String,
@@ -798,6 +821,64 @@ pub async fn compact_session(
     Ok(StartDialogTurnResponse {
         success: true,
         message: "Session compaction started".to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn activate_session_goal(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
+    request: ActivateSessionGoalRequest,
+) -> Result<ActivateSessionGoalResponse, String> {
+    let session_id = request.session_id.trim();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+
+    if coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .is_none()
+    {
+        let workspace_path = request
+            .workspace_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                "workspace_path is required when the session is not loaded".to_string()
+            })?;
+        let effective = desktop_effective_session_storage_path(
+            &app_state,
+            workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await;
+        coordinator
+            .restore_session(&effective, session_id)
+            .await
+            .map_err(|e| format!("Failed to restore session before activating goal mode: {e}"))?;
+    }
+
+    let user_hint = request
+        .user_hint
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    let activation = coordinator
+        .activate_session_goal(session_id.to_string(), user_hint)
+        .await
+        .map_err(|e| format!("Failed to activate session goal mode: {e}"))?;
+
+    Ok(ActivateSessionGoalResponse {
+        success: true,
+        goal_text: activation.goal_text,
+        success_criteria: activation.success_criteria,
+        kickoff_message: activation.kickoff_message,
+        display_message: activation.display_message,
     })
 }
 

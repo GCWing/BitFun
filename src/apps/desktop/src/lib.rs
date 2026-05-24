@@ -586,6 +586,7 @@ pub async fn run() {
             api::agentic_api::ensure_coordinator_session,
             api::agentic_api::start_dialog_turn,
             api::agentic_api::compact_session,
+            api::agentic_api::activate_session_goal,
             api::agentic_api::ensure_assistant_bootstrap,
             api::agentic_api::cancel_dialog_turn,
             api::agentic_api::steer_dialog_turn,

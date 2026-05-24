@@ -100,6 +100,9 @@ pub struct AgentSessionReplyRoute {
 struct ActiveTurn {
     turn_id: String,
     workspace_path: Option<String>,
+    agent_type: String,
+    user_input: String,
+    user_message_metadata: Option<serde_json::Value>,
     policy: DialogSubmissionPolicy,
     reply_route: Option<AgentSessionReplyRoute>,
 }
@@ -109,6 +112,12 @@ impl ActiveTurn {
         Self {
             turn_id,
             workspace_path: turn.workspace_path.clone(),
+            agent_type: turn.agent_type.clone(),
+            user_input: turn
+                .original_user_input
+                .clone()
+                .unwrap_or_else(|| turn.user_input.clone()),
+            user_message_metadata: turn.user_message_metadata.clone(),
             policy: turn.policy,
             reply_route: turn.reply_route.clone(),
         }
@@ -789,6 +798,53 @@ Status: {status}"
                 }
             }
 
+            if let (Some(active_turn), TurnOutcome::Completed { final_response, .. }) =
+                (active_turn.as_ref(), &outcome)
+            {
+                match self
+                    .coordinator
+                    .prepare_goal_continuation_after_turn(
+                        &session_id,
+                        &active_turn.user_input,
+                        active_turn.user_message_metadata.as_ref(),
+                        final_response,
+                    )
+                    .await
+                {
+                    Ok(Some(plan)) => {
+                        if let Err(error) = self
+                            .submit(
+                                session_id.clone(),
+                                plan.wrapped_message,
+                                Some(plan.display_message),
+                                None,
+                                active_turn.agent_type.clone(),
+                                active_turn.workspace_path.clone(),
+                                DialogSubmissionPolicy::for_source(
+                                    DialogTriggerSource::AgentSession,
+                                ),
+                                None,
+                                Some(plan.user_message_metadata),
+                                None,
+                            )
+                            .await
+                        {
+                            warn!(
+                                "Failed to submit goal continuation turn: session_id={}, error={}",
+                                session_id, error
+                            );
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        warn!(
+                            "Goal verification failed after turn completion: session_id={}, error={}",
+                            session_id, error
+                        );
+                    }
+                }
+            }
+
             let status = outcome.status();
             match outcome.queue_action() {
                 TurnOutcomeQueueAction::DispatchNext => {
@@ -835,6 +891,9 @@ mod tests {
         ActiveTurn {
             turn_id: "turn_1".to_string(),
             workspace_path: Some("/workspace".to_string()),
+            agent_type: "agentic".to_string(),
+            user_input: "hello".to_string(),
+            user_message_metadata: None,
             policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
             reply_route: Some(AgentSessionReplyRoute {
                 source_session_id: source_session_id.to_string(),

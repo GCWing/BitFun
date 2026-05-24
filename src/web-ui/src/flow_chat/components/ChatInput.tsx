@@ -35,6 +35,7 @@ import { useChatInputState } from '../store/chatInputStateStore';
 import { useInputHistoryStore } from '../store/inputHistoryStore';
 import { startBtwThread } from '../services/BtwThreadService';
 import { runUsageReportCommand } from '../services/usageReportService';
+import { isGoalSlashCommand, parseGoalCommand, runGoalCommandSafely } from '../services/goalService';
 import { FlowChatManager } from '@/flow_chat';
 import {
   DEEP_REVIEW_SLASH_COMMAND,
@@ -1098,6 +1099,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           }]),
       {
         kind: 'action',
+        id: 'goal',
+        command: '/goal',
+        label: t('chatInput.goalAction', { defaultValue: 'Session goal' }),
+      },
+      {
+        kind: 'action',
         id: 'usage',
         command: '/usage',
         label: t('chatInput.usageAction', { defaultValue: 'Usage report' }),
@@ -1210,12 +1217,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const trimmedLower = text.trim().toLowerCase();
     const isBtwCommand = trimmedLower.startsWith('/btw');
     const isCompactCommand = trimmedLower.startsWith('/compact');
+    const isGoalCommand = isGoalSlashCommand(text);
     const isUsageCommand = trimmedLower.startsWith('/usage');
     const isDeepReviewCommand = isDeepReviewSlashCommand(text);
     const isProcessing = !!derivedState?.isProcessing;
 
-    // Don't queue /btw while the main session is processing; /btw runs independently.
-    if (derivedState?.isProcessing && !isBtwCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand) {
+    // Don't queue /btw or /goal while the main session is processing; they have dedicated flows.
+    if (derivedState?.isProcessing && !isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand) {
       setQueuedInput(text);
     }
 
@@ -1230,7 +1238,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         // Only show the picker for "/..." patterns that are plausibly a command (/ or /b... /d...).
         // Once the user types a space (starts composing the real question), stop showing the picker
         // so Enter can submit "/btw ..." or "/DeepReview ..." instead of selecting from the picker.
-        if (!hasWhitespace && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('u'))) {
+        if (!hasWhitespace && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('g') || query.startsWith('u'))) {
           setSlashCommandState({
             isActive: true,
             kind: 'actions',
@@ -1244,7 +1252,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
 
       // When idle, keep the picker for mode switching, but don't interfere with executable slash commands.
-      if (!isBtwCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
+      if (!isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
         setSlashCommandState({
           isActive: true,
           kind: 'all',
@@ -1541,6 +1549,65 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     t,
   ]);
 
+  const submitGoalFromInput = useCallback(async () => {
+    if (!effectiveTargetSessionId || !effectiveTargetSession) {
+      notificationService.error(
+        t('chatInput.goalNoSession', { defaultValue: 'No active session for /goal' })
+      );
+      return;
+    }
+
+    if (isBtwSession) {
+      notificationService.warning(
+        t('chatInput.goalNestedDisabled', {
+          defaultValue: 'Goal mode can only be started from the main session.',
+        })
+      );
+      return;
+    }
+
+    const message = inputState.value.trim();
+    const parsed = parseGoalCommand(message);
+    if (!parsed) {
+      notificationService.warning(
+        t('chatInput.goalUsage', {
+          defaultValue: 'Use /goal with optional focus text, for example /goal fix the login bug.',
+        })
+      );
+      return;
+    }
+
+    const originalMessage = message;
+    dispatchInput({ type: 'CLEAR_VALUE' });
+    setQueuedInput(null);
+    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+
+    const result = await runGoalCommandSafely({
+      session: effectiveTargetSession,
+      userHint: parsed.userHint,
+      failedTitle: t('chatInput.goalFailed', { defaultValue: 'Goal mode activation failed' }),
+      unknownErrorMessage: t('error.unknown'),
+      activatedTitle: t('chatInput.goalActivated', { defaultValue: 'Session goal activated' }),
+    });
+
+    if (!result) {
+      dispatchInput({ type: 'ACTIVATE' });
+      dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
+      return;
+    }
+
+    onSendMessage?.(result.goalText);
+    dispatchInput({ type: 'DEACTIVATE' });
+  }, [
+    effectiveTargetSession,
+    effectiveTargetSessionId,
+    inputState.value,
+    isBtwSession,
+    onSendMessage,
+    setQueuedInput,
+    t,
+  ]);
+
   const submitDeepreviewFromInput = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
       notificationService.error(
@@ -1780,6 +1847,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
+    if (isGoalSlashCommand(message)) {
+      await submitGoalFromInput();
+      return;
+    }
+
     if (/^\/compact\s*$/i.test(message)) {
       await submitCompactFromInput();
       return;
@@ -1822,6 +1894,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (message.toLowerCase().startsWith('/init')) {
       notificationService.warning(
         t('chatInput.initUsage', { defaultValue: 'Use /init without extra arguments.' })
+      );
+      return;
+    }
+
+    if (message.toLowerCase().startsWith('/goal') && !isGoalSlashCommand(message)) {
+      notificationService.warning(
+        t('chatInput.goalUsage', {
+          defaultValue: 'Use /goal with optional focus text, for example /goal fix the login bug.',
+        })
       );
       return;
     }
@@ -1881,6 +1962,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     expandComposerSpecialTokens,
     setQueuedInput,
     submitBtwFromInput,
+    submitGoalFromInput,
     submitCompactFromInput,
     submitUsageFromInput,
     submitInitFromInput,
@@ -1976,6 +2058,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     } else if (actionId === 'compact') {
       next = '/compact';
+    } else if (actionId === 'goal') {
+      if (!lower.startsWith('/goal')) {
+        next = '/goal ';
+      } else {
+        const m = raw.match(/^(\s*)\/goal\b/i);
+        if (m) {
+          const leadingWs = m[1] || '';
+          const rest = raw.slice(m[0].length);
+          next = `${leadingWs}/goal ${rest.trimStart()}`;
+        } else {
+          next = '/goal ';
+        }
+      }
     } else if (actionId === 'usage') {
       next = '/usage';
     } else if (actionId === 'init') {
@@ -2271,6 +2366,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         return;
       }
 
+      if (isGoalSlashCommand(inputState.value.trim())) {
+        void submitGoalFromInput();
+        return;
+      }
+
       if (derivedState?.isProcessing) {
         if (!inputState.value.trim()) return;
         void handleSendOrCancel();
@@ -2284,7 +2384,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       void handleCancelCurrentTask();
     }
-  }, [handleSendOrCancel, submitBtwFromInput, derivedState, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getFilteredActions, getSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashPromptCommand, canSwitchModes, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, t]);
+  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getFilteredActions, getSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashPromptCommand, canSwitchModes, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
