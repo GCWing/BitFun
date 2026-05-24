@@ -22,6 +22,8 @@ use crate::agentic::tools::framework::{
 };
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::agentic::tools::InputValidator;
+use crate::service::config::global::GlobalConfigManager;
+use crate::service::config::types::AIConfig;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
@@ -55,6 +57,29 @@ impl TaskTool {
             description,
             run_manifest,
         )
+    }
+
+    async fn load_configured_tool_execution_timeout() -> Option<u64> {
+        let service = GlobalConfigManager::get_service().await.ok()?;
+        let ai_config: AIConfig = service.get_config(Some("ai")).await.ok()?;
+        ai_config
+            .tool_execution_timeout_secs
+            .filter(|seconds| *seconds > 0)
+    }
+
+    fn resolve_subagent_timeout_seconds(
+        requested_timeout_seconds: Option<u64>,
+        configured_execution_timeout_secs: Option<u64>,
+    ) -> Option<u64> {
+        match (
+            requested_timeout_seconds.filter(|seconds| *seconds > 0),
+            configured_execution_timeout_secs.filter(|seconds| *seconds > 0),
+        ) {
+            (Some(requested), Some(configured)) => Some(requested.max(configured)),
+            (Some(requested), None) => Some(requested),
+            (None, Some(configured)) => Some(configured),
+            (None, None) => None,
+        }
     }
 
     fn deep_review_launch_batch_for_task(
@@ -418,7 +443,7 @@ Usage notes:
 - If 'workspace_path' is omitted, the task inherits the current workspace by default.
 - Provide 'workspace_path' when the selected agent requires an explicit workspace, such as Explore or FileFinder.
 - Use 'model_id' when a caller needs a specific model or model slot for the subagent. Omit it to use the agent default.
-- Use 'timeout_seconds' when you need a hard deadline for the subagent. Omit it or set it to 0 to disable the timeout.
+- Use 'timeout_seconds' when you need a hard deadline for the subagent. When omitted, the session execution timeout from settings is used. When provided, the effective timeout is the larger of the requested value and the session execution timeout. Set it to 0 with no configured session execution timeout to disable the timeout.
 - For DeepReview only, set 'retry' to true when re-dispatching a reviewer after that same reviewer returned partial_timeout or an explicit transient capacity failure in the current turn. Retry calls must include retry_coverage with source_packet_id, source_status, covered_files, and a smaller retry_scope_files list. Do not set 'auto_retry' unless this is a backend-owned automatic retry admitted by Review Team settings; model-issued retry decisions should omit it or set it to false. Example retry_coverage: {{ "source_packet_id": "reviewer-123", "source_status": "partial_timeout", "covered_files": ["src/main.rs"], "retry_scope_files": ["src/parser.rs"] }}.
 - Launch independent agents concurrently when that improves coverage or latency; send parallel Task calls in a single assistant message.
 - When the agent is done, it will return a single message back to you.
@@ -521,7 +546,7 @@ impl Tool for TaskTool {
                 "timeout_seconds": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Optional timeout for this subagent task in seconds. Use 0 or omit it to disable the timeout."
+                    "description": "Optional timeout for this subagent task in seconds. When omitted, the session execution timeout from settings is used. When provided, the effective timeout is the larger of this value and the session execution timeout. Use 0 with no configured session execution timeout to disable the timeout."
                 },
                 "run_in_background": {
                     "type": "boolean",
@@ -1094,6 +1119,12 @@ impl Tool for TaskTool {
             }
         }
 
+        if deep_review_subagent_role.is_none() {
+            let configured_timeout = Self::load_configured_tool_execution_timeout().await;
+            timeout_seconds =
+                Self::resolve_subagent_timeout_seconds(timeout_seconds, configured_timeout);
+        }
+
         if let Some(retry_scope_files) = deep_review_retry_scope_files.as_ref() {
             prompt = Self::prompt_with_deep_review_retry_scope(&prompt, retry_scope_files);
         }
@@ -1642,6 +1673,30 @@ mod tests {
         assert!(policy.classify_subagent("ReviewFixer").is_err());
         assert!(policy.classify_subagent("CodeReview").is_err());
         assert!(policy.classify_subagent("DeepReview").is_err());
+    }
+
+    #[test]
+    fn resolve_subagent_timeout_uses_session_execution_timeout_as_floor() {
+        assert_eq!(
+            TaskTool::resolve_subagent_timeout_seconds(Some(300), Some(1200)),
+            Some(1200)
+        );
+        assert_eq!(
+            TaskTool::resolve_subagent_timeout_seconds(None, Some(1200)),
+            Some(1200)
+        );
+        assert_eq!(
+            TaskTool::resolve_subagent_timeout_seconds(Some(1800), Some(1200)),
+            Some(1800)
+        );
+        assert_eq!(
+            TaskTool::resolve_subagent_timeout_seconds(Some(300), None),
+            Some(300)
+        );
+        assert_eq!(
+            TaskTool::resolve_subagent_timeout_seconds(None, None),
+            None
+        );
     }
 
     #[test]

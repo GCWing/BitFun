@@ -17,7 +17,7 @@
     "confirmTimeout": "确认超时",
     "confirmTimeoutDesc": "等待用户确认工具调用的最长时间（秒）。",
     "executionTimeout": "执行超时",
-    "executionTimeoutDesc": "工具执行的最长时间（秒）。",
+    "executionTimeoutDesc": "工具执行的最长时间（秒），包含 Task 子智能体运行时长。",
     "seconds": "秒"
   },
   "filters": {
