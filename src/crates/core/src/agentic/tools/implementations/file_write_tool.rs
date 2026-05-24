@@ -113,8 +113,45 @@ mod tests {
         }
     }
 
+    #[test]
+    fn input_schema_requires_explicit_content() {
+        let tool = FileWriteTool::new();
+        let schema = tool.input_schema();
+
+        assert!(schema["properties"].get("content").is_some());
+        let required = schema["required"]
+            .as_array()
+            .expect("required fields should be an array");
+        assert!(required.iter().any(|value| value == "file_path"));
+        assert!(required.iter().any(|value| value == "content"));
+    }
+
     #[tokio::test]
-    async fn validate_input_rejects_existing_file_before_content_generation() {
+    async fn validate_input_rejects_missing_content() {
+        let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+
+        let tool = FileWriteTool::new();
+        let validation = tool
+            .validate_input(
+                &json!({ "file_path": "new.md" }),
+                Some(&local_context(root.clone())),
+            )
+            .await;
+
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert!(!validation.result);
+        assert!(
+            validation
+                .message
+                .unwrap_or_default()
+                .contains("content is required")
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_input_rejects_existing_file() {
         let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp workspace");
         let existing_file = root.join("existing.md");
@@ -123,7 +160,7 @@ mod tests {
         let tool = FileWriteTool::new();
         let validation = tool
             .validate_input(
-                &json!({ "file_path": "existing.md" }),
+                &json!({ "file_path": "existing.md", "content": "new content" }),
                 Some(&local_context(root.clone())),
             )
             .await;
@@ -212,7 +249,7 @@ Usage:
 - ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
-- Do NOT include the file content in the tool call arguments. Only provide file_path. The system will prompt you separately to output the file content as plain text."#.to_string())
+- The content parameter must contain the exact full file content to write. Do not include markdown fences, explanations, tool transcripts, or placeholder comments unless they are literally part of the target file."#.to_string())
     }
 
     fn short_description(&self) -> String {
@@ -226,9 +263,13 @@ Usage:
                 "file_path": {
                     "type": "string",
                     "description": "The file to write. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The exact full file content to write. Do not include markdown fences, explanations, tool transcripts, or omitted-code placeholders unless they are literally part of the target file."
                 }
             },
-            "required": ["file_path"],
+            "required": ["file_path", "content"],
             "additionalProperties": false
         })
     }
@@ -262,6 +303,18 @@ Usage:
             }
         };
 
+        match input.get("content").and_then(|v| v.as_str()) {
+            Some(_) => {}
+            None => {
+                return ValidationResult {
+                    result: false,
+                    message: Some("content is required".to_string()),
+                    error_code: Some(400),
+                    meta: None,
+                };
+            }
+        }
+
         if let Some(ctx) = context {
             let resolved = match ctx.resolve_tool_path(file_path) {
                 Ok(resolved) => resolved,
@@ -284,21 +337,13 @@ Usage:
                 };
             }
 
-            // If content is absent, RoundExecutor would otherwise launch a
-            // second model request to generate the full file. Reject existing
-            // targets here so we do not spend tokens producing content that
-            // Write must reject anyway. If a model already supplied content
-            // despite the public schema, defer to call_impl so identical
-            // retries can be treated as idempotent success.
-            if input.get("content").is_none() {
-                if let Some(error) = Self::existing_file_error(ctx, &resolved).await {
-                    return ValidationResult {
-                        result: false,
-                        message: Some(error),
-                        error_code: Some(400),
-                        meta: None,
-                    };
-                }
+            if let Some(error) = Self::existing_file_error(ctx, &resolved).await {
+                return ValidationResult {
+                    result: false,
+                    message: Some(error),
+                    error_code: Some(400),
+                    meta: None,
+                };
             }
         }
 
