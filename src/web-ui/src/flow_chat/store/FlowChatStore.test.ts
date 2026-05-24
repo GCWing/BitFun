@@ -207,6 +207,51 @@ describe('FlowChatStore local usage reports', () => {
     expect(stored?.lastActiveAt).toBe(4321);
   });
 
+  it('can append local goal pending turns', () => {
+    const session = createSession();
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    const turn = flowChatStore.addLocalGoalPendingTurn({
+      sessionId: session.sessionId,
+      message: 'Generating session goal...',
+      pendingId: 'goal-1',
+    });
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns[0];
+    expect(turn).not.toBeNull();
+    expect(stored?.kind).toBe('local_command');
+    expect(stored?.status).toBe('processing');
+    expect(stored?.userMessage.content).toBe('Generating session goal...');
+    expect(stored?.userMessage.metadata).toMatchObject({
+      localCommandKind: 'goal_pending',
+      modelVisible: false,
+      goalPendingId: 'goal-1',
+    });
+  });
+
+  it('can delete local goal pending turns', () => {
+    const session = createSession();
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    const turn = flowChatStore.addLocalGoalPendingTurn({
+      sessionId: session.sessionId,
+      message: 'Generating session goal...',
+      pendingId: 'goal-1',
+    });
+
+    expect(turn).not.toBeNull();
+    flowChatStore.deleteDialogTurn(session.sessionId, turn!.id);
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId);
+    expect(stored?.dialogTurns).toHaveLength(0);
+  });
+
   it('appends repeated usage reports as separate snapshots', () => {
     const session = createSession();
     flowChatStore.setState(() => ({

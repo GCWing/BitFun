@@ -1585,6 +1585,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const result = await runGoalCommandSafely({
       session: effectiveTargetSession,
       userHint: parsed.userHint,
+      loadingMessage: t('chatInput.goalGenerating', { defaultValue: 'Generating session goal...' }),
       failedTitle: t('chatInput.goalFailed', { defaultValue: 'Goal mode activation failed' }),
       unknownErrorMessage: t('error.unknown'),
       aiFailedMessage: t('chatInput.goalAiFailed', {

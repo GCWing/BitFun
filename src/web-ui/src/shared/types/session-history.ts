@@ -98,14 +98,17 @@ export interface ReviewActionPersistedState {
 export type SessionStatus = 'active' | 'archived' | 'completed';
 export type DialogTurnKind = 'user_dialog' | 'manual_compaction' | 'local_command';
 
+export type LocalCommandKind = 'usage_report' | 'goal_pending';
+
 export interface LocalCommandMetadata {
-  localCommandKind: 'usage_report';
-  reportId: string;
-  schemaVersion: number;
-  generatedAt: number;
+  localCommandKind: LocalCommandKind;
+  reportId?: string;
+  schemaVersion?: number;
+  generatedAt?: number;
   modelVisible: false;
   usageReport?: Record<string, any>;
   usageReportStatus?: 'loading' | 'completed';
+  goalPendingId?: string;
 }
 
 export interface SessionList {

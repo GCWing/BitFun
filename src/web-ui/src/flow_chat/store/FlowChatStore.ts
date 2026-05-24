@@ -1009,6 +1009,66 @@ export class FlowChatStore {
     return dialogTurn;
   }
 
+  public addLocalGoalPendingTurn(params: {
+    sessionId: string;
+    message: string;
+    pendingId: string;
+  }): DialogTurn | null {
+    const session = this.state.sessions.get(params.sessionId);
+    if (!session) {
+      log.warn('Session not found, cannot add local goal pending turn', {
+        sessionId: params.sessionId,
+      });
+      return null;
+    }
+
+    const generatedAt = Date.now();
+    const metadata: LocalCommandMetadata = {
+      localCommandKind: 'goal_pending',
+      modelVisible: false,
+      goalPendingId: params.pendingId,
+      generatedAt,
+    };
+    const turnIndex = session.dialogTurns.length;
+    const dialogTurn: DialogTurn = {
+      id: `local-goal-${params.pendingId}`,
+      sessionId: params.sessionId,
+      kind: 'local_command',
+      userMessage: {
+        id: `local-goal-user-${params.pendingId}`,
+        content: params.message,
+        timestamp: generatedAt,
+        metadata,
+      },
+      modelRounds: [],
+      status: 'processing',
+      startTime: generatedAt,
+      endTime: generatedAt,
+      backendTurnIndex: turnIndex,
+    };
+
+    this.setState(prev => {
+      const currentSession = prev.sessions.get(params.sessionId);
+      if (!currentSession) return prev;
+
+      if (currentSession.dialogTurns.some(turn => turn.id === dialogTurn.id)) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(params.sessionId, {
+        ...currentSession,
+        dialogTurns: [...currentSession.dialogTurns, dialogTurn],
+      });
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+    return dialogTurn;
+  }
+
   public deleteDialogTurn(sessionId: string, dialogTurnId: string): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
@@ -2368,6 +2428,7 @@ export class FlowChatStore {
 
       const displayContent =
         metadata?.localCommandKind === 'usage_report'
+          || metadata?.localCommandKind === 'goal_pending'
           ? turn.userMessage.content
           : metadata?.original_text || this.cleanRemoteUserInput(turn.userMessage.content);
       const normalizedTurnStatus = normalizeRecoveredTurnStatus(turn.status, { error: undefined });

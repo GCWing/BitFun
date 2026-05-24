@@ -16,7 +16,7 @@ import { snapshotAPI } from '@/infrastructure/api';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
-import { ReproductionStepsBlock, Tooltip, confirmDanger } from '@/component-library';
+import { ReproductionStepsBlock, Tooltip, confirmDanger, ToolProcessingDots } from '@/component-library';
 import { UserMessageEditComposer } from './UserMessageEditComposer';
 import {
   describeUserMessageEditImpact,
@@ -69,6 +69,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const messageContent = typeof message?.content === 'string' ? message.content : String(message?.content || '');
     const messageImages = useMemo(() => message?.images ?? [], [message?.images]);
     const isUsageReportMessage = message?.metadata?.localCommandKind === 'usage_report';
+    const isGoalPendingMessage = message?.metadata?.localCommandKind === 'goal_pending';
     const isUsageReportLoading = message?.metadata?.usageReportStatus === 'loading';
     const usageReport = coerceSessionUsageReport(message?.metadata?.usageReport);
     const sessionRelationship = useMemo(
@@ -354,6 +355,19 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           isLoading={isUsageReportLoading}
           onOpenDetails={usageReport ? handleOpenUsageReport : undefined}
         />
+      );
+    }
+
+    if (isGoalPendingMessage) {
+      return (
+        <div className="session-usage-report-card session-usage-report-card--loading" aria-live="polite">
+          <div className="session-usage-report-card__loading-main">
+            <ToolProcessingDots className="session-usage-report-card__loading-dots" size={12} />
+            <div>
+              <h3 className="session-usage-report-card__loading-title">{messageContent}</h3>
+            </div>
+          </div>
+        </div>
       );
     }
     

@@ -487,6 +487,7 @@
     "compactUsage": "請直接使用 /compact，不要附加額外參數。",
     "compactFailed": "會話壓縮失敗",
     "goalAction": "會話目標",
+    "goalGenerating": "正在生成目標…",
     "goalNoSession": "當前沒有可用於 /goal 的會話",
     "goalUsage": "使用 /goal 並可選擇附加目標描述，例如 /goal 修復登入問題。",
     "goalFailed": "目標模式啟用失敗",

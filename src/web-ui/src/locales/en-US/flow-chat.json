@@ -493,6 +493,7 @@
     "usageNoWorkspace": "A workspace is required to build a usage report.",
     "usageFailed": "Usage report failed",
     "goalAction": "Session goal",
+    "goalGenerating": "Generating session goal...",
     "goalNoSession": "No active session for /goal",
     "goalUsage": "Use /goal with optional focus text, for example /goal fix the login bug.",
     "goalFailed": "Goal mode activation failed",
