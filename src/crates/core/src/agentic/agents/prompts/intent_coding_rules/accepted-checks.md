@@ -37,6 +37,12 @@ Every Evidence Package should record:
 - Which checks were manual.
 - Any acceptance coverage gaps and why they remain.
 
+Use an explicit status marker for each accepted check:
+
+- `[x]` or `[passed]` for completed and verified checks.
+- `[ ]` or `[partial]` for checks that remain incomplete.
+- `[-]`, `[skipped]`, `[blocked]`, or `[not run]` when a check could not run, followed by the reason.
+
 ## Good Accepted Checks
 
 Good checks are specific and observable:

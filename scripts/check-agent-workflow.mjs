@@ -78,6 +78,25 @@ function hasSection(markdown, sectionName) {
   return new RegExp(`^## ${escaped}\\s*$`, 'm').test(markdown);
 }
 
+function sectionContent(markdown, sectionName) {
+  const sectionHeading = `## ${sectionName}`;
+  const lines = markdown.split(/\r?\n/);
+  const startIndex = lines.findIndex((line) => line.trim() === sectionHeading);
+  if (startIndex < 0) {
+    return '';
+  }
+
+  const contentLines = [];
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    if (/^##\s+/.test(lines[index])) {
+      break;
+    }
+    contentLines.push(lines[index]);
+  }
+
+  return contentLines.join('\n').trim();
+}
+
 function validateSections(filePath, requiredSections) {
   const markdown = readMarkdown(filePath);
   for (const section of requiredSections) {
@@ -103,6 +122,39 @@ function validateEvidenceIntentReference(filePath, markdown) {
   const intentPath = path.join(root, match[0]);
   if (!fs.existsSync(intentPath)) {
     reportError(`${rel(filePath)} references missing Intent Record ${match[0]}`);
+  }
+}
+
+function acceptedCheckLineHasStatus(line) {
+  return /^\s*[-*]\s+(?:\[[ xX~-]\]|\[(?:passed|failed|skipped|blocked|not run|partial)\])\s+\S/i.test(
+    line,
+  );
+}
+
+function validateEvidenceAcceptedCheckStatuses(filePath, markdown) {
+  const content = sectionContent(markdown, 'Accepted Checks');
+  if (!content) {
+    return;
+  }
+
+  const checkLines = content
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => /^\s*[-*]\s+/.test(line));
+
+  if (checkLines.length === 0) {
+    reportError(
+      `${rel(filePath)} "## Accepted Checks" must list at least one check with an explicit status`,
+    );
+    return;
+  }
+
+  for (const line of checkLines) {
+    if (!acceptedCheckLineHasStatus(line)) {
+      reportError(
+        `${rel(filePath)} Accepted Check must start with a status marker: ${line.trim()}`,
+      );
+    }
   }
 }
 
@@ -151,6 +203,7 @@ function main() {
     evidenceSlugs.add(slug);
     const markdown = validateSections(file, requiredEvidenceSections);
     validateEvidenceIntentReference(file, markdown);
+    validateEvidenceAcceptedCheckStatuses(file, markdown);
   }
 
   for (const slug of intentSlugs) {
