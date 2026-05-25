@@ -7,55 +7,24 @@
 use crate::agentic::core::ToolResult;
 use crate::agentic::tools::framework::ToolUseContext;
 use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_agent_tools::GET_TOOL_SPEC_TOOL_NAME;
+#[cfg(test)]
+use bitfun_agent_tools::{DEFAULT_MAX_TOOL_RESULT_CHARS, PERSISTED_OUTPUT_TAG};
+use bitfun_agent_tools::{
+    GET_TOOL_SPEC_TOOL_NAME, PersistedToolOutput, ToolResultPersistenceCandidate,
+    ToolResultStoragePolicy, build_persisted_tool_output_message, count_tool_result_lines,
+    generate_tool_result_preview, sanitize_tool_result_file_component,
+    select_tool_result_indices_for_persistence, tool_result_is_persisted_output,
+};
 use log::{debug, warn};
 use std::collections::HashSet;
 use std::path::Path;
 
-pub(crate) const DEFAULT_MAX_TOOL_RESULT_CHARS: usize = 50_000;
 /// Keep in sync with `FileReadTool::DEFAULT_READ_MAX_TOTAL_CHARS` plus wrapper overhead.
 pub(crate) const READ_MAX_TOOL_RESULT_CHARS: usize = 72_000;
-pub(crate) const MAX_TOOL_RESULTS_PER_ROUND_CHARS: usize = 200_000;
-pub(crate) const TOOL_RESULT_PREVIEW_CHARS: usize = 2_000;
-pub(crate) const PERSISTED_OUTPUT_TAG: &str = "<persisted-output>";
-pub(crate) const PERSISTED_OUTPUT_CLOSING_TAG: &str = "</persisted-output>";
 
 const READ_TOOL_NAME: &str = "Read";
 const BASH_TOOL_NAME: &str = "Bash";
 const SHELL_MAX_TOOL_RESULT_CHARS: usize = 30_000;
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct ToolResultStoragePolicy {
-    pub per_tool_limit_chars: usize,
-    pub per_round_limit_chars: usize,
-    pub preview_chars: usize,
-}
-
-impl Default for ToolResultStoragePolicy {
-    fn default() -> Self {
-        Self {
-            per_tool_limit_chars: DEFAULT_MAX_TOOL_RESULT_CHARS,
-            per_round_limit_chars: MAX_TOOL_RESULTS_PER_ROUND_CHARS,
-            preview_chars: TOOL_RESULT_PREVIEW_CHARS,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct PersistedToolResult {
-    reference: String,
-    original_chars: usize,
-    line_count: usize,
-    preview: String,
-    has_more: bool,
-    metadata: Vec<(String, String)>,
-}
-
-#[derive(Debug, Clone)]
-struct ToolResultCandidate {
-    index: usize,
-    visible_chars: usize,
-}
 
 pub(crate) async fn maybe_persist_large_tool_result(
     mut result: ToolResult,
@@ -106,7 +75,7 @@ pub(crate) async fn apply_round_tool_result_budget(
         return results;
     }
 
-    let selected = select_candidates_to_persist(
+    let selected = select_tool_result_indices_for_persistence(
         &candidates,
         total_visible_chars,
         policy.per_round_limit_chars,
@@ -154,37 +123,17 @@ fn should_skip_tool_result(result: &ToolResult) -> bool {
             .is_some_and(|v| !v.is_empty())
 }
 
-fn collect_round_budget_candidates(results: &[ToolResult]) -> Vec<ToolResultCandidate> {
+fn collect_round_budget_candidates(results: &[ToolResult]) -> Vec<ToolResultPersistenceCandidate> {
     results
         .iter()
         .enumerate()
         .filter(|(_, result)| !should_skip_tool_result(result))
         .filter(|(_, result)| !visible_content_is_compacted(result))
-        .map(|(index, result)| ToolResultCandidate {
+        .map(|(index, result)| ToolResultPersistenceCandidate {
             index,
             visible_chars: result_visible_content(result).chars().count(),
         })
         .collect()
-}
-
-fn select_candidates_to_persist(
-    candidates: &[ToolResultCandidate],
-    total_visible_chars: usize,
-    limit: usize,
-) -> Vec<usize> {
-    let mut sorted = candidates.to_vec();
-    sorted.sort_by(|a, b| b.visible_chars.cmp(&a.visible_chars));
-
-    let mut selected = Vec::new();
-    let mut remaining = total_visible_chars;
-    for candidate in sorted {
-        if remaining <= limit {
-            break;
-        }
-        selected.push(candidate.index);
-        remaining = remaining.saturating_sub(candidate.visible_chars);
-    }
-    selected
 }
 
 async fn persist_and_render_replacement(
@@ -195,7 +144,7 @@ async fn persist_and_render_replacement(
 ) -> BitFunResult<String> {
     let persisted =
         persist_tool_result(result, context, policy.preview_chars, content_override).await?;
-    Ok(build_persisted_output_message(
+    Ok(build_persisted_tool_output_message(
         &persisted,
         policy.preview_chars,
     ))
@@ -206,7 +155,7 @@ async fn persist_tool_result(
     context: &ToolUseContext,
     preview_chars: usize,
     content_override: Option<String>,
-) -> BitFunResult<PersistedToolResult> {
+) -> BitFunResult<PersistedToolOutput> {
     let session_id = context.session_id.as_deref().ok_or_else(|| {
         BitFunError::tool("A session id is required to persist tool results".to_string())
     })?;
@@ -237,7 +186,7 @@ async fn persist_tool_result(
             &format!("tool-results/{}", file_name),
         )
         .unwrap_or_else(|_| path.display().to_string());
-    let (preview, has_more) = generate_preview(&serialized, preview_chars);
+    let (preview, has_more) = generate_tool_result_preview(&serialized, preview_chars);
 
     debug!(
         "Persisted oversized tool result: tool_name={}, tool_id={}, chars={}, path={}",
@@ -247,10 +196,10 @@ async fn persist_tool_result(
         path.display()
     );
 
-    Ok(PersistedToolResult {
+    Ok(PersistedToolOutput {
         reference,
         original_chars: serialized.chars().count(),
-        line_count: count_text_lines(&serialized),
+        line_count: count_tool_result_lines(&serialized),
         preview,
         has_more,
         metadata: tool_result_metadata(result),
@@ -345,75 +294,14 @@ fn visible_content_is_compacted(result: &ToolResult) -> bool {
     result
         .result_for_assistant
         .as_deref()
-        .is_some_and(|text| text.starts_with(PERSISTED_OUTPUT_TAG))
+        .is_some_and(tool_result_is_persisted_output)
 }
 
 fn tool_result_file_name(tool_id: &str, is_json: bool) -> String {
-    let safe_id = sanitize_file_component(tool_id);
+    let fallback = uuid::Uuid::new_v4().to_string();
+    let safe_id = sanitize_tool_result_file_component(tool_id, &fallback);
     let ext = if is_json { "json" } else { "txt" };
     format!("{}.{}", safe_id, ext)
-}
-
-fn sanitize_file_component(value: &str) -> String {
-    let mut sanitized = value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-
-    if sanitized.is_empty() {
-        sanitized = uuid::Uuid::new_v4().to_string();
-    }
-    sanitized
-}
-
-fn generate_preview(content: &str, max_chars: usize) -> (String, bool) {
-    if content.chars().count() <= max_chars {
-        return (content.to_string(), false);
-    }
-
-    let prefix = content.chars().take(max_chars).collect::<String>();
-    let cut_point = prefix
-        .char_indices()
-        .filter_map(|(idx, ch)| (ch == '\n').then_some(idx))
-        .last()
-        .filter(|idx| *idx > prefix.len() / 2)
-        .unwrap_or(prefix.len());
-
-    (prefix[..cut_point].to_string(), true)
-}
-
-fn count_text_lines(content: &str) -> usize {
-    if content.is_empty() {
-        0
-    } else {
-        content.lines().count()
-    }
-}
-
-fn build_persisted_output_message(result: &PersistedToolResult, preview_chars: usize) -> String {
-    let mut message = format!(
-        "{PERSISTED_OUTPUT_TAG}\nOutput too large ({} chars). Full output saved to: {}\nLine count: {}\n\nPreview (first {} chars):\n{}",
-        result.original_chars, result.reference, result.line_count, preview_chars, result.preview
-    );
-    if result.has_more {
-        message.push_str("\n...\n");
-    } else {
-        message.push('\n');
-    }
-    if !result.metadata.is_empty() {
-        message.push_str("\nMetadata:\n");
-        for (key, value) in &result.metadata {
-            message.push_str(&format!("- {}: {}\n", key, value));
-        }
-    }
-    message.push_str(PERSISTED_OUTPUT_CLOSING_TAG);
-    message
 }
 
 fn tool_result_metadata(result: &ToolResult) -> Vec<(String, String)> {
@@ -443,8 +331,8 @@ fn tool_result_metadata(result: &ToolResult) -> Vec<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::WorkspaceBinding;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
     use serde_json::json;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -630,24 +518,29 @@ mod tests {
         let medium = tool_result("medium_1", "WebFetch", "b".repeat(60_000));
         let bash = tool_result("bash_1", "Bash", "c".repeat(30_000));
 
-        let processed =
-            apply_round_tool_result_budget(vec![read, medium, bash], &context).await;
+        let processed = apply_round_tool_result_budget(vec![read, medium, bash], &context).await;
 
-        assert!(processed[0]
-            .result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .starts_with(PERSISTED_OUTPUT_TAG));
-        assert!(!processed[1]
-            .result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .starts_with(PERSISTED_OUTPUT_TAG));
-        assert!(!processed[2]
-            .result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .starts_with(PERSISTED_OUTPUT_TAG));
+        assert!(
+            processed[0]
+                .result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .starts_with(PERSISTED_OUTPUT_TAG)
+        );
+        assert!(
+            !processed[1]
+                .result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .starts_with(PERSISTED_OUTPUT_TAG)
+        );
+        assert!(
+            !processed[2]
+                .result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .starts_with(PERSISTED_OUTPUT_TAG)
+        );
 
         let session_dir = context
             .current_workspace_session_tool_results_dir("session_1")

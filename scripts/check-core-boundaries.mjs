@@ -641,6 +641,41 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/agentic/tools/file_read_state_runtime.rs',
+    patterns: [
+      {
+        regex: /\bnormalize_string\b/,
+        message:
+          'core file read-state runtime must delegate pure freshness normalization to bitfun-agent-tools',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_result_storage.rs',
+    patterns: [
+      {
+        regex: /\bfn\s+generate_preview\b/,
+        message:
+          'core tool result storage must delegate pure preview generation to bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn\s+build_persisted_output_message\b/,
+        message:
+          'core tool result storage must delegate persisted-output rendering to bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn\s+select_candidates_to_persist\b/,
+        message:
+          'core tool result storage must delegate round-budget selection to bitfun-agent-tools',
+      },
+      {
+        regex: /\bstruct\s+ToolResultStoragePolicy\b/,
+        message:
+          'core tool result storage must use the provider-neutral storage policy from bitfun-agent-tools',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/service/mcp/server/process.rs',
     patterns: [
       {
@@ -1873,6 +1908,69 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/agent-tools/src/file_guidance.rs',
+    reason: 'agent-tools owns provider-neutral file tool guidance marker contracts',
+    patterns: [
+      {
+        regex: /\bpub const FILE_TOOL_GUIDANCE_PREFIX\b/,
+        message: 'missing file tool guidance marker prefix',
+      },
+      {
+        regex: /\bpub fn file_tool_guidance_message\b/,
+        message: 'missing file tool guidance message helper',
+      },
+      {
+        regex: /\bpub fn is_file_tool_guidance_message\b/,
+        message: 'missing file tool guidance classifier',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-tools/src/file_read_freshness.rs',
+    reason: 'agent-tools owns pure file-read freshness policy for Read/Edit/Write guardrails',
+    patterns: [
+      {
+        regex: /\bpub struct FileReadFreshnessFacts\b/,
+        message: 'missing file-read freshness facts contract',
+      },
+      {
+        regex: /\bpub fn normalize_tool_file_content\b/,
+        message: 'missing provider-neutral file content normalization helper',
+      },
+      {
+        regex: /\bpub fn file_read_facts_are_fresh\b/,
+        message: 'missing file-read freshness policy helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-tools/src/tool_result_storage.rs',
+    reason:
+      'agent-tools owns pure oversized tool-result storage policy and rendering without session IO',
+    patterns: [
+      {
+        regex: /\bpub struct ToolResultStoragePolicy\b/,
+        message: 'missing provider-neutral tool result storage policy',
+      },
+      {
+        regex: /\bpub struct PersistedToolOutput\b/,
+        message: 'missing persisted tool output render contract',
+      },
+      {
+        regex: /\bpub fn select_tool_result_indices_for_persistence\b/,
+        message: 'missing round-budget persistence candidate selector',
+      },
+      {
+        regex: /\bpub fn build_persisted_tool_output_message\b/,
+        message: 'missing persisted-output message renderer',
+      },
+      {
+        regex: /\bpub fn tool_result_is_persisted_output\b/,
+        message: 'missing persisted-output classifier',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
     reason:
       'core must keep current coordinator port adapters and attachment guard until remote runtime migration is reviewed',
@@ -2619,8 +2717,8 @@ const requiredContentRules = [
         message: 'missing core GetToolSpec execution error mapping boundary',
       },
       {
-        regex: /\bbuild_product_get_tool_spec_catalog_description\b/,
-        message: 'missing core product GetToolSpec catalog facade delegation',
+        regex: /\bbuild_collapsed_tools_context_section\b/,
+        message: 'missing core collapsed-tool request-context section renderer',
       },
       {
         regex: /\bproduct_get_tool_spec_runtime\b/,
@@ -4896,6 +4994,37 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/agent-tools/src/file_guidance.rs',
+      contracts: [
+        'FILE_TOOL_GUIDANCE_PREFIX',
+        'file_tool_guidance_message',
+        'is_file_tool_guidance_message',
+      ],
+    },
+    {
+      path: 'src/crates/agent-tools/src/file_read_freshness.rs',
+      contracts: [
+        'FileReadFreshnessFacts',
+        'normalize_tool_file_content',
+        'file_read_facts_content_matches',
+        'file_read_facts_are_fresh',
+      ],
+    },
+    {
+      path: 'src/crates/agent-tools/src/tool_result_storage.rs',
+      contracts: [
+        'ToolResultStoragePolicy',
+        'PersistedToolOutput',
+        'ToolResultPersistenceCandidate',
+        'select_tool_result_indices_for_persistence',
+        'sanitize_tool_result_file_component',
+        'generate_tool_result_preview',
+        'count_tool_result_lines',
+        'tool_result_is_persisted_output',
+        'build_persisted_tool_output_message',
+      ],
+    },
+    {
       path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
       contracts: [
         'AgentSubmissionPort',
@@ -5093,7 +5222,7 @@ function runManifestParserSelfTest() {
       path: 'src/crates/core/src/agentic/tools/implementations/get_tool_spec_tool.rs',
       contracts: [
         'GetToolSpecTool',
-        'build_product_get_tool_spec_catalog_description',
+        'build_collapsed_tools_context_section',
         'product_get_tool_spec_runtime',
         'with_runtime',
         'resolve_product_get_tool_spec_results',

@@ -3,12 +3,22 @@
 //! Pure tool DTOs and helpers live here before the concrete tool framework and
 //! tool packs are moved out of the core facade.
 
+pub mod file_guidance;
+pub mod file_read_freshness;
 pub mod framework;
 pub mod input_validator;
+pub mod tool_result_storage;
 
 pub use bitfun_core_types::ToolImageAttachment;
 pub use bitfun_runtime_ports::{
     DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult, ToolDecorator,
+};
+pub use file_guidance::{
+    FILE_TOOL_GUIDANCE_PREFIX, file_tool_guidance_message, is_file_tool_guidance_message,
+};
+pub use file_read_freshness::{
+    FileReadFreshnessFacts, file_read_facts_are_fresh, file_read_facts_content_matches,
+    normalize_tool_file_content,
 };
 pub use framework::{
     BITFUN_RUNTIME_URI_PREFIX, CollapsedToolUsageError, ContextualToolManifest,
@@ -48,3 +58,10 @@ pub use framework::{
     validate_get_tool_spec_input, validate_tool_allowed_by_list,
 };
 pub use input_validator::InputValidator;
+pub use tool_result_storage::{
+    DEFAULT_MAX_TOOL_RESULT_CHARS, MAX_TOOL_RESULTS_PER_ROUND_CHARS, PERSISTED_OUTPUT_CLOSING_TAG,
+    PERSISTED_OUTPUT_TAG, PersistedToolOutput, TOOL_RESULT_PREVIEW_CHARS,
+    ToolResultPersistenceCandidate, ToolResultStoragePolicy, build_persisted_tool_output_message,
+    count_tool_result_lines, generate_tool_result_preview, sanitize_tool_result_file_component,
+    select_tool_result_indices_for_persistence, tool_result_is_persisted_output,
+};

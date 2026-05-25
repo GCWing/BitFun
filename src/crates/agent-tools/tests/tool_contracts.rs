@@ -31,6 +31,17 @@ use bitfun_agent_tools::{
     summarize_get_tool_spec_collapsed_tools, tool_path_is_effectively_absolute,
     validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_tool_allowed_by_list,
 };
+use bitfun_agent_tools::{
+    FILE_TOOL_GUIDANCE_PREFIX, PERSISTED_OUTPUT_TAG, PersistedToolOutput,
+    TOOL_RESULT_PREVIEW_CHARS, ToolResultPersistenceCandidate, build_persisted_tool_output_message,
+    count_tool_result_lines, file_tool_guidance_message, generate_tool_result_preview,
+    is_file_tool_guidance_message, sanitize_tool_result_file_component,
+    select_tool_result_indices_for_persistence, tool_result_is_persisted_output,
+};
+use bitfun_agent_tools::{
+    FileReadFreshnessFacts, file_read_facts_are_fresh, file_read_facts_content_matches,
+    normalize_tool_file_content,
+};
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -220,6 +231,118 @@ fn portable_tool_context_provider_exposes_facts_only() {
     assert_eq!(value["workspaceKind"], "local");
     assert!(value.get("workspace_services").is_none());
     assert!(value.get("unlockedCollapsedTools").is_none());
+}
+
+#[test]
+fn file_tool_guidance_marker_is_provider_neutral() {
+    let message = file_tool_guidance_message("Read the file first");
+
+    assert_eq!(FILE_TOOL_GUIDANCE_PREFIX, "[guidance] ");
+    assert_eq!(message, "[guidance] Read the file first");
+    assert!(is_file_tool_guidance_message(&message));
+    assert!(!is_file_tool_guidance_message("Read the file first"));
+}
+
+#[test]
+fn file_read_freshness_policy_preserves_read_edit_write_guardrails() {
+    let full_read = FileReadFreshnessFacts {
+        content: "alpha\r\n",
+        timestamp_ms: 100,
+        is_full_file_read: true,
+    };
+
+    assert_eq!(normalize_tool_file_content("alpha\r\n"), "alpha\n");
+    assert!(file_read_facts_content_matches(full_read, "alpha\n"));
+    assert!(file_read_facts_are_fresh(full_read, "alpha\n", Some(200)));
+    assert!(!file_read_facts_are_fresh(full_read, "beta\n", Some(200)));
+    assert!(file_read_facts_are_fresh(full_read, "beta\n", Some(50)));
+    assert!(!file_read_facts_are_fresh(full_read, "beta\n", None));
+
+    let partial_read = FileReadFreshnessFacts {
+        content: "middle\n",
+        timestamp_ms: 100,
+        is_full_file_read: false,
+    };
+    assert!(!file_read_facts_content_matches(partial_read, "middle\n"));
+    assert!(!file_read_facts_are_fresh(
+        partial_read,
+        "full file\n",
+        Some(200)
+    ));
+    assert!(file_read_facts_are_fresh(partial_read, "full file\n", None));
+}
+
+#[test]
+fn persisted_tool_output_message_keeps_reference_preview_and_metadata_shape() {
+    let rendered = build_persisted_tool_output_message(
+        &PersistedToolOutput {
+            reference: "bitfun-runtime://session/session-1/tool-results/bash_1.txt".to_string(),
+            original_chars: 12_345,
+            line_count: 7,
+            preview: "first lines".to_string(),
+            has_more: true,
+            metadata: vec![
+                ("exit_code".to_string(), "1".to_string()),
+                ("working_directory".to_string(), "/repo".to_string()),
+            ],
+        },
+        TOOL_RESULT_PREVIEW_CHARS,
+    );
+
+    assert!(rendered.starts_with(PERSISTED_OUTPUT_TAG));
+    assert!(rendered.contains("Output too large (12345 chars). Full output saved to:"));
+    assert!(rendered.contains("Line count: 7"));
+    assert!(rendered.contains("Preview (first 2000 chars):\nfirst lines"));
+    assert!(rendered.contains("- exit_code: 1"));
+    assert!(rendered.contains("- working_directory: /repo"));
+    assert!(tool_result_is_persisted_output(&rendered));
+}
+
+#[test]
+fn tool_result_preview_prefers_line_boundary_when_possible() {
+    let content = "first line\nsecond line\nthird line";
+
+    let (preview, has_more) = generate_tool_result_preview(content, 23);
+
+    assert!(has_more);
+    assert_eq!(preview, "first line\nsecond line");
+}
+
+#[test]
+fn round_budget_candidate_selection_persists_largest_until_under_limit() {
+    let candidates = vec![
+        ToolResultPersistenceCandidate {
+            index: 0,
+            visible_chars: 170_000,
+        },
+        ToolResultPersistenceCandidate {
+            index: 1,
+            visible_chars: 60_000,
+        },
+        ToolResultPersistenceCandidate {
+            index: 2,
+            visible_chars: 30_000,
+        },
+    ];
+
+    let selected = select_tool_result_indices_for_persistence(&candidates, 260_000, 200_000);
+
+    assert_eq!(selected, vec![0]);
+}
+
+#[test]
+fn tool_result_storage_helpers_keep_stable_file_and_line_contracts() {
+    assert_eq!(
+        sanitize_tool_result_file_component("tool/one", "fallback"),
+        "tool_one"
+    );
+    assert_eq!(
+        sanitize_tool_result_file_component("", "fallback"),
+        "fallback"
+    );
+    assert_eq!(count_tool_result_lines(""), 0);
+    assert_eq!(count_tool_result_lines("a\nb\n"), 2);
+    assert!(!tool_result_is_persisted_output("plain output"));
 }
 
 #[test]

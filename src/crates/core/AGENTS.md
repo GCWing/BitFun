@@ -99,10 +99,14 @@ SessionManager → Session → DialogTurn → ModelRound
   owner feature group.
 - Provider-neutral tool path resolution, effective absolute-path checks,
   runtime artifact reference assembly, path policy root matching, and denial
-  text may live in `bitfun-agent-tools`; keep workspace/runtime root lookup,
-  allowed-root resolution, local canonicalization, remote POSIX containment
-  callbacks, `BitFunError` mapping, and `ToolUseContext` runtime/service
-  bindings in core unless a separate migration proves equivalence.
+  text may live in `bitfun-agent-tools`; file guidance markers, file-read
+  freshness comparison policy, and oversized tool-result preview/rendering
+  policy may also live there as pure contracts. Keep workspace/runtime root
+  lookup, allowed-root resolution, local canonicalization, remote POSIX
+  containment callbacks, session file-read state storage, tool-result
+  filesystem writes, `BitFunError` mapping, and `ToolUseContext`
+  runtime/service bindings in core unless a separate migration proves
+  equivalence.
 - Product/runtime dependencies that are only used behind those feature gates
   should stay optional in `bitfun-core` and be enabled by `product-full`,
   `service-integrations`, or `ssh-remote`; do not treat that as permission to
