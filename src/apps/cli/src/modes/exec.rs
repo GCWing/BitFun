@@ -5,8 +5,11 @@
 use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
+use bitfun_core::agentic::core::SessionState;
 use bitfun_events::AgenticEvent;
+use tokio::time::{sleep, Instant};
 
 use crate::agent::{agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter, Agent};
 use crate::config::CliConfig;
@@ -129,6 +132,7 @@ impl ExecMode {
 
         // Consume events from EventQueue until turn completes
         let mut total_tool_calls = 0usize;
+        let mut terminal_outcome: Option<Result<()>> = None;
 
         loop {
             // Wait for events (efficient, uses Notify internally)
@@ -244,9 +248,8 @@ impl ExecMode {
                         if total_tool_calls > 0 {
                             println!("\nTool call statistics: {} tools invoked", total_tool_calls);
                         }
-                        // Break out of the event loop
-                        self.output_patch_if_needed();
-                        return Ok(());
+                        terminal_outcome = Some(Ok(()));
+                        break;
                     }
 
                     AgenticEvent::DialogTurnFailed { error, .. } => {
@@ -256,14 +259,15 @@ impl ExecMode {
                             error,
                             &self.exit_context(Some(&session_id), Some(&turn_id)),
                         );
-                        self.output_patch_if_needed();
-                        return Err(anyhow::anyhow!("Execution failed: {}", error));
+                        terminal_outcome =
+                            Some(Err(anyhow::anyhow!("Execution failed: {}", error)));
+                        break;
                     }
 
                     AgenticEvent::DialogTurnCancelled { .. } => {
                         println!("\nExecution cancelled");
-                        self.output_patch_if_needed();
-                        return Ok(());
+                        terminal_outcome = Some(Ok(()));
+                        break;
                     }
 
                     AgenticEvent::SystemError { error, .. } => {
@@ -273,14 +277,22 @@ impl ExecMode {
                             error,
                             &self.exit_context(Some(&session_id), Some(&turn_id)),
                         );
-                        self.output_patch_if_needed();
-                        return Err(anyhow::anyhow!("System error: {}", error));
+                        terminal_outcome = Some(Err(anyhow::anyhow!("System error: {}", error)));
+                        break;
                     }
 
                     _ => {}
                 }
             }
+
+            if terminal_outcome.is_some() {
+                break;
+            }
         }
+
+        self.wait_for_turn_settlement(&session_id, &turn_id).await;
+        self.output_patch_if_needed();
+        terminal_outcome.unwrap_or(Ok(()))
     }
 
     async fn record_resolved_model_id(&self, session_id: &str, model_id: &str) {
@@ -333,6 +345,37 @@ impl ExecMode {
             }
         }
     }
+
+    async fn wait_for_turn_settlement(&self, session_id: &str, turn_id: &str) {
+        let session_manager = self.agent.coordinator().get_session_manager().clone();
+        let deadline = Instant::now() + Duration::from_secs(5);
+
+        loop {
+            let Some(session) = session_manager.get_session(session_id) else {
+                return;
+            };
+
+            let still_processing = matches!(
+                &session.state,
+                SessionState::Processing { current_turn_id, .. } if current_turn_id == turn_id
+            );
+
+            if !still_processing {
+                return;
+            }
+
+            if Instant::now() >= deadline {
+                tracing::warn!(
+                    "Timed out waiting for exec turn settlement: session_id={}, turn_id={}",
+                    session_id,
+                    turn_id
+                );
+                return;
+            }
+
+            sleep(Duration::from_millis(50)).await;
+        }
+    }
 }
 
 pub(crate) fn write_patch_to_path(output_target: &str, patch: &str) -> std::io::Result<()> {
@@ -355,11 +398,8 @@ mod patch_tests {
     fn write_patch_to_path_creates_nested_parent_directories() {
         let temp = tempfile::tempdir().expect("tempdir");
         let patch_path = temp.path().join("parent/child/out.patch");
-        write_patch_to_path(
-            patch_path.to_str().expect("utf8 path"),
-            "diff content",
-        )
-        .expect("write patch");
+        write_patch_to_path(patch_path.to_str().expect("utf8 path"), "diff content")
+            .expect("write patch");
 
         let written = std::fs::read_to_string(&patch_path).expect("read patch");
         assert_eq!(written, "diff content");
