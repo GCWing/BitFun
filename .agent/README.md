@@ -27,14 +27,25 @@ Plain conversation, quick code explanation, or one-off inspection does not need 
 
 ## Directory Map
 
-- `rules/`: durable constraints and workflow rules.
-- `templates/`: reusable Markdown templates for records and notes.
-- `intents/`: task Intent Records, named `intent-YYYYMMDD-short-task-name.md`.
-- `evidence/`: task Evidence Packages, named `evidence-YYYYMMDD-short-task-name.md`.
-- `knowledge/`: stable project facts for the simplified Context Compiler.
-- `changes/`: temporary rollout or task-context notes.
+- `rules/`: durable constraints and workflow rules. Loaded into agent context at runtime.
+- `templates/`: reusable Markdown templates for Intent Records, Evidence Packages, and other artifacts.
+- `intents/`: per-task **Intent Records** named `intent-YYYYMMDD-short-task-name.md`. These are task-specific delivery artifacts — not global configuration. Each meaningful coding task should produce one before editing code. They are not loaded into agent context automatically; the agent writes them as structured output.
+- `evidence/`: per-task **Evidence Packages** named `evidence-YYYYMMDD-short-task-name.md`. Each pairs 1:1 with an Intent Record and documents what was delivered, verified, and reviewed. They are task delivery artifacts, not runtime dependencies.
+- `knowledge/`: stable project facts for the simplified Context Compiler. Loaded into agent context at runtime.
+- `changes/`: temporary rollout or task-context notes. Loaded into agent context at runtime.
 
-`README.md` files under `.agent/` are for humans and are skipped during automatic context injection. Put Agent-readable facts in named Markdown files under `rules/`, `knowledge/`, or `changes/`.
+`README.md` files under `.agent/` are for humans and are skipped during automatic context injection.
+
+### What goes in `intents/` vs `evidence/`
+
+| | Intent Record | Evidence Package |
+|---|---|---|
+| **When** | Before coding starts | After verification passes |
+| **Purpose** | Capture intent, scope, accepted checks | Prove delivery and record outcomes |
+| **Loaded at runtime** | No — agent writes it | No — agent writes it |
+| **Lifecycle** | Written per task, committed alongside changes or discarded after merge | Written per task, references its Intent Record |
+
+Only `rules/`, `knowledge/`, and `changes/` are injected into the agent's workspace context. The `intents/` and `evidence/` directories hold the task-level paper trail that the `agent:check` script validates structurally.
 
 ## Task Lifecycle
 
