@@ -25,6 +25,7 @@ The checker validates structural workflow hygiene:
 - Evidence Packages reference existing Intent Records.
 - Intent Records and Evidence Packages are paired by task slug.
 - Evidence Package accepted checks include explicit status markers.
+- Evidence Package repair loops include attempt counts and final repair status.
 
 ## Limits
 

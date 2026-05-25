@@ -45,3 +45,9 @@ Every Evidence Package should include repair-loop data when any verification fai
 - Repair attempts count.
 - Final repair status: `not_needed`, `repaired`, `blocked`, or `deferred`.
 - Remaining verification gaps.
+
+Use a dedicated `## Repair Loop` section in the Evidence Package. It must include:
+
+- `Repair attempts: <number>`
+- `Final repair status: <not_needed|repaired|blocked|deferred>`
+- Failure classes observed, or `none` when no verification failed.

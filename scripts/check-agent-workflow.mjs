@@ -24,10 +24,13 @@ const requiredEvidenceSections = [
   'Summary',
   'Files Changed',
   'Verification',
+  'Repair Loop',
   'Accepted Checks',
   'Risks',
   'Human Review Focus',
 ];
+
+const validRepairStatuses = new Set(['not_needed', 'repaired', 'blocked', 'deferred']);
 
 let errorCount = 0;
 
@@ -158,6 +161,31 @@ function validateEvidenceAcceptedCheckStatuses(filePath, markdown) {
   }
 }
 
+function validateEvidenceRepairLoop(filePath, markdown) {
+  const content = sectionContent(markdown, 'Repair Loop');
+  if (!content) {
+    return;
+  }
+
+  const attemptsMatch = content.match(/Repair attempts\s*:\s*(\d+)/i);
+  if (!attemptsMatch) {
+    reportError(`${rel(filePath)} "## Repair Loop" must include "Repair attempts: <number>"`);
+  }
+
+  const statusMatch = content.match(/Final repair status\s*:\s*([a-z_]+)/i);
+  if (!statusMatch) {
+    reportError(`${rel(filePath)} "## Repair Loop" must include "Final repair status: <status>"`);
+    return;
+  }
+
+  const status = statusMatch[1].toLowerCase();
+  if (!validRepairStatuses.has(status)) {
+    reportError(
+      `${rel(filePath)} has invalid Final repair status "${status}". Expected one of: ${Array.from(validRepairStatuses).join(', ')}`,
+    );
+  }
+}
+
 function main() {
   // .agent is a runtime artifact directory created by the IntentCoding agent.
   // Its absence is not an error — just means no active Intent Coding task.
@@ -204,6 +232,7 @@ function main() {
     const markdown = validateSections(file, requiredEvidenceSections);
     validateEvidenceIntentReference(file, markdown);
     validateEvidenceAcceptedCheckStatuses(file, markdown);
+    validateEvidenceRepairLoop(file, markdown);
   }
 
   for (const slug of intentSlugs) {
