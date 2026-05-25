@@ -1184,6 +1184,61 @@ const forbiddenContentRules = [
     path: 'src/crates/core/src/service/remote_connect/remote_server.rs',
     patterns: [
       {
+        regex: /\bpub\(crate\) struct CoreRemoteDialogRuntimeHost\b/,
+        message:
+          'remote_server must not own concrete remote dialog runtime host; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bpub\(crate\) struct CoreRemoteCancelRuntimeHost\b/,
+        message:
+          'remote_server must not own concrete remote cancel runtime host; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bpub\(crate\) struct CoreRemoteWorkspaceFileRuntimeHost\b/,
+        message:
+          'remote_server must not own concrete remote workspace file runtime host; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bstruct CoreRemoteSessionTrackerHost\b/,
+        message:
+          'remote_server must not own concrete remote tracker host; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\basync fn resolve_session_model_id\b/,
+        message:
+          'remote_server must not own remote session model resolution; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\basync fn load_remote_model_catalog\b/,
+        message:
+          'remote_server must not own remote model catalog loading; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bget_global_config_service\b/,
+        message:
+          'remote_server must not own remote model config access; route it through service_agent_runtime',
+      },
+      {
+        regex: /\bfn compress_data_url_for_mobile\b/,
+        message:
+          'remote_server must not own remote chat thumbnail compression; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bfn turns_to_chat_messages\b/,
+        message:
+          'remote_server must not own persisted turn to remote chat conversion; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\basync fn load_chat_messages_from_conversation_persistence\b/,
+        message:
+          'remote_server must not own remote chat history persistence loading; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bfn strip_user_input_tags\b/,
+        message:
+          'remote_server must not own remote user input display cleanup; keep it in service_agent_runtime',
+      },
+      {
         regex: /\bpub struct ImageAttachment\b/,
         message: 'core remote-connect server must not redefine image attachment wire DTOs; use the integrations contract',
       },
@@ -2238,6 +2293,38 @@ const requiredContentRules = [
         message: 'missing remote image context owner adapter',
       },
       {
+        regex: /\bfn load_remote_model_catalog\b/,
+        message: 'missing remote model catalog owner adapter',
+      },
+      {
+        regex: /\bfn update_remote_session_model\b/,
+        message: 'missing remote session model update owner adapter',
+      },
+      {
+        regex: /\bfn normalize_remote_session_model_id\b/,
+        message: 'missing remote session model id normalization regression hook',
+      },
+      {
+        regex: /\bfn normalize_remote_model_selection\b/,
+        message: 'missing remote model selection normalization regression hook',
+      },
+      {
+        regex: /\bfn remote_chat_messages_from_turns\b/,
+        message: 'missing remote chat history conversion owner adapter',
+      },
+      {
+        regex: /\bfn strip_remote_user_input_tags\b/,
+        message: 'missing remote user input display cleanup owner adapter',
+      },
+      {
+        regex: /\bfn compress_remote_chat_data_url_for_mobile\b/,
+        message: 'missing remote chat thumbnail compression owner adapter',
+      },
+      {
+        regex: /\bfn load_remote_chat_messages\b/,
+        message: 'missing remote chat history persistence owner adapter',
+      },
+      {
         regex: /\bfn agent_submission_port\b/,
         message: 'missing agent submission port owner binding',
       },
@@ -2258,8 +2345,32 @@ const requiredContentRules = [
         message: 'missing core remote cancel host binding',
       },
       {
+        regex: /\bCoreRemoteWorkspaceFileRuntimeHost\b/,
+        message: 'missing core remote workspace file host binding',
+      },
+      {
+        regex: /\bCoreRemoteSessionTrackerHost\b/,
+        message: 'missing core remote session tracker host binding',
+      },
+      {
         regex: /\bRemoteExecutionDispatcher\b/,
         message: 'missing remote execution dispatcher binding',
+      },
+      {
+        regex: /\bimpl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost\b/,
+        message: 'missing remote dialog host adapter implementation in runtime owner',
+      },
+      {
+        regex: /\bimpl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost\b/,
+        message: 'missing remote cancel host adapter implementation in runtime owner',
+      },
+      {
+        regex: /\bimpl RemoteWorkspaceFileRuntimeHost for CoreRemoteWorkspaceFileRuntimeHost\b/,
+        message: 'missing remote workspace file host adapter implementation in runtime owner',
+      },
+      {
+        regex: /\bimpl RemoteSessionTrackerHost for CoreRemoteSessionTrackerHost\b/,
+        message: 'missing remote tracker host adapter implementation in runtime owner',
       },
       {
         regex: /\bImageContextData\b/,
@@ -2288,6 +2399,22 @@ const requiredContentRules = [
       {
         regex: /\bcore_service_agent_runtime_owner_keeps_coordinator_port_contracts\b/,
         message: 'missing coordinator runtime port contract regression',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_normalizes_remote_session_model_ids\b/,
+        message: 'missing remote session model id normalization regression',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_normalizes_remote_model_selection_aliases\b/,
+        message: 'missing remote model selection alias regression',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_preserves_remote_chat_history_shape\b/,
+        message: 'missing remote chat history conversion regression',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_skips_in_progress_remote_assistant_history\b/,
+        message: 'missing in-progress remote assistant history regression',
       },
     ],
   },
@@ -2652,30 +2779,6 @@ const requiredContentRules = [
       {
         regex: /\bCoreServiceAgentRuntime\b/,
         message: 'missing core service/agent runtime owner routing',
-      },
-      {
-        regex: /\bstruct CoreRemoteDialogRuntimeHost\b/,
-        message: 'missing core remote dialog runtime adapter',
-      },
-      {
-        regex: /\bstruct CoreRemoteCancelRuntimeHost\b/,
-        message: 'missing core remote cancel runtime adapter',
-      },
-      {
-        regex: /\bstruct CoreRemoteWorkspaceFileRuntimeHost\b/,
-        message: 'missing core remote file runtime adapter',
-      },
-      {
-        regex: /\bimpl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost\b/,
-        message: 'missing integrations dialog host adapter implementation',
-      },
-      {
-        regex: /\bimpl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost\b/,
-        message: 'missing integrations cancel host adapter implementation',
-      },
-      {
-        regex: /\bimpl RemoteWorkspaceFileRuntimeHost for CoreRemoteWorkspaceFileRuntimeHost\b/,
-        message: 'missing integrations file host adapter implementation',
       },
       {
         regex: /\bsubmit_remote_dialog\b/,
@@ -5570,11 +5673,21 @@ function runManifestParserSelfTest() {
         'remote_dialog_host',
         'remote_cancel_host',
         'remote_image_context',
+        'load_remote_model_catalog',
+        'update_remote_session_model',
+        'normalize_remote_session_model_id',
+        'normalize_remote_model_selection',
+        'remote_chat_messages_from_turns',
+        'strip_remote_user_input_tags',
+        'compress_remote_chat_data_url_for_mobile',
+        'load_remote_chat_messages',
         'agent_submission_port',
         'agent_turn_cancellation_port',
         'remote_control_state_port',
         'CoreRemoteDialogRuntimeHost',
         'CoreRemoteCancelRuntimeHost',
+        'CoreRemoteWorkspaceFileRuntimeHost',
+        'CoreRemoteSessionTrackerHost',
         'RemoteExecutionDispatcher',
         'ImageContextData',
         'RemoteImageContextAdapter',
@@ -5583,6 +5696,10 @@ function runManifestParserSelfTest() {
         'RemoteControlStatePort',
         'SessionTranscriptReader',
         'core_service_agent_runtime_owner_keeps_coordinator_port_contracts',
+        'core_service_agent_runtime_owner_normalizes_remote_session_model_ids',
+        'core_service_agent_runtime_owner_normalizes_remote_model_selection_aliases',
+        'core_service_agent_runtime_owner_preserves_remote_chat_history_shape',
+        'core_service_agent_runtime_owner_skips_in_progress_remote_assistant_history',
       ],
     },
     {

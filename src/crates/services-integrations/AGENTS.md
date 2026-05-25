@@ -24,7 +24,9 @@ slices that are outside pure product logic but still platform-neutral.
   persistence/workspace service reads, concrete scheduler submission, concrete
   session restore / terminal pre-warm adapters, and product execution remain
   core-owned unless a later reviewed port/provider moves them with equivalence
-  tests. Core bindings for these runtime adapters are centralized in
+  tests. Core remote dialog/cancel/file/tracker, remote model
+  catalog/session-model selection, and remote chat history persistence/message
+  conversion adapter bindings are centralized in
   `src/crates/core/src/service_agent_runtime.rs`.
 - Remote-SSH path/session identity helpers may live here; SSH channels, SFTP,
   remote FS, remote terminal, and manager assembly remain core-owned unless a
