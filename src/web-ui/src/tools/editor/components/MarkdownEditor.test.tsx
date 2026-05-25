@@ -27,13 +27,13 @@ vi.mock('@/component-library', () => ({
 }));
 
 vi.mock('../meditor', () => ({
-  MEditor: forwardRef((_props: { value?: string }, ref) => {
+  MEditor: forwardRef((props: { value?: string; mode?: string }, ref) => {
     useImperativeHandle(ref, () => ({
       destroy: vi.fn(),
       markSaved: vi.fn(),
       setInitialContent: vi.fn(),
     }));
-    return <div data-testid="markdown-body" />;
+    return <div data-testid="markdown-body" data-mode={props.mode} />;
   }),
 }));
 
@@ -91,5 +91,13 @@ describe('MarkdownEditor', () => {
     expect(html).toContain('aria-label="Copy Markdown"');
     expect(html).toContain('data-icon="copy"');
     expect(html).toContain('bitfun-markdown-editor__toolbar-button');
+  });
+
+  it('uses preview mode for markdown rendering', () => {
+    const html = renderToStaticMarkup(
+      <MarkdownEditor initialContent="```mermaid\ngraph TD\n  A-->B\n```" />,
+    );
+
+    expect(html).toContain('data-mode="preview"');
   });
 });

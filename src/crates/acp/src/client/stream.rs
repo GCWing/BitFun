@@ -8,6 +8,7 @@ use agent_client_protocol::util::MatchDispatch;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use bitfun_events::ToolEventData;
 
+use super::session_options::AcpSessionContextUsage;
 use super::tool_card_bridge::{acp_tool_name, normalize_tool_params};
 
 #[derive(Debug, Clone)]
@@ -20,6 +21,7 @@ pub enum AcpClientStreamEvent {
     AgentText(String),
     AgentThought(String),
     ToolEvent(ToolEventData),
+    ContextUsageUpdated(AcpSessionContextUsage),
     Completed,
     Cancelled,
 }
@@ -77,6 +79,7 @@ impl AcpStreamRoundTracker {
                 events
             }
             AcpClientStreamEvent::ModelRoundStarted { .. }
+            | AcpClientStreamEvent::ContextUsageUpdated(_)
             | AcpClientStreamEvent::Completed
             | AcpClientStreamEvent::Cancelled => vec![event],
         }
@@ -120,6 +123,11 @@ pub(super) async fn acp_dispatch_to_stream_events_with_tracker(
                 }
                 SessionUpdate::ToolCallUpdate(tool_call_update) => {
                     events.extend(acp_tool_call_update_events(tool_call_update, tracker));
+                }
+                SessionUpdate::UsageUpdate(usage_update) => {
+                    events.push(AcpClientStreamEvent::ContextUsageUpdated(
+                        AcpSessionContextUsage::from(usage_update),
+                    ));
                 }
                 _ => {}
             }
@@ -423,10 +431,40 @@ mod tests {
                 AcpClientStreamEvent::AgentText(_) => "text",
                 AcpClientStreamEvent::AgentThought(_) => "thought",
                 AcpClientStreamEvent::ToolEvent(_) => "tool",
+                AcpClientStreamEvent::ContextUsageUpdated(_) => "usage",
                 AcpClientStreamEvent::Completed => "completed",
                 AcpClientStreamEvent::Cancelled => "cancelled",
             })
             .collect()
+    }
+
+    #[test]
+    fn exposes_context_usage_updates() {
+        use agent_client_protocol::JsonRpcMessage;
+
+        let mut tracker = AcpToolCallTracker::new();
+        let notification = SessionNotification::new(
+            "session-1",
+            SessionUpdate::UsageUpdate(agent_client_protocol::schema::UsageUpdate::new(
+                1_000, 4_000,
+            )),
+        )
+        .to_untyped_message()
+        .expect("notification");
+        let dispatch = agent_client_protocol::Dispatch::Notification(notification);
+
+        let events = tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(acp_dispatch_to_stream_events_with_tracker(
+                dispatch,
+                &mut tracker,
+            ))
+            .expect("dispatch");
+
+        assert!(matches!(
+            events.as_slice(),
+            [AcpClientStreamEvent::ContextUsageUpdated(usage)] if usage.used == 1_000 && usage.size == 4_000
+        ));
     }
 
     #[test]

@@ -462,6 +462,31 @@ pub enum ModelCategory {
 
 pub use bitfun_ai_adapters::types::ReasoningMode;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum WriteToolMode {
+    InlineContent,
+    #[default]
+    PlaintextFollowup,
+}
+
+impl WriteToolMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::InlineContent => "inline_content",
+            Self::PlaintextFollowup => "plaintext_followup",
+        }
+    }
+
+    pub fn from_context_var(value: Option<&str>) -> Self {
+        match value.map(str::trim) {
+            Some("inline_content") => Self::InlineContent,
+            Some("plaintext_followup") => Self::PlaintextFollowup,
+            _ => Self::default(),
+        }
+    }
+}
+
 /// Default model configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -592,6 +617,10 @@ pub struct AIConfig {
     /// Skip tool execution confirmation (global, applies to all modes).
     #[serde(default = "default_skip_tool_confirmation")]
     pub skip_tool_confirmation: bool,
+
+    /// Selects how the Write tool obtains file content.
+    #[serde(default)]
+    pub write_tool_mode: WriteToolMode,
 
     /// Debug-mode configuration (log path, language templates, etc.).
     #[serde(default)]
@@ -1554,6 +1583,7 @@ impl Default for AIConfig {
             tool_execution_timeout_secs: default_tool_execution_timeout(),
             tool_confirmation_timeout_secs: default_tool_confirmation_timeout(),
             skip_tool_confirmation: true,
+            write_tool_mode: WriteToolMode::default(),
             debug_mode_config: DebugModeConfig::default(),
             computer_use_enabled: false,
             browser_control_preferred_browser: String::new(),

@@ -205,6 +205,55 @@
   color: var(--color-accent-500);
 }
 
+.workspace-related-paths {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workspace-related-paths__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.workspace-related-paths__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workspace-related-paths__item,
+.workspace-related-paths__more {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(96, 165, 250, 0.06);
+  border: 1px solid rgba(96, 165, 250, 0.12);
+}
+
+.workspace-related-paths__path {
+  display: block;
+  font-size: 12px;
+  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  color: var(--color-accent-500);
+  word-break: break-all;
+}
+
+.workspace-related-paths__desc {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.45;
+}
+
+.workspace-related-paths__more {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
 .workspace-type {
   font-size: 12px;
   padding: 2px 8px;

@@ -418,6 +418,7 @@ export async function createChatSession(
         sessionName,
         agentType,
         workspacePath,
+        workspaceId: mergedConfig.workspaceId,
         remoteConnectionId,
         remoteSshHost,
         config: {
@@ -759,6 +760,7 @@ export async function ensureBackendSession(
         `Session ${sessionId.slice(0, 8)}`,
       agentType: latestSession.mode || 'agentic',
       workspacePath,
+      workspaceId: latestSession.workspaceId,
       remoteConnectionId: effectiveConnectionId,
       remoteSshHost: effectiveSshHost,
       relationship: buildCreateSessionRelationship(latestSession),
@@ -799,6 +801,7 @@ export async function retryCreateBackendSession(
       `Session ${sessionId.slice(0, 8)}`,
     agentType: session.mode || 'agentic',
     workspacePath,
+    workspaceId: session.workspaceId,
     remoteConnectionId: session.remoteConnectionId,
     remoteSshHost: session.remoteSshHost,
     relationship: buildCreateSessionRelationship(session),

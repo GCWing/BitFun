@@ -4,6 +4,13 @@ interface SessionFilesLaunchPromptParams {
   reviewTeamPromptBlock: string;
 }
 
+interface PullRequestLaunchPromptParams {
+  filePaths: string[];
+  extraContext?: string;
+  diffContext?: string;
+  reviewTeamPromptBlock: string;
+}
+
 interface SlashCommandLaunchPromptParams {
   commandText: string;
   extraContext: string;
@@ -30,6 +37,30 @@ export function formatSessionFilesLaunchPrompt({
     contextBlock,
     reviewTeamPromptBlock,
     'Keep the scope tight to the listed files unless a directly-related dependency must be read to confirm a finding.',
+  ].join('\n\n');
+}
+
+export function formatPullRequestLaunchPrompt({
+  filePaths,
+  extraContext,
+  diffContext,
+  reviewTeamPromptBlock,
+}: PullRequestLaunchPromptParams): string {
+  const contextBlock = extraContext?.trim()
+    ? `Pull request context:\n${extraContext.trim()}`
+    : 'Pull request context:\nNone.';
+  const diffBlock = diffContext?.trim()
+    ? `Pull request provider diff:\n${diffContext.trim()}`
+    : 'Pull request provider diff:\nNo provider diff was included. Confirm findings against the listed files and PR metadata.';
+
+  return [
+    'Run a deep code review using the parallel Code Review Team.',
+    'Review scope: ONLY inspect the following files changed by this pull request.',
+    formatFileList(filePaths),
+    contextBlock,
+    diffBlock,
+    reviewTeamPromptBlock,
+    'Treat the provider diff as the source of truth for what changed in the PR. Read repository files only to understand surrounding context or verify findings.',
   ].join('\n\n');
 }
 

@@ -117,6 +117,17 @@ const buildAutoModelInfo = (
   provider: 'auto',
 });
 
+const syncAcpContextUsageToStore = (
+  sessionId: string | undefined,
+  options: AcpSessionOptions,
+): void => {
+  if (!sessionId || !options.contextUsage) {
+    return;
+  }
+
+  FlowChatStore.getInstance().updateAcpContextUsage(sessionId, options.contextUsage);
+};
+
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
   currentMode,
   className = '',
@@ -208,6 +219,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         remoteSshHost: activeSession?.remoteSshHost,
       });
       setAcpOptions(options);
+      syncAcpContextUsageToStore(sessionId, options);
     } catch (error) {
       log.warn('Failed to load ACP session model options', { sessionId, acpClientId, error });
       setAcpOptions(null);
@@ -368,6 +380,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           modelId,
         });
         setAcpOptions(options);
+        syncAcpContextUsageToStore(sessionId, options);
         FlowChatStore.getInstance().updateSessionModelName(sessionId, modelId);
         log.info('ACP session model updated', { sessionId, acpClientId, modelId });
         setDropdownOpen(false);
@@ -440,7 +453,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }
 
     const currentAcpModelId = acpOptions?.currentModelId || acpAvailableModels[0]?.id || '';
-    const acpTooltip = getModelTooltipText(acpCurrentModel, acpClientId ? `${acpClientId} ACP` : 'ACP');
+    const acpBaseTooltip = getModelTooltipText(acpCurrentModel, acpClientId ? `${acpClientId} ACP` : 'ACP');
+    const acpUsageTooltip =
+      currentTokens > 0 && maxTokens > 0
+        ? `${formatTokenCount(currentTokens)}/${formatTokenCount(maxTokens)} (${tokenPercentage}%)`
+        : '';
+    const acpTooltip = acpUsageTooltip ? `${acpBaseTooltip} · ${acpUsageTooltip}` : acpBaseTooltip;
 
     return (
       <div
@@ -462,6 +480,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             <span className="bitfun-model-selector__name">
               {getModelDisplayLabel(acpCurrentModel, currentAcpModelId)}
             </span>
+            {tokenPercentage > 0 && (
+              <span className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`}>
+                · {tokenPercentage}%
+              </span>
+            )}
             <ChevronDown size={10} className="bitfun-model-selector__chevron" />
           </button>
         </Tooltip>

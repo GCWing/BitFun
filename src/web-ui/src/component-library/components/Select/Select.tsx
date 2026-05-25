@@ -2,7 +2,14 @@
  * Select dropdown component
  */
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useCallback,
+} from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import './Select.scss';
 
@@ -80,6 +87,7 @@ export const Select: React.FC<SelectProps> = ({
   const resolvedEmptyText = emptyText ?? t('select.emptyText');
   const resolvedCustomValueHint = customValueHint ?? t('select.customValueHint');
   const [isOpen, setIsOpen] = useState(false);
+  const [resolvedPlacement, setResolvedPlacement] = useState<'bottom' | 'top'>(placement);
   const [selectedValue, setSelectedValue] = useState<string | number | (string | number)[]>(
     value !== undefined ? value : defaultValue !== undefined ? defaultValue : multiple ? [] : ''
   );
@@ -103,9 +111,48 @@ export const Select: React.FC<SelectProps> = ({
     const query = searchQuery.toLowerCase();
     return options.filter(opt => 
       opt.label.toLowerCase().includes(query) ||
+      String(opt.value).toLowerCase().includes(query) ||
       opt.description?.toLowerCase().includes(query)
     );
   }, [options, searchQuery, searchable]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setResolvedPlacement(placement);
+      return;
+    }
+
+    const selectElement = selectRef.current;
+    const dropdownElement = dropdownRef.current;
+    if (!selectElement || !dropdownElement || typeof window === 'undefined') {
+      setResolvedPlacement(placement);
+      return;
+    }
+
+    const triggerRect = selectElement.getBoundingClientRect();
+    const dropdownHeight = dropdownElement.offsetHeight || dropdownElement.scrollHeight || 240;
+    const spaceBelow = window.innerHeight - triggerRect.bottom;
+    const spaceAbove = triggerRect.top;
+
+    let nextPlacement: 'bottom' | 'top' = placement;
+    if (placement === 'bottom' && spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+      nextPlacement = 'top';
+    } else if (placement === 'top' && spaceAbove < dropdownHeight && spaceBelow > spaceAbove) {
+      nextPlacement = 'bottom';
+    }
+
+    setResolvedPlacement(nextPlacement);
+  }, [
+    isOpen,
+    placement,
+    options.length,
+    searchable,
+    multiple,
+    showSelectAll,
+    allowCustomValue,
+    searchQuery,
+    filteredOptions.length,
+  ]);
 
   const groupedOptions = useMemo(() => {
     const groups: { [key: string]: SelectOption[] } = {};
@@ -200,7 +247,7 @@ export const Select: React.FC<SelectProps> = ({
   }, [multiple, onChange]);
 
   const handleCustomValueSubmit = useCallback(() => {
-    if (!allowCustomValue || multiple || !searchQuery.trim()) return false;
+    if (!allowCustomValue || !searchQuery.trim()) return false;
     
     const trimmedValue = searchQuery.trim();
     const existingOption = options.find(opt => 
@@ -209,6 +256,15 @@ export const Select: React.FC<SelectProps> = ({
     
     if (existingOption) {
       handleSelect(existingOption);
+    } else if (multiple) {
+      const currentValues = selectedValue as (string | number)[];
+      if (!currentValues.includes(trimmedValue)) {
+        const newValue = [...currentValues, trimmedValue];
+        setSelectedValue(newValue);
+        onChange?.(newValue);
+      }
+      setIsOpen(false);
+      setSearchQuery('');
     } else {
       setSelectedValue(trimmedValue);
       onChange?.(trimmedValue);
@@ -216,7 +272,7 @@ export const Select: React.FC<SelectProps> = ({
       setSearchQuery('');
     }
     return true;
-  }, [allowCustomValue, multiple, searchQuery, options, handleSelect, onChange]);
+  }, [allowCustomValue, multiple, searchQuery, options, handleSelect, selectedValue, onChange]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (disabled) return;
@@ -228,7 +284,7 @@ export const Select: React.FC<SelectProps> = ({
           setIsOpen(true);
         } else if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
           handleSelect(filteredOptions[highlightedIndex]);
-        } else if (allowCustomValue && !multiple && searchQuery.trim()) {
+        } else if (allowCustomValue && searchQuery.trim()) {
           handleCustomValueSubmit();
         }
         break;
@@ -261,14 +317,14 @@ export const Select: React.FC<SelectProps> = ({
         
       case 'Tab':
         if (isOpen) {
-          if (allowCustomValue && !multiple && searchQuery.trim()) {
+          if (allowCustomValue && searchQuery.trim()) {
             handleCustomValueSubmit();
           }
           setIsOpen(false);
         }
         break;
     }
-  }, [disabled, isOpen, highlightedIndex, filteredOptions, handleSelect, allowCustomValue, multiple, searchQuery, handleCustomValueSubmit]);
+  }, [disabled, isOpen, highlightedIndex, filteredOptions, handleSelect, allowCustomValue, searchQuery, handleCustomValueSubmit]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -322,7 +378,7 @@ export const Select: React.FC<SelectProps> = ({
   const classNames = [
     'select',
     `select--${size}`,
-    `select--placement-${placement}`,
+    `select--placement-${resolvedPlacement}`,
     isOpen && 'select--open',
     disabled && 'select--disabled',
     error && 'select--error',
@@ -463,7 +519,7 @@ export const Select: React.FC<SelectProps> = ({
       </div>
 
       {isOpen && (
-        <div className={`select__dropdown select__dropdown--${placement}`} ref={dropdownRef} role="listbox">
+        <div className={`select__dropdown select__dropdown--${resolvedPlacement}`} ref={dropdownRef} role="listbox">
           {searchable && (
             <div className="select__search">
               <input
@@ -479,7 +535,7 @@ export const Select: React.FC<SelectProps> = ({
                     e.preventDefault();
                     if (highlightedIndex >= 0 && highlightedIndex < filteredOptions.length) {
                       handleSelect(filteredOptions[highlightedIndex]);
-                    } else if (allowCustomValue && !multiple && searchQuery.trim()) {
+                    } else if (allowCustomValue && searchQuery.trim()) {
                       handleCustomValueSubmit();
                     }
                   } else if (e.key === 'Escape') {
@@ -534,7 +590,7 @@ export const Select: React.FC<SelectProps> = ({
                   <span className="select__loading-spinner" aria-hidden="true" />
                   <span>{t('select.loading')}</span>
                 </div>
-              ) : allowCustomValue && !multiple && searchQuery.trim() ? (
+              ) : allowCustomValue && searchQuery.trim() ? (
                 <div 
                   className="select__custom-value-hint"
                   onClick={() => handleCustomValueSubmit()}
@@ -567,13 +623,17 @@ export const Select: React.FC<SelectProps> = ({
             ) : (
               <>
                 {filteredOptions.map((option, index) => renderOptionItem(option, index))}
-                {allowCustomValue && !multiple && searchQuery.trim() && 
-                 !filteredOptions.some(opt => opt.label.toLowerCase() === searchQuery.trim().toLowerCase()) && (
+                {allowCustomValue && searchQuery.trim() && 
+                 !filteredOptions.some(opt => (
+                   opt.label.toLowerCase() === searchQuery.trim().toLowerCase() ||
+                   String(opt.value).toLowerCase() === searchQuery.trim().toLowerCase()
+                 )) && (
                   <div 
                     className="select__custom-value-hint"
                     onClick={() => handleCustomValueSubmit()}
                   >
-                    <span className="select__custom-value-text">{t('select.useCustomValue', { value: searchQuery.trim() })}</span>
+                    <span className="select__custom-value-text">"{searchQuery.trim()}"</span>
+                    <span className="select__custom-value-action">{resolvedCustomValueHint}</span>
                   </div>
                 )}
               </>

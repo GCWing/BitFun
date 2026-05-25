@@ -135,6 +135,7 @@ const TIPS: &[&str] = &[
     "Use /sessions to list and continue previous conversations",
     "Press Ctrl+O to expand/collapse tool output",
     "Use /skills to browse and execute available skills",
+    "Use /usage inside a session to generate a usage report",
     "Use /theme to switch the CLI theme",
     "Use /acp to copy editor setup commands for ACP hosts",
     "Press Up/Down to cycle through input history",
@@ -1048,6 +1049,9 @@ impl StartupPage {
             "sessions" => {
                 self.show_session_selector();
             }
+            "usage" => {
+                self.status = Some("No active session for /usage.".to_string());
+            }
             // Prompt group
             "skills" => {
                 self.show_skill_selector();
@@ -1138,6 +1142,9 @@ impl StartupPage {
                 return Some(StartupResult::NewSession {
                     prompt: Some("/acp".to_string()),
                 });
+            }
+            "/usage" => {
+                self.status = Some("No active session for /usage.".to_string());
             }
             "/init" => match crate::prompts::get_cli_prompt("init") {
                 Some(prompt) => {

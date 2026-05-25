@@ -101,6 +101,7 @@ export class ExplorerController {
   private unwatch?: () => void;
   private pendingRefreshTimer?: ReturnType<typeof setTimeout>;
   private pendingRefreshPaths = new Set<string>();
+  private queuedForceRefreshPaths = new Set<string>();
   private generation = 0;
   private disposed = false;
 
@@ -234,6 +235,12 @@ export class ExplorerController {
     }
   }
 
+  removePath(path: string): void {
+    if (this.model.removePath(path)) {
+      this.emit();
+    }
+  }
+
   dispose(): void {
     this.disposed = true;
     this.stopWatchers();
@@ -327,12 +334,16 @@ export class ExplorerController {
     expectedGeneration = this.generation,
     expectedRootPath = this.config.rootPath ?? ''
   ): Promise<void> {
-    const node = this.model.getNode(path);
+    const canonicalPath = this.model.resolveNodeKey(path) ?? path;
+    const node = this.model.getNode(canonicalPath);
     if (!node || node.kind !== 'directory') {
       return;
     }
 
     if (node.childrenState === 'refreshing') {
+      if (forceRefresh) {
+        this.queueForceRefresh(canonicalPath);
+      }
       return;
     }
 
@@ -346,59 +357,91 @@ export class ExplorerController {
       return;
     }
 
-    this.model.setDirectoryRefreshing(path, true);
+    this.model.setDirectoryRefreshing(canonicalPath, true);
     this.emit();
 
     try {
       const children = await this.provider.getChildren({
-        path,
+        path: canonicalPath,
         options: this.config,
       });
 
       if (!this.isGenerationCurrent(expectedGeneration, expectedRootPath)) {
+        this.model.setDirectoryRefreshing(canonicalPath, false);
         return;
       }
 
       this.model.upsertChildren(
-        path,
+        canonicalPath,
         sortNodes(children, this.config.sortBy ?? 'name', this.config.sortOrder ?? 'asc')
       );
       this.emit();
     } catch (error) {
       if (!this.isGenerationCurrent(expectedGeneration, expectedRootPath)) {
+        this.model.setDirectoryRefreshing(canonicalPath, false);
         return;
       }
 
       const message = error instanceof Error ? error.message : String(error);
-      this.model.markDirectoryError(path, message);
-      if (pathsEquivalentFs(path, this.config.rootPath ?? '')) {
+      this.model.markDirectoryError(canonicalPath, message);
+      if (pathsEquivalentFs(canonicalPath, this.config.rootPath ?? '')) {
         this.model.setError(message);
       }
       this.emit();
-      log.error('Failed to resolve explorer directory', { path, error });
+      log.error('Failed to resolve explorer directory', { path: canonicalPath, error });
       throw error;
+    } finally {
+      await this.flushQueuedForceRefresh(canonicalPath, expectedGeneration, expectedRootPath);
     }
+  }
+
+  private queueForceRefresh(path: string): void {
+    const canonicalPath = this.model.resolveNodeKey(path) ?? path;
+    this.queuedForceRefreshPaths.add(canonicalPath);
+  }
+
+  private async flushQueuedForceRefresh(
+    path: string,
+    expectedGeneration: number,
+    expectedRootPath: string
+  ): Promise<void> {
+    const canonicalPath = this.model.resolveNodeKey(path) ?? path;
+    if (!this.queuedForceRefreshPaths.has(canonicalPath)) {
+      return;
+    }
+
+    this.queuedForceRefreshPaths.delete(canonicalPath);
+    if (!this.isGenerationCurrent(expectedGeneration, expectedRootPath)) {
+      return;
+    }
+
+    await this.resolveDirectory(canonicalPath, true, expectedGeneration, expectedRootPath);
   }
 
   private handleFileChange(event: FileSystemChangeEvent): void {
     const parentPath = dirnameAbsolutePath(event.path);
+    const resolvedParent = parentPath
+      ? (this.model.resolveNodeKey(parentPath) ?? parentPath)
+      : null;
     const changedDirectory = this.model.getNode(event.path);
 
-    if (parentPath) {
-      this.pendingRefreshPaths.add(parentPath);
-      this.model.markDirectoryStale(parentPath);
+    if (resolvedParent) {
+      this.pendingRefreshPaths.add(resolvedParent);
+      this.model.markDirectoryStale(resolvedParent);
     }
 
     if (changedDirectory?.kind === 'directory') {
-      this.pendingRefreshPaths.add(event.path);
-      this.model.markDirectoryStale(event.path);
+      const resolvedDirectory = this.model.resolveNodeKey(event.path) ?? event.path;
+      this.pendingRefreshPaths.add(resolvedDirectory);
+      this.model.markDirectoryStale(resolvedDirectory);
     }
 
     if (event.oldPath) {
       const oldParent = dirnameAbsolutePath(event.oldPath);
       if (oldParent) {
-        this.pendingRefreshPaths.add(oldParent);
-        this.model.markDirectoryStale(oldParent);
+        const resolvedOldParent = this.model.resolveNodeKey(oldParent) ?? oldParent;
+        this.pendingRefreshPaths.add(resolvedOldParent);
+        this.model.markDirectoryStale(resolvedOldParent);
       }
     }
 
@@ -450,7 +493,8 @@ export class ExplorerController {
     }
 
     for (const directory of Array.from(directoriesToRefresh).sort(comparePathDepth)) {
-      await this.resolveDirectory(directory, true);
+      const resolvedDirectory = this.model.resolveNodeKey(directory) ?? directory;
+      await this.resolveDirectory(resolvedDirectory, true);
     }
   }
 

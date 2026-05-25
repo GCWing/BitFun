@@ -364,4 +364,102 @@ describe('FileOperationToolCard', () => {
     expect(container.textContent).toContain('from-acp-location.ts');
     expect(container.textContent).not.toContain('toolCards.file.parsingPath');
   });
+
+  it('renders write guardrail blocks as guidance instead of hard failure', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'error',
+      toolCall: {
+        id: 'call-1',
+        name: 'Write',
+        input: {
+          file_path: 'docs/report.md',
+        },
+      },
+      toolResult: {
+        success: false,
+        error:
+          '[guidance] Use Read to load the current contents of docs/report.md before calling Write on it.',
+      },
+    } as FlowToolItem;
+
+    const config: ToolCardConfig = {
+      toolName: 'Write',
+      displayName: 'Write',
+      icon: 'WRITE',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Write a file',
+      displayMode: 'standard',
+    };
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    expect(container.textContent).toContain('toolCards.file.guidanceHint');
+    expect(container.textContent).not.toContain('toolCards.file.failed');
+    expect(container.textContent).toContain(
+      'Use Read to load the current contents of docs/report.md before calling Write on it.',
+    );
+    expect(container.querySelector('.file-operation-card--guidance')).not.toBeNull();
+  });
+
+  it('renders edit guardrail blocks as guidance instead of hard failure', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-2',
+      type: 'tool',
+      toolName: 'Edit',
+      status: 'error',
+      toolCall: {
+        id: 'call-2',
+        name: 'Edit',
+        input: {
+          file_path: 'src/main.rs',
+          old_string: 'foo',
+          new_string: 'bar',
+        },
+      },
+      toolResult: {
+        success: false,
+        error:
+          '[guidance] Use Read to load the current contents of src/main.rs before calling Edit on it.',
+      },
+    } as FlowToolItem;
+
+    const config: ToolCardConfig = {
+      toolName: 'Edit',
+      displayName: 'Edit',
+      icon: 'EDIT',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Edit a file',
+      displayMode: 'standard',
+    };
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    expect(container.textContent).toContain('toolCards.file.guidanceHint');
+    expect(container.textContent).not.toContain('toolCards.file.failed');
+    expect(container.textContent).toContain(
+      'Use Read to load the current contents of src/main.rs before calling Edit on it.',
+    );
+    expect(container.querySelector('.file-operation-card--guidance')).not.toBeNull();
+  });
 });

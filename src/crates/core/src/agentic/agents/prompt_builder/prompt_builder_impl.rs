@@ -9,6 +9,7 @@ use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::filesystem::get_formatted_directory_listing;
 use crate::service::i18n::LocaleId;
+use crate::service::workspace::RelatedPath;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
 use std::path::Path;
@@ -21,14 +22,73 @@ const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 const PLACEHOLDER_SESSION_ID: &str = "{SESSION_ID}";
-const ADDITIONAL_TOOLS_PROMPT: &str = r#"# Additional Tools
-
-Some tools in the tool list are intentionally collapsed.
+const ADDITIONAL_CONTEXT_PROMPT: &str =
+    "As you answer the user's questions, you can use the following context";
+const SKILL_TOOL_CONTEXT_TITLE: &str = "## Skills Available via Skill Tool";
+const TASK_TOOL_CONTEXT_TITLE: &str = "## Subagents Available via Task Tool";
+const GET_TOOL_SPEC_CONTEXT_TITLE: &str =
+    "## Collapsed Tools (load full definition via GetToolSpec tool)";
+const ADDITIONAL_TOOLS_PROMPT: &str = r#"Some tools in the tool list are intentionally collapsed.
 Their listed descriptions are short summaries rather than full usage instructions.
 Before calling a collapsed tool, call `GetToolSpec` with its exact tool name to read its full definition and input schema.
 After reading the returned spec, call the real tool directly by its own name.
-If a tool spec is already available in the current conversation, do not call `GetToolSpec` for it again.
-"#;
+If a tool spec is already available in the current conversation, do not call `GetToolSpec` for it again."#;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RequestContextToolSections {
+    pub available_skills: Option<String>,
+    pub available_agents: Option<String>,
+    pub collapsed_tools: Option<String>,
+}
+
+impl RequestContextToolSections {
+    pub fn is_empty(&self) -> bool {
+        self.available_skills.is_none()
+            && self.available_agents.is_none()
+            && self.collapsed_tools.is_none()
+    }
+
+    fn render(&self) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+
+        let mut sections = Vec::new();
+        if let Some(available_skills) = self.available_skills.as_deref() {
+            sections.push(Self::render_section(
+                SKILL_TOOL_CONTEXT_TITLE,
+                available_skills,
+                None,
+            ));
+        }
+        if let Some(available_agents) = self.available_agents.as_deref() {
+            sections.push(Self::render_section(
+                TASK_TOOL_CONTEXT_TITLE,
+                available_agents,
+                None,
+            ));
+        }
+        if let Some(collapsed_tools) = self.collapsed_tools.as_deref() {
+            sections.push(Self::render_section(
+                GET_TOOL_SPEC_CONTEXT_TITLE,
+                collapsed_tools,
+                Some(ADDITIONAL_TOOLS_PROMPT),
+            ));
+        }
+
+        Some(format!(
+            "# Available Tool Context\n{}",
+            sections.join("\n\n")
+        ))
+    }
+
+    fn render_section(title: &str, body: &str, description: Option<&str>) -> String {
+        match description {
+            Some(description) => format!("{}\n{}\n\n{}", title, description, body.trim()),
+            None => format!("{}\n{}", title, body.trim()),
+        }
+    }
+}
 
 /// SSH remote host facts for system prompt (workspace tools run here, not on the local client).
 #[derive(Debug, Clone)]
@@ -41,6 +101,7 @@ pub struct RemoteExecutionHints {
 #[derive(Debug, Clone)]
 pub struct PromptBuilderContext {
     pub workspace_path: String,
+    pub related_paths: Vec<RelatedPath>,
     pub session_id: Option<String>,
     pub model_name: Option<String>,
     /// When set, file/shell tools target this remote environment; OS and path instructions follow it.
@@ -49,8 +110,8 @@ pub struct PromptBuilderContext {
     pub remote_project_layout: Option<String>,
     /// When `Some(false)`, system prompt append Computer use text-only guidance (no screenshot tool output).
     pub supports_image_understanding: Option<bool>,
-    /// When true, append a static reminder that additional collapsed tools exist behind GetToolSpec.
-    pub has_additional_tools: bool,
+    /// Dynamic tool catalogs that are injected through request context instead of tool descriptions.
+    pub request_context_tools: RequestContextToolSections,
 }
 
 impl PromptBuilderContext {
@@ -61,12 +122,13 @@ impl PromptBuilderContext {
     ) -> Self {
         Self {
             workspace_path: workspace_path.into().replace("\\", "/"),
+            related_paths: Vec::new(),
             session_id,
             model_name,
             remote_execution: None,
             remote_project_layout: None,
             supports_image_understanding: None,
-            has_additional_tools: false,
+            request_context_tools: RequestContextToolSections::default(),
         }
     }
 
@@ -75,8 +137,13 @@ impl PromptBuilderContext {
         self
     }
 
-    pub fn with_additional_tools_hint(mut self, has_additional_tools: bool) -> Self {
-        self.has_additional_tools = has_additional_tools;
+    pub fn with_request_context_tools(mut self, tools: RequestContextToolSections) -> Self {
+        self.request_context_tools = tools;
+        self
+    }
+
+    pub fn with_related_paths(mut self, related_paths: Vec<RelatedPath>) -> Self {
+        self.related_paths = related_paths;
         self
     }
 
@@ -110,9 +177,6 @@ impl PromptBuilder {
         let host_family = std::env::consts::FAMILY;
         let host_arch = std::env::consts::ARCH;
 
-        let now = chrono::Local::now();
-        let current_date = now.format("%Y-%m-%d").to_string();
-
         let computer_use_keys = match host_os {
             "macos" => "Computer use / `key_chord`: the **local BitFun desktop** is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use Bash tool for `osascript`, AppleScript, shell scripts) 2) Keyboard shortcuts: command+a/c/x/v (clipboard), command+space (Spotlight), command+tab (switch app) 3) UI control (AX/OCR/mouse) only when above fail.",
             "windows" => "Computer use / `key_chord`: the **local BitFun desktop** is **Windows** — use `meta`/`super` for Windows key, `alt`, `control`, `shift`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use Bash tool for PowerShell, cmd, scripts) 2) Keyboard shortcuts: control+a/c/x/v (clipboard), meta (Start menu), Alt+Tab (switch) 3) UI control only when above fail.",
@@ -120,49 +184,94 @@ impl PromptBuilder {
             _ => "Computer use / `key_chord`: match modifier names to the **local BitFun desktop** OS below. **ACTION PRIORITY:** 1) Terminal/CLI/system commands first 2) Keyboard shortcuts second 3) UI control (mouse/OCR) last resort.",
         };
 
-        if let Some(remote) = &self.context.remote_execution {
+        if self.context.remote_execution.is_some() {
             format!(
                 r#"# Environment Information
 <environment_details>
-- Workspace root (file tools, Glob, LS, Bash on workspace): {}
-- Execution environment: **Remote SSH** — connection "{}".
-- Remote host: {} (uname/kernel: {})
-- **Paths and shell:** POSIX on the remote server — use forward slashes and Unix shell syntax (bash/sh). Do **not** use PowerShell, `cmd.exe`, or Windows-style paths for workspace operations.
-- Local BitFun client OS: {} ({}) — applies to Computer use / UI automation on this machine only, not to workspace file or terminal tools.
+- Local BitFun client OS: {} ({}) — applies to Computer use / UI automation on this machine only.
 - Local client architecture: {}
-- Current Date: {}
 - {}
 </environment_details>
 
 "#,
-                self.context.workspace_path,
-                remote.connection_display_name.replace('"', "'"),
-                remote.hostname.replace('"', "'"),
-                remote.kernel_name.replace('"', "'"),
-                host_os,
-                host_family,
-                host_arch,
-                current_date,
-                computer_use_keys
+                host_os, host_family, host_arch, computer_use_keys
             )
         } else {
             format!(
                 r#"# Environment Information
 <environment_details>
-- Current Working Directory: {}
 - Operating System: {} ({})
 - Architecture: {}
-- Current Date: {}
 - {}
 </environment_details>
 
 "#,
+                host_os, host_family, host_arch, computer_use_keys
+            )
+        }
+    }
+
+    /// Get workspace context that is intentionally injected outside the system prompt cache.
+    pub fn get_workspace_context(&self) -> String {
+        let related_paths_section = if self.context.related_paths.is_empty() {
+            String::new()
+        } else {
+            let items = self
+                .context
+                .related_paths
+                .iter()
+                .map(|related_path| {
+                    let path = related_path.path.replace("\\", "/");
+                    match related_path.description.as_deref().map(str::trim) {
+                        Some(description) if !description.is_empty() => {
+                            format!("  - {} — {}", path, description)
+                        }
+                        _ => format!("  - {}", path),
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!(
+                "- Related directories (user-specified directories related to this workspace):\n{}",
+                items
+            )
+        };
+
+        if let Some(remote) = &self.context.remote_execution {
+            format!(
+                r#"## Workspace Context
+<workspace_context>
+- Workspace root (file tools, Glob, LS, Bash on workspace): {}
+{}
+- Execution environment: **Remote SSH** — connection "{}".
+- Remote host: {} (uname/kernel: {})
+- **Paths and shell:** POSIX on the remote server — use forward slashes and Unix shell syntax (bash/sh). Do **not** use PowerShell, `cmd.exe`, or Windows-style paths for workspace operations.
+</workspace_context>
+"#,
                 self.context.workspace_path,
-                host_os,
-                host_family,
-                host_arch,
-                current_date,
-                computer_use_keys
+                if related_paths_section.is_empty() {
+                    String::new()
+                } else {
+                    format!("{}\n", related_paths_section)
+                },
+                remote.connection_display_name.replace('"', "'"),
+                remote.hostname.replace('"', "'"),
+                remote.kernel_name.replace('"', "'"),
+            )
+        } else {
+            format!(
+                r#"## Workspace Context
+<workspace_context>
+- Current Working Directory: {}
+{}
+</workspace_context>
+"#,
+                self.context.workspace_path,
+                if related_paths_section.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n{}", related_paths_section)
+                }
             )
         }
     }
@@ -170,7 +279,7 @@ impl PromptBuilder {
     /// Get workspace file list
     pub fn get_project_layout(&self) -> String {
         if let Some(remote_layout) = &self.context.remote_project_layout {
-            let mut project_layout = "# Workspace Layout\n<project_layout>\n".to_string();
+            let mut project_layout = "## Workspace Layout\n<project_layout>\n".to_string();
             project_layout.push_str(
                 "Below is a snapshot of the current workspace's file structure on the **remote** host.\n\n",
             );
@@ -187,7 +296,7 @@ impl PromptBuilder {
             reached_limit: false,
             text: format!("Error listing directory: {}", e),
         });
-        let mut project_layout = "# Workspace Layout\n<project_layout>\n".to_string();
+        let mut project_layout = "## Workspace Layout\n<project_layout>\n".to_string();
         if formatted_listing.reached_limit {
             project_layout.push_str(&format!("Below is a snapshot of the current workspace's file structure (showing up to {} entries).\n\n", self.file_tree_max_entries));
         } else {
@@ -204,15 +313,21 @@ impl PromptBuilder {
         policy: &RequestContextPolicy,
     ) -> Option<String> {
         let mut sections = Vec::new();
-        let mut instruction_sections = Vec::new();
-        let mut override_sections = Vec::new();
-        let mut trailing_sections = Vec::new();
+        let mut additional_sections = Vec::new();
+
+        if let Some(tool_context) = self.context.request_context_tools.render() {
+            sections.push(tool_context);
+        }
+
+        if policy.includes(RequestContextSection::WorkspaceContext) {
+            additional_sections.push(self.get_workspace_context());
+        }
 
         if self.context.remote_execution.is_none() {
             let workspace = Path::new(&self.context.workspace_path);
             if policy.includes(RequestContextSection::WorkspaceInstructions) {
                 match build_workspace_instruction_files_context(workspace).await {
-                    Ok(Some(prompt)) => instruction_sections.push(prompt),
+                    Ok(Some(prompt)) => additional_sections.push(prompt),
                     Ok(None) => {}
                     Err(e) => warn!(
                         "Failed to build workspace instruction context: path={} error={}",
@@ -223,7 +338,7 @@ impl PromptBuilder {
             }
             if policy.includes(RequestContextSection::WorkspaceMemoryFiles) {
                 match build_workspace_memory_files_context(workspace).await {
-                    Ok(Some(prompt)) => override_sections.push(prompt),
+                    Ok(Some(prompt)) => additional_sections.push(prompt),
                     Ok(None) => {}
                     Err(e) => warn!(
                         "Failed to build workspace memory context: path={} error={}",
@@ -235,17 +350,20 @@ impl PromptBuilder {
         }
 
         if policy.includes(RequestContextSection::ProjectLayout) {
-            trailing_sections.push(self.get_project_layout());
+            additional_sections.push(self.get_project_layout());
         }
 
-        sections.extend(instruction_sections);
-
-        if policy.has_override_sections() && !override_sections.is_empty() {
-            sections.push("Codebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.".to_string());
-            sections.extend(override_sections);
+        if !additional_sections.is_empty() {
+            sections.push(format!(
+                "# Additional Context\n{}\n\n{}",
+                ADDITIONAL_CONTEXT_PROMPT,
+                additional_sections
+                    .into_iter()
+                    .map(|section| section.trim().to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n\n")
+            ));
         }
-
-        sections.extend(trailing_sections);
 
         if sections.is_empty() {
             None
@@ -304,14 +422,12 @@ Output Mermaid in fenced code blocks (```mermaid) so the UI can render them.
 
     /// Get Claw-specific workspace boundary instruction
     fn get_claw_workspace_instruction(&self) -> String {
-        format!(
-            "# Workspace
-Your dedicated operating space is `{}`.
+        "# Workspace
+Your dedicated operating space is the workspace root shown in the current request context.
 Prefer doing work inside this workspace and keep it well organized with clear structure, sensible filenames, and minimal clutter.
 Do not read from, modify, create, move, or delete files outside this workspace unless the user has explicitly granted permission for that external action.
-",
-            self.context.workspace_path
-        )
+"
+        .to_string()
     }
 
     /// Build prompt from template, automatically fill content based on placeholders
@@ -416,12 +532,6 @@ The configured **primary model does not accept image inputs**. When using **`Com
             );
         }
 
-        if self.context.has_additional_tools {
-            result.push_str("\n\n");
-            result.push_str(ADDITIONAL_TOOLS_PROMPT);
-            result.push('\n');
-        }
-
         Ok(result.trim().to_string())
     }
 }
@@ -430,29 +540,94 @@ The configured **primary model does not accept image inputs**. When using **`Com
 mod tests {
     use super::PromptBuilder;
     use super::PromptBuilderContext;
+    use super::RequestContextToolSections;
+    use super::{
+        ADDITIONAL_CONTEXT_PROMPT, GET_TOOL_SPEC_CONTEXT_TITLE, SKILL_TOOL_CONTEXT_TITLE,
+        TASK_TOOL_CONTEXT_TITLE,
+    };
+    use crate::agentic::agents::RequestContextPolicy;
+    use crate::service::workspace::RelatedPath;
 
     #[tokio::test]
-    async fn appends_additional_tools_section_when_hint_is_enabled() {
-        let context =
-            PromptBuilderContext::new("E:/workspace", None, None).with_additional_tools_hint(true);
+    async fn renders_available_tool_context_before_additional_context() {
+        let tool_sections = RequestContextToolSections {
+            available_skills: Some("<available_skills>\n- pdf\n</available_skills>".to_string()),
+            available_agents: Some(
+                "<available_agents>\n- Explore\n</available_agents>".to_string(),
+            ),
+            collapsed_tools: Some(
+                "<collapsed_tools>\n- WebFetch: Fetch readable web content.\n</collapsed_tools>"
+                    .to_string(),
+            ),
+        };
+        let context = PromptBuilderContext::new("E:/workspace", None, None)
+            .with_request_context_tools(tool_sections);
         let prompt = PromptBuilder::new(context)
-            .build_prompt_from_template("Base prompt")
+            .build_request_context_reminder(
+                &RequestContextPolicy::empty()
+                    .with_workspace_context()
+                    .with_workspace_instructions(),
+            )
             .await
-            .expect("prompt should build");
+            .expect("request context should build");
 
-        assert!(prompt.contains("# Additional Tools"));
-        assert!(prompt.contains("short summaries rather than full usage instructions"));
-        assert!(prompt.contains("call `GetToolSpec` with its exact tool name"));
+        assert!(prompt.contains("# Available Tool Context"));
+        assert!(prompt.contains(SKILL_TOOL_CONTEXT_TITLE));
+        assert!(prompt.contains(TASK_TOOL_CONTEXT_TITLE));
+        assert!(prompt.contains(GET_TOOL_SPEC_CONTEXT_TITLE));
+        assert!(prompt.contains("<collapsed_tools>"));
+        assert!(prompt.contains("# Additional Context"));
+        assert!(prompt.contains(ADDITIONAL_CONTEXT_PROMPT));
+        assert!(prompt.find("# Available Tool Context") < prompt.find("# Additional Context"));
+        assert!(prompt.contains("Current Working Directory: E:/workspace"));
     }
 
     #[tokio::test]
-    async fn omits_additional_tools_section_when_hint_is_disabled() {
+    async fn omits_request_context_when_policy_and_tool_sections_are_empty() {
         let context = PromptBuilderContext::new("E:/workspace", None, None);
         let prompt = PromptBuilder::new(context)
-            .build_prompt_from_template("Base prompt")
-            .await
-            .expect("prompt should build");
+            .build_request_context_reminder(&RequestContextPolicy::empty())
+            .await;
 
-        assert!(!prompt.contains("# Additional Tools"));
+        assert!(prompt.is_none());
+    }
+
+    #[test]
+    fn workspace_context_renders_related_directories() {
+        let context =
+            PromptBuilderContext::new("E:/workspace", None, None).with_related_paths(vec![
+                RelatedPath {
+                    path: r"E:\legacy-ts".to_string(),
+                    description: Some("Legacy TypeScript implementation".to_string()),
+                },
+                RelatedPath {
+                    path: r"E:\monorepo\billing".to_string(),
+                    description: Some("Billing package".to_string()),
+                },
+            ]);
+
+        let workspace_context = PromptBuilder::new(context).get_workspace_context();
+
+        assert!(workspace_context.contains("Related directories"));
+        assert!(workspace_context.contains("E:/legacy-ts"));
+        assert!(workspace_context.contains("Legacy TypeScript implementation"));
+        assert!(workspace_context.contains("E:/monorepo/billing"));
+    }
+
+    #[test]
+    fn workspace_context_renders_related_directories_without_description() {
+        let context =
+            PromptBuilderContext::new("E:/workspace", None, None).with_related_paths(vec![
+                RelatedPath {
+                    path: r"E:\monorepo\packages\payments".to_string(),
+                    description: None,
+                },
+            ]);
+
+        let workspace_context = PromptBuilder::new(context).get_workspace_context();
+
+        assert!(workspace_context.contains("Related directories"));
+        assert!(workspace_context.contains("  - E:/monorepo/packages/payments"));
+        assert!(!workspace_context.contains("payments —"));
     }
 }

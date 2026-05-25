@@ -34,10 +34,19 @@ vi.mock('../../store/modernFlowChatStore', () => ({
   useActiveSession: () => activeSessionRef.current,
 }));
 
+const flowChatStoreMock = vi.hoisted(() => ({
+  getState: vi.fn(() => ({
+    sessions: new Map(),
+    activeSessionId: null,
+  })),
+  truncateDialogTurnsFrom: vi.fn(),
+}));
+
 vi.mock('../../store/FlowChatStore', () => ({
-  flowChatStore: {
-    truncateDialogTurnsFrom: vi.fn(),
+  FlowChatStore: {
+    getInstance: () => flowChatStoreMock,
   },
+  flowChatStore: flowChatStoreMock,
 }));
 
 vi.mock('@/infrastructure/api', () => ({

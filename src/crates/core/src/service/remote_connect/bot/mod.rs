@@ -114,16 +114,6 @@ pub struct WorkspaceFileContent {
     pub size: u64,
 }
 
-fn strip_workspace_path_prefix(raw: &str) -> &str {
-    raw.strip_prefix("computer://")
-        .or_else(|| raw.strip_prefix("file://"))
-        .unwrap_or(raw)
-}
-
-fn is_absolute_workspace_path(path: &str) -> bool {
-    path.starts_with('/') || (path.len() >= 3 && path.as_bytes()[1] == b':')
-}
-
 /// Resolve a raw path (with or without `computer://` / `file://` prefix) to an
 /// absolute `PathBuf`.
 ///
@@ -134,57 +124,12 @@ pub fn resolve_workspace_path(
     raw: &str,
     workspace_root: Option<&std::path::Path>,
 ) -> Option<std::path::PathBuf> {
-    let stripped = strip_workspace_path_prefix(raw);
-
-    if is_absolute_workspace_path(stripped) {
-        return Some(std::path::PathBuf::from(stripped));
-    }
-
-    let workspace_root = workspace_root?;
-    let canonical_root = std::fs::canonicalize(workspace_root).ok()?;
-    let candidate = canonical_root.join(stripped);
-    let canonical_candidate = std::fs::canonicalize(candidate).ok()?;
-
-    if canonical_candidate.starts_with(&canonical_root) {
-        Some(canonical_candidate)
-    } else {
-        None
-    }
+    bitfun_services_integrations::remote_connect::resolve_remote_workspace_path(raw, workspace_root)
 }
 
 /// Return the best-effort MIME type for a file based on its extension.
 pub fn detect_mime_type(path: &std::path::Path) -> &'static str {
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-
-    match ext.as_str() {
-        "txt" | "log" => "text/plain",
-        "md" => "text/markdown",
-        "html" | "htm" => "text/html",
-        "css" => "text/css",
-        "js" | "mjs" => "text/javascript",
-        "ts" | "tsx" | "jsx" | "rs" | "py" | "go" | "java" | "c" | "cpp" | "h" | "sh" | "toml"
-        | "yaml" | "yml" => "text/plain",
-        "json" => "application/json",
-        "xml" => "application/xml",
-        "csv" => "text/csv",
-        "pdf" => "application/pdf",
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "svg" => "image/svg+xml",
-        "zip" => "application/zip",
-        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "mp4" => "video/mp4",
-        "opus" => "audio/opus",
-        _ => "application/octet-stream",
-    }
+    bitfun_services_integrations::remote_connect::detect_remote_mime_type(path)
 }
 
 /// Read a workspace file, resolving `computer://` prefixes.
@@ -199,48 +144,19 @@ pub async fn read_workspace_file(
     max_size: u64,
     workspace_root: Option<&std::path::Path>,
 ) -> anyhow::Result<WorkspaceFileContent> {
-    let abs_path = resolve_workspace_path(raw_path, workspace_root)
-        .ok_or_else(|| anyhow::anyhow!("Remote file path could not be resolved: {raw_path}"))?;
-
-    if !abs_path.exists() {
-        return Err(anyhow::anyhow!("File not found: {}", abs_path.display()));
-    }
-    if !abs_path.is_file() {
-        return Err(anyhow::anyhow!(
-            "Path is not a regular file: {}",
-            abs_path.display()
-        ));
-    }
-
-    let metadata = tokio::fs::metadata(&abs_path).await.map_err(|e| {
-        anyhow::anyhow!("Cannot read file metadata for {}: {e}", abs_path.display())
-    })?;
-
-    if metadata.len() > max_size {
-        return Err(anyhow::anyhow!(
-            "File too large ({} bytes, limit {max_size} bytes): {}",
-            metadata.len(),
-            abs_path.display()
-        ));
-    }
-
-    let bytes = tokio::fs::read(&abs_path)
-        .await
-        .map_err(|e| anyhow::anyhow!("Cannot read file {}: {e}", abs_path.display()))?;
-
-    let name = abs_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("file")
-        .to_string();
-
-    let mime_type = detect_mime_type(&abs_path);
+    let content = bitfun_services_integrations::remote_connect::read_remote_workspace_file(
+        raw_path,
+        max_size,
+        workspace_root,
+    )
+    .await
+    .map_err(anyhow::Error::msg)?;
 
     Ok(WorkspaceFileContent {
-        name,
-        bytes,
-        mime_type,
-        size: metadata.len(),
+        name: content.name,
+        bytes: content.bytes,
+        mime_type: content.mime_type,
+        size: content.size,
     })
 }
 

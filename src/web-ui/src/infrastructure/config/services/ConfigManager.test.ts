@@ -76,4 +76,36 @@ describe('ConfigManager', () => {
     expect(configApiMocks.getConfig).not.toHaveBeenCalled();
     expect(configManager.get('ai.default_models')).toEqual({ chat: 'gpt-5' });
   });
+
+  it('migrates legacy models with the same base URL into one provider instance', async () => {
+    const legacyModels = [
+      {
+        id: 'model-a',
+        name: 'First provider',
+        base_url: 'https://open.bigmodel.cn/api/paas/v4',
+        model_name: 'glm-5',
+      },
+      {
+        id: 'model-b',
+        name: 'Second provider',
+        base_url: 'https://open.bigmodel.cn/api/paas/v4/',
+        model_name: 'glm-4.7',
+      },
+      {
+        id: 'model-c',
+        name: 'Other provider',
+        base_url: 'https://api.deepseek.com/v1',
+        model_name: 'deepseek-v4',
+      },
+    ];
+    configApiMocks.getConfig.mockResolvedValueOnce(legacyModels);
+
+    const migrated = await configManager.getConfig<any[]>('ai.models');
+
+    const firstProviderId = migrated[0].metadata.provider_instance_id;
+    expect(firstProviderId).toMatch(/^provider_legacy_/);
+    expect(migrated[1].metadata.provider_instance_id).toBe(firstProviderId);
+    expect(migrated[2].metadata.provider_instance_id).not.toBe(firstProviderId);
+    expect(configApiMocks.setConfig).toHaveBeenCalledWith('ai.models', migrated);
+  });
 });

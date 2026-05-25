@@ -1,7 +1,17 @@
+use crate::agentic::tools::file_read_state_runtime::{
+    assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms,
+    get_stored_file_read_state, local_file_modification_time_ms, read_current_file_content,
+    read_state_tracking_enabled, update_file_read_state_after_mutation,
+    validate_existing_file_read_before_write, FILE_UNEXPECTEDLY_MODIFIED_ERROR,
+};
+use crate::agentic::tools::file_tool_guidance::{
+    file_tool_guidance_message, is_file_tool_guidance_message,
+};
 use crate::agentic::tools::framework::{
     Tool, ToolPathResolution, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::ToolPathOperation;
+use crate::service::config::types::WriteToolMode;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -9,6 +19,10 @@ use std::path::Path;
 use tokio::fs;
 
 pub struct FileWriteTool;
+
+const LARGE_WRITE_SOFT_LINE_LIMIT: usize = 200;
+const LARGE_WRITE_SOFT_BYTE_LIMIT: usize = 20 * 1024;
+pub(crate) const WRITE_TOOL_MODE_CONTEXT_KEY: &str = "write_tool_mode";
 
 impl Default for FileWriteTool {
     fn default() -> Self {
@@ -21,20 +35,40 @@ impl FileWriteTool {
         Self
     }
 
-    pub(crate) async fn existing_file_error(
-        context: &ToolUseContext,
-        resolved: &ToolPathResolution,
-    ) -> Option<String> {
-        let file_already_exists = Self::file_exists(context, resolved).await;
+    pub(crate) fn write_guidance_message(message: impl Into<String>) -> String {
+        file_tool_guidance_message(message)
+    }
 
-        file_already_exists.then(|| {
+    pub(crate) fn is_write_guidance_message(message: &str) -> bool {
+        is_file_tool_guidance_message(message)
+    }
+
+    fn format_write_freshness_guidance(logical_path: &str, error: String) -> String {
+        if error == FILE_UNEXPECTEDLY_MODIFIED_ERROR || error.contains("unexpectedly modified") {
             format!(
-                "File {} already exists. The Write tool is reserved for creating NEW files. \
-                 To modify the file, use the Edit tool. \
-                 To fully rewrite the file, first call the Delete tool on this path, then call Write again.",
-                resolved.logical_path
+                "The file {} changed since it was last read. Use Read again, then retry Write.",
+                logical_path
             )
-        })
+        } else if error.contains("modified since read") {
+            format!(
+                "The file {} changed after it was last read. Use Read again, then retry Write.",
+                logical_path
+            )
+        } else {
+            error
+        }
+    }
+
+    pub(crate) fn write_tool_mode(context: Option<&ToolUseContext>) -> WriteToolMode {
+        if Self::is_acp_context(context) {
+            return WriteToolMode::InlineContent;
+        }
+
+        WriteToolMode::from_context_var(
+            context
+                .and_then(|ctx| ctx.custom_data.get(WRITE_TOOL_MODE_CONTEXT_KEY))
+                .and_then(|value| value.as_str()),
+        )
     }
 
     async fn file_exists(context: &ToolUseContext, resolved: &ToolPathResolution) -> bool {
@@ -65,6 +99,82 @@ impl FileWriteTool {
         };
 
         Some(existing == content.as_bytes())
+    }
+
+    async fn existing_file_write_freshness_error(
+        context: &ToolUseContext,
+        resolved: &ToolPathResolution,
+    ) -> Option<String> {
+        if !Self::file_exists(context, resolved).await {
+            return None;
+        }
+        if !read_state_tracking_enabled(context) {
+            return None;
+        }
+
+        let current_content = match read_current_file_content(context, resolved).await {
+            Ok(content) => content,
+            Err(error) => return Some(error.to_string()),
+        };
+        let read_state = get_stored_file_read_state(context, resolved);
+        let current_mtime_ms = if resolved.uses_remote_workspace_backend() {
+            None
+        } else {
+            Some(local_file_modification_time_ms(Path::new(&resolved.resolved_path)))
+        };
+
+        assert_file_not_unexpectedly_modified(
+            read_state.as_ref(),
+            &current_content,
+            current_mtime_ms,
+        )
+        .err()
+        .map(|error| Self::format_write_freshness_guidance(&resolved.logical_path, error))
+    }
+
+    async fn assert_atomic_write_freshness_if_exists(
+        context: &ToolUseContext,
+        resolved: &ToolPathResolution,
+    ) -> BitFunResult<()> {
+        if let Some(error) = Self::existing_file_write_freshness_error(context, resolved).await {
+            return Err(BitFunError::tool(Self::write_guidance_message(error)));
+        }
+
+        Ok(())
+    }
+
+    async fn write_guardrail_preflight_error(
+        context: &ToolUseContext,
+        resolved: &ToolPathResolution,
+    ) -> Option<String> {
+        if !Self::file_exists(context, resolved).await {
+            return None;
+        }
+
+        if let Some(message) = validate_existing_file_read_before_write(context, resolved).await
+        {
+            return Some(Self::write_guidance_message(message));
+        }
+
+        Self::existing_file_write_freshness_error(context, resolved)
+            .await
+            .map(Self::write_guidance_message)
+    }
+
+    pub(crate) async fn preflight_write_error(
+        context: &ToolUseContext,
+        file_path: &str,
+    ) -> Option<String> {
+        let resolved = match context.resolve_tool_path(file_path) {
+            Ok(resolved) => resolved,
+            Err(err) => return Some(err.to_string()),
+        };
+
+        if let Err(err) = context.enforce_path_operation(ToolPathOperation::Write, &resolved) {
+            return Some(err.to_string());
+        }
+
+        Self::write_guardrail_preflight_error(context, &resolved).await
     }
 
     fn write_success_result(
@@ -109,11 +219,225 @@ impl FileWriteTool {
             "additionalProperties": false
         })
     }
+
+    fn schema_without_content() -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "The file to write. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
+                }
+            },
+            "required": ["file_path"],
+            "additionalProperties": false
+        })
+    }
+
+    fn inline_description() -> String {
+        r#"Writes a file to the local filesystem.
+
+Usage:
+- This tool will overwrite the existing file if there is one at the provided path.
+- If this is an existing file, you MUST use the Read tool first to read the file's contents. This tool will fail if you did not read the file first.
+- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
+- ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
+- Keep writes focused. The 200-line / 20KB guideline is a soft reliability threshold, not a hard cap. If a task genuinely needs more content, preserve correctness and use a staged plan instead of truncating.
+- For existing files, prefer Read + targeted Edit calls. For large new files or rewrites, write the stable scaffold first, then fill or revise sections with focused Edit calls. Do not replace an entire existing file just to change a few sections.
+- NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+- Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
+- Include the complete file content in the `content` argument."#
+            .to_string()
+    }
+
+    fn plaintext_followup_description() -> String {
+        r#"Writes a file to the local filesystem.
+
+Usage:
+- This tool writes the COMPLETE file content and will overwrite the existing file if one already exists at the provided path.
+- For partial changes to an existing file, use the Edit tool instead. Edit performs targeted string replacements; Write replaces the entire file.
+- If this is an existing file, you MUST use the Read tool first to read the file's contents before calling Write.
+- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
+- ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
+- Keep writes focused. For existing files, prefer Read + targeted Edit calls. Use Write only when you need to replace the entire file or create a new one.
+- NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+- Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
+- Do NOT include the file content in the tool call arguments. Only provide file_path. The system will prompt you separately to output the file content as plain text."#
+            .to_string()
+    }
+
+    async fn call_inline_content_impl(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
+        let file_path = input
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| BitFunError::tool("file_path is required".to_string()))?;
+
+        let resolved = context.resolve_tool_path(file_path)?;
+        context.enforce_path_operation(ToolPathOperation::Write, &resolved)?;
+        context
+            .record_light_checkpoint(
+                "Write",
+                &resolved.logical_path,
+                vec![resolved.logical_path.clone()],
+            )
+            .await;
+
+        let content = input
+            .get("content")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
+
+        Self::assert_atomic_write_freshness_if_exists(context, &resolved).await?;
+
+        if resolved.uses_remote_workspace_backend() {
+            let ws_fs = context.ws_fs().ok_or_else(|| {
+                BitFunError::tool("Remote workspace file system is unavailable".to_string())
+            })?;
+            ws_fs
+                .write_file(&resolved.resolved_path, content.as_bytes())
+                .await
+                .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
+        } else {
+            if let Some(parent) = Path::new(&resolved.resolved_path).parent() {
+                fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| BitFunError::tool(format!("Failed to create directory: {}", e)))?;
+            }
+            fs::write(&resolved.resolved_path, content)
+                .await
+                .map_err(|e| {
+                    BitFunError::tool(format!(
+                        "Failed to write file {}: {}",
+                        resolved.logical_path, e
+                    ))
+                })?;
+        }
+
+        let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
+        update_file_read_state_after_mutation(context, &resolved, content, timestamp_ms);
+
+        let result = ToolResult::Result {
+            data: json!({
+                "file_path": resolved.logical_path,
+                "bytes_written": content.len(),
+                "success": true
+            }),
+            result_for_assistant: Some(format!("Successfully wrote to {}", resolved.logical_path)),
+            image_attachments: None,
+        };
+
+        Ok(vec![result])
+    }
+
+    async fn call_plaintext_followup_impl(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
+        let file_path = input
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| BitFunError::tool("file_path is required".to_string()))?;
+
+        let resolved = context.resolve_tool_path(file_path)?;
+        context.enforce_path_operation(ToolPathOperation::Write, &resolved)?;
+        context
+            .record_light_checkpoint(
+                "Write",
+                &resolved.logical_path,
+                vec![resolved.logical_path.clone()],
+            )
+            .await;
+
+        let content = input
+            .get("content")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
+
+        let file_already_exists = Self::file_exists(context, &resolved).await;
+        if file_already_exists
+            && Self::existing_file_matches_content(context, &resolved, content).await == Some(true)
+        {
+            let result = Self::write_success_result(
+                &resolved.logical_path,
+                0,
+                "already_exists_same_content",
+                format!(
+                    "Write skipped because {} already exists with identical content.",
+                    resolved.logical_path
+                ),
+            );
+            return Ok(vec![result]);
+        }
+
+        Self::assert_atomic_write_freshness_if_exists(context, &resolved).await?;
+
+        if resolved.uses_remote_workspace_backend() {
+            let ws_fs = context.ws_fs().ok_or_else(|| {
+                BitFunError::tool("Remote workspace file system is unavailable".to_string())
+            })?;
+            ws_fs
+                .write_file(&resolved.resolved_path, content.as_bytes())
+                .await
+                .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
+        } else {
+            if let Some(parent) = Path::new(&resolved.resolved_path).parent() {
+                fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| BitFunError::tool(format!("Failed to create directory: {}", e)))?;
+            }
+            fs::write(&resolved.resolved_path, content)
+                .await
+                .map_err(|e| {
+                    BitFunError::tool(format!(
+                        "Failed to write file {}: {}",
+                        resolved.logical_path, e
+                    ))
+                })?;
+        }
+
+        let (status, assistant_message) = if file_already_exists {
+            (
+                "overwritten",
+                format!(
+                    "Successfully overwrote {} ({} bytes).",
+                    resolved.logical_path,
+                    content.len()
+                ),
+            )
+        } else {
+            (
+                "created",
+                format!(
+                    "Successfully created {} ({} bytes).",
+                    resolved.logical_path,
+                    content.len()
+                ),
+            )
+        };
+
+        let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
+        update_file_read_state_after_mutation(context, &resolved, content, timestamp_ms);
+
+        let result = Self::write_success_result(
+            &resolved.logical_path,
+            content.len(),
+            status,
+            assistant_message,
+        );
+
+        Ok(vec![result])
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::FileWriteTool;
+    use super::{FileWriteTool, WRITE_TOOL_MODE_CONTEXT_KEY};
+    use crate::agentic::tools::file_tool_guidance::FILE_TOOL_GUIDANCE_PREFIX;
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::WorkspaceBinding;
@@ -137,6 +461,25 @@ mod tests {
         }
     }
 
+    fn local_context_with_custom_data(
+        root: PathBuf,
+        custom_data: HashMap<String, serde_json::Value>,
+    ) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new(None, root)),
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data,
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        }
+    }
+
     fn context_with_custom_data(custom_data: HashMap<String, serde_json::Value>) -> ToolUseContext {
         ToolUseContext {
             tool_call_id: None,
@@ -153,27 +496,41 @@ mod tests {
         }
     }
 
+    #[test]
+    fn write_guidance_prefix_helpers_round_trip() {
+        let message = FileWriteTool::write_guidance_message("Use Read first.");
+        assert!(FileWriteTool::is_write_guidance_message(&message));
+        assert_eq!(
+            message.strip_prefix(FILE_TOOL_GUIDANCE_PREFIX).unwrap(),
+            "Use Read first."
+        );
+    }
+
     #[tokio::test]
-    async fn validate_input_rejects_existing_file_before_content_generation() {
+    async fn preflight_write_error_allows_new_file_target() {
         let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp workspace");
-        let existing_file = root.join("existing.md");
-        std::fs::write(&existing_file, "already here").expect("create existing file");
 
-        let tool = FileWriteTool::new();
-        let validation = tool
-            .validate_input(
-                &json!({ "file_path": "existing.md" }),
-                Some(&local_context(root.clone())),
-            )
+        let error = FileWriteTool::preflight_write_error(&local_context(root.clone()), "new.txt")
             .await;
 
         let _ = std::fs::remove_dir_all(&root);
 
-        assert!(!validation.result);
-        let message = validation.message.unwrap_or_default();
-        assert!(message.contains("already exists"));
-        assert!(message.contains("Edit tool"));
+        assert!(error.is_none());
+    }
+
+    #[tokio::test]
+    async fn preflight_write_error_allows_existing_file_without_read_state_tracking() {
+        let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+        std::fs::write(root.join("existing.md"), "already here").expect("create existing file");
+
+        let error =
+            FileWriteTool::preflight_write_error(&local_context(root.clone()), "existing.md").await;
+
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert!(error.is_none());
     }
 
     #[tokio::test]
@@ -207,28 +564,33 @@ mod tests {
         assert!(result_for_assistant
             .as_deref()
             .unwrap_or_default()
-            .contains("do not call Write for this path again"));
+            .contains("identical content"));
     }
 
     #[tokio::test]
-    async fn call_impl_rejects_different_existing_content() {
+    async fn call_impl_overwrites_different_existing_content() {
         let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp workspace");
         std::fs::write(root.join("existing.md"), "old content").expect("create existing file");
 
         let tool = FileWriteTool::new();
-        let error = tool
+        let results = tool
             .call(
                 &json!({ "file_path": "existing.md", "content": "new content" }),
                 &local_context(root.clone()),
             )
             .await
-            .expect_err("different content must not overwrite existing files");
+            .expect("plaintext followup should overwrite existing files");
 
+        let written = std::fs::read_to_string(root.join("existing.md")).expect("read file");
         let _ = std::fs::remove_dir_all(&root);
 
-        assert!(error.to_string().contains("already exists"));
-        assert!(error.to_string().contains("Edit tool"));
+        assert_eq!(written, "new content");
+
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("expected result");
+        };
+        assert_eq!(data["status"], "overwritten");
     }
 
     #[tokio::test]
@@ -264,6 +626,70 @@ mod tests {
         assert_eq!(schema["required"], serde_json::json!(["file_path"]));
         assert!(schema["properties"].get("content").is_none());
     }
+
+    #[tokio::test]
+    async fn inline_mode_schema_requires_content() {
+        let tool = FileWriteTool::new();
+        let mut custom_data = HashMap::new();
+        custom_data.insert(
+            WRITE_TOOL_MODE_CONTEXT_KEY.to_string(),
+            serde_json::Value::String("inline_content".to_string()),
+        );
+        let context = context_with_custom_data(custom_data);
+
+        let schema = tool
+            .input_schema_for_model_with_context(Some(&context))
+            .await;
+
+        assert_eq!(
+            schema["required"],
+            serde_json::json!(["file_path", "content"])
+        );
+    }
+
+    #[tokio::test]
+    async fn inline_mode_requires_content_during_validation() {
+        let tool = FileWriteTool::new();
+        let mut custom_data = HashMap::new();
+        custom_data.insert(
+            WRITE_TOOL_MODE_CONTEXT_KEY.to_string(),
+            serde_json::Value::String("inline_content".to_string()),
+        );
+        let context = context_with_custom_data(custom_data);
+
+        let validation = tool
+            .validate_input(&json!({ "file_path": "new.txt" }), Some(&context))
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(validation.message.as_deref(), Some("content is required"));
+    }
+
+    #[tokio::test]
+    async fn inline_mode_overwrites_existing_file() {
+        let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+        std::fs::write(root.join("existing.md"), "old content").expect("create existing file");
+
+        let mut custom_data = HashMap::new();
+        custom_data.insert(
+            WRITE_TOOL_MODE_CONTEXT_KEY.to_string(),
+            serde_json::Value::String("inline_content".to_string()),
+        );
+
+        let tool = FileWriteTool::new();
+        tool.call(
+            &json!({ "file_path": "existing.md", "content": "new content" }),
+            &local_context_with_custom_data(root.clone(), custom_data),
+        )
+        .await
+        .expect("inline mode should overwrite existing files");
+
+        let written = std::fs::read_to_string(root.join("existing.md")).expect("read file");
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert_eq!(written, "new content");
+    }
 }
 
 #[async_trait]
@@ -273,64 +699,31 @@ impl Tool for FileWriteTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Writes a file to the local filesystem.
-
-Usage:
-- This tool is for creating NEW files only. Calling Write on a path that already exists will be REJECTED with an error.
-- To MODIFY an existing file, use the Edit tool — it is the correct choice in almost every case.
-- To FULLY REWRITE an existing file (e.g. regenerate a generated file, replace a template), first call the Delete tool on that path, then call Write to create the new version. Do not try to "overwrite" via Write directly.
-- After Write succeeds for a path, do not call Write for that path again in later rounds. Use Edit for any additional changes.
-- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
-- ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
-- NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
-- Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
-- Do NOT include the file content in the tool call arguments. Only provide file_path. The system will prompt you separately to output the file content as plain text."#.to_string())
+        Ok(Self::plaintext_followup_description())
     }
 
     fn short_description(&self) -> String {
-        "Write a new file.".to_string()
+        "Write or overwrite a file.".to_string()
     }
 
     async fn description_with_context(
         &self,
         context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        if Self::is_acp_context(context) {
-            return Ok(r#"Writes a file to the local filesystem.
-
-Usage:
-- This tool is for creating NEW files only. Calling Write on a path that already exists will be REJECTED with an error unless the existing content is identical, in which case the retry is treated as already successful.
-- To MODIFY an existing file, use the Edit tool. To fully rewrite an existing file, first call the Delete tool on that path, then call Write to create the new version.
-- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
-- ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
-- For new files, preserve correctness and provide the complete intended file content when this tool is appropriate.
-- NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
-- Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
-- Include the complete file content in the `content` argument."#.to_string());
+        match Self::write_tool_mode(context) {
+            WriteToolMode::InlineContent => Ok(Self::inline_description()),
+            WriteToolMode::PlaintextFollowup => Ok(Self::plaintext_followup_description()),
         }
-
-        self.description().await
     }
 
     fn input_schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "The file to write. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
-                }
-            },
-            "required": ["file_path"],
-            "additionalProperties": false
-        })
+        Self::schema_without_content()
     }
 
     async fn input_schema_for_model_with_context(&self, context: Option<&ToolUseContext>) -> Value {
-        if Self::is_acp_context(context) {
-            Self::schema_with_content()
-        } else {
-            self.input_schema()
+        match Self::write_tool_mode(context) {
+            WriteToolMode::InlineContent => Self::schema_with_content(),
+            WriteToolMode::PlaintextFollowup => self.input_schema(),
         }
     }
 
@@ -363,44 +756,63 @@ Usage:
             }
         };
 
-        if let Some(ctx) = context {
-            let resolved = match ctx.resolve_tool_path(file_path) {
-                Ok(resolved) => resolved,
-                Err(err) => {
-                    return ValidationResult {
-                        result: false,
-                        message: Some(err.to_string()),
-                        error_code: Some(400),
-                        meta: None,
-                    };
-                }
+        let mode = Self::write_tool_mode(context);
+        if matches!(mode, WriteToolMode::InlineContent) && input.get("content").is_none() {
+            return ValidationResult {
+                result: false,
+                message: Some("content is required".to_string()),
+                error_code: Some(400),
+                meta: None,
             };
+        }
 
-            if let Err(err) = ctx.enforce_path_operation(ToolPathOperation::Write, &resolved) {
+        let large_write_warning = if matches!(mode, WriteToolMode::InlineContent) {
+            input
+                .get("content")
+                .and_then(|v| v.as_str())
+                .and_then(|content| {
+                    let line_count = content.lines().count();
+                    let byte_count = content.len();
+                    if line_count > LARGE_WRITE_SOFT_LINE_LIMIT
+                        || byte_count > LARGE_WRITE_SOFT_BYTE_LIMIT
+                    {
+                        Some((line_count, byte_count))
+                    } else {
+                        None
+                    }
+                })
+        } else {
+            None
+        };
+
+        if let Some(ctx) = context {
+            if let Some(message) = Self::preflight_write_error(ctx, file_path).await {
+                let is_guidance = Self::is_write_guidance_message(&message);
                 return ValidationResult {
                     result: false,
-                    message: Some(err.to_string()),
+                    message: Some(message),
                     error_code: Some(400),
-                    meta: None,
+                    meta: is_guidance.then(|| json!({ "failure_kind": "guidance" })),
                 };
             }
+        }
 
-            // If content is absent, RoundExecutor would otherwise launch a
-            // second model request to generate the full file. Reject existing
-            // targets here so we do not spend tokens producing content that
-            // Write must reject anyway. If a model already supplied content
-            // despite the public schema, defer to call_impl so identical
-            // retries can be treated as idempotent success.
-            if input.get("content").is_none() {
-                if let Some(error) = Self::existing_file_error(ctx, &resolved).await {
-                    return ValidationResult {
-                        result: false,
-                        message: Some(error),
-                        error_code: Some(400),
-                        meta: None,
-                    };
-                }
-            }
+        if let Some((line_count, byte_count)) = large_write_warning {
+            return ValidationResult {
+                result: true,
+                message: Some(format!(
+                    "Large Write payload: {} lines, {} bytes. This is allowed when necessary, but prefer a staged approach: for existing files use Read + focused Edit calls; for large new files write a stable scaffold first, then add sections in follow-up edits unless a complete initial body is required.",
+                    line_count, byte_count
+                )),
+                error_code: None,
+                meta: Some(json!({
+                    "large_write": true,
+                    "line_count": line_count,
+                    "byte_count": byte_count,
+                    "soft_line_limit": LARGE_WRITE_SOFT_LINE_LIMIT,
+                    "soft_byte_limit": LARGE_WRITE_SOFT_BYTE_LIMIT
+                })),
+            };
         }
 
         ValidationResult::default()
@@ -428,79 +840,11 @@ Usage:
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let file_path = input
-            .get("file_path")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("file_path is required".to_string()))?;
-
-        let resolved = context.resolve_tool_path(file_path)?;
-        context.enforce_path_operation(ToolPathOperation::Write, &resolved)?;
-        context
-            .record_light_checkpoint(
-                "Write",
-                &resolved.logical_path,
-                vec![resolved.logical_path.clone()],
-            )
-            .await;
-
-        let content = input
-            .get("content")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
-
-        if let Some(error) = Self::existing_file_error(context, &resolved).await {
-            if Self::existing_file_matches_content(context, &resolved, content).await == Some(true)
-            {
-                let result = Self::write_success_result(
-                    &resolved.logical_path,
-                    0,
-                    "already_exists_same_content",
-                    format!(
-                        "Write skipped because {} already exists with identical content. Treat this file as successfully created and do not call Write for this path again. Use Edit for any further changes.",
-                        resolved.logical_path
-                    ),
-                );
-                return Ok(vec![result]);
+        match Self::write_tool_mode(Some(context)) {
+            WriteToolMode::InlineContent => self.call_inline_content_impl(input, context).await,
+            WriteToolMode::PlaintextFollowup => {
+                self.call_plaintext_followup_impl(input, context).await
             }
-
-            return Err(BitFunError::tool(error));
         }
-
-        if resolved.uses_remote_workspace_backend() {
-            let ws_fs = context.ws_fs().ok_or_else(|| {
-                BitFunError::tool("Remote workspace file system is unavailable".to_string())
-            })?;
-            ws_fs
-                .write_file(&resolved.resolved_path, content.as_bytes())
-                .await
-                .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
-        } else {
-            if let Some(parent) = Path::new(&resolved.resolved_path).parent() {
-                fs::create_dir_all(parent)
-                    .await
-                    .map_err(|e| BitFunError::tool(format!("Failed to create directory: {}", e)))?;
-            }
-            fs::write(&resolved.resolved_path, content)
-                .await
-                .map_err(|e| {
-                    BitFunError::tool(format!(
-                        "Failed to write file {}: {}",
-                        resolved.logical_path, e
-                    ))
-                })?;
-        }
-
-        let result = Self::write_success_result(
-            &resolved.logical_path,
-            content.len(),
-            "created",
-            format!(
-                "Successfully created {} ({} bytes). The file now exists; do not call Write for this path again. Use Edit for any further changes.",
-                resolved.logical_path,
-                content.len()
-            ),
-        );
-
-        Ok(vec![result])
     }
 }

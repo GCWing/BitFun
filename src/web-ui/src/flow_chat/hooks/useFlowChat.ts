@@ -99,6 +99,7 @@ export const useFlowChat = () => {
         sessionName,
         agentType: agentTypeForSession,
         workspacePath,
+        workspaceId: workspace?.id ?? config?.workspaceId,
         remoteConnectionId,
         remoteSshHost,
         config: {

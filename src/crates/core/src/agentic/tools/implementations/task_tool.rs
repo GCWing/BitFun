@@ -22,6 +22,8 @@ use crate::agentic::tools::framework::{
 };
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::agentic::tools::InputValidator;
+use crate::service::config::global::GlobalConfigManager;
+use crate::service::config::types::AIConfig;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
@@ -55,6 +57,29 @@ impl TaskTool {
             description,
             run_manifest,
         )
+    }
+
+    async fn load_configured_tool_execution_timeout() -> Option<u64> {
+        let service = GlobalConfigManager::get_service().await.ok()?;
+        let ai_config: AIConfig = service.get_config(Some("ai")).await.ok()?;
+        ai_config
+            .tool_execution_timeout_secs
+            .filter(|seconds| *seconds > 0)
+    }
+
+    fn resolve_subagent_timeout_seconds(
+        requested_timeout_seconds: Option<u64>,
+        configured_execution_timeout_secs: Option<u64>,
+    ) -> Option<u64> {
+        match (
+            requested_timeout_seconds.filter(|seconds| *seconds > 0),
+            configured_execution_timeout_secs.filter(|seconds| *seconds > 0),
+        ) {
+            (Some(requested), Some(configured)) => Some(requested.max(configured)),
+            (Some(requested), None) => Some(requested),
+            (None, Some(configured)) => Some(configured),
+            (None, None) => None,
+        }
     }
 
     fn deep_review_launch_batch_for_task(
@@ -373,7 +398,7 @@ impl TaskTool {
         }
     }
 
-    fn format_agent_descriptions(&self, agents: &[AgentInfo]) -> String {
+    fn format_agent_descriptions(agents: &[AgentInfo]) -> String {
         if agents.is_empty() {
             return String::new();
         }
@@ -390,20 +415,12 @@ impl TaskTool {
         out
     }
 
-    fn render_description(&self, agent_descriptions: String) -> String {
-        let agent_descriptions = if agent_descriptions.is_empty() {
-            "<agents>No agents available</agents>".to_string()
-        } else {
-            agent_descriptions
-        };
-
-        format!(
-            r#"Launch a new agent to handle complex, multi-step tasks autonomously. 
+    fn render_description(&self) -> String {
+        r#"Launch a new agent to handle complex, multi-step tasks autonomously. 
 
 The Task tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.
 
-Available agents and the tools they have access to:
-{}
+The current request context includes an <available_agents> section when subagents are available. Use the exact `type` attribute from that section as `subagent_type`.
 
 When using the Task tool, you must specify `subagent_type` as a top-level tool argument to select which agent type to use. Do not put `subagent_type`, `description`, `workspace_path`, `model_id`, or `timeout_seconds` inside the prompt string.
 
@@ -418,7 +435,7 @@ Usage notes:
 - If 'workspace_path' is omitted, the task inherits the current workspace by default.
 - Provide 'workspace_path' when the selected agent requires an explicit workspace, such as Explore or FileFinder.
 - Use 'model_id' when a caller needs a specific model or model slot for the subagent. Omit it to use the agent default.
-- Use 'timeout_seconds' when you need a hard deadline for the subagent. Omit it or set it to 0 to disable the timeout.
+- Use 'timeout_seconds' when you need a hard deadline for the subagent. When omitted, the session execution timeout from settings is used. When provided, the effective timeout is the larger of the requested value and the session execution timeout. Set it to 0 with no configured session execution timeout to disable the timeout.
 - For DeepReview only, set 'retry' to true when re-dispatching a reviewer after that same reviewer returned partial_timeout or an explicit transient capacity failure in the current turn. Retry calls must include retry_coverage with source_packet_id, source_status, covered_files, and a smaller retry_scope_files list. Do not set 'auto_retry' unless this is a backend-owned automatic retry admitted by Review Team settings; model-issued retry decisions should omit it or set it to false. Example retry_coverage: {{ "source_packet_id": "reviewer-123", "source_status": "partial_timeout", "covered_files": ["src/main.rs"], "retry_scope_files": ["src/parser.rs"] }}.
 - Launch independent agents concurrently when that improves coverage or latency; send parallel Task calls in a single assistant message.
 - When the agent is done, it will return a single message back to you.
@@ -437,18 +454,23 @@ assistant: Uses the Task tool with subagent_type="Explore" because this is a bro
 <example>
 user: "Find the files that implement export formatting"
 assistant: Uses the Task tool with subagent_type="FileFinder" because the exact filenames are unknown and semantic file discovery is useful. The parent agent reads the returned files before proposing edits.
-</example>"#,
-            agent_descriptions
-        )
+</example>"#
+            .to_string()
     }
 
-    async fn build_description(&self, context: Option<&ToolUseContext>) -> String {
-        let agents = self.get_enabled_agents(context).await;
-        let agent_descriptions = self.format_agent_descriptions(&agents);
-        self.render_description(agent_descriptions)
+    pub(crate) async fn build_available_agents_context_section(
+        context: Option<&ToolUseContext>,
+    ) -> Option<String> {
+        let agents = Self::get_enabled_agents(context).await;
+        let agent_descriptions = Self::format_agent_descriptions(&agents);
+        if agent_descriptions.trim().is_empty() {
+            None
+        } else {
+            Some(agent_descriptions)
+        }
     }
 
-    async fn get_enabled_agents(&self, context: Option<&ToolUseContext>) -> Vec<AgentInfo> {
+    async fn get_enabled_agents(context: Option<&ToolUseContext>) -> Vec<AgentInfo> {
         let registry = get_agent_registry();
         let workspace_root = context.and_then(|ctx| ctx.workspace_root());
         if let Some(workspace_root) = workspace_root {
@@ -465,7 +487,7 @@ assistant: Uses the Task tool with subagent_type="FileFinder" because the exact 
     }
 
     async fn get_agents_types(&self, context: Option<&ToolUseContext>) -> Vec<String> {
-        self.get_enabled_agents(context)
+        Self::get_enabled_agents(context)
             .await
             .into_iter()
             .map(|agent| agent.id)
@@ -480,7 +502,7 @@ impl Tool for TaskTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(self.build_description(None).await)
+        Ok(self.render_description())
     }
 
     fn short_description(&self) -> String {
@@ -489,9 +511,9 @@ impl Tool for TaskTool {
 
     async fn description_with_context(
         &self,
-        context: Option<&ToolUseContext>,
+        _context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        Ok(self.build_description(context).await)
+        Ok(self.render_description())
     }
 
     fn input_schema(&self) -> Value {
@@ -521,7 +543,7 @@ impl Tool for TaskTool {
                 "timeout_seconds": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Optional timeout for this subagent task in seconds. Use 0 or omit it to disable the timeout."
+                    "description": "Optional timeout for this subagent task in seconds. When omitted, the session execution timeout from settings is used. When provided, the effective timeout is the larger of this value and the session execution timeout. Use 0 with no configured session execution timeout to disable the timeout."
                 },
                 "run_in_background": {
                     "type": "boolean",
@@ -1094,6 +1116,12 @@ impl Tool for TaskTool {
             }
         }
 
+        if deep_review_subagent_role.is_none() {
+            let configured_timeout = Self::load_configured_tool_execution_timeout().await;
+            timeout_seconds =
+                Self::resolve_subagent_timeout_seconds(timeout_seconds, configured_timeout);
+        }
+
         if let Some(retry_scope_files) = deep_review_retry_scope_files.as_ref() {
             prompt = Self::prompt_with_deep_review_retry_scope(&prompt, retry_scope_files);
         }
@@ -1139,7 +1167,7 @@ impl Tool for TaskTool {
                     "background_task_id": background_result.background_task_id,
                 }),
                 result_for_assistant: Some(format!(
-                    "Background subagent '{}' started successfully.\n<background_task status=\"started\" id=\"{}\">Its final result will be delivered back automatically to you when it is finished.</background_task>",
+                    "Background subagent '{}' started successfully.\n<background_task status=\"started\" id=\"{}\">Its final result will be delivered back automatically to you when it is finished. Do not poll for status updates. If your current path is blocked on this result and there is no other useful local work to do, it is fine to end the current turn.</background_task>",
                     subagent_type, background_result.background_task_id
                 )),
                 image_attachments: None,
@@ -1520,7 +1548,9 @@ impl Tool for TaskTool {
 mod tests {
     use super::TaskTool;
     use crate::agentic::agents::CustomSubagentConfig;
-    use crate::agentic::agents::{get_agent_registry, Agent, AgentCategory, SubAgentSource};
+    use crate::agentic::agents::{
+        get_agent_registry, Agent, AgentCategory, RequestContextPolicy, SubAgentSource,
+    };
     use crate::agentic::deep_review::task_adapter as deep_review_task_adapter;
     use crate::agentic::deep_review_policy::{
         DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewSubagentRole,
@@ -1557,6 +1587,10 @@ mod tests {
 
         fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
             "test_prompt_order_agent"
+        }
+
+        fn request_context_policy(&self) -> RequestContextPolicy {
+            RequestContextPolicy::empty()
         }
 
         fn default_tools(&self) -> Vec<String> {
@@ -1645,6 +1679,27 @@ mod tests {
     }
 
     #[test]
+    fn resolve_subagent_timeout_uses_session_execution_timeout_as_floor() {
+        assert_eq!(
+            TaskTool::resolve_subagent_timeout_seconds(Some(300), Some(1200)),
+            Some(1200)
+        );
+        assert_eq!(
+            TaskTool::resolve_subagent_timeout_seconds(None, Some(1200)),
+            Some(1200)
+        );
+        assert_eq!(
+            TaskTool::resolve_subagent_timeout_seconds(Some(1800), Some(1200)),
+            Some(1800)
+        );
+        assert_eq!(
+            TaskTool::resolve_subagent_timeout_seconds(Some(300), None),
+            Some(300)
+        );
+        assert_eq!(TaskTool::resolve_subagent_timeout_seconds(None, None), None);
+    }
+
+    #[test]
     fn deep_review_policy_caps_reviewer_and_judge_timeouts() {
         let policy = DeepReviewExecutionPolicy::from_config_value(Some(&json!({
             "reviewer_timeout_seconds": 300,
@@ -1694,7 +1749,6 @@ mod tests {
 
     #[tokio::test]
     async fn description_with_context_filters_restricted_subagents_by_parent_agent() {
-        let tool = TaskTool::new();
         let agentic_context = ToolUseContext {
             tool_call_id: None,
             agent_type: Some("agentic".to_string()),
@@ -1713,25 +1767,24 @@ mod tests {
             ..agentic_context.clone()
         };
 
-        let agentic_description = tool
-            .description_with_context(Some(&agentic_context))
-            .await
-            .expect("agentic description should render");
+        let agentic_description =
+            TaskTool::build_available_agents_context_section(Some(&agentic_context))
+                .await
+                .expect("agentic available agents should render");
         assert!(agentic_description.contains("<agent type=\"Explore\">"));
         assert!(!agentic_description.contains("<agent type=\"ReviewSecurity\">"));
         assert!(!agentic_description.contains("<agent type=\"ResearchSpecialist\">"));
 
-        let deep_review_description = tool
-            .description_with_context(Some(&deep_review_context))
-            .await
-            .expect("deep review description should render");
+        let deep_review_description =
+            TaskTool::build_available_agents_context_section(Some(&deep_review_context))
+                .await
+                .expect("deep review available agents should render");
         assert!(deep_review_description.contains("<agent type=\"ReviewSecurity\">"));
         assert!(!deep_review_description.contains("<agent type=\"ResearchSpecialist\">"));
     }
 
     #[tokio::test]
     async fn prompt_stability_description_with_context_renders_available_agents_in_stable_order() {
-        let tool = TaskTool::new();
         let context = ToolUseContext {
             tool_call_id: None,
             agent_type: Some("agentic".to_string()),
@@ -1767,10 +1820,9 @@ mod tests {
             }),
         );
 
-        let description = tool
-            .description_with_context(Some(&context))
+        let description = TaskTool::build_available_agents_context_section(Some(&context))
             .await
-            .expect("description should render");
+            .expect("available agents should render");
 
         let builtin_a_index = find_agent_block_index(&description, builtin_a);
         let builtin_z_index = find_agent_block_index(&description, builtin_z);

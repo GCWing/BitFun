@@ -96,7 +96,7 @@ mod tests {
         for agent in agents {
             assert_eq!(
                 agent.request_context_policy(),
-                RequestContextPolicy::instructions_only()
+                RequestContextPolicy::empty().with_workspace_instructions()
             );
             assert!(agent.is_readonly());
             assert!(agent.default_tools().contains(&"GetFileDiff".to_string()));

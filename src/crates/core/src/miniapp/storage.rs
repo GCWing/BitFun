@@ -325,6 +325,13 @@ impl MiniAppStorage {
         self.write_package_json_to_dir(app_dir, &app.id, &app.source.npm_dependencies)
             .await?;
 
+        let storage_path = app_dir.join(STORAGE_JSON);
+        if !storage_path.exists() {
+            tokio::fs::write(&storage_path, "{}")
+                .await
+                .map_err(|e| BitFunError::io(format!("Failed to write storage.json: {}", e)))?;
+        }
+
         tokio::fs::write(app_dir.join(COMPILED_HTML), &app.compiled_html)
             .await
             .map_err(|e| BitFunError::io(format!("Failed to write compiled.html: {}", e)))?;
@@ -938,6 +945,11 @@ mod tests {
         let layout = MiniAppStorageLayout::new(path_manager.miniapps_dir(), "layout_app");
 
         storage.save(&app).await.unwrap();
+        assert!(layout.storage_path().is_file());
+        assert_eq!(
+            fs::read_to_string(layout.storage_path()).unwrap(),
+            "{}".to_string()
+        );
         storage
             .save_app_storage("layout_app", "answer", serde_json::json!(42))
             .await
@@ -947,7 +959,6 @@ mod tests {
         assert!(layout.app_dir().is_dir());
         assert!(layout.meta_path().is_file());
         assert!(layout.compiled_path().is_file());
-        assert!(layout.storage_path().is_file());
         assert!(layout.package_json_path().is_file());
         assert!(layout.source_file_path(INDEX_HTML).is_file());
         assert!(layout.source_file_path(STYLE_CSS).is_file());
@@ -955,6 +966,34 @@ mod tests {
         assert!(layout.source_file_path(WORKER_JS).is_file());
         assert!(layout.source_file_path(ESM_DEPS_JSON).is_file());
         assert!(layout.version_path(7).is_file());
+    }
+
+    #[tokio::test]
+    async fn saving_app_files_preserves_existing_storage_json() {
+        let root = std::env::temp_dir().join(format!(
+            "bitfun-miniapp-storage-preserve-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let path_manager =
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
+        let storage = MiniAppStorage::new(path_manager);
+        let app = sample_app("storage_app");
+
+        storage.save(&app).await.unwrap();
+        storage
+            .save_app_storage("storage_app", "answer", serde_json::json!(42))
+            .await
+            .unwrap();
+        storage.save(&app).await.unwrap();
+
+        assert_eq!(
+            storage
+                .load_app_storage("storage_app")
+                .await
+                .unwrap()
+                .get("answer"),
+            Some(&serde_json::json!(42))
+        );
     }
 
     #[tokio::test]

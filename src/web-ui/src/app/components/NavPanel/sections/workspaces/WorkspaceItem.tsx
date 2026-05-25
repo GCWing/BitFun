@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { Button, ConfirmDialog, Modal, Tooltip } from '@/component-library';
@@ -33,6 +33,7 @@ import {
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { useWorkspaceSearchIndex } from '@/tools/file-explorer';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
+import WorkspaceRelatedPathsDialog from './WorkspaceRelatedPathsDialog';
 
 
 interface WorkspaceItemProps {
@@ -78,6 +79,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteWorktreeDialogOpen, setDeleteWorktreeDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [relatedPathsDialogOpen, setRelatedPathsDialogOpen] = useState(false);
   const [isDeletingAssistant, setIsDeletingAssistant] = useState(false);
   const [isDeletingWorktree, setIsDeletingWorktree] = useState(false);
   const [isResettingWorkspace, setIsResettingWorkspace] = useState(false);
@@ -103,6 +105,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       ? workspace.identity?.name?.trim() || workspace.name
       : workspace.name;
   const isLinkedWorktree = isLinkedWorktreeWorkspace(workspace);
+  const relatedPathCount = workspace.relatedPaths?.length ?? 0;
   const canShowSearchIndex =
     isActive
     && workspaceSearchEnabled
@@ -864,6 +867,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 >
                   <span className="bitfun-nav-panel__workspace-item-name-line">
                     <span className="bitfun-nav-panel__workspace-item-label">{workspaceDisplayName}</span>
+                    {relatedPathCount > 0 ? (
+                      <span className="bitfun-nav-panel__workspace-item-badge">
+                        {t('nav.workspaces.relatedPaths.badge', { count: relatedPathCount })}
+                      </span>
+                    ) : null}
                   </span>
                 </button>
               </Tooltip>
@@ -1048,6 +1056,19 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   <FileText size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.initAgents')}</span>
                 </button>
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__workspace-item-menu-item"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setRelatedPathsDialogOpen(true);
+                  }}
+                >
+                  <Link2 size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">
+                    {t('nav.workspaces.actions.manageRelatedPaths')}
+                  </span>
+                </button>
                 <div className="bitfun-nav-panel__workspace-item-menu-divider" />
                 {isLinkedWorktree ? (
                   <button
@@ -1132,6 +1153,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         cancelText={t('actions.cancel')}
         confirmDanger
         preview={`${t('nav.workspaces.deleteWorktreeDialog.pathLabel')}\n${workspace.rootPath}`}
+      />
+      <WorkspaceRelatedPathsDialog
+        workspace={workspace}
+        isOpen={relatedPathsDialogOpen}
+        onClose={() => setRelatedPathsDialogOpen(false)}
       />
     </div>
   );

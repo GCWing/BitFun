@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useI18n } from '@/infrastructure/i18n';
 import { Button } from '@/component-library';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -31,6 +32,8 @@ interface RemoteFileBrowserProps {
   initialPath?: string;
   /** Used by the Home button; defaults to `initialPath`. */
   homePath?: string;
+  /** When true, only directories can be chosen and files are not selectable. */
+  selectDirectoriesOnly?: boolean;
   onSelect: (path: string) => void;
   onCancel: () => void;
 }
@@ -85,6 +88,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
   connectionId,
   initialPath = '/tmp',
   homePath,
+  selectDirectoriesOnly = false,
   onSelect,
   onCancel,
 }) => {
@@ -195,7 +199,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
   const handleEntryClick = (entry: RemoteFileEntry) => {
     if (entry.isDir) {
       navigateTo(entry.path);
-    } else {
+    } else if (!selectDirectoriesOnly) {
       setSelectedPath(entry.path);
     }
     setContextMenu({ show: false, x: 0, y: 0, entry: null });
@@ -255,7 +259,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
         case 'open':
           if (entry.isDir) {
             navigateTo(entry.path);
-          } else {
+          } else if (!selectDirectoriesOnly) {
             onSelect(entry.path);
           }
           break;
@@ -336,7 +340,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
   };
 
   const openSelectedWorkspace = () => {
-    onSelect(selectedPath || currentPath);
+    onSelect(selectDirectoriesOnly ? currentPath : (selectedPath || currentPath));
   };
 
   const formatFileSize = (bytes?: number): string => {
@@ -380,7 +384,7 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
     return `/${pathParts.slice(0, index + 1).join('/')}`;
   };
 
-  return (
+  const browser = (
     <div className="remote-file-browser-overlay">
       <div className="remote-file-browser">
         {/* Header */}
@@ -665,13 +669,15 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
         {/* Footer */}
         <div className="remote-file-browser__footer">
           <div className="remote-file-browser__footer-info">
-            {selectedPath ? (
+            {!selectDirectoriesOnly && selectedPath ? (
               <>
                 <span className="remote-file-browser__footer-label">{t('ssh.remote.selected')}: </span>
                 <span className="remote-file-browser__footer-path">{selectedPath}</span>
               </>
             ) : (
-              <span className="remote-file-browser__footer-hint">{t('ssh.remote.clickToSelect')}</span>
+              <span className="remote-file-browser__footer-hint">
+                {selectDirectoriesOnly ? currentPath : t('ssh.remote.clickToSelect')}
+              </span>
             )}
           </div>
           <div className="remote-file-browser__footer-actions">
@@ -691,6 +697,8 @@ export const RemoteFileBrowser: React.FC<RemoteFileBrowserProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(browser, document.body);
 };
 
 export default RemoteFileBrowser;

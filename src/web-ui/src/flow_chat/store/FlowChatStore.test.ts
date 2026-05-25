@@ -207,6 +207,75 @@ describe('FlowChatStore local usage reports', () => {
     expect(stored?.lastActiveAt).toBe(4321);
   });
 
+  it('can append local goal pending turns', () => {
+    const session = createSession();
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    const turn = flowChatStore.addLocalGoalPendingTurn({
+      sessionId: session.sessionId,
+      message: 'Generating session goal...',
+      pendingId: 'goal-1',
+    });
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns[0];
+    expect(turn).not.toBeNull();
+    expect(stored?.kind).toBe('local_command');
+    expect(stored?.status).toBe('processing');
+    expect(stored?.userMessage.content).toBe('Generating session goal...');
+    expect(stored?.userMessage.metadata).toMatchObject({
+      localCommandKind: 'goal_pending',
+      modelVisible: false,
+      goalPendingId: 'goal-1',
+    });
+  });
+
+  it('can delete local goal pending turns', () => {
+    const session = createSession();
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    const turn = flowChatStore.addLocalGoalPendingTurn({
+      sessionId: session.sessionId,
+      message: 'Generating session goal...',
+      pendingId: 'goal-1',
+    });
+
+    expect(turn).not.toBeNull();
+    flowChatStore.deleteDialogTurn(session.sessionId, turn!.id);
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId);
+    expect(stored?.dialogTurns).toHaveLength(0);
+  });
+
+  it('can append and remove local goal verifying turns', () => {
+    const session = createSession();
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    const turn = flowChatStore.addLocalGoalVerifyingTurn({
+      sessionId: session.sessionId,
+      message: 'Checking if the session goal is met...',
+      verifyingId: 'verify-1',
+    });
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns[0];
+    expect(turn).not.toBeNull();
+    expect(stored?.userMessage.metadata).toMatchObject({
+      localCommandKind: 'goal_verifying',
+      goalVerifyingId: 'verify-1',
+    });
+
+    flowChatStore.removeLocalGoalVerifyingTurn(session.sessionId);
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns).toHaveLength(0);
+  });
+
   it('appends repeated usage reports as separate snapshots', () => {
     const session = createSession();
     flowChatStore.setState(() => ({
@@ -235,6 +304,36 @@ describe('FlowChatStore local usage reports', () => {
       'local-usage-usage-1',
       'local-usage-usage-2',
     ]);
+  });
+});
+
+describe('FlowChatStore ACP context usage', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('stores ACP context usage separately from token usage reports', () => {
+    const session = createSession({
+      config: { agentType: 'acp:codex' },
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.updateAcpContextUsage(session.sessionId, {
+      used: 42_000,
+      size: 128_000,
+      cost: { amount: 0.12, currency: 'USD' },
+    });
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId);
+    expect(stored?.currentAcpContextUsage).toMatchObject({
+      used: 42_000,
+      size: 128_000,
+      cost: { amount: 0.12, currency: 'USD' },
+    });
+    expect(stored?.currentTokenUsage).toBeUndefined();
   });
 });
 

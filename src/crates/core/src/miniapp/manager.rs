@@ -6,6 +6,7 @@ use crate::miniapp::storage::MiniAppStorage;
 use crate::miniapp::types::{
     MiniApp, MiniAppAiContext, MiniAppMeta, MiniAppPermissions, MiniAppSource,
 };
+use crate::product_domain_runtime::CoreProductDomainRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_product_domains::miniapp::customization::{
     apply_draft_customization_metadata, decline_builtin_update_metadata,
@@ -70,7 +71,7 @@ impl MiniAppManager {
     }
 
     fn runtime_facade(&self) -> MiniAppRuntimeFacade<'_> {
-        MiniAppRuntimeFacade::new(&self.storage)
+        CoreProductDomainRuntime::miniapp_runtime_facade(&self.storage)
     }
 
     pub fn compile_source(

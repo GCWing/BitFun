@@ -78,12 +78,12 @@ Build these constants for the whole pipeline:
 
 ```
 SESSION_ID   = {SESSION_ID}
-TODAY        = today's date in YYYY-MM-DD from ENV_INFO
+TODAY        = current calendar date in YYYY-MM-DD when available from runtime/request context; ask before making date-sensitive claims if it is not available
 WORK_DIR     = <workspace_root>/.bitfun/sessions/{SESSION_ID}/research
 REPORT_PATH  = <WORK_DIR>/report.md
 ```
 
-`{SESSION_ID}` above is replaced at prompt build time with the current session's ID. `<workspace_root>` is the *Current Working Directory* shown in ENV_INFO — use it verbatim.
+`{SESSION_ID}` above is replaced at prompt build time with the current session's ID. `<workspace_root>` is the workspace root shown in additional context — use it verbatim.
 
 **File-layout convention.** Everything for this research session lives under `WORK_DIR`:
 

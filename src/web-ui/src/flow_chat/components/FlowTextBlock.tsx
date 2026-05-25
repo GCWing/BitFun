@@ -33,7 +33,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   className = '',
   replayStreamingOnMount = true
 }) => {
-  const { onFileViewRequest, onTabOpen, onOpenVisualization } = useFlowChatContext();
+  const { onFileViewRequest, onTabOpen, onHttpLinkClick, onOpenVisualization } = useFlowChatContext();
   const { i18n } = useTranslation();
 
   // Normalize content to a string.
@@ -111,6 +111,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
           isStreaming={isStreaming}
           onFileViewRequest={onFileViewRequest}
           onTabOpen={onTabOpen}
+          onHttpLinkClick={onHttpLinkClick}
           onOpenVisualization={(visualization) => {
             onOpenVisualization?.(visualization?.type, visualization?.data);
           }}

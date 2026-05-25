@@ -179,6 +179,7 @@ impl From<bitfun_agent_stream::StreamProcessorError> for BitFunError {
     }
 }
 
+#[cfg(feature = "service-integrations")]
 impl From<bitfun_services_integrations::mcp::MCPRuntimeError> for BitFunError {
     fn from(error: bitfun_services_integrations::mcp::MCPRuntimeError) -> Self {
         use bitfun_services_integrations::mcp::MCPRuntimeErrorKind;

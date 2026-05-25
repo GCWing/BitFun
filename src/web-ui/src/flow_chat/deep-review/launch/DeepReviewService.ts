@@ -23,6 +23,7 @@ import {
   resolveSlashCommandReviewTarget,
 } from './targetResolver';
 import {
+  formatPullRequestLaunchPrompt,
   formatSessionFilesLaunchPrompt,
   formatSlashCommandLaunchPrompt,
 } from './launchPrompt';
@@ -174,6 +175,47 @@ export async function buildDeepReviewPreviewFromSessionFiles(
 ): Promise<ReviewTeamRunManifest> {
   const team = await loadDefaultReviewTeam(workspacePath);
   const target = classifyReviewTargetFromFiles(filePaths, 'session_files');
+  const changeStats = buildUnknownChangeStats(target);
+  return buildReviewTeamManifestWithRuntimeSignals(team, {
+    workspacePath,
+    target,
+    changeStats,
+  });
+}
+
+export async function buildDeepReviewLaunchFromPullRequestFiles(
+  filePaths: string[],
+  extraContext?: string,
+  diffContext?: string,
+  workspacePath?: string,
+): Promise<DeepReviewLaunchPrompt> {
+  const target = classifyReviewTargetFromFiles(filePaths, 'pull_request');
+  const changeStats = buildUnknownChangeStats(target);
+  const team = await prepareDefaultReviewTeamForLaunch(workspacePath, {
+    reviewTargetFilePaths: filePaths,
+    target,
+  });
+  const manifest = await buildReviewTeamManifestWithRuntimeSignals(team, {
+    workspacePath,
+    target,
+    changeStats,
+  });
+  const prompt = formatPullRequestLaunchPrompt({
+    filePaths,
+    extraContext,
+    diffContext,
+    reviewTeamPromptBlock: buildReviewTeamPromptBlock(team, manifest),
+  });
+
+  return { prompt, runManifest: manifest };
+}
+
+export async function buildDeepReviewPreviewFromPullRequestFiles(
+  filePaths: string[],
+  workspacePath?: string,
+): Promise<ReviewTeamRunManifest> {
+  const team = await loadDefaultReviewTeam(workspacePath);
+  const target = classifyReviewTargetFromFiles(filePaths, 'pull_request');
   const changeStats = buildUnknownChangeStats(target);
   return buildReviewTeamManifestWithRuntimeSignals(team, {
     workspacePath,

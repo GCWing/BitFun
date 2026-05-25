@@ -178,6 +178,16 @@ export interface TokenUsage {
   timestamp: number;
 }
 
+export interface AcpContextUsage {
+  used: number;
+  size: number;
+  cost?: {
+    amount: number;
+    currency: string;
+  };
+  timestamp: number;
+}
+
 // Dialog turn: user input + full AI response across model rounds.
 export interface DialogTurn {
   id: string;
@@ -297,6 +307,7 @@ export interface Session {
   todos?: TodoItem[];
   
   currentTokenUsage?: TokenUsage;
+  currentAcpContextUsage?: AcpContextUsage;
   maxContextTokens?: number;
   
   // Session mode is synced to the input when switching sessions.

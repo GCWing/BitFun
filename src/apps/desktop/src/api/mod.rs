@@ -28,6 +28,7 @@ pub mod miniapp_api;
 pub mod path_target;
 pub mod project_context_api;
 pub mod remote_connect_api;
+pub mod review_platform_api;
 pub mod runtime_api;
 pub mod search_api;
 pub mod session_api;

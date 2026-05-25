@@ -148,6 +148,33 @@ impl CoreAgentAdapter {
             }
         }
     }
+
+    pub async fn create_session_with_id(
+        &self,
+        session_id: String,
+        agent_type: &str,
+    ) -> Result<String> {
+        let mut session_id_guard = self.session_id.lock().await;
+
+        let session = self
+            .coordinator
+            .create_session_with_id(
+                Some(session_id.clone()),
+                Self::build_default_session_name(),
+                agent_type.to_string(),
+                SessionConfig {
+                    workspace_path: Some(self.workspace_path_string()),
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        let id = session.session_id.clone();
+        *session_id_guard = Some(id.clone());
+        tracing::info!("Created core session with fixed id: {}", id);
+
+        Ok(id)
+    }
 }
 
 #[async_trait::async_trait]

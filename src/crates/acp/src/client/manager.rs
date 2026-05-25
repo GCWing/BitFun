@@ -46,7 +46,9 @@ use super::requirements::{
     install_remote_npm_cli_package, predownload_npm_adapter, probe_executable, probe_npm_adapter,
     probe_remote_executable, probe_remote_npx_adapter, resolve_configured_command,
 };
-use super::session_options::{model_config_id, session_options_from_state, AcpSessionOptions};
+use super::session_options::{
+    model_config_id, session_options_from_state, AcpSessionContextUsage, AcpSessionOptions,
+};
 use super::session_persistence::AcpSessionPersistence;
 pub use super::session_persistence::CreateAcpFlowSessionRecordResponse;
 use super::stream::{
@@ -127,6 +129,7 @@ struct AcpRemoteSession {
     active: Option<ActiveSession<'static, Agent>>,
     models: Option<SessionModelState>,
     config_options: Vec<SessionConfigOption>,
+    context_usage: Option<AcpSessionContextUsage>,
     discard_pending_updates_before_next_prompt: bool,
 }
 
@@ -154,6 +157,7 @@ impl AcpRemoteSession {
             active: None,
             models: None,
             config_options: Vec::new(),
+            context_usage: None,
             discard_pending_updates_before_next_prompt: false,
         }
     }
@@ -859,6 +863,7 @@ impl AcpClientService {
         Ok(session_options_from_state(
             session.models.as_ref(),
             &session.config_options,
+            session.context_usage.as_ref(),
         ))
     }
 
@@ -920,6 +925,7 @@ impl AcpClientService {
                     return Ok(session_options_from_state(
                         session.models.as_ref(),
                         &session.config_options,
+                        session.context_usage.as_ref(),
                     ));
                 }
                 Err(error) => {
@@ -947,6 +953,7 @@ impl AcpClientService {
             return Ok(session_options_from_state(
                 session.models.as_ref(),
                 &session.config_options,
+                session.context_usage.as_ref(),
             ));
         }
 
@@ -1045,23 +1052,34 @@ impl AcpClientService {
             .await?;
 
             discard_pending_session_updates_if_needed(&mut session).await;
-            let active = session
-                .active
-                .as_mut()
-                .ok_or_else(|| BitFunError::service("ACP session was not initialized"))?;
-            active.send_prompt(prompt).map_err(protocol_error)?;
+            {
+                let active = session
+                    .active
+                    .as_mut()
+                    .ok_or_else(|| BitFunError::service("ACP session was not initialized"))?;
+                active.send_prompt(prompt).map_err(protocol_error)?;
+            }
             let mut round_tracker = AcpStreamRoundTracker::new();
             let mut tool_call_tracker = AcpToolCallTracker::new();
 
             loop {
-                match active.read_update().await.map_err(protocol_error)? {
+                let message = {
+                    let active = session
+                        .active
+                        .as_mut()
+                        .ok_or_else(|| BitFunError::service("ACP session was not initialized"))?;
+                    active.read_update().await.map_err(protocol_error)?
+                };
+
+                match message {
                     SessionMessage::SessionMessage(dispatch) => {
-                        for event in acp_dispatch_to_stream_events_with_tracker(
+                        let events = acp_dispatch_to_stream_events_with_tracker(
                             dispatch,
                             &mut tool_call_tracker,
                         )
-                        .await?
-                        {
+                        .await?;
+                        update_session_context_usage(&mut session, &events);
+                        for event in events {
                             for event in round_tracker.apply(event) {
                                 on_event(event)?;
                             }
@@ -1991,14 +2009,29 @@ async fn discard_pending_session_updates_if_needed(session: &mut AcpRemoteSessio
     }
 
     session.discard_pending_updates_before_next_prompt = false;
-    let Some(active) = session.active.as_mut() else {
-        return;
-    };
-
     let started_at = Instant::now();
     let mut discarded_count = 0usize;
     while started_at.elapsed() < LOAD_REPLAY_DRAIN_MAX_DURATION {
-        match tokio::time::timeout(LOAD_REPLAY_DRAIN_QUIET_WINDOW, active.read_update()).await {
+        let update = {
+            let Some(active) = session.active.as_mut() else {
+                return;
+            };
+            tokio::time::timeout(LOAD_REPLAY_DRAIN_QUIET_WINDOW, active.read_update()).await
+        };
+
+        match update {
+            Ok(Ok(SessionMessage::SessionMessage(dispatch))) => {
+                let mut tracker = AcpToolCallTracker::new();
+                if let Ok(events) =
+                    acp_dispatch_to_stream_events_with_tracker(dispatch, &mut tracker).await
+                {
+                    update_session_context_usage(session, &events);
+                }
+                discarded_count += 1;
+            }
+            Ok(Ok(SessionMessage::StopReason(_))) => {
+                discarded_count += 1;
+            }
             Ok(Ok(_)) => {
                 discarded_count += 1;
             }
@@ -2019,6 +2052,17 @@ async fn discard_pending_session_updates_if_needed(session: &mut AcpRemoteSessio
             discarded_count
         );
     }
+}
+
+fn update_session_context_usage(session: &mut AcpRemoteSession, events: &[AcpClientStreamEvent]) {
+    let Some(usage) = events.iter().rev().find_map(|event| match event {
+        AcpClientStreamEvent::ContextUsageUpdated(usage) => Some(usage.clone()),
+        _ => None,
+    }) else {
+        return;
+    };
+
+    session.context_usage = Some(usage);
 }
 
 fn protocol_error(error: impl std::fmt::Display) -> BitFunError {

@@ -101,6 +101,10 @@ const SessionUsagePanel = React.lazy(() =>
   }))
 );
 
+const ReviewPlatformPanel = React.lazy(() =>
+  import('@/app/components/panels/review-platform/ReviewPlatformPanel')
+);
+
 // CodePreview, ChartRenderer and CodeNode removed - visualization features disabled
 import { 
   FlexiblePanelProps
@@ -740,6 +744,26 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               sessionId={content.data?.sessionId}
               workspacePath={content.data?.workspacePath || workspacePath}
               initialTab={content.data?.initialTab}
+            />
+          </React.Suspense>
+        );
+
+      case 'review-platform':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading pull requests...</div>}>
+            <ReviewPlatformPanel workspacePath={content.data?.workspacePath || workspacePath} />
+          </React.Suspense>
+        );
+
+      case 'review-platform-pr-detail':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading pull request...</div>}>
+            <ReviewPlatformPanel
+              workspacePath={content.data?.workspacePath || workspacePath}
+              initialRemoteId={content.data?.remoteId}
+              initialPullRequestId={content.data?.pullRequestId}
+              initialPullRequestUrl={content.data?.pullRequestUrl}
+              detailOnly
             />
           </React.Suspense>
         );

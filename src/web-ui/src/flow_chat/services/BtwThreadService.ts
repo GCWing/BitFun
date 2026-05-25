@@ -113,6 +113,7 @@ export async function createBtwChildSession(params: {
           sessionName: childSessionName,
           agentType,
           workspacePath,
+          workspaceId: parentSession?.workspaceId,
           remoteConnectionId,
           remoteSshHost,
           relationship,

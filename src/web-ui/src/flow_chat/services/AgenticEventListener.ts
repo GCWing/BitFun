@@ -19,6 +19,7 @@ import type {
   ModelRoundCompletedEvent,
   UserSteeringInjectedEvent,
   DeepReviewQueueStateChangedEvent,
+  AcpContextUsageUpdatedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -43,9 +44,12 @@ export interface AgenticEventCallbacks {
   onDialogTurnFailed?: (event: AgenticEvent) => void;
   onDialogTurnCancelled?: (event: AgenticEvent) => void;
   onTokenUsageUpdated?: (event: AgenticEvent) => void;
+  onAcpContextUsageUpdated?: (event: AcpContextUsageUpdatedEvent) => void;
   onContextCompressionStarted?: (event: AgenticEvent) => void;
   onContextCompressionCompleted?: (event: AgenticEvent) => void;
   onContextCompressionFailed?: (event: AgenticEvent) => void;
+  onGoalVerificationStarted?: (event: AgenticEvent) => void;
+  onGoalVerificationFinished?: (event: AgenticEvent) => void;
   onSessionTitleGenerated?: (event: SessionTitleGeneratedEvent) => void;
   onSessionModelAutoMigrated?: (event: SessionModelAutoMigratedEvent) => void;
   onUserSteeringInjected?: (event: UserSteeringInjectedEvent) => void;
@@ -190,6 +194,14 @@ export class AgenticEventListener {
         this.unlistenFunctions.push(unlisten);
       }
 
+      if (callbacks.onAcpContextUsageUpdated) {
+        const unlisten = agentAPI.onAcpContextUsageUpdated((event) => {
+          logger.debug('ACP context usage updated:', event);
+          callbacks.onAcpContextUsageUpdated?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
       if (callbacks.onContextCompressionStarted) {
         const unlisten = agentAPI.onContextCompressionStarted((event) => {
           logger.debug('Context compression started:', event);
@@ -210,6 +222,22 @@ export class AgenticEventListener {
         const unlisten = agentAPI.onContextCompressionFailed((event) => {
           logger.error('Context compression failed:', event);
           callbacks.onContextCompressionFailed?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onGoalVerificationStarted) {
+        const unlisten = agentAPI.onGoalVerificationStarted((event) => {
+          logger.debug('Goal verification started:', event);
+          callbacks.onGoalVerificationStarted?.(event);
+        });
+        this.unlistenFunctions.push(unlisten);
+      }
+
+      if (callbacks.onGoalVerificationFinished) {
+        const unlisten = agentAPI.onGoalVerificationFinished((event) => {
+          logger.debug('Goal verification finished:', event);
+          callbacks.onGoalVerificationFinished?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }

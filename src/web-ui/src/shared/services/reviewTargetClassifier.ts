@@ -1,5 +1,6 @@
 export type ReviewTargetSource =
   | 'session_files'
+  | 'pull_request'
   | 'slash_command_explicit_files'
   | 'slash_command_git_ref'
   | 'workspace_diff'

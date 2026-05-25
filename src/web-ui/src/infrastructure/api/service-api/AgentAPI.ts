@@ -42,6 +42,7 @@ export interface CreateSessionRequest {
   sessionName: string;
   agentType: string;
   workspacePath: string;
+  workspaceId?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
   sessionKind?: 'standard' | 'subagent';
@@ -256,6 +257,16 @@ export interface ModelRoundCompletedEvent extends AgenticEvent {
   tokenDetails?: unknown;
 }
 
+export interface AcpContextUsageUpdatedEvent extends AgenticEvent {
+  clientId?: string;
+  used: number;
+  size: number;
+  cost?: {
+    amount: number;
+    currency: string;
+  };
+}
+
 export interface CompressionEvent extends AgenticEvent {
   compressionId: string;          
   
@@ -305,6 +316,26 @@ export class AgentAPI {
       return await api.invoke<{ success: boolean; message: string }>('compact_session', { request });
     } catch (error) {
       throw createTauriCommandError('compact_session', error, request);
+    }
+  }
+
+  async activateSessionGoal(request: {
+    sessionId: string;
+    userHint?: string;
+    workspacePath?: string;
+    remoteConnectionId?: string;
+    remoteSshHost?: string;
+  }): Promise<{
+    success: boolean;
+    goalText: string;
+    successCriteria: string[];
+    kickoffMessage: string;
+    displayMessage: string;
+  }> {
+    try {
+      return await api.invoke('activate_session_goal', { request });
+    } catch (error) {
+      throw createTauriCommandError('activate_session_goal', error, request);
     }
   }
 
@@ -617,6 +648,15 @@ export class AgentAPI {
     return api.listen<AgenticEvent>('agentic://token-usage-updated', callback);
   }
 
+  onAcpContextUsageUpdated(
+    callback: (event: AcpContextUsageUpdatedEvent) => void
+  ): () => void {
+    return api.listen<AcpContextUsageUpdatedEvent>(
+      'agentic://acp-context-usage-updated',
+      callback
+    );
+  }
+
    
   onContextCompressionStarted(callback: (event: CompressionEvent) => void): () => void {
     return api.listen<CompressionEvent>('agentic://context-compression-started', callback);
@@ -630,6 +670,14 @@ export class AgentAPI {
    
   onContextCompressionFailed(callback: (event: CompressionEvent) => void): () => void {
     return api.listen<CompressionEvent>('agentic://context-compression-failed', callback);
+  }
+
+  onGoalVerificationStarted(callback: (event: AgenticEvent) => void): () => void {
+    return api.listen<AgenticEvent>('agentic://goal-verification-started', callback);
+  }
+
+  onGoalVerificationFinished(callback: (event: AgenticEvent) => void): () => void {
+    return api.listen<AgenticEvent>('agentic://goal-verification-finished', callback);
   }
 
   onImageAnalysisStarted(callback: (event: ImageAnalysisEvent) => void): () => void {

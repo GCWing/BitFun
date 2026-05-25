@@ -205,6 +205,20 @@ pub enum AgenticEvent {
         error: String,
     },
 
+    /// Emitted when `/goal` verification begins after a dialog turn completes.
+    GoalVerificationStarted {
+        session_id: String,
+        source_turn_id: String,
+    },
+
+    /// Emitted when `/goal` verification finishes.
+    GoalVerificationFinished {
+        session_id: String,
+        source_turn_id: String,
+        /// One of: `achieved`, `continuing`, `failed`, `limit_reached`.
+        outcome: String,
+    },
+
     ModelRoundStarted {
         session_id: String,
         turn_id: String,
@@ -666,6 +680,8 @@ impl AgenticEvent {
             | Self::ContextCompressionStarted { session_id, .. }
             | Self::ContextCompressionCompleted { session_id, .. }
             | Self::ContextCompressionFailed { session_id, .. }
+            | Self::GoalVerificationStarted { session_id, .. }
+            | Self::GoalVerificationFinished { session_id, .. }
             | Self::DialogTurnCancelled { session_id, .. }
             | Self::DialogTurnFailed { session_id, .. }
             | Self::ModelRoundStarted { session_id, .. }
@@ -703,6 +719,8 @@ impl AgenticEvent {
             | Self::TokenUsageUpdated { .. }
             | Self::DialogTurnCompleted { .. }
             | Self::ContextCompressionStarted { .. }
+            | Self::GoalVerificationStarted { .. }
+            | Self::GoalVerificationFinished { .. }
             | Self::UserSteeringInjected { .. }
             | Self::ContextCompressionCompleted { .. } => AgenticEventPriority::Normal,
 

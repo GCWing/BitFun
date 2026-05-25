@@ -10,7 +10,8 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::{
     EvidenceLedgerCheckpoint, EvidenceLedgerEvent, EvidenceLedgerEventStatus,
-    EvidenceLedgerSummary, EvidenceLedgerTargetKind, SessionContextStore, SessionEvidenceLedger,
+    EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState, FileReadStateStore,
+    SessionContextStore, SessionEvidenceLedger,
 };
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::{
@@ -90,6 +91,7 @@ pub struct SessionManager {
 
     /// Sub-components
     context_store: Arc<SessionContextStore>,
+    file_read_state_store: Arc<FileReadStateStore>,
     evidence_ledger: Arc<SessionEvidenceLedger>,
     persistence_manager: Arc<PersistenceManager>,
 
@@ -113,23 +115,71 @@ struct SessionCleanupCandidate {
 }
 
 impl SessionManager {
-    async fn resolve_model_context_window(model_id: &str) -> Option<usize> {
+    async fn load_ai_config_for_model_resolution()
+        -> Option<crate::service::config::types::AIConfig>
+    {
+        let config_service = get_global_config_service().await.ok()?;
+        config_service.get_config(Some("ai")).await.ok()
+    }
+
+    fn is_auto_model_selector(model_id: &str) -> bool {
         let trimmed = model_id.trim();
-        if trimmed.is_empty() || trimmed == "auto" || trimmed == "default" {
+        trimmed.is_empty() || trimmed == "auto" || trimmed == "default"
+    }
+
+    fn context_window_for_model_selection(
+        ai_config: &crate::service::config::types::AIConfig,
+        model_id: &str,
+    ) -> Option<usize> {
+        let trimmed = model_id.trim();
+        if Self::is_auto_model_selector(trimmed) {
             return None;
         }
 
-        let config_service = get_global_config_service().await.ok()?;
-        let ai_config: crate::service::config::types::AIConfig =
-            config_service.get_config(Some("ai")).await.ok()?;
         let resolved_model_id = ai_config.resolve_model_selection(trimmed)?;
-
         ai_config
             .models
             .iter()
             .find(|model| model.id == resolved_model_id)
             .and_then(|model| model.context_window)
             .map(|tokens| tokens as usize)
+    }
+
+    fn session_context_window_from_ai_config(
+        session: &Session,
+        ai_config: &crate::service::config::types::AIConfig,
+    ) -> Option<usize> {
+        let configured_model_id = session
+            .config
+            .model_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|model_id| !model_id.is_empty())
+            .unwrap_or("auto");
+
+        if !Self::is_auto_model_selector(configured_model_id) {
+            return Self::context_window_for_model_selection(ai_config, configured_model_id);
+        }
+
+        let agent_model_id = ai_config
+            .agent_models
+            .get(&session.agent_type)
+            .map(String::as_str)
+            .map(str::trim)
+            .filter(|model_id| !Self::is_auto_model_selector(model_id));
+
+        agent_model_id
+            .and_then(|model_id| Self::context_window_for_model_selection(ai_config, model_id))
+            .or_else(|| Self::context_window_for_model_selection(ai_config, "primary"))
+    }
+
+    fn sync_session_context_window_from_ai_config(
+        session: &mut Session,
+        ai_config: &crate::service::config::types::AIConfig,
+    ) -> Option<usize> {
+        let context_window = Self::session_context_window_from_ai_config(session, ai_config)?;
+        session.config.max_context_tokens = context_window;
+        Some(context_window)
     }
 
     fn normalize_session_title_input(title: &str) -> BitFunResult<String> {
@@ -638,6 +688,7 @@ impl SessionManager {
             sessions: Arc::new(DashMap::new()),
             session_workspace_index: Arc::new(DashMap::new()),
             context_store,
+            file_read_state_store: Arc::new(FileReadStateStore::new()),
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             persistence_manager,
             config,
@@ -823,6 +874,7 @@ impl SessionManager {
         let sessions = self.sessions.clone();
         let session_workspace_index = self.session_workspace_index.clone();
         let context_store = self.context_store.clone();
+        let file_read_state_store = self.file_read_state_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
         let persistence_manager = self.persistence_manager.clone();
         let manager_config = self.config.clone();
@@ -842,6 +894,7 @@ impl SessionManager {
                 sessions,
                 session_workspace_index,
                 context_store,
+                file_read_state_store,
                 evidence_ledger,
                 persistence_manager,
                 config: manager_config,
@@ -980,6 +1033,7 @@ impl SessionManager {
 
         // 2. Initialize the in-memory context cache.
         self.context_store.create_session(&session_id);
+        self.file_read_state_store.create_session(&session_id);
 
         // 3. Persist to local path (handles remote workspaces correctly)
         // Use the local `session` directly -- no need to re-fetch from DashMap,
@@ -1276,7 +1330,8 @@ impl SessionManager {
         session_id: &str,
         model_id: &str,
     ) -> BitFunResult<()> {
-        let resolved_context_window = Self::resolve_model_context_window(model_id).await;
+        let ai_config = Self::load_ai_config_for_model_resolution().await;
+        let mut resolved_context_window = None;
 
         // If the session was evicted from memory (idle > 1h), try to restore it
         // using the workspace path recorded when it was first created/restored.
@@ -1296,8 +1351,9 @@ impl SessionManager {
 
         if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.config.model_id = Some(model_id.to_string());
-            if let Some(context_window) = resolved_context_window {
-                session.config.max_context_tokens = context_window;
+            if let Some(ai_config) = ai_config.as_ref() {
+                resolved_context_window =
+                    Self::sync_session_context_window_from_ai_config(&mut session, ai_config);
             }
             session.updated_at = SystemTime::now();
             session.last_activity_at = SystemTime::now();
@@ -1378,6 +1434,7 @@ impl SessionManager {
             session_id
         );
         self.context_store.delete_session(session_id);
+        self.file_read_state_store.delete_session(session_id);
         debug!(
             "Session deletion stage completed: session_id={}, stage=context_store_delete, duration_ms={}",
             session_id,
@@ -1697,6 +1754,9 @@ impl SessionManager {
             elapsed_ms_u64(session_started_at)
         );
 
+        let ai_config_for_restore = Self::load_ai_config_for_model_resolution().await;
+        let mut should_persist_restored_session = false;
+
         // Lazy migration: if the persisted model_id is no longer usable
         // (model deleted or disabled while the session was on disk), repoint
         // it to "auto" before the session re-enters memory. The next request
@@ -1705,14 +1765,8 @@ impl SessionManager {
             let trimmed = persisted_model_id.trim();
             let needs_migration = if trimmed.is_empty() {
                 false
-            } else if let Ok(config_service) = get_global_config_service().await {
-                match config_service
-                    .get_config::<crate::service::config::types::AIConfig>(Some("ai"))
-                    .await
-                {
-                    Ok(ai_config) => !Self::is_session_model_id_usable(&ai_config, trimmed),
-                    Err(_) => false,
-                }
+            } else if let Some(ai_config) = ai_config_for_restore.as_ref() {
+                !Self::is_session_model_id_usable(ai_config, trimmed)
             } else {
                 false
             };
@@ -1724,6 +1778,7 @@ impl SessionManager {
                 );
                 let previous_model_id = trimmed.to_string();
                 session.config.model_id = Some("auto".to_string());
+                should_persist_restored_session = true;
 
                 if let Some(coordinator) = crate::agentic::coordination::get_global_coordinator() {
                     coordinator
@@ -1734,6 +1789,21 @@ impl SessionManager {
                             "model_unavailable_on_restore",
                         )
                         .await;
+                }
+            }
+        }
+
+        if let Some(ai_config) = ai_config_for_restore.as_ref() {
+            let previous_max_context_tokens = session.config.max_context_tokens;
+            if let Some(context_window) =
+                Self::sync_session_context_window_from_ai_config(&mut session, ai_config)
+            {
+                if context_window != previous_max_context_tokens {
+                    should_persist_restored_session = true;
+                    debug!(
+                        "Session context window refreshed during restore: session_id={}, previous={}, resolved={}",
+                        session_id, previous_max_context_tokens, context_window
+                    );
                 }
             }
         }
@@ -1811,6 +1881,7 @@ impl SessionManager {
         // If session already exists, delete old one first then create (ensure clean state)
         if session_already_in_memory {
             self.context_store.delete_session(session_id);
+            self.file_read_state_store.delete_session(session_id);
         }
 
         let context_replace_started_at = Instant::now();
@@ -1879,6 +1950,12 @@ impl SessionManager {
         // Older IDE versions could leave sessions in non-idle states on disk; treating those
         // as completed would surface misleading unread indicators after an upgrade.
         // Unread completion is now written only by runtime completion/persist paths.
+
+        if should_persist_restored_session && self.should_persist_session_id(session_id) {
+            self.persistence_manager
+                .save_session(&session_storage_path, &session)
+                .await?;
+        }
 
         // 4. Add to memory (will overwrite if already exists)
         self.sessions
@@ -2485,6 +2562,102 @@ impl SessionManager {
         Ok(turn_id)
     }
 
+    /// Append a completed local command turn that should be persisted in user-facing
+    /// history without entering model-visible runtime context.
+    pub async fn append_completed_local_command_turn(
+        &self,
+        session_id: &str,
+        content: String,
+        turn_id: Option<String>,
+        timestamp_ms: Option<u64>,
+        user_message_metadata: Option<serde_json::Value>,
+    ) -> BitFunResult<DialogTurnData> {
+        let session = self
+            .get_session(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+        let workspace_path = Self::effective_workspace_path_from_config(&session.config)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+
+        let turn_id = new_turn_id(turn_id);
+        let turn_index = session
+            .dialog_turn_ids
+            .iter()
+            .position(|existing| existing == &turn_id)
+            .unwrap_or(session.dialog_turn_ids.len());
+        let timestamp = timestamp_ms.unwrap_or_else(|| {
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64
+        });
+        let mut turn = DialogTurnData::new_with_kind(
+            DialogTurnKind::LocalCommand,
+            turn_id.clone(),
+            turn_index,
+            session_id.to_string(),
+            None,
+            UserMessageData {
+                id: format!("{}-user", turn_id),
+                content,
+                timestamp,
+                metadata: user_message_metadata,
+            },
+        );
+        turn.timestamp = timestamp;
+        turn.start_time = timestamp;
+        turn.end_time = Some(timestamp);
+        turn.duration_ms = Some(0);
+        turn.status = TurnStatus::Completed;
+
+        if self.config.enable_persistence && Self::should_persist_session(&session) {
+            self.persistence_manager
+                .save_dialog_turn(&workspace_path, &turn)
+                .await?;
+        }
+
+        let session_snapshot = if let Some(mut session) = self.sessions.get_mut(session_id) {
+            if !session
+                .dialog_turn_ids
+                .iter()
+                .any(|existing| existing == &turn_id)
+            {
+                session.dialog_turn_ids.push(turn_id);
+            }
+            session.state = SessionState::Idle;
+            session.updated_at = SystemTime::now();
+            session.last_activity_at = SystemTime::now();
+
+            if self.config.enable_persistence && Self::should_persist_session(&session) {
+                Some(session.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(session) = session_snapshot {
+            self.persistence_manager
+                .save_session(&workspace_path, &session)
+                .await?;
+        }
+
+        self.persist_context_snapshot_for_turn_best_effort(
+            session_id,
+            turn_index,
+            "local_command_turn_persisted",
+        )
+        .await;
+
+        Ok(turn)
+    }
+
     /// Complete dialog turn
     pub async fn complete_dialog_turn(
         &self,
@@ -3051,8 +3224,27 @@ impl SessionManager {
     /// snapshot. This is primarily used after compression rewrites the model-visible context.
     pub async fn replace_context_messages(&self, session_id: &str, messages: Vec<Message>) {
         self.context_store.replace_context(session_id, messages);
+        self.file_read_state_store.clear_session(session_id);
         self.persist_current_turn_context_snapshot_best_effort(session_id, "context_replaced")
             .await;
+    }
+
+    pub fn set_file_read_state(
+        &self,
+        session_id: &str,
+        logical_path: &str,
+        state: FileReadState,
+    ) {
+        self.file_read_state_store
+            .set(session_id, logical_path, state);
+    }
+
+    pub fn get_file_read_state(
+        &self,
+        session_id: &str,
+        logical_path: &str,
+    ) -> Option<FileReadState> {
+        self.file_read_state_store.get(session_id, logical_path)
     }
 
     /// Get dialog turn count
@@ -3290,6 +3482,7 @@ impl SessionManager {
         let persistence = self.persistence_manager.clone();
         let enable_persistence = self.config.enable_persistence;
         let context_store = self.context_store.clone();
+        let file_read_state_store = self.file_read_state_store.clone();
 
         tokio::spawn(async move {
             let mut ticker = time::interval(Duration::from_secs(60));
@@ -3346,6 +3539,7 @@ impl SessionManager {
                         .is_some()
                     {
                         context_store.delete_session(&candidate.session_id);
+                        file_read_state_store.delete_session(&candidate.session_id);
                     }
                 }
             }
@@ -3401,10 +3595,14 @@ mod tests {
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::SessionContextStore;
     use crate::infrastructure::PathManager;
+    use crate::service::config::types::{
+        AIConfig as ServiceAIConfig, AIModelConfig as ServiceAIModelConfig,
+    };
     use crate::service::remote_ssh::workspace_state::local_workspace_roots_equal;
     use crate::service::session::{
-        DialogTurnData, ModelRoundData, SessionKind, SessionMetadata, SessionRelationship,
-        SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData, UserMessageData,
+        DialogTurnData, DialogTurnKind, ModelRoundData, SessionKind, SessionMetadata,
+        SessionRelationship, SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData,
+        TurnStatus, UserMessageData,
     };
     use dashmap::try_result::TryResult;
     use serde_json::json;
@@ -3471,6 +3669,79 @@ mod tests {
                 enable_persistence: false,
             },
         )
+    }
+
+    fn test_model(id: &str, context_window: u32) -> ServiceAIModelConfig {
+        ServiceAIModelConfig {
+            id: id.to_string(),
+            name: id.to_string(),
+            model_name: id.to_string(),
+            enabled: true,
+            context_window: Some(context_window),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn sync_session_context_window_refreshes_stale_explicit_model_window() {
+        let mut ai_config = ServiceAIConfig::default();
+        ai_config.models = vec![test_model("deepseek-v4-pro", 1_000_000)];
+
+        let mut session = Session::new_with_id(
+            "session-804".to_string(),
+            "DeepSeek session".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                model_id: Some("deepseek-v4-pro".to_string()),
+                max_context_tokens: 256_000,
+                ..Default::default()
+            },
+        );
+
+        let resolved =
+            SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
+
+        assert_eq!(resolved, Some(1_000_000));
+        assert_eq!(session.config.max_context_tokens, 1_000_000);
+    }
+
+    #[test]
+    fn sync_session_context_window_resolves_auto_through_agent_model_then_primary() {
+        let mut ai_config = ServiceAIConfig::default();
+        ai_config.models = vec![
+            test_model("primary-model", 512_000),
+            test_model("agent-model", 1_000_000),
+        ];
+        ai_config.default_models.primary = Some("primary-model".to_string());
+        ai_config
+            .agent_models
+            .insert("agentic".to_string(), "agent-model".to_string());
+
+        let mut session = Session::new_with_id(
+            "session-auto".to_string(),
+            "Auto session".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                model_id: Some("auto".to_string()),
+                max_context_tokens: 256_000,
+                ..Default::default()
+            },
+        );
+
+        let resolved =
+            SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
+
+        assert_eq!(resolved, Some(1_000_000));
+        assert_eq!(session.config.max_context_tokens, 1_000_000);
+
+        ai_config.agent_models.clear();
+        session.config.max_context_tokens = 256_000;
+
+        let resolved =
+            SessionManager::sync_session_context_window_from_ai_config(&mut session, &ai_config);
+
+        assert_eq!(resolved, Some(512_000));
+        assert_eq!(session.config.max_context_tokens, 512_000);
     }
 
     #[tokio::test]
@@ -3625,6 +3896,67 @@ mod tests {
             .expect("session should remain available");
         assert!(updated);
         assert!(matches!(session.state, SessionState::Idle));
+    }
+
+    #[tokio::test]
+    async fn append_completed_local_command_turn_persists_without_model_context() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Usage session".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        let turn = manager
+            .append_completed_local_command_turn(
+                &session.session_id,
+                "# Session Usage Report".to_string(),
+                Some("local-usage-1".to_string()),
+                Some(42),
+                Some(json!({
+                    "localCommandKind": "usage_report",
+                    "modelVisible": false,
+                })),
+            )
+            .await
+            .expect("local command turn should persist");
+
+        assert_eq!(turn.kind, DialogTurnKind::LocalCommand);
+        assert_eq!(turn.status, TurnStatus::Completed);
+
+        let active = manager
+            .get_session(&session.session_id)
+            .expect("session should remain active");
+        assert_eq!(active.dialog_turn_ids, vec!["local-usage-1".to_string()]);
+        assert!(manager
+            .context_store
+            .get_context_messages(&session.session_id)
+            .is_empty());
+
+        let persisted_turns = persistence_manager
+            .load_session_turns(workspace.path(), &session.session_id)
+            .await
+            .expect("turns should load");
+        assert_eq!(persisted_turns.len(), 1);
+        assert_eq!(persisted_turns[0].kind, DialogTurnKind::LocalCommand);
+        assert!(SessionManager::build_messages_from_turns(&persisted_turns).is_empty());
+
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.turn_count, 1);
     }
 
     #[tokio::test]

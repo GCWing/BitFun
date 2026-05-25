@@ -14,6 +14,7 @@ import { notificationService } from '@/shared/notification-system';
 import type { ContextItem, ImageContext } from '@/shared/types/context';
 import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { createLogger } from '@/shared/utils/logger';
+import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
 
 const log = createLogger('FlowChat');
 
@@ -168,46 +169,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       const displayMessage = options?.displayMessage?.trim() || trimmedMessage;
 
       if (contexts.length > 0) {
-        const fullContextSection = contexts.map(ctx => {
-          switch (ctx.type) {
-            case 'file':
-              return `[File: ${ctx.relativePath || ctx.filePath}]`;
-            case 'directory':
-              return `[Directory: ${ctx.directoryPath}]`;
-            case 'code-snippet':
-              return `[Code Snippet: ${ctx.filePath}:${ctx.startLine}-${ctx.endLine}]`;
-            case 'image':
-              // Images are sent out-of-band via `imageContexts` so the backend can attach them
-              // for multimodal models or convert to text placeholders for text-only models. Avoid embedding
-              // "Image ID" references into the user prompt, which can cause redundant tool calls.
-              return '';
-            case 'terminal-command':
-              return `[Command: ${ctx.command}]`;
-            case 'mermaid-node':
-              return `[Mermaid Node: ${ctx.nodeText}]`;
-            case 'mermaid-diagram':
-              return `[Mermaid Diagram${ctx.diagramTitle ? ': ' + ctx.diagramTitle : ''}]\n\`\`\`mermaid\n${ctx.diagramCode}\n\`\`\``;
-            case 'git-ref':
-              return `[Git Ref: ${ctx.refValue}]`;
-            case 'url':
-              return `[URL: ${ctx.url}]`;
-            case 'web-element': {
-              const attrStr = Object.entries(ctx.attributes)
-                .map(([k, v]) => `${k}="${v}"`)
-                .join(' ');
-              const lines = [
-                `[Web Element: <${ctx.tagName}${attrStr ? ' ' + attrStr : ''}>]`,
-                `CSS Path: ${ctx.path}`,
-              ];
-              if (ctx.sourceUrl) lines.push(`Source URL: ${ctx.sourceUrl}`);
-              if (ctx.textContent) lines.push(`Text Content: ${ctx.textContent}`);
-              if (ctx.outerHTML) lines.push(`Outer HTML:\n\`\`\`html\n${ctx.outerHTML}\n\`\`\``);
-              return lines.join('\n');
-            }
-            default:
-              return '';
-          }
-        }).filter(Boolean).join('\n');
+        const fullContextSection = contexts.map(formatContextForPrompt).filter(Boolean).join('\n');
 
         fullMessage = `${fullContextSection}\n\n${aiTrimmedMessage}`;
       }

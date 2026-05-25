@@ -318,11 +318,35 @@
         "deleteAssistant": "Delete personal assistant",
         "resetWorkspace": "Reset workspace",
         "initAgents": "Initialize AGENTS.md",
+        "manageRelatedPaths": "Related directories",
         "newWorktree": "New worktree",
         "deleteWorktree": "Delete worktree",
         "copyPath": "Copy path",
         "reveal": "Reveal in explorer",
         "close": "Close workspace"
+      },
+      "relatedPaths": {
+        "badge": "{{count}} linked",
+        "dialog": {
+          "title": "Related directories",
+          "heading": "Add supporting directories to this workspace",
+          "description": "These directories and descriptions are injected into workspace context, which is useful for cross-project migrations and focused monorepo slices.",
+          "localScope": "This workspace runs locally, so only local directories can be linked here.",
+          "remoteScope": "This workspace runs remotely, so only directories under connection \"{{connectionName}}\" can be linked here.",
+          "empty": "No related directories yet. Once added, the AI will see these directories and descriptions in workspace context.",
+          "itemLabel": "Directory {{index}}",
+          "add": "Add directory",
+          "selectDirectoryTitle": "Select related directory",
+          "pathPlaceholder": "Enter a directory path, or use the picker on the right",
+          "descriptionPlaceholder": "Optional: briefly explain why this directory matters, for example: legacy TypeScript implementation / billing package inside the monorepo"
+        },
+        "messages": {
+          "saveFailed": "Failed to save related directories",
+          "selectFailed": "Failed to select directory"
+        },
+        "validation": {
+          "pathRequired": "Please fill in a path for every related directory"
+        }
       },
       "deleteAssistantDialog": {
         "title": "Delete {{name}}?",

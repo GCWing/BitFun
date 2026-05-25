@@ -213,4 +213,33 @@ describe('buildAgentCompanionActivity', () => {
       latestOutput: finalText,
     });
   });
+
+  it('does not show hidden subagent sessions as companion bubbles', async () => {
+    const parentSession = createSession('processing');
+    const subagentSession: Session = {
+      ...createSession('completed'),
+      sessionId: 'subagent-1',
+      title: 'Explore: Find ppt',
+      sessionKind: 'subagent',
+      parentSessionId: 'session-1',
+      parentToolCallId: 'task-call-1',
+      subagentType: 'Explore',
+      hasUnreadCompletion: 'completed',
+      lastFinishedAt: 2200,
+    };
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['session-1', parentSession],
+        ['subagent-1', subagentSession],
+      ]),
+      activeSessionId: 'session-1',
+    }));
+    await putStateMachineInStreaming();
+
+    const activity = buildAgentCompanionActivity();
+
+    expect(activity.tasks).toHaveLength(1);
+    expect(activity.tasks[0]?.sessionId).toBe('session-1');
+  });
 });

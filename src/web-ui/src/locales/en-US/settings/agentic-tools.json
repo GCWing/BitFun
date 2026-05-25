@@ -17,7 +17,7 @@
     "confirmTimeout": "Confirm Timeout",
     "confirmTimeoutDesc": "Maximum time (seconds) to wait for user confirmation of tool calls.",
     "executionTimeout": "Execution Timeout",
-    "executionTimeoutDesc": "Maximum time (seconds) for tool execution.",
+    "executionTimeoutDesc": "Maximum time (seconds) for tool execution, including Task subagent runs.",
     "seconds": "sec"
   },
   "filters": {

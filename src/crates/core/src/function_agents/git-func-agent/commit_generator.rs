@@ -1,10 +1,7 @@
 use super::types::*;
 use crate::function_agents::common::AgentResult;
-use crate::function_agents::port_adapters::{
-    CoreFunctionAgentAiAdapter, CoreFunctionAgentGitAdapter,
-};
 use crate::infrastructure::ai::AIClientFactory;
-use bitfun_product_domains::function_agents::ports::FunctionAgentRuntimeFacade;
+use crate::product_domain_runtime::CoreProductDomainRuntime;
 /**
  * Git Function Agent - commit message generator
  *
@@ -27,9 +24,10 @@ impl CommitGenerator {
             repo_path
         );
 
-        let git_adapter = CoreFunctionAgentGitAdapter::default();
-        let ai_adapter = CoreFunctionAgentAiAdapter::new(factory);
-        let facade = FunctionAgentRuntimeFacade::new(&git_adapter, &ai_adapter);
+        let git_adapter = CoreProductDomainRuntime::function_agent_git_adapter();
+        let ai_adapter = CoreProductDomainRuntime::function_agent_ai_adapter(factory);
+        let facade =
+            CoreProductDomainRuntime::function_agent_runtime_facade(&git_adapter, &ai_adapter);
         facade
             .generate_commit_message(repo_path.to_path_buf(), options)
             .await

@@ -50,7 +50,7 @@ fn render_workspace_instruction_files_section(
     }
 
     let mut rendered =
-        String::from("As you answer the user's questions, you can use the following context:\n\n");
+        String::from("## Codebase and user instructions\n\nBe sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n");
 
     for file in files {
         rendered.push_str(&format!(

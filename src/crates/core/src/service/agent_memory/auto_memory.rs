@@ -303,14 +303,14 @@ async fn build_memory_space_files_section(memory_dir: &Path) -> BitFunResult<Str
     };
 
     Ok(format!(
-        r#"# memory_files
+        r#"## memory_files
 Persistent memory files currently available in `{memory_dir_display}`.
 
-## memory.md
+### memory.md
 High-level index for the durable workspace memory space.{index_description_suffix}
 {index_body}
 
-## topic_memory_files
+### topic_memory_files
 Topic-oriented durable memory files available in this workspace.{topic_description_suffix}
 {topic_files_content}"#
     ))

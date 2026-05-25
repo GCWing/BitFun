@@ -3,6 +3,7 @@ import { stateMachineManager } from '../state-machine/SessionStateMachineManager
 import { ProcessingPhase, type SessionStateMachine } from '../state-machine/types';
 import { deriveChatInputPetMood, type ChatInputPetMood } from './chatInputPetMood';
 import type { DialogTurn, FlowTextItem, FlowThinkingItem, Session } from '../types/flow-chat';
+import { resolveSessionRelationship } from './sessionMetadata';
 import { toWellFormedText } from '@/shared/utils/wellFormedText';
 
 export type AgentCompanionTaskState =
@@ -295,9 +296,17 @@ function aggregateMood(tasks: AgentCompanionTaskStatus[]): ChatInputPetMood {
   return 'rest';
 }
 
+function isIndependentCompanionSession(session: Session): boolean {
+  if (session.isTransient) {
+    return false;
+  }
+
+  return !resolveSessionRelationship(session).isSubagent;
+}
+
 export function buildAgentCompanionActivity(): AgentCompanionActivityPayload {
   const sessions = Array.from(FlowChatStore.getInstance().getState().sessions.values())
-    .filter(session => !session.isTransient);
+    .filter(isIndependentCompanionSession);
   const tasks: AgentCompanionTaskStatus[] = [];
 
   sessions.forEach(session => {

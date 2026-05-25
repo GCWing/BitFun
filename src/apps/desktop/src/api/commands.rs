@@ -405,6 +405,17 @@ pub struct ReorderOpenedWorkspacesRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateWorkspaceInfoRequest {
+    pub workspace_id: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub related_paths: Option<Vec<bitfun_core::service::workspace::RelatedPath>>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct TestAIConfigConnectionRequest {
     pub config: bitfun_core::service::config::types::AIModelConfig,
 }
@@ -1729,6 +1740,51 @@ pub async fn reorder_opened_workspaces(
         Err(e) => {
             error!("Failed to reorder opened workspaces: {}", e);
             Err(format!("Failed to reorder opened workspaces: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn update_workspace_info(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    request: UpdateWorkspaceInfoRequest,
+) -> Result<WorkspaceInfoDto, String> {
+    let updates = bitfun_core::service::workspace::WorkspaceInfoUpdates {
+        name: request.name,
+        description: request.description,
+        tags: request.tags,
+        related_paths: request.related_paths,
+    };
+
+    match state
+        .workspace_service
+        .update_workspace_info(&request.workspace_id, updates)
+        .await
+    {
+        Ok(workspace_info) => {
+            let is_active_workspace = state
+                .workspace_service
+                .get_current_workspace()
+                .await
+                .map(|workspace| workspace.id == workspace_info.id)
+                .unwrap_or(false);
+
+            if is_active_workspace {
+                apply_active_workspace_context(&state, &app, &workspace_info).await;
+            }
+
+            info!(
+                "Workspace info updated: workspace_id={}, path={}",
+                workspace_info.id,
+                workspace_info.root_path.display()
+            );
+
+            Ok(WorkspaceInfoDto::from_workspace_info(&workspace_info))
+        }
+        Err(error) => {
+            error!("Failed to update workspace info: {}", error);
+            Err(format!("Failed to update workspace info: {}", error))
         }
     }
 }

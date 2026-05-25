@@ -699,6 +699,7 @@ const MainNav: React.FC<MainNavProps> = ({
           connectionId={sshRemote.connectionId}
           initialPath={sshRemote.remoteFileBrowserInitialPath}
           homePath={sshRemote.remoteFileBrowserInitialPath}
+          selectDirectoriesOnly
           onSelect={handleSelectRemoteWorkspace}
           onCancel={() => {
             const hasActiveRemoteWorkspace =

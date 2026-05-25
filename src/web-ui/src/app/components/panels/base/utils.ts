@@ -18,6 +18,7 @@ import {
   MessageSquareQuote,
   Globe,
   Activity,
+  GitPullRequest,
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
 
@@ -203,6 +204,22 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     type: 'session-usage',
     displayName: 'Session Usage',
     icon: Activity,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
+  'review-platform': {
+    type: 'review-platform',
+    displayName: 'Pull Requests',
+    icon: GitPullRequest,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
+  'review-platform-pr-detail': {
+    type: 'review-platform-pr-detail',
+    displayName: 'Pull Request',
+    icon: GitPullRequest,
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false

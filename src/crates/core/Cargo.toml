@@ -30,16 +30,16 @@ log = { workspace = true }
 
 uuid = { workspace = true }
 chrono = { workspace = true }
-chrono-tz = { workspace = true }
-cron = { workspace = true }
+chrono-tz = { workspace = true, optional = true }
+cron = { workspace = true, optional = true }
 regex = { workspace = true }
 base64 = { workspace = true }
-image = { workspace = true }
-md5 = { workspace = true }
-aes = "0.8"
+image = { workspace = true, optional = true }
+md5 = { workspace = true, optional = true }
+aes = { version = "0.8", optional = true }
 hex = "0.4"
-dashmap = { workspace = true }
-indexmap = { workspace = true }
+dashmap = { workspace = true, optional = true }
+indexmap = { workspace = true, optional = true }
 lazy_static = "1.4"
 once_cell = "1.19"
 parking_lot = "0.12"
@@ -49,29 +49,29 @@ reqwest = { workspace = true }
 axum = { workspace = true }
 tower-http = { workspace = true }
 
-glob = { workspace = true }
+glob = { workspace = true, optional = true }
 ignore = { workspace = true }
 notify = { workspace = true }
 dirs = { workspace = true }
 dunce = { workspace = true }
-filetime = { workspace = true }
-fs2 = { workspace = true }
+filetime = { workspace = true, optional = true }
+fs2 = { workspace = true, optional = true }
 zip = { workspace = true }
-flate2 = { workspace = true }
-include_dir = { workspace = true }
+flate2 = { workspace = true, optional = true }
+include_dir = { workspace = true, optional = true }
 
-git2 = { workspace = true }
+git2 = { workspace = true, optional = true }
 
 # Command detection (cross-platform)
 which = { workspace = true }
-similar = { workspace = true }
+similar = { workspace = true, optional = true }
 urlencoding = { workspace = true }
 
 grep-searcher = { workspace = true }
 grep-regex = { workspace = true }
-globset = { workspace = true }
+globset = { workspace = true, optional = true }
 
-eventsource-stream = { workspace = true }
+eventsource-stream = { workspace = true, optional = true }
 
 # MCP Streamable HTTP client (official rust-sdk used by Codex)
 rmcp = { version = "0.12.0", default-features = false, features = [
@@ -82,8 +82,8 @@ rmcp = { version = "0.12.0", default-features = false, features = [
     "schemars",
     "server",
     "transport-streamable-http-client-reqwest",
-] }
-sse-stream = "0.2.1"
+], optional = true }
+sse-stream = { version = "0.2.1", optional = true }
 
 # Shared AI protocol adapters
 bitfun-ai-adapters = { path = "../ai-adapters" }
@@ -95,19 +95,19 @@ bitfun-agent-stream = { path = "../agent-stream" }
 bitfun-agent-tools = { path = "../agent-tools" }
 
 # Tool pack provider plan
-bitfun-tool-packs = { path = "../tool-packs", features = ["product-full"] }
+bitfun-tool-packs = { path = "../tool-packs", default-features = false, optional = true }
 
 # Core service owner crate
 bitfun-services-core = { path = "../services-core" }
 
 # Integration service owner crate
-bitfun-services-integrations = { path = "../services-integrations", features = ["product-full"] }
+bitfun-services-integrations = { path = "../services-integrations", default-features = false, features = ["remote-ssh"] }
 
 # Product domain owner crate
-bitfun-product-domains = { path = "../product-domains", features = ["product-full"] }
+bitfun-product-domains = { path = "../product-domains", default-features = false, optional = true }
 
 # Tool runtime
-tool-runtime = { path = "../tool-runtime" }
+tool-runtime = { path = "../tool-runtime", optional = true }
 
 # terminal
 terminal-core = { path = "../terminal" }
@@ -117,20 +117,20 @@ fluent-bundle = { workspace = true }
 unic-langid = { workspace = true }
 
 # Encryption (Remote Connect E2E)
-x25519-dalek = { workspace = true }
-aes-gcm = { workspace = true }
+x25519-dalek = { workspace = true, optional = true }
+aes-gcm = { workspace = true, optional = true }
 sha2 = { workspace = true }
-rand = { workspace = true }
+rand = { workspace = true, optional = true }
 
 # Device/Network info (Remote Connect)
-local-ip-address = { workspace = true }
-hostname = { workspace = true }
+local-ip-address = { workspace = true, optional = true }
+hostname = { workspace = true, optional = true }
 
 # QR code generation
-qrcode = { workspace = true }
+qrcode = { workspace = true, optional = true }
 
 # WebSocket client
-tokio-tungstenite = { workspace = true }
+tokio-tungstenite = { workspace = true, optional = true }
 
 # SSH - Remote SSH support (optional feature)
 russh = { version = "0.45", optional = true }
@@ -140,7 +140,7 @@ shellexpand = { version = "3", optional = true }
 ssh_config = { version = "0.1", optional = true }
 
 # Relay server shared library (embedded relay reuses standalone relay logic)
-bitfun-relay-server = { path = "../../apps/relay-server" }
+bitfun-relay-server = { path = "../../apps/relay-server", optional = true }
 
 # Event layer dependency (lowest layer)
 bitfun-core-types = { path = "../core-types" }
@@ -155,7 +155,7 @@ tauri = { workspace = true }
 
 # Non-Windows: vendored OpenSSL for libgit2 (no system install).
 [target.'cfg(not(windows))'.dependencies]
-git2 = { workspace = true, features = ["vendored-openssl"] }
+git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }
@@ -167,9 +167,55 @@ schannel = "0.1"
 # Full product runtime feature set. Product crates should depend on this
 # explicitly before `bitfun-core` default features are made lighter.
 default = ["product-full"]
-product-full = ["ssh-remote"]
+product-full = [
+    "dep:chrono-tz",
+    "dep:cron",
+    "dep:dashmap",
+    "dep:eventsource-stream",
+    "dep:filetime",
+    "dep:flate2",
+    "dep:fs2",
+    "dep:glob",
+    "dep:globset",
+    "dep:include_dir",
+    "dep:indexmap",
+    "dep:md5",
+    "dep:similar",
+    "dep:tool-runtime",
+    "ssh-remote",
+    "product-domains",
+    "service-integrations",
+    "tool-packs",
+]
+product-domains = ["dep:bitfun-product-domains", "bitfun-product-domains/product-full"]
+service-integrations = [
+    "dep:aes",
+    "dep:aes-gcm",
+    "dep:bitfun-relay-server",
+    "dep:git2",
+    "dep:hostname",
+    "dep:image",
+    "dep:local-ip-address",
+    "dep:md5",
+    "dep:qrcode",
+    "dep:rand",
+    "dep:rmcp",
+    "dep:sse-stream",
+    "dep:tokio-tungstenite",
+    "dep:x25519-dalek",
+    "bitfun-services-integrations/product-full",
+]
+tool-packs = ["dep:bitfun-tool-packs", "bitfun-tool-packs/product-full"]
 tauri-support = []  # Optional tauri support
-ssh-remote = ["russh", "russh-sftp", "russh-keys", "shellexpand", "ssh_config"]  # russh-keys pure-Rust crypto backend (no openssl)
+ssh-remote = [
+    "dep:aes-gcm",
+    "dep:rand",
+    "russh",
+    "russh-sftp",
+    "russh-keys",
+    "shellexpand",
+    "ssh_config",
+]  # russh-keys pure-Rust crypto backend (no openssl)
 
 [build-dependencies]
 sha2 = { workspace = true }

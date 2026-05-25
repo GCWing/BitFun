@@ -37,14 +37,15 @@
   built-in bundle/hash/marker seed plan 与 marker wire helper、built-in
   source/placeholder payload contract、port trait，以及 storage-backed runtime
   state facade。
-- `function-agents` 拥有纯 DTO、prompt assembly、commit prompt preparation、
-  AI response parsing policy、diff truncation policy、JSON string 到领域 DTO 的
-  解析 helper、本地文件形态分析、Git/AI port trait，以及 port-backed runtime
-  facade orchestration。
+- `function-agents` 拥有纯 DTO、prompt template 与 assembly、commit prompt
+  preparation、AI response JSON extraction 与 domain error mapping policy、
+  diff truncation policy、JSON string 到领域 DTO 的解析 helper、本地文件形态分析、
+  Git/AI port trait，以及 port-backed runtime facade orchestration。
 - Core 仍拥有 MiniApp filesystem IO、worker process、host dispatch、built-in
   asset include/seeding、marker IO、recompile orchestration、source-hash lookup、
-  `PathManager` 集成、function-agent Git/AI service adapter、prompt template、
-  JSON extraction 和 error mapping。
+  `PathManager` 集成、function-agent Git/AI service adapter、AI client 调用、
+  provider acquisition 和 AI transport error mapping；core 侧 product-domain
+  runtime 绑定集中在 `src/crates/core/src/product_domain_runtime.rs`。
 
 ## 验证
 

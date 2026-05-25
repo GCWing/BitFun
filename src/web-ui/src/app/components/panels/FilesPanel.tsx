@@ -25,7 +25,6 @@ import { PanelHeader } from './base';
 import { createLogger } from '@/shared/utils/logger';
 import {
   basenamePath,
-  dirnameAbsolutePath,
   normalizeLocalPathForRename,
   pathsEquivalentFs,
   replaceBasename,
@@ -39,11 +38,13 @@ import type {
 } from '@/infrastructure/api/service-api/tauri-commands';
 import {
   downloadWorkspaceFileToDisk,
-  isDragPositionOverElement,
-  resolveDropTargetDirectoryFromDragPosition,
-  uploadLocalPathsToWorkspaceDirectory,
+  joinWorkspaceTargetPath,
+  normalizeWorkspaceTargetDirectory,
+  pasteClipboardFilesToWorkspaceDirectory,
+  resolvePasteTargetDirectory,
   type TransferProgressState,
 } from '@/tools/file-system/services/workspaceFileTransfer';
+import { useWorkspaceFileDrop } from '@/tools/file-system/hooks/useWorkspaceFileDrop';
 import '@/tools/file-system/styles/FileExplorer.scss';
 import './FilesPanel.scss';
 
@@ -111,6 +112,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   const { workspace: currentWorkspace } = useCurrentWorkspace();
   
   const panelRef = useRef<HTMLDivElement>(null);
+  const pasteInFlightRef = useRef(false);
   const lastFocusRefreshAtRef = useRef<number>(0);
   const [internalViewMode, setInternalViewMode] = useState<'tree' | 'search'>('tree');
   const viewMode = externalViewMode !== undefined ? externalViewMode : internalViewMode;
@@ -189,6 +191,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     expandFolder,
     expandFolderLazy,
     expandFolderEnsure,
+    removePath,
   } = useFileSystem({
     rootPath: workspacePath,
     autoLoad: true,
@@ -255,7 +258,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, []);
 
   const handleConfirmNewFile = useCallback(async (fileName: string) => {
-    const filePath = `${inputDialog.parentPath}${inputDialog.parentPath.endsWith('/') ? '' : '/'}${fileName}`;
+    const filePath = joinWorkspaceTargetPath(
+      inputDialog.parentPath,
+      fileName,
+      isRemoteWorkspace(currentWorkspace),
+    );
     
     try {
       await workspaceAPI.createFile(filePath);
@@ -266,7 +273,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       log.error('Failed to create file', error);
       notification.error(t('notifications.createFileFailed', { error: String(error) }));
     }
-  }, [inputDialog.parentPath, workspacePath, loadFileTree, notification, t, handleInputDialogClose]);
+  }, [inputDialog.parentPath, workspacePath, loadFileTree, notification, t, handleInputDialogClose, currentWorkspace]);
 
   const handleNewFolder = useCallback((data: { parentPath: string }) => {
     setInputDialog({
@@ -277,7 +284,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, []);
 
   const handleConfirmNewFolder = useCallback(async (folderName: string) => {
-    const folderPath = `${inputDialog.parentPath}${inputDialog.parentPath.endsWith('/') ? '' : '/'}${folderName}`;
+    const folderPath = joinWorkspaceTargetPath(
+      inputDialog.parentPath,
+      folderName,
+      isRemoteWorkspace(currentWorkspace),
+    );
     
     try {
       await workspaceAPI.createDirectory(folderPath);
@@ -288,7 +299,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       log.error('Failed to create directory', error);
       notification.error(t('notifications.createFolderFailed', { error: String(error) }));
     }
-  }, [inputDialog.parentPath, workspacePath, loadFileTree, notification, t, handleInputDialogClose]);
+  }, [inputDialog.parentPath, workspacePath, loadFileTree, notification, t, handleInputDialogClose, currentWorkspace]);
 
   const handleInputDialogConfirm = useCallback((value: string) => {
     if (inputDialog.type === 'newFile') {
@@ -299,7 +310,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, [inputDialog.type, handleConfirmNewFile, handleConfirmNewFolder]);
 
   const handleStartRename = useCallback((data: { path: string; name: string }) => {
-    setRenamingPath(data.path);
+    setRenamingPath(normalizeLocalPathForRename(data.path));
   }, []);
 
   const handleExecuteRename = useCallback(async (oldPath: string, newName: string) => {
@@ -317,32 +328,36 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       await workspaceAPI.renameFile(normalizedOld, newPath);
       log.info('File renamed', { oldPath: normalizedOld, newPath });
       setRenamingPath(null);
-      loadFileTree(workspacePath || '', true);
+      removePath(normalizedOld);
+      await loadFileTree(workspacePath || '', true);
     } catch (error) {
       log.error('Failed to rename file', error);
       notification.error(t('notifications.renameFailed', { error: String(error) }));
       setRenamingPath(null);
     }
-  }, [workspacePath, loadFileTree, notification, t]);
+  }, [workspacePath, loadFileTree, removePath, notification, t]);
 
   const handleCancelRename = useCallback(() => {
     setRenamingPath(null);
   }, []);
 
   const handleDelete = useCallback(async (data: { path: string; isDirectory: boolean }) => {
+    const normalizedPath = normalizeLocalPathForRename(data.path);
+
     try {
       if (data.isDirectory) {
-        await workspaceAPI.deleteDirectory(data.path);
+        await workspaceAPI.deleteDirectory(normalizedPath);
       } else {
-        await workspaceAPI.deleteFile(data.path);
+        await workspaceAPI.deleteFile(normalizedPath);
       }
-      log.info('File deleted', { path: data.path, isDirectory: data.isDirectory });
-      loadFileTree(workspacePath || '', true);
+      log.info('File deleted', { path: normalizedPath, isDirectory: data.isDirectory });
+      removePath(normalizedPath);
+      await loadFileTree(workspacePath || '', true);
     } catch (error) {
       log.error('Failed to delete file', error);
       notification.error(t('notifications.deleteFailed', { error: String(error) }));
     }
-  }, [workspacePath, loadFileTree, notification, t]);
+  }, [workspacePath, loadFileTree, removePath, notification, t]);
 
   const handleReveal = useCallback(async (data: { path: string }) => {
     if (isRemoteWorkspace(workspaceManager.getState().currentWorkspace)) {
@@ -463,13 +478,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     })();
   }, [workspacePath, expandFolder, expandFolderEnsure, expandedFolders]);
 
-  const getParentDirectory = useCallback((filePath: string): string => {
-    return dirnameAbsolutePath(filePath);
-  }, []);
-
   const findNode = useCallback((nodes: FileSystemNode[], path: string): FileSystemNode | null => {
     for (const node of nodes) {
-      if (node.path === path) return node;
+      if (pathsEquivalentFs(node.path, path)) return node;
       if (node.children) {
         const found = findNode(node.children, path);
         if (found) return found;
@@ -484,53 +495,83 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       return;
     }
 
+    if (!currentWorkspace) {
+      notification.warning(t('notifications.selectWorkspaceFirst'));
+      return;
+    }
+
+    if (pasteInFlightRef.current) {
+      return;
+    }
+
+    pasteInFlightRef.current = true;
+
     try {
-      const { files, isCut } = await workspaceAPI.getClipboardFiles();
-      
-      if (files.length === 0) {
+      let targetDirectory = resolvePasteTargetDirectory({
+        workspacePath,
+        explicitTargetDir: targetDir,
+        selectedFile,
+        fileTree,
+        findNode,
+      });
+
+      targetDirectory = normalizeWorkspaceTargetDirectory(targetDirectory, currentWorkspace);
+
+      notification.info(
+        t('notifications.pastingFiles', {
+          count: 1,
+          target: targetDirectory.split(/[/\\]/).pop(),
+        })
+      );
+
+      const result = await pasteClipboardFilesToWorkspaceDirectory(
+        targetDirectory,
+        currentWorkspace,
+        setTransferProgress
+      );
+
+      if (result.successCount === 0 && result.failedFiles.length === 0) {
         notification.info(t('notifications.pasteNoFiles'));
         return;
       }
 
-      let targetDirectory = targetDir || workspacePath;
-      
-      if (!targetDir && selectedFile) {
-        const selectedNode = findNode(fileTree, selectedFile);
-        if (selectedNode) {
-          if (selectedNode.isDirectory) {
-            targetDirectory = selectedFile;
-          } else {
-            targetDirectory = getParentDirectory(selectedFile);
-          }
-        }
-      }
-
-      notification.info(t('notifications.pastingFiles', { count: files.length, target: targetDirectory.split(/[/\\]/).pop() }));
-      
-      const result = await workspaceAPI.pasteFiles(files, targetDirectory, isCut);
-      
       if (result.successCount > 0) {
         notification.success(t('notifications.pasteSuccess', { count: result.successCount }));
-        loadFileTree(undefined, true);
-        
-        if (targetDirectory !== workspacePath) {
+        await loadFileTree(undefined, true);
+
+        if (!pathsEquivalentFs(targetDirectory, workspacePath)) {
           expandFolder(targetDirectory, true);
         }
       }
-      
+
       if (result.failedFiles.length > 0) {
-        const failedNames = result.failedFiles.map(f => {
-          const name = f.path.split(/[/\\]/).pop() || f.path;
-          return `${name}: ${f.error}`;
+        const failedNames = result.failedFiles.map((entry) => {
+          const name = entry.path.split(/[/\\]/).pop() || entry.path;
+          return `${name}: ${entry.error}`;
         }).join('\n');
-        notification.error(t('notifications.pasteFailed', { count: result.failedFiles.length }) + `:\n${failedNames}`, { duration: 5000 });
+        notification.error(
+          t('notifications.pasteFailed', { count: result.failedFiles.length }) + `:\n${failedNames}`,
+          { duration: 5000 }
+        );
       }
-      
     } catch (error) {
       log.error('Failed to paste files', error);
+      setTransferProgress(null);
       notification.error(t('notifications.pasteFailed', { count: 1 }));
+    } finally {
+      pasteInFlightRef.current = false;
     }
-  }, [workspacePath, selectedFile, fileTree, notification, loadFileTree, expandFolder, findNode, getParentDirectory, t]);
+  }, [
+    workspacePath,
+    currentWorkspace,
+    selectedFile,
+    fileTree,
+    notification,
+    loadFileTree,
+    expandFolder,
+    findNode,
+    t,
+  ]);
 
   const handlePasteFromContextMenu = useCallback((data: { targetDirectory: string }) => {
     executePaste(data.targetDirectory);
@@ -643,86 +684,33 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     };
   }, [isRemoteCurrentWorkspace, workspacePath, viewMode, loadFileTree]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('__TAURI__' in window) || !workspacePath) {
-      return;
+  const handleFileDropOver = useCallback((overPanel: boolean) => {
+    setFileDropHighlight(overPanel);
+  }, []);
+
+  const handleFileDropComplete = useCallback((targetDirectory: string) => {
+    setFileDropHighlight(false);
+    void loadFileTree(workspacePath || '', true);
+    if (workspacePath && !pathsEquivalentFs(targetDirectory, workspacePath)) {
+      expandFolder(targetDirectory, true);
     }
+  }, [workspacePath, loadFileTree, expandFolder]);
 
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-    let lastEnterPaths: string[] = [];
+  const handleFileDropError = useCallback((error: unknown) => {
+    setTransferProgress(null);
+    setFileDropHighlight(false);
+    notification.error(t('transfer.failed', { error: String(error) }));
+  }, [notification, t]);
 
-    const setup = async () => {
-      try {
-        // File-drop IPC is scoped to the webview; Window.onDragDropEvent may not receive events.
-        const { getCurrentWebview } = await import('@tauri-apps/api/webview');
-        const webview = getCurrentWebview();
-        unlisten = await webview.onDragDropEvent(async (event) => {
-          if (cancelled) return;
-          const payload = event.payload;
-          if (payload.type === 'leave') {
-            setFileDropHighlight(false);
-            lastEnterPaths = [];
-            return;
-          }
-          if (payload.type === 'enter') {
-            lastEnterPaths = payload.paths;
-            return;
-          }
-          if (payload.type === 'over') {
-            const factor = await webview.window.scaleFactor();
-            const panelEl = panelRef.current;
-            setFileDropHighlight(
-              isDragPositionOverElement(payload.position, factor, panelEl)
-            );
-            return;
-          }
-          if (payload.type === 'drop') {
-            setFileDropHighlight(false);
-            const paths =
-              payload.paths.length > 0 ? payload.paths : [...lastEnterPaths];
-            lastEnterPaths = [];
-            if (!workspacePath || paths.length === 0) {
-              return;
-            }
-
-            const factor = await webview.window.scaleFactor();
-            const targetDir = resolveDropTargetDirectoryFromDragPosition(
-              payload.position,
-              factor,
-              workspacePath
-            );
-
-            const ws = workspaceManager.getState().currentWorkspace;
-            try {
-              await uploadLocalPathsToWorkspaceDirectory(
-                paths,
-                targetDir,
-                ws,
-                setTransferProgress
-              );
-              loadFileTree(workspacePath, true);
-              if (targetDir !== workspacePath) {
-                expandFolder(targetDir, true);
-              }
-            } catch (error) {
-              log.error('Failed to upload dropped files', error);
-              setTransferProgress(null);
-              notification.error(t('transfer.failed', { error: String(error) }));
-            }
-          }
-        });
-      } catch (e) {
-        log.warn('File drag-drop listener not available', e);
-      }
-    };
-
-    void setup();
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [workspacePath, loadFileTree, expandFolder, notification, t]);
+  useWorkspaceFileDrop({
+    workspacePath,
+    panelRef,
+    enabled: Boolean(workspacePath) && viewMode === 'tree',
+    onProgress: setTransferProgress,
+    onDragOver: handleFileDropOver,
+    onComplete: handleFileDropComplete,
+    onError: handleFileDropError,
+  });
 
   const handleFileSelect = useCallback((filePath: string, fileName: string) => {
     selectFile(filePath);

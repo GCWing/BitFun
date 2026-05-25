@@ -3,7 +3,7 @@
 //! This agent can use Read/Grep/Glob/LS tools to gather context before
 //! submitting a code review, reducing false positives from missing context.
 
-use crate::agentic::agents::Agent;
+use crate::agentic::agents::{Agent, RequestContextPolicy};
 use async_trait::async_trait;
 
 pub struct CodeReviewAgent {
@@ -66,6 +66,13 @@ impl Agent for CodeReviewAgent {
 
     fn default_tools(&self) -> Vec<String> {
         self.default_tools.clone()
+    }
+
+    fn request_context_policy(&self) -> RequestContextPolicy {
+        RequestContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
+            .with_project_layout()
     }
 
     fn is_readonly(&self) -> bool {

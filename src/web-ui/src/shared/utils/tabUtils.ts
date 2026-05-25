@@ -25,6 +25,14 @@ interface CreateTerminalTabOptions {
   sceneJustOpened?: boolean;
 }
 
+export interface CreateReviewPlatformPullRequestDetailTabOptions {
+  workspacePath?: string;
+  remoteId?: string;
+  pullRequestId?: string;
+  pullRequestUrl?: string;
+  title?: string;
+}
+
 function isRightPanelCollapsed(): boolean {
   try {
     const layoutState = (window as any).__BITFUN_LAYOUT_STATE__;
@@ -264,6 +272,74 @@ export function createConfigCenterTab(
 ): void {
   // Settings is now an independent scene — open via event bus.
   window.dispatchEvent(new CustomEvent('scene:open', { detail: { sceneId: 'settings' } }));
+}
+
+export function createReviewPlatformTab(workspacePath?: string): void {
+  const detail = {
+    type: 'review-platform',
+    title: i18nService.getT()('common:tabs.pullRequests', { defaultValue: 'Pull Requests' }),
+    data: { workspacePath },
+    metadata: {
+      workspacePath,
+      duplicateCheckKey: `review-platform:${workspacePath || 'current'}`,
+    },
+    checkDuplicate: true,
+    duplicateCheckKey: `review-platform:${workspacePath || 'current'}`,
+    replaceExisting: true,
+  };
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
+
+  if (isRightPanelCollapsed()) {
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+    }, 300);
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+}
+
+export function createReviewPlatformPullRequestDetailTab(options: CreateReviewPlatformPullRequestDetailTabOptions): void {
+  const pullRequestLabel = options.pullRequestId ? `#${options.pullRequestId}` : 'Pull Request';
+  const title = options.title || pullRequestLabel;
+  const duplicateKey = [
+    'review-platform-pr-detail',
+    options.workspacePath || 'current',
+    options.remoteId || 'auto',
+    options.pullRequestId || options.pullRequestUrl || 'unknown',
+  ].join(':');
+  const detail = {
+    type: 'review-platform-pr-detail',
+    title,
+    data: {
+      workspacePath: options.workspacePath,
+      remoteId: options.remoteId,
+      pullRequestId: options.pullRequestId,
+      pullRequestUrl: options.pullRequestUrl,
+    },
+    metadata: {
+      workspacePath: options.workspacePath,
+      remoteId: options.remoteId,
+      pullRequestId: options.pullRequestId,
+      pullRequestUrl: options.pullRequestUrl,
+      duplicateCheckKey: duplicateKey,
+    },
+    checkDuplicate: true,
+    duplicateCheckKey: duplicateKey,
+    replaceExisting: true,
+  };
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
+
+  if (isRightPanelCollapsed()) {
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+    }, 300);
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
 }
 
 export function createTerminalTab(

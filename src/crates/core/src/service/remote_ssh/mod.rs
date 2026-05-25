@@ -4,18 +4,33 @@
 //! This allows BitFun to work with files on remote servers via SSH,
 //! similar to VSCode's Remote SSH extension.
 
+#[cfg(not(feature = "ssh-remote"))]
+mod disabled;
+#[cfg(feature = "ssh-remote")]
 pub mod manager;
+#[cfg(feature = "ssh-remote")]
 mod password_vault;
+#[cfg(feature = "ssh-remote")]
 pub mod remote_fs;
+#[cfg(feature = "ssh-remote")]
 pub mod remote_terminal;
 pub mod types;
 pub mod workspace_state;
 
+#[cfg(not(feature = "ssh-remote"))]
+pub use disabled::{
+    KnownHostEntry, PTYSession, PortForward, PortForwardDirection, PortForwardManager,
+    RemoteFileService, RemoteTerminalManager, RemoteTerminalSession, SSHConnectionManager,
+    SessionStatus,
+};
+#[cfg(feature = "ssh-remote")]
 pub use manager::{
     KnownHostEntry, PTYSession, PortForward, PortForwardDirection, PortForwardManager,
     SSHConnectionManager,
 };
+#[cfg(feature = "ssh-remote")]
 pub use remote_fs::RemoteFileService;
+#[cfg(feature = "ssh-remote")]
 pub use remote_terminal::{RemoteTerminalManager, RemoteTerminalSession, SessionStatus};
 pub use types::*;
 pub use workspace_state::{

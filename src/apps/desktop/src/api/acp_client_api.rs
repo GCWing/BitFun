@@ -359,6 +359,24 @@ pub async fn start_acp_dialog_turn(
                                     bitfun_core::util::errors::BitFunError::service(e.to_string())
                                 })?;
                         }
+                        AcpClientStreamEvent::ContextUsageUpdated(usage) => {
+                            app_handle
+                                .emit(
+                                    "agentic://acp-context-usage-updated",
+                                    serde_json::json!({
+                                        "sessionId": request.session_id,
+                                        "turnId": request.turn_id,
+                                        "clientId": request.client_id,
+                                        "used": usage.used,
+                                        "size": usage.size,
+                                        "cost": usage.cost,
+                                        "subagentParentInfo": null,
+                                    }),
+                                )
+                                .map_err(|e| {
+                                    bitfun_core::util::errors::BitFunError::service(e.to_string())
+                                })?;
+                        }
                         AcpClientStreamEvent::Completed => {
                             app_handle
                                 .emit(

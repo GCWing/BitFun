@@ -1,4 +1,16 @@
 use bitfun_agent_tools::{
+    ContextualToolManifestItem, DynamicToolDescriptor, DynamicToolProvider,
+    GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider, StaticToolProvider,
+    StaticToolProviderGroup, ToolCatalogRuntime, ToolCatalogSnapshotProvider, ToolDecorator,
+    ToolDecoratorRef, ToolRegistry, ToolRegistryItem, ToolRuntimeAssembly,
+};
+use bitfun_agent_tools::{
+    DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, GetToolSpecCollapsedToolSummary,
+    GetToolSpecExecutionError, GetToolSpecExecutionPlan, GetToolSpecLoadObservation,
+    GetToolSpecRuntime, InputValidator, PromptVisibleToolManifestItem, ToolContextFacts,
+    ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
+    ToolPathBackend, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
+    ToolWorkspaceKind, ValidationResult, build_bitfun_runtime_uri,
     build_collapsed_tool_stub_definition, build_get_tool_spec_assistant_detail,
     build_get_tool_spec_catalog_description, build_get_tool_spec_catalog_description_from_provider,
     build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
@@ -6,24 +18,16 @@ use bitfun_agent_tools::{
     build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
     collect_loaded_collapsed_tool_names, get_tool_spec_input_schema,
     get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
-    get_tool_spec_short_description, render_get_tool_spec_tool_use_message,
-    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
-    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
-    resolve_get_tool_spec_execution_result_from_provider, resolve_readonly_enabled_tools,
-    resolve_tool_manifest_policy, sort_tool_manifest_definitions,
-    summarize_get_tool_spec_collapsed_tools, validate_get_tool_spec_input, DynamicMcpToolInfo,
-    DynamicToolInfo, GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError,
-    GetToolSpecExecutionPlan, GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator,
-    PromptVisibleToolManifestItem, ToolContextFacts, ToolExposure, ToolImageAttachment,
-    ToolManifestDefinition, ToolManifestPolicyTool, ToolPathBackend, ToolPathResolution,
-    ToolRenderOptions, ToolResult, ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult,
-    GET_TOOL_SPEC_TOOL_NAME,
-};
-use bitfun_agent_tools::{
-    ContextualToolManifestItem, DynamicToolDescriptor, DynamicToolProvider,
-    GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider, StaticToolProvider,
-    StaticToolProviderGroup, ToolCatalogRuntime, ToolCatalogSnapshotProvider, ToolDecorator,
-    ToolDecoratorRef, ToolRegistry, ToolRegistryItem, ToolRuntimeAssembly,
+    get_tool_spec_short_description, is_bitfun_runtime_uri, is_remote_posix_path_within_root,
+    normalize_host_path, normalize_runtime_relative_path, parse_bitfun_runtime_uri,
+    posix_resolve_path_with_workspace, posix_style_path_is_absolute,
+    render_get_tool_spec_tool_use_message, resolve_contextual_tool_manifest,
+    resolve_contextual_tool_manifest_from_provider, resolve_get_tool_spec_detail,
+    resolve_get_tool_spec_detail_from_provider,
+    resolve_get_tool_spec_execution_result_from_provider, resolve_host_path_with_workspace,
+    resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_workspace_tool_path,
+    sort_tool_manifest_definitions, summarize_get_tool_spec_collapsed_tools,
+    validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_tool_allowed_by_list,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -283,6 +287,155 @@ fn path_resolution_contract_keeps_backend_and_runtime_helpers() {
 }
 
 #[test]
+fn runtime_uri_contract_is_provider_neutral_and_normalized() {
+    let uri = build_bitfun_runtime_uri("workspace-123", r"plans\demo.plan.md")
+        .expect("runtime URI should build");
+
+    assert_eq!(uri, "bitfun://runtime/workspace-123/plans/demo.plan.md");
+    assert!(is_bitfun_runtime_uri(&uri));
+
+    let parsed = parse_bitfun_runtime_uri(&uri).expect("runtime URI should parse");
+    assert_eq!(parsed.workspace_scope, "workspace-123");
+    assert_eq!(parsed.relative_path, "plans/demo.plan.md");
+    assert_eq!(
+        normalize_runtime_relative_path("/sessions/turn-1/result.json")
+            .expect("relative path should normalize"),
+        "sessions/turn-1/result.json"
+    );
+}
+
+#[test]
+fn runtime_uri_contract_rejects_escape_and_invalid_scope() {
+    let escape = build_bitfun_runtime_uri("workspace-123", "../secret.txt")
+        .expect_err("runtime URI should reject parent directory escape");
+    assert_eq!(
+        escape.to_string(),
+        "Runtime artifact path cannot escape its root"
+    );
+
+    let empty_scope =
+        build_bitfun_runtime_uri("  ", "logs/tool.txt").expect_err("scope should be required");
+    assert_eq!(
+        empty_scope.to_string(),
+        "Runtime URI workspace scope cannot be empty"
+    );
+
+    let unsupported =
+        parse_bitfun_runtime_uri("/tmp/result.txt").expect_err("non-runtime URI should fail");
+    assert_eq!(
+        unsupported.to_string(),
+        "Unsupported runtime URI: /tmp/result.txt"
+    );
+}
+
+#[test]
+fn collapsed_tool_usage_gate_preserves_get_tool_spec_unlock_contract() {
+    let collapsed_tools = vec!["WebFetch".to_string()];
+    let loaded_collapsed_tools = Vec::new();
+
+    let err = validate_collapsed_tool_usage(
+        "WebFetch",
+        &collapsed_tools,
+        &loaded_collapsed_tools,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .expect_err("collapsed tool should require GetToolSpec unlock");
+    assert_eq!(
+        err.to_string(),
+        "Tool 'WebFetch' is collapsed. Call GetToolSpec first with {\"tool_name\":\"WebFetch\"} to read its full usage instructions and input schema, then try again."
+    );
+
+    let loaded_collapsed_tools = vec!["WebFetch".to_string()];
+    validate_collapsed_tool_usage(
+        "WebFetch",
+        &collapsed_tools,
+        &loaded_collapsed_tools,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .expect("loaded collapsed tool should be executable");
+
+    validate_collapsed_tool_usage(
+        GET_TOOL_SPEC_TOOL_NAME,
+        &collapsed_tools,
+        &[],
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .expect("GetToolSpec itself is the unlock path");
+}
+
+#[test]
+fn tool_allowed_list_gate_preserves_pipeline_rejection_contract() {
+    validate_tool_allowed_by_list("Read", &[])
+        .expect("empty allowed-list should preserve allow-all behavior");
+
+    let allowed_tools = vec!["Read".to_string(), "GetToolSpec".to_string()];
+    validate_tool_allowed_by_list("Read", &allowed_tools).expect("listed tool should be allowed");
+
+    let err = validate_tool_allowed_by_list("Bash", &allowed_tools)
+        .expect_err("unlisted tool should be rejected");
+    assert_eq!(
+        err.to_string(),
+        "Tool 'Bash' is not in the allowed list: [\"Read\", \"GetToolSpec\"]"
+    );
+}
+
+#[test]
+fn remote_posix_path_contract_keeps_workspace_containment_semantics() {
+    assert!(posix_style_path_is_absolute(r"\home\workspace"));
+    assert_eq!(
+        posix_resolve_path_with_workspace(r"src\lib.rs", Some("/home/project"))
+            .expect("relative remote path should resolve"),
+        "/home/project/src/lib.rs"
+    );
+    assert!(is_remote_posix_path_within_root(
+        "/home/project/src/lib.rs",
+        "/home/project"
+    ));
+    assert!(!is_remote_posix_path_within_root(
+        "/home/project2/src/lib.rs",
+        "/home/project"
+    ));
+}
+
+#[test]
+fn host_path_contract_keeps_local_workspace_resolution_semantics() {
+    let normalized = normalize_host_path("repo/./src/../README.md");
+    assert_eq!(
+        PathBuf::from(normalized),
+        PathBuf::from("repo").join("README.md")
+    );
+
+    let workspace = PathBuf::from("/repo/project");
+    let resolved = resolve_host_path_with_workspace("src/main.rs", Some(workspace.as_path()))
+        .expect("relative local path should resolve from workspace");
+    assert_eq!(
+        PathBuf::from(resolved),
+        workspace.join("src").join("main.rs")
+    );
+
+    let missing = resolve_host_path_with_workspace("src/main.rs", None)
+        .expect_err("relative local path should require a workspace");
+    assert_eq!(
+        missing.to_string(),
+        "A workspace path is required to resolve relative path: src/main.rs"
+    );
+}
+
+#[test]
+fn unified_tool_path_contract_selects_host_or_remote_semantics() {
+    let local = resolve_workspace_tool_path("src/lib.rs", Some("/repo/project"), false)
+        .expect("local path should resolve");
+    assert_eq!(
+        PathBuf::from(local),
+        PathBuf::from("/repo/project/src/lib.rs")
+    );
+
+    let remote = resolve_workspace_tool_path("src/lib.rs", Some("/home/project"), true)
+        .expect("remote path should resolve");
+    assert_eq!(remote, "/home/project/src/lib.rs");
+}
+
+#[test]
 fn dynamic_tool_provider_contract_is_available_from_agent_tools_boundary() {
     fn assert_provider_contract<T: DynamicToolProvider>() {}
     fn assert_decorator_contract<T: ToolDecorator<String>>() {}
@@ -481,9 +634,10 @@ fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
 
     assert_eq!(stub.name, "WebFetch");
     assert!(stub.description.contains("Fetch a URL"));
-    assert!(stub
-        .description
-        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
+    assert!(
+        stub.description
+            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
+    );
     assert_eq!(
         stub.parameters,
         json!({
@@ -551,9 +705,11 @@ fn prompt_visible_manifest_builder_preserves_expanded_and_collapsed_contract() {
         definitions[0].parameters["properties"]["command"]["type"],
         json!("string")
     );
-    assert!(definitions[2]
-        .description
-        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
+    assert!(
+        definitions[2]
+            .description
+            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
+    );
 }
 
 #[test]
@@ -564,10 +720,12 @@ fn get_tool_spec_contract_preserves_input_schema_and_validation() {
     assert_eq!(schema["additionalProperties"], false);
     assert_eq!(schema["required"], json!(["tool_name"]));
     assert_eq!(schema["properties"]["tool_name"]["type"], "string");
-    assert!(schema["properties"]["tool_name"]["description"]
-        .as_str()
-        .unwrap_or_default()
-        .contains("canonical casing"));
+    assert!(
+        schema["properties"]["tool_name"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("canonical casing")
+    );
 
     let missing = validate_get_tool_spec_input(&json!({}));
     assert!(!missing.result);
@@ -691,7 +849,9 @@ fn get_tool_spec_contract_builds_duplicate_load_result() {
     assert_eq!(data["already_loaded"], true);
     assert_eq!(
         result_for_assistant.as_deref(),
-        Some("Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use 'WebFetch' directly.")
+        Some(
+            "Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use 'WebFetch' directly."
+        )
     );
     assert_eq!(image_attachments, None);
 }
@@ -755,10 +915,12 @@ fn get_tool_spec_contract_plans_duplicate_load_without_core_context() {
 
     assert_eq!(data["tool_name"], "WebFetch");
     assert_eq!(data["already_loaded"], true);
-    assert!(result_for_assistant
-        .as_deref()
-        .unwrap_or_default()
-        .contains("already loaded in the current conversation"));
+    assert!(
+        result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("already loaded in the current conversation")
+    );
     assert_eq!(image_attachments, None);
 }
 
@@ -1325,9 +1487,11 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
         .iter()
         .find(|tool| tool.name == "WebFetch")
         .expect("collapsed WebFetch stub");
-    assert!(web_fetch
-        .description
-        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
+    assert!(
+        web_fetch
+            .description
+            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
+    );
     assert_eq!(web_fetch.parameters["additionalProperties"], false);
 }
 
@@ -1617,10 +1781,12 @@ async fn get_tool_spec_provider_execution_returns_duplicate_result_without_detai
 
     assert_eq!(data["tool_name"], "WebFetch");
     assert_eq!(data["already_loaded"], true);
-    assert!(result_for_assistant
-        .as_deref()
-        .unwrap_or_default()
-        .contains("already loaded in the current conversation"));
+    assert!(
+        result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("already loaded in the current conversation")
+    );
     assert_eq!(image_attachments, None);
 }
 
@@ -1733,9 +1899,11 @@ async fn get_tool_spec_runtime_facade_owns_tool_result_vector_adapter_shape() {
         panic!("expected normal detail result");
     };
     assert_eq!(data["tool_name"], "WebFetch");
-    assert!(result_for_assistant
-        .expect("assistant detail")
-        .contains("<description>\nWebFetch description for agentic"));
+    assert!(
+        result_for_assistant
+            .expect("assistant detail")
+            .contains("<description>\nWebFetch description for agentic")
+    );
     assert_eq!(image_attachments, None);
 
     let duplicate_runtime =
@@ -1764,7 +1932,9 @@ async fn get_tool_spec_runtime_facade_owns_tool_result_vector_adapter_shape() {
     assert_eq!(data["tool_name"], "WebFetch");
     assert_eq!(
         result_for_assistant.as_deref(),
-        Some("Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use 'WebFetch' directly.")
+        Some(
+            "Tool 'WebFetch' is already loaded in the current conversation. Do not call GetToolSpec again for it. Use 'WebFetch' directly."
+        )
     );
     assert!(image_attachments.is_none());
 }
