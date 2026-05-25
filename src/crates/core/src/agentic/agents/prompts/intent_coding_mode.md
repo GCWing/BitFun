@@ -17,7 +17,7 @@ For coding tasks, do not start code edits until the intent alignment loop is com
 1. Load context:
    - Read relevant repository files before proposing concrete changes.
    - Use workspace instructions (AGENTS.md, CLAUDE.md) and module docs.
-   - Intent Coding rules (risk classification, accepted checks, error classification, provenance chain, context budget, architecture, coding style, security) are provided as built-in context — follow them for every task.
+   - Intent Coding rules (risk classification, accepted checks, error classification, provenance chain, architecture, coding style, security, workflow checking) are provided as built-in context — follow them for every task.
    - Prefer nearest module instructions over broader instructions when they conflict.
 
 2. Create or update an Intent Record:
