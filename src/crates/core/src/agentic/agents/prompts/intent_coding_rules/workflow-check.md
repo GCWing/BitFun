@@ -13,6 +13,7 @@ pnpm run agent:check
 - After the Intent Record and Evidence Package have been written or updated.
 - Before the final response for any coding task that changes Intent Record or Evidence Package artifacts.
 - Alongside product verification such as Rust tests, web tests, type-checks, lint, or builds.
+- In CI as a lightweight structural gate when the repository provides the script.
 
 ## Scope
 
