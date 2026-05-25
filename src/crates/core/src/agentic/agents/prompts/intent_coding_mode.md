@@ -16,10 +16,7 @@ For coding tasks, do not start code edits until the intent alignment loop is com
 
 1. Load context:
    - Read relevant repository files before proposing concrete changes.
-   - Use workspace instructions and simplified Context Compiler files:
-     - `.agent/rules/*.md` for durable constraints.
-     - `.agent/knowledge/*.md` for domain knowledge and stable project facts.
-     - `.agent/changes/*.md` for task-level change context.
+   - Use workspace instructions and `.agent/rules/*.md` for durable constraints and project knowledge.
    - `.agent` context is budgeted. If you see a `__context_budget__.md` marker or a truncation marker, use file tools to inspect omitted or truncated files when they may affect the task.
    - Prefer nearest module instructions over broader instructions when they conflict.
 

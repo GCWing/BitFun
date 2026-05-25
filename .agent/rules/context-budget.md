@@ -1,23 +1,21 @@
 # Context Budget Rules
 
-The simplified Context Compiler loads shallow Markdown files from `.agent/rules`, `.agent/knowledge`, and `.agent/changes`. Keep this context compact and stable.
+The simplified Context Compiler loads shallow Markdown files from `.agent/rules`. Keep this context compact and stable.
 
 ## Current MVP Limits
 
-- Load only shallow `*.md` files from each context directory.
+- Load only shallow `*.md` files from `.agent/rules`.
 - Skip `README.md` files in context directories; they are human guidance and do not count toward the context budget.
-- Load at most 20 files per context directory.
+- Load at most 20 files from `.agent/rules`.
 - Read at most 12,000 bytes from each context file.
 - Truncate oversized files on a UTF-8 character boundary.
-- When files are omitted by the file count limit, BitFun injects a `__context_budget__.md` marker for that directory.
+- When files are omitted by the file count limit, BitFun injects a `__context_budget__.md` marker.
 
 ## Authoring Guidance
 
-- Prefer several focused notes over one large catch-all file.
-- Keep durable facts in `.agent/knowledge`.
-- Keep task-specific notes in `.agent/changes`.
-- Keep enforcement-style constraints in `.agent/rules`.
-- Put the highest-value files first alphabetically if a directory may exceed the file count limit.
+- Prefer several focused rules over one large catch-all file.
+- Keep constraints in `.agent/rules`.
+- Put the highest-value files first alphabetically if rules may exceed the file count limit.
 
 ## Evidence Requirement
 

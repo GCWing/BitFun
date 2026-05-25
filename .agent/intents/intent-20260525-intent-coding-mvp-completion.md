@@ -72,7 +72,7 @@ No blocking question. Assumption: the final summary should close the MVP without
 
 - Context inputs: current git status, diff stat, previous Evidence Packages, `.agent/README.md`, `pnpm run agent:check`.
 - User decisions: Continue until the MVP is ready for review.
-- Related change notes: `.agent/changes/intent-coding-rollout.md`.
+- Related change notes: (removed — knowledge/changes dirs merged into rules).
 
 ## Execution Contract
 

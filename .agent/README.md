@@ -31,8 +31,6 @@ Plain conversation, quick code explanation, or one-off inspection does not need 
 - `templates/`: reusable Markdown templates for Intent Records, Evidence Packages, and other artifacts.
 - `intents/`: per-task **Intent Records** named `intent-YYYYMMDD-short-task-name.md`. These are task-specific delivery artifacts — not global configuration. Each meaningful coding task should produce one before editing code. They are not loaded into agent context automatically; the agent writes them as structured output.
 - `evidence/`: per-task **Evidence Packages** named `evidence-YYYYMMDD-short-task-name.md`. Each pairs 1:1 with an Intent Record and documents what was delivered, verified, and reviewed. They are task delivery artifacts, not runtime dependencies.
-- `knowledge/`: stable project facts for the simplified Context Compiler. Loaded into agent context at runtime.
-- `changes/`: temporary rollout or task-context notes. Loaded into agent context at runtime.
 
 `README.md` files under `.agent/` are for humans and are skipped during automatic context injection.
 
@@ -45,12 +43,12 @@ Plain conversation, quick code explanation, or one-off inspection does not need 
 | **Loaded at runtime** | No — agent writes it | No — agent writes it |
 | **Lifecycle** | Written per task, committed alongside changes or discarded after merge | Written per task, references its Intent Record |
 
-Only `rules/`, `knowledge/`, and `changes/` are injected into the agent's workspace context. The `intents/` and `evidence/` directories hold the task-level paper trail that the `agent:check` script validates structurally.
+Only `rules/` is injected into the agent's workspace context. The `intents/` and `evidence/` directories hold the task-level paper trail that the `agent:check` script validates structurally.
 
 ## Task Lifecycle
 
 1. Read relevant repository files and nearest `AGENTS.md`.
-2. Load relevant `.agent/rules`, `.agent/knowledge`, and `.agent/changes` context.
+2. Load relevant `.agent/rules` context.
 3. Create or update an Intent Record before editing code.
 4. Ask at most 3 clarification questions when ambiguity is high-risk.
 5. Record risk level, accepted checks/tests, scope, and execution contract.

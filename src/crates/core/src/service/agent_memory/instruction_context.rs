@@ -3,7 +3,7 @@ use std::path::Path;
 use tokio::fs;
 
 const WORKSPACE_INSTRUCTION_FILE_NAMES: [&str; 2] = ["AGENTS.md", "CLAUDE.md"];
-const AGENT_CONTEXT_DIRS: [&str; 3] = [".agent/rules", ".agent/knowledge", ".agent/changes"];
+const AGENT_CONTEXT_DIRS: [&str; 1] = [".agent/rules"];
 const MAX_AGENT_CONTEXT_FILES_PER_DIR: usize = 20;
 const MAX_AGENT_CONTEXT_FILE_BYTES: usize = 12_000;
 
@@ -207,17 +207,9 @@ mod tests {
     async fn workspace_instruction_context_includes_agent_context_files() {
         let workspace = unique_temp_workspace("agent-context");
         let rules_dir = workspace.join(".agent").join("rules");
-        let knowledge_dir = workspace.join(".agent").join("knowledge");
-        let changes_dir = workspace.join(".agent").join("changes");
         fs::create_dir_all(&rules_dir)
             .await
             .expect("create rules dir");
-        fs::create_dir_all(&knowledge_dir)
-            .await
-            .expect("create knowledge dir");
-        fs::create_dir_all(&changes_dir)
-            .await
-            .expect("create changes dir");
         fs::write(
             workspace.join("AGENTS.md"),
             "# Root instructions\n\nUse repo rules.",
@@ -236,18 +228,6 @@ mod tests {
         )
         .await
         .expect("write security rule");
-        fs::write(
-            knowledge_dir.join("domain.md"),
-            "# Domain\n\nWorkspace means project root.",
-        )
-        .await
-        .expect("write domain knowledge");
-        fs::write(
-            changes_dir.join("current-task.md"),
-            "# Change\n\nKeep this task documentation-first.",
-        )
-        .await
-        .expect("write change note");
 
         let context = build_workspace_instruction_files_context(&workspace)
             .await
@@ -259,10 +239,6 @@ mod tests {
         assert!(context.contains("Keep core portable."));
         assert!(context.contains("<document name=\".agent/rules/security.md\">"));
         assert!(context.contains("Do not commit secrets."));
-        assert!(context.contains("<document name=\".agent/knowledge/domain.md\">"));
-        assert!(context.contains("Workspace means project root."));
-        assert!(context.contains("<document name=\".agent/changes/current-task.md\">"));
-        assert!(context.contains("Keep this task documentation-first."));
 
         let _ = fs::remove_dir_all(&workspace).await;
     }
@@ -270,18 +246,18 @@ mod tests {
     #[tokio::test]
     async fn workspace_instruction_context_limits_agent_context_file_count() {
         let workspace = unique_temp_workspace("agent-context-count");
-        let knowledge_dir = workspace.join(".agent").join("knowledge");
-        fs::create_dir_all(&knowledge_dir)
+        let rules_dir = workspace.join(".agent").join("rules");
+        fs::create_dir_all(&rules_dir)
             .await
-            .expect("create knowledge dir");
+            .expect("create rules dir");
 
         for index in 0..25 {
             fs::write(
-                knowledge_dir.join(format!("{:02}.md", index)),
+                rules_dir.join(format!("{:02}.md", index)),
                 format!("# Note {}\n\ncontent {}", index, index),
             )
             .await
-            .expect("write knowledge note");
+            .expect("write rules note");
         }
 
         let context = build_workspace_instruction_files_context(&workspace)
@@ -289,11 +265,11 @@ mod tests {
             .expect("context should build")
             .expect("context should exist");
 
-        assert!(context.contains("<document name=\".agent/knowledge/00.md\">"));
-        assert!(context.contains("<document name=\".agent/knowledge/19.md\">"));
-        assert!(!context.contains("<document name=\".agent/knowledge/20.md\">"));
-        assert!(!context.contains("<document name=\".agent/knowledge/24.md\">"));
-        assert!(context.contains("<document name=\".agent/knowledge/__context_budget__.md\">"));
+        assert!(context.contains("<document name=\".agent/rules/00.md\">"));
+        assert!(context.contains("<document name=\".agent/rules/19.md\">"));
+        assert!(!context.contains("<document name=\".agent/rules/20.md\">"));
+        assert!(!context.contains("<document name=\".agent/rules/24.md\">"));
+        assert!(context.contains("<document name=\".agent/rules/__context_budget__.md\">"));
         assert!(context.contains("omitted 5 additional file(s)"));
         assert!(context.contains("Omitted files: 20.md, 21.md, 22.md, 23.md, 24.md"));
 
@@ -303,18 +279,18 @@ mod tests {
     #[tokio::test]
     async fn workspace_instruction_context_marks_omitted_agent_context_files() {
         let workspace = unique_temp_workspace("agent-context-marker");
-        let changes_dir = workspace.join(".agent").join("changes");
-        fs::create_dir_all(&changes_dir)
+        let rules_dir = workspace.join(".agent").join("rules");
+        fs::create_dir_all(&rules_dir)
             .await
-            .expect("create changes dir");
+            .expect("create rules dir");
 
         for index in 0..22 {
             fs::write(
-                changes_dir.join(format!("{:02}.md", index)),
-                format!("# Change {}\n\ncontent {}", index, index),
+                rules_dir.join(format!("{:02}.md", index)),
+                format!("# Rule {}\n\ncontent {}", index, index),
             )
             .await
-            .expect("write change note");
+            .expect("write rule note");
         }
 
         let context = build_workspace_instruction_files_context(&workspace)
@@ -322,10 +298,10 @@ mod tests {
             .expect("context should build")
             .expect("context should exist");
 
-        assert!(context.contains("<document name=\".agent/changes/19.md\">"));
-        assert!(!context.contains("<document name=\".agent/changes/20.md\">"));
-        assert!(context.contains("<document name=\".agent/changes/__context_budget__.md\">"));
-        assert!(context.contains("loaded the first 20 Markdown files from `.agent/changes`"));
+        assert!(context.contains("<document name=\".agent/rules/19.md\">"));
+        assert!(!context.contains("<document name=\".agent/rules/20.md\">"));
+        assert!(context.contains("<document name=\".agent/rules/__context_budget__.md\">"));
+        assert!(context.contains("loaded the first 20 Markdown files from `.agent/rules`"));
         assert!(context.contains("Omitted files: 20.md, 21.md"));
 
         let _ = fs::remove_dir_all(&workspace).await;
@@ -334,24 +310,24 @@ mod tests {
     #[tokio::test]
     async fn workspace_instruction_context_skips_agent_context_readmes() {
         let workspace = unique_temp_workspace("agent-context-readme");
-        let knowledge_dir = workspace.join(".agent").join("knowledge");
-        fs::create_dir_all(&knowledge_dir)
+        let rules_dir = workspace.join(".agent").join("rules");
+        fs::create_dir_all(&rules_dir)
             .await
-            .expect("create knowledge dir");
+            .expect("create rules dir");
         fs::write(
-            knowledge_dir.join("README.md"),
-            "# Knowledge README\n\nHuman guidance only.",
+            rules_dir.join("README.md"),
+            "# Rules README\n\nHuman guidance only.",
         )
         .await
         .expect("write README");
 
         for index in 0..20 {
             fs::write(
-                knowledge_dir.join(format!("{:02}.md", index)),
-                format!("# Note {}\n\ncontent {}", index, index),
+                rules_dir.join(format!("{:02}.md", index)),
+                format!("# Rule {}\n\ncontent {}", index, index),
             )
             .await
-            .expect("write knowledge note");
+            .expect("write rule note");
         }
 
         let context = build_workspace_instruction_files_context(&workspace)
@@ -359,11 +335,11 @@ mod tests {
             .expect("context should build")
             .expect("context should exist");
 
-        assert!(!context.contains("<document name=\".agent/knowledge/README.md\">"));
+        assert!(!context.contains("<document name=\".agent/rules/README.md\">"));
         assert!(!context.contains("Human guidance only."));
-        assert!(context.contains("<document name=\".agent/knowledge/00.md\">"));
-        assert!(context.contains("<document name=\".agent/knowledge/19.md\">"));
-        assert!(!context.contains("<document name=\".agent/knowledge/__context_budget__.md\">"));
+        assert!(context.contains("<document name=\".agent/rules/00.md\">"));
+        assert!(context.contains("<document name=\".agent/rules/19.md\">"));
+        assert!(!context.contains("<document name=\".agent/rules/__context_budget__.md\">"));
 
         let _ = fs::remove_dir_all(&workspace).await;
     }
@@ -371,22 +347,22 @@ mod tests {
     #[tokio::test]
     async fn workspace_instruction_context_truncates_large_agent_context_files() {
         let workspace = unique_temp_workspace("agent-context-truncate");
-        let changes_dir = workspace.join(".agent").join("changes");
-        fs::create_dir_all(&changes_dir)
+        let rules_dir = workspace.join(".agent").join("rules");
+        fs::create_dir_all(&rules_dir)
             .await
-            .expect("create changes dir");
+            .expect("create rules dir");
 
         let large_content = format!("{}{}", "a".repeat(11_999), "测");
-        fs::write(changes_dir.join("large.md"), large_content)
+        fs::write(rules_dir.join("large.md"), large_content)
             .await
-            .expect("write large change note");
+            .expect("write large rule note");
 
         let context = build_workspace_instruction_files_context(&workspace)
             .await
             .expect("context should build")
             .expect("context should exist");
 
-        assert!(context.contains("<document name=\".agent/changes/large.md\">"));
+        assert!(context.contains("<document name=\".agent/rules/large.md\">"));
         assert!(context.contains("[Context file truncated to 12000 bytes by BitFun context budget.]"));
         assert!(context.is_char_boundary(context.len()));
 
