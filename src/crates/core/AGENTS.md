@@ -92,7 +92,9 @@ SessionManager → Session → DialogTurn → ModelRound
   workspace-root source selection, persistence/workspace service reads,
   concrete scheduler/session restore, terminal pre-warm adapters, and product
   execution core-owned until a reviewed migration proves equivalence. Core
-  service/agent runtime bindings are centralized in
+  remote dialog/cancel/file/tracker adapters, remote model catalog/session-model
+  selection adapters, remote chat history persistence/message conversion
+  adapters, and service/agent runtime bindings are centralized in
   `src/crates/core/src/service_agent_runtime.rs`.
 - Keep concrete remote SSH runtime code behind `ssh-remote`. No-default builds
   may keep workspace identity helpers and explicit unsupported stubs, but must
