@@ -24,8 +24,8 @@ const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 const PLACEHOLDER_SESSION_ID: &str = "{SESSION_ID}";
 const ADDITIONAL_CONTEXT_PROMPT: &str =
     "As you answer the user's questions, you can use the following context";
-const SKILL_TOOL_CONTEXT_TITLE: &str = "## Skills Available via Skill Tool";
-const TASK_TOOL_CONTEXT_TITLE: &str = "## Subagents Available via Task Tool";
+const SKILL_TOOL_CONTEXT_TITLE: &str = "## Skills available for use with the Skill tool";
+const TASK_TOOL_CONTEXT_TITLE: &str = "## Available agent types for the Task Tool";
 const GET_TOOL_SPEC_CONTEXT_TITLE: &str =
     "## Collapsed Tools (load full definition via GetToolSpec tool)";
 const ADDITIONAL_TOOLS_PROMPT: &str = r#"Some tools in the tool list are intentionally collapsed.
