@@ -336,7 +336,7 @@ const optionalDependencyFeatureOwnerRules = [
       { depName: 'aes-gcm', ownerFeatures: ['mcp'] },
       { depName: 'anyhow', ownerFeatures: ['mcp'] },
       { depName: 'async-trait', ownerFeatures: ['mcp', 'remote-connect'] },
-      { depName: 'base64', ownerFeatures: ['mcp'] },
+      { depName: 'base64', ownerFeatures: ['mcp', 'remote-connect'] },
       { depName: 'bitfun-runtime-ports', ownerFeatures: ['remote-connect'] },
       { depName: 'bitfun-services-core', ownerFeatures: ['git', 'mcp'] },
       { depName: 'chrono', ownerFeatures: ['git'] },
@@ -1298,6 +1298,90 @@ const forbiddenContentRules = [
         message: 'core remote-connect server must not redefine remote workspace file-info readers; use the integrations helper',
       },
       {
+        regex: /\bfn remote_file_content_response\b/,
+        message: 'core remote-connect server must not own remote file content response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_file_chunk_response\b/,
+        message: 'core remote-connect server must not own remote file chunk response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_file_info_response\b/,
+        message: 'core remote-connect server must not own remote file-info response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn handle_remote_workspace_file_command\b/,
+        message: 'core remote-connect server must not own remote file command orchestration; use the integrations helper',
+      },
+      {
+        regex: /general_purpose::STANDARD\.encode/,
+        message: 'core remote-connect server must not own remote response base64 wrapping; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_dialog_submit_response\b/,
+        message: 'core remote-connect server must not own remote dialog response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_task_cancel_response\b/,
+        message: 'core remote-connect server must not own remote cancel response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_interaction_accepted_response\b/,
+        message: 'core remote-connect server must not own remote interaction response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_answer_question_response\b/,
+        message: 'core remote-connect server must not own remote answer response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_workspace_info_response\b/,
+        message: 'core remote-connect server must not own workspace-info response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_recent_workspaces_response\b/,
+        message: 'core remote-connect server must not own recent-workspaces response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_assistant_list_response\b/,
+        message: 'core remote-connect server must not own assistant-list response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_workspace_updated_response\b/,
+        message: 'core remote-connect server must not own workspace-updated response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_assistant_updated_response\b/,
+        message: 'core remote-connect server must not own assistant-updated response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_session_info\b/,
+        message: 'core remote-connect server must not own session response facts assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_session_list_response\b/,
+        message: 'core remote-connect server must not own session-list response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_initial_sync_response\b/,
+        message: 'core remote-connect server must not own initial-sync response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_session_created_response\b/,
+        message: 'core remote-connect server must not own session-created response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_session_model_updated_response\b/,
+        message: 'core remote-connect server must not own session-model response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_messages_response\b/,
+        message: 'core remote-connect server must not own remote messages response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_session_deleted_response\b/,
+        message: 'core remote-connect server must not own session-deleted response assembly; use the integrations helper',
+      },
+      {
         regex: /\bfn should_send_remote_model_catalog\b/,
         message: 'core remote-connect server must not own poll model-catalog policy; use the integrations helper',
       },
@@ -2252,6 +2336,78 @@ const requiredContentRules = [
         message: 'missing remote workspace file-info reader',
       },
       {
+        regex: /\bpub trait RemoteWorkspaceFileRuntimeHost\b/,
+        message: 'missing remote workspace file runtime host contract',
+      },
+      {
+        regex: /\bpub async fn handle_remote_workspace_file_command\b/,
+        message: 'missing remote workspace file command owner handler',
+      },
+      {
+        regex: /\bpub fn remote_file_content_response\b/,
+        message: 'missing remote file content response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_file_chunk_response\b/,
+        message: 'missing remote file chunk response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_file_info_response\b/,
+        message: 'missing remote file-info response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_dialog_submit_response\b/,
+        message: 'missing remote dialog response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_task_cancel_response\b/,
+        message: 'missing remote task cancel response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_interaction_accepted_response\b/,
+        message: 'missing remote interaction response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_answer_question_response\b/,
+        message: 'missing remote answer response assembly helper',
+      },
+      {
+        regex: /\bpub struct RemoteWorkspaceFacts\b/,
+        message: 'missing remote workspace response facts DTO',
+      },
+      {
+        regex: /\bpub struct RemoteSessionMetadata\b/,
+        message: 'missing remote session response metadata DTO',
+      },
+      {
+        regex: /\bpub fn remote_workspace_info_response\b/,
+        message: 'missing remote workspace-info response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_recent_workspaces_response\b/,
+        message: 'missing remote recent-workspaces response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_assistant_list_response\b/,
+        message: 'missing remote assistant-list response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_session_info\b/,
+        message: 'missing remote session response facts helper',
+      },
+      {
+        regex: /\bpub fn remote_session_list_response\b/,
+        message: 'missing remote session-list response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_initial_sync_response\b/,
+        message: 'missing remote initial-sync response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_messages_response\b/,
+        message: 'missing remote messages response assembly helper',
+      },
+      {
         regex: /\bpub struct RemoteDefaultModelsConfig\b/,
         message: 'missing remote model default DTO',
       },
@@ -2366,6 +2522,18 @@ const requiredContentRules = [
         message: 'missing remote chunk/info helper test',
       },
       {
+        regex: /\bremote_connect_file_response_assembly_owns_base64_wire_shape\b/,
+        message: 'missing remote file response assembly contract test',
+      },
+      {
+        regex: /\bremote_connect_file_command_handler_owns_owner_flow_and_uses_host_root\b/,
+        message: 'missing remote file command handler owner-flow test',
+      },
+      {
+        regex: /\bremote_connect_execution_response_helpers_preserve_wire_shape\b/,
+        message: 'missing remote execution response helper contract test',
+      },
+      {
         regex: /\bremote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes\b/,
         message: 'missing tracker completion contract test',
       },
@@ -2393,6 +2561,14 @@ const requiredContentRules = [
         regex: /\bremote_connect_cancel_runtime_preserves_restore_failure_error\b/,
         message: 'missing remote cancel restore failure regression',
       },
+      {
+        regex: /\bremote_connect_workspace_response_helpers_own_wire_shape\b/,
+        message: 'missing remote workspace response assembly regression',
+      },
+      {
+        regex: /\bremote_connect_session_response_helpers_own_pagination_and_timestamps\b/,
+        message: 'missing remote session response assembly regression',
+      },
     ],
   },
   {
@@ -2413,12 +2589,20 @@ const requiredContentRules = [
         message: 'missing core remote cancel runtime adapter',
       },
       {
+        regex: /\bstruct CoreRemoteWorkspaceFileRuntimeHost\b/,
+        message: 'missing core remote file runtime adapter',
+      },
+      {
         regex: /\bimpl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost\b/,
         message: 'missing integrations dialog host adapter implementation',
       },
       {
         regex: /\bimpl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost\b/,
         message: 'missing integrations cancel host adapter implementation',
+      },
+      {
+        regex: /\bimpl RemoteWorkspaceFileRuntimeHost for CoreRemoteWorkspaceFileRuntimeHost\b/,
+        message: 'missing integrations file host adapter implementation',
       },
       {
         regex: /\bsubmit_remote_dialog\b/,
@@ -2429,16 +2613,68 @@ const requiredContentRules = [
         message: 'missing remote cancel owner orchestration delegation',
       },
       {
-        regex: /\bread_remote_workspace_file\b/,
-        message: 'missing remote file full-read helper delegation',
+        regex: /\bhandle_remote_workspace_file_command\b/,
+        message: 'missing remote file command owner delegation',
       },
       {
-        regex: /\bread_remote_workspace_file_chunk\b/,
-        message: 'missing remote file chunk helper delegation',
+        regex: /\bremote_dialog_submit_response\b/,
+        message: 'missing remote dialog response assembly delegation',
       },
       {
-        regex: /\bread_remote_workspace_file_info\b/,
-        message: 'missing remote file info helper delegation',
+        regex: /\bremote_task_cancel_response\b/,
+        message: 'missing remote cancel response assembly delegation',
+      },
+      {
+        regex: /\bremote_interaction_accepted_response\b/,
+        message: 'missing remote interaction response assembly delegation',
+      },
+      {
+        regex: /\bremote_answer_question_response\b/,
+        message: 'missing remote answer response assembly delegation',
+      },
+      {
+        regex: /\bremote_workspace_info_response\b/,
+        message: 'missing remote workspace-info response assembly delegation',
+      },
+      {
+        regex: /\bremote_recent_workspaces_response\b/,
+        message: 'missing remote recent-workspaces response assembly delegation',
+      },
+      {
+        regex: /\bremote_assistant_list_response\b/,
+        message: 'missing remote assistant-list response assembly delegation',
+      },
+      {
+        regex: /\bremote_workspace_updated_response\b/,
+        message: 'missing remote workspace-updated response assembly delegation',
+      },
+      {
+        regex: /\bremote_assistant_updated_response\b/,
+        message: 'missing remote assistant-updated response assembly delegation',
+      },
+      {
+        regex: /\bremote_session_list_response\b/,
+        message: 'missing remote session-list response assembly delegation',
+      },
+      {
+        regex: /\bremote_initial_sync_response\b/,
+        message: 'missing remote initial-sync response assembly delegation',
+      },
+      {
+        regex: /\bremote_session_created_response\b/,
+        message: 'missing remote session-created response assembly delegation',
+      },
+      {
+        regex: /\bremote_session_model_updated_response\b/,
+        message: 'missing remote session-model response assembly delegation',
+      },
+      {
+        regex: /\bremote_messages_response\b/,
+        message: 'missing remote messages response assembly delegation',
+      },
+      {
+        regex: /\bremote_session_deleted_response\b/,
+        message: 'missing remote session-deleted response assembly delegation',
       },
       {
         regex: /\bremote_image_context\b/,
@@ -5257,6 +5493,15 @@ function runManifestParserSelfTest() {
         'REMOTE_FILE_MAX_CHUNK_BYTES',
         'resolve_remote_file_chunk_range',
         'remote_file_display_name',
+        'RemoteWorkspaceFacts',
+        'RemoteSessionMetadata',
+        'remote_workspace_info_response',
+        'remote_recent_workspaces_response',
+        'remote_assistant_list_response',
+        'remote_session_info',
+        'remote_session_list_response',
+        'remote_initial_sync_response',
+        'remote_messages_response',
         'RemoteDefaultModelsConfig',
         'RemoteModelConfig',
         'RemoteModelCatalog',
@@ -5286,6 +5531,8 @@ function runManifestParserSelfTest() {
         'remote_connect_tracker_registry_owns_lifecycle_without_core_state',
         'remote_connect_tracker_ignores_unrelated_direct_session_events',
         'remote_connect_tool_preview_slimming_keeps_short_fields_and_drops_large_strings',
+        'remote_connect_workspace_response_helpers_own_wire_shape',
+        'remote_connect_session_response_helpers_own_pagination_and_timestamps',
       ],
     },
     {
@@ -5293,6 +5540,10 @@ function runManifestParserSelfTest() {
       contracts: [
         'CoreServiceAgentRuntime',
         'remote_image_context',
+        'remote_workspace_info_response',
+        'remote_session_list_response',
+        'remote_initial_sync_response',
+        'remote_messages_response',
         'core_service_agent_runtime_owner_maps_remote_image_context',
         'remote_execution_prefers_unified_image_contexts_over_legacy_images',
         'remote_cancel_decision_preserves_current_turn_boundaries',
@@ -6291,6 +6542,27 @@ function runManifestParserSelfTest() {
     'read_remote_workspace_file',
     'read_remote_workspace_file_chunk',
     'read_remote_workspace_file_info',
+    'remote_file_content_response',
+    'remote_file_chunk_response',
+    'remote_file_info_response',
+    'handle_remote_workspace_file_command',
+    'general_purpose::STANDARD\\.encode',
+    'remote_dialog_submit_response',
+    'remote_task_cancel_response',
+    'remote_interaction_accepted_response',
+    'remote_answer_question_response',
+    'remote_workspace_info_response',
+    'remote_recent_workspaces_response',
+    'remote_assistant_list_response',
+    'remote_workspace_updated_response',
+    'remote_assistant_updated_response',
+    'remote_session_info',
+    'remote_session_list_response',
+    'remote_initial_sync_response',
+    'remote_session_created_response',
+    'remote_session_model_updated_response',
+    'remote_messages_response',
+    'remote_session_deleted_response',
     'should_send_remote_model_catalog',
     'remote_model_catalog_poll_delta',
     'remote_no_change_poll_response',

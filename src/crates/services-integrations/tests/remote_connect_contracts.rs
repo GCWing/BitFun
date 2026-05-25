@@ -5,24 +5,35 @@ use bitfun_runtime_ports::{
     AgentSubmissionSource, RemoteControlSessionState, RemoteControlStateSnapshot,
 };
 use bitfun_services_integrations::remote_connect::{
-    build_remote_image_attachment, build_remote_image_contexts,
-    build_remote_image_submission_request, build_remote_session_create_request,
-    build_remote_submission_request, cancel_remote_task, make_slim_tool_params,
-    read_remote_workspace_file, read_remote_workspace_file_chunk, read_remote_workspace_file_info,
-    remote_file_display_name, remote_model_catalog_poll_delta, remote_no_change_poll_response,
-    remote_persisted_poll_response, remote_session_restore_target, remote_snapshot_poll_response,
-    resolve_remote_agent_type, resolve_remote_cancel_decision,
-    resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range,
-    resolve_remote_workspace_path, should_send_remote_model_catalog, submit_remote_dialog,
     ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, ImageAttachment,
+    REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES, RemoteAssistantWorkspaceFacts,
     RemoteCancelDecision, RemoteCancelRuntimeHost, RemoteCancelTaskRequest, RemoteCommand,
     RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
     RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy,
     RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
-    RemoteImageContextAdapter, RemoteModelCatalog, RemoteModelConfig, RemoteResponse,
-    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteSessionTrackerRegistry,
-    RemoteTerminalPrewarmRequest, RemoteToolStatus, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES,
-    REMOTE_FILE_MAX_READ_BYTES,
+    RemoteImageContextAdapter, RemoteModelCatalog, RemoteModelConfig, RemoteRecentWorkspaceFacts,
+    RemoteResponse, RemoteSessionMetadata, RemoteSessionStateTracker, RemoteSessionTrackerHost,
+    RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest, RemoteToolStatus,
+    RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
+    RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
+    RemoteWorkspaceUpdate, TrackerEvent, build_remote_image_attachment,
+    build_remote_image_contexts, build_remote_image_submission_request,
+    build_remote_session_create_request, build_remote_submission_request, cancel_remote_task,
+    handle_remote_workspace_file_command, make_slim_tool_params, read_remote_workspace_file,
+    read_remote_workspace_file_chunk, read_remote_workspace_file_info,
+    remote_answer_question_response, remote_assistant_list_response,
+    remote_assistant_updated_response, remote_dialog_submit_response, remote_file_chunk_response,
+    remote_file_content_response, remote_file_display_name, remote_file_info_response,
+    remote_initial_sync_response, remote_interaction_accepted_response, remote_messages_response,
+    remote_model_catalog_poll_delta, remote_no_change_poll_response,
+    remote_persisted_poll_response, remote_recent_workspaces_response,
+    remote_session_created_response, remote_session_deleted_response, remote_session_info,
+    remote_session_list_response, remote_session_model_updated_response,
+    remote_session_restore_target, remote_snapshot_poll_response, remote_task_cancel_response,
+    remote_workspace_info_response, remote_workspace_updated_response, resolve_remote_agent_type,
+    resolve_remote_cancel_decision, resolve_remote_execution_image_contexts,
+    resolve_remote_file_chunk_range, resolve_remote_workspace_path,
+    should_send_remote_model_catalog, submit_remote_dialog,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -812,6 +823,345 @@ async fn remote_connect_file_chunk_and_info_helpers_preserve_response_facts() {
     assert_eq!(info.mime_type, "text/markdown");
 
     std::fs::remove_dir_all(base).expect("cleanup remote workspace");
+}
+
+#[test]
+fn remote_connect_file_response_assembly_owns_base64_wire_shape() {
+    let content_response = remote_file_content_response(Ok(RemoteWorkspaceFileContent {
+        name: "report.md".to_string(),
+        bytes: b"hello remote file".to_vec(),
+        mime_type: "text/markdown",
+        size: 17,
+    }));
+    let content_json = serde_json::to_value(content_response).expect("serialize file content");
+
+    assert_eq!(content_json["resp"], "file_content");
+    assert_eq!(content_json["name"], "report.md");
+    assert_eq!(content_json["content_base64"], "aGVsbG8gcmVtb3RlIGZpbGU=");
+    assert_eq!(content_json["mime_type"], "text/markdown");
+    assert_eq!(content_json["size"], 17);
+
+    let chunk_response = remote_file_chunk_response(Ok(RemoteWorkspaceFileChunk {
+        name: "report.md".to_string(),
+        bytes: b"remote file".to_vec(),
+        offset: 6,
+        chunk_size: 11,
+        total_size: 17,
+        mime_type: "text/markdown",
+    }));
+    let chunk_json = serde_json::to_value(chunk_response).expect("serialize file chunk");
+
+    assert_eq!(chunk_json["resp"], "file_chunk");
+    assert_eq!(chunk_json["chunk_base64"], "cmVtb3RlIGZpbGU=");
+    assert_eq!(chunk_json["offset"], 6);
+    assert_eq!(chunk_json["chunk_size"], 11);
+    assert_eq!(chunk_json["total_size"], 17);
+
+    let info_response = remote_file_info_response(Ok(RemoteWorkspaceFileInfo {
+        name: "report.md".to_string(),
+        size: 17,
+        mime_type: "text/markdown",
+    }));
+    let info_json = serde_json::to_value(info_response).expect("serialize file info");
+
+    assert_eq!(info_json["resp"], "file_info");
+    assert_eq!(info_json["name"], "report.md");
+    assert_eq!(info_json["mime_type"], "text/markdown");
+
+    let err_json = serde_json::to_value(remote_file_info_response(Err("missing file".to_string())))
+        .expect("serialize file error");
+    assert_eq!(err_json["resp"], "error");
+    assert_eq!(err_json["message"], "missing file");
+}
+
+#[derive(Default)]
+struct RecordingFileHost {
+    workspace_root: PathBuf,
+    seen_sessions: Mutex<Vec<Option<String>>>,
+}
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceFileRuntimeHost for RecordingFileHost {
+    async fn resolve_remote_file_workspace_root(
+        &self,
+        session_id: Option<&str>,
+    ) -> Option<PathBuf> {
+        self.seen_sessions
+            .lock()
+            .unwrap()
+            .push(session_id.map(ToOwned::to_owned));
+        Some(self.workspace_root.clone())
+    }
+}
+
+#[tokio::test]
+async fn remote_connect_file_command_handler_owns_owner_flow_and_uses_host_root() {
+    let (base, workspace, _report) = make_temp_remote_workspace();
+    let host = RecordingFileHost {
+        workspace_root: workspace,
+        seen_sessions: Mutex::new(Vec::new()),
+    };
+
+    let response = handle_remote_workspace_file_command(
+        &host,
+        &RemoteCommand::ReadFile {
+            path: "computer://artifacts/report.md".to_string(),
+            session_id: Some("session-1".to_string()),
+        },
+    )
+    .await;
+    let json = serde_json::to_value(response).expect("serialize read response");
+
+    assert_eq!(json["resp"], "file_content");
+    assert_eq!(json["content_base64"], "aGVsbG8gcmVtb3RlIGZpbGU=");
+    assert_eq!(
+        host.seen_sessions.lock().unwrap().as_slice(),
+        &[Some("session-1".to_string())]
+    );
+
+    let error = handle_remote_workspace_file_command(&host, &RemoteCommand::Ping).await;
+    assert_eq!(
+        error,
+        RemoteResponse::Error {
+            message: "Unsupported remote workspace file command".to_string()
+        }
+    );
+
+    std::fs::remove_dir_all(base).expect("cleanup remote workspace");
+}
+
+#[test]
+fn remote_connect_execution_response_helpers_preserve_wire_shape() {
+    let started = remote_dialog_submit_response(Ok(RemoteDialogSubmitOutcome::Started {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+    }));
+    assert_eq!(
+        started,
+        RemoteResponse::MessageSent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+        }
+    );
+
+    let queued = remote_dialog_submit_response(Ok(RemoteDialogSubmitOutcome::Queued {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-2".to_string(),
+    }));
+    assert_eq!(
+        queued,
+        RemoteResponse::MessageSent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-2".to_string(),
+        }
+    );
+
+    assert_eq!(
+        remote_task_cancel_response("session-1", Ok(())),
+        RemoteResponse::TaskCancelled {
+            session_id: "session-1".to_string(),
+        }
+    );
+    assert_eq!(
+        remote_interaction_accepted_response("confirm_tool", "tool-1", Ok(())),
+        RemoteResponse::InteractionAccepted {
+            action: "confirm_tool".to_string(),
+            target_id: "tool-1".to_string(),
+        }
+    );
+    assert_eq!(
+        remote_answer_question_response(Ok(())),
+        RemoteResponse::AnswerAccepted
+    );
+    assert_eq!(
+        remote_answer_question_response(Err("question closed".to_string())),
+        RemoteResponse::Error {
+            message: "question closed".to_string(),
+        }
+    );
+}
+
+#[test]
+fn remote_connect_workspace_response_helpers_own_wire_shape() {
+    let workspace = RemoteWorkspaceFacts {
+        path: "D:/workspace/project".to_string(),
+        name: "project".to_string(),
+        git_branch: Some("main".to_string()),
+        kind: RemoteWorkspaceKind::Remote,
+        assistant_id: Some("assistant-1".to_string()),
+    };
+
+    let info_json = serde_json::to_value(remote_workspace_info_response(Some(workspace.clone())))
+        .expect("serialize workspace info");
+    assert_eq!(info_json["resp"], "workspace_info");
+    assert_eq!(info_json["has_workspace"], true);
+    assert_eq!(info_json["path"], "D:/workspace/project");
+    assert_eq!(info_json["project_name"], "project");
+    assert_eq!(info_json["git_branch"], "main");
+    assert_eq!(info_json["workspace_kind"], "remote");
+    assert_eq!(info_json["assistant_id"], "assistant-1");
+
+    let empty_json =
+        serde_json::to_value(remote_workspace_info_response(None)).expect("serialize empty info");
+    assert_eq!(empty_json["resp"], "workspace_info");
+    assert_eq!(empty_json["has_workspace"], false);
+    assert!(empty_json.get("workspace_kind").is_none());
+
+    let recent_json = serde_json::to_value(remote_recent_workspaces_response(vec![
+        RemoteRecentWorkspaceFacts {
+            path: workspace.path.clone(),
+            name: workspace.name.clone(),
+            last_opened: "2026-05-25T00:00:00Z".to_string(),
+            kind: workspace.kind,
+        },
+    ]))
+    .expect("serialize recent workspaces");
+    assert_eq!(recent_json["resp"], "recent_workspaces");
+    assert_eq!(recent_json["workspaces"][0]["workspace_kind"], "remote");
+    assert_eq!(
+        recent_json["workspaces"][0]["last_opened"],
+        "2026-05-25T00:00:00Z"
+    );
+
+    let assistant_json = serde_json::to_value(remote_assistant_list_response(vec![
+        RemoteAssistantWorkspaceFacts {
+            path: "D:/workspace/assistant".to_string(),
+            name: "assistant".to_string(),
+            assistant_id: Some("assistant-2".to_string()),
+        },
+    ]))
+    .expect("serialize assistant list");
+    assert_eq!(assistant_json["resp"], "assistant_list");
+    assert_eq!(
+        assistant_json["assistants"][0]["assistant_id"],
+        "assistant-2"
+    );
+
+    assert_eq!(
+        remote_workspace_updated_response(Ok(RemoteWorkspaceUpdate {
+            path: "D:/workspace/project".to_string(),
+            name: "project".to_string(),
+        })),
+        RemoteResponse::WorkspaceUpdated {
+            success: true,
+            path: Some("D:/workspace/project".to_string()),
+            project_name: Some("project".to_string()),
+            error: None,
+        }
+    );
+    assert_eq!(
+        remote_assistant_updated_response(Err("open failed".to_string())),
+        RemoteResponse::AssistantUpdated {
+            success: false,
+            path: None,
+            name: None,
+            error: Some("open failed".to_string()),
+        }
+    );
+}
+
+#[test]
+fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
+    let metadata = vec![
+        RemoteSessionMetadata {
+            session_id: "session-1".to_string(),
+            name: "first".to_string(),
+            agent_type: "agentic".to_string(),
+            created_at_ms: 1_700_000_000_000,
+            last_active_at_ms: 1_700_000_001_000,
+            turn_count: 3,
+        },
+        RemoteSessionMetadata {
+            session_id: "session-2".to_string(),
+            name: "second".to_string(),
+            agent_type: "Cowork".to_string(),
+            created_at_ms: 1_700_000_002_000,
+            last_active_at_ms: 1_700_000_003_000,
+            turn_count: 5,
+        },
+        RemoteSessionMetadata {
+            session_id: "session-3".to_string(),
+            name: "third".to_string(),
+            agent_type: "Plan".to_string(),
+            created_at_ms: 1_700_000_004_000,
+            last_active_at_ms: 1_700_000_005_000,
+            turn_count: 8,
+        },
+    ];
+
+    let session = remote_session_info(&metadata[0], Some("D:/workspace/project"), Some("project"));
+    assert_eq!(session.session_id, "session-1");
+    assert_eq!(session.created_at, "1700000000");
+    assert_eq!(session.updated_at, "1700000001");
+    assert_eq!(session.message_count, 3);
+    assert_eq!(
+        session.workspace_path.as_deref(),
+        Some("D:/workspace/project")
+    );
+    assert_eq!(session.workspace_name.as_deref(), Some("project"));
+
+    let list = remote_session_list_response(
+        metadata.clone(),
+        Some("D:/workspace/project"),
+        Some("project"),
+        1,
+        1,
+    );
+    let list_json = serde_json::to_value(list).expect("serialize session list");
+    assert_eq!(list_json["resp"], "session_list");
+    assert_eq!(list_json["has_more"], true);
+    assert_eq!(list_json["sessions"].as_array().unwrap().len(), 1);
+    assert_eq!(list_json["sessions"][0]["session_id"], "session-2");
+    assert_eq!(list_json["sessions"][0]["created_at"], "1700000002");
+
+    let initial = remote_initial_sync_response(
+        Some(RemoteWorkspaceFacts {
+            path: "D:/workspace/project".to_string(),
+            name: "project".to_string(),
+            git_branch: Some("main".to_string()),
+            kind: RemoteWorkspaceKind::Normal,
+            assistant_id: None,
+        }),
+        metadata,
+        Some("project"),
+        true,
+        Some("user-1".to_string()),
+    );
+    let initial_json = serde_json::to_value(initial).expect("serialize initial sync");
+    assert_eq!(initial_json["resp"], "initial_sync");
+    assert_eq!(initial_json["has_workspace"], true);
+    assert_eq!(initial_json["workspace_kind"], "normal");
+    assert_eq!(initial_json["has_more_sessions"], true);
+    assert_eq!(initial_json["sessions"].as_array().unwrap().len(), 3);
+    assert_eq!(initial_json["authenticated_user_id"], "user-1");
+
+    assert_eq!(
+        remote_session_created_response("session-new"),
+        RemoteResponse::SessionCreated {
+            session_id: "session-new".to_string(),
+        }
+    );
+    assert_eq!(
+        remote_session_model_updated_response("session-1", "model-1"),
+        RemoteResponse::SessionModelUpdated {
+            session_id: "session-1".to_string(),
+            model_id: "model-1".to_string(),
+        }
+    );
+    assert_eq!(
+        remote_messages_response("session-1", vec![], false),
+        RemoteResponse::Messages {
+            session_id: "session-1".to_string(),
+            messages: vec![],
+            has_more: false,
+        }
+    );
+    assert_eq!(
+        remote_session_deleted_response("session-1"),
+        RemoteResponse::SessionDeleted {
+            session_id: "session-1".to_string(),
+        }
+    );
 }
 
 #[test]

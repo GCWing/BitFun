@@ -9,34 +9,61 @@
 //! incremental updates (new messages + current active turn snapshot).
 
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use log::{debug, error, info};
 use serde_json::Value;
 use std::sync::{Arc, OnceLock};
 
 use super::encryption;
-use bitfun_services_integrations::remote_connect::{
-    build_remote_image_contexts, cancel_remote_task, read_remote_workspace_file,
-    read_remote_workspace_file_chunk, read_remote_workspace_file_info,
-    remote_model_catalog_poll_delta, remote_no_change_poll_response,
-    remote_persisted_poll_response, remote_snapshot_poll_response,
-    resolve_remote_execution_image_contexts, submit_remote_dialog, RemoteCancelRuntimeHost,
-    RemoteCancelTaskRequest, RemoteConnectSubmissionSource, RemoteDialogQueuePriority,
-    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy,
-    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
-    RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest,
-    REMOTE_FILE_MAX_READ_BYTES,
-};
 pub use bitfun_services_integrations::remote_connect::{
     ActiveTurnSnapshot, AssistantEntry, ChatImageAttachment, ChatMessage, ChatMessageItem,
     ImageAttachment, RecentWorkspaceEntry, RemoteCommand, RemoteDefaultModelsConfig,
     RemoteModelCatalog, RemoteModelConfig, RemoteResponse, RemoteSessionStateTracker,
     RemoteToolStatus, SessionInfo, TrackerEvent,
 };
+use bitfun_services_integrations::remote_connect::{
+    RemoteAssistantWorkspaceFacts, RemoteCancelRuntimeHost, RemoteCancelTaskRequest,
+    RemoteConnectSubmissionSource, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
+    RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest,
+    RemoteDialogSubmitOutcome, RemoteImageContext, RemoteRecentWorkspaceFacts,
+    RemoteSessionMetadata, RemoteSessionTrackerHost, RemoteSessionTrackerRegistry,
+    RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind as RemoteConnectWorkspaceKind, RemoteWorkspaceUpdate,
+    build_remote_image_contexts, cancel_remote_task, handle_remote_workspace_file_command,
+    remote_answer_question_response, remote_assistant_list_response,
+    remote_assistant_updated_response, remote_dialog_submit_response, remote_initial_sync_response,
+    remote_interaction_accepted_response, remote_messages_response,
+    remote_model_catalog_poll_delta, remote_no_change_poll_response,
+    remote_persisted_poll_response, remote_recent_workspaces_response,
+    remote_session_created_response, remote_session_deleted_response, remote_session_list_response,
+    remote_session_model_updated_response, remote_snapshot_poll_response,
+    remote_task_cancel_response, remote_workspace_info_response, remote_workspace_updated_response,
+    resolve_remote_execution_image_contexts, submit_remote_dialog,
+};
 
 fn current_workspace_path() -> Option<std::path::PathBuf> {
     crate::service::workspace::get_global_workspace_service()
         .and_then(|service| service.try_get_current_workspace_path())
+}
+
+fn remote_workspace_kind(
+    kind: crate::service::workspace::WorkspaceKind,
+) -> RemoteConnectWorkspaceKind {
+    match kind {
+        crate::service::workspace::WorkspaceKind::Normal => RemoteConnectWorkspaceKind::Normal,
+        crate::service::workspace::WorkspaceKind::Assistant => {
+            RemoteConnectWorkspaceKind::Assistant
+        }
+        crate::service::workspace::WorkspaceKind::Remote => RemoteConnectWorkspaceKind::Remote,
+    }
+}
+
+fn git_branch_for_workspace_path(path: &std::path::Path) -> Option<String> {
+    git2::Repository::open(path).ok().and_then(|repo| {
+        repo.head()
+            .ok()
+            .and_then(|head| head.shorthand().map(String::from))
+    })
 }
 
 async fn resolve_session_workspace_path(session_id: &str) -> Option<std::path::PathBuf> {
@@ -190,8 +217,8 @@ pub type EncryptedPayload = (String, String);
 /// Falls back to the original if decoding/compression fails or the image is
 /// already within `max_bytes`.
 fn compress_data_url_for_mobile(data_url: &str, max_bytes: usize) -> String {
-    use base64::engine::general_purpose::STANDARD as BASE64;
     use base64::Engine;
+    use base64::engine::general_purpose::STANDARD as BASE64;
     use image::imageops::FilterType;
 
     const MAX_THUMBNAIL_DIM: u32 = 400;
@@ -590,11 +617,19 @@ pub(crate) struct CoreRemoteCancelRuntimeHost {
     coordinator: Arc<crate::agentic::coordination::ConversationCoordinator>,
 }
 
+pub(crate) struct CoreRemoteWorkspaceFileRuntimeHost;
+
 impl CoreRemoteCancelRuntimeHost {
     pub(crate) fn new() -> std::result::Result<Self, String> {
         let coordinator = crate::agentic::coordination::get_global_coordinator()
             .ok_or_else(|| "Desktop session system not ready".to_string())?;
         Ok(Self { coordinator })
+    }
+}
+
+impl CoreRemoteWorkspaceFileRuntimeHost {
+    pub(crate) fn new() -> Self {
+        Self
     }
 }
 
@@ -740,6 +775,16 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
                     turn_id,
                 },
             })
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceFileRuntimeHost for CoreRemoteWorkspaceFileRuntimeHost {
+    async fn resolve_remote_file_workspace_root(
+        &self,
+        session_id: Option<&str>,
+    ) -> Option<std::path::PathBuf> {
+        resolve_file_workspace_root(session_id).await
     }
 }
 
@@ -974,20 +1019,11 @@ impl RemoteServer {
 
             RemoteCommand::PollSession { .. } => self.handle_poll_command(cmd).await,
 
-            RemoteCommand::ReadFile { path, session_id } => {
-                self.handle_read_file(path, session_id.as_deref()).await
-            }
-            RemoteCommand::ReadFileChunk {
-                path,
-                session_id,
-                offset,
-                limit,
-            } => {
-                self.handle_read_file_chunk(path, session_id.as_deref(), *offset, *limit)
-                    .await
-            }
-            RemoteCommand::GetFileInfo { path, session_id } => {
-                self.handle_get_file_info(path, session_id.as_deref()).await
+            RemoteCommand::ReadFile { .. }
+            | RemoteCommand::ReadFileChunk { .. }
+            | RemoteCommand::GetFileInfo { .. } => {
+                let host = CoreServiceAgentRuntime::remote_workspace_file_host();
+                handle_remote_workspace_file_command(&host, cmd).await
             }
         }
     }
@@ -1002,48 +1038,33 @@ impl RemoteServer {
     ) -> RemoteResponse {
         use crate::agentic::persistence::PersistenceManager;
         use crate::infrastructure::PathManager;
-        use crate::service::workspace::{get_global_workspace_service, WorkspaceKind};
 
-        let (
-            ws_path,
-            has_workspace,
-            path_str,
-            project_name,
-            git_branch,
-            workspace_kind,
-            assistant_id,
-        ) = if let Some(ws_service) = get_global_workspace_service() {
-            if let Some(ws) = ws_service.get_current_workspace().await {
-                let p = ws.root_path.clone();
-                let branch = git2::Repository::open(&p).ok().and_then(|repo| {
-                    repo.head()
-                        .ok()
-                        .and_then(|h| h.shorthand().map(String::from))
-                });
-                let kind_str = match ws.workspace_kind {
-                    WorkspaceKind::Normal => "normal",
-                    WorkspaceKind::Assistant => "assistant",
-                    WorkspaceKind::Remote => "remote",
-                };
-                (
-                    Some(p.clone()),
-                    true,
-                    Some(p.to_string_lossy().to_string()),
-                    Some(ws.name.clone()),
-                    branch,
-                    Some(kind_str.to_string()),
-                    ws.assistant_id.clone(),
-                )
+        let (ws_path, workspace_facts) =
+            if let Some(ws_service) = crate::service::workspace::get_global_workspace_service() {
+                if let Some(ws) = ws_service.get_current_workspace().await {
+                    let p = ws.root_path.clone();
+                    (
+                        Some(p.clone()),
+                        Some(RemoteWorkspaceFacts {
+                            path: p.to_string_lossy().to_string(),
+                            name: ws.name.clone(),
+                            git_branch: git_branch_for_workspace_path(&p),
+                            kind: remote_workspace_kind(ws.workspace_kind),
+                            assistant_id: ws.assistant_id.clone(),
+                        }),
+                    )
+                } else {
+                    (None, None)
+                }
             } else {
-                (None, false, None, None, None, None, None)
-            }
-        } else {
-            (None, false, None, None, None, None, None)
-        };
+                (None, None)
+            };
+
+        let ws_name = ws_path
+            .as_ref()
+            .and_then(|wp| wp.file_name().map(|n| n.to_string_lossy().to_string()));
 
         let (sessions, has_more) = if let Some(ref wp) = ws_path {
-            let ws_str = wp.to_string_lossy().to_string();
-            let ws_name = wp.file_name().map(|n| n.to_string_lossy().to_string());
             if let Ok(pm) = PathManager::new() {
                 let pm = std::sync::Arc::new(pm);
                 if let Ok(store) = PersistenceManager::new(pm) {
@@ -1051,18 +1072,16 @@ impl RemoteServer {
                         let total = all_meta.len();
                         let page_size = 100usize;
                         let has_more = total > page_size;
-                        let sessions: Vec<SessionInfo> = all_meta
+                        let sessions: Vec<RemoteSessionMetadata> = all_meta
                             .into_iter()
                             .take(page_size)
-                            .map(|s| SessionInfo {
+                            .map(|s| RemoteSessionMetadata {
                                 session_id: s.session_id,
                                 name: s.session_name,
                                 agent_type: s.agent_type,
-                                created_at: (s.created_at / 1000).to_string(),
-                                updated_at: (s.last_active_at / 1000).to_string(),
-                                message_count: s.turn_count,
-                                workspace_path: Some(ws_str.clone()),
-                                workspace_name: ws_name.clone(),
+                                created_at_ms: s.created_at,
+                                last_active_at_ms: s.last_active_at,
+                                turn_count: s.turn_count,
                             })
                             .collect();
                         (sessions, has_more)
@@ -1079,17 +1098,13 @@ impl RemoteServer {
             (vec![], false)
         };
 
-        RemoteResponse::InitialSync {
-            has_workspace,
-            path: path_str,
-            project_name,
-            git_branch,
-            workspace_kind,
-            assistant_id,
+        remote_initial_sync_response(
+            workspace_facts,
             sessions,
-            has_more_sessions: has_more,
+            ws_name.as_deref(),
+            has_more,
             authenticated_user_id,
-        }
+        )
     }
 
     // ── Poll command handler ────────────────────────────────────────
@@ -1150,82 +1165,6 @@ impl RemoteServer {
         )
     }
 
-    // ── ReadFile ────────────────────────────────────────────────────
-
-    /// Read a workspace file and return its base64-encoded content.
-    ///
-    /// Relative paths are resolved against the session workspace when possible,
-    /// otherwise the current workspace root. Rejects files larger than 30 MB.
-    async fn handle_read_file(&self, raw_path: &str, session_id: Option<&str>) -> RemoteResponse {
-        let workspace_root = resolve_file_workspace_root(session_id).await;
-        match read_remote_workspace_file(
-            raw_path,
-            REMOTE_FILE_MAX_READ_BYTES,
-            workspace_root.as_deref(),
-        )
-        .await
-        {
-            Ok(content) => {
-                use base64::Engine as _;
-                let content_base64 =
-                    base64::engine::general_purpose::STANDARD.encode(&content.bytes);
-                RemoteResponse::FileContent {
-                    name: content.name,
-                    content_base64,
-                    mime_type: content.mime_type.to_string(),
-                    size: content.size,
-                }
-            }
-            Err(e) => RemoteResponse::Error {
-                message: e.to_string(),
-            },
-        }
-    }
-
-    async fn handle_read_file_chunk(
-        &self,
-        raw_path: &str,
-        session_id: Option<&str>,
-        offset: u64,
-        limit: u64,
-    ) -> RemoteResponse {
-        let workspace_root = resolve_file_workspace_root(session_id).await;
-        match read_remote_workspace_file_chunk(raw_path, workspace_root.as_deref(), offset, limit)
-            .await
-        {
-            Ok(chunk) => {
-                use base64::Engine as _;
-                let chunk_base64 = base64::engine::general_purpose::STANDARD.encode(&chunk.bytes);
-
-                RemoteResponse::FileChunk {
-                    name: chunk.name,
-                    chunk_base64,
-                    offset: chunk.offset,
-                    chunk_size: chunk.chunk_size,
-                    total_size: chunk.total_size,
-                    mime_type: chunk.mime_type.to_string(),
-                }
-            }
-            Err(message) => RemoteResponse::Error { message },
-        }
-    }
-
-    async fn handle_get_file_info(
-        &self,
-        raw_path: &str,
-        session_id: Option<&str>,
-    ) -> RemoteResponse {
-        let workspace_root = resolve_file_workspace_root(session_id).await;
-        match read_remote_workspace_file_info(raw_path, workspace_root.as_deref()).await {
-            Ok(info) => RemoteResponse::FileInfo {
-                name: info.name,
-                size: info.size,
-                mime_type: info.mime_type.to_string(),
-            },
-            Err(message) => RemoteResponse::Error { message },
-        }
-    }
-
     // ── Workspace commands ──────────────────────────────────────────
 
     async fn handle_workspace_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
@@ -1233,78 +1172,46 @@ impl RemoteServer {
 
         match cmd {
             RemoteCommand::GetWorkspaceInfo => {
-                use crate::service::workspace::{get_global_workspace_service, WorkspaceKind};
-
                 if let Some(ws_service) = get_global_workspace_service() {
                     if let Some(ws) = ws_service.get_current_workspace().await {
                         let p = ws.root_path.clone();
-                        let branch = git2::Repository::open(&p).ok().and_then(|repo| {
-                            repo.head()
-                                .ok()
-                                .and_then(|h| h.shorthand().map(String::from))
-                        });
-                        let kind_str = match ws.workspace_kind {
-                            WorkspaceKind::Normal => "normal",
-                            WorkspaceKind::Assistant => "assistant",
-                            WorkspaceKind::Remote => "remote",
-                        };
-                        return RemoteResponse::WorkspaceInfo {
-                            has_workspace: true,
-                            path: Some(p.to_string_lossy().to_string()),
-                            project_name: Some(ws.name.clone()),
-                            git_branch: branch,
-                            workspace_kind: Some(kind_str.to_string()),
+                        return remote_workspace_info_response(Some(RemoteWorkspaceFacts {
+                            path: p.to_string_lossy().to_string(),
+                            name: ws.name.clone(),
+                            git_branch: git_branch_for_workspace_path(&p),
+                            kind: remote_workspace_kind(ws.workspace_kind),
                             assistant_id: ws.assistant_id.clone(),
-                        };
+                        }));
                     }
                 }
-                RemoteResponse::WorkspaceInfo {
-                    has_workspace: false,
-                    path: None,
-                    project_name: None,
-                    git_branch: None,
-                    workspace_kind: None,
-                    assistant_id: None,
-                }
+                remote_workspace_info_response(None)
             }
             RemoteCommand::ListRecentWorkspaces => {
                 let ws_service = match get_global_workspace_service() {
                     Some(s) => s,
                     None => {
-                        return RemoteResponse::RecentWorkspaces { workspaces: vec![] };
+                        return remote_recent_workspaces_response(vec![]);
                     }
                 };
                 let recent = ws_service.get_recent_workspaces().await;
                 let entries = recent
                     .into_iter()
-                    .map(|w| {
-                        let kind_str = match w.workspace_kind {
-                            crate::service::workspace::WorkspaceKind::Normal => "normal",
-                            crate::service::workspace::WorkspaceKind::Assistant => "assistant",
-                            crate::service::workspace::WorkspaceKind::Remote => "remote",
-                        };
-                        RecentWorkspaceEntry {
-                            path: w.root_path.to_string_lossy().to_string(),
-                            name: w.name.clone(),
-                            last_opened: w.last_accessed.to_rfc3339(),
-                            workspace_kind: Some(kind_str.to_string()),
-                        }
+                    .map(|w| RemoteRecentWorkspaceFacts {
+                        path: w.root_path.to_string_lossy().to_string(),
+                        name: w.name.clone(),
+                        last_opened: w.last_accessed.to_rfc3339(),
+                        kind: remote_workspace_kind(w.workspace_kind),
                     })
                     .collect();
-                RemoteResponse::RecentWorkspaces {
-                    workspaces: entries,
-                }
+                remote_recent_workspaces_response(entries)
             }
             RemoteCommand::SetWorkspace { path } => {
                 let ws_service = match get_global_workspace_service() {
                     Some(s) => s,
                     None => {
-                        return RemoteResponse::WorkspaceUpdated {
-                            success: false,
-                            path: None,
-                            project_name: None,
-                            error: Some("Workspace service not available".into()),
-                        };
+                        return remote_workspace_updated_response(Err(
+                            "Workspace service not available".to_string(),
+                        ));
                     }
                 };
                 let path_buf = std::path::PathBuf::from(path);
@@ -1319,51 +1226,39 @@ impl RemoteServer {
                         {
                             error!("Failed to initialize snapshot after remote workspace set: {e}");
                         }
-                        RemoteResponse::WorkspaceUpdated {
-                            success: true,
-                            path: Some(info.root_path.to_string_lossy().to_string()),
-                            project_name: Some(info.name.clone()),
-                            error: None,
-                        }
+                        remote_workspace_updated_response(Ok(RemoteWorkspaceUpdate {
+                            path: info.root_path.to_string_lossy().to_string(),
+                            name: info.name.clone(),
+                        }))
                     }
-                    Err(e) => RemoteResponse::WorkspaceUpdated {
-                        success: false,
-                        path: None,
-                        project_name: None,
-                        error: Some(e.to_string()),
-                    },
+                    Err(e) => remote_workspace_updated_response(Err(e.to_string())),
                 }
             }
             RemoteCommand::ListAssistants => {
                 let ws_service = match get_global_workspace_service() {
                     Some(s) => s,
                     None => {
-                        return RemoteResponse::AssistantList { assistants: vec![] };
+                        return remote_assistant_list_response(vec![]);
                     }
                 };
                 let assistants = ws_service.get_assistant_workspaces().await;
                 let entries = assistants
                     .into_iter()
-                    .map(|w| AssistantEntry {
+                    .map(|w| RemoteAssistantWorkspaceFacts {
                         path: w.root_path.to_string_lossy().to_string(),
                         name: w.name.clone(),
                         assistant_id: w.assistant_id.clone(),
                     })
                     .collect();
-                RemoteResponse::AssistantList {
-                    assistants: entries,
-                }
+                remote_assistant_list_response(entries)
             }
             RemoteCommand::SetAssistant { path } => {
                 let ws_service = match get_global_workspace_service() {
                     Some(s) => s,
                     None => {
-                        return RemoteResponse::AssistantUpdated {
-                            success: false,
-                            path: None,
-                            name: None,
-                            error: Some("Workspace service not available".into()),
-                        };
+                        return remote_assistant_updated_response(Err(
+                            "Workspace service not available".to_string(),
+                        ));
                     }
                 };
                 let path_buf = std::path::PathBuf::from(path);
@@ -1378,19 +1273,12 @@ impl RemoteServer {
                         {
                             error!("Failed to initialize snapshot after remote assistant set: {e}");
                         }
-                        RemoteResponse::AssistantUpdated {
-                            success: true,
-                            path: Some(info.root_path.to_string_lossy().to_string()),
-                            name: Some(info.name.clone()),
-                            error: None,
-                        }
+                        remote_assistant_updated_response(Ok(RemoteWorkspaceUpdate {
+                            path: info.root_path.to_string_lossy().to_string(),
+                            name: info.name.clone(),
+                        }))
                     }
-                    Err(e) => RemoteResponse::AssistantUpdated {
-                        success: false,
-                        path: None,
-                        name: None,
-                        error: Some(e.to_string()),
-                    },
+                    Err(e) => remote_assistant_updated_response(Err(e.to_string())),
                 }
             }
             _ => RemoteResponse::Error {
@@ -1404,7 +1292,7 @@ impl RemoteServer {
     async fn handle_session_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
         use crate::agentic::coordination::get_global_coordinator;
         use bitfun_services_integrations::remote_connect::{
-            build_remote_session_create_request, RemoteConnectSubmissionSource,
+            RemoteConnectSubmissionSource, build_remote_session_create_request,
         };
 
         let coordinator = match get_global_coordinator() {
@@ -1448,28 +1336,24 @@ impl RemoteServer {
                     match PersistenceManager::new(pm) {
                         Ok(store) => match store.list_session_metadata(&workspace_path).await {
                             Ok(all_meta) => {
-                                let total = all_meta.len();
-                                let has_more = page_offset + page_size < total;
-                                let sessions: Vec<SessionInfo> = all_meta
+                                let sessions: Vec<RemoteSessionMetadata> = all_meta
                                     .into_iter()
-                                    .skip(page_offset)
-                                    .take(page_size)
-                                    .map(|s| {
-                                        let created = (s.created_at / 1000).to_string();
-                                        let updated = (s.last_active_at / 1000).to_string();
-                                        SessionInfo {
-                                            session_id: s.session_id,
-                                            name: s.session_name,
-                                            agent_type: s.agent_type,
-                                            created_at: created,
-                                            updated_at: updated,
-                                            message_count: s.turn_count,
-                                            workspace_path: Some(ws_str.clone()),
-                                            workspace_name: workspace_name.clone(),
-                                        }
+                                    .map(|s| RemoteSessionMetadata {
+                                        session_id: s.session_id,
+                                        name: s.session_name,
+                                        agent_type: s.agent_type,
+                                        created_at_ms: s.created_at,
+                                        last_active_at_ms: s.last_active_at,
+                                        turn_count: s.turn_count,
                                     })
                                     .collect();
-                                RemoteResponse::SessionList { sessions, has_more }
+                                remote_session_list_response(
+                                    sessions,
+                                    Some(ws_str.as_str()),
+                                    workspace_name.as_deref(),
+                                    page_size,
+                                    page_offset,
+                                )
                             }
                             Err(e) => {
                                 debug!("Session list read failed for {ws_str}: {e}");
@@ -1569,9 +1453,7 @@ impl RemoteServer {
                 let submission_port =
                     CoreServiceAgentRuntime::agent_submission_port(coordinator.as_ref());
                 match submission_port.create_session(request).await {
-                    Ok(session) => RemoteResponse::SessionCreated {
-                        session_id: session.session_id,
-                    },
+                    Ok(session) => remote_session_created_response(session.session_id),
                     Err(e) => RemoteResponse::Error { message: e.message },
                 }
             }
@@ -1657,10 +1539,10 @@ impl RemoteServer {
                     .update_session_model_id(session_id, &normalized_model_id)
                     .await
                 {
-                    Ok(()) => RemoteResponse::SessionModelUpdated {
-                        session_id: session_id.clone(),
-                        model_id: normalized_model_id,
-                    },
+                    Ok(()) => remote_session_model_updated_response(
+                        session_id.clone(),
+                        normalized_model_id,
+                    ),
                     Err(e) => RemoteResponse::Error {
                         message: e.to_string(),
                     },
@@ -1682,11 +1564,7 @@ impl RemoteServer {
                 let (chat_msgs, has_more) =
                     load_chat_messages_from_conversation_persistence(&workspace_path, session_id)
                         .await;
-                RemoteResponse::Messages {
-                    session_id: session_id.clone(),
-                    messages: chat_msgs,
-                    has_more,
-                }
+                remote_messages_response(session_id.clone(), chat_msgs, has_more)
             }
             RemoteCommand::DeleteSession { session_id } => {
                 let Some(workspace_path) = resolve_session_workspace_path(session_id).await else {
@@ -1704,9 +1582,7 @@ impl RemoteServer {
                 {
                     Ok(_) => {
                         get_or_init_global_dispatcher().remove_tracker(session_id);
-                        RemoteResponse::SessionDeleted {
-                            session_id: session_id.clone(),
-                        }
+                        remote_session_deleted_response(session_id.clone())
                     }
                     Err(e) => RemoteResponse::Error {
                         message: e.to_string(),
@@ -1751,45 +1627,26 @@ impl RemoteServer {
                     requested_agent_type.as_deref().unwrap_or("agentic"),
                     resolved_contexts.len()
                 );
-                match dispatcher
-                    .send_message(
-                        session_id,
-                        content.clone(),
-                        requested_agent_type.as_deref(),
-                        resolved_contexts,
-                        RemoteConnectSubmissionSource::Relay,
-                        None,
-                    )
-                    .await
-                {
-                    Ok(outcome) => {
-                        let (sid, turn_id) = match outcome {
-                            RemoteDialogSubmitOutcome::Started {
-                                session_id,
-                                turn_id,
-                            }
-                            | RemoteDialogSubmitOutcome::Queued {
-                                session_id,
-                                turn_id,
-                            } => (session_id, turn_id),
-                        };
-                        RemoteResponse::MessageSent {
-                            session_id: sid,
-                            turn_id,
-                        }
-                    }
-                    Err(e) => RemoteResponse::Error { message: e },
-                }
+                remote_dialog_submit_response(
+                    dispatcher
+                        .send_message(
+                            session_id,
+                            content.clone(),
+                            requested_agent_type.as_deref(),
+                            resolved_contexts,
+                            RemoteConnectSubmissionSource::Relay,
+                            None,
+                        )
+                        .await,
+                )
             }
             RemoteCommand::CancelTask {
                 session_id,
                 turn_id,
-            } => match dispatcher.cancel_task(session_id, turn_id.as_deref()).await {
-                Ok(()) => RemoteResponse::TaskCancelled {
-                    session_id: session_id.clone(),
-                },
-                Err(e) => RemoteResponse::Error { message: e },
-            },
+            } => remote_task_cancel_response(
+                session_id.clone(),
+                dispatcher.cancel_task(session_id, turn_id.as_deref()).await,
+            ),
             RemoteCommand::ConfirmTool {
                 tool_id,
                 updated_input,
@@ -1802,18 +1659,15 @@ impl RemoteServer {
                         };
                     }
                 };
-                match coordinator
-                    .confirm_tool(tool_id, updated_input.clone())
-                    .await
-                {
-                    Ok(_) => RemoteResponse::InteractionAccepted {
-                        action: "confirm_tool".to_string(),
-                        target_id: tool_id.clone(),
-                    },
-                    Err(e) => RemoteResponse::Error {
-                        message: e.to_string(),
-                    },
-                }
+                remote_interaction_accepted_response(
+                    "confirm_tool",
+                    tool_id.clone(),
+                    coordinator
+                        .confirm_tool(tool_id, updated_input.clone())
+                        .await
+                        .map(|_| ())
+                        .map_err(|e| e.to_string()),
+                )
             }
             RemoteCommand::RejectTool { tool_id, reason } => {
                 let coordinator = match get_global_coordinator() {
@@ -1827,15 +1681,15 @@ impl RemoteServer {
                 let reject_reason = reason
                     .clone()
                     .unwrap_or_else(|| "User rejected".to_string());
-                match coordinator.reject_tool(tool_id, reject_reason).await {
-                    Ok(_) => RemoteResponse::InteractionAccepted {
-                        action: "reject_tool".to_string(),
-                        target_id: tool_id.clone(),
-                    },
-                    Err(e) => RemoteResponse::Error {
-                        message: e.to_string(),
-                    },
-                }
+                remote_interaction_accepted_response(
+                    "reject_tool",
+                    tool_id.clone(),
+                    coordinator
+                        .reject_tool(tool_id, reject_reason)
+                        .await
+                        .map(|_| ())
+                        .map_err(|e| e.to_string()),
+                )
             }
             RemoteCommand::CancelTool { tool_id, reason } => {
                 let coordinator = match get_global_coordinator() {
@@ -1849,23 +1703,20 @@ impl RemoteServer {
                 let cancel_reason = reason
                     .clone()
                     .unwrap_or_else(|| "User cancelled".to_string());
-                match coordinator.cancel_tool(tool_id, cancel_reason).await {
-                    Ok(_) => RemoteResponse::InteractionAccepted {
-                        action: "cancel_tool".to_string(),
-                        target_id: tool_id.clone(),
-                    },
-                    Err(e) => RemoteResponse::Error {
-                        message: e.to_string(),
-                    },
-                }
+                remote_interaction_accepted_response(
+                    "cancel_tool",
+                    tool_id.clone(),
+                    coordinator
+                        .cancel_tool(tool_id, cancel_reason)
+                        .await
+                        .map(|_| ())
+                        .map_err(|e| e.to_string()),
+                )
             }
             RemoteCommand::AnswerQuestion { tool_id, answers } => {
                 use crate::agentic::tools::user_input_manager::get_user_input_manager;
                 let mgr = get_user_input_manager();
-                match mgr.send_answer(tool_id, answers.clone()) {
-                    Ok(()) => RemoteResponse::AnswerAccepted,
-                    Err(e) => RemoteResponse::Error { message: e },
-                }
+                remote_answer_question_response(mgr.send_answer(tool_id, answers.clone()))
             }
             _ => RemoteResponse::Error {
                 message: "Unknown execution command".into(),
@@ -1879,7 +1730,7 @@ mod tests {
     use super::*;
     use crate::service::remote_connect::encryption::KeyPair;
     use bitfun_services_integrations::remote_connect::{
-        remote_session_restore_target, resolve_remote_cancel_decision, RemoteCancelDecision,
+        RemoteCancelDecision, remote_session_restore_target, resolve_remote_cancel_decision,
     };
 
     #[test]

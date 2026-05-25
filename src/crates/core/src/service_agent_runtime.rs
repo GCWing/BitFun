@@ -13,7 +13,8 @@ use bitfun_services_integrations::remote_connect::{RemoteImageContext, RemoteIma
 use crate::agentic::coordination::ConversationCoordinator;
 use crate::agentic::image_analysis::ImageContextData;
 use crate::service::remote_connect::remote_server::{
-    CoreRemoteCancelRuntimeHost, CoreRemoteDialogRuntimeHost, RemoteExecutionDispatcher,
+    CoreRemoteCancelRuntimeHost, CoreRemoteDialogRuntimeHost, CoreRemoteWorkspaceFileRuntimeHost,
+    RemoteExecutionDispatcher,
 };
 
 impl RemoteImageContextAdapter for ImageContextData {
@@ -39,6 +40,10 @@ impl CoreServiceAgentRuntime {
 
     pub(crate) fn remote_cancel_host() -> Result<CoreRemoteCancelRuntimeHost, String> {
         CoreRemoteCancelRuntimeHost::new()
+    }
+
+    pub(crate) fn remote_workspace_file_host() -> CoreRemoteWorkspaceFileRuntimeHost {
+        CoreRemoteWorkspaceFileRuntimeHost::new()
     }
 
     pub(crate) fn remote_image_context(context: RemoteImageContext) -> ImageContextData {

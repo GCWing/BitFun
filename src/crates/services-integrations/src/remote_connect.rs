@@ -623,6 +623,361 @@ pub async fn read_remote_workspace_file_info(
     })
 }
 
+#[async_trait::async_trait]
+pub trait RemoteWorkspaceFileRuntimeHost: Send + Sync {
+    async fn resolve_remote_file_workspace_root(&self, session_id: Option<&str>)
+    -> Option<PathBuf>;
+}
+
+pub fn remote_file_content_response(
+    result: Result<RemoteWorkspaceFileContent, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(content) => {
+            use base64::Engine as _;
+            RemoteResponse::FileContent {
+                name: content.name,
+                content_base64: base64::engine::general_purpose::STANDARD.encode(&content.bytes),
+                mime_type: content.mime_type.to_string(),
+                size: content.size,
+            }
+        }
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_file_chunk_response(
+    result: Result<RemoteWorkspaceFileChunk, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(chunk) => {
+            use base64::Engine as _;
+            RemoteResponse::FileChunk {
+                name: chunk.name,
+                chunk_base64: base64::engine::general_purpose::STANDARD.encode(&chunk.bytes),
+                offset: chunk.offset,
+                chunk_size: chunk.chunk_size,
+                total_size: chunk.total_size,
+                mime_type: chunk.mime_type.to_string(),
+            }
+        }
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_file_info_response(
+    result: Result<RemoteWorkspaceFileInfo, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(info) => RemoteResponse::FileInfo {
+            name: info.name,
+            size: info.size,
+            mime_type: info.mime_type.to_string(),
+        },
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub async fn handle_remote_workspace_file_command<H>(
+    host: &H,
+    command: &RemoteCommand,
+) -> RemoteResponse
+where
+    H: RemoteWorkspaceFileRuntimeHost + ?Sized,
+{
+    match command {
+        RemoteCommand::ReadFile { path, session_id } => {
+            let workspace_root = host
+                .resolve_remote_file_workspace_root(session_id.as_deref())
+                .await;
+            remote_file_content_response(
+                read_remote_workspace_file(
+                    path,
+                    REMOTE_FILE_MAX_READ_BYTES,
+                    workspace_root.as_deref(),
+                )
+                .await,
+            )
+        }
+        RemoteCommand::ReadFileChunk {
+            path,
+            session_id,
+            offset,
+            limit,
+        } => {
+            let workspace_root = host
+                .resolve_remote_file_workspace_root(session_id.as_deref())
+                .await;
+            remote_file_chunk_response(
+                read_remote_workspace_file_chunk(path, workspace_root.as_deref(), *offset, *limit)
+                    .await,
+            )
+        }
+        RemoteCommand::GetFileInfo { path, session_id } => {
+            let workspace_root = host
+                .resolve_remote_file_workspace_root(session_id.as_deref())
+                .await;
+            remote_file_info_response(
+                read_remote_workspace_file_info(path, workspace_root.as_deref()).await,
+            )
+        }
+        _ => RemoteResponse::Error {
+            message: "Unsupported remote workspace file command".to_string(),
+        },
+    }
+}
+
+pub fn remote_dialog_submit_response(
+    result: Result<RemoteDialogSubmitOutcome, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(RemoteDialogSubmitOutcome::Started {
+            session_id,
+            turn_id,
+        })
+        | Ok(RemoteDialogSubmitOutcome::Queued {
+            session_id,
+            turn_id,
+        }) => RemoteResponse::MessageSent {
+            session_id,
+            turn_id,
+        },
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_task_cancel_response(
+    session_id: impl Into<String>,
+    result: Result<(), String>,
+) -> RemoteResponse {
+    match result {
+        Ok(()) => RemoteResponse::TaskCancelled {
+            session_id: session_id.into(),
+        },
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_interaction_accepted_response(
+    action: impl Into<String>,
+    target_id: impl Into<String>,
+    result: Result<(), String>,
+) -> RemoteResponse {
+    match result {
+        Ok(()) => RemoteResponse::InteractionAccepted {
+            action: action.into(),
+            target_id: target_id.into(),
+        },
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_answer_question_response(result: Result<(), String>) -> RemoteResponse {
+    match result {
+        Ok(()) => RemoteResponse::AnswerAccepted,
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -> RemoteResponse {
+    match workspace {
+        Some(workspace) => RemoteResponse::WorkspaceInfo {
+            has_workspace: true,
+            path: Some(workspace.path),
+            project_name: Some(workspace.name),
+            git_branch: workspace.git_branch,
+            workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
+            assistant_id: workspace.assistant_id,
+        },
+        None => RemoteResponse::WorkspaceInfo {
+            has_workspace: false,
+            path: None,
+            project_name: None,
+            git_branch: None,
+            workspace_kind: None,
+            assistant_id: None,
+        },
+    }
+}
+
+pub fn remote_recent_workspaces_response(
+    workspaces: Vec<RemoteRecentWorkspaceFacts>,
+) -> RemoteResponse {
+    RemoteResponse::RecentWorkspaces {
+        workspaces: workspaces
+            .into_iter()
+            .map(|workspace| RecentWorkspaceEntry {
+                path: workspace.path,
+                name: workspace.name,
+                last_opened: workspace.last_opened,
+                workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
+            })
+            .collect(),
+    }
+}
+
+pub fn remote_assistant_list_response(
+    assistants: Vec<RemoteAssistantWorkspaceFacts>,
+) -> RemoteResponse {
+    RemoteResponse::AssistantList {
+        assistants: assistants
+            .into_iter()
+            .map(|assistant| AssistantEntry {
+                path: assistant.path,
+                name: assistant.name,
+                assistant_id: assistant.assistant_id,
+            })
+            .collect(),
+    }
+}
+
+pub fn remote_workspace_updated_response(
+    result: Result<RemoteWorkspaceUpdate, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(update) => RemoteResponse::WorkspaceUpdated {
+            success: true,
+            path: Some(update.path),
+            project_name: Some(update.name),
+            error: None,
+        },
+        Err(message) => RemoteResponse::WorkspaceUpdated {
+            success: false,
+            path: None,
+            project_name: None,
+            error: Some(message),
+        },
+    }
+}
+
+pub fn remote_assistant_updated_response(
+    result: Result<RemoteWorkspaceUpdate, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(update) => RemoteResponse::AssistantUpdated {
+            success: true,
+            path: Some(update.path),
+            name: Some(update.name),
+            error: None,
+        },
+        Err(message) => RemoteResponse::AssistantUpdated {
+            success: false,
+            path: None,
+            name: None,
+            error: Some(message),
+        },
+    }
+}
+
+pub fn remote_session_info(
+    metadata: &RemoteSessionMetadata,
+    workspace_path: Option<&str>,
+    workspace_name: Option<&str>,
+) -> SessionInfo {
+    SessionInfo {
+        session_id: metadata.session_id.clone(),
+        name: metadata.name.clone(),
+        agent_type: metadata.agent_type.clone(),
+        created_at: (metadata.created_at_ms / 1000).to_string(),
+        updated_at: (metadata.last_active_at_ms / 1000).to_string(),
+        message_count: metadata.turn_count,
+        workspace_path: workspace_path.map(ToOwned::to_owned),
+        workspace_name: workspace_name.map(ToOwned::to_owned),
+    }
+}
+
+pub fn remote_session_list_response(
+    metadata: Vec<RemoteSessionMetadata>,
+    workspace_path: Option<&str>,
+    workspace_name: Option<&str>,
+    limit: usize,
+    offset: usize,
+) -> RemoteResponse {
+    let page_size = limit.min(100);
+    let total = metadata.len();
+    let has_more = offset.saturating_add(page_size) < total;
+    let sessions = metadata
+        .iter()
+        .skip(offset)
+        .take(page_size)
+        .map(|session| remote_session_info(session, workspace_path, workspace_name))
+        .collect();
+
+    RemoteResponse::SessionList { sessions, has_more }
+}
+
+pub fn remote_initial_sync_response(
+    workspace: Option<RemoteWorkspaceFacts>,
+    metadata: Vec<RemoteSessionMetadata>,
+    session_workspace_name: Option<&str>,
+    has_more_sessions: bool,
+    authenticated_user_id: Option<String>,
+) -> RemoteResponse {
+    let (has_workspace, path, project_name, git_branch, workspace_kind, assistant_id) =
+        match workspace {
+            Some(workspace) => (
+                true,
+                Some(workspace.path.clone()),
+                Some(workspace.name.clone()),
+                workspace.git_branch.clone(),
+                Some(workspace.kind.as_wire_str().to_string()),
+                workspace.assistant_id.clone(),
+            ),
+            None => (false, None, None, None, None, None),
+        };
+    let workspace_path = path.as_deref();
+    let sessions = metadata
+        .iter()
+        .map(|session| remote_session_info(session, workspace_path, session_workspace_name))
+        .collect();
+
+    RemoteResponse::InitialSync {
+        has_workspace,
+        path,
+        project_name,
+        git_branch,
+        workspace_kind,
+        assistant_id,
+        sessions,
+        has_more_sessions,
+        authenticated_user_id,
+    }
+}
+
+pub fn remote_session_created_response(session_id: impl Into<String>) -> RemoteResponse {
+    RemoteResponse::SessionCreated {
+        session_id: session_id.into(),
+    }
+}
+
+pub fn remote_session_model_updated_response(
+    session_id: impl Into<String>,
+    model_id: impl Into<String>,
+) -> RemoteResponse {
+    RemoteResponse::SessionModelUpdated {
+        session_id: session_id.into(),
+        model_id: model_id.into(),
+    }
+}
+
+pub fn remote_messages_response(
+    session_id: impl Into<String>,
+    messages: Vec<ChatMessage>,
+    has_more: bool,
+) -> RemoteResponse {
+    RemoteResponse::Messages {
+        session_id: session_id.into(),
+        messages,
+        has_more,
+    }
+}
+
+pub fn remote_session_deleted_response(session_id: impl Into<String>) -> RemoteResponse {
+    RemoteResponse::SessionDeleted {
+        session_id: session_id.into(),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct RemoteDefaultModelsConfig {
     pub primary: Option<String>,
@@ -749,6 +1104,63 @@ pub struct AssistantEntry {
     pub path: String,
     pub name: String,
     pub assistant_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteWorkspaceKind {
+    Normal,
+    Assistant,
+    Remote,
+}
+
+impl RemoteWorkspaceKind {
+    pub const fn as_wire_str(self) -> &'static str {
+        match self {
+            RemoteWorkspaceKind::Normal => "normal",
+            RemoteWorkspaceKind::Assistant => "assistant",
+            RemoteWorkspaceKind::Remote => "remote",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteWorkspaceFacts {
+    pub path: String,
+    pub name: String,
+    pub git_branch: Option<String>,
+    pub kind: RemoteWorkspaceKind,
+    pub assistant_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteRecentWorkspaceFacts {
+    pub path: String,
+    pub name: String,
+    pub last_opened: String,
+    pub kind: RemoteWorkspaceKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteAssistantWorkspaceFacts {
+    pub path: String,
+    pub name: String,
+    pub assistant_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteWorkspaceUpdate {
+    pub path: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteSessionMetadata {
+    pub session_id: String,
+    pub name: String,
+    pub agent_type: String,
+    pub created_at_ms: u64,
+    pub last_active_at_ms: u64,
+    pub turn_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1812,9 +2224,5 @@ pub fn remote_persisted_poll_response(
 }
 
 fn non_empty_title(title: String) -> Option<String> {
-    if title.is_empty() {
-        None
-    } else {
-        Some(title)
-    }
+    if title.is_empty() { None } else { Some(title) }
 }

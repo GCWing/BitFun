@@ -85,11 +85,14 @@ SessionManager → Session → DialogTurn → ModelRound
   IO, recompile orchestration, worker process runtime, and host dispatch
   execution core-owned until a reviewed migration proves equivalence.
 - Remote-connect wire/tracker/dialog and cancel orchestration plus portable
-  file/image contracts may live in `bitfun-services-integrations`; keep
-  workspace-root source selection, response wrapping, concrete scheduler/session
-  restore, terminal pre-warm adapters, and product execution core-owned until a
-  reviewed migration proves equivalence. Core service/agent runtime bindings
-  are centralized in `src/crates/core/src/service_agent_runtime.rs`.
+  file/image contracts, remote file command/response assembly,
+  dialog/cancel/interaction response helpers, and workspace/session response
+  assembly helpers may live in `bitfun-services-integrations`; keep
+  workspace-root source selection, persistence/workspace service reads,
+  concrete scheduler/session restore, terminal pre-warm adapters, and product
+  execution core-owned until a reviewed migration proves equivalence. Core
+  service/agent runtime bindings are centralized in
+  `src/crates/core/src/service_agent_runtime.rs`.
 - Keep concrete remote SSH runtime code behind `ssh-remote`. No-default builds
   may keep workspace identity helpers and explicit unsupported stubs, but must
   not compile russh-backed SSH/SFTP/terminal/search runtime modules.

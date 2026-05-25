@@ -63,7 +63,7 @@ mcp = [
     "rmcp/transport-streamable-http-client-reqwest",
     "sse-stream",
 ]
-remote-connect = ["async-trait", "bitfun-runtime-ports", "uuid"]
+remote-connect = ["async-trait", "base64", "bitfun-runtime-ports", "uuid"]
 remote-ssh = ["dunce", "sha2", "tokio-util"]
 product-full = [
     "announcement",
