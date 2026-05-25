@@ -18,4 +18,3 @@ export function getModeDisplayDescription(
     mode.description ||
     mode.name;
 }
-

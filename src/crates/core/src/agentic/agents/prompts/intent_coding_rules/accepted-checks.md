@@ -50,4 +50,3 @@ Avoid vague checks:
 - "Works correctly."
 - "UI looks good."
 - "Tests pass."
-

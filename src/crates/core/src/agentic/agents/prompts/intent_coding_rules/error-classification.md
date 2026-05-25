@@ -45,4 +45,3 @@ Every Evidence Package should include repair-loop data when any verification fai
 - Repair attempts count.
 - Final repair status: `not_needed`, `repaired`, `blocked`, or `deferred`.
 - Remaining verification gaps.
-

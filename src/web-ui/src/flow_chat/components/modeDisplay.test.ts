@@ -44,4 +44,3 @@ describe('modeDisplay', () => {
     expect(getModeDisplayDescription(t, mode)).toBe('Intent Coding backend');
   });
 });
-

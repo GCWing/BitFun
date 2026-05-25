@@ -21,4 +21,3 @@ These rules are long-lived constraints for Coding Agent work in this repository.
 - Keep target resolution and manifest construction on the frontend.
 - Keep policy validation, queue/retry state, and report enrichment in shared core.
 - Keep Deep Review documentation aligned with implementation changes.
-

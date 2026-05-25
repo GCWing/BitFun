@@ -38,4 +38,3 @@ await api.invoke('your_command', { request: { ... } });
 - Run the smallest verification command that matches the changed surface.
 - Report skipped verification and the reason.
 - Prefer adding or updating automated tests when the project already has coverage for the touched behavior.
-

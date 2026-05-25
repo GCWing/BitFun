@@ -21,4 +21,3 @@ These rules define repository-wide security constraints for Coding Agent tasks.
 
 - Do not address looping behavior first with hard-coded string, pattern, or count blockers.
 - Investigate tool behavior, model interaction, context packaging, prompt/tool schema design, and state synchronization before adding loop controls.
-

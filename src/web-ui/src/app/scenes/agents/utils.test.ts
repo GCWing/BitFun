@@ -41,4 +41,3 @@ describe('agents utils', () => {
     ]);
   });
 });
-

@@ -34,4 +34,3 @@ Every Evidence Package should include:
 - Key context inputs.
 - Verification and repair anchors.
 - Human decisions that changed scope, risk, or acceptance.
-
