@@ -26,6 +26,24 @@ vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
   },
 }));
 
+vi.mock('@/infrastructure/theme/integrations/MonacoThemeSync', () => ({
+  monacoThemeSync: {
+    syncTheme: vi.fn(),
+  },
+}));
+
+vi.mock('@/shared/helpers/MonacoHelper', () => ({
+  MonacoHelper: {
+    getEditorFromElement: vi.fn(() => null),
+    getSelection: vi.fn(() => ({ hasSelection: false })),
+    getCursorPosition: vi.fn(() => null),
+    getWordAtCursor: vi.fn(() => undefined),
+    getFileInfo: vi.fn(() => null),
+    getContextInfo: vi.fn(() => null),
+    isInMonacoEditor: vi.fn(() => false),
+  },
+}));
+
 vi.mock('../../../shared/notification-system/services/NotificationService', () => ({
   notificationService: {
     error: vi.fn(),

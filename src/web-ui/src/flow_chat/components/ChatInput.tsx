@@ -64,6 +64,7 @@ import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { getModeDisplayDescription, getModeDisplayName } from './modeDisplay';
 import './ChatInput.scss';
 
 const log = createLogger('ChatInput');
@@ -2958,12 +2959,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           <div className="bitfun-chat-input__boost-section">
                             {incrementalCodeModes.length > 0 ? (
                               incrementalCodeModes.map(modeOption => {
-                                const modeDescription =
-                                  t(`chatInput.modeDescriptions.${modeOption.id}`, { defaultValue: '' }) ||
-                                  modeOption.description ||
-                                  modeOption.name;
-                                const modeName =
-                                  t(`chatInput.modeNames.${modeOption.id}`, { defaultValue: '' }) || modeOption.name;
+                                const modeDescription = getModeDisplayDescription(t, modeOption);
+                                const modeName = getModeDisplayName(t, modeOption);
                                 return (
                                   <Tooltip key={modeOption.id} content={modeDescription} placement="left">
                                     <div

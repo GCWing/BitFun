@@ -76,6 +76,7 @@ fn top_level_modes_default_to_auto() {
     for agent_type in [
         "agentic",
         "Multitask",
+        "IntentCoding",
         "Cowork",
         "Plan",
         "debug",
@@ -85,6 +86,26 @@ fn top_level_modes_default_to_auto() {
     ] {
         assert_eq!(default_model_id_for_builtin_agent(agent_type), "auto");
     }
+}
+
+#[tokio::test]
+async fn intent_coding_is_registered_as_top_level_mode() {
+    let registry = AgentRegistry::new();
+    let modes = registry.get_modes_info().await;
+    let intent_coding = modes
+        .iter()
+        .find(|agent| agent.id == "IntentCoding")
+        .expect("IntentCoding should be registered as a top-level mode");
+
+    assert_eq!(intent_coding.name, "Intent Coding");
+    assert!(!intent_coding.is_readonly);
+    assert!(intent_coding.default_tools.contains(&"Edit".to_string()));
+    assert!(intent_coding
+        .default_tools
+        .contains(&"AskUserQuestion".to_string()));
+    assert!(intent_coding
+        .default_tools
+        .contains(&"CreatePlan".to_string()));
 }
 
 #[tokio::test]

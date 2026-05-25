@@ -8,6 +8,7 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig(({ mode, command }) => {
   const isProduction = mode === 'production' || (command === 'build' && mode !== 'development');
+  const isTest = mode === 'test' || process.env.VITEST === 'true';
   
   return {
     plugins: [
@@ -20,6 +21,9 @@ export default defineConfig(({ mode, command }) => {
       dedupe: ['react', 'react-dom'],
       alias: {
         "@": path.resolve(__dirname, "./src"),
+        ...(isTest ? {
+          "monaco-editor": path.resolve(__dirname, "./src/test/monaco-editor.mock.ts"),
+        } : {}),
         "@/shared": path.resolve(__dirname, "./src/shared"),
         "@/core": path.resolve(__dirname, "./src/core"),
         "@/tools": path.resolve(__dirname, "./src/tools"),

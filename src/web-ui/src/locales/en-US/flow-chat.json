@@ -532,6 +532,7 @@
     "sendingToBtw": "Side session: {{title}}",
     "modeDescriptions": {
       "agentic": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
+      "IntentCoding": "Intent-aligned coding: clarify requirements, record acceptance checks, verify changes, and deliver evidence",
       "Multitask": "Multitask mode: decompose work into orthogonal branches or a DAG and proactively use subagents in parallel when it helps",
       "Claw": "Personal assistant mode for dedicated assistant workspaces and everyday task support",
       "Plan": "Plan first, execute later — clarify requirements and create an implementation plan before coding",
@@ -543,6 +544,7 @@
     },
     "modeNames": {
       "agentic": "Agentic",
+      "IntentCoding": "Intent Coding",
       "Multitask": "Multitask",
       "Claw": "Claw",
       "Plan": "Plan",

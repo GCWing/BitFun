@@ -19,6 +19,7 @@
     "lint:web:fix": "pnpm --dir src/web-ui run lint:fix",
     "i18n:audit": "node scripts/i18n-audit.mjs",
     "fmt:rs": "node scripts/format-changed-rust.mjs",
+    "agent:check": "node scripts/check-agent-workflow.mjs",
     "prebuild": "pnpm run prebuild:web",
     "prebuild:web": "pnpm run copy-assets --silent && pnpm run generate-all --silent",
     "type-check:web": "pnpm --dir src/web-ui run type-check",

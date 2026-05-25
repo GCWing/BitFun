@@ -57,6 +57,7 @@ const VALID_AGENT_TYPES = new Set([
   'agentic',
   'Multitask',
   'debug',
+  'IntentCoding',
   'Plan',
   'Cowork',
   'Claw',

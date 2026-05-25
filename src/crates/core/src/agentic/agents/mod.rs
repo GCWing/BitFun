@@ -18,8 +18,8 @@ use async_trait::async_trait;
 pub use definitions::custom::{CustomSubagent, CustomSubagentKind};
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
-    AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
-    TeamMode,
+    AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, IntentCodingMode,
+    MultitaskMode, PlanMode, TeamMode,
 };
 pub use definitions::review::{
     ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,
