@@ -50,7 +50,11 @@ impl Agent for IntentCodingMode {
     }
 
     fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::full()
+        RequestContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
+            .with_workspace_memory_files()
+            .with_project_layout()
     }
 
     fn is_readonly(&self) -> bool {
