@@ -16,11 +16,12 @@ use std::sync::{Arc, OnceLock};
 
 use super::encryption;
 use bitfun_services_integrations::remote_connect::{
-    build_remote_image_contexts, read_remote_workspace_file, read_remote_workspace_file_chunk,
-    read_remote_workspace_file_info, remote_model_catalog_poll_delta,
-    remote_no_change_poll_response, remote_persisted_poll_response, remote_snapshot_poll_response,
-    resolve_remote_cancel_decision, resolve_remote_execution_image_contexts, submit_remote_dialog,
-    RemoteCancelDecision, RemoteConnectSubmissionSource, RemoteDialogQueuePriority,
+    build_remote_image_contexts, cancel_remote_task, read_remote_workspace_file,
+    read_remote_workspace_file_chunk, read_remote_workspace_file_info,
+    remote_model_catalog_poll_delta, remote_no_change_poll_response,
+    remote_persisted_poll_response, remote_snapshot_poll_response,
+    resolve_remote_execution_image_contexts, submit_remote_dialog, RemoteCancelRuntimeHost,
+    RemoteCancelTaskRequest, RemoteConnectSubmissionSource, RemoteDialogQueuePriority,
     RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy,
     RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
     RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest,
@@ -585,6 +586,18 @@ impl<'a> CoreRemoteDialogRuntimeHost<'a> {
     }
 }
 
+pub(crate) struct CoreRemoteCancelRuntimeHost {
+    coordinator: Arc<crate::agentic::coordination::ConversationCoordinator>,
+}
+
+impl CoreRemoteCancelRuntimeHost {
+    pub(crate) fn new() -> std::result::Result<Self, String> {
+        let coordinator = crate::agentic::coordination::get_global_coordinator()
+            .ok_or_else(|| "Desktop session system not ready".to_string())?;
+        Ok(Self { coordinator })
+    }
+}
+
 fn core_dialog_submission_policy(
     policy: RemoteDialogSubmissionPolicy,
 ) -> crate::agentic::coordination::DialogSubmissionPolicy {
@@ -730,6 +743,62 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
     }
 }
 
+#[async_trait::async_trait]
+impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
+    async fn resolve_restore_workspace(&self, session_id: &str) -> Option<String> {
+        self.coordinator
+            .resolve_session_workspace_path(session_id)
+            .await
+            .map(|path| path.to_string_lossy().into_owned())
+    }
+
+    async fn remote_control_state(
+        &self,
+        session_id: &str,
+    ) -> std::result::Result<Option<bitfun_runtime_ports::RemoteControlStateSnapshot>, String> {
+        let state_port =
+            CoreServiceAgentRuntime::remote_control_state_port(self.coordinator.as_ref());
+        state_port
+            .read_remote_control_state(bitfun_runtime_ports::RemoteControlStateRequest {
+                session_id: session_id.to_string(),
+            })
+            .await
+            .map_err(|error| error.message)
+    }
+
+    async fn restore_remote_session(
+        &self,
+        session_id: &str,
+        workspace_path: &str,
+    ) -> std::result::Result<(), String> {
+        self.coordinator
+            .restore_session(std::path::Path::new(workspace_path), session_id)
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    async fn cancel_remote_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> std::result::Result<(), String> {
+        let cancellation_port =
+            CoreServiceAgentRuntime::agent_turn_cancellation_port(self.coordinator.as_ref());
+        cancellation_port
+            .cancel_turn(bitfun_runtime_ports::AgentTurnCancellationRequest {
+                session_id: session_id.to_string(),
+                turn_id: Some(turn_id.to_string()),
+                source: Some(bitfun_runtime_ports::AgentSubmissionSource::RemoteRelay),
+                reason: None,
+                wait_timeout_ms: None,
+            })
+            .await
+            .map(|_| ())
+            .map_err(|error| error.message)
+    }
+}
+
 // ── RemoteExecutionDispatcher (global singleton) ────────────────────
 
 /// Shared dispatch layer that owns the session state trackers.
@@ -819,50 +888,15 @@ impl RemoteExecutionDispatcher {
         session_id: &str,
         requested_turn_id: Option<&str>,
     ) -> std::result::Result<(), String> {
-        use crate::agentic::coordination::get_global_coordinator;
-
-        let coordinator = get_global_coordinator()
-            .ok_or_else(|| "Desktop session system not ready".to_string())?;
-
-        let session_mgr = coordinator.get_session_manager();
-        let session = match session_mgr.get_session(session_id) {
-            Some(s) => s,
-            None => {
-                let workspace_path = resolve_session_workspace_path(session_id)
-                    .await
-                    .ok_or_else(|| {
-                        format!("Workspace path not available for session: {}", session_id)
-                    })?;
-                coordinator
-                    .restore_session(&workspace_path, session_id)
-                    .await
-                    .map_err(|e| format!("Session not found: {e}"))?
-            }
-        };
-
-        let running_turn_id = match &session.state {
-            crate::agentic::core::SessionState::Processing {
-                current_turn_id, ..
-            } => Some(current_turn_id.clone()),
-            _ => None,
-        };
-
-        match resolve_remote_cancel_decision(running_turn_id.as_deref(), requested_turn_id) {
-            RemoteCancelDecision::StaleRequestedTurn => {
-                Err("This task is no longer running.".to_string())
-            }
-            RemoteCancelDecision::CancelCurrent(current_turn_id) => coordinator
-                .cancel_dialog_turn(session_id, &current_turn_id)
-                .await
-                .map_err(|e| e.to_string()),
-            RemoteCancelDecision::AlreadyFinished => {
-                Err("This task is already finished.".to_string())
-            }
-            RemoteCancelDecision::NoRunningTask => Err(format!(
-                "No running task to cancel for session: {}",
-                session_id
-            )),
-        }
+        let host = CoreServiceAgentRuntime::remote_cancel_host()?;
+        cancel_remote_task(
+            &host,
+            RemoteCancelTaskRequest {
+                session_id: session_id.to_string(),
+                requested_turn_id: requested_turn_id.map(ToOwned::to_owned),
+            },
+        )
+        .await
     }
 }
 
@@ -1844,7 +1878,9 @@ impl RemoteServer {
 mod tests {
     use super::*;
     use crate::service::remote_connect::encryption::KeyPair;
-    use bitfun_services_integrations::remote_connect::remote_session_restore_target;
+    use bitfun_services_integrations::remote_connect::{
+        remote_session_restore_target, resolve_remote_cancel_decision, RemoteCancelDecision,
+    };
 
     #[test]
     fn test_command_round_trip() {

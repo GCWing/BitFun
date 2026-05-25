@@ -38,10 +38,11 @@ moves here gradually.
 - `miniapp` owns MiniApp DTOs, compiler/bridge helpers, storage/draft/import
   file shapes, import fallback payloads, runtime search-plan helpers, worker
   install command selection, lifecycle/revision and manager state-transition
-  helpers, host-routing string policy, customization metadata policy including
-  built-in update/decline decisions, built-in bundle/hash/marker seed plan and
-  marker wire helpers, built-in source/placeholder payload contracts, port
-  traits, and storage-backed runtime state facade logic.
+  helpers including create/update/draft/apply state construction, host-routing
+  string policy, customization metadata policy including built-in
+  update/decline decisions, built-in bundle/hash/marker seed plan, seed meta
+  timestamp policy, marker wire helpers, built-in source/placeholder payload
+  contracts, port traits, and storage-backed runtime state facade logic.
 - `function-agents` owns pure function-agent DTOs, prompt templates and
   assembly helpers, commit prompt preparation, AI-response JSON extraction and
   domain error-mapping policy, diff truncation policy, JSON-string-to-domain

@@ -7,6 +7,7 @@
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
     AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionRequest, AgentSubmissionSource,
+    RemoteControlStateSnapshot,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -192,6 +193,67 @@ pub fn resolve_remote_cancel_decision(
         }
         (None, Some(_)) => RemoteCancelDecision::AlreadyFinished,
         (None, None) => RemoteCancelDecision::NoRunningTask,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteCancelTaskRequest {
+    pub session_id: String,
+    pub requested_turn_id: Option<String>,
+}
+
+#[async_trait::async_trait]
+pub trait RemoteCancelRuntimeHost: Send + Sync {
+    async fn resolve_restore_workspace(&self, session_id: &str) -> Option<String>;
+
+    async fn remote_control_state(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<RemoteControlStateSnapshot>, String>;
+
+    async fn restore_remote_session(
+        &self,
+        session_id: &str,
+        workspace_path: &str,
+    ) -> Result<(), String>;
+
+    async fn cancel_remote_turn(&self, session_id: &str, turn_id: &str) -> Result<(), String>;
+}
+
+pub async fn cancel_remote_task<H>(host: &H, request: RemoteCancelTaskRequest) -> Result<(), String>
+where
+    H: RemoteCancelRuntimeHost + ?Sized,
+{
+    let RemoteCancelTaskRequest {
+        session_id,
+        requested_turn_id,
+    } = request;
+
+    let mut state = host.remote_control_state(&session_id).await?;
+    if state.is_none() {
+        let workspace_path = host
+            .resolve_restore_workspace(&session_id)
+            .await
+            .ok_or_else(|| format!("Workspace path not available for session: {}", session_id))?;
+        host.restore_remote_session(&session_id, &workspace_path)
+            .await
+            .map_err(|error| format!("Session not found: {error}"))?;
+        state = host.remote_control_state(&session_id).await?;
+    }
+
+    let running_turn_id = state.and_then(|state| state.active_turn_id);
+    match resolve_remote_cancel_decision(running_turn_id.as_deref(), requested_turn_id.as_deref()) {
+        RemoteCancelDecision::StaleRequestedTurn => {
+            Err("This task is no longer running.".to_string())
+        }
+        RemoteCancelDecision::CancelCurrent(current_turn_id) => {
+            host.cancel_remote_turn(&session_id, &current_turn_id).await
+        }
+        RemoteCancelDecision::AlreadyFinished => Err("This task is already finished.".to_string()),
+        RemoteCancelDecision::NoRunningTask => Err(format!(
+            "No running task to cancel for session: {}",
+            session_id
+        )),
     }
 }
 

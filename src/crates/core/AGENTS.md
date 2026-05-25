@@ -79,16 +79,17 @@ SessionManager → Session → DialogTurn → ModelRound
   prompt templates, JSON extraction/repair, domain error mapping, and domain
   JSON parsing policy may live in `bitfun-product-domains`.
 - MiniApp built-in bundle/hash/marker seed-plan and marker wire helpers may
-  live in `bitfun-product-domains`; keep bundled asset includes, filesystem
-  writes, marker IO, customization metadata IO, recompile orchestration, worker
-  process runtime, and host dispatch execution core-owned until a reviewed
-  migration proves equivalence.
-- Remote-connect wire/tracker/dialog orchestration and portable file/image
-  contracts may live in `bitfun-services-integrations`; keep workspace-root
-  source selection, response wrapping, concrete scheduler/session restore,
-  terminal pre-warm adapters, and product execution core-owned until a reviewed
-  migration proves equivalence. Core service/agent runtime bindings are
-  centralized in `src/crates/core/src/service_agent_runtime.rs`.
+  live in `bitfun-product-domains`. MiniApp create/update/draft/apply pure state
+  transitions and built-in seed meta timestamp policy may also live there; keep
+  bundled asset includes, filesystem writes, marker IO, customization metadata
+  IO, recompile orchestration, worker process runtime, and host dispatch
+  execution core-owned until a reviewed migration proves equivalence.
+- Remote-connect wire/tracker/dialog and cancel orchestration plus portable
+  file/image contracts may live in `bitfun-services-integrations`; keep
+  workspace-root source selection, response wrapping, concrete scheduler/session
+  restore, terminal pre-warm adapters, and product execution core-owned until a
+  reviewed migration proves equivalence. Core service/agent runtime bindings
+  are centralized in `src/crates/core/src/service_agent_runtime.rs`.
 - Keep concrete remote SSH runtime code behind `ssh-remote`. No-default builds
   may keep workspace identity helpers and explicit unsupported stubs, but must
   not compile russh-backed SSH/SFTP/terminal/search runtime modules.

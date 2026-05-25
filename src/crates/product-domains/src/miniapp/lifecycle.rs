@@ -2,7 +2,43 @@
 
 use std::path::Path;
 
-use crate::miniapp::types::{MiniApp, MiniAppRuntimeState, MiniAppSource};
+use crate::miniapp::types::{
+    MiniApp, MiniAppAiContext, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource,
+};
+
+#[derive(Debug, Clone)]
+pub struct MiniAppCreateInput {
+    pub name: String,
+    pub description: String,
+    pub icon: String,
+    pub category: String,
+    pub tags: Vec<String>,
+    pub source: MiniAppSource,
+    pub permissions: MiniAppPermissions,
+    pub ai_context: Option<MiniAppAiContext>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct MiniAppUpdatePatch {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub icon: Option<String>,
+    pub category: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub source: Option<MiniAppSource>,
+    pub permissions: Option<MiniAppPermissions>,
+    pub ai_context: Option<MiniAppAiContext>,
+}
+
+impl MiniAppUpdatePatch {
+    pub fn source_for_compile<'a>(&'a self, previous: &'a MiniApp) -> &'a MiniAppSource {
+        self.source.as_ref().unwrap_or(&previous.source)
+    }
+
+    pub fn permissions_for_compile<'a>(&'a self, previous: &'a MiniApp) -> &'a MiniAppPermissions {
+        self.permissions.as_ref().unwrap_or(&previous.permissions)
+    }
+}
 
 pub fn build_source_revision(version: u32, updated_at: i64) -> String {
     format!("src:{version}:{updated_at}")
@@ -32,6 +68,166 @@ pub fn build_runtime_state(
         worker_restart_required,
         ui_recompile_required: false,
     }
+}
+
+pub fn build_created_app(
+    id: String,
+    input: MiniAppCreateInput,
+    compiled_html: String,
+    now: i64,
+) -> MiniApp {
+    let version = 1;
+    let runtime = build_runtime_state(
+        version,
+        now,
+        &input.source,
+        !input.source.npm_dependencies.is_empty(),
+        true,
+    );
+
+    MiniApp {
+        id,
+        name: input.name,
+        description: input.description,
+        icon: input.icon,
+        category: input.category,
+        tags: input.tags,
+        version,
+        created_at: now,
+        updated_at: now,
+        source: input.source,
+        compiled_html,
+        permissions: input.permissions,
+        ai_context: input.ai_context,
+        runtime,
+        i18n: None,
+    }
+}
+
+pub fn apply_update_patch(
+    previous: &MiniApp,
+    patch: MiniAppUpdatePatch,
+    compiled_html: String,
+    now: i64,
+) -> MiniApp {
+    let source_changed = patch.source.is_some();
+    let permissions_changed = patch.permissions.is_some();
+    let mut app = previous.clone();
+
+    if let Some(name) = patch.name {
+        app.name = name;
+    }
+    if let Some(description) = patch.description {
+        app.description = description;
+    }
+    if let Some(icon) = patch.icon {
+        app.icon = icon;
+    }
+    if let Some(category) = patch.category {
+        app.category = category;
+    }
+    if let Some(tags) = patch.tags {
+        app.tags = tags;
+    }
+    if let Some(source) = patch.source {
+        app.source = source;
+    }
+    if let Some(permissions) = patch.permissions {
+        app.permissions = permissions;
+    }
+    if let Some(ai_context) = patch.ai_context {
+        app.ai_context = Some(ai_context);
+    }
+
+    app.version += 1;
+    app.updated_at = now;
+    app.compiled_html = compiled_html;
+
+    let deps_changed = previous.source.npm_dependencies != app.source.npm_dependencies;
+    if source_changed || permissions_changed {
+        app.runtime.source_revision = build_source_revision(app.version, app.updated_at);
+        app.runtime.worker_restart_required = true;
+    }
+    if deps_changed {
+        app.runtime.deps_revision = build_deps_revision(&app.source);
+        app.runtime.deps_dirty = !app.source.npm_dependencies.is_empty();
+        app.runtime.worker_restart_required = true;
+    }
+    app.runtime.ui_recompile_required = false;
+    ensure_runtime_state(&mut app);
+    app
+}
+
+pub fn prepare_draft_app(mut app: MiniApp, compiled_html: String, now: i64) -> MiniApp {
+    app.updated_at = now;
+    app.compiled_html = compiled_html;
+    ensure_runtime_state(&mut app);
+    app
+}
+
+pub fn apply_draft_source_sync_result(
+    mut app: MiniApp,
+    compiled_html: String,
+    now: i64,
+) -> MiniApp {
+    app.updated_at = now;
+    app.compiled_html = compiled_html;
+    app.runtime = build_runtime_state(
+        app.version,
+        app.updated_at,
+        &app.source,
+        !app.source.npm_dependencies.is_empty(),
+        true,
+    );
+    app
+}
+
+pub fn apply_draft_permission_update_result(
+    mut app: MiniApp,
+    permissions: MiniAppPermissions,
+    compiled_html: String,
+    now: i64,
+) -> MiniApp {
+    app.permissions = permissions;
+    app.updated_at = now;
+    app.compiled_html = compiled_html;
+    app.runtime = build_runtime_state(
+        app.version,
+        app.updated_at,
+        &app.source,
+        !app.source.npm_dependencies.is_empty(),
+        true,
+    );
+    app
+}
+
+pub fn apply_draft_to_active(
+    current: &MiniApp,
+    draft: MiniApp,
+    compiled_html: String,
+    now: i64,
+) -> MiniApp {
+    let mut app = current.clone();
+    app.name = draft.name;
+    app.description = draft.description;
+    app.icon = draft.icon;
+    app.category = draft.category;
+    app.tags = draft.tags;
+    app.source = draft.source;
+    app.permissions = draft.permissions;
+    app.ai_context = draft.ai_context;
+    app.i18n = draft.i18n;
+    app.version = current.version + 1;
+    app.updated_at = now;
+    app.compiled_html = compiled_html;
+    app.runtime = build_runtime_state(
+        app.version,
+        app.updated_at,
+        &app.source,
+        !app.source.npm_dependencies.is_empty(),
+        true,
+    );
+    app
 }
 
 pub fn ensure_runtime_state(app: &mut MiniApp) -> bool {

@@ -1,25 +1,28 @@
 #![cfg(feature = "remote-connect")]
 
 use bitfun_events::{AgenticEvent, ToolEventData};
-use bitfun_runtime_ports::AgentSubmissionSource;
+use bitfun_runtime_ports::{
+    AgentSubmissionSource, RemoteControlSessionState, RemoteControlStateSnapshot,
+};
 use bitfun_services_integrations::remote_connect::{
     build_remote_image_attachment, build_remote_image_contexts,
     build_remote_image_submission_request, build_remote_session_create_request,
-    build_remote_submission_request, make_slim_tool_params, read_remote_workspace_file,
-    read_remote_workspace_file_chunk, read_remote_workspace_file_info, remote_file_display_name,
-    remote_model_catalog_poll_delta, remote_no_change_poll_response,
+    build_remote_submission_request, cancel_remote_task, make_slim_tool_params,
+    read_remote_workspace_file, read_remote_workspace_file_chunk, read_remote_workspace_file_info,
+    remote_file_display_name, remote_model_catalog_poll_delta, remote_no_change_poll_response,
     remote_persisted_poll_response, remote_session_restore_target, remote_snapshot_poll_response,
     resolve_remote_agent_type, resolve_remote_cancel_decision,
     resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range,
     resolve_remote_workspace_path, should_send_remote_model_catalog, submit_remote_dialog,
     ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, ImageAttachment,
-    RemoteCancelDecision, RemoteCommand, RemoteConnectSubmissionSource, RemoteDefaultModelsConfig,
-    RemoteDialogQueuePriority, RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost,
-    RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome,
-    RemoteImageContext, RemoteImageContextAdapter, RemoteModelCatalog, RemoteModelConfig,
-    RemoteResponse, RemoteSessionStateTracker, RemoteSessionTrackerHost,
-    RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest, RemoteToolStatus, TrackerEvent,
-    REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
+    RemoteCancelDecision, RemoteCancelRuntimeHost, RemoteCancelTaskRequest, RemoteCommand,
+    RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
+    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy,
+    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
+    RemoteImageContextAdapter, RemoteModelCatalog, RemoteModelConfig, RemoteResponse,
+    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteSessionTrackerRegistry,
+    RemoteTerminalPrewarmRequest, RemoteToolStatus, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES,
+    REMOTE_FILE_MAX_READ_BYTES,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -349,6 +352,115 @@ impl RemoteDialogRuntimeHost for RecordingDialogHost {
     }
 }
 
+struct RecordingCancelHost {
+    initial_state: Mutex<Option<RemoteControlStateSnapshot>>,
+    restored_state: Mutex<Option<RemoteControlStateSnapshot>>,
+    state_reads: Mutex<usize>,
+    restore_workspace: Option<String>,
+    restore_error: bool,
+    cancel_error: Option<String>,
+    events: Mutex<Vec<String>>,
+}
+
+impl RecordingCancelHost {
+    fn new(
+        initial_state: Option<RemoteControlStateSnapshot>,
+        restored_state: Option<RemoteControlStateSnapshot>,
+        restore_workspace: Option<&str>,
+    ) -> Self {
+        Self {
+            initial_state: Mutex::new(initial_state),
+            restored_state: Mutex::new(restored_state),
+            state_reads: Mutex::new(0),
+            restore_workspace: restore_workspace.map(ToOwned::to_owned),
+            restore_error: false,
+            cancel_error: None,
+            events: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn with_restore_error(mut self) -> Self {
+        self.restore_error = true;
+        self
+    }
+
+    fn events(&self) -> Vec<String> {
+        self.events.lock().unwrap().clone()
+    }
+}
+
+fn remote_state(
+    session_id: &str,
+    state: RemoteControlSessionState,
+    active_turn_id: Option<&str>,
+) -> RemoteControlStateSnapshot {
+    RemoteControlStateSnapshot {
+        session_id: session_id.to_string(),
+        state,
+        active_turn_id: active_turn_id.map(ToOwned::to_owned),
+        queue_depth: 0,
+        metadata: serde_json::Map::new(),
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteCancelRuntimeHost for RecordingCancelHost {
+    async fn resolve_restore_workspace(&self, session_id: &str) -> Option<String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("resolve_workspace:{session_id}"));
+        self.restore_workspace.clone()
+    }
+
+    async fn remote_control_state(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<RemoteControlStateSnapshot>, String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("read_state:{session_id}"));
+        let mut reads = self.state_reads.lock().unwrap();
+        let read_index = *reads;
+        *reads += 1;
+        drop(reads);
+
+        if read_index == 0 {
+            return Ok(self.initial_state.lock().unwrap().clone());
+        }
+        Ok(self.restored_state.lock().unwrap().clone())
+    }
+
+    async fn restore_remote_session(
+        &self,
+        session_id: &str,
+        workspace_path: &str,
+    ) -> Result<(), String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("restore:{session_id}:{workspace_path}"));
+        if self.restore_error {
+            Err("restore failed".to_string())
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn cancel_remote_turn(&self, session_id: &str, turn_id: &str) -> Result<(), String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("cancel:{session_id}:{turn_id}"));
+        if let Some(error) = &self.cancel_error {
+            Err(error.clone())
+        } else {
+            Ok(())
+        }
+    }
+}
+
 #[tokio::test]
 async fn remote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order() {
     let host = RecordingDialogHost::new(false, Some("D:/workspace/project"));
@@ -485,6 +597,111 @@ async fn remote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance() 
         ]
     );
     assert_eq!(host.submitted().turn_id, "turn-1");
+}
+
+#[tokio::test]
+async fn remote_connect_cancel_runtime_restores_missing_session_before_cancel() {
+    let host = RecordingCancelHost::new(
+        None,
+        Some(remote_state(
+            "session-1",
+            RemoteControlSessionState::Processing,
+            Some("turn-current"),
+        )),
+        Some("D:/workspace/project"),
+    );
+
+    cancel_remote_task(
+        &host,
+        RemoteCancelTaskRequest {
+            session_id: "session-1".to_string(),
+            requested_turn_id: None,
+        },
+    )
+    .await
+    .expect("cancel succeeds after restore");
+
+    assert_eq!(
+        host.events(),
+        vec![
+            "read_state:session-1",
+            "resolve_workspace:session-1",
+            "restore:session-1:D:/workspace/project",
+            "read_state:session-1",
+            "cancel:session-1:turn-current",
+        ]
+    );
+}
+
+#[tokio::test]
+async fn remote_connect_cancel_runtime_preserves_stale_and_idle_errors_without_restore() {
+    let stale_host = RecordingCancelHost::new(
+        Some(remote_state(
+            "session-1",
+            RemoteControlSessionState::Processing,
+            Some("turn-current"),
+        )),
+        None,
+        Some("D:/workspace/project"),
+    );
+    let err = cancel_remote_task(
+        &stale_host,
+        RemoteCancelTaskRequest {
+            session_id: "session-1".to_string(),
+            requested_turn_id: Some("turn-stale".to_string()),
+        },
+    )
+    .await
+    .expect_err("stale turn is rejected");
+    assert_eq!(err, "This task is no longer running.");
+    assert_eq!(stale_host.events(), vec!["read_state:session-1"]);
+
+    let idle_host = RecordingCancelHost::new(
+        Some(remote_state(
+            "session-2",
+            RemoteControlSessionState::Idle,
+            None,
+        )),
+        None,
+        Some("D:/workspace/project"),
+    );
+    let err = cancel_remote_task(
+        &idle_host,
+        RemoteCancelTaskRequest {
+            session_id: "session-2".to_string(),
+            requested_turn_id: None,
+        },
+    )
+    .await
+    .expect_err("idle session has no running turn");
+    assert_eq!(err, "No running task to cancel for session: session-2");
+    assert_eq!(idle_host.events(), vec!["read_state:session-2"]);
+}
+
+#[tokio::test]
+async fn remote_connect_cancel_runtime_preserves_restore_failure_error() {
+    let host =
+        RecordingCancelHost::new(None, None, Some("D:/workspace/project")).with_restore_error();
+
+    let err = cancel_remote_task(
+        &host,
+        RemoteCancelTaskRequest {
+            session_id: "session-1".to_string(),
+            requested_turn_id: Some("turn-current".to_string()),
+        },
+    )
+    .await
+    .expect_err("restore error is propagated with legacy prefix");
+
+    assert_eq!(err, "Session not found: restore failed");
+    assert_eq!(
+        host.events(),
+        vec![
+            "read_state:session-1",
+            "resolve_workspace:session-1",
+            "restore:session-1:D:/workspace/project",
+        ]
+    );
 }
 
 #[test]

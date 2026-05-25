@@ -2,12 +2,12 @@
 
 use bitfun_product_domains::miniapp::bridge_builder::{build_bridge_script, build_csp_content};
 use bitfun_product_domains::miniapp::builtin::{
-    build_builtin_install_marker, build_builtin_package_json, builtin_content_hash,
-    builtin_source_files, legacy_builtin_version_marker_content, parse_builtin_install_marker,
-    resolve_builtin_seed_action, resolve_builtin_seed_check, serialize_builtin_install_marker,
-    should_seed_builtin_app, BuiltinInstallMarker, BuiltinMiniAppBundle, BuiltinSeedAction,
-    BuiltinSeedCheck, BUILTIN_INSTALL_MARKER, BUILTIN_PLACEHOLDER_COMPILED_HTML,
-    LEGACY_BUILTIN_VERSION_MARKER,
+    build_builtin_install_marker, build_builtin_package_json, build_builtin_seed_meta,
+    builtin_content_hash, builtin_source_files, legacy_builtin_version_marker_content,
+    parse_builtin_install_marker, preserved_builtin_created_at, resolve_builtin_seed_action,
+    resolve_builtin_seed_check, serialize_builtin_install_marker, should_seed_builtin_app,
+    BuiltinInstallMarker, BuiltinMiniAppBundle, BuiltinSeedAction, BuiltinSeedCheck,
+    BUILTIN_INSTALL_MARKER, BUILTIN_PLACEHOLDER_COMPILED_HTML, LEGACY_BUILTIN_VERSION_MARKER,
 };
 use bitfun_product_domains::miniapp::compiler::compile;
 use bitfun_product_domains::miniapp::customization::{
@@ -27,10 +27,12 @@ use bitfun_product_domains::miniapp::host_routing::{
     is_host_primitive,
 };
 use bitfun_product_domains::miniapp::lifecycle::{
+    apply_draft_permission_update_result, apply_draft_source_sync_result, apply_draft_to_active,
     apply_import_runtime_state, apply_recompile_result, apply_sync_from_fs_result,
-    build_deps_revision, build_runtime_state, build_source_revision, build_worker_revision,
-    clear_worker_restart_required_state, ensure_runtime_state, mark_deps_installed_state,
-    prepare_rollback_app, workspace_dir_string,
+    apply_update_patch, build_created_app, build_deps_revision, build_runtime_state,
+    build_source_revision, build_worker_revision, clear_worker_restart_required_state,
+    ensure_runtime_state, mark_deps_installed_state, prepare_draft_app, prepare_rollback_app,
+    workspace_dir_string, MiniAppCreateInput, MiniAppUpdatePatch,
 };
 use bitfun_product_domains::miniapp::permission_policy::resolve_policy;
 use bitfun_product_domains::miniapp::ports::{
@@ -49,8 +51,8 @@ use bitfun_product_domains::miniapp::storage::{
     REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, VERSIONS_DIR, WORKER_JS,
 };
 use bitfun_product_domains::miniapp::types::{
-    FsPermissions, MiniApp, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource, NetPermissions,
-    NotificationPermissions, NpmDep,
+    FsPermissions, MiniApp, MiniAppAiContext, MiniAppI18n, MiniAppPermissions, MiniAppRuntimeState,
+    MiniAppSource, NetPermissions, NotificationPermissions, NpmDep,
 };
 use bitfun_product_domains::miniapp::worker::{install_command_for_runtime, InstallResult};
 use std::collections::BTreeMap;
@@ -634,6 +636,217 @@ fn miniapp_lifecycle_manager_state_helpers_preserve_core_transitions() {
 }
 
 #[test]
+fn miniapp_lifecycle_create_and_update_helpers_preserve_manager_contract() {
+    let source = MiniAppSource {
+        css: "body { color: black; }".to_string(),
+        ..MiniAppSource::default()
+    };
+    let ai_context = MiniAppAiContext {
+        original_prompt: "build a dashboard".to_string(),
+        conversation_id: Some("conversation-1".to_string()),
+        iteration_history: vec!["created".to_string()],
+    };
+
+    let created = build_created_app(
+        "app-1".to_string(),
+        MiniAppCreateInput {
+            name: "Demo".to_string(),
+            description: "Demo app".to_string(),
+            icon: "sparkles".to_string(),
+            category: "tools".to_string(),
+            tags: vec!["demo".to_string()],
+            source: source.clone(),
+            permissions: MiniAppPermissions::default(),
+            ai_context: Some(ai_context.clone()),
+        },
+        "<html>created</html>".to_string(),
+        1000,
+    );
+
+    assert_eq!(created.id, "app-1");
+    assert_eq!(created.version, 1);
+    assert_eq!(created.created_at, 1000);
+    assert_eq!(created.updated_at, 1000);
+    assert_eq!(created.compiled_html, "<html>created</html>");
+    assert_eq!(
+        created.ai_context.as_ref().unwrap().conversation_id,
+        ai_context.conversation_id
+    );
+    assert_eq!(created.runtime.source_revision, "src:1:1000");
+    assert!(!created.runtime.deps_dirty);
+    assert!(created.runtime.worker_restart_required);
+    assert!(created.i18n.is_none());
+
+    let updated_source = MiniAppSource {
+        css: "body { color: red; }".to_string(),
+        npm_dependencies: vec![NpmDep {
+            name: "lodash".to_string(),
+            version: "^4.17.21".to_string(),
+        }],
+        ..source
+    };
+    let updated_permissions = MiniAppPermissions {
+        fs: Some(FsPermissions {
+            read: Some(vec!["{workspace}".to_string()]),
+            write: None,
+        }),
+        ..MiniAppPermissions::default()
+    };
+    let patch = MiniAppUpdatePatch {
+        name: Some("Updated".to_string()),
+        source: Some(updated_source.clone()),
+        permissions: Some(updated_permissions.clone()),
+        ..MiniAppUpdatePatch::default()
+    };
+    assert_eq!(patch.source_for_compile(&created).css, updated_source.css);
+    assert!(patch.permissions_for_compile(&created).fs.is_some());
+
+    let updated = apply_update_patch(&created, patch, "<html>updated</html>".to_string(), 2000);
+
+    assert_eq!(updated.name, "Updated");
+    assert_eq!(updated.description, created.description);
+    assert_eq!(updated.tags, created.tags);
+    assert_eq!(
+        updated.ai_context.as_ref().unwrap().original_prompt,
+        "build a dashboard"
+    );
+    assert_eq!(updated.version, 2);
+    assert_eq!(updated.created_at, 1000);
+    assert_eq!(updated.updated_at, 2000);
+    assert_eq!(updated.compiled_html, "<html>updated</html>");
+    assert_eq!(updated.source.css, "body { color: red; }");
+    assert_eq!(
+        updated
+            .permissions
+            .fs
+            .as_ref()
+            .unwrap()
+            .read
+            .as_ref()
+            .unwrap()[0],
+        "{workspace}"
+    );
+    assert_eq!(updated.runtime.source_revision, "src:2:2000");
+    assert_eq!(updated.runtime.deps_revision, "lodash@^4.17.21");
+    assert!(updated.runtime.deps_dirty);
+    assert!(updated.runtime.worker_restart_required);
+    assert!(!updated.runtime.ui_recompile_required);
+
+    let metadata_only = apply_update_patch(
+        &updated,
+        MiniAppUpdatePatch {
+            tags: Some(vec!["metadata".to_string()]),
+            ..MiniAppUpdatePatch::default()
+        },
+        "<html>metadata</html>".to_string(),
+        3000,
+    );
+
+    assert_eq!(metadata_only.version, 3);
+    assert_eq!(metadata_only.updated_at, 3000);
+    assert_eq!(metadata_only.tags, vec!["metadata".to_string()]);
+    assert_eq!(metadata_only.runtime.source_revision, "src:2:2000");
+    assert_eq!(metadata_only.runtime.deps_revision, "lodash@^4.17.21");
+    assert!(metadata_only.runtime.deps_dirty);
+    assert!(metadata_only.runtime.worker_restart_required);
+    assert!(!metadata_only.runtime.ui_recompile_required);
+}
+
+#[test]
+fn miniapp_lifecycle_draft_helpers_preserve_manager_contract() {
+    let mut active = sample_miniapp_for_lifecycle(MiniAppSource {
+        css: "body { color: black; }".to_string(),
+        ..MiniAppSource::default()
+    });
+    active.runtime = build_runtime_state(
+        active.version,
+        active.updated_at,
+        &active.source,
+        false,
+        false,
+    );
+
+    let prepared = prepare_draft_app(active.clone(), "<html>draft</html>".to_string(), 2000);
+
+    assert_eq!(prepared.version, active.version);
+    assert_eq!(prepared.source.css, "body { color: black; }");
+    assert_eq!(prepared.updated_at, 2000);
+    assert_eq!(prepared.compiled_html, "<html>draft</html>");
+    assert_eq!(prepared.runtime.source_revision, "src:3:1234");
+    assert!(!prepared.runtime.worker_restart_required);
+
+    let mut draft_from_fs = prepared.clone();
+    draft_from_fs.source = MiniAppSource {
+        css: "body { background: white; }".to_string(),
+        npm_dependencies: vec![NpmDep {
+            name: "lodash".to_string(),
+            version: "^4.17.21".to_string(),
+        }],
+        ..MiniAppSource::default()
+    };
+    let synced =
+        apply_draft_source_sync_result(draft_from_fs, "<html>synced</html>".to_string(), 3000);
+
+    assert_eq!(synced.version, active.version);
+    assert_eq!(synced.updated_at, 3000);
+    assert_eq!(synced.source.css, "body { background: white; }");
+    assert_eq!(synced.runtime.source_revision, "src:3:3000");
+    assert_eq!(synced.runtime.deps_revision, "lodash@^4.17.21");
+    assert!(synced.runtime.deps_dirty);
+    assert!(synced.runtime.worker_restart_required);
+
+    let updated_permissions = MiniAppPermissions {
+        fs: Some(FsPermissions {
+            read: None,
+            write: Some(vec!["{workspace}".to_string()]),
+        }),
+        ..MiniAppPermissions::default()
+    };
+    let permissioned = apply_draft_permission_update_result(
+        synced.clone(),
+        updated_permissions,
+        "<html>permissioned</html>".to_string(),
+        4000,
+    );
+
+    assert_eq!(permissioned.version, active.version);
+    assert_eq!(permissioned.updated_at, 4000);
+    assert!(permissioned
+        .permissions
+        .fs
+        .as_ref()
+        .unwrap()
+        .write
+        .is_some());
+    assert_eq!(permissioned.runtime.source_revision, "src:3:4000");
+    assert!(permissioned.runtime.worker_restart_required);
+
+    let mut draft_to_apply = permissioned;
+    draft_to_apply.name = "Draft name".to_string();
+    draft_to_apply.description = "Draft description".to_string();
+    draft_to_apply.i18n = Some(MiniAppI18n::default());
+
+    let applied = apply_draft_to_active(
+        &active,
+        draft_to_apply,
+        "<html>applied</html>".to_string(),
+        5000,
+    );
+
+    assert_eq!(applied.id, active.id);
+    assert_eq!(applied.created_at, active.created_at);
+    assert_eq!(applied.version, active.version + 1);
+    assert_eq!(applied.updated_at, 5000);
+    assert_eq!(applied.name, "Draft name");
+    assert_eq!(applied.description, "Draft description");
+    assert_eq!(applied.compiled_html, "<html>applied</html>");
+    assert!(applied.i18n.is_some());
+    assert_eq!(applied.runtime.source_revision, "src:4:5000");
+    assert!(applied.runtime.deps_dirty);
+    assert!(applied.runtime.worker_restart_required);
+}
+
+#[test]
 fn miniapp_storage_package_json_contract_remains_stable() {
     let deps = parse_npm_dependencies(
         r#"{
@@ -840,6 +1053,59 @@ fn miniapp_builtin_contract_owns_seed_plan_and_marker_wire_shape() {
         )
     );
     assert_eq!(parse_builtin_install_marker(&serialized).unwrap(), marker);
+}
+
+#[test]
+fn miniapp_builtin_contract_owns_seed_meta_timestamp_policy() {
+    let app = BuiltinMiniAppBundle {
+        id: "builtin-demo",
+        version: 7,
+        meta_json: r#"{
+            "id": "template-id",
+            "name": "Built in",
+            "description": "Demo",
+            "icon": "box",
+            "category": "tools",
+            "version": 7,
+            "created_at": 1,
+            "updated_at": 2
+        }"#,
+        html: "<!doctype html><html></html>",
+        css: "",
+        ui_js: "",
+        worker_js: "",
+        esm_dependencies_json: "[]",
+    };
+
+    let fresh_meta = build_builtin_seed_meta(&app, None, 1000).unwrap();
+    assert_eq!(fresh_meta.id, "builtin-demo");
+    assert_eq!(fresh_meta.created_at, 1000);
+    assert_eq!(fresh_meta.updated_at, 1000);
+
+    let existing_meta = r#"{
+        "id": "builtin-demo",
+        "name": "Existing",
+        "description": "Existing",
+        "icon": "box",
+        "category": "tools",
+        "version": 6,
+        "created_at": 123,
+        "updated_at": 456
+    }"#;
+    assert_eq!(preserved_builtin_created_at(Some(existing_meta)), Some(123));
+    assert_eq!(preserved_builtin_created_at(Some("{not json")), None);
+    assert_eq!(preserved_builtin_created_at(None), None);
+
+    let updated_meta = build_builtin_seed_meta(
+        &app,
+        preserved_builtin_created_at(Some(existing_meta)),
+        2000,
+    )
+    .unwrap();
+    assert_eq!(updated_meta.id, "builtin-demo");
+    assert_eq!(updated_meta.name, "Built in");
+    assert_eq!(updated_meta.created_at, 123);
+    assert_eq!(updated_meta.updated_at, 2000);
 }
 
 #[test]

@@ -5,13 +5,15 @@
 //! session restore, terminal pre-warm, remote image conversion, and runtime-port
 //! implementations until a reviewed port/provider migration proves equivalence.
 
-use bitfun_runtime_ports::AgentSubmissionPort;
+use bitfun_runtime_ports::{
+    AgentSubmissionPort, AgentTurnCancellationPort, RemoteControlStatePort,
+};
 use bitfun_services_integrations::remote_connect::{RemoteImageContext, RemoteImageContextAdapter};
 
 use crate::agentic::coordination::ConversationCoordinator;
 use crate::agentic::image_analysis::ImageContextData;
 use crate::service::remote_connect::remote_server::{
-    CoreRemoteDialogRuntimeHost, RemoteExecutionDispatcher,
+    CoreRemoteCancelRuntimeHost, CoreRemoteDialogRuntimeHost, RemoteExecutionDispatcher,
 };
 
 impl RemoteImageContextAdapter for ImageContextData {
@@ -35,6 +37,10 @@ impl CoreServiceAgentRuntime {
         CoreRemoteDialogRuntimeHost::new(dispatcher)
     }
 
+    pub(crate) fn remote_cancel_host() -> Result<CoreRemoteCancelRuntimeHost, String> {
+        CoreRemoteCancelRuntimeHost::new()
+    }
+
     pub(crate) fn remote_image_context(context: RemoteImageContext) -> ImageContextData {
         ImageContextData::from_remote_image_context(context)
     }
@@ -42,6 +48,18 @@ impl CoreServiceAgentRuntime {
     pub(crate) fn agent_submission_port(
         coordinator: &ConversationCoordinator,
     ) -> &(dyn AgentSubmissionPort + '_) {
+        coordinator
+    }
+
+    pub(crate) fn agent_turn_cancellation_port(
+        coordinator: &ConversationCoordinator,
+    ) -> &(dyn AgentTurnCancellationPort + '_) {
+        coordinator
+    }
+
+    pub(crate) fn remote_control_state_port(
+        coordinator: &ConversationCoordinator,
+    ) -> &(dyn RemoteControlStatePort + '_) {
         coordinator
     }
 }
@@ -66,5 +84,22 @@ mod tests {
         }
 
         assert_runtime_ports::<ConversationCoordinator>();
+    }
+
+    #[test]
+    fn core_service_agent_runtime_owner_exposes_remote_control_ports() {
+        fn assert_port_accessors(
+            coordinator: &ConversationCoordinator,
+        ) -> (
+            &(dyn AgentTurnCancellationPort + '_),
+            &(dyn RemoteControlStatePort + '_),
+        ) {
+            (
+                CoreServiceAgentRuntime::agent_turn_cancellation_port(coordinator),
+                CoreServiceAgentRuntime::remote_control_state_port(coordinator),
+            )
+        }
+
+        let _ = assert_port_accessors;
     }
 }

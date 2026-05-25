@@ -573,6 +573,36 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/miniapp/manager.rs',
+    patterns: [
+      {
+        regex: /\bbuild_runtime_state\b/,
+        message:
+          'core MiniApp manager must not build runtime state directly; use product-domain lifecycle helpers',
+      },
+      {
+        regex: /\bbuild_source_revision\b/,
+        message:
+          'core MiniApp manager must not build source revisions directly; use product-domain lifecycle helpers',
+      },
+      {
+        regex: /\bbuild_deps_revision\b/,
+        message:
+          'core MiniApp manager must not build dependency revisions directly; use product-domain lifecycle helpers',
+      },
+      {
+        regex: /\bapp\.version\s*\+=\s*1\b/,
+        message:
+          'core MiniApp manager must not own version increments for lifecycle transitions; use product-domain lifecycle helpers',
+      },
+      {
+        regex: /\bapp\.runtime\s*=/,
+        message:
+          'core MiniApp manager must not own runtime-state replacement for lifecycle transitions; use product-domain lifecycle helpers',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/tools/restrictions.rs',
     patterns: [
       {
@@ -1206,6 +1236,18 @@ const forbiddenContentRules = [
       {
         regex: /\benum RemoteCancelDecision\b/,
         message: 'core remote-connect server must not own cancel decision types; use the integrations contract',
+      },
+      {
+        regex: /\bstruct RemoteCancelTaskRequest\b/,
+        message: 'core remote-connect server must not own cancel task request contracts; use the integrations contract',
+      },
+      {
+        regex: /\btrait RemoteCancelRuntimeHost\b/,
+        message: 'core remote-connect server must not own cancel runtime host contracts; use the integrations contract',
+      },
+      {
+        regex: /\bfn cancel_remote_task\b/,
+        message: 'core remote-connect server must not own cancel orchestration; use the integrations helper',
       },
       {
         regex: /\bfn remote_session_restore_target\b/,
@@ -1938,6 +1980,10 @@ const requiredContentRules = [
         message: 'missing provider-neutral file content normalization helper',
       },
       {
+        regex: /\bpub fn file_read_facts_content_matches\b/,
+        message: 'missing file-read content equivalence helper',
+      },
+      {
         regex: /\bpub fn file_read_facts_are_fresh\b/,
         message: 'missing file-read freshness policy helper',
       },
@@ -1957,8 +2003,24 @@ const requiredContentRules = [
         message: 'missing persisted tool output render contract',
       },
       {
+        regex: /\bpub struct ToolResultPersistenceCandidate\b/,
+        message: 'missing provider-neutral persistence candidate contract',
+      },
+      {
         regex: /\bpub fn select_tool_result_indices_for_persistence\b/,
         message: 'missing round-budget persistence candidate selector',
+      },
+      {
+        regex: /\bpub fn sanitize_tool_result_file_component\b/,
+        message: 'missing tool-result file component sanitizer',
+      },
+      {
+        regex: /\bpub fn generate_tool_result_preview\b/,
+        message: 'missing tool-result preview generator',
+      },
+      {
+        regex: /\bpub fn count_tool_result_lines\b/,
+        message: 'missing tool-result line counter',
       },
       {
         regex: /\bpub fn build_persisted_tool_output_message\b/,
@@ -2011,6 +2073,10 @@ const requiredContentRules = [
         message: 'missing remote dialog host owner factory',
       },
       {
+        regex: /\bfn remote_cancel_host\b/,
+        message: 'missing remote cancel host owner factory',
+      },
+      {
         regex: /\bfn remote_image_context\b/,
         message: 'missing remote image context owner adapter',
       },
@@ -2019,8 +2085,20 @@ const requiredContentRules = [
         message: 'missing agent submission port owner binding',
       },
       {
+        regex: /\bfn agent_turn_cancellation_port\b/,
+        message: 'missing agent turn cancellation port owner binding',
+      },
+      {
+        regex: /\bfn remote_control_state_port\b/,
+        message: 'missing remote control state port owner binding',
+      },
+      {
         regex: /\bCoreRemoteDialogRuntimeHost\b/,
         message: 'missing core remote dialog host binding',
+      },
+      {
+        regex: /\bCoreRemoteCancelRuntimeHost\b/,
+        message: 'missing core remote cancel host binding',
       },
       {
         regex: /\bRemoteExecutionDispatcher\b/,
@@ -2116,6 +2194,18 @@ const requiredContentRules = [
       {
         regex: /\bpub fn resolve_remote_cancel_decision\b/,
         message: 'missing remote cancel decision resolver',
+      },
+      {
+        regex: /\bpub struct RemoteCancelTaskRequest\b/,
+        message: 'missing remote cancel task request contract',
+      },
+      {
+        regex: /\bpub trait RemoteCancelRuntimeHost\b/,
+        message: 'missing remote cancel runtime host port',
+      },
+      {
+        regex: /\bpub async fn cancel_remote_task\b/,
+        message: 'missing remote cancel orchestration owner',
       },
       {
         regex: /\bpub trait RemoteDialogRuntimeHost\b/,
@@ -2291,6 +2381,18 @@ const requiredContentRules = [
         regex: /\bremote_connect_tool_preview_slimming_keeps_short_fields_and_drops_large_strings\b/,
         message: 'missing remote tool preview slimming test',
       },
+      {
+        regex: /\bremote_connect_cancel_runtime_restores_missing_session_before_cancel\b/,
+        message: 'missing remote cancel restore/order regression',
+      },
+      {
+        regex: /\bremote_connect_cancel_runtime_preserves_stale_and_idle_errors_without_restore\b/,
+        message: 'missing remote cancel stale/idle regression',
+      },
+      {
+        regex: /\bremote_connect_cancel_runtime_preserves_restore_failure_error\b/,
+        message: 'missing remote cancel restore failure regression',
+      },
     ],
   },
   {
@@ -2307,12 +2409,24 @@ const requiredContentRules = [
         message: 'missing core remote dialog runtime adapter',
       },
       {
+        regex: /\bstruct CoreRemoteCancelRuntimeHost\b/,
+        message: 'missing core remote cancel runtime adapter',
+      },
+      {
         regex: /\bimpl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost\b/,
         message: 'missing integrations dialog host adapter implementation',
       },
       {
+        regex: /\bimpl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost\b/,
+        message: 'missing integrations cancel host adapter implementation',
+      },
+      {
         regex: /\bsubmit_remote_dialog\b/,
         message: 'missing remote dialog owner orchestration delegation',
+      },
+      {
+        regex: /\bcancel_remote_task\b/,
+        message: 'missing remote cancel owner orchestration delegation',
       },
       {
         regex: /\bread_remote_workspace_file\b/,
@@ -3464,6 +3578,14 @@ const requiredContentRules = [
         message: 'missing product-domain built-in MiniApp source payload use',
       },
       {
+        regex: /\bbuild_builtin_seed_meta\b/,
+        message: 'missing product-domain built-in MiniApp seed meta helper use',
+      },
+      {
+        regex: /\bpreserved_builtin_created_at\b/,
+        message: 'missing product-domain built-in MiniApp timestamp preservation helper use',
+      },
+      {
         regex: /\bBUILTIN_PLACEHOLDER_COMPILED_HTML\b/,
         message: 'missing product-domain built-in MiniApp placeholder payload use',
       },
@@ -3616,6 +3738,38 @@ const requiredContentRules = [
         message: 'missing MiniApp deps-installed state helper',
       },
       {
+        regex: /\bpub struct MiniAppCreateInput\b/,
+        message: 'missing MiniApp create input contract',
+      },
+      {
+        regex: /\bpub struct MiniAppUpdatePatch\b/,
+        message: 'missing MiniApp update patch contract',
+      },
+      {
+        regex: /\bpub fn build_created_app\b/,
+        message: 'missing MiniApp create state helper',
+      },
+      {
+        regex: /\bpub fn apply_update_patch\b/,
+        message: 'missing MiniApp update state helper',
+      },
+      {
+        regex: /\bpub fn prepare_draft_app\b/,
+        message: 'missing MiniApp draft prepare state helper',
+      },
+      {
+        regex: /\bpub fn apply_draft_source_sync_result\b/,
+        message: 'missing MiniApp draft source-sync state helper',
+      },
+      {
+        regex: /\bpub fn apply_draft_permission_update_result\b/,
+        message: 'missing MiniApp draft permission-update state helper',
+      },
+      {
+        regex: /\bpub fn apply_draft_to_active\b/,
+        message: 'missing MiniApp draft apply state helper',
+      },
+      {
         regex: /\bpub fn clear_worker_restart_required_state\b/,
         message: 'missing MiniApp worker-restart clear state helper',
       },
@@ -3757,6 +3911,22 @@ const requiredContentRules = [
       {
         regex: /\bMiniAppRuntimeFacade\b/,
         message: 'missing product-domain MiniApp runtime-state facade use',
+      },
+      {
+        regex: /\bbuild_created_app\b/,
+        message: 'missing product-domain MiniApp create lifecycle helper use',
+      },
+      {
+        regex: /\bapply_update_patch\b/,
+        message: 'missing product-domain MiniApp update lifecycle helper use',
+      },
+      {
+        regex: /\bprepare_draft_app\b/,
+        message: 'missing product-domain MiniApp draft prepare lifecycle helper use',
+      },
+      {
+        regex: /\bapply_draft_to_active\b/,
+        message: 'missing product-domain MiniApp draft apply lifecycle helper use',
       },
       {
         regex: /\bCoreProductDomainRuntime\b/,
@@ -3960,6 +4130,14 @@ const requiredContentRules = [
       {
         regex: /\bpub fn build_builtin_package_json\b/,
         message: 'missing built-in MiniApp package payload helper',
+      },
+      {
+        regex: /\bpub fn preserved_builtin_created_at\b/,
+        message: 'missing built-in MiniApp created-at preservation helper',
+      },
+      {
+        regex: /\bpub fn build_builtin_seed_meta\b/,
+        message: 'missing built-in MiniApp seed meta helper',
       },
     ],
   },
@@ -5039,9 +5217,13 @@ function runManifestParserSelfTest() {
       contracts: [
         'CoreServiceAgentRuntime',
         'remote_dialog_host',
+        'remote_cancel_host',
         'remote_image_context',
         'agent_submission_port',
+        'agent_turn_cancellation_port',
+        'remote_control_state_port',
         'CoreRemoteDialogRuntimeHost',
+        'CoreRemoteCancelRuntimeHost',
         'RemoteExecutionDispatcher',
         'ImageContextData',
         'RemoteImageContextAdapter',
@@ -5068,6 +5250,9 @@ function runManifestParserSelfTest() {
         'remote_session_restore_target',
         'RemoteCancelDecision',
         'resolve_remote_cancel_decision',
+        'RemoteCancelTaskRequest',
+        'RemoteCancelRuntimeHost',
+        'cancel_remote_task',
         'REMOTE_FILE_MAX_READ_BYTES',
         'REMOTE_FILE_MAX_CHUNK_BYTES',
         'resolve_remote_file_chunk_range',
@@ -5460,6 +5645,8 @@ function runManifestParserSelfTest() {
         'resolve_builtin_seed_check',
         'resolve_builtin_seed_action',
         'builtin_source_files',
+        'build_builtin_seed_meta',
+        'preserved_builtin_created_at',
         'BUILTIN_PLACEHOLDER_COMPILED_HTML',
         'read_builtin_install_marker',
         'parse_builtin_install_marker',
@@ -5488,6 +5675,8 @@ function runManifestParserSelfTest() {
         'builtin_source_files',
         'BUILTIN_PLACEHOLDER_COMPILED_HTML',
         'build_builtin_package_json',
+        'preserved_builtin_created_at',
+        'build_builtin_seed_meta',
       ],
     },
     {
@@ -5585,6 +5774,14 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/product-domains/src/miniapp/lifecycle.rs',
       contracts: [
+        'MiniAppCreateInput',
+        'MiniAppUpdatePatch',
+        'build_created_app',
+        'apply_update_patch',
+        'prepare_draft_app',
+        'apply_draft_source_sync_result',
+        'apply_draft_permission_update_result',
+        'apply_draft_to_active',
         'mark_deps_installed_state',
         'clear_worker_restart_required_state',
         'prepare_rollback_app',
@@ -5631,6 +5828,10 @@ function runManifestParserSelfTest() {
         'storage.load_customization_metadata',
         'CoreProductDomainRuntime',
         'MiniAppRuntimeFacade',
+        'build_created_app',
+        'apply_update_patch',
+        'prepare_draft_app',
+        'apply_draft_to_active',
         'persist_sync_from_fs_result_for_app',
         'compile_source',
         'REQUIRED_SOURCE_FILES',
@@ -6075,6 +6276,9 @@ function runManifestParserSelfTest() {
     'match mobile_type',
     'RemoteCancelDecision',
     'resolve_remote_cancel_decision',
+    'RemoteCancelTaskRequest',
+    'RemoteCancelRuntimeHost',
+    'cancel_remote_task',
     'remote_session_restore_target',
     'resolve_remote_execution_image_contexts',
     'RemoteImageContextAdapter',

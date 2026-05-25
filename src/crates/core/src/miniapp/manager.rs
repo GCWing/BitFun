@@ -19,8 +19,10 @@ use bitfun_product_domains::miniapp::draft::{
     build_draft_manifest, build_draft_response, MiniAppDraft, MiniAppDraftManifest,
 };
 use bitfun_product_domains::miniapp::lifecycle::{
-    apply_import_runtime_state, build_deps_revision, build_runtime_state, build_source_revision,
-    build_worker_revision, ensure_runtime_state, workspace_dir_string,
+    apply_draft_permission_update_result, apply_draft_source_sync_result, apply_draft_to_active,
+    apply_import_runtime_state, apply_update_patch, build_created_app, build_worker_revision,
+    ensure_runtime_state, prepare_draft_app, workspace_dir_string, MiniAppCreateInput,
+    MiniAppUpdatePatch,
 };
 use bitfun_product_domains::miniapp::ports::{
     MiniAppPortError, MiniAppPortErrorKind, MiniAppRuntimeFacade,
@@ -159,26 +161,22 @@ impl MiniAppManager {
 
         let compiled_html =
             self.compile_source(&id, &source, &permissions, "dark", workspace_root)?;
-        let runtime =
-            build_runtime_state(1, now, &source, !source.npm_dependencies.is_empty(), true);
 
-        let app = MiniApp {
-            id: id.clone(),
-            name,
-            description,
-            icon,
-            category,
-            tags,
-            version: 1,
-            created_at: now,
-            updated_at: now,
-            source,
+        let app = build_created_app(
+            id.clone(),
+            MiniAppCreateInput {
+                name,
+                description,
+                icon,
+                category,
+                tags,
+                source,
+                permissions,
+                ai_context,
+            },
             compiled_html,
-            permissions,
-            ai_context,
-            runtime,
-            i18n: None,
-        };
+            now,
+        );
 
         self.storage.save(&app).await?;
         Ok(app)
@@ -199,58 +197,26 @@ impl MiniAppManager {
         ai_context: Option<MiniAppAiContext>,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniApp> {
-        let mut app = self.storage.load(app_id).await?;
-        let previous_app = app.clone();
-        let source_changed = source.is_some();
-        let permissions_changed = permissions.is_some();
-
-        if let Some(n) = name {
-            app.name = n;
-        }
-        if let Some(d) = description {
-            app.description = d;
-        }
-        if let Some(i) = icon {
-            app.icon = i;
-        }
-        if let Some(c) = category {
-            app.category = c;
-        }
-        if let Some(t) = tags {
-            app.tags = t;
-        }
-        if let Some(s) = source {
-            app.source = s;
-        }
-        if let Some(p) = permissions {
-            app.permissions = p;
-        }
-        if let Some(a) = ai_context {
-            app.ai_context = Some(a);
-        }
-
-        app.version += 1;
-        app.updated_at = Utc::now().timestamp_millis();
-
-        app.compiled_html = self.compile_source(
+        let previous_app = self.storage.load(app_id).await?;
+        let patch = MiniAppUpdatePatch {
+            name,
+            description,
+            icon,
+            category,
+            tags,
+            source,
+            permissions,
+            ai_context,
+        };
+        let now = Utc::now().timestamp_millis();
+        let compiled_html = self.compile_source(
             app_id,
-            &app.source,
-            &app.permissions,
+            patch.source_for_compile(&previous_app),
+            patch.permissions_for_compile(&previous_app),
             "dark",
             workspace_root,
         )?;
-        let deps_changed = previous_app.source.npm_dependencies != app.source.npm_dependencies;
-        if source_changed || permissions_changed {
-            app.runtime.source_revision = build_source_revision(app.version, app.updated_at);
-            app.runtime.worker_restart_required = true;
-        }
-        if deps_changed {
-            app.runtime.deps_revision = build_deps_revision(&app.source);
-            app.runtime.deps_dirty = !app.source.npm_dependencies.is_empty();
-            app.runtime.worker_restart_required = true;
-        }
-        app.runtime.ui_recompile_required = false;
-        ensure_runtime_state(&mut app);
+        let app = apply_update_patch(&previous_app, patch, compiled_html, now);
 
         self.storage
             .save_version(app_id, previous_app.version, &previous_app)
@@ -359,11 +325,10 @@ impl MiniAppManager {
         theme: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniAppDraft> {
-        let mut app = self.get(app_id).await?;
+        let app = self.get(app_id).await?;
         let now = Utc::now().timestamp_millis();
         let draft_id = Uuid::new_v4().to_string();
-        app.updated_at = now;
-        app.compiled_html = self.compile_source_with_app_data_dir(
+        let compiled_html = self.compile_source_with_app_data_dir(
             app_id,
             &self.storage.draft_dir(app_id, &draft_id),
             &app.source,
@@ -371,7 +336,7 @@ impl MiniAppManager {
             theme,
             workspace_root,
         )?;
-        ensure_runtime_state(&mut app);
+        let app = prepare_draft_app(app, compiled_html, now);
 
         let manifest = build_draft_manifest(app_id, draft_id, app.version, now);
         self.save_draft_with_manifest(app_id, app, manifest).await
@@ -390,10 +355,10 @@ impl MiniAppManager {
         theme: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniAppDraft> {
-        let mut app = self.storage.load_draft_app(app_id, draft_id).await?;
+        let app = self.storage.load_draft_app(app_id, draft_id).await?;
         let mut manifest = self.load_draft_manifest(app_id, draft_id).await?;
-        app.updated_at = Utc::now().timestamp_millis();
-        app.compiled_html = self.compile_source_with_app_data_dir(
+        let now = Utc::now().timestamp_millis();
+        let compiled_html = self.compile_source_with_app_data_dir(
             app_id,
             &self.storage.draft_dir(app_id, draft_id),
             &app.source,
@@ -401,13 +366,7 @@ impl MiniAppManager {
             theme,
             workspace_root,
         )?;
-        app.runtime = build_runtime_state(
-            app.version,
-            app.updated_at,
-            &app.source,
-            !app.source.npm_dependencies.is_empty(),
-            true,
-        );
+        let app = apply_draft_source_sync_result(app, compiled_html, now);
         manifest.updated_at = app.updated_at;
         self.save_draft_with_manifest(app_id, app, manifest).await
     }
@@ -420,25 +379,18 @@ impl MiniAppManager {
         theme: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniAppDraft> {
-        let mut app = self.storage.load_draft_app(app_id, draft_id).await?;
+        let app = self.storage.load_draft_app(app_id, draft_id).await?;
         let mut manifest = self.load_draft_manifest(app_id, draft_id).await?;
-        app.permissions = permissions;
-        app.updated_at = Utc::now().timestamp_millis();
-        app.compiled_html = self.compile_source_with_app_data_dir(
+        let now = Utc::now().timestamp_millis();
+        let compiled_html = self.compile_source_with_app_data_dir(
             app_id,
             &self.storage.draft_dir(app_id, draft_id),
             &app.source,
-            &app.permissions,
+            &permissions,
             theme,
             workspace_root,
         )?;
-        app.runtime = build_runtime_state(
-            app.version,
-            app.updated_at,
-            &app.source,
-            !app.source.npm_dependencies.is_empty(),
-            true,
-        );
+        let app = apply_draft_permission_update_result(app, permissions, compiled_html, now);
         manifest.updated_at = app.updated_at;
         self.save_draft_with_manifest(app_id, app, manifest).await
     }
@@ -462,29 +414,15 @@ impl MiniAppManager {
     ) -> BitFunResult<MiniApp> {
         let current = self.get(app_id).await?;
         let draft = self.storage.load_draft_app(app_id, draft_id).await?;
-        let mut app = current.clone();
         let now = Utc::now().timestamp_millis();
-
-        app.name = draft.name;
-        app.description = draft.description;
-        app.icon = draft.icon;
-        app.category = draft.category;
-        app.tags = draft.tags;
-        app.source = draft.source;
-        app.permissions = draft.permissions;
-        app.ai_context = draft.ai_context;
-        app.i18n = draft.i18n;
-        app.version = current.version + 1;
-        app.updated_at = now;
-        app.compiled_html =
-            self.compile_source(app_id, &app.source, &app.permissions, theme, workspace_root)?;
-        app.runtime = build_runtime_state(
-            app.version,
-            app.updated_at,
-            &app.source,
-            !app.source.npm_dependencies.is_empty(),
-            true,
-        );
+        let compiled_html = self.compile_source(
+            app_id,
+            &draft.source,
+            &draft.permissions,
+            theme,
+            workspace_root,
+        )?;
+        let app = apply_draft_to_active(&current, draft, compiled_html, now);
 
         self.storage
             .save_version(app_id, current.version, &current)
