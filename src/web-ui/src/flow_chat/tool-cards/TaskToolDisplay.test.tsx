@@ -60,6 +60,7 @@ vi.mock('../store/FlowChatStore', () => ({
         }],
       ]),
     }),
+    subscribe: () => () => {},
   },
 }));
 
