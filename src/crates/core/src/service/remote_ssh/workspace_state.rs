@@ -348,21 +348,25 @@ impl RemoteWorkspaceStateManager {
     ) -> PathBuf {
         let remote_id = remote_connection_id
             .map(str::trim)
-            .filter(|s| !s.is_empty());
-        if remote_id.is_none() {
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        let Some(remote_id) = remote_id else {
             return PathBuf::from(workspace_path);
-        }
+        };
         let path_norm = normalize_remote_workspace_path(workspace_path);
         if let Some(host) = remote_ssh_host.map(str::trim).filter(|s| !s.is_empty()) {
             return remote_workspace_session_mirror_dir(host, &path_norm);
         }
-        if let Some(entry) = self.lookup_connection(workspace_path, remote_id).await {
+        if let Some(entry) = self
+            .lookup_connection(workspace_path, Some(remote_id.as_str()))
+            .await
+        {
             if !entry.ssh_host.trim().is_empty() {
                 return remote_workspace_session_mirror_dir(&entry.ssh_host, &entry.remote_root);
             }
-            return unresolved_remote_session_storage_dir(remote_id.unwrap(), &path_norm);
+            return unresolved_remote_session_storage_dir(&remote_id, &path_norm);
         }
-        unresolved_remote_session_storage_dir(remote_id.unwrap(), &path_norm)
+        unresolved_remote_session_storage_dir(&remote_id, &path_norm)
     }
 }
 
