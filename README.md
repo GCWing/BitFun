@@ -134,19 +134,32 @@ Desktop is built on Tauri for Windows / macOS / Linux; remote control works from
 - [Rust toolchain](https://rustup.rs/)
 - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) (required for desktop development)
 - [ohos-rs](https://ohos.rs/docs/basic/quick-start)
+- [DevEco Studio](https://developer.huawei.com/consumer/en/deveco-studio/)
 
 **Commands:**
 
 ```bash
-# Install dependencies
+# Install dependencies in root directory
 pnpm install
 
-# build frontend
+# build frontend in root directory
 npm run build
 
-# build so 
-cd ./src/apps/desktop
-cargo tauri ohos build
+# build backend(.so) in desktop directory
+cd src/apps/desktop && cargo tauri ohos init && cargo tauri ohos build
+
+# build mini app frontend
+cd src/mobile-web && npm run build
+
+# build app
+## copy mini-app resources
+1. cp src/mobile-web/dist src/apps/ohos/entry/src/main/resources/resfile
+
+## copy app exe
+2. cp target/aarch64-unknow-linux-ohos/release/libbitfun_desktop_lib.so src/apps/ohos/entry/libs/arm64-v8a/libbitfun_desktop_lib.so  
+
+## build whole app
+3. use deveco app to build 
 ```
 
 For more details, see the [Contributing guide](./CONTRIBUTING.md).
