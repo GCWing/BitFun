@@ -3,7 +3,7 @@ import type { ModeInfo } from '../reducers/modeReducer';
 type Translate = (key: string, options?: { defaultValue?: string }) => string;
 
 function translatedOrEmpty(t: Translate, key: string): string {
-  return t(key, { defaultValue: '' }) || '';
+  return t(key, { defaultValue: '' });
 }
 
 export function getModeDisplayName(t: Translate, mode: Pick<ModeInfo, 'id' | 'name'>): string {

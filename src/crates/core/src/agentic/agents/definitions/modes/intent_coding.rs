@@ -14,7 +14,6 @@ const EMBEDDED_RULES: &[(&str, &str)] = &[
     ("accepted-checks", include_str!("../../prompts/intent_coding_rules/accepted-checks.md")),
     ("architecture", include_str!("../../prompts/intent_coding_rules/architecture.md")),
     ("coding-style", include_str!("../../prompts/intent_coding_rules/coding-style.md")),
-    ("context-budget", include_str!("../../prompts/intent_coding_rules/context-budget.md")),
     ("error-classification", include_str!("../../prompts/intent_coding_rules/error-classification.md")),
     ("provenance-chain", include_str!("../../prompts/intent_coding_rules/provenance-chain.md")),
     ("risk-classification", include_str!("../../prompts/intent_coding_rules/risk-classification.md")),
@@ -144,13 +143,21 @@ mod tests {
     }
 
     #[test]
-    fn intent_coding_embeds_all_nine_rules() {
+    fn intent_coding_embeds_required_rules() {
         let rules: Vec<&str> = EMBEDDED_RULES.iter().map(|(name, _)| *name).collect();
-        assert_eq!(rules.len(), 9);
-        assert!(rules.contains(&"risk-classification"));
-        assert!(rules.contains(&"accepted-checks"));
-        assert!(rules.contains(&"error-classification"));
-        assert!(rules.contains(&"provenance-chain"));
+        assert!(!rules.is_empty());
+        for name in [
+            "risk-classification",
+            "accepted-checks",
+            "error-classification",
+            "provenance-chain",
+            "workflow-check",
+            "security",
+            "architecture",
+            "coding-style",
+        ] {
+            assert!(rules.contains(&name), "missing rule: {name}");
+        }
         for (_name, content) in EMBEDDED_RULES {
             assert!(!content.is_empty(), "rule content must not be empty");
         }

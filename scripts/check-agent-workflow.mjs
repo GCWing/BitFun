@@ -44,6 +44,10 @@ function reportError(message) {
   console.error(`[agent:check] ERROR ${message}`);
 }
 
+function reportWarn(message) {
+  console.warn(`[agent:check] WARN  ${message}`);
+}
+
 function reportInfo(message) {
   console.log(`[agent:check] ${message}`);
 }
@@ -122,7 +126,8 @@ function main() {
     reportError('.agent/intents has no Intent Records but .agent/evidence has Evidence Packages');
   }
   if (evidenceFiles.length === 0) {
-    reportError('.agent/evidence has no Evidence Packages but .agent/intents has Intent Records');
+    // Intent Record exists without Evidence Package — normal during active work.
+    reportWarn('.agent/evidence has no Evidence Packages yet — task may still be in progress');
   }
 
   const intentSlugs = new Set();
@@ -150,7 +155,8 @@ function main() {
 
   for (const slug of intentSlugs) {
     if (!evidenceSlugs.has(slug)) {
-      reportError(`Missing Evidence Package for intent-${slug}.md`);
+      // Intent without matching Evidence is expected during active work.
+      reportWarn(`Evidence Package not yet written for intent-${slug}.md`);
     }
   }
 

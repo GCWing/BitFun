@@ -64,6 +64,9 @@ tests/e2e/reports/
 
 # BitFun sandbox data - auto managed
 .bitfun/
+
+# Intent Coding runtime artifacts - created on demand by IntentCoding agent
+.agent/
 .cursor
 .cursor/rules/no-cargo.mdc
 .sisyphus/
