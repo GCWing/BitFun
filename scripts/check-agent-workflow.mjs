@@ -190,19 +190,52 @@ function validateEvidenceRepairLoop(filePath, markdown) {
 function validateRiskLevelLine(filePath, markdown, sectionName, label) {
   const content = sectionContent(markdown, sectionName);
   if (!content) {
-    return;
+    return null;
   }
 
   const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = content.match(new RegExp(`${escapedLabel}\\s*:\\s*(L[0-4])\\b`, 'i'));
   if (!match) {
     reportError(`${rel(filePath)} "## ${sectionName}" must include "${label}: L0|L1|L2|L3|L4"`);
-    return;
+    return null;
   }
 
   const riskLevel = match[1].toUpperCase();
   if (!validRiskLevels.has(riskLevel)) {
     reportError(`${rel(filePath)} has invalid ${label} "${riskLevel}"`);
+    return null;
+  }
+
+  return riskLevel;
+}
+
+function isHighRiskLevel(riskLevel) {
+  return riskLevel === 'L3' || riskLevel === 'L4';
+}
+
+function validateHighRiskIntentReviewEscalation(filePath, markdown, riskLevel) {
+  if (!isHighRiskLevel(riskLevel)) {
+    return;
+  }
+
+  const metadata = sectionContent(markdown, 'Metadata');
+  if (!/Review escalation\s*:\s*\S/i.test(metadata)) {
+    reportError(
+      `${rel(filePath)} L3/L4 Intent Record must include "Review escalation: <plan>" in "## Metadata"`,
+    );
+  }
+}
+
+function validateHighRiskEvidenceReviewEscalation(filePath, markdown, riskLevel) {
+  if (!isHighRiskLevel(riskLevel)) {
+    return;
+  }
+
+  const risks = sectionContent(markdown, 'Risks');
+  if (!/Review escalation status\s*:\s*\S/i.test(risks)) {
+    reportError(
+      `${rel(filePath)} L3/L4 Evidence Package must include "Review escalation status: <completed|skipped|blocked>" in "## Risks"`,
+    );
   }
 }
 
@@ -239,7 +272,8 @@ function main() {
     }
     intentSlugs.add(slug);
     const markdown = validateSections(file, requiredIntentSections);
-    validateRiskLevelLine(file, markdown, 'Metadata', 'Risk level');
+    const riskLevel = validateRiskLevelLine(file, markdown, 'Metadata', 'Risk level');
+    validateHighRiskIntentReviewEscalation(file, markdown, riskLevel);
   }
 
   const evidenceSlugs = new Set();
@@ -254,7 +288,8 @@ function main() {
     validateEvidenceIntentReference(file, markdown);
     validateEvidenceAcceptedCheckStatuses(file, markdown);
     validateEvidenceRepairLoop(file, markdown);
-    validateRiskLevelLine(file, markdown, 'Risks', 'Final risk level');
+    const riskLevel = validateRiskLevelLine(file, markdown, 'Risks', 'Final risk level');
+    validateHighRiskEvidenceReviewEscalation(file, markdown, riskLevel);
   }
 
   for (const slug of intentSlugs) {

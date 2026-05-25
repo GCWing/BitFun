@@ -12,6 +12,10 @@ Every Intent Record must include a machine-checkable risk line in `## Metadata`:
 - `Risk level: L3`
 - `Risk level: L4`
 
+For L3 and L4 tasks, the Intent Record must also include:
+
+- `Review escalation: <planned review path>`
+
 ## Levels
 
 ### L0 Exploration
@@ -89,7 +93,7 @@ Every Evidence Package must record:
 - Verification commands run.
 - Verification that was skipped and why.
 - Human review focus for L2 and above.
-- Review escalation result for L3 and L4.
+- Review escalation result for L3 and L4 as `Review escalation status: <completed|skipped|blocked>` in `## Risks`.
 
 ## Review Escalation
 
