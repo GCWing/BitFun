@@ -238,7 +238,7 @@ impl Tool for BashTool {
         let shell_info = Self::resolve_shell().await.display_name;
 
         Ok(format!(
-            r#"Executes a given command in a persistent shell session with optional timeout, ensuring proper handling and security measures.
+            r#"Executes a given command in a persistent shell session, ensuring proper handling and security measures.
 
 Shell Environment: {shell_info}
 
@@ -263,7 +263,7 @@ Before executing the command, please follow these steps:
 Usage notes:
   - The command argument is required and MUST be a single-line command.
   - DO NOT use multiline commands or HEREDOC syntax (e.g., <<EOF, heredoc with newlines). Only single-line commands are supported.
-  - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
+  - The `timeout_ms` parameter is accepted for compatibility but ignored. Commands run without a tool-imposed timeout.
   - It is very helpful if you write a clear, concise description of what this command does. For simple commands, keep it brief (5-10 words). For complex commands (piped commands, obscure flags, or anything hard to understand at a glance), add enough context to clarify what it does.
   - If the output exceeds {BASH_RESULT_MAX_OUTPUT_LENGTH} characters, output will be truncated before being returned to you, with the tail of the output preserved because the ending is usually more important.
   - You can use the `run_in_background` parameter to run the command in a new dedicated background terminal session. The tool returns immediately without waiting for the command to finish. The final completion result will be delivered back to you automatically when it is done, and the full output will be saved to a session runtime file instead of being pasted back into chat. Only use this for long-running processes (e.g., dev servers, watchers) where you do not need the output right away. You do not need to append '&' to the command. NOTE: `timeout_ms` is ignored when `run_in_background` is true.
@@ -322,7 +322,7 @@ Usage notes:
                 },
                 "timeout_ms": {
                     "type": "number",
-                    "description": "Optional timeout in milliseconds (default 120000, max 600000). Ignored when run_in_background is true."
+                    "description": "Accepted for compatibility but ignored; commands run without a tool-imposed timeout."
                 },
                 "run_in_background": {
                     "type": "boolean",
@@ -360,10 +360,6 @@ Usage notes:
         context: Option<&ToolUseContext>,
     ) -> ValidationResult {
         let command = input.get("command").and_then(|v| v.as_str());
-        let run_in_background = input
-            .get("run_in_background")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
 
         if let Some(cmd) = command {
             if let Some(base_cmd) = banned_shell_command(cmd) {
@@ -502,12 +498,12 @@ Usage notes:
             }
         }
 
-        // Warn if timeout_ms is set alongside run_in_background
-        if run_in_background && input.get("timeout_ms").is_some() {
+        // Warn if timeout_ms is set; runtime intentionally ignores it.
+        if input.get("timeout_ms").is_some() {
             return ValidationResult {
                 result: true,
                 message: Some(
-                    "Note: timeout_ms is ignored when run_in_background is true".to_string(),
+                    "Note: timeout_ms is accepted for compatibility but ignored".to_string(),
                 ),
                 error_code: None,
                 meta: None,
@@ -583,16 +579,18 @@ Usage notes:
             let remote_command =
                 command_for_working_directory(command_str, requested_working_directory.as_deref());
 
-            let timeout_ms = input
-                .get("timeout_ms")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(120_000);
+            if let Some(timeout_ms) = input.get("timeout_ms").and_then(|v| v.as_u64()) {
+                debug!(
+                    "Ignoring requested remote Bash timeout: timeout_ms={}",
+                    timeout_ms
+                );
+            }
 
             let exec_result = ws_shell
                 .exec_with_options(
                     &remote_command,
                     WorkspaceCommandOptions {
-                        timeout_ms: Some(timeout_ms),
+                        timeout_ms: None,
                         cancellation_token: context.cancellation_token().cloned(),
                     },
                 )
@@ -748,15 +746,9 @@ Usage notes:
 
         let tool_name = self.name().to_string();
 
-        const DEFAULT_TIMEOUT_MS: u64 = 120_000;
-        const MAX_TIMEOUT_MS: u64 = 600_000;
-        let timeout_ms = Some(
-            input
-                .get("timeout_ms")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(DEFAULT_TIMEOUT_MS)
-                .min(MAX_TIMEOUT_MS),
-        );
+        if let Some(timeout_ms) = input.get("timeout_ms").and_then(|v| v.as_u64()) {
+            debug!("Ignoring requested Bash timeout: timeout_ms={}", timeout_ms);
+        }
 
         debug!(
             "Bash tool executing command: {}, session_id: {}, tool_id: {}",
@@ -767,7 +759,7 @@ Usage notes:
         let request = ExecuteCommandRequest {
             session_id: primary_session_id.clone(),
             command: command_to_execute,
-            timeout_ms,
+            timeout_ms: None,
             prevent_history: Some(true),
         };
 
