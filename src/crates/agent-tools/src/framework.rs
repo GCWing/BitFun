@@ -64,6 +64,98 @@ pub trait PortableToolContextProvider: Send + Sync {
 
 pub const GET_TOOL_SPEC_TOOL_NAME: &str = "GetToolSpec";
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CollapsedToolUsageError {
+    RequiresGetToolSpec {
+        tool_name: String,
+        get_tool_spec_tool_name: String,
+    },
+}
+
+impl fmt::Display for CollapsedToolUsageError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::RequiresGetToolSpec {
+                tool_name,
+                get_tool_spec_tool_name,
+            } => write!(
+                formatter,
+                "Tool '{tool_name}' is collapsed. Call {get_tool_spec_tool_name} first with {{\"tool_name\":\"{tool_name}\"}} to read its full usage instructions and input schema, then try again."
+            ),
+        }
+    }
+}
+
+impl std::error::Error for CollapsedToolUsageError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolExecutionAccessError {
+    NotInAllowedList {
+        tool_name: String,
+        allowed_tools: Vec<String>,
+    },
+}
+
+impl fmt::Display for ToolExecutionAccessError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotInAllowedList {
+                tool_name,
+                allowed_tools,
+            } => write!(
+                formatter,
+                "Tool '{tool_name}' is not in the allowed list: {allowed_tools:?}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ToolExecutionAccessError {}
+
+pub fn validate_tool_allowed_by_list(
+    tool_name: &str,
+    allowed_tools: &[String],
+) -> Result<(), ToolExecutionAccessError> {
+    if allowed_tools.is_empty() || allowed_tools.iter().any(|allowed| allowed == tool_name) {
+        return Ok(());
+    }
+
+    Err(ToolExecutionAccessError::NotInAllowedList {
+        tool_name: tool_name.to_string(),
+        allowed_tools: allowed_tools.to_vec(),
+    })
+}
+
+pub fn validate_collapsed_tool_usage(
+    tool_name: &str,
+    collapsed_tools: &[String],
+    loaded_collapsed_tools: &[String],
+    get_tool_spec_tool_name: &str,
+) -> Result<(), CollapsedToolUsageError> {
+    if tool_name == get_tool_spec_tool_name {
+        return Ok(());
+    }
+
+    if !collapsed_tools
+        .iter()
+        .any(|collapsed_tool| collapsed_tool == tool_name)
+    {
+        return Ok(());
+    }
+
+    if loaded_collapsed_tools
+        .iter()
+        .any(|loaded_tool| loaded_tool == tool_name)
+    {
+        return Ok(());
+    }
+
+    Err(CollapsedToolUsageError::RequiresGetToolSpec {
+        tool_name: tool_name.to_string(),
+        get_tool_spec_tool_name: get_tool_spec_tool_name.to_string(),
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ToolExposure {
     Expanded,
@@ -1330,44 +1422,267 @@ impl ToolPathResolution {
         let root = self.runtime_root.as_ref()?;
         let relative = absolute_child_path.strip_prefix(root).ok()?;
         let relative_str = relative.to_string_lossy().replace('\\', "/");
-        build_bitfun_runtime_uri(scope, &relative_str)
+        build_bitfun_runtime_uri(scope, &relative_str).ok()
     }
 }
 
-fn build_bitfun_runtime_uri(workspace_scope: &str, relative_path: &str) -> Option<String> {
-    let scope = workspace_scope.trim();
-    if scope.is_empty() {
-        return None;
-    }
+pub const BITFUN_RUNTIME_URI_PREFIX: &str = "bitfun://runtime/";
 
-    Some(format!(
-        "bitfun://runtime/{}/{}",
-        scope,
-        normalize_runtime_relative_path(relative_path)?
-    ))
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedBitFunRuntimeUri {
+    pub workspace_scope: String,
+    pub relative_path: String,
 }
 
-fn normalize_runtime_relative_path(path: &str) -> Option<String> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolPathContractError {
+    EmptyRuntimeArtifactPath,
+    RuntimeArtifactPathEscapesRoot,
+    UnsupportedRuntimeUri { uri: String },
+    MissingRuntimeUriWorkspaceScope,
+    MissingRuntimeUriArtifactPath,
+    EmptyRuntimeWorkspaceScope,
+    EmptyPath,
+    MissingWorkspaceRoot { path: String },
+}
+
+impl fmt::Display for ToolPathContractError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyRuntimeArtifactPath => {
+                write!(formatter, "Runtime artifact path cannot be empty")
+            }
+            Self::RuntimeArtifactPathEscapesRoot => {
+                write!(formatter, "Runtime artifact path cannot escape its root")
+            }
+            Self::UnsupportedRuntimeUri { uri } => {
+                write!(formatter, "Unsupported runtime URI: {uri}")
+            }
+            Self::MissingRuntimeUriWorkspaceScope => {
+                write!(formatter, "Runtime URI is missing workspace scope")
+            }
+            Self::MissingRuntimeUriArtifactPath => {
+                write!(formatter, "Runtime URI is missing artifact path")
+            }
+            Self::EmptyRuntimeWorkspaceScope => {
+                write!(formatter, "Runtime URI workspace scope cannot be empty")
+            }
+            Self::EmptyPath => write!(formatter, "path cannot be empty"),
+            Self::MissingWorkspaceRoot { path } => {
+                write!(
+                    formatter,
+                    "A workspace path is required to resolve relative path: {path}"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ToolPathContractError {}
+
+pub fn is_bitfun_runtime_uri(path: &str) -> bool {
+    path.trim().starts_with(BITFUN_RUNTIME_URI_PREFIX)
+}
+
+pub fn normalize_host_path(path: &str) -> String {
+    let path = Path::new(path);
+    let mut components = Vec::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                if !components.is_empty() {
+                    components.pop();
+                }
+            }
+            component => components.push(component),
+        }
+    }
+    components
+        .iter()
+        .collect::<PathBuf>()
+        .to_string_lossy()
+        .to_string()
+}
+
+pub fn resolve_host_path_with_workspace(
+    path: &str,
+    workspace_root: Option<&Path>,
+) -> Result<String, ToolPathContractError> {
+    if Path::new(path).is_absolute() {
+        Ok(normalize_host_path(path))
+    } else {
+        let base_path =
+            workspace_root.ok_or_else(|| ToolPathContractError::MissingWorkspaceRoot {
+                path: path.to_string(),
+            })?;
+
+        Ok(normalize_host_path(
+            base_path.join(path).to_string_lossy().as_ref(),
+        ))
+    }
+}
+
+pub fn resolve_host_path(path: &str) -> Result<String, ToolPathContractError> {
+    resolve_host_path_with_workspace(path, None)
+}
+
+pub fn resolve_workspace_tool_path(
+    path: &str,
+    workspace_root: Option<&str>,
+    workspace_is_remote: bool,
+) -> Result<String, ToolPathContractError> {
+    if workspace_is_remote {
+        posix_resolve_path_with_workspace(path, workspace_root)
+    } else {
+        resolve_host_path_with_workspace(path, workspace_root.map(Path::new))
+    }
+}
+
+pub fn normalize_runtime_relative_path(path: &str) -> Result<String, ToolPathContractError> {
     let normalized = path.trim().replace('\\', "/");
     let trimmed = normalized.trim_matches('/');
     if trimmed.is_empty() {
-        return None;
+        return Err(ToolPathContractError::EmptyRuntimeArtifactPath);
     }
 
     let mut segments = Vec::new();
     for part in trimmed.split('/') {
         match part {
             "" | "." => continue,
-            ".." => return None,
+            ".." => return Err(ToolPathContractError::RuntimeArtifactPathEscapesRoot),
             value => segments.push(value.to_string()),
         }
     }
 
     if segments.is_empty() {
-        return None;
+        return Err(ToolPathContractError::EmptyRuntimeArtifactPath);
     }
 
-    Some(segments.join("/"))
+    Ok(segments.join("/"))
+}
+
+pub fn parse_bitfun_runtime_uri(
+    path: &str,
+) -> Result<ParsedBitFunRuntimeUri, ToolPathContractError> {
+    let trimmed = path.trim();
+    let suffix = trimmed
+        .strip_prefix(BITFUN_RUNTIME_URI_PREFIX)
+        .ok_or_else(|| ToolPathContractError::UnsupportedRuntimeUri {
+            uri: path.to_string(),
+        })?;
+
+    let mut parts = suffix.splitn(2, '/');
+    let workspace_scope = parts
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or(ToolPathContractError::MissingRuntimeUriWorkspaceScope)?
+        .to_string();
+    let relative_path = parts
+        .next()
+        .ok_or(ToolPathContractError::MissingRuntimeUriArtifactPath)?;
+
+    Ok(ParsedBitFunRuntimeUri {
+        workspace_scope,
+        relative_path: normalize_runtime_relative_path(relative_path)?,
+    })
+}
+
+pub fn build_bitfun_runtime_uri(
+    workspace_scope: &str,
+    relative_path: &str,
+) -> Result<String, ToolPathContractError> {
+    let scope = workspace_scope.trim();
+    if scope.is_empty() {
+        return Err(ToolPathContractError::EmptyRuntimeWorkspaceScope);
+    }
+
+    Ok(format!(
+        "{}{}/{}",
+        BITFUN_RUNTIME_URI_PREFIX,
+        scope,
+        normalize_runtime_relative_path(relative_path)?
+    ))
+}
+
+pub fn posix_style_path_is_absolute(path: &str) -> bool {
+    let path = path.trim().replace('\\', "/");
+    path.starts_with('/')
+}
+
+pub fn normalize_absolute_posix_path(path: &str) -> String {
+    let normalized = path.trim().replace('\\', "/");
+    let is_absolute = normalized.starts_with('/');
+    let mut segments = Vec::new();
+
+    for segment in normalized.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                if !segments.is_empty() {
+                    segments.pop();
+                }
+            }
+            value => segments.push(value.to_string()),
+        }
+    }
+
+    let body = segments.join("/");
+    if is_absolute {
+        if body.is_empty() {
+            "/".to_string()
+        } else {
+            format!("/{}", body)
+        }
+    } else {
+        body
+    }
+}
+
+pub fn is_remote_posix_path_within_root(path: &str, root: &str) -> bool {
+    let normalized_path = normalize_absolute_posix_path(path);
+    let normalized_root = normalize_absolute_posix_path(root);
+
+    if !normalized_path.starts_with('/') || !normalized_root.starts_with('/') {
+        return false;
+    }
+
+    if normalized_root == "/" {
+        return true;
+    }
+
+    normalized_path == normalized_root
+        || normalized_path
+            .strip_prefix(&normalized_root)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
+pub fn posix_resolve_path_with_workspace(
+    path: &str,
+    workspace_root: Option<&str>,
+) -> Result<String, ToolPathContractError> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Err(ToolPathContractError::EmptyPath);
+    }
+
+    let normalized_input = path.replace('\\', "/");
+
+    let combined = if posix_style_path_is_absolute(&normalized_input) {
+        normalized_input
+    } else {
+        let base = workspace_root
+            .ok_or_else(|| ToolPathContractError::MissingWorkspaceRoot {
+                path: path.to_string(),
+            })?
+            .trim()
+            .replace('\\', "/");
+        let base = base.trim_end_matches('/');
+        format!("{}/{}", base, normalized_input)
+    };
+
+    Ok(normalize_absolute_posix_path(&combined))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

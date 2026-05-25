@@ -13,6 +13,7 @@ import {
   FlowImageAnalysisItem,
   ImageAnalysisResult,
   AnyFlowItem,
+  AcpContextUsage,
   SessionConfig,
   SessionContextRestoreState,
   SessionHistoryState,
@@ -1014,6 +1015,140 @@ export class FlowChatStore {
     return dialogTurn;
   }
 
+  public addLocalGoalPendingTurn(params: {
+    sessionId: string;
+    message: string;
+    pendingId: string;
+  }): DialogTurn | null {
+    const session = this.state.sessions.get(params.sessionId);
+    if (!session) {
+      log.warn('Session not found, cannot add local goal pending turn', {
+        sessionId: params.sessionId,
+      });
+      return null;
+    }
+
+    const generatedAt = Date.now();
+    const metadata: LocalCommandMetadata = {
+      localCommandKind: 'goal_pending',
+      modelVisible: false,
+      goalPendingId: params.pendingId,
+      generatedAt,
+    };
+    const turnIndex = session.dialogTurns.length;
+    const dialogTurn: DialogTurn = {
+      id: `local-goal-${params.pendingId}`,
+      sessionId: params.sessionId,
+      kind: 'local_command',
+      userMessage: {
+        id: `local-goal-user-${params.pendingId}`,
+        content: params.message,
+        timestamp: generatedAt,
+        metadata,
+      },
+      modelRounds: [],
+      status: 'processing',
+      startTime: generatedAt,
+      endTime: generatedAt,
+      backendTurnIndex: turnIndex,
+    };
+
+    this.setState(prev => {
+      const currentSession = prev.sessions.get(params.sessionId);
+      if (!currentSession) return prev;
+
+      if (currentSession.dialogTurns.some(turn => turn.id === dialogTurn.id)) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(params.sessionId, {
+        ...currentSession,
+        dialogTurns: [...currentSession.dialogTurns, dialogTurn],
+      });
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+    return dialogTurn;
+  }
+
+  public addLocalGoalVerifyingTurn(params: {
+    sessionId: string;
+    message: string;
+    verifyingId: string;
+  }): DialogTurn | null {
+    this.removeLocalGoalVerifyingTurn(params.sessionId);
+
+    const session = this.state.sessions.get(params.sessionId);
+    if (!session) {
+      log.warn('Session not found, cannot add local goal verifying turn', {
+        sessionId: params.sessionId,
+      });
+      return null;
+    }
+
+    const generatedAt = Date.now();
+    const metadata: LocalCommandMetadata = {
+      localCommandKind: 'goal_verifying',
+      modelVisible: false,
+      goalVerifyingId: params.verifyingId,
+      generatedAt,
+    };
+    const turnIndex = session.dialogTurns.length;
+    const dialogTurn: DialogTurn = {
+      id: `local-goal-verify-${params.verifyingId}`,
+      sessionId: params.sessionId,
+      kind: 'local_command',
+      userMessage: {
+        id: `local-goal-verify-user-${params.verifyingId}`,
+        content: params.message,
+        timestamp: generatedAt,
+        metadata,
+      },
+      modelRounds: [],
+      status: 'processing',
+      startTime: generatedAt,
+      endTime: generatedAt,
+      backendTurnIndex: turnIndex,
+    };
+
+    this.setState(prev => {
+      const currentSession = prev.sessions.get(params.sessionId);
+      if (!currentSession) return prev;
+
+      if (currentSession.dialogTurns.some(turn => turn.id === dialogTurn.id)) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(params.sessionId, {
+        ...currentSession,
+        dialogTurns: [...currentSession.dialogTurns, dialogTurn],
+      });
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+    return dialogTurn;
+  }
+
+  public removeLocalGoalVerifyingTurn(sessionId: string): void {
+    const session = this.state.sessions.get(sessionId);
+    if (!session) return;
+
+    const verifyingTurn = session.dialogTurns.find(
+      turn => turn.userMessage?.metadata?.localCommandKind === 'goal_verifying',
+    );
+    if (!verifyingTurn) return;
+
+    this.deleteDialogTurn(sessionId, verifyingTurn.id);
+  }
+
   public deleteDialogTurn(sessionId: string, dialogTurnId: string): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
@@ -1396,6 +1531,49 @@ export class FlowChatStore {
       return {
         ...prev,
         sessions: newSessions
+      };
+    });
+  }
+
+  public updateAcpContextUsage(
+    sessionId: string,
+    contextUsage: { used: number; size: number; cost?: { amount: number; currency: string } }
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const nextUsage: AcpContextUsage = {
+        used: contextUsage.used,
+        size: contextUsage.size,
+        timestamp: Date.now(),
+      };
+      if (contextUsage.cost) {
+        nextUsage.cost = contextUsage.cost;
+      }
+
+      const currentUsage = session.currentAcpContextUsage;
+      if (
+        currentUsage &&
+        currentUsage.used === nextUsage.used &&
+        currentUsage.size === nextUsage.size &&
+        currentUsage.cost?.amount === nextUsage.cost?.amount &&
+        currentUsage.cost?.currency === nextUsage.cost?.currency
+      ) {
+        return prev;
+      }
+
+      const updatedSession = {
+        ...session,
+        currentAcpContextUsage: nextUsage,
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, updatedSession);
+
+      return {
+        ...prev,
+        sessions: newSessions,
       };
     });
   }
@@ -2330,6 +2508,8 @@ export class FlowChatStore {
 
       const displayContent =
         metadata?.localCommandKind === 'usage_report'
+          || metadata?.localCommandKind === 'goal_pending'
+          || metadata?.localCommandKind === 'goal_verifying'
           ? turn.userMessage.content
           : metadata?.original_text || this.cleanRemoteUserInput(turn.userMessage.content);
       const normalizedTurnStatus = normalizeRecoveredTurnStatus(turn.status, { error: undefined });

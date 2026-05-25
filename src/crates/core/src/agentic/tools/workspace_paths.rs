@@ -5,164 +5,49 @@
 //! incorrectly. Remote sessions must use POSIX path semantics for tool arguments.
 
 use crate::util::errors::{BitFunError, BitFunResult};
-use std::path::{Component, Path, PathBuf};
-
-pub const BITFUN_RUNTIME_URI_PREFIX: &str = "bitfun://runtime/";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParsedBitFunRuntimeUri {
-    pub workspace_scope: String,
-    pub relative_path: String,
-}
+pub use bitfun_agent_tools::{
+    BITFUN_RUNTIME_URI_PREFIX, ParsedBitFunRuntimeUri, is_bitfun_runtime_uri,
+};
+use std::path::Path;
 
 pub fn normalize_path(path: &str) -> String {
-    let path = Path::new(path);
-    let mut components = Vec::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if !components.is_empty() {
-                    components.pop();
-                }
-            }
-            c => components.push(c),
-        }
-    }
-    components
-        .iter()
-        .collect::<PathBuf>()
-        .to_string_lossy()
-        .to_string()
+    bitfun_agent_tools::normalize_host_path(path)
 }
 
 pub fn resolve_path_with_workspace(
     path: &str,
     workspace_root: Option<&Path>,
 ) -> BitFunResult<String> {
-    if Path::new(path).is_absolute() {
-        Ok(normalize_path(path))
-    } else {
-        let base_path = workspace_root.ok_or_else(|| {
-            BitFunError::tool(format!(
-                "A workspace path is required to resolve relative path: {}",
-                path
-            ))
-        })?;
-
-        Ok(normalize_path(
-            base_path.join(path).to_string_lossy().as_ref(),
-        ))
-    }
+    bitfun_agent_tools::resolve_host_path_with_workspace(path, workspace_root)
+        .map_err(|error| BitFunError::tool(error.to_string()))
 }
 
 pub fn resolve_path(path: &str) -> BitFunResult<String> {
-    resolve_path_with_workspace(path, None)
-}
-
-pub fn is_bitfun_runtime_uri(path: &str) -> bool {
-    path.trim().starts_with(BITFUN_RUNTIME_URI_PREFIX)
+    bitfun_agent_tools::resolve_host_path(path)
+        .map_err(|error| BitFunError::tool(error.to_string()))
 }
 
 pub fn normalize_runtime_relative_path(path: &str) -> BitFunResult<String> {
-    let normalized = path.trim().replace('\\', "/");
-    let trimmed = normalized.trim_matches('/');
-    if trimmed.is_empty() {
-        return Err(BitFunError::tool(
-            "Runtime artifact path cannot be empty".to_string(),
-        ));
-    }
-
-    let mut segments = Vec::new();
-    for part in trimmed.split('/') {
-        match part {
-            "" | "." => continue,
-            ".." => {
-                return Err(BitFunError::tool(
-                    "Runtime artifact path cannot escape its root".to_string(),
-                ))
-            }
-            value => segments.push(value.to_string()),
-        }
-    }
-
-    if segments.is_empty() {
-        return Err(BitFunError::tool(
-            "Runtime artifact path cannot be empty".to_string(),
-        ));
-    }
-
-    Ok(segments.join("/"))
+    bitfun_agent_tools::normalize_runtime_relative_path(path)
+        .map_err(|error| BitFunError::tool(error.to_string()))
 }
 
 pub fn parse_bitfun_runtime_uri(path: &str) -> BitFunResult<ParsedBitFunRuntimeUri> {
-    let trimmed = path.trim();
-    let suffix = trimmed
-        .strip_prefix(BITFUN_RUNTIME_URI_PREFIX)
-        .ok_or_else(|| BitFunError::tool(format!("Unsupported runtime URI: {}", path)))?;
-
-    let mut parts = suffix.splitn(2, '/');
-    let workspace_scope = parts
-        .next()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| BitFunError::tool("Runtime URI is missing workspace scope".to_string()))?
-        .to_string();
-    let relative_path = parts
-        .next()
-        .ok_or_else(|| BitFunError::tool("Runtime URI is missing artifact path".to_string()))?;
-
-    Ok(ParsedBitFunRuntimeUri {
-        workspace_scope,
-        relative_path: normalize_runtime_relative_path(relative_path)?,
-    })
+    bitfun_agent_tools::parse_bitfun_runtime_uri(path)
+        .map_err(|error| BitFunError::tool(error.to_string()))
 }
 
 pub fn build_bitfun_runtime_uri(
     workspace_scope: &str,
     relative_path: &str,
 ) -> BitFunResult<String> {
-    let scope = workspace_scope.trim();
-    if scope.is_empty() {
-        return Err(BitFunError::tool(
-            "Runtime URI workspace scope cannot be empty".to_string(),
-        ));
-    }
-
-    Ok(format!(
-        "{}{}/{}",
-        BITFUN_RUNTIME_URI_PREFIX,
-        scope,
-        normalize_runtime_relative_path(relative_path)?
-    ))
+    bitfun_agent_tools::build_bitfun_runtime_uri(workspace_scope, relative_path)
+        .map_err(|error| BitFunError::tool(error.to_string()))
 }
 
 /// POSIX absolute: after normalizing backslashes, path starts with `/`.
 pub fn posix_style_path_is_absolute(path: &str) -> bool {
-    let p = path.trim().replace('\\', "/");
-    p.starts_with('/')
-}
-
-fn posix_normalize_components(path: &str) -> String {
-    let path = path.trim().replace('\\', "/");
-    let is_abs = path.starts_with('/');
-    let mut stack: Vec<String> = Vec::new();
-    for part in path.split('/') {
-        if part.is_empty() || part == "." {
-            continue;
-        }
-        if part == ".." {
-            stack.pop();
-        } else {
-            stack.push(part.to_string());
-        }
-    }
-    let body = stack.join("/");
-    if is_abs {
-        format!("/{}", body)
-    } else {
-        body
-    }
+    bitfun_agent_tools::posix_style_path_is_absolute(path)
 }
 
 /// Resolve a path using POSIX rules (for remote SSH workspaces).
@@ -170,30 +55,8 @@ pub fn posix_resolve_path_with_workspace(
     path: &str,
     workspace_root: Option<&str>,
 ) -> BitFunResult<String> {
-    let path = path.trim();
-    if path.is_empty() {
-        return Err(BitFunError::tool("path cannot be empty".to_string()));
-    }
-
-    let normalized_input = path.replace('\\', "/");
-
-    let combined = if posix_style_path_is_absolute(&normalized_input) {
-        normalized_input
-    } else {
-        let base = workspace_root
-            .ok_or_else(|| {
-                BitFunError::tool(format!(
-                    "A workspace path is required to resolve relative path: {}",
-                    path
-                ))
-            })?
-            .trim()
-            .replace('\\', "/");
-        let base = base.trim_end_matches('/');
-        format!("{}/{}", base, normalized_input)
-    };
-
-    Ok(posix_normalize_components(&combined))
+    bitfun_agent_tools::posix_resolve_path_with_workspace(path, workspace_root)
+        .map_err(|error| BitFunError::tool(error.to_string()))
 }
 
 /// Unified resolver: POSIX semantics when the workspace is remote SSH; otherwise host `Path`.
@@ -202,16 +65,14 @@ pub fn resolve_workspace_tool_path(
     workspace_root: Option<&str>,
     workspace_is_remote: bool,
 ) -> BitFunResult<String> {
-    if workspace_is_remote {
-        posix_resolve_path_with_workspace(path, workspace_root)
-    } else {
-        resolve_path_with_workspace(path, workspace_root.map(Path::new))
-    }
+    bitfun_agent_tools::resolve_workspace_tool_path(path, workspace_root, workspace_is_remote)
+        .map_err(|error| BitFunError::tool(error.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn resolves_relative_paths_from_workspace_root() {

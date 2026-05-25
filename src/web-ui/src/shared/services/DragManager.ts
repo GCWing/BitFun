@@ -240,6 +240,8 @@ export class DragManager {
         return context.directoryPath;
       case 'code-snippet':
         return context.selectedText;
+      case 'pull-request':
+        return context.content;
       case 'mermaid-node':
         return context.nodeText;
       case 'image':

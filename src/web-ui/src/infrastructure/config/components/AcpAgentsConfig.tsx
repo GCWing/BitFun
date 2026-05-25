@@ -85,28 +85,20 @@ const PRESETS: AcpClientPreset[] = [
 ];
 
 const PRESET_BY_ID = new Map(PRESETS.map(preset => [preset.id, preset]));
-let requirementProbeCache: AcpClientRequirementProbe[] | null = null;
-let requirementProbeInFlight: Promise<AcpClientRequirementProbe[]> | null = null;
 
 function loadRequirementProbes(options: { force?: boolean } = {}): Promise<AcpClientRequirementProbe[]> {
-  if (!options.force && requirementProbeCache) {
-    return Promise.resolve(requirementProbeCache);
-  }
+  return ACPClientAPI.probeClientRequirements({ force: options.force });
+}
 
-  if (!options.force && requirementProbeInFlight) {
-    return requirementProbeInFlight;
-  }
+function hasTransientProbeFailure(probe?: AcpClientRequirementProbe): boolean {
+  if (!probe) return false;
 
-  requirementProbeInFlight = ACPClientAPI.probeClientRequirements({ force: options.force })
-    .then((probes) => {
-      requirementProbeCache = probes;
-      return probes;
-    })
-    .finally(() => {
-      requirementProbeInFlight = null;
+  return [probe.tool.error, probe.adapter?.error]
+    .filter(Boolean)
+    .some((error) => {
+      const lower = error!.toLowerCase();
+      return lower.includes('timeout') || lower.includes('timed out');
     });
-
-  return requirementProbeInFlight;
 }
 
 function defaultConfigForPreset(preset: AcpClientPreset): AcpClientConfig {
@@ -253,6 +245,7 @@ function getAgentRowStatus({
   adapterInstalled,
   requiresAdapter,
   probePending,
+  probe,
 }: {
   configured: boolean;
   enabled: boolean;
@@ -260,10 +253,21 @@ function getAgentRowStatus({
   adapterInstalled?: boolean;
   requiresAdapter: boolean;
   probePending: boolean;
+  probe?: AcpClientRequirementProbe;
 }): AgentRowStatus {
   if (probePending) return 'checking';
-  if (toolInstalled === false) return 'not_installed';
-  if (requiresAdapter && adapterInstalled === false) return 'partial';
+  if (toolInstalled === false) {
+    if (configured && enabled && hasTransientProbeFailure(probe)) {
+      return 'enabled';
+    }
+    return 'not_installed';
+  }
+  if (requiresAdapter && adapterInstalled === false) {
+    if (configured && enabled && hasTransientProbeFailure(probe)) {
+      return 'enabled';
+    }
+    return 'partial';
+  }
   if (!configured) return 'ready';
   if (!enabled) return 'invalid';
   return 'enabled';
@@ -335,9 +339,7 @@ const AcpAgentsConfig: React.FC = () => {
   const [showJsonEditor, setShowJsonEditor] = useState(false);
   const [jsonConfig, setJsonConfig] = useState('');
   const [envDrafts, setEnvDrafts] = useState<Record<string, string>>({});
-  const [requirementProbes, setRequirementProbes] = useState<AcpClientRequirementProbe[]>(
-    requirementProbeCache ?? []
-  );
+  const [requirementProbes, setRequirementProbes] = useState<AcpClientRequirementProbe[]>([]);
   const [remoteRequirementProbes, setRemoteRequirementProbes] = useState<Record<string, AcpClientRequirementProbe[]>>({});
   const [probingRemoteRequirements, setProbingRemoteRequirements] = useState<Set<string>>(() => new Set());
   const [probingRequirements, setProbingRequirements] = useState(false);
@@ -346,6 +348,7 @@ const AcpAgentsConfig: React.FC = () => {
   const [installingClientIds, setInstallingClientIds] = useState<Set<string>>(() => new Set());
   const [installingRemoteClientIds, setInstallingRemoteClientIds] = useState<Set<string>>(() => new Set());
   const requirementProbeRequestIdRef = useRef(0);
+  const savingConfigRef = useRef(false);
   const loadedRemoteProbeIdsRef = useRef<Set<string>>(new Set());
   const [remoteProbeRefreshNonce, setRemoteProbeRefreshNonce] = useState(0);
 
@@ -387,6 +390,7 @@ const AcpAgentsConfig: React.FC = () => {
         adapterInstalled: probe?.adapter?.installed,
         requiresAdapter: Boolean(probe?.adapter || preset.id !== 'opencode'),
         probePending,
+        probe,
       });
       if (registryFilter === 'installed' && status !== 'enabled' && status !== 'ready') return false;
       if (registryFilter === 'not_installed' && status !== 'not_installed') return false;
@@ -418,6 +422,7 @@ const AcpAgentsConfig: React.FC = () => {
         adapterInstalled: requirementProbe?.adapter?.installed,
         requiresAdapter: Boolean(requirementProbe?.adapter),
         probePending,
+        probe: requirementProbe,
       });
       if (registryFilter === 'installed' && status !== 'enabled' && status !== 'ready') return false;
       if (registryFilter === 'not_installed' && status !== 'not_installed') return false;
@@ -436,12 +441,6 @@ const AcpAgentsConfig: React.FC = () => {
   const refreshRequirementProbes = useCallback(async (
     options: { force?: boolean; notifyOnError?: boolean } = {}
   ) => {
-    if (!options.force && requirementProbeCache) {
-      setRequirementProbes(requirementProbeCache);
-      setProbingRequirements(false);
-      return;
-    }
-
     const requestId = ++requirementProbeRequestIdRef.current;
     setProbingRequirements(true);
     try {
@@ -554,6 +553,9 @@ const AcpAgentsConfig: React.FC = () => {
 
   useEffect(() => {
     const handleAcpClientsChanged = () => {
+      if (savingConfigRef.current) {
+        return;
+      }
       void loadConfig({ showLoading: false });
     };
     window.addEventListener('bitfun:acp-clients-changed', handleAcpClientsChanged);
@@ -609,7 +611,6 @@ const AcpAgentsConfig: React.FC = () => {
         loadedRemoteProbeIdsRef.current.delete(remoteConnectionId);
         await refreshRemoteRequirementProbes(remoteConnectionId, { force: true, notifyOnError: false });
       } else {
-        requirementProbeCache = null;
         await refreshRequirementProbes({ force: true, notifyOnError: false });
       }
       notifySuccess(t('notifications.installSuccess'));
@@ -634,7 +635,6 @@ const AcpAgentsConfig: React.FC = () => {
       await ACPClientAPI.predownloadClientAdapter({
         clientId: preset.id,
       });
-      requirementProbeCache = null;
       await refreshRequirementProbes({ force: true, notifyOnError: false });
       notifySuccess(t('notifications.configureSuccess'));
     } catch (error) {
@@ -666,6 +666,7 @@ const AcpAgentsConfig: React.FC = () => {
   });
 
   const saveConfig = async (nextConfig = config, options: { mergeEnvDrafts?: boolean } = {}) => {
+    savingConfigRef.current = true;
     try {
       setSaving(true);
       const configToSave = options.mergeEnvDrafts === false
@@ -677,10 +678,8 @@ const AcpAgentsConfig: React.FC = () => {
       setConfig(configToSave);
       setJsonConfig(formatConfig(configToSave));
       setDirty(false);
-      requirementProbeCache = null;
-      setRequirementProbes([]);
+      await refreshRequirementProbes({ force: true, notifyOnError: false });
       loadedRemoteProbeIdsRef.current.clear();
-      setRemoteRequirementProbes({});
       setRemoteProbeRefreshNonce(prev => prev + 1);
       notifySuccess(t('notifications.saveSuccess'));
     } catch (error) {
@@ -689,6 +688,7 @@ const AcpAgentsConfig: React.FC = () => {
         title: t('notifications.saveFailed'),
       });
     } finally {
+      savingConfigRef.current = false;
       setSaving(false);
     }
   };
@@ -1014,6 +1014,7 @@ const AcpAgentsConfig: React.FC = () => {
                   adapterInstalled: requirementProbe?.adapter?.installed,
                   requiresAdapter,
                   probePending,
+                  probe: requirementProbe,
                 });
                 const statusLabel = getStatusLabel({
                   status,
@@ -1144,6 +1145,7 @@ const AcpAgentsConfig: React.FC = () => {
                   adapterInstalled: requirementProbe?.adapter?.installed,
                   requiresAdapter,
                   probePending,
+                  probe: requirementProbe,
                 });
                 const statusLabel = getStatusLabel({
                   status,
@@ -1262,6 +1264,7 @@ const AcpAgentsConfig: React.FC = () => {
                       adapterInstalled: requirementProbe?.adapter?.installed,
                       requiresAdapter,
                       probePending,
+                      probe: requirementProbe,
                     });
                     const displayName = effectiveConfig?.name || preset?.name || clientId;
                     const description = preset?.description ??

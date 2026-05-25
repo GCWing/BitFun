@@ -113,6 +113,49 @@ const lightweightBoundaryRules = [
 
 const dependencyProfileRules = [
   {
+    crateName: 'core',
+    profileName: 'no-default runtime-surface-light profile',
+    reason:
+      'bitfun-core no-default profile must not force product/runtime integration dependencies',
+    forbiddenNonOptionalDeps: [
+      'aes',
+      'aes-gcm',
+      'bitfun-product-domains',
+      'bitfun-relay-server',
+      'bitfun-tool-packs',
+      'chrono-tz',
+      'cron',
+      'dashmap',
+      'eventsource-stream',
+      'filetime',
+      'flate2',
+      'fs2',
+      'git2',
+      'glob',
+      'globset',
+      'hostname',
+      'image',
+      'include_dir',
+      'indexmap',
+      'local-ip-address',
+      'mac_address',
+      'md5',
+      'qrcode',
+      'rand',
+      'rmcp',
+      'russh',
+      'russh-keys',
+      'russh-sftp',
+      'shellexpand',
+      'sse-stream',
+      'ssh_config',
+      'similar',
+      'tool-runtime',
+      'tokio-tungstenite',
+      'x25519-dalek',
+    ],
+  },
+  {
     crateName: 'core-types',
     profileName: 'default DTO profile',
     reason: 'core-types default profile must stay DTO-only',
@@ -239,6 +282,108 @@ const dependencyProfileRules = [
   },
 ];
 
+const optionalDependencyFeatureOwnerRules = [
+  {
+    crateName: 'core',
+    reason:
+      'bitfun-core product/runtime optional dependencies must stay owned by explicit feature gates',
+    dependencies: [
+      { depName: 'aes', ownerFeatures: ['service-integrations'] },
+      { depName: 'aes-gcm', ownerFeatures: ['service-integrations', 'ssh-remote'] },
+      { depName: 'bitfun-product-domains', ownerFeatures: ['product-domains'] },
+      { depName: 'bitfun-relay-server', ownerFeatures: ['service-integrations'] },
+      { depName: 'bitfun-tool-packs', ownerFeatures: ['tool-packs'] },
+      { depName: 'chrono-tz', ownerFeatures: ['product-full'] },
+      { depName: 'cron', ownerFeatures: ['product-full'] },
+      { depName: 'dashmap', ownerFeatures: ['product-full'] },
+      { depName: 'eventsource-stream', ownerFeatures: ['product-full'] },
+      { depName: 'filetime', ownerFeatures: ['product-full'] },
+      { depName: 'flate2', ownerFeatures: ['product-full'] },
+      { depName: 'fs2', ownerFeatures: ['product-full'] },
+      { depName: 'git2', ownerFeatures: ['service-integrations'] },
+      { depName: 'glob', ownerFeatures: ['product-full'] },
+      { depName: 'globset', ownerFeatures: ['product-full'] },
+      { depName: 'hostname', ownerFeatures: ['service-integrations'] },
+      { depName: 'image', ownerFeatures: ['service-integrations'] },
+      { depName: 'include_dir', ownerFeatures: ['product-full'] },
+      { depName: 'indexmap', ownerFeatures: ['product-full'] },
+      { depName: 'local-ip-address', ownerFeatures: ['service-integrations'] },
+      { depName: 'mac_address', ownerFeatures: ['service-integrations'] },
+      { depName: 'md5', ownerFeatures: ['product-full', 'service-integrations'] },
+      { depName: 'qrcode', ownerFeatures: ['service-integrations'] },
+      { depName: 'rand', ownerFeatures: ['service-integrations', 'ssh-remote'] },
+      { depName: 'rmcp', ownerFeatures: ['service-integrations'] },
+      { depName: 'russh', ownerFeatures: ['ssh-remote'] },
+      { depName: 'russh-keys', ownerFeatures: ['ssh-remote'] },
+      { depName: 'russh-sftp', ownerFeatures: ['ssh-remote'] },
+      { depName: 'shellexpand', ownerFeatures: ['ssh-remote'] },
+      { depName: 'similar', ownerFeatures: ['product-full'] },
+      { depName: 'sse-stream', ownerFeatures: ['service-integrations'] },
+      { depName: 'ssh_config', ownerFeatures: ['ssh-remote'] },
+      { depName: 'tokio-tungstenite', ownerFeatures: ['service-integrations'] },
+      { depName: 'tool-runtime', ownerFeatures: ['product-full'] },
+      { depName: 'x25519-dalek', ownerFeatures: ['service-integrations'] },
+    ],
+  },
+];
+
+const productCoreFeatureAssemblyRules = [
+  {
+    manifestPath: 'src/apps/desktop/Cargo.toml',
+    dependencyName: 'bitfun-core',
+    requiredFeatures: ['product-full'],
+    reason: 'desktop must explicitly assemble the full bitfun-core product runtime',
+  },
+  {
+    manifestPath: 'src/apps/cli/Cargo.toml',
+    dependencyName: 'bitfun-core',
+    requiredFeatures: ['product-full'],
+    reason: 'CLI must explicitly assemble the full bitfun-core product runtime',
+  },
+  {
+    manifestPath: 'src/crates/acp/Cargo.toml',
+    dependencyName: 'bitfun-core',
+    requiredFeatures: ['product-full'],
+    reason: 'ACP must explicitly assemble the full bitfun-core product runtime',
+  },
+];
+
+const productCoreFeatureAssemblyScanRoots = ['src/apps', 'src/crates/acp'];
+
+const ownerCrateFeatureAssemblyRules = [
+  {
+    manifestPath: 'src/crates/tool-packs/Cargo.toml',
+    reason: 'tool-packs must keep product feature groups explicit and default-light',
+    requiredProductFullFeatures: [
+      'basic',
+      'git',
+      'mcp',
+      'browser-web',
+      'computer-use',
+      'image-analysis',
+      'miniapp',
+      'agent-control',
+    ],
+  },
+  {
+    manifestPath: 'src/crates/services-integrations/Cargo.toml',
+    reason: 'services-integrations must keep integration feature groups explicit and default-light',
+    requiredProductFullFeatures: [
+      'announcement',
+      'file-watch',
+      'git',
+      'mcp',
+      'remote-connect',
+      'remote-ssh',
+    ],
+  },
+  {
+    manifestPath: 'src/crates/product-domains/Cargo.toml',
+    reason: 'product-domains must keep product domain feature groups explicit and default-light',
+    requiredProductFullFeatures: ['miniapp', 'function-agents'],
+  },
+];
+
 const facadeOnlyFiles = [
   {
     path: 'src/crates/core/src/service/git/git_service.rs',
@@ -349,6 +494,36 @@ const forbiddenContentRules = [
         regex: /\bpub enum ToolWorkspaceKind\b/,
         message: 'core tool framework must not redefine ToolWorkspaceKind; use bitfun-agent-tools',
       },
+      {
+        regex: /\bget_global_coordinator\b/,
+        message:
+          'core tool framework must not own runtime checkpoint coordination; keep it in tool_context_runtime',
+      },
+      {
+        regex: /\bGitService\b/,
+        message:
+          'core tool framework must not own git-backed checkpoint runtime; keep it in tool_context_runtime',
+      },
+      {
+        regex: /\bget_workspace_runtime_service_arc\b/,
+        message:
+          'core tool framework must not own workspace runtime lookup; keep it in tool_context_runtime',
+      },
+      {
+        regex: /\bremote_workspace_runtime_root\b/,
+        message:
+          'core tool framework must not own remote runtime-root lookup; keep it in tool_context_runtime',
+      },
+      {
+        regex: /\bget_path_manager_arc\b/,
+        message:
+          'core tool framework must not own host runtime-root lookup; keep it in tool_context_runtime',
+      },
+      {
+        regex: /\bpost_call_hooks::record_successful_tool_call\b/,
+        message:
+          'core tool framework must not own post-call runtime hooks; keep them in tool_context_runtime',
+      },
     ],
   },
   {
@@ -366,6 +541,36 @@ const forbiddenContentRules = [
         regex: /\bpub struct ToolRuntimeRestrictions\b/,
         message:
           'core tool restrictions must not redefine ToolRuntimeRestrictions; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn\s+normalize_absolute_posix_path\b/,
+        message:
+          'core tool restrictions must not redefine remote POSIX path normalization; use bitfun-agent-tools',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/workspace_paths.rs',
+    patterns: [
+      {
+        regex: /\bpub const BITFUN_RUNTIME_URI_PREFIX\b/,
+        message:
+          'core workspace path facade must not redefine the runtime URI prefix; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bpub struct ParsedBitFunRuntimeUri\b/,
+        message:
+          'core workspace path facade must not redefine ParsedBitFunRuntimeUri; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn\s+posix_normalize_components\b/,
+        message:
+          'core workspace path facade must not redefine remote POSIX path normalization; use bitfun-agent-tools',
+      },
+      {
+        regex: /Component::ParentDir/,
+        message:
+          'core workspace path facade must not redefine host path normalization; use bitfun-agent-tools',
       },
     ],
   },
@@ -505,12 +710,12 @@ const forbiddenContentRules = [
       {
         regex: /\bGitService::get_status\b/,
         message:
-          'Git function-agent commit generator must use CoreFunctionAgentGitAdapter through FunctionAgentRuntimeFacade',
+          'Git function-agent commit generator must use CoreProductDomainRuntime for Git adapter wiring',
       },
       {
         regex: /\bAIAnalysisService::new_with_agent_config\b/,
         message:
-          'Git function-agent commit generator must use CoreFunctionAgentAiAdapter through FunctionAgentRuntimeFacade',
+          'Git function-agent commit generator must use CoreProductDomainRuntime for AI adapter wiring',
       },
       {
         regex: /\bto_string_lossy\b/,
@@ -525,12 +730,12 @@ const forbiddenContentRules = [
       {
         regex: /\bAIWorkStateService::new_with_agent_config\b/,
         message:
-          'Startchat work-state analyzer must use CoreFunctionAgentAiAdapter through FunctionAgentRuntimeFacade',
+          'Startchat work-state analyzer must use CoreProductDomainRuntime for AI adapter wiring',
       },
       {
         regex: /\bcreate_command\("git"\)/,
         message:
-          'Startchat work-state analyzer must use CoreFunctionAgentGitAdapter through FunctionAgentRuntimeFacade',
+          'Startchat work-state analyzer must use CoreProductDomainRuntime for Git adapter wiring',
       },
     ],
   },
@@ -930,6 +1135,10 @@ const forbiddenContentRules = [
         message: 'core remote-connect server must not own image-context preference policy; use the integrations helper',
       },
       {
+        regex: /\btrait RemoteImageContextAdapter\b/,
+        message: 'core remote-connect server must not own image-context adapter contracts; use the integrations contract',
+      },
+      {
         regex: /\bconst MAX_SIZE\b/,
         message: 'core remote-connect server must not own remote file max-read policy; use the integrations helper',
       },
@@ -940,6 +1149,30 @@ const forbiddenContentRules = [
       {
         regex: /unwrap_or\("file"\)/,
         message: 'core remote-connect server must not own remote file display-name fallback; use the integrations helper',
+      },
+      {
+        regex: /\bresolve_workspace_path\b/,
+        message: 'core remote-connect server must not own workspace file path resolution; use the integrations helper',
+      },
+      {
+        regex: /\bdetect_mime_type\b/,
+        message: 'core remote-connect server must not own workspace file MIME detection; use the integrations helper',
+      },
+      {
+        regex: /\bread_workspace_file\b/,
+        message: 'core remote-connect server must not own workspace file read helpers; use the integrations helper',
+      },
+      {
+        regex: /\bfn read_remote_workspace_file\b/,
+        message: 'core remote-connect server must not redefine remote workspace full-file readers; use the integrations helper',
+      },
+      {
+        regex: /\bfn read_remote_workspace_file_chunk\b/,
+        message: 'core remote-connect server must not redefine remote workspace chunk readers; use the integrations helper',
+      },
+      {
+        regex: /\bfn read_remote_workspace_file_info\b/,
+        message: 'core remote-connect server must not redefine remote workspace file-info readers; use the integrations helper',
       },
       {
         regex: /\bfn should_send_remote_model_catalog\b/,
@@ -960,6 +1193,27 @@ const forbiddenContentRules = [
       {
         regex: /\bfn remote_persisted_poll_response\b/,
         message: 'core remote-connect server must not own persisted poll response assembly; use the integrations helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_connect/bot/mod.rs',
+    patterns: [
+      {
+        regex: /\bfn strip_workspace_path_prefix\b/,
+        message: 'core remote-connect bot facade must not own workspace path prefix stripping; use the integrations helper',
+      },
+      {
+        regex: /\bfn is_absolute_workspace_path\b/,
+        message: 'core remote-connect bot facade must not own workspace path absolute detection; use the integrations helper',
+      },
+      {
+        regex: /\bmatch ext\.as_str\(\)/,
+        message: 'core remote-connect bot facade must not own workspace file MIME mapping; use the integrations helper',
+      },
+      {
+        regex: /\btokio::fs::read\(&abs_path\)/,
+        message: 'core remote-connect bot facade must not own workspace file reads; use the integrations helper',
       },
     ],
   },
@@ -1098,6 +1352,191 @@ const forbiddenContentUnderRules = [
 
 const requiredContentRules = [
   {
+    path: 'src/crates/core/Cargo.toml',
+    reason:
+      'bitfun-core product-full must explicitly aggregate owner crate feature groups instead of forcing them through dependency declarations',
+    patterns: [
+      {
+        regex:
+          /bitfun-tool-packs = \{ path = "\.\.\/tool-packs", default-features = false, optional = true \}/,
+        message: 'bitfun-tool-packs dependency must stay optional and not force product-full outside the core feature graph',
+      },
+      {
+        regex:
+          /bitfun-services-integrations = \{ path = "\.\.\/services-integrations", default-features = false, features = \["remote-ssh"\] \}/,
+        message:
+          'bitfun-services-integrations dependency may keep remote workspace identity helpers but must not force product-full outside the core feature graph',
+      },
+      {
+        regex:
+          /bitfun-product-domains = \{ path = "\.\.\/product-domains", default-features = false, optional = true \}/,
+        message:
+          'bitfun-product-domains dependency must stay optional and not force product-full outside the core feature graph',
+      },
+      {
+        regex: /"dep:bitfun-tool-packs"/,
+        message: 'core tool-packs feature must explicitly enable the optional dependency',
+      },
+      {
+        regex: /"bitfun-tool-packs\/product-full"/,
+        message: 'core product-full must explicitly enable tool pack product features',
+      },
+      {
+        regex: /"bitfun-services-integrations\/product-full"/,
+        message: 'core product-full must explicitly enable integration product features',
+      },
+      {
+        regex: /"dep:bitfun-product-domains"/,
+        message: 'core product-domains feature must explicitly enable the optional dependency',
+      },
+      {
+        regex: /"bitfun-product-domains\/product-full"/,
+        message: 'core product-full must explicitly enable product-domain features',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/lib.rs',
+    reason:
+      'no-default bitfun-core must keep product runtime surfaces behind explicit features',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*pub mod agentic\b/s,
+        message: 'agentic runtime must stay behind product-full for no-default builds',
+      },
+      {
+        regex: /#\[cfg\(feature = "product-domains"\)\]\s*pub mod function_agents\b/s,
+        message: 'function-agent product domain facade must stay behind product-domains',
+      },
+      {
+        regex: /#\[cfg\(feature = "product-domains"\)\]\s*pub mod miniapp\b/s,
+        message: 'MiniApp product domain facade must stay behind product-domains',
+      },
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub\(crate\) mod service_agent_runtime\b/s,
+        message: 'service agent runtime owner assembly must stay behind service-integrations',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/mod.rs',
+    reason:
+      'service integration and agent-runtime surfaces must not compile in no-default core builds',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub mod git\b/s,
+        message: 'git service facade must stay behind service-integrations',
+      },
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub mod mcp\b/s,
+        message: 'MCP service facade must stay behind service-integrations',
+      },
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub mod remote_connect\b/s,
+        message: 'remote-connect service facade must stay behind service-integrations',
+      },
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub mod review_platform\b/s,
+        message: 'review platform facade must stay behind service-integrations',
+      },
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*pub mod snapshot\b/s,
+        message: 'snapshot service must stay behind product-full until tool-runtime ownership is split',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/config/mod.rs',
+    reason:
+      'mode config canonicalization depends on product agent/tool registries and must stay out of no-default builds',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*pub mod mode_config_canonicalizer\b/s,
+        message: 'mode config canonicalizer must stay behind product-full',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/workspace/manager.rs',
+    reason:
+      'workspace metadata may omit git worktree enrichment when service integrations are disabled',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "service-integrations"\)\]\s*use crate::service::git::GitService\b/s,
+        message: 'GitService import must stay gated for no-default builds',
+      },
+      {
+        regex: /#\[cfg\(not\(feature = "service-integrations"\)\)\]\s*\{\s*let _ = workspace_root;\s*return None;\s*\}/s,
+        message: 'no-default worktree enrichment fallback must remain explicit',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/workspace_runtime/service.rs',
+    reason:
+      'workspace runtime binding helpers may depend on agentic runtime only in full product builds',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*use crate::agentic::WorkspaceBinding\b/s,
+        message: 'WorkspaceBinding import must stay gated for no-default builds',
+      },
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*pub async fn ensure_runtime_for_workspace_binding\b/s,
+        message: 'WorkspaceBinding runtime helper must stay behind product-full',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_ssh/mod.rs',
+    reason:
+      'core remote SSH runtime must keep concrete SSH dependencies behind the ssh-remote feature while preserving lightweight workspace identity helpers',
+    patterns: [
+      {
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod disabled\b/s,
+        message: 'missing disabled remote SSH runtime surface for no-default builds',
+      },
+      {
+        regex: /#\[cfg\(feature = "ssh-remote"\)\]\s*pub mod manager\b/s,
+        message: 'remote SSH manager must stay gated behind ssh-remote',
+      },
+      {
+        regex: /#\[cfg\(feature = "ssh-remote"\)\]\s*pub mod remote_fs\b/s,
+        message: 'remote SSH filesystem runtime must stay gated behind ssh-remote',
+      },
+      {
+        regex: /#\[cfg\(feature = "ssh-remote"\)\]\s*pub mod remote_terminal\b/s,
+        message: 'remote SSH terminal runtime must stay gated behind ssh-remote',
+      },
+      {
+        regex: /\bpub mod workspace_state\b/,
+        message: 'remote workspace identity helpers must remain available without ssh-remote',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_ssh/disabled.rs',
+    reason:
+      'no-default core builds must expose explicit unsupported remote SSH stubs instead of compiling russh-backed runtime code',
+    patterns: [
+      {
+        regex: /Remote SSH support is disabled; enable the `ssh-remote` feature/,
+        message: 'missing explicit disabled remote SSH diagnostic',
+      },
+      {
+        regex: /\bpub struct SSHConnectionManager\b/,
+        message: 'missing disabled SSH manager compatibility surface',
+      },
+      {
+        regex: /\bpub struct RemoteFileService\b/,
+        message: 'missing disabled remote file compatibility surface',
+      },
+      {
+        regex: /\bpub struct RemoteTerminalManager\b/,
+        message: 'missing disabled remote terminal compatibility surface',
+      },
+    ],
+  },
+  {
     path: 'src/crates/runtime-ports/src/lib.rs',
     reason:
       'runtime-ports must keep remote runtime boundary contracts DTO/trait-only',
@@ -1123,7 +1562,7 @@ const requiredContentRules = [
   {
     path: 'src/crates/agent-tools/src/framework.rs',
     reason:
-      'agent-tools may own pure and generic prompt-visible tool manifest contracts without owning product registry or execution',
+      'agent-tools may own pure and generic prompt-visible tool contracts and provider-neutral execution gate policy without owning product registry or concrete execution',
     patterns: [
       {
         regex: /\bpub const GET_TOOL_SPEC_TOOL_NAME\b/,
@@ -1302,6 +1741,22 @@ const requiredContentRules = [
         message: 'missing pure collapsed-tool load collection contract',
       },
       {
+        regex: /\bpub enum CollapsedToolUsageError\b/,
+        message: 'missing collapsed-tool execution gate error contract',
+      },
+      {
+        regex: /\bpub enum ToolExecutionAccessError\b/,
+        message: 'missing tool execution allowed-list gate error contract',
+      },
+      {
+        regex: /\bpub fn validate_tool_allowed_by_list\b/,
+        message: 'missing tool execution allowed-list gate policy',
+      },
+      {
+        regex: /\bpub fn validate_collapsed_tool_usage\b/,
+        message: 'missing collapsed-tool execution gate policy',
+      },
+      {
         regex: /\bpub fn sort_tool_manifest_definitions\b/,
         message: 'missing prompt-visible manifest ordering helper',
       },
@@ -1375,6 +1830,399 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/service_agent_runtime.rs',
+    reason:
+      'core service/agent runtime owner must centralize concrete remote-connect and agent runtime port bindings without moving runtime behavior',
+    patterns: [
+      {
+        regex: /\bpub\(crate\) struct CoreServiceAgentRuntime\b/,
+        message: 'missing core service/agent runtime owner type',
+      },
+      {
+        regex: /\bfn remote_dialog_host\b/,
+        message: 'missing remote dialog host owner factory',
+      },
+      {
+        regex: /\bfn remote_image_context\b/,
+        message: 'missing remote image context owner adapter',
+      },
+      {
+        regex: /\bfn agent_submission_port\b/,
+        message: 'missing agent submission port owner binding',
+      },
+      {
+        regex: /\bCoreRemoteDialogRuntimeHost\b/,
+        message: 'missing core remote dialog host binding',
+      },
+      {
+        regex: /\bRemoteExecutionDispatcher\b/,
+        message: 'missing remote execution dispatcher binding',
+      },
+      {
+        regex: /\bImageContextData\b/,
+        message: 'missing core image context binding',
+      },
+      {
+        regex: /\bRemoteImageContextAdapter\b/,
+        message: 'missing remote image context adapter implementation',
+      },
+      {
+        regex: /\bAgentSubmissionPort\b/,
+        message: 'missing agent submission port binding',
+      },
+      {
+        regex: /\bAgentTurnCancellationPort\b/,
+        message: 'missing agent turn cancellation port contract guard',
+      },
+      {
+        regex: /\bRemoteControlStatePort\b/,
+        message: 'missing remote control state port contract guard',
+      },
+      {
+        regex: /\bSessionTranscriptReader\b/,
+        message: 'missing session transcript reader contract guard',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_keeps_coordinator_port_contracts\b/,
+        message: 'missing coordinator runtime port contract regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services-integrations/src/remote_connect.rs',
+    reason:
+      'services-integrations must own remote-connect wire, tracker, dialog, file, and image adapter contracts',
+    patterns: [
+      {
+        regex: /\bpub struct RemoteSessionStateTracker\b/,
+        message: 'missing remote session state tracker owner',
+      },
+      {
+        regex: /\bpub enum TrackerEvent\b/,
+        message: 'missing remote tracker event owner',
+      },
+      {
+        regex: /\bpub trait RemoteSessionTrackerHost\b/,
+        message: 'missing remote tracker host port',
+      },
+      {
+        regex: /\bpub struct RemoteSessionTrackerRegistry\b/,
+        message: 'missing remote tracker registry owner',
+      },
+      {
+        regex: /\bpub fn make_slim_tool_params\b/,
+        message: 'missing remote tool preview slimming helper',
+      },
+      {
+        regex: /\bfn handle_agentic_event\b/,
+        message: 'missing tracker event reducer',
+      },
+      {
+        regex: /\bpub fn resolve_remote_agent_type\b/,
+        message: 'missing remote agent type helper',
+      },
+      {
+        regex: /\bpub struct RemoteImageContext\b/,
+        message: 'missing portable remote image context contract',
+      },
+      {
+        regex: /\bpub trait RemoteImageContextAdapter\b/,
+        message: 'missing remote image context adapter contract',
+      },
+      {
+        regex: /\bpub fn build_remote_image_contexts\b/,
+        message: 'missing legacy remote image context builder',
+      },
+      {
+        regex: /\bpub fn resolve_remote_execution_image_contexts\b/,
+        message: 'missing remote image context preference helper',
+      },
+      {
+        regex: /\bpub fn remote_session_restore_target\b/,
+        message: 'missing remote restore-target helper',
+      },
+      {
+        regex: /\bpub enum RemoteCancelDecision\b/,
+        message: 'missing remote cancel decision contract',
+      },
+      {
+        regex: /\bpub fn resolve_remote_cancel_decision\b/,
+        message: 'missing remote cancel decision resolver',
+      },
+      {
+        regex: /\bpub trait RemoteDialogRuntimeHost\b/,
+        message: 'missing remote dialog runtime host port',
+      },
+      {
+        regex: /\bpub async fn submit_remote_dialog\b/,
+        message: 'missing remote dialog orchestration owner',
+      },
+      {
+        regex: /\bpub const REMOTE_FILE_MAX_READ_BYTES\b/,
+        message: 'missing remote file max-read policy',
+      },
+      {
+        regex: /\bpub const REMOTE_FILE_MAX_CHUNK_BYTES\b/,
+        message: 'missing remote file chunk policy',
+      },
+      {
+        regex: /\bpub fn resolve_remote_file_chunk_range\b/,
+        message: 'missing remote file chunk range helper',
+      },
+      {
+        regex: /\bpub fn remote_file_display_name\b/,
+        message: 'missing remote file display-name fallback',
+      },
+      {
+        regex: /\bpub fn resolve_remote_workspace_path\b/,
+        message: 'missing remote workspace path resolver',
+      },
+      {
+        regex: /\bpub fn detect_remote_mime_type\b/,
+        message: 'missing remote MIME detector',
+      },
+      {
+        regex: /\bpub async fn read_remote_workspace_file\b/,
+        message: 'missing remote workspace full-file reader',
+      },
+      {
+        regex: /\bpub async fn read_remote_workspace_file_chunk\b/,
+        message: 'missing remote workspace chunk reader',
+      },
+      {
+        regex: /\bpub async fn read_remote_workspace_file_info\b/,
+        message: 'missing remote workspace file-info reader',
+      },
+      {
+        regex: /\bpub struct RemoteDefaultModelsConfig\b/,
+        message: 'missing remote model default DTO',
+      },
+      {
+        regex: /\bpub struct RemoteModelConfig\b/,
+        message: 'missing remote model DTO',
+      },
+      {
+        regex: /\bpub struct RemoteModelCatalog\b/,
+        message: 'missing remote model catalog DTO',
+      },
+      {
+        regex: /\bpub struct RemoteModelCatalogPollDelta\b/,
+        message: 'missing remote model catalog poll delta',
+      },
+      {
+        regex: /\bpub enum RemoteCommand\b/,
+        message: 'missing remote command wire contract',
+      },
+      {
+        regex: /\bpub enum RemoteResponse\b/,
+        message: 'missing remote response wire contract',
+      },
+      {
+        regex: /\bpub fn should_send_remote_model_catalog\b/,
+        message: 'missing remote model catalog poll policy',
+      },
+      {
+        regex: /\bpub fn remote_model_catalog_poll_delta\b/,
+        message: 'missing remote model catalog poll delta helper',
+      },
+      {
+        regex: /\bpub fn remote_no_change_poll_response\b/,
+        message: 'missing remote no-change poll response helper',
+      },
+      {
+        regex: /\bpub fn remote_snapshot_poll_response\b/,
+        message: 'missing remote snapshot poll response helper',
+      },
+      {
+        regex: /\bpub fn remote_persisted_poll_response\b/,
+        message: 'missing remote persisted poll response helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services-integrations/tests/remote_connect_contracts.rs',
+    reason: 'remote-connect owner crate must keep focused behavior contracts',
+    patterns: [
+      {
+        regex: /\bremote_connect_command_wire_shape_lives_in_owner_contract\b/,
+        message: 'missing remote command wire contract test',
+      },
+      {
+        regex: /\bremote_connect_response_wire_shape_lives_in_owner_contract\b/,
+        message: 'missing remote response wire contract test',
+      },
+      {
+        regex: /\bremote_connect_model_catalog_delta_preserves_poll_invalidation_policy\b/,
+        message: 'missing remote model catalog delta contract test',
+      },
+      {
+        regex: /\bremote_connect_poll_helpers_preserve_delta_and_completion_policy\b/,
+        message: 'missing remote poll helper contract test',
+      },
+      {
+        regex: /\bremote_connect_image_context_policy_preserves_legacy_fallback_shape\b/,
+        message: 'missing legacy image context fallback test',
+      },
+      {
+        regex: /\bremote_connect_image_context_policy_prefers_explicit_contexts\b/,
+        message: 'missing explicit image context preference test',
+      },
+      {
+        regex: /\bremote_connect_image_context_adapter_owns_portable_conversion_shape\b/,
+        message: 'missing image context adapter contract test',
+      },
+      {
+        regex: /\bremote_connect_cancel_and_restore_policy_preserve_runtime_decisions\b/,
+        message: 'missing cancel/restore policy test',
+      },
+      {
+        regex: /\bremote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order\b/,
+        message: 'missing dialog runtime order test',
+      },
+      {
+        regex: /\bremote_connect_dialog_runtime_preserves_explicit_turn_without_restore\b/,
+        message: 'missing dialog explicit-turn test',
+      },
+      {
+        regex: /\bremote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance\b/,
+        message: 'missing restore failure tolerance test',
+      },
+      {
+        regex: /\bremote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges\b/,
+        message: 'missing remote file transfer policy test',
+      },
+      {
+        regex: /\bremote_connect_file_transfer_policy_preserves_name_fallback\b/,
+        message: 'missing remote file display-name test',
+      },
+      {
+        regex: /\bremote_connect_file_path_resolution_stays_within_workspace_root\b/,
+        message: 'missing remote file path resolution test',
+      },
+      {
+        regex: /\bremote_connect_file_read_helpers_preserve_current_wire_inputs\b/,
+        message: 'missing remote full-read helper test',
+      },
+      {
+        regex: /\bremote_connect_file_chunk_and_info_helpers_preserve_response_facts\b/,
+        message: 'missing remote chunk/info helper test',
+      },
+      {
+        regex: /\bremote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes\b/,
+        message: 'missing tracker completion contract test',
+      },
+      {
+        regex: /\bremote_connect_tracker_registry_owns_lifecycle_without_core_state\b/,
+        message: 'missing tracker registry owner test',
+      },
+      {
+        regex: /\bremote_connect_tracker_ignores_unrelated_direct_session_events\b/,
+        message: 'missing tracker unrelated-event guard test',
+      },
+      {
+        regex: /\bremote_connect_tool_preview_slimming_keeps_short_fields_and_drops_large_strings\b/,
+        message: 'missing remote tool preview slimming test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_connect/remote_server.rs',
+    reason:
+      'core remote-connect server must remain a product runtime adapter around integrations-owned contracts',
+    patterns: [
+      {
+        regex: /\bCoreServiceAgentRuntime\b/,
+        message: 'missing core service/agent runtime owner routing',
+      },
+      {
+        regex: /\bstruct CoreRemoteDialogRuntimeHost\b/,
+        message: 'missing core remote dialog runtime adapter',
+      },
+      {
+        regex: /\bimpl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost\b/,
+        message: 'missing integrations dialog host adapter implementation',
+      },
+      {
+        regex: /\bsubmit_remote_dialog\b/,
+        message: 'missing remote dialog owner orchestration delegation',
+      },
+      {
+        regex: /\bread_remote_workspace_file\b/,
+        message: 'missing remote file full-read helper delegation',
+      },
+      {
+        regex: /\bread_remote_workspace_file_chunk\b/,
+        message: 'missing remote file chunk helper delegation',
+      },
+      {
+        regex: /\bread_remote_workspace_file_info\b/,
+        message: 'missing remote file info helper delegation',
+      },
+      {
+        regex: /\bremote_image_context\b/,
+        message: 'missing image context adapter contract delegation',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_maps_remote_image_context\b/,
+        message: 'missing core service/agent image-context owner regression',
+      },
+      {
+        regex: /\bremote_execution_prefers_unified_image_contexts_over_legacy_images\b/,
+        message: 'missing unified image context preference regression',
+      },
+      {
+        regex: /\bremote_execution_falls_back_to_legacy_images_as_image_contexts\b/,
+        message: 'missing legacy image context fallback regression',
+      },
+      {
+        regex: /\bremote_cancel_decision_preserves_current_turn_boundaries\b/,
+        message: 'missing remote cancel boundary regression',
+      },
+      {
+        regex: /\bremote_restore_target_only_restores_cold_sessions_with_workspace_binding\b/,
+        message: 'missing remote restore target regression',
+      },
+      {
+        regex: /\bremote_command_snapshot_covers_execution_poll_and_cancel_surfaces\b/,
+        message: 'missing remote command snapshot regression',
+      },
+      {
+        regex: /\bremote_response_snapshot_preserves_active_turn_and_result_shapes\b/,
+        message: 'missing remote response snapshot regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/remote_connect/bot/command_router.rs',
+    reason:
+      'remote-connect bot must route concrete agent runtime port bindings through the core service/agent runtime owner',
+    patterns: [
+      {
+        regex: /\bCoreServiceAgentRuntime\b/,
+        message: 'missing core service/agent runtime owner routing',
+      },
+      {
+        regex: /\bagent_submission_port\b/,
+        message: 'missing agent submission port owner binding',
+      },
+      {
+        regex: /\bbuild_remote_session_create_request\b/,
+        message: 'missing integrations-owned remote session create request builder',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+    reason:
+      'core scheduler keeps remote queue policy semantics until agent-runtime migration is reviewed',
+    patterns: [
+      {
+        regex: /\bremote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary\b/,
+        message: 'missing remote queue policy regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/tools/registry.rs',
     reason:
       'core registry must stay a compatibility container that delegates product tool runtime assembly through the core owner module',
@@ -1388,8 +2236,8 @@ const requiredContentRules = [
         message: 'missing product decorator ref alias using agent-tools contract',
       },
       {
-        regex: /\bProductToolRuntimeAssembly\b/,
-        message: 'missing product tool runtime assembly delegation',
+        regex: /\bProductToolRuntime\b/,
+        message: 'missing product tool runtime owner delegation',
       },
       {
         regex: /\bget_collapsed_tool_names\b/,
@@ -1400,7 +2248,7 @@ const requiredContentRules = [
         message: 'missing product tool catalog readonly facade delegation',
       },
       {
-        regex: /\bregistry_preserves_collapsed_tool_manifest_for_owner_migration\b/,
+        regex: /\bproduct_tool_runtime_owner_preserves_registry_contract\b/,
         message: 'missing collapsed-tool manifest migration baseline',
       },
       {
@@ -1410,13 +2258,13 @@ const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/core/src/agentic/tools/runtime_assembly.rs',
+    path: 'src/crates/core/src/agentic/tools/product_runtime.rs',
     reason:
-      'core must keep product tool runtime assembly explicit until ToolUseContext and concrete tool-pack migration are reviewed',
+      'core product tool runtime owner keeps registry assembly, static tool materialization, catalog manifests, and GetToolSpec facades explicit until concrete tools migrate',
     patterns: [
       {
-        regex: /\bProductToolRuntimeAssembly\b/,
-        message: 'missing core product tool runtime assembly owner',
+        regex: /\bProductToolRuntime\b/,
+        message: 'missing core product tool runtime owner',
       },
       {
         regex: /\bSnapshotToolDecorator\b/,
@@ -1429,29 +2277,6 @@ const requiredContentRules = [
       {
         regex: /\bbuiltin_static_tool_providers\b/,
         message: 'missing builtin provider assembly input',
-      },
-      {
-        regex: /\bToolRuntimeAssembly\b/,
-        message: 'missing generic agent-tools runtime assembly delegation',
-      },
-      {
-        regex: /\bcreate_registry_from_static_providers\b/,
-        message: 'missing generic static provider assembly delegation',
-      },
-      {
-        regex: /\bwrap_tool_for_snapshot_tracking\b/,
-        message: 'missing snapshot wrapper boundary',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/core/src/agentic/tools/static_providers.rs',
-    reason:
-      'core materializes concrete tools from the tool-pack provider plan until concrete tools migrate',
-    patterns: [
-      {
-        regex: /\bbuiltin_static_tool_providers\b/,
-        message: 'missing builtin static tool provider owner',
       },
       {
         regex: /\bStaticToolProviderGroup\b/,
@@ -1469,48 +2294,18 @@ const requiredContentRules = [
         regex: /\bGetToolSpecTool::new\(\)/,
         message: 'missing GetToolSpec registration anchor',
       },
-    ],
-  },
-  {
-    path: 'src/crates/core/src/agentic/tools/tool_adapter.rs',
-    reason:
-      'core must keep the product Tool-to-agent-tools adapters explicit until ToolUseContext and concrete tools migrate',
-    patterns: [
       {
-        regex: /\bimpl ToolRegistryItem for dyn Tool\b/,
-        message: 'missing core Tool registry adapter',
+        regex: /\bToolRuntimeAssembly\b/,
+        message: 'missing generic agent-tools runtime assembly delegation',
       },
       {
-        regex: /\bimpl ContextualToolManifestItem<ToolUseContext> for dyn Tool\b/,
-        message: 'missing core ToolUseContext contextual manifest adapter',
+        regex: /\bcreate_registry_from_static_providers\b/,
+        message: 'missing generic static provider assembly delegation',
       },
       {
-        regex: /\bTool::dynamic_tool_info\b/,
-        message: 'missing dynamic tool metadata adapter',
+        regex: /\bwrap_tool_for_snapshot_tracking\b/,
+        message: 'missing snapshot wrapper boundary',
       },
-      {
-        regex: /\bTool::is_readonly\b/,
-        message: 'missing readonly metadata adapter',
-      },
-      {
-        regex: /\bTool::is_enabled\b/,
-        message: 'missing enabled-state metadata adapter',
-      },
-      {
-        regex: /\bTool::description_with_context\b/,
-        message: 'missing context-aware tool description adapter',
-      },
-      {
-        regex: /\bTool::input_schema_for_model_with_context\b/,
-        message: 'missing context-aware tool schema adapter',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/core/src/agentic/tools/catalog_provider.rs',
-    reason:
-      'core must keep the product tool catalog provider explicit until ToolUseContext, manifest assembly, and GetToolSpec execution migration are reviewed',
-    patterns: [
       {
         regex: /\bProductToolCatalogProvider\b/,
         message: 'missing core product tool catalog provider owner',
@@ -1568,8 +2363,47 @@ const requiredContentRules = [
         message: 'missing product catalog provider collapsed catalog regression',
       },
       {
+        regex: /\bproduct_tool_runtime_owner_preserves_registry_contract\b/,
+        message: 'missing product runtime owner registry equivalence regression',
+      },
+      {
         regex: /\bGetToolSpec requires agent type context\b/,
         message: 'missing contextual GetToolSpec catalog validation boundary',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_adapter.rs',
+    reason:
+      'core must keep the product Tool-to-agent-tools adapters explicit until ToolUseContext and concrete tools migrate',
+    patterns: [
+      {
+        regex: /\bimpl ToolRegistryItem for dyn Tool\b/,
+        message: 'missing core Tool registry adapter',
+      },
+      {
+        regex: /\bimpl ContextualToolManifestItem<ToolUseContext> for dyn Tool\b/,
+        message: 'missing core ToolUseContext contextual manifest adapter',
+      },
+      {
+        regex: /\bTool::dynamic_tool_info\b/,
+        message: 'missing dynamic tool metadata adapter',
+      },
+      {
+        regex: /\bTool::is_readonly\b/,
+        message: 'missing readonly metadata adapter',
+      },
+      {
+        regex: /\bTool::is_enabled\b/,
+        message: 'missing enabled-state metadata adapter',
+      },
+      {
+        regex: /\bTool::description_with_context\b/,
+        message: 'missing context-aware tool description adapter',
+      },
+      {
+        regex: /\bTool::input_schema_for_model_with_context\b/,
+        message: 'missing context-aware tool schema adapter',
       },
     ],
   },
@@ -1764,13 +2598,84 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/agentic/tools/tool_context_runtime.rs',
+    reason:
+      'core must keep ToolUseContext runtime/service bindings centralized while ToolUseContext and concrete tools remain core-owned',
+    patterns: [
+      {
+        regex: /\bimpl ToolUseContext\b/,
+        message: 'missing ToolUseContext runtime binding owner impl',
+      },
+      {
+        regex: /\brecord_light_checkpoint\b/,
+        message: 'missing Deep Review checkpoint binding',
+      },
+      {
+        regex: /\bcall_with_tool_runtime_hooks\b/,
+        message: 'missing tool-call cancellation/post-call hook binding',
+      },
+      {
+        regex: /\bbuild_tool_use_context_for_task\b/,
+        message: 'missing tool pipeline context materialization binding',
+      },
+      {
+        regex: /\bbuild_tool_description_context\b/,
+        message: 'missing tool manifest description context materialization binding',
+      },
+      {
+        regex: /\bbuild_write_preflight_context\b/,
+        message: 'missing write preflight context materialization binding',
+      },
+      {
+        regex: /\bensure_current_workspace_runtime\b/,
+        message: 'missing workspace runtime ensure binding',
+      },
+      {
+        regex: /\bresolve_tool_path\b/,
+        message: 'missing tool path resolution binding',
+      },
+      {
+        regex: /\benforce_path_operation\b/,
+        message: 'missing runtime path policy binding',
+      },
+      {
+        regex: /\bworkspace_path_resolution_rejects_absolute_paths_outside_remote_workspace\b/,
+        message: 'missing remote workspace containment regression',
+      },
+      {
+        regex: /\bruntime_uri_resolution_rejects_different_workspace_scope\b/,
+        message: 'missing runtime artifact scope regression',
+      },
+      {
+        regex: /\bpath_policy_allows_only_configured_local_roots\b/,
+        message: 'missing path policy enforcement regression',
+      },
+      {
+        regex: /\btool_call_runtime_hook_returns_cancelled_before_impl_completes\b/,
+        message: 'missing tool-call cancellation regression',
+      },
+      {
+        regex: /\btool_task_context_materialization_preserves_runtime_fields\b/,
+        message: 'missing tool task context materialization regression',
+      },
+      {
+        regex: /\btool_description_context_preserves_manifest_custom_data_shape\b/,
+        message: 'missing tool description context regression',
+      },
+      {
+        regex: /\bwrite_preflight_context_preserves_minimal_runtime_fields\b/,
+        message: 'missing write preflight context regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
-      'core must continue owning collapsed-tool execution gating until manifest/runtime migration is reviewed',
+      'core must continue carrying collapsed-tool unlock state while delegating provider-neutral execution gate policy to agent-tools',
     patterns: [
       {
         regex: /\bfn validate_collapsed_tool_usage\b/,
-        message: 'missing collapsed-tool execution gate',
+        message: 'missing collapsed-tool execution gate compatibility wrapper',
       },
       {
         regex: /\bunlocked_collapsed_tools\b/,
@@ -1941,11 +2846,11 @@ const requiredContentRules = [
       'core scheduler must continue owning background subagent result delivery until running-turn and idle-session routing equivalence tests exist',
     patterns: [
       {
-        regex: /\bdeliver_background_subagent_result\b/,
+        regex: /\bdeliver_background_result\b/,
         message: 'missing background subagent delivery entry point',
       },
       {
-        regex: /RoundInjectionKind::BackgroundSubagentResult/,
+        regex: /RoundInjectionKind::BackgroundResult/,
         message: 'missing running-turn background result injection',
       },
       {
@@ -2101,6 +3006,44 @@ const requiredContentRules = [
       {
         regex: /\bfallback_query\b/,
         message: 'missing FilesWithMatches fallback query',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/search/mod.rs',
+    reason:
+      'remote workspace search must route to the real implementation only when ssh-remote is enabled',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "ssh-remote"\)\]\s*mod remote\b/s,
+        message: 'missing ssh-remote gate for real remote search implementation',
+      },
+      {
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod remote_disabled\b/s,
+        message: 'missing disabled remote search implementation for no-default builds',
+      },
+      {
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*pub use remote_disabled/s,
+        message: 'missing disabled remote search export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/search/remote_disabled.rs',
+    reason:
+      'no-default core builds must keep remote search unavailable with an explicit diagnostic',
+    patterns: [
+      {
+        regex: /Remote SSH search is disabled; enable the `ssh-remote` feature/,
+        message: 'missing explicit disabled remote search diagnostic',
+      },
+      {
+        regex: /\bpub struct RemoteWorkspaceSearchService\b/,
+        message: 'missing disabled remote workspace search service surface',
+      },
+      {
+        regex: /\bremote_workspace_search_service_for_path\b/,
+        message: 'missing disabled remote workspace search resolver',
       },
     ],
   },
@@ -2624,6 +3567,10 @@ const requiredContentRules = [
         message: 'missing product-domain MiniApp runtime-state facade use',
       },
       {
+        regex: /\bCoreProductDomainRuntime\b/,
+        message: 'missing core-owned product-domain runtime owner delegation',
+      },
+      {
         regex: /\bpersist_sync_from_fs_result_for_app\b/,
         message: 'missing product-domain MiniApp sync-from-fs facade delegation',
       },
@@ -2737,19 +3684,23 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/function_agents/git-func-agent/commit_generator.rs',
     reason:
-      'Git function-agent commit generation must route through the product-domain runtime facade while core keeps concrete adapters',
+      'Git function-agent commit generation must route through the core product-domain runtime owner while core keeps concrete adapters',
     patterns: [
       {
-        regex: /\bFunctionAgentRuntimeFacade\b/,
-        message: 'missing product-domain function-agent runtime facade routing',
+        regex: /\bCoreProductDomainRuntime\b/,
+        message: 'missing core product-domain runtime owner routing',
       },
       {
-        regex: /\bCoreFunctionAgentGitAdapter\b/,
-        message: 'missing core-owned Git adapter wiring',
+        regex: /\bfunction_agent_git_adapter\b/,
+        message: 'missing core-owned Git adapter factory wiring',
       },
       {
-        regex: /\bCoreFunctionAgentAiAdapter\b/,
-        message: 'missing core-owned AI adapter wiring',
+        regex: /\bfunction_agent_ai_adapter\b/,
+        message: 'missing core-owned AI adapter factory wiring',
+      },
+      {
+        regex: /\bfunction_agent_runtime_facade\b/,
+        message: 'missing product-domain function-agent runtime facade owner routing',
       },
     ],
   },
@@ -2823,19 +3774,23 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
     reason:
-      'Startchat work-state analysis must route through the product-domain runtime facade while core keeps concrete adapters',
+      'Startchat work-state analysis must route through the core product-domain runtime owner while core keeps concrete adapters',
     patterns: [
       {
-        regex: /\bFunctionAgentRuntimeFacade\b/,
-        message: 'missing product-domain function-agent runtime facade routing',
+        regex: /\bCoreProductDomainRuntime\b/,
+        message: 'missing core product-domain runtime owner routing',
       },
       {
-        regex: /\bCoreFunctionAgentGitAdapter\b/,
-        message: 'missing core-owned Git adapter wiring',
+        regex: /\bfunction_agent_git_adapter\b/,
+        message: 'missing core-owned Git adapter factory wiring',
       },
       {
-        regex: /\bCoreFunctionAgentAiAdapter\b/,
-        message: 'missing core-owned AI adapter wiring',
+        regex: /\bfunction_agent_ai_adapter\b/,
+        message: 'missing core-owned AI adapter factory wiring',
+      },
+      {
+        regex: /\bfunction_agent_runtime_facade\b/,
+        message: 'missing product-domain function-agent runtime facade owner routing',
       },
     ],
   },
@@ -3024,6 +3979,61 @@ const requiredContentRules = [
       },
     ],
   },
+  {
+    path: 'src/crates/core/src/product_domain_runtime.rs',
+    reason:
+      'core product-domain runtime owner must centralize concrete MiniApp and function-agent runtime port bindings without moving runtime behavior',
+    patterns: [
+      {
+        regex: /\bpub\(crate\) struct CoreProductDomainRuntime\b/,
+        message: 'missing core product-domain runtime owner type',
+      },
+      {
+        regex: /\bfn miniapp_runtime_facade\b/,
+        message: 'missing MiniApp runtime facade owner factory',
+      },
+      {
+        regex: /\bfn function_agent_git_adapter\b/,
+        message: 'missing function-agent Git adapter owner factory',
+      },
+      {
+        regex: /\bfn function_agent_ai_adapter\b/,
+        message: 'missing function-agent AI adapter owner factory',
+      },
+      {
+        regex: /\bfn function_agent_runtime_facade\b/,
+        message: 'missing function-agent runtime facade owner factory',
+      },
+      {
+        regex: /\bCoreFunctionAgentGitAdapter\b/,
+        message: 'missing core-owned Git adapter binding',
+      },
+      {
+        regex: /\bCoreFunctionAgentAiAdapter\b/,
+        message: 'missing core-owned AI adapter binding',
+      },
+      {
+        regex: /\bMiniAppRuntimeFacade\b/,
+        message: 'missing MiniApp product-domain facade binding',
+      },
+      {
+        regex: /\bMiniAppStoragePort\b/,
+        message: 'missing MiniApp storage port owner binding',
+      },
+      {
+        regex: /\bFunctionAgentRuntimeFacade\b/,
+        message: 'missing function-agent product-domain facade binding',
+      },
+      {
+        regex: /\bFunctionAgentGitPort\b/,
+        message: 'missing function-agent Git port owner binding',
+      },
+      {
+        regex: /\bFunctionAgentAiPort\b/,
+        message: 'missing function-agent AI port owner binding',
+      },
+    ],
+  },
 ];
 
 const failures = [];
@@ -3088,6 +4098,7 @@ function parseManifestDependencies(lines) {
     }
 
     if (currentInline) {
+      currentInline.text.push(trimmed);
       if (/\boptional\s*=\s*true\b/.test(trimmed)) {
         currentInline.optional = true;
       }
@@ -3107,6 +4118,7 @@ function parseManifestDependencies(lines) {
             name: depName,
             line: index + 1,
             optional: false,
+            text: [trimmed],
           };
           deps.push(currentTable);
           break;
@@ -3115,8 +4127,11 @@ function parseManifestDependencies(lines) {
       return;
     }
 
-    if (currentTable && /\boptional\s*=\s*true\b/.test(trimmed)) {
-      currentTable.optional = true;
+    if (currentTable) {
+      currentTable.text.push(trimmed);
+      if (/\boptional\s*=\s*true\b/.test(trimmed)) {
+        currentTable.optional = true;
+      }
       return;
     }
 
@@ -3131,6 +4146,7 @@ function parseManifestDependencies(lines) {
         name,
         line: index + 1,
         optional: /\boptional\s*=\s*true\b/.test(trimmed),
+        text: [trimmed],
       });
       if (trimmed.includes('{') && !trimmed.includes('}')) {
         currentInline = deps[deps.length - 1];
@@ -3143,12 +4159,117 @@ function parseManifestDependencies(lines) {
   return deps;
 }
 
+function manifestDependencyText(dep) {
+  return dep?.text?.join('\n') ?? '';
+}
+
+function manifestDependencyDisablesDefaultFeatures(dep) {
+  return /\bdefault-features\s*=\s*false\b/.test(manifestDependencyText(dep));
+}
+
+function parseManifestDependencyFeatureNames(dep) {
+  const features = new Set();
+  const text = manifestDependencyText(dep);
+  for (const match of text.matchAll(/\bfeatures\s*=\s*\[([\s\S]*?)\]/g)) {
+    for (const featureMatch of match[1].matchAll(/"([^"]+)"/g)) {
+      features.add(featureMatch[1]);
+    }
+  }
+  return features;
+}
+
+function collectProductCoreDependencyManifestPaths(manifestEntries) {
+  return manifestEntries
+    .filter((entry) => {
+      const deps = parseManifestDependencies(entry.text.split(/\r?\n/));
+      return deps.some((dep) => dep.name === 'bitfun-core');
+    })
+    .map((entry) => entry.manifestPath)
+    .sort();
+}
+
+function collectProductCoreDependencyManifests(scanRoots = productCoreFeatureAssemblyScanRoots) {
+  const manifestEntries = [];
+  for (const repoDir of scanRoots) {
+    const dir = join(ROOT, ...repoDir.split('/'));
+    walkFiles(dir, (path) => {
+      if (!path.endsWith('Cargo.toml')) {
+        return;
+      }
+      manifestEntries.push({
+        manifestPath: toRepoPath(path),
+        text: readText(path),
+      });
+    });
+  }
+  return collectProductCoreDependencyManifestPaths(manifestEntries);
+}
+
+function parseManifestFeatures(lines) {
+  const features = new Map();
+  let inFeatures = false;
+  let currentFeature = null;
+
+  const appendRefs = (feature, text) => {
+    const refs = [...text.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+    feature.refs.push(...refs);
+  };
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('#') || trimmed === '') {
+      return;
+    }
+
+    const headerMatch = trimmed.match(/^\[(.+)]$/);
+    if (headerMatch) {
+      inFeatures = trimmed === '[features]';
+      currentFeature = null;
+      return;
+    }
+
+    if (!inFeatures) {
+      return;
+    }
+
+    if (currentFeature) {
+      appendRefs(currentFeature, trimmed);
+      if (trimmed.includes(']')) {
+        currentFeature = null;
+      }
+      return;
+    }
+
+    const featureMatch = trimmed.match(/^([A-Za-z0-9_-]+)\s*=\s*(.*)$/);
+    if (!featureMatch) {
+      return;
+    }
+
+    const feature = {
+      name: featureMatch[1],
+      line: index + 1,
+      refs: [],
+    };
+    appendRefs(feature, featureMatch[2]);
+    features.set(feature.name, feature);
+    if (featureMatch[2].includes('[') && !featureMatch[2].includes(']')) {
+      currentFeature = feature;
+    }
+  });
+
+  return features;
+}
+
 function collectKnownDependencyNames() {
   return Array.from(
     new Set([
       'bitfun-core',
       ...lightweightBoundaryRules.flatMap((rule) => rule.forbiddenDeps),
       ...dependencyProfileRules.flatMap((rule) => rule.forbiddenNonOptionalDeps),
+      ...optionalDependencyFeatureOwnerRules.flatMap((rule) =>
+        rule.dependencies.map((dependency) => dependency.depName),
+      ),
+      ...productCoreFeatureAssemblyRules.map((rule) => rule.dependencyName),
     ]),
   );
 }
@@ -3186,6 +4307,7 @@ function runManifestParserSelfTest() {
     'rmcp = { version = "0.12.0", default-features = false, features = [',
     '    "auth",',
     '], optional = true }',
+    'bitfun-core = { path = "../core", default-features = false, features = ["product-full"] }',
     '[dependencies.git2]',
     'workspace = true',
     'optional = true',
@@ -3210,8 +4332,109 @@ function runManifestParserSelfTest() {
   if (parsedByName.get('bitfun-cli')?.optional !== false) {
     throw new Error('dependency profile parser must detect non-optional target dependency tables');
   }
+  const parsedCoreDep = parsedByName.get('bitfun-core');
+  if (!manifestDependencyDisablesDefaultFeatures(parsedCoreDep)) {
+    throw new Error('dependency profile parser must detect default-features = false');
+  }
+  if (!parseManifestDependencyFeatureNames(parsedCoreDep).has('product-full')) {
+    throw new Error('dependency profile parser must detect inline dependency features');
+  }
+  const parsedCoreTableDeps = parseManifestDependencies([
+    '[dependencies."bitfun-core"]',
+    'path = "../core"',
+    'default-features = false',
+    'features = [',
+    '  "product-full",',
+    '  "ssh-remote",',
+    ']',
+  ]);
+  const parsedCoreTableDep = parsedCoreTableDeps.find((dep) => dep.name === 'bitfun-core');
+  if (!manifestDependencyDisablesDefaultFeatures(parsedCoreTableDep)) {
+    throw new Error('dependency profile parser must detect table default-features = false');
+  }
+  if (!parseManifestDependencyFeatureNames(parsedCoreTableDep).has('ssh-remote')) {
+    throw new Error('dependency profile parser must detect table dependency features');
+  }
   if (parsedByName.has('image')) {
     throw new Error('dependency profile parser must ignore feature entries named like dependencies');
+  }
+
+  const productCoreRulePaths = new Set(
+    productCoreFeatureAssemblyRules.map((rule) => rule.manifestPath),
+  );
+  for (const manifestPath of [
+    'src/apps/desktop/Cargo.toml',
+    'src/apps/cli/Cargo.toml',
+    'src/crates/acp/Cargo.toml',
+  ]) {
+    if (!productCoreRulePaths.has(manifestPath)) {
+      throw new Error(`product core feature assembly rule must cover ${manifestPath}`);
+    }
+  }
+  for (const rule of productCoreFeatureAssemblyRules) {
+    if (!rule.requiredFeatures.includes('product-full')) {
+      throw new Error(`${rule.manifestPath} must require bitfun-core product-full`);
+    }
+  }
+  const discoveredProductCoreManifests = collectProductCoreDependencyManifestPaths([
+    {
+      manifestPath: 'src/apps/desktop/Cargo.toml',
+      text:
+        '[dependencies]\nbitfun-core = { path = "../../crates/core", default-features = false, features = ["product-full"] }',
+    },
+    {
+      manifestPath: 'src/apps/server/Cargo.toml',
+      text: '[dependencies]\naxum = { workspace = true }',
+    },
+    {
+      manifestPath: 'src/crates/acp/Cargo.toml',
+      text: '[dependencies."bitfun-core"]\npath = "../core"\ndefault-features = false\nfeatures = ["product-full"]',
+    },
+  ]);
+  if (discoveredProductCoreManifests.join(',') !== 'src/apps/desktop/Cargo.toml,src/crates/acp/Cargo.toml') {
+    throw new Error('product core dependency scanner must discover only manifests that depend on bitfun-core');
+  }
+  const ownerFeatureRulePaths = new Set(
+    ownerCrateFeatureAssemblyRules.map((rule) => rule.manifestPath),
+  );
+  for (const manifestPath of [
+    'src/crates/tool-packs/Cargo.toml',
+    'src/crates/services-integrations/Cargo.toml',
+    'src/crates/product-domains/Cargo.toml',
+  ]) {
+    if (!ownerFeatureRulePaths.has(manifestPath)) {
+      throw new Error(`owner crate feature assembly rule must cover ${manifestPath}`);
+    }
+  }
+
+  const parsedFeatures = parseManifestFeatures([
+    '[package]',
+    'name = "example"',
+    '[features]',
+    'default = ["product-full"]',
+    'product-full = [',
+    '    "dep:tool-runtime",',
+    '    "service-integrations",',
+    ']',
+    'service-integrations = ["dep:git2", "dep:rmcp"]',
+    'ssh-remote = [',
+    '    "russh",',
+    '    "russh-sftp",',
+    ']',
+    '[dependencies]',
+    'git2 = { workspace = true, optional = true }',
+  ]);
+  if (!parsedFeatures.get('default')?.refs.includes('product-full')) {
+    throw new Error('feature parser must detect inline feature references');
+  }
+  if (!parsedFeatures.get('product-full')?.refs.includes('dep:tool-runtime')) {
+    throw new Error('feature parser must detect multiline dependency feature references');
+  }
+  if (!parsedFeatures.get('service-integrations')?.refs.includes('dep:rmcp')) {
+    throw new Error('feature parser must detect inline dependency feature references');
+  }
+  if (!parsedFeatures.get('ssh-remote')?.refs.includes('russh-sftp')) {
+    throw new Error('feature parser must detect implicit optional dependency feature references');
   }
 
   const acceptsGitFacadeLine = createFacadeLineChecker('bitfun_services_integrations::git');
@@ -3270,6 +4493,12 @@ function runManifestParserSelfTest() {
     'ToolRenderOptions',
     'ToolPathBackend',
     'ToolPathResolution',
+    'get_global_coordinator',
+    'GitService',
+    'get_workspace_runtime_service_arc',
+    'remote_workspace_runtime_root',
+    'get_path_manager_arc',
+    'post_call_hooks::record_successful_tool_call',
   ];
   const coreToolFrameworkRuleText = coreToolFrameworkRule.patterns
     .map((pattern) => pattern.regex.source)
@@ -3289,6 +4518,7 @@ function runManifestParserSelfTest() {
     'ToolPathOperation',
     'ToolPathPolicy',
     'ToolRuntimeRestrictions',
+    'normalize_absolute_posix_path',
   ];
   const coreToolRestrictionRuleText = coreToolRestrictionRule.patterns
     .map((pattern) => pattern.regex.source)
@@ -3296,6 +4526,26 @@ function runManifestParserSelfTest() {
   for (const contract of coreToolRestrictionContracts) {
     if (!coreToolRestrictionRuleText.includes(contract)) {
       throw new Error(`core tool restrictions boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreWorkspacePathRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/tools/workspace_paths.rs',
+  );
+  if (!coreWorkspacePathRule) {
+    throw new Error('missing core workspace path boundary rule');
+  }
+  const coreWorkspacePathContracts = [
+    'BITFUN_RUNTIME_URI_PREFIX',
+    'ParsedBitFunRuntimeUri',
+    'posix_normalize_components',
+    'Component::ParentDir',
+  ];
+  const coreWorkspacePathRuleText = coreWorkspacePathRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of coreWorkspacePathContracts) {
+    if (!coreWorkspacePathRuleText.includes(contract)) {
+      throw new Error(`core workspace path boundary rule must forbid contract: ${contract}`);
     }
   }
   const coreToolRegistryRule = forbiddenContentRules.find(
@@ -3323,6 +4573,26 @@ function runManifestParserSelfTest() {
   );
   if (!productDomainProfile?.forbiddenNonOptionalDeps.includes('dirs')) {
     throw new Error('product-domains default profile must forbid non-optional dirs');
+  }
+  const coreProfile = dependencyProfileRules.find((rule) => rule.crateName === 'core');
+  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
+    if (!coreProfile?.forbiddenNonOptionalDeps.includes(dep)) {
+      throw new Error(`core no-default profile must forbid non-optional ${dep}`);
+    }
+  }
+  const coreOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'core',
+  );
+  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
+    if (!coreOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
+      throw new Error(`core optional dependency owner rule must cover ${dep}`);
+    }
+  }
+  const coreGit2Owner = coreOptionalOwnerRule?.dependencies.find(
+    (dependency) => dependency.depName === 'git2',
+  );
+  if (!coreGit2Owner?.ownerFeatures.includes('service-integrations')) {
+    throw new Error('core optional dependency owner rule must keep git2 under service-integrations');
   }
   const productDomainRuntimeRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/product-domains/src',
@@ -3454,6 +4724,10 @@ function runManifestParserSelfTest() {
         'call_results',
         'GetToolSpecLoadObservation',
         'collect_loaded_collapsed_tool_names',
+        'CollapsedToolUsageError',
+        'ToolExecutionAccessError',
+        'validate_tool_allowed_by_list',
+        'validate_collapsed_tool_usage',
         'sort_tool_manifest_definitions',
         'is_tool_collapsed',
         'get_collapsed_tool_names',
@@ -3467,6 +4741,24 @@ function runManifestParserSelfTest() {
         'AgentTurnCancellationPort',
         'RemoteControlStatePort',
         'generic attachments',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/service_agent_runtime.rs',
+      contracts: [
+        'CoreServiceAgentRuntime',
+        'remote_dialog_host',
+        'remote_image_context',
+        'agent_submission_port',
+        'CoreRemoteDialogRuntimeHost',
+        'RemoteExecutionDispatcher',
+        'ImageContextData',
+        'RemoteImageContextAdapter',
+        'AgentSubmissionPort',
+        'AgentTurnCancellationPort',
+        'RemoteControlStatePort',
+        'SessionTranscriptReader',
+        'core_service_agent_runtime_owner_keeps_coordinator_port_contracts',
       ],
     },
     {
@@ -3523,6 +4815,9 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/src/service/remote_connect/remote_server.rs',
       contracts: [
+        'CoreServiceAgentRuntime',
+        'remote_image_context',
+        'core_service_agent_runtime_owner_maps_remote_image_context',
         'remote_execution_prefers_unified_image_contexts_over_legacy_images',
         'remote_cancel_decision_preserves_current_turn_boundaries',
         'remote_restore_target_only_restores_cold_sessions_with_workspace_binding',
@@ -3539,31 +4834,41 @@ function runManifestParserSelfTest() {
       contracts: [
         'from_inner',
         'ProductToolDecoratorRef',
-        'ProductToolRuntimeAssembly',
+        'ProductToolRuntime',
         'get_collapsed_tool_names',
         'resolve_product_readonly_enabled_tools',
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/runtime_assembly.rs',
+      path: 'src/crates/core/src/agentic/tools/product_runtime.rs',
       contracts: [
-        'ProductToolRuntimeAssembly',
+        'ProductToolRuntime',
         'SnapshotToolDecorator',
         'ProductSnapshotToolWrapper',
-        'builtin_static_tool_providers',
-        'ToolRuntimeAssembly',
-        'create_registry_from_static_providers',
-        'wrap_tool_for_snapshot_tracking',
-      ],
-    },
-    {
-      path: 'src/crates/core/src/agentic/tools/static_providers.rs',
-      contracts: [
         'builtin_static_tool_providers',
         'StaticToolProviderGroup',
         'product_tool_provider_group_plan',
         'materialize_tool',
         'GetToolSpecTool',
+        'ToolRuntimeAssembly',
+        'create_registry_from_static_providers',
+        'wrap_tool_for_snapshot_tracking',
+        'ProductToolCatalogProvider',
+        'ToolCatalogSnapshotProvider',
+        'GetToolSpecCatalogProvider',
+        'get_global_tool_registry',
+        'get_agent_registry',
+        'ToolCatalogRuntime',
+        'product_tool_catalog_runtime',
+        'GetToolSpecRuntime',
+        'product_get_tool_spec_runtime',
+        'resolve_product_tool_manifest',
+        'resolve_product_readonly_enabled_tools',
+        'resolve_product_get_tool_spec_results',
+        'unlocked_collapsed_tools',
+        'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
+        'product_tool_runtime_owner_preserves_registry_contract',
+        'GetToolSpec requires agent type context',
       ],
     },
     {
@@ -3613,26 +4918,6 @@ function runManifestParserSelfTest() {
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/catalog_provider.rs',
-      contracts: [
-        'ProductToolCatalogProvider',
-        'ToolCatalogSnapshotProvider',
-        'GetToolSpecCatalogProvider',
-        'get_global_tool_registry',
-        'get_agent_registry',
-        'ToolCatalogRuntime',
-        'product_tool_catalog_runtime',
-        'GetToolSpecRuntime',
-        'product_get_tool_spec_runtime',
-        'resolve_product_tool_manifest',
-        'resolve_product_readonly_enabled_tools',
-        'resolve_product_get_tool_spec_results',
-        'unlocked_collapsed_tools',
-        'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
-        'GetToolSpec requires agent type context',
-      ],
-    },
-    {
       path: 'src/crates/core/src/agentic/tools/manifest_resolver.rs',
       contracts: [
         'resolve_tool_manifest',
@@ -3663,6 +4948,27 @@ function runManifestParserSelfTest() {
         'customData',
         'cancellationToken',
         'unlocked_collapsed_tools',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/tool_context_runtime.rs',
+      contracts: [
+        'impl ToolUseContext',
+        'record_light_checkpoint',
+        'call_with_tool_runtime_hooks',
+        'build_tool_use_context_for_task',
+        'build_tool_description_context',
+        'build_write_preflight_context',
+        'ensure_current_workspace_runtime',
+        'resolve_tool_path',
+        'enforce_path_operation',
+        'workspace_path_resolution_rejects_absolute_paths_outside_remote_workspace',
+        'runtime_uri_resolution_rejects_different_workspace_scope',
+        'path_policy_allows_only_configured_local_roots',
+        'tool_call_runtime_hook_returns_cancelled_before_impl_completes',
+        'tool_task_context_materialization_preserves_runtime_fields',
+        'tool_description_context_preserves_manifest_custom_data_shape',
+        'write_preflight_context_preserves_minimal_runtime_fields',
       ],
     },
     {
@@ -3706,8 +5012,8 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
       contracts: [
-        'deliver_background_subagent_result',
-        'BackgroundSubagentResult',
+        'deliver_background_result',
+        'BackgroundResult',
         'CurrentRunningTurn',
         'AgentSession',
       ],
@@ -3747,6 +5053,63 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/src/service/search/remote.rs',
       contracts: ['remote_workspace_search_service_for_path', 'lookup_remote_connection_with_hint', 'allow_scan_fallback', 'fallback_query'],
+    },
+    {
+      path: 'src/crates/core/src/service/search/mod.rs',
+      contracts: ['mod remote_disabled', 'feature = "ssh-remote"', 'pub use remote_disabled'],
+    },
+    {
+      path: 'src/crates/core/src/service/search/remote_disabled.rs',
+      contracts: ['Remote SSH search is disabled', 'RemoteWorkspaceSearchService', 'remote_workspace_search_service_for_path'],
+    },
+    {
+      path: 'src/crates/core/Cargo.toml',
+      contracts: [
+        'bitfun-tool-packs = \\{ path = "\\.\\.\\/tool-packs", default-features = false, optional = true \\}',
+        'bitfun-services-integrations = \\{ path = "\\.\\.\\/services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
+        'bitfun-product-domains = \\{ path = "\\.\\.\\/product-domains", default-features = false, optional = true \\}',
+        'dep:bitfun-tool-packs',
+        'bitfun-tool-packs\\/product-full',
+        'bitfun-services-integrations\\/product-full',
+        'dep:bitfun-product-domains',
+        'bitfun-product-domains\\/product-full',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/lib.rs',
+      contracts: [
+        'feature = "product-full"',
+        'pub mod agentic',
+        'feature = "product-domains"',
+        'pub mod function_agents',
+        'pub mod miniapp',
+        'feature = "service-integrations"',
+        'service_agent_runtime',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/service/mod.rs',
+      contracts: [
+        'feature = "service-integrations"',
+        'pub mod git',
+        'pub mod mcp',
+        'pub mod remote_connect',
+        'pub mod review_platform',
+        'feature = "product-full"',
+        'pub mod snapshot',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/service/config/mod.rs',
+      contracts: ['feature = "product-full"', 'mode_config_canonicalizer'],
+    },
+    {
+      path: 'src/crates/core/src/service/workspace/manager.rs',
+      contracts: ['feature = "service-integrations"', 'GitService', 'return None'],
+    },
+    {
+      path: 'src/crates/core/src/service/workspace_runtime/service.rs',
+      contracts: ['feature = "product-full"', 'WorkspaceBinding', 'ensure_runtime_for_workspace_binding'],
     },
     {
       path: 'src/crates/acp/src/client/manager.rs',
@@ -3861,6 +5224,39 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/core/src/service/remote_connect/bot/command_router.rs',
+      contracts: [
+        'CoreServiceAgentRuntime',
+        'agent_submission_port',
+        'build_remote_session_create_request',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/product_domain_runtime.rs',
+      contracts: [
+        'CoreProductDomainRuntime',
+        'miniapp_runtime_facade',
+        'function_agent_git_adapter',
+        'function_agent_ai_adapter',
+        'function_agent_runtime_facade',
+        'CoreFunctionAgentGitAdapter',
+        'CoreFunctionAgentAiAdapter',
+        'MiniAppRuntimeFacade',
+        'MiniAppStoragePort',
+        'FunctionAgentRuntimeFacade',
+        'FunctionAgentGitPort',
+        'FunctionAgentAiPort',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/service/remote_ssh/mod.rs',
+      contracts: ['mod disabled', 'pub mod manager', 'pub mod remote_fs', 'pub mod remote_terminal', 'pub mod workspace_state'],
+    },
+    {
+      path: 'src/crates/core/src/service/remote_ssh/disabled.rs',
+      contracts: ['Remote SSH support is disabled', 'SSHConnectionManager', 'RemoteFileService', 'RemoteTerminalManager'],
+    },
+    {
       path: 'src/crates/services-integrations/src/remote_ssh/paths.rs',
       contracts: [
         'remote_workspace_runtime_root',
@@ -3942,6 +5338,7 @@ function runManifestParserSelfTest() {
         'mark_builtin_update_available_metadata',
         'decline_builtin_update_metadata',
         'storage.load_customization_metadata',
+        'CoreProductDomainRuntime',
         'MiniAppRuntimeFacade',
         'persist_sync_from_fs_result_for_app',
         'compile_source',
@@ -3976,9 +5373,19 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/src/function_agents/git-func-agent/commit_generator.rs',
       contracts: [
-        'FunctionAgentRuntimeFacade',
-        'CoreFunctionAgentGitAdapter',
-        'CoreFunctionAgentAiAdapter',
+        'CoreProductDomainRuntime',
+        'function_agent_git_adapter',
+        'function_agent_ai_adapter',
+        'function_agent_runtime_facade',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
+      contracts: [
+        'CoreProductDomainRuntime',
+        'function_agent_git_adapter',
+        'function_agent_ai_adapter',
+        'function_agent_runtime_facade',
       ],
     },
     {
@@ -4025,13 +5432,16 @@ function runManifestParserSelfTest() {
     },
   ];
   for (const { path, contracts } of requiredContentContracts) {
-    const rule = requiredContentRules.find((rule) => rule.path === path);
-    if (!rule) {
+    const matchingRules = requiredContentRules.filter((rule) => rule.path === path);
+    if (matchingRules.length === 0) {
       throw new Error(`missing owner content anchor rule for ${path}`);
     }
-    const ruleText = rule.patterns.map((pattern) => pattern.regex.source).join('\n');
+    const ruleText = matchingRules
+      .flatMap((rule) => rule.patterns)
+      .map((pattern) => pattern.regex.source)
+      .join('\n');
     for (const contract of contracts) {
-      if (!ruleText.includes(contract)) {
+      if (!ruleText.includes(contract) && !ruleText.includes(escapeRegex(contract))) {
         throw new Error(`owner content anchor rule for ${path} must require: ${contract}`);
       }
     }
@@ -4376,9 +5786,16 @@ function runManifestParserSelfTest() {
     'resolve_remote_cancel_decision',
     'remote_session_restore_target',
     'resolve_remote_execution_image_contexts',
+    'RemoteImageContextAdapter',
     'MAX_SIZE',
     'MAX_CHUNK',
     'unwrap_or\\("file"\\)',
+    'resolve_workspace_path',
+    'detect_mime_type',
+    'read_workspace_file',
+    'read_remote_workspace_file',
+    'read_remote_workspace_file_chunk',
+    'read_remote_workspace_file_info',
     'should_send_remote_model_catalog',
     'remote_model_catalog_poll_delta',
     'remote_no_change_poll_response',
@@ -4441,6 +5858,156 @@ function checkForbiddenNonOptionalManifestDeps(crateDir, forbiddenDeps, messageF
         path: manifestPath,
         line: dep.line,
         message: messageForDep(dep.name),
+      });
+    }
+  }
+}
+
+function featureReferencesDependency(feature, depName) {
+  if (!feature) {
+    return false;
+  }
+  return feature.refs.includes(`dep:${depName}`) || feature.refs.includes(depName);
+}
+
+function featureReferencesFeature(feature, featureName) {
+  if (!feature) {
+    return false;
+  }
+  return feature.refs.includes(featureName);
+}
+
+function checkOptionalDependencyFeatureOwners(crateDir, rule) {
+  const manifestPath = join(crateDir, 'Cargo.toml');
+  const lines = readText(manifestPath).split(/\r?\n/);
+  const deps = parseManifestDependencies(lines);
+  const depsByName = new Map(deps.map((dep) => [dep.name, dep]));
+  const features = parseManifestFeatures(lines);
+
+  for (const dependency of rule.dependencies) {
+    const dep = depsByName.get(dependency.depName);
+    if (!dep) {
+      failures.push({
+        path: manifestPath,
+        line: 1,
+        message: `${rule.reason}; missing optional dependency: ${dependency.depName}`,
+      });
+      continue;
+    }
+    if (!dep.optional) {
+      failures.push({
+        path: manifestPath,
+        line: dep.line,
+        message: `${rule.reason}; dependency must be optional: ${dependency.depName}`,
+      });
+    }
+    for (const featureName of dependency.ownerFeatures) {
+      const feature = features.get(featureName);
+      if (!featureReferencesDependency(feature, dependency.depName)) {
+        failures.push({
+          path: manifestPath,
+          line: feature?.line ?? dep.line,
+          message: `${rule.reason}; ${featureName} must explicitly enable ${dependency.depName}`,
+        });
+      }
+    }
+  }
+}
+
+function checkProductCoreFeatureAssembly(rule) {
+  const manifestPath = join(ROOT, ...rule.manifestPath.split('/'));
+  const deps = parseManifestDependencies(readText(manifestPath).split(/\r?\n/));
+  const dep = deps.find((candidate) => candidate.name === rule.dependencyName);
+  if (!dep) {
+    failures.push({
+      path: manifestPath,
+      line: 1,
+      message: `${rule.reason}; missing dependency: ${rule.dependencyName}`,
+    });
+    return;
+  }
+
+  if (!manifestDependencyDisablesDefaultFeatures(dep)) {
+    failures.push({
+      path: manifestPath,
+      line: dep.line,
+      message: `${rule.reason}; ${rule.dependencyName} must set default-features = false`,
+    });
+  }
+
+  const enabledFeatures = parseManifestDependencyFeatureNames(dep);
+  for (const featureName of rule.requiredFeatures) {
+    if (!enabledFeatures.has(featureName)) {
+      failures.push({
+        path: manifestPath,
+        line: dep.line,
+        message: `${rule.reason}; ${rule.dependencyName} must enable feature ${featureName}`,
+      });
+    }
+  }
+}
+
+function checkProductCoreFeatureAssemblyCoverage() {
+  const rulePaths = new Set(productCoreFeatureAssemblyRules.map((rule) => rule.manifestPath));
+  for (const manifestPath of collectProductCoreDependencyManifests()) {
+    if (!rulePaths.has(manifestPath)) {
+      failures.push({
+        path: join(ROOT, ...manifestPath.split('/')),
+        line: 1,
+        message:
+          'product entry crate depends on bitfun-core but is not covered by product-full assembly rules',
+      });
+    }
+  }
+}
+
+function checkCoreDefaultProductFullFeature() {
+  const manifestPath = join(ROOT, 'src', 'crates', 'core', 'Cargo.toml');
+  const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
+  if (!featureReferencesFeature(features.get('default'), 'product-full')) {
+    failures.push({
+      path: manifestPath,
+      line: features.get('default')?.line ?? 1,
+      message:
+        'bitfun-core default feature must remain product-full until a separate product matrix review changes it',
+    });
+  }
+}
+
+function checkOwnerCrateFeatureAssembly(rule) {
+  const manifestPath = join(ROOT, ...rule.manifestPath.split('/'));
+  const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
+  const defaultFeature = features.get('default');
+  if (!defaultFeature) {
+    failures.push({
+      path: manifestPath,
+      line: 1,
+      message: `${rule.reason}; missing default feature declaration`,
+    });
+  } else if (defaultFeature.refs.length > 0) {
+    failures.push({
+      path: manifestPath,
+      line: defaultFeature.line,
+      message: `${rule.reason}; default feature must remain empty`,
+    });
+  }
+
+  const productFull = features.get('product-full');
+  if (!productFull) {
+    failures.push({
+      path: manifestPath,
+      line: 1,
+      message: `${rule.reason}; missing product-full feature declaration`,
+    });
+    return;
+  }
+
+  for (const featureName of rule.requiredProductFullFeatures) {
+    if (!featureReferencesFeature(productFull, featureName)) {
+      failures.push({
+        path: manifestPath,
+        line: productFull.line,
+        message: `${rule.reason}; product-full must explicitly enable ${featureName}`,
       });
     }
   }
@@ -4655,6 +6222,20 @@ for (const rule of dependencyProfileRules) {
   const messageForDep = (dep) =>
     `${rule.reason}; ${rule.profileName} forbids non-optional dependency: ${dep}`;
   checkForbiddenNonOptionalManifestDeps(crateDir, rule.forbiddenNonOptionalDeps, messageForDep);
+}
+
+for (const rule of optionalDependencyFeatureOwnerRules) {
+  const crateDir = join(ROOT, 'src', 'crates', rule.crateName);
+  checkOptionalDependencyFeatureOwners(crateDir, rule);
+}
+
+for (const rule of productCoreFeatureAssemblyRules) {
+  checkProductCoreFeatureAssembly(rule);
+}
+checkProductCoreFeatureAssemblyCoverage();
+checkCoreDefaultProductFullFeature();
+for (const rule of ownerCrateFeatureAssemblyRules) {
+  checkOwnerCrateFeatureAssembly(rule);
 }
 
 for (const facade of facadeOnlyFiles) {

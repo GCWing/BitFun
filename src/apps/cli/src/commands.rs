@@ -65,6 +65,10 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         description: "Show history",
     },
     CommandSpec {
+        name: "/usage",
+        description: "Generate session usage report",
+    },
+    CommandSpec {
         name: "/exit",
         description: "Exit the app",
     },
@@ -115,6 +119,10 @@ pub const STARTUP_COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "/init",
         description: "Explore repo and generate AGENTS.md",
+    },
+    CommandSpec {
+        name: "/usage",
+        description: "Generate session usage report",
     },
     CommandSpec {
         name: "/exit",

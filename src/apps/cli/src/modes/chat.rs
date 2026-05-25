@@ -2,7 +2,7 @@
 ///
 /// Interactive chat mode with TUI interface.
 /// Events are consumed directly from core's EventQueue.
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use arboard::Clipboard;
 use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
@@ -42,6 +42,7 @@ use crate::ui::{init_terminal, restore_terminal};
 use bitfun_core::agentic::agents::{
     get_agent_registry, AgentInfo, SubAgentSource, SubagentListScope, SubagentQueryContext,
 };
+use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::agentic::tools::implementations::skills::{
     mode_overrides::{
         load_project_mode_skills_document_local, save_project_mode_skills_document_local,
@@ -51,6 +52,10 @@ use bitfun_core::agentic::tools::implementations::skills::{
     ModeSkillInfo, SkillInfo,
 };
 use bitfun_core::service::config::GlobalConfigManager;
+use bitfun_core::service::session_usage::{
+    generate_session_usage_report, render_usage_report_markdown, SessionUsageReportRequest,
+};
+use bitfun_core::service::token_usage::TokenUsageService;
 
 /// Keyboard shortcuts help text
 const KEYBOARD_SHORTCUTS_HELP: &str = "\
@@ -119,6 +124,7 @@ pub struct ChatMode {
     agent_type: String,
     workspace: Option<String>,
     agent: Arc<CoreAgentAdapter>,
+    token_usage_service: Arc<TokenUsageService>,
     /// If set, restore this existing session instead of creating a new one
     restore_session_id: Option<String>,
     /// If set, send this prompt automatically when the session starts
@@ -155,6 +161,7 @@ impl ChatMode {
             agent_type,
             workspace,
             agent,
+            token_usage_service: agentic_system.token_usage_service.clone(),
             restore_session_id: None,
             initial_prompt: None,
             pending_mcp_op: None,
@@ -1573,6 +1580,9 @@ impl ChatMode {
                 }
                 self.show_session_selector(chat_view, chat_state, rt_handle);
             }
+            "usage" => {
+                self.show_usage_report(chat_view, chat_state, rt_handle);
+            }
             // Prompt group
             "skills" => {
                 self.show_skill_selector(chat_view, chat_state, rt_handle);
@@ -1699,6 +1709,9 @@ impl ChatMode {
                     "ACP setup added to the conversation. You can keep typing.".to_string(),
                 ));
             }
+            "/usage" => {
+                self.show_usage_report(chat_view, chat_state, rt_handle);
+            }
             "/init" => match crate::prompts::get_cli_prompt("init") {
                 Some(prompt) => {
                     self.send_message_to_agent(
@@ -1755,6 +1768,100 @@ impl ChatMode {
         }
 
         Ok(None)
+    }
+
+    fn show_usage_report(
+        &self,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        if chat_state.is_processing {
+            chat_view.set_status(Some(
+                "Wait until the session is idle before using /usage.".to_string(),
+            ));
+            return;
+        }
+
+        let session_id = chat_state.core_session_id.clone();
+        let workspace_path = chat_state
+            .workspace
+            .clone()
+            .or_else(|| self.workspace.clone())
+            .or_else(|| Some(self.agent.workspace_path_string()));
+        let token_usage_service = self.token_usage_service.clone();
+        let session_manager = self.agent.coordinator().get_session_manager();
+
+        let report_result: Result<bitfun_core::service::session_usage::SessionUsageReport> =
+            tokio::task::block_in_place(|| {
+                let session_id = session_id.clone();
+                let workspace_path = workspace_path.clone();
+                let token_usage_service = token_usage_service.clone();
+                let session_manager = session_manager.clone();
+                rt_handle.block_on(async move {
+                    let workspace_path = workspace_path
+                        .filter(|path| !path.trim().is_empty())
+                        .ok_or_else(|| anyhow!("Workspace path is required for usage reports"))?;
+
+                    let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
+                        .map_err(|error| anyhow!(error.to_string()))?;
+                    let persistence_manager = PersistenceManager::new(path_manager)
+                        .map_err(|error| anyhow!(error.to_string()))?;
+
+                    let report = generate_session_usage_report(
+                        &persistence_manager,
+                        Some(token_usage_service.as_ref()),
+                        SessionUsageReportRequest {
+                            session_id: session_id.clone(),
+                            workspace_path: Some(workspace_path),
+                            remote_connection_id: None,
+                            remote_ssh_host: None,
+                            include_hidden_subagents: true,
+                        },
+                    )
+                    .await
+                    .map_err(|error| anyhow!(error.to_string()))?;
+
+                    let markdown = render_usage_report_markdown(&report);
+                    let generated_at = u64::try_from(report.generated_at).unwrap_or_default();
+                    let usage_report = serde_json::to_value(&report)
+                        .map_err(|error| anyhow!("Failed to serialize usage report: {}", error))?;
+                    let metadata = serde_json::json!({
+                        "localCommandKind": "usage_report",
+                        "reportId": report.report_id.clone(),
+                        "schemaVersion": report.schema_version,
+                        "generatedAt": report.generated_at,
+                        "modelVisible": false,
+                        "usageReport": usage_report,
+                        "usageReportStatus": "completed",
+                    });
+
+                    session_manager
+                        .append_completed_local_command_turn(
+                            &session_id,
+                            markdown,
+                            Some(format!("local-usage-{}", report.report_id)),
+                            Some(generated_at),
+                            Some(metadata),
+                        )
+                        .await
+                        .map_err(|error| anyhow!(error.to_string()))?;
+
+                    Ok(report)
+                })
+            });
+
+        match report_result {
+            Ok(report) => {
+                let markdown = render_usage_report_markdown(&report);
+                chat_state.add_assistant_message(markdown);
+                chat_view.set_status(Some("Usage report added to conversation".to_string()));
+            }
+            Err(error) => {
+                chat_state
+                    .add_system_message(format!("Failed to generate usage report: {}", error));
+            }
+        }
     }
 
     fn list_available_themes(&self) -> Vec<ThemeItem> {

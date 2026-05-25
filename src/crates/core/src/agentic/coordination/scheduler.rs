@@ -15,9 +15,8 @@ use super::turn_outcome::{TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus
 use crate::agentic::core::{PromptEnvelope, SessionState};
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{
-    DialogRoundInjectionSource, DialogRoundPreemptSource, RoundInjection,
-    RoundInjectionKind, RoundInjectionTarget, SessionRoundInjectionBuffer,
-    SessionRoundYieldFlags,
+    DialogRoundInjectionSource, DialogRoundPreemptSource, RoundInjection, RoundInjectionKind,
+    RoundInjectionTarget, SessionRoundInjectionBuffer, SessionRoundYieldFlags,
 };
 use crate::agentic::session::SessionManager;
 use dashmap::DashMap;
@@ -101,6 +100,9 @@ pub struct AgentSessionReplyRoute {
 struct ActiveTurn {
     turn_id: String,
     workspace_path: Option<String>,
+    agent_type: String,
+    user_input: String,
+    user_message_metadata: Option<serde_json::Value>,
     policy: DialogSubmissionPolicy,
     reply_route: Option<AgentSessionReplyRoute>,
 }
@@ -110,6 +112,12 @@ impl ActiveTurn {
         Self {
             turn_id,
             workspace_path: turn.workspace_path.clone(),
+            agent_type: turn.agent_type.clone(),
+            user_input: turn
+                .original_user_input
+                .clone()
+                .unwrap_or_else(|| turn.user_input.clone()),
+            user_message_metadata: turn.user_message_metadata.clone(),
             policy: turn.policy,
             reply_route: turn.reply_route.clone(),
         }
@@ -291,12 +299,12 @@ impl DialogScheduler {
         })
     }
 
-    /// Deliver a completed background subagent result back to the parent
-    /// session. If the session is currently processing, inject the result into
-    /// the running turn at the next model-round boundary. Otherwise, start a
-    /// new turn immediately so the result is handled without waiting for an
+    /// Deliver a completed background result back to the parent session.
+    /// If the session is currently processing, inject the result into the
+    /// running turn at the next model-round boundary. Otherwise, start a new
+    /// turn immediately so the result is handled without waiting for an
     /// unrelated future message.
-    pub async fn deliver_background_subagent_result(
+    pub async fn deliver_background_result(
         &self,
         session_id: String,
         agent_type: String,
@@ -318,7 +326,7 @@ impl DialogScheduler {
                     &session_id,
                     RoundInjection {
                         id: injection_id,
-                        kind: RoundInjectionKind::BackgroundSubagentResult,
+                        kind: RoundInjectionKind::BackgroundResult,
                         target: RoundInjectionTarget::CurrentRunningTurn,
                         content,
                         display_content: display,
@@ -327,8 +335,8 @@ impl DialogScheduler {
                 );
                 Ok(())
             }
-            _ => {
-                self.submit(
+            _ => self
+                .submit(
                     session_id,
                     content,
                     Some(display),
@@ -341,8 +349,7 @@ impl DialogScheduler {
                     None,
                 )
                 .await
-                .map(|_| ())
-            }
+                .map(|_| ()),
         }
     }
 
@@ -791,6 +798,54 @@ Status: {status}"
                 }
             }
 
+            if let (Some(active_turn), TurnOutcome::Completed { final_response, .. }) =
+                (active_turn.as_ref(), &outcome)
+            {
+                match self
+                    .coordinator
+                    .prepare_goal_continuation_after_turn(
+                        &session_id,
+                        &outcome.turn_id(),
+                        &active_turn.user_input,
+                        active_turn.user_message_metadata.as_ref(),
+                        final_response,
+                    )
+                    .await
+                {
+                    Ok(Some(plan)) => {
+                        if let Err(error) = self
+                            .submit(
+                                session_id.clone(),
+                                plan.wrapped_message,
+                                Some(plan.display_message),
+                                None,
+                                active_turn.agent_type.clone(),
+                                active_turn.workspace_path.clone(),
+                                DialogSubmissionPolicy::for_source(
+                                    DialogTriggerSource::AgentSession,
+                                ),
+                                None,
+                                Some(plan.user_message_metadata),
+                                None,
+                            )
+                            .await
+                        {
+                            warn!(
+                                "Failed to submit goal continuation turn: session_id={}, error={}",
+                                session_id, error
+                            );
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        warn!(
+                            "Goal verification failed after turn completion: session_id={}, error={}",
+                            session_id, error
+                        );
+                    }
+                }
+            }
+
             let status = outcome.status();
             match outcome.queue_action() {
                 TurnOutcomeQueueAction::DispatchNext => {
@@ -837,6 +892,9 @@ mod tests {
         ActiveTurn {
             turn_id: "turn_1".to_string(),
             workspace_path: Some("/workspace".to_string()),
+            agent_type: "agentic".to_string(),
+            user_input: "hello".to_string(),
+            user_message_metadata: None,
             policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
             reply_route: Some(AgentSessionReplyRoute {
                 source_session_id: source_session_id.to_string(),

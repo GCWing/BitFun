@@ -814,7 +814,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
         onChange={handleContentChange}
         onSave={handleSave}
         onDirtyChange={handleDirtyChange}
-        mode={viewMode === 'preview' ? 'ir' : 'edit'}
+        mode={viewMode === 'preview' ? 'preview' : 'edit'}
         theme={isLight ? 'light' : 'dark'}
         height="100%"
         width="100%"

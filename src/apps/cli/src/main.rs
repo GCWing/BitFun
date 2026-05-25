@@ -10,18 +10,21 @@ mod agent;
 mod chat_state;
 mod commands;
 mod config;
+mod management;
 mod modes;
 mod prompts;
+mod root_handlers;
 mod ui;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 
 use config::CliConfig;
 use modes::chat::ChatMode;
-use modes::exec::ExecMode;
+use modes::exec::ExecOutputFormat;
 
 // ======================== Global MCP Service ========================
 
@@ -77,12 +80,36 @@ enum Commands {
 
     /// Execute single command
     Exec {
-        /// User message
-        message: String,
+        /// User message. If omitted, stdin is used when piped.
+        message: Option<String>,
 
         /// Agent type
         #[arg(short, long, default_value = "agentic")]
         agent: String,
+
+        /// Continue the most recent session in the current workspace
+        #[arg(short = 'c', long = "continue")]
+        continue_last: bool,
+
+        /// Resume a session by ID, or use "last" for the most recent session
+        #[arg(short = 'r', long)]
+        resume: Option<String>,
+
+        /// Alias for --resume, compatible with opencode-style CLIs
+        #[arg(short = 's', long)]
+        session: Option<String>,
+
+        /// Create a new session with a fixed session ID
+        #[arg(long)]
+        session_id: Option<String>,
+
+        /// Fork the resumed session before executing the prompt
+        #[arg(long = "fork-session")]
+        fork_session: bool,
+
+        /// Output format for automation
+        #[arg(long, value_enum, default_value_t = ExecOutputFormat::Text)]
+        output_format: ExecOutputFormat,
 
         /// Output git diff patch after execution (for SWE-bench evaluation)
         /// Without path outputs to terminal, with path saves to file
@@ -101,6 +128,30 @@ enum Commands {
         action: SessionAction,
     },
 
+    /// Agent management
+    Agents,
+
+    /// Model management
+    Models {
+        #[command(subcommand)]
+        action: Option<ModelAction>,
+    },
+
+    /// MCP server management
+    Mcp {
+        #[command(subcommand)]
+        action: Option<McpAction>,
+    },
+
+    /// Usage reporting
+    Usage {
+        /// Session ID to inspect; defaults to the most recent session in the current workspace
+        session_id: Option<String>,
+    },
+
+    /// Diagnostic check
+    Doctor,
+
     /// Configuration management
     Config {
         #[command(subcommand)]
@@ -115,6 +166,37 @@ enum Commands {
         #[command(subcommand)]
         action: Option<AcpAction>,
     },
+}
+
+#[derive(Subcommand)]
+enum ModelAction {
+    /// List configured models
+    List,
+    /// Set the default model for all modes
+    SetDefault {
+        /// Model id
+        model_id: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum McpAction {
+    /// List configured MCP servers
+    List,
+    /// Check MCP readiness
+    Doctor,
+    /// Enable an MCP server by id
+    Enable {
+        /// MCP server id
+        server_id: String,
+    },
+    /// Disable an MCP server by id
+    Disable {
+        /// MCP server id
+        server_id: String,
+    },
+    /// Print the stored MCP JSON config
+    Config,
 }
 
 #[derive(Subcommand)]
@@ -209,6 +291,21 @@ enum SessionAction {
     Delete {
         /// Session ID
         id: String,
+    },
+    /// Resume a session in the interactive TUI
+    Resume {
+        /// Session ID (or "last" for the most recent)
+        id: String,
+    },
+    /// Continue the most recent session in the interactive TUI
+    Continue,
+    /// Fork a session at the latest persisted turn
+    Fork {
+        /// Session ID (or "last" for the most recent)
+        id: String,
+        /// Print only the new session ID
+        #[arg(long)]
+        id_only: bool,
     },
 }
 
@@ -433,22 +530,12 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
-    let is_acp_command = matches!(cli.command, Some(Commands::Acp { .. }));
-    let is_acp_serve = matches!(
-        cli.command,
-        Some(Commands::Acp { action: None })
-            | Some(Commands::Acp {
-                action: Some(AcpAction::Serve),
-            })
-    );
     let log_level = if cli.verbose {
         tracing::Level::DEBUG
-    } else if is_acp_serve {
-        tracing::Level::WARN
-    } else if is_acp_command {
-        tracing::Level::ERROR
-    } else {
+    } else if is_tui_mode {
         tracing::Level::INFO
+    } else {
+        tracing::Level::ERROR
     };
 
     if is_tui_mode {
@@ -475,16 +562,11 @@ async fn main() -> Result<()> {
                 .with_target(false)
                 .init();
         }
-    } else if is_acp_command {
+    } else {
         tracing_subscriber::fmt()
             .with_max_level(log_level)
             .with_writer(std::io::stderr)
             .with_ansi(false)
-            .with_target(false)
-            .init();
-    } else {
-        tracing_subscriber::fmt()
-            .with_max_level(log_level)
             .with_target(false)
             .init();
     }
@@ -506,73 +588,91 @@ async fn main() -> Result<()> {
         Some(Commands::Exec {
             message,
             agent,
+            continue_last,
+            resume,
+            session,
+            session_id,
+            fork_session,
+            output_format,
             output_patch,
             confirm,
         }) => {
-            let workspace_path_resolved = std::env::current_dir().ok();
-
-            if let Some(ref ws_path) = workspace_path_resolved {
-                tracing::info!("Workspace path set: {:?}", ws_path);
-            }
-
-            let skip_confirmation = !confirm;
-            let (agentic_system, original_skip_confirmation) =
-                initialize_core_services(skip_confirmation).await?;
-
-            let mut exec_mode = ExecMode::new(
+            root_handlers::handle_exec_command(
                 config,
-                message,
-                agent,
-                &agentic_system,
-                workspace_path_resolved,
-                output_patch,
-            );
-            let run_result = exec_mode.run().await;
-
-            shutdown_mcp_servers().await;
-            restore_tool_confirmation(original_skip_confirmation).await;
-
-            run_result?;
+                root_handlers::ExecCommandArgs {
+                    message,
+                    agent,
+                    continue_last,
+                    resume,
+                    session,
+                    session_id,
+                    fork_session,
+                    output_format,
+                    output_patch,
+                    confirm,
+                },
+            )
+            .await?;
         }
 
         Some(Commands::Sessions { action }) => {
-            handle_session_action(action).await?;
+            if let Some(session_id) = root_handlers::handle_session_action(action).await? {
+                run_interactive_with_session(config, session_id).await?;
+            }
+        }
+
+        Some(Commands::Agents) => {
+            let workspace = std::env::current_dir()?;
+            management::print_agents(Some(workspace.as_path())).await?;
+        }
+
+        Some(Commands::Models { action }) => match action {
+            None | Some(ModelAction::List) => management::print_models().await?,
+            Some(ModelAction::SetDefault { model_id }) => {
+                management::set_default_model(&model_id).await?;
+            }
+        },
+
+        Some(Commands::Mcp { action }) => match action {
+            None | Some(McpAction::List) => management::print_mcp_servers().await?,
+            Some(McpAction::Doctor) => {
+                if !management::print_doctor().await? {
+                    std::process::exit(1);
+                }
+            }
+            Some(McpAction::Enable { server_id }) => {
+                management::set_mcp_server_enabled(&server_id, true).await?;
+            }
+            Some(McpAction::Disable { server_id }) => {
+                management::set_mcp_server_enabled(&server_id, false).await?;
+            }
+            Some(McpAction::Config) => {
+                management::print_mcp_json_config().await?;
+            }
+        },
+
+        Some(Commands::Usage { session_id }) => {
+            management::print_usage_report(session_id.as_deref()).await?;
+        }
+
+        Some(Commands::Doctor) => {
+            if !management::print_doctor().await? {
+                std::process::exit(1);
+            }
         }
 
         Some(Commands::Config { action }) => {
-            handle_config_action(action, &config)?;
+            root_handlers::handle_config_action(action, &config)?;
         }
 
         Some(Commands::Health) => {
-            println!("BitFun CLI is running normally");
-            println!("Version: {}", env!("CARGO_PKG_VERSION"));
-            println!("Config directory: {:?}", CliConfig::config_dir()?);
+            root_handlers::handle_health_command()?;
         }
 
         Some(Commands::Acp {
             action: None | Some(AcpAction::Serve),
         }) => {
-            setup_workspace();
-
-            bitfun_core::service::config::initialize_global_config()
-                .await
-                .context("Failed to initialize global config service")?;
-            tracing::info!("Global config service initialized");
-
-            use bitfun_core::infrastructure::ai::AIClientFactory;
-            AIClientFactory::initialize_global()
-                .await
-                .context("Failed to initialize global AIClientFactory")?;
-            tracing::info!("Global AI client factory initialized");
-
-            initialize_terminal_service().await;
-
-            let agentic_system = agent::agentic_system::init_agentic_system()
-                .await
-                .context("Failed to initialize agentic system")?;
-            tracing::info!("Agentic system initialized");
-
-            bitfun_acp::BitfunAcpRuntime::serve_stdio(agentic_system).await?;
+            root_handlers::serve_acp_stdio().await?;
         }
 
         Some(Commands::Acp {
@@ -638,178 +738,31 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn handle_session_action(action: SessionAction) -> Result<()> {
-    // Initialize core services for session management
-    bitfun_core::service::config::initialize_global_config()
-        .await
-        .expect("Failed to initialize global config service");
+async fn run_interactive_with_session(config: CliConfig, session_id: String) -> Result<()> {
+    let mut terminal = ui::init_terminal()?;
+    ui::render_loading(&mut terminal, "Initializing system, please wait...")?;
 
-    let agentic_system = agent::agentic_system::init_agentic_system()
-        .await
-        .expect("Failed to initialize agentic system");
+    let workspace = setup_workspace();
+    let (agentic_system, original_skip_confirmation) = initialize_core_services(true).await?;
+    let workspace_path = workspace
+        .clone()
+        .map(PathBuf::from)
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("."));
+    let session = agentic_system
+        .coordinator
+        .restore_session(&workspace_path, &session_id)
+        .await?;
 
-    let coordinator = agentic_system.coordinator.clone();
-    let workspace_path = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let mut chat_mode = ChatMode::new(config, session.agent_type, workspace, &agentic_system)
+        .with_restore_session(session_id);
+    let run_result = chat_mode.run(Some(terminal));
 
-    match action {
-        SessionAction::List => {
-            let sessions = coordinator.list_sessions(&workspace_path).await?;
+    shutdown_mcp_servers().await;
+    restore_tool_confirmation(original_skip_confirmation).await;
+    println!("Goodbye!");
 
-            if sessions.is_empty() {
-                println!(
-                    "No history sessions for current project: {}",
-                    workspace_path.display()
-                );
-                return Ok(());
-            }
-
-            println!(
-                "History sessions for current project (total {})",
-                sessions.len()
-            );
-            println!("Project: {}\n", workspace_path.display());
-
-            for (i, info) in sessions.iter().enumerate() {
-                let last_updated = {
-                    let duration = info
-                        .last_activity_at
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default();
-                    let secs = duration.as_secs() as i64;
-                    chrono::DateTime::from_timestamp(secs, 0)
-                        .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
-                        .unwrap_or_else(|| "unknown".to_string())
-                };
-
-                println!("{}. {} (ID: {})", i + 1, info.session_name, info.session_id);
-                println!(
-                    "   Agent: {} | Turns: {} | Updated: {}",
-                    info.agent_type, info.turn_count, last_updated
-                );
-                println!();
-            }
-        }
-
-        SessionAction::Show { id } => {
-            let sessions = coordinator.list_sessions(&workspace_path).await?;
-
-            let session_id = if id == "last" {
-                sessions
-                    .first()
-                    .map(|s| s.session_id.clone())
-                    .ok_or_else(|| anyhow::anyhow!("No history sessions"))?
-            } else {
-                id
-            };
-
-            // Restore and show session details
-            let session = coordinator
-                .restore_session(&workspace_path, &session_id)
-                .await?;
-            let messages = coordinator.get_messages(&session_id).await?;
-
-            println!("Session Details\n");
-            println!("Name: {}", session.session_name);
-            println!("ID: {}", session.session_id);
-            println!("Agent: {}", session.agent_type);
-            println!("State: {:?}", session.state);
-            println!("Messages: {}", messages.len());
-            println!();
-
-            if !messages.is_empty() {
-                println!("Recent messages:");
-                let recent: Vec<_> = messages.iter().rev().take(5).collect();
-                for msg in recent.iter().rev() {
-                    let role = format!("{:?}", msg.role);
-                    let content_preview = match &msg.content {
-                        bitfun_core::agentic::core::message::MessageContent::Text(text) => {
-                            text.lines().next().unwrap_or("").to_string()
-                        }
-                        bitfun_core::agentic::core::message::MessageContent::Multimodal {
-                            text,
-                            images,
-                        } => {
-                            if text.is_empty() {
-                                format!("[{} images]", images.len())
-                            } else {
-                                text.lines().next().unwrap_or("").to_string()
-                            }
-                        }
-                        bitfun_core::agentic::core::message::MessageContent::Mixed {
-                            text,
-                            tool_calls,
-                            ..
-                        } => {
-                            if text.is_empty() {
-                                format!("[{} tool calls]", tool_calls.len())
-                            } else {
-                                text.lines().next().unwrap_or("").to_string()
-                            }
-                        }
-                        bitfun_core::agentic::core::message::MessageContent::ToolResult {
-                            tool_name,
-                            ..
-                        } => {
-                            format!("[Tool result: {}]", tool_name)
-                        }
-                    };
-                    let preview = if content_preview.len() > 80 {
-                        format!("{}...", &content_preview[..77])
-                    } else {
-                        content_preview
-                    };
-                    println!("  [{}] {}", role, preview);
-                }
-            }
-        }
-
-        SessionAction::Delete { id } => {
-            coordinator.delete_session(&workspace_path, &id).await?;
-            println!("Deleted session from current project: {}", id);
-        }
-    }
-
+    run_result?;
     Ok(())
 }
 
-fn handle_config_action(action: ConfigAction, config: &CliConfig) -> Result<()> {
-    match action {
-        ConfigAction::Show => {
-            println!("Current Configuration\n");
-            println!("Note: AI model configuration is now managed via GlobalConfig");
-            println!("View and manage at: Main Menu -> Settings -> AI Model Configuration");
-            println!();
-            println!("UI Configuration:");
-            println!("  Appearance: {}", config.ui.theme);
-            println!("  Theme ID: {}", config.ui.theme_id);
-            println!("  Color scheme: {}", config.ui.color_scheme);
-            println!("  Show tips: {}", config.ui.show_tips);
-            println!("  Animation: {}", config.ui.animation);
-            println!();
-            println!("Behavior Configuration:");
-            println!("  Auto save: {}", config.behavior.auto_save);
-            println!("  Confirm dangerous: {}", config.behavior.confirm_dangerous);
-            println!("  Default Agent: {}", config.behavior.default_agent);
-            println!();
-            println!("Config file: {:?}", CliConfig::config_path()?);
-        }
-
-        ConfigAction::Edit => {
-            let config_path = CliConfig::config_path()?;
-            println!("Config file location: {:?}", config_path);
-            println!();
-            println!("Please use a text editor to edit the config file:");
-            println!("  vi {:?}", config_path);
-            println!("  or");
-            println!("  code {:?}", config_path);
-        }
-
-        ConfigAction::Reset => {
-            let default_config = CliConfig::default();
-            default_config.save()?;
-            println!("Reset to default configuration");
-        }
-    }
-
-    Ok(())
-}

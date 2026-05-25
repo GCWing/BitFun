@@ -4,7 +4,7 @@
  */
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { File, Folder, Code, Image, Terminal, GitBranch, Link, FileText } from 'lucide-react';
+import { File, Folder, Code, Image, Terminal, GitBranch, Link, FileText, GitPullRequest } from 'lucide-react';
 import { Tag } from '@/component-library';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { SnapshotRollbackButton } from './SnapshotRollbackButton';
@@ -38,7 +38,8 @@ const TAG_CONFIG = {
   cmd: { icon: Terminal, color: '#94a3b8', label: 'Command' },
   chart: { icon: FileText, color: '#22d3ee', label: 'Chart' },
   git: { icon: GitBranch, color: '#f87171', label: 'Git' },
-  link: { icon: Link, color: '#60a5fa', label: 'Link' }
+  link: { icon: Link, color: '#60a5fa', label: 'Link' },
+  pr: { icon: GitPullRequest, color: '#a78bfa', label: 'Pull Request' }
 };
 
 /**
@@ -59,7 +60,7 @@ function parseMessageContent(content: string): ContentPart[] {
   const parts: ContentPart[] = [];
   
   // Match #type:value until whitespace or line break.
-  const tagPattern = /#(file|dir|code|img|cmd|chart|git|link):([^\s\n]+)/g;
+  const tagPattern = /#(file|dir|code|img|cmd|chart|git|link|pr):([^\s\n]+)/g;
   
   let lastIndex = 0;
   let match;

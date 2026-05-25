@@ -5,18 +5,23 @@ use bitfun_runtime_ports::AgentSubmissionSource;
 use bitfun_services_integrations::remote_connect::{
     build_remote_image_attachment, build_remote_image_contexts,
     build_remote_image_submission_request, build_remote_session_create_request,
-    build_remote_submission_request, make_slim_tool_params, remote_file_display_name,
+    build_remote_submission_request, make_slim_tool_params, read_remote_workspace_file,
+    read_remote_workspace_file_chunk, read_remote_workspace_file_info, remote_file_display_name,
     remote_model_catalog_poll_delta, remote_no_change_poll_response,
     remote_persisted_poll_response, remote_session_restore_target, remote_snapshot_poll_response,
     resolve_remote_agent_type, resolve_remote_cancel_decision,
     resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range,
-    should_send_remote_model_catalog, ActiveTurnSnapshot, ChatImageAttachment, ChatMessage,
-    ChatMessageItem, ImageAttachment, RemoteCancelDecision, RemoteCommand,
-    RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteImageContext,
-    RemoteModelCatalog, RemoteModelConfig, RemoteResponse, RemoteSessionStateTracker,
-    RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteToolStatus, TrackerEvent,
+    resolve_remote_workspace_path, should_send_remote_model_catalog, submit_remote_dialog,
+    ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, ImageAttachment,
+    RemoteCancelDecision, RemoteCommand, RemoteConnectSubmissionSource, RemoteDefaultModelsConfig,
+    RemoteDialogQueuePriority, RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost,
+    RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome,
+    RemoteImageContext, RemoteImageContextAdapter, RemoteModelCatalog, RemoteModelConfig,
+    RemoteResponse, RemoteSessionStateTracker, RemoteSessionTrackerHost,
+    RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest, RemoteToolStatus, TrackerEvent,
     REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
 };
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 #[test]
@@ -143,6 +148,52 @@ fn remote_connect_image_context_policy_prefers_explicit_contexts() {
     assert_eq!(contexts, vec![explicit]);
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct TestImageContext {
+    id: String,
+    image_path: Option<String>,
+    data_url: Option<String>,
+    mime_type: String,
+    metadata: Option<serde_json::Value>,
+}
+
+impl RemoteImageContextAdapter for TestImageContext {
+    fn from_remote_image_context(context: RemoteImageContext) -> Self {
+        Self {
+            id: context.id,
+            image_path: context.image_path,
+            data_url: context.data_url,
+            mime_type: context.mime_type,
+            metadata: context.metadata,
+        }
+    }
+}
+
+#[test]
+fn remote_connect_image_context_adapter_owns_portable_conversion_shape() {
+    let context = RemoteImageContext {
+        id: "ctx-1".to_string(),
+        image_path: Some("D:/workspace/project/screenshot.png".to_string()),
+        data_url: Some("data:image/png;base64,abc".to_string()),
+        mime_type: "image/png".to_string(),
+        metadata: Some(serde_json::json!({ "source": "remote" })),
+    };
+
+    let adapted = TestImageContext::from_remote_image_context(context);
+
+    assert_eq!(adapted.id, "ctx-1");
+    assert_eq!(
+        adapted.image_path.as_deref(),
+        Some("D:/workspace/project/screenshot.png")
+    );
+    assert_eq!(
+        adapted.data_url.as_deref(),
+        Some("data:image/png;base64,abc")
+    );
+    assert_eq!(adapted.mime_type, "image/png");
+    assert_eq!(adapted.metadata.as_ref().unwrap()["source"], "remote");
+}
+
 #[test]
 fn remote_connect_cancel_and_restore_policy_preserve_runtime_decisions() {
     assert_eq!(
@@ -177,6 +228,265 @@ fn remote_connect_cancel_and_restore_policy_preserve_runtime_decisions() {
     );
 }
 
+struct RecordingDialogHost {
+    session_exists: bool,
+    binding_workspace: Option<String>,
+    generated_turn_id: String,
+    restore_error: bool,
+    submit_outcome: RemoteDialogSubmitOutcome,
+    events: Mutex<Vec<String>>,
+    submitted: Mutex<Option<RemoteDialogResolvedSubmission<String>>>,
+}
+
+impl RecordingDialogHost {
+    fn new(session_exists: bool, binding_workspace: Option<&str>) -> Self {
+        Self {
+            session_exists,
+            binding_workspace: binding_workspace.map(ToOwned::to_owned),
+            generated_turn_id: "turn-generated".to_string(),
+            restore_error: false,
+            submit_outcome: RemoteDialogSubmitOutcome::Started {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-generated".to_string(),
+            },
+            events: Mutex::new(Vec::new()),
+            submitted: Mutex::new(None),
+        }
+    }
+
+    fn with_restore_error(mut self) -> Self {
+        self.restore_error = true;
+        self
+    }
+
+    fn with_submit_outcome(mut self, submit_outcome: RemoteDialogSubmitOutcome) -> Self {
+        self.submit_outcome = submit_outcome;
+        self
+    }
+
+    fn events(&self) -> Vec<String> {
+        self.events.lock().unwrap().clone()
+    }
+
+    fn submitted(&self) -> RemoteDialogResolvedSubmission<String> {
+        self.submitted
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("dialog submitted")
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteDialogRuntimeHost for RecordingDialogHost {
+    type ImageContext = String;
+
+    fn ensure_tracker(&self, session_id: &str) {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("ensure_tracker:{session_id}"));
+    }
+
+    async fn resolve_binding_workspace(&self, session_id: &str) -> Option<String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("resolve_workspace:{session_id}"));
+        self.binding_workspace.clone()
+    }
+
+    async fn remote_session_exists(&self, session_id: &str) -> Result<bool, String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("session_exists:{session_id}"));
+        Ok(self.session_exists)
+    }
+
+    async fn restore_remote_session(
+        &self,
+        session_id: &str,
+        workspace_path: &str,
+    ) -> Result<(), String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("restore:{session_id}:{workspace_path}"));
+        if self.restore_error {
+            Err("restore failed".to_string())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn prewarm_remote_terminal(&self, request: RemoteTerminalPrewarmRequest) {
+        self.events.lock().unwrap().push(format!(
+            "prewarm:{}:{}",
+            request.session_id,
+            request.binding_workspace.as_deref().unwrap_or("<none>")
+        ));
+    }
+
+    fn generate_turn_id(&self) -> String {
+        self.events
+            .lock()
+            .unwrap()
+            .push("generate_turn".to_string());
+        self.generated_turn_id.clone()
+    }
+
+    async fn submit_dialog(
+        &self,
+        submission: RemoteDialogResolvedSubmission<Self::ImageContext>,
+    ) -> Result<RemoteDialogSubmitOutcome, String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("submit:{}", submission.session_id));
+        *self.submitted.lock().unwrap() = Some(submission);
+        Ok(self.submit_outcome.clone())
+    }
+}
+
+#[tokio::test]
+async fn remote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order() {
+    let host = RecordingDialogHost::new(false, Some("D:/workspace/project"));
+
+    let outcome = submit_remote_dialog(
+        &host,
+        RemoteDialogSubmissionRequest {
+            session_id: "session-1".to_string(),
+            content: "hello".to_string(),
+            agent_type: Some("code".to_string()),
+            image_contexts: vec!["image-1".to_string()],
+            policy: RemoteDialogSubmissionPolicy::for_source(RemoteConnectSubmissionSource::Relay),
+            turn_id: None,
+        },
+    )
+    .await
+    .expect("dialog submit succeeds");
+
+    assert_eq!(
+        outcome,
+        RemoteDialogSubmitOutcome::Started {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-generated".to_string()
+        }
+    );
+    assert_eq!(
+        host.events(),
+        vec![
+            "ensure_tracker:session-1",
+            "resolve_workspace:session-1",
+            "session_exists:session-1",
+            "restore:session-1:D:/workspace/project",
+            "prewarm:session-1:D:/workspace/project",
+            "generate_turn",
+            "submit:session-1",
+        ]
+    );
+
+    let submitted = host.submitted();
+    assert_eq!(submitted.session_id, "session-1");
+    assert_eq!(submitted.content, "hello");
+    assert_eq!(submitted.resolved_agent_type, "agentic");
+    assert_eq!(
+        submitted.binding_workspace.as_deref(),
+        Some("D:/workspace/project")
+    );
+    assert_eq!(submitted.image_contexts, vec!["image-1".to_string()]);
+    assert_eq!(submitted.turn_id, "turn-generated");
+    assert_eq!(
+        submitted.policy.source,
+        RemoteConnectSubmissionSource::Relay
+    );
+    assert_eq!(
+        submitted.policy.queue_priority,
+        RemoteDialogQueuePriority::Normal
+    );
+    assert!(submitted.policy.skip_tool_confirmation);
+}
+
+#[tokio::test]
+async fn remote_connect_dialog_runtime_preserves_explicit_turn_without_restore() {
+    let host = RecordingDialogHost::new(true, Some("D:/workspace/project")).with_submit_outcome(
+        RemoteDialogSubmitOutcome::Queued {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-bot".to_string(),
+        },
+    );
+
+    let outcome = submit_remote_dialog(
+        &host,
+        RemoteDialogSubmissionRequest {
+            session_id: "session-1".to_string(),
+            content: "from bot".to_string(),
+            agent_type: Some("Cowork".to_string()),
+            image_contexts: Vec::new(),
+            policy: RemoteDialogSubmissionPolicy::for_source(RemoteConnectSubmissionSource::Bot),
+            turn_id: Some("turn-bot".to_string()),
+        },
+    )
+    .await
+    .expect("dialog submit succeeds");
+
+    assert_eq!(
+        outcome,
+        RemoteDialogSubmitOutcome::Queued {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-bot".to_string()
+        }
+    );
+    assert_eq!(
+        host.events(),
+        vec![
+            "ensure_tracker:session-1",
+            "resolve_workspace:session-1",
+            "session_exists:session-1",
+            "prewarm:session-1:D:/workspace/project",
+            "submit:session-1",
+        ]
+    );
+
+    let submitted = host.submitted();
+    assert_eq!(submitted.resolved_agent_type, "Cowork");
+    assert_eq!(submitted.turn_id, "turn-bot");
+    assert_eq!(submitted.policy.source, RemoteConnectSubmissionSource::Bot);
+}
+
+#[tokio::test]
+async fn remote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance() {
+    let host = RecordingDialogHost::new(false, Some("D:/workspace/project")).with_restore_error();
+
+    submit_remote_dialog(
+        &host,
+        RemoteDialogSubmissionRequest {
+            session_id: "session-1".to_string(),
+            content: "hello".to_string(),
+            agent_type: None,
+            image_contexts: Vec::new(),
+            policy: RemoteDialogSubmissionPolicy::for_source(RemoteConnectSubmissionSource::Relay),
+            turn_id: Some("turn-1".to_string()),
+        },
+    )
+    .await
+    .expect("restore failure is still tolerated before scheduler submit");
+
+    assert_eq!(
+        host.events(),
+        vec![
+            "ensure_tracker:session-1",
+            "resolve_workspace:session-1",
+            "session_exists:session-1",
+            "restore:session-1:D:/workspace/project",
+            "prewarm:session-1:D:/workspace/project",
+            "submit:session-1",
+        ]
+    );
+    assert_eq!(host.submitted().turn_id, "turn-1");
+}
+
 #[test]
 fn remote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges() {
     assert_eq!(REMOTE_FILE_MAX_READ_BYTES, 30 * 1024 * 1024);
@@ -204,6 +514,87 @@ fn remote_connect_file_transfer_policy_preserves_name_fallback() {
     assert_eq!(remote_file_display_name(Some("report.md")), "report.md");
     assert_eq!(remote_file_display_name(None), "file");
     assert_eq!(remote_file_display_name(Some("")), "file");
+}
+
+fn make_temp_remote_workspace() -> (PathBuf, PathBuf, PathBuf) {
+    let base = std::env::temp_dir().join(format!(
+        "bitfun-remote-connect-contract-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let workspace = base.join("workspace");
+    let artifacts = workspace.join("artifacts");
+    std::fs::create_dir_all(&artifacts).expect("create remote workspace");
+    let report = artifacts.join("report.md");
+    std::fs::write(&report, b"hello remote file").expect("write remote file");
+    (base, workspace, report)
+}
+
+#[test]
+fn remote_connect_file_path_resolution_stays_within_workspace_root() {
+    let (base, workspace, report) = make_temp_remote_workspace();
+
+    let resolved =
+        resolve_remote_workspace_path("computer://artifacts/report.md", Some(&workspace))
+            .expect("workspace-relative file resolves");
+    assert_eq!(resolved, report.canonicalize().expect("canonical report"));
+
+    assert!(resolve_remote_workspace_path("../secret.md", Some(&workspace)).is_none());
+    assert!(resolve_remote_workspace_path("artifacts/report.md", None).is_none());
+
+    std::fs::remove_dir_all(base).expect("cleanup remote workspace");
+}
+
+#[tokio::test]
+async fn remote_connect_file_read_helpers_preserve_current_wire_inputs() {
+    let (base, workspace, report) = make_temp_remote_workspace();
+
+    let content = read_remote_workspace_file(
+        "computer://artifacts/report.md",
+        REMOTE_FILE_MAX_READ_BYTES,
+        Some(&workspace),
+    )
+    .await
+    .expect("read remote file");
+
+    assert_eq!(content.name, "report.md");
+    assert_eq!(content.bytes, b"hello remote file");
+    assert_eq!(content.mime_type, "text/markdown");
+    assert_eq!(content.size, 17);
+
+    let err = read_remote_workspace_file("computer://artifacts/report.md", 3, Some(&workspace))
+        .await
+        .expect_err("size limit rejects large file");
+    assert!(err.contains("File too large"));
+    assert!(err.contains(&report.display().to_string()));
+
+    std::fs::remove_dir_all(base).expect("cleanup remote workspace");
+}
+
+#[tokio::test]
+async fn remote_connect_file_chunk_and_info_helpers_preserve_response_facts() {
+    let (base, workspace, _report) = make_temp_remote_workspace();
+
+    let chunk =
+        read_remote_workspace_file_chunk("computer://artifacts/report.md", Some(&workspace), 6, 99)
+            .await
+            .expect("read remote file chunk");
+
+    assert_eq!(chunk.name, "report.md");
+    assert_eq!(chunk.bytes, b"remote file");
+    assert_eq!(chunk.offset, 6);
+    assert_eq!(chunk.chunk_size, 11);
+    assert_eq!(chunk.total_size, 17);
+    assert_eq!(chunk.mime_type, "text/markdown");
+
+    let info = read_remote_workspace_file_info("computer://artifacts/report.md", Some(&workspace))
+        .await
+        .expect("read remote file info");
+
+    assert_eq!(info.name, "report.md");
+    assert_eq!(info.size, 17);
+    assert_eq!(info.mime_type, "text/markdown");
+
+    std::fs::remove_dir_all(base).expect("cleanup remote workspace");
 }
 
 #[test]

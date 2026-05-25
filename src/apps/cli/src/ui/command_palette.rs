@@ -53,6 +53,12 @@ pub fn default_palette_items() -> Vec<PaletteItem> {
             description: "Browse and switch sessions".into(),
             group: "Session".into(),
         },
+        PaletteItem {
+            id: "usage".into(),
+            label: "Usage report".into(),
+            description: "Generate a usage report for the current session".into(),
+            group: "Session".into(),
+        },
         // Prompt group
         PaletteItem {
             id: "skills".into(),
@@ -141,6 +147,12 @@ fn build_suggested_items() -> Vec<PaletteItem> {
             id: "new_session".into(),
             label: "New session".into(),
             description: "Start a new conversation".into(),
+            group: "Suggested".into(),
+        },
+        PaletteItem {
+            id: "usage".into(),
+            label: "Usage report".into(),
+            description: "Generate a usage report for the current session".into(),
             group: "Suggested".into(),
         },
     ]

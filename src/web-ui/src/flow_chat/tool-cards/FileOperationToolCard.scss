@@ -103,7 +103,8 @@
   }
 }
 
-.file-error-message-inline {
+.file-error-message-inline,
+.file-guidance-message-inline {
   min-width: 0;
   overflow: hidden;
   color: var(--color-text-muted);
@@ -358,6 +359,40 @@
 }
 
 .error-message {
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  line-height: var(--flowchat-support-line-height, 1.45);
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.file-operation-card--guidance {
+  .base-tool-card.status-error {
+    border-color: var(--border-medium, rgba(255, 255, 255, 0.12));
+    background: var(--color-surface-elevated, transparent);
+  }
+}
+
+.guidance-content {
+  padding: 8px 12px 10px;
+}
+
+.guidance-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  font-weight: 600;
+  margin-bottom: 6px;
+
+  svg {
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+  }
+}
+
+.guidance-message {
   font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   line-height: var(--flowchat-support-line-height, 1.45);
   color: var(--color-text-muted);

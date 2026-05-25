@@ -1230,12 +1230,10 @@ mod tests {
             .await;
 
         assert!(!validation.result);
-        assert!(
-            validation
-                .message
-                .as_deref()
-                .unwrap_or_default()
-                .contains("unknown field")
-        );
+        assert!(validation
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .contains("unknown field"));
     }
 }

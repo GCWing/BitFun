@@ -360,6 +360,32 @@ impl TransportAdapter for TauriTransportAdapter {
                     }),
                 )?;
             }
+            AgenticEvent::GoalVerificationStarted {
+                session_id,
+                source_turn_id,
+            } => {
+                self.app_handle.emit(
+                    "agentic://goal-verification-started",
+                    json!({
+                        "sessionId": session_id,
+                        "sourceTurnId": source_turn_id,
+                    }),
+                )?;
+            }
+            AgenticEvent::GoalVerificationFinished {
+                session_id,
+                source_turn_id,
+                outcome,
+            } => {
+                self.app_handle.emit(
+                    "agentic://goal-verification-finished",
+                    json!({
+                        "sessionId": session_id,
+                        "sourceTurnId": source_turn_id,
+                        "outcome": outcome,
+                    }),
+                )?;
+            }
             AgenticEvent::SessionStateChanged {
                 session_id,
                 new_state,

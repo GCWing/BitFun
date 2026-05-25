@@ -4,6 +4,7 @@
  */
 
 import { createContext, useContext } from 'react';
+import type React from 'react';
 import type { FlowChatConfig, Session } from '../../types/flow-chat';
 import type { LineRange } from '@/component-library';
 
@@ -11,6 +12,7 @@ export interface FlowChatContextValue {
   // File and panel actions
   onFileViewRequest?: (filePath: string, fileName: string, lineRange?: LineRange) => void;
   onTabOpen?: (tabInfo: any, sessionId?: string, panelType?: string) => void;
+  onHttpLinkClick?: (url: string, event: React.MouseEvent<HTMLAnchorElement>) => boolean | void;
   onOpenVisualization?: (type: string, data: any) => void;
   onSwitchToChatPanel?: () => void;
 

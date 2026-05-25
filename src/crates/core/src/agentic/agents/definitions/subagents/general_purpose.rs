@@ -21,6 +21,8 @@ impl GeneralPurposeAgent {
                 "Grep".to_string(),
                 "Write".to_string(),
                 "Edit".to_string(),
+                "Delete".to_string(),
+                "TerminalControl".to_string(),
                 "WebSearch".to_string(),
                 "WebFetch".to_string(),
             ],
@@ -55,7 +57,10 @@ impl Agent for GeneralPurposeAgent {
     }
 
     fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::instructions_only()
+        RequestContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
+            .with_project_layout()
     }
 
     fn is_readonly(&self) -> bool {

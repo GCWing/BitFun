@@ -6,21 +6,25 @@
 use super::state_manager::ToolStateManager;
 use super::types::*;
 use crate::agentic::core::{ToolCall, ToolExecutionState, ToolResult as ModelToolResult};
-use crate::agentic::deep_review::tool_context;
 use crate::agentic::events::types::ToolEventData;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{ToolResult as FrameworkToolResult, ToolUseContext};
 use crate::agentic::tools::registry::ToolRegistry;
+use crate::agentic::tools::tool_context_runtime;
+use crate::agentic::tools::tool_result_storage;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_tools::{
+    validate_collapsed_tool_usage, validate_tool_allowed_by_list, GET_TOOL_SPEC_TOOL_NAME,
+};
 use dashmap::DashMap;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
-use tokio::sync::{RwLock as TokioRwLock, oneshot};
-use tokio::time::{Duration, timeout};
+use tokio::sync::{oneshot, RwLock as TokioRwLock};
+use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 
 /// A batch of tool tasks to execute together.
@@ -314,33 +318,13 @@ pub struct ToolPipeline {
 
 impl ToolPipeline {
     fn validate_collapsed_tool_usage(task: &ToolTask) -> BitFunResult<()> {
-        let tool_name = task.tool_call.tool_name.as_str();
-        if tool_name == "GetToolSpec" {
-            return Ok(());
-        }
-
-        if !task
-            .context
-            .collapsed_tools
-            .iter()
-            .any(|collapsed| collapsed == tool_name)
-        {
-            return Ok(());
-        }
-
-        if task
-            .context
-            .unlocked_collapsed_tools
-            .iter()
-            .any(|loaded| loaded == tool_name)
-        {
-            return Ok(());
-        }
-
-        Err(BitFunError::Validation(format!(
-            "Tool '{}' is collapsed. Call GetToolSpec first with {{\"tool_name\":\"{}\"}} to read its full usage instructions and input schema, then try again.",
-            tool_name, tool_name
-        )))
+        validate_collapsed_tool_usage(
+            task.tool_call.tool_name.as_str(),
+            &task.context.collapsed_tools,
+            &task.context.unlocked_collapsed_tools,
+            GET_TOOL_SPEC_TOOL_NAME,
+        )
+        .map_err(|error| BitFunError::Validation(error.to_string()))
     }
 
     pub fn new(
@@ -755,15 +739,8 @@ impl ToolPipeline {
             return Err(BitFunError::Validation(error_msg));
         }
 
-        // Security check: check if the tool is in the allowed list
-        // If allowed_tools is not empty, only allow execution of tools in the whitelist
-        if !task.context.allowed_tools.is_empty()
-            && !task.context.allowed_tools.contains(&tool_name)
-        {
-            let error_msg = format!(
-                "Tool '{}' is not in the allowed list: {:?}",
-                tool_name, task.context.allowed_tools
-            );
+        if let Err(err) = validate_tool_allowed_by_list(&tool_name, &task.context.allowed_tools) {
+            let error_msg = err.to_string();
             warn!("Tool not allowed: {}", error_msg);
 
             // Update state to failed
@@ -1056,6 +1033,7 @@ impl ToolPipeline {
         }
 
         let execution_started_at = Instant::now();
+        let tool_context = self.build_tool_use_context(&task, cancellation_token.clone());
         let result = self
             .execute_with_retry(&task, cancellation_token.clone(), tool)
             .await;
@@ -1066,7 +1044,11 @@ impl ToolPipeline {
         match result {
             Ok(tool_result) => {
                 let duration_ms = elapsed_ms_u64(start_time);
-                let mut tool_result = tool_result;
+                let mut tool_result = tool_result_storage::maybe_persist_large_tool_result(
+                    tool_result,
+                    &tool_context,
+                )
+                .await;
                 tool_result.duration_ms = Some(duration_ms);
 
                 // The tool call succeeded with arguments that we patched
@@ -1283,64 +1265,11 @@ impl ToolPipeline {
         task: &ToolTask,
         cancellation_token: CancellationToken,
     ) -> ToolUseContext {
-        ToolUseContext {
-            tool_call_id: Some(task.tool_call.tool_id.clone()),
-            agent_type: Some(task.context.agent_type.clone()),
-            session_id: Some(task.context.session_id.clone()),
-            dialog_turn_id: Some(task.context.dialog_turn_id.clone()),
-            workspace: task.context.workspace.clone(),
-            unlocked_collapsed_tools: task.context.unlocked_collapsed_tools.clone(),
-            custom_data: {
-                let mut map = HashMap::new();
-
-                if let Some(turn_index) = task.context.context_vars.get("turn_index") {
-                    if let Ok(n) = turn_index.parse::<u64>() {
-                        map.insert("turn_index".to_string(), serde_json::json!(n));
-                    }
-                }
-
-                if let Some(provider) = task.context.context_vars.get("primary_model_provider") {
-                    if !provider.is_empty() {
-                        map.insert(
-                            "primary_model_provider".to_string(),
-                            serde_json::json!(provider),
-                        );
-                    }
-                }
-                if let Some(supports_images) = task
-                    .context
-                    .context_vars
-                    .get("primary_model_supports_image_understanding")
-                {
-                    if let Ok(flag) = supports_images.parse::<bool>() {
-                        map.insert(
-                            "primary_model_supports_image_understanding".to_string(),
-                            serde_json::json!(flag),
-                        );
-                    }
-                }
-                let deep_review_parent_context =
-                    task.context
-                        .subagent_parent_info
-                        .as_ref()
-                        .map(|parent_info| tool_context::DeepReviewToolParentContext {
-                            tool_call_id: parent_info.tool_call_id.as_str(),
-                            session_id: parent_info.session_id.as_str(),
-                            dialog_turn_id: parent_info.dialog_turn_id.as_str(),
-                        });
-                tool_context::append_tool_use_context_data(
-                    &task.context.context_vars,
-                    deep_review_parent_context,
-                    &mut map,
-                );
-
-                map
-            },
-            computer_use_host: self.computer_use_host.clone(),
-            cancellation_token: Some(cancellation_token),
-            runtime_tool_restrictions: task.context.runtime_tool_restrictions.clone(),
-            workspace_services: task.context.workspace_services.clone(),
-        }
+        tool_context_runtime::build_tool_use_context_for_task(
+            task,
+            self.computer_use_host.clone(),
+            cancellation_token,
+        )
     }
 
     /// Handle streaming results
@@ -1652,14 +1581,12 @@ mod tests {
             result.result.result["provided_arguments"],
             serde_json::Value::String("{\"operation\":\"log\"".to_string())
         );
-        assert!(
-            result
-                .result
-                .result_for_assistant
-                .as_deref()
-                .unwrap_or_default()
-                .contains("Provided arguments: {\"operation\":\"log\"")
-        );
+        assert!(result
+            .result
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Provided arguments: {\"operation\":\"log\""));
     }
 
     #[test]
@@ -1700,6 +1627,12 @@ mod tests {
             "primary_model_supports_image_understanding".to_string(),
             "true".to_string(),
         );
+        task.context
+            .context_vars
+            .insert("write_tool_mode".to_string(), "inline_content".to_string());
+        task.context
+            .context_vars
+            .insert("acp_transport".to_string(), "true".to_string());
         task.context.collapsed_tools = vec!["WebFetch".to_string()];
         task.context.unlocked_collapsed_tools = vec!["WebFetch".to_string()];
         task.context.runtime_tool_restrictions = ToolRuntimeRestrictions {
@@ -1716,11 +1649,9 @@ mod tests {
         assert_eq!(context.dialog_turn_id.as_deref(), Some("turn_1"));
         assert_eq!(context.unlocked_collapsed_tools, vec!["WebFetch"]);
         assert!(context.cancellation_token.is_some());
-        assert!(
-            context
-                .runtime_tool_restrictions
-                .is_tool_allowed("WebFetch")
-        );
+        assert!(context
+            .runtime_tool_restrictions
+            .is_tool_allowed("WebFetch"));
         assert!(!context.runtime_tool_restrictions.is_tool_allowed("Bash"));
         assert_eq!(context.custom_data["turn_index"], json!(7));
         assert_eq!(
@@ -1731,6 +1662,11 @@ mod tests {
             context.custom_data["primary_model_supports_image_understanding"],
             json!(true)
         );
+        assert_eq!(
+            context.custom_data["write_tool_mode"],
+            json!("inline_content")
+        );
+        assert_eq!(context.custom_data["acp_transport"], json!(true));
 
         let facts = context.to_tool_context_facts();
         let value = serde_json::to_value(&facts).expect("serialize context facts");
@@ -1750,10 +1686,9 @@ mod tests {
         let err = ToolPipeline::validate_collapsed_tool_usage(&task)
             .expect_err("collapsed tool should require GetToolSpec unlock");
 
-        assert!(
-            err.to_string()
-                .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}")
-        );
+        assert!(err
+            .to_string()
+            .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}"));
     }
 
     #[test]

@@ -13,12 +13,14 @@ use crate::agentic::session;
 use crate::agentic::tools;
 use crate::infrastructure::ai::AIClientFactory;
 use crate::infrastructure::try_get_path_manager_arc;
+use crate::service::token_usage::{TokenUsageService, TokenUsageSubscriber};
 
 /// Agentic runtime state shared by host adapters.
 #[derive(Clone)]
 pub struct AgenticSystem {
     pub coordinator: Arc<coordination::ConversationCoordinator>,
     pub event_queue: Arc<events::EventQueue>,
+    pub token_usage_service: Arc<TokenUsageService>,
 }
 
 /// Initialize the agentic runtime and register the global coordinator.
@@ -32,6 +34,9 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
 
     let path_manager = try_get_path_manager_arc()?;
     let persistence_manager = Arc::new(persistence::PersistenceManager::new(path_manager.clone())?);
+    let token_usage_service = Arc::new(TokenUsageService::new(path_manager.clone()).await?);
+    let token_usage_subscriber = Arc::new(TokenUsageSubscriber::new(token_usage_service.clone()));
+    event_router.subscribe_internal("token_usage".to_string(), token_usage_subscriber);
 
     let context_store = Arc::new(session::SessionContextStore::new());
     let context_compressor = Arc::new(session::ContextCompressor::new(Default::default()));
@@ -70,14 +75,34 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
         execution_engine,
         tool_pipeline,
         event_queue.clone(),
-        event_router,
+        event_router.clone(),
     ));
 
     coordination::ConversationCoordinator::set_global(coordinator.clone());
+
+    let mut internal_event_rx = event_queue.subscribe();
+    let internal_event_router = event_router.clone();
+    tokio::spawn(async move {
+        loop {
+            match internal_event_rx.recv().await {
+                Ok(envelope) => {
+                    if let Err(error) = internal_event_router.route(envelope).await {
+                        log::warn!("Internal agentic event routing failed: {}", error);
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                    log::warn!("Internal agentic event router lagged by {} events", skipped);
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
     info!("Agentic system initialization complete");
 
     Ok(AgenticSystem {
         coordinator,
         event_queue,
+        token_usage_service,
     })
 }

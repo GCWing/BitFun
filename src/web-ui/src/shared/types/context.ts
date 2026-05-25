@@ -19,6 +19,7 @@ export type ContextItem =
   | FileContext
   | DirectoryContext
   | CodeSnippetContext
+  | PullRequestContext
   | MermaidNodeContext
   | MermaidDiagramContext
   | ImageContext
@@ -55,6 +56,18 @@ export interface CodeSnippetContext extends BaseContext {
   
   beforeContext?: string; 
   afterContext?: string;  
+}
+
+export interface PullRequestContext extends BaseContext {
+  type: 'pull-request';
+  label: string;
+  section: 'overview' | 'ci' | 'file-diff' | 'commits' | 'reviews' | 'summary';
+  content: string;
+  sourceUrl?: string;
+  remoteId?: string;
+  repository?: string;
+  pullRequestNumber?: number;
+  pullRequestTitle?: string;
 }
 
 export interface MermaidNodeContext extends BaseContext {
@@ -165,6 +178,10 @@ export function isDirectoryContext(context: ContextItem): context is DirectoryCo
 
 export function isCodeSnippetContext(context: ContextItem): context is CodeSnippetContext {
   return context.type === 'code-snippet';
+}
+
+export function isPullRequestContext(context: ContextItem): context is PullRequestContext {
+  return context.type === 'pull-request';
 }
 
 export function isMermaidNodeContext(context: ContextItem): context is MermaidNodeContext {

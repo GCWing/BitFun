@@ -1085,11 +1085,12 @@ $_section-header-height: 24px;
 
     &.is-collapsed {
       grid-template-rows: 0fr;
+      pointer-events: none;
     }
   }
 
   &__collapsible-inner {
-    overflow: visible;
+    overflow: hidden;
     min-height: 0;
     min-width: 0;
     max-width: 100%;

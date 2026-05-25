@@ -9,6 +9,7 @@ import { i18nService } from '../../../infrastructure/i18n';
 import { workspaceManager } from '../../../infrastructure/services/business/workspaceManager';
 import { isRemoteWorkspace } from '../../../shared/types';
 import { addFileMentionToChat } from '@/shared/utils/chatContext';
+import { dirnameAbsolutePath } from '@/shared/utils/pathUtils';
 
 export class FileExplorerMenuProvider implements IMenuProvider {
   readonly id = 'file-explorer';
@@ -277,10 +278,6 @@ export class FileExplorerMenuProvider implements IMenuProvider {
 
    
   private getParentDirectory(filePath: string): string {
-    const isWindows = filePath.includes('\\');
-    const separator = isWindows ? '\\' : '/';
-    const parts = filePath.split(separator);
-    parts.pop();
-    return parts.join(separator);
+    return dirnameAbsolutePath(filePath);
   }
 }

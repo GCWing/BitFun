@@ -32,6 +32,10 @@ export interface WorkspaceInfo {
     vibe?: string | null;
     emoji?: string | null;
   } | null;
+  relatedPaths?: Array<{
+    path: string;
+    description?: string | null;
+  }>;
   connectionId?: string;
   connectionName?: string;
 }

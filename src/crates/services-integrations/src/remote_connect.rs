@@ -10,6 +10,7 @@ use bitfun_runtime_ports::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
@@ -114,6 +115,10 @@ pub struct RemoteImageContext {
     pub metadata: Option<serde_json::Value>,
 }
 
+pub trait RemoteImageContextAdapter {
+    fn from_remote_image_context(context: RemoteImageContext) -> Self;
+}
+
 pub fn build_remote_image_contexts(images: Option<&[ImageAttachment]>) -> Vec<RemoteImageContext> {
     let Some(images) = images.filter(|images| !images.is_empty()) else {
         return Vec::new();
@@ -190,8 +195,170 @@ pub fn resolve_remote_cancel_decision(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteDialogQueuePriority {
+    Low,
+    Normal,
+    High,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteDialogSubmissionPolicy {
+    pub source: RemoteConnectSubmissionSource,
+    pub queue_priority: RemoteDialogQueuePriority,
+    pub skip_tool_confirmation: bool,
+}
+
+impl RemoteDialogSubmissionPolicy {
+    pub const fn for_source(source: RemoteConnectSubmissionSource) -> Self {
+        Self {
+            source,
+            queue_priority: RemoteDialogQueuePriority::Normal,
+            skip_tool_confirmation: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteDialogSubmissionRequest<ImageContext> {
+    pub session_id: String,
+    pub content: String,
+    pub agent_type: Option<String>,
+    pub image_contexts: Vec<ImageContext>,
+    pub policy: RemoteDialogSubmissionPolicy,
+    pub turn_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteTerminalPrewarmRequest {
+    pub session_id: String,
+    pub binding_workspace: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteDialogResolvedSubmission<ImageContext> {
+    pub session_id: String,
+    pub content: String,
+    pub resolved_agent_type: String,
+    pub binding_workspace: Option<String>,
+    pub image_contexts: Vec<ImageContext>,
+    pub policy: RemoteDialogSubmissionPolicy,
+    pub turn_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteDialogSubmitOutcome {
+    Started { session_id: String, turn_id: String },
+    Queued { session_id: String, turn_id: String },
+}
+
+/// Host callbacks required by remote-connect dialog execution.
+///
+/// The owner crate keeps the remote dialog orchestration order stable, while
+/// concrete session restore, terminal warmup, and scheduler execution stay in
+/// the product runtime adapter.
+#[async_trait::async_trait]
+pub trait RemoteDialogRuntimeHost: Send + Sync {
+    type ImageContext: Send + Sync + 'static;
+
+    fn ensure_tracker(&self, session_id: &str);
+
+    async fn resolve_binding_workspace(&self, session_id: &str) -> Option<String>;
+
+    async fn remote_session_exists(&self, session_id: &str) -> Result<bool, String>;
+
+    async fn restore_remote_session(
+        &self,
+        session_id: &str,
+        workspace_path: &str,
+    ) -> Result<(), String>;
+
+    fn prewarm_remote_terminal(&self, request: RemoteTerminalPrewarmRequest);
+
+    fn generate_turn_id(&self) -> String;
+
+    async fn submit_dialog(
+        &self,
+        submission: RemoteDialogResolvedSubmission<Self::ImageContext>,
+    ) -> Result<RemoteDialogSubmitOutcome, String>;
+}
+
+pub async fn submit_remote_dialog<H>(
+    host: &H,
+    request: RemoteDialogSubmissionRequest<H::ImageContext>,
+) -> Result<RemoteDialogSubmitOutcome, String>
+where
+    H: RemoteDialogRuntimeHost + ?Sized,
+{
+    let RemoteDialogSubmissionRequest {
+        session_id,
+        content,
+        agent_type,
+        image_contexts,
+        policy,
+        turn_id,
+    } = request;
+
+    host.ensure_tracker(&session_id);
+
+    let binding_workspace = host.resolve_binding_workspace(&session_id).await;
+    let session_exists = host.remote_session_exists(&session_id).await?;
+
+    if let Some(workspace_path) =
+        remote_session_restore_target(session_exists, binding_workspace.as_deref())
+    {
+        let _ = host
+            .restore_remote_session(&session_id, workspace_path)
+            .await;
+    }
+
+    host.prewarm_remote_terminal(RemoteTerminalPrewarmRequest {
+        session_id: session_id.clone(),
+        binding_workspace: binding_workspace.clone(),
+    });
+
+    let resolved_agent_type = resolve_remote_agent_type(agent_type.as_deref()).to_string();
+    let turn_id = turn_id.unwrap_or_else(|| host.generate_turn_id());
+
+    host.submit_dialog(RemoteDialogResolvedSubmission {
+        session_id,
+        content,
+        resolved_agent_type,
+        binding_workspace,
+        image_contexts,
+        policy,
+        turn_id,
+    })
+    .await
+}
+
 pub const REMOTE_FILE_MAX_READ_BYTES: u64 = 30 * 1024 * 1024;
 pub const REMOTE_FILE_MAX_CHUNK_BYTES: u64 = 3 * 1024 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteWorkspaceFileContent {
+    pub name: String,
+    pub bytes: Vec<u8>,
+    pub mime_type: &'static str,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteWorkspaceFileChunk {
+    pub name: String,
+    pub bytes: Vec<u8>,
+    pub offset: u64,
+    pub chunk_size: u64,
+    pub total_size: u64,
+    pub mime_type: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteWorkspaceFileInfo {
+    pub name: String,
+    pub size: u64,
+    pub mime_type: &'static str,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemoteFileChunkRange {
@@ -221,6 +388,177 @@ pub fn remote_file_display_name(name: Option<&str>) -> String {
         Some(name) if !name.is_empty() => name.to_string(),
         _ => "file".to_string(),
     }
+}
+
+fn strip_remote_workspace_path_prefix(raw: &str) -> &str {
+    raw.strip_prefix("computer://")
+        .or_else(|| raw.strip_prefix("file://"))
+        .unwrap_or(raw)
+}
+
+fn is_remote_absolute_workspace_path(path: &str) -> bool {
+    path.starts_with('/') || (path.len() >= 3 && path.as_bytes()[1] == b':')
+}
+
+pub fn resolve_remote_workspace_path(raw: &str, workspace_root: Option<&Path>) -> Option<PathBuf> {
+    let stripped = strip_remote_workspace_path_prefix(raw);
+
+    if is_remote_absolute_workspace_path(stripped) {
+        return Some(PathBuf::from(stripped));
+    }
+
+    let workspace_root = workspace_root?;
+    let canonical_root = std::fs::canonicalize(workspace_root).ok()?;
+    let candidate = canonical_root.join(stripped);
+    let canonical_candidate = std::fs::canonicalize(candidate).ok()?;
+
+    if canonical_candidate.starts_with(&canonical_root) {
+        Some(canonical_candidate)
+    } else {
+        None
+    }
+}
+
+pub fn detect_remote_mime_type(path: &Path) -> &'static str {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    match ext.as_str() {
+        "txt" | "log" => "text/plain",
+        "md" => "text/markdown",
+        "html" | "htm" => "text/html",
+        "css" => "text/css",
+        "js" | "mjs" => "text/javascript",
+        "ts" | "tsx" | "jsx" | "rs" | "py" | "go" | "java" | "c" | "cpp" | "h" | "sh" | "toml"
+        | "yaml" | "yml" => "text/plain",
+        "json" => "application/json",
+        "xml" => "application/xml",
+        "csv" => "text/csv",
+        "pdf" => "application/pdf",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "zip" => "application/zip",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "mp4" => "video/mp4",
+        "opus" => "audio/opus",
+        _ => "application/octet-stream",
+    }
+}
+
+pub async fn read_remote_workspace_file(
+    raw_path: &str,
+    max_size: u64,
+    workspace_root: Option<&Path>,
+) -> Result<RemoteWorkspaceFileContent, String> {
+    let abs_path = resolve_remote_workspace_path(raw_path, workspace_root)
+        .ok_or_else(|| format!("Remote file path could not be resolved: {raw_path}"))?;
+
+    if !abs_path.exists() {
+        return Err(format!("File not found: {}", abs_path.display()));
+    }
+    if !abs_path.is_file() {
+        return Err(format!(
+            "Path is not a regular file: {}",
+            abs_path.display()
+        ));
+    }
+
+    let metadata = tokio::fs::metadata(&abs_path)
+        .await
+        .map_err(|e| format!("Cannot read file metadata for {}: {e}", abs_path.display()))?;
+
+    if metadata.len() > max_size {
+        return Err(format!(
+            "File too large ({} bytes, limit {max_size} bytes): {}",
+            metadata.len(),
+            abs_path.display()
+        ));
+    }
+
+    let bytes = tokio::fs::read(&abs_path)
+        .await
+        .map_err(|e| format!("Cannot read file {}: {e}", abs_path.display()))?;
+
+    Ok(RemoteWorkspaceFileContent {
+        name: remote_file_display_name(abs_path.file_name().and_then(|n| n.to_str())),
+        bytes,
+        mime_type: detect_remote_mime_type(&abs_path),
+        size: metadata.len(),
+    })
+}
+
+pub async fn read_remote_workspace_file_chunk(
+    raw_path: &str,
+    workspace_root: Option<&Path>,
+    offset: u64,
+    limit: u64,
+) -> Result<RemoteWorkspaceFileChunk, String> {
+    let abs_path = resolve_remote_workspace_path(raw_path, workspace_root)
+        .ok_or_else(|| format!("Remote file path could not be resolved: {raw_path}"))?;
+
+    if !abs_path.exists() || !abs_path.is_file() {
+        return Err(format!(
+            "File not found or not a regular file: {}",
+            abs_path.display()
+        ));
+    }
+
+    let total_size = tokio::fs::metadata(&abs_path)
+        .await
+        .map_err(|e| format!("Cannot read file metadata: {e}"))?
+        .len();
+
+    let bytes = tokio::fs::read(&abs_path)
+        .await
+        .map_err(|e| format!("Cannot read file: {e}"))?;
+    let range = resolve_remote_file_chunk_range(bytes.len(), offset, limit);
+    let chunk = bytes[range.start..range.end].to_vec();
+
+    Ok(RemoteWorkspaceFileChunk {
+        name: remote_file_display_name(abs_path.file_name().and_then(|n| n.to_str())),
+        bytes: chunk,
+        offset,
+        chunk_size: range.chunk_size,
+        total_size,
+        mime_type: detect_remote_mime_type(&abs_path),
+    })
+}
+
+pub async fn read_remote_workspace_file_info(
+    raw_path: &str,
+    workspace_root: Option<&Path>,
+) -> Result<RemoteWorkspaceFileInfo, String> {
+    let abs_path = resolve_remote_workspace_path(raw_path, workspace_root)
+        .ok_or_else(|| format!("Remote file path could not be resolved: {raw_path}"))?;
+
+    if !abs_path.exists() {
+        return Err(format!("File not found: {}", abs_path.display()));
+    }
+    if !abs_path.is_file() {
+        return Err(format!(
+            "Path is not a regular file: {}",
+            abs_path.display()
+        ));
+    }
+
+    let size = tokio::fs::metadata(&abs_path)
+        .await
+        .map_err(|e| format!("Cannot read file metadata: {e}"))?
+        .len();
+
+    Ok(RemoteWorkspaceFileInfo {
+        name: remote_file_display_name(abs_path.file_name().and_then(|n| n.to_str())),
+        size,
+        mime_type: detect_remote_mime_type(&abs_path),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

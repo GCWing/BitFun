@@ -387,11 +387,7 @@ mod tests {
 
     impl TestTempDir {
         fn new(prefix: &str) -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "{}-{}",
-                prefix,
-                uuid::Uuid::new_v4()
-            ));
+            let path = std::env::temp_dir().join(format!("{}-{}", prefix, uuid::Uuid::new_v4()));
             fs::create_dir_all(&path).expect("test root should be created");
             Self { path }
         }
@@ -410,10 +406,9 @@ mod tests {
     #[tokio::test]
     async fn runtime_port_adapter_preserves_existing_runtime_and_noop_install() {
         let root = TestTempDir::new("bitfun-miniapp-runtime-port");
-        let path_manager =
-            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(
-                root.path().to_path_buf(),
-            ));
+        let path_manager = Arc::new(
+            crate::infrastructure::PathManager::with_user_root_for_tests(root.path().to_path_buf()),
+        );
         let app_id = "demo_app";
         tokio::fs::create_dir_all(path_manager.miniapp_dir(app_id))
             .await

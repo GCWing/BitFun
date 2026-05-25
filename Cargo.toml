@@ -73,7 +73,7 @@ indexmap = "2"
 include_dir = "0.7"
 
 # HTTP client
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "json", "stream", "multipart"] }
+reqwest = { version = "0.12", default-features = false, features = ["native-tls", "rustls-tls-native-roots", "json", "stream", "multipart"] }
 
 # Debug Log HTTP Server
 axum = { version = "0.7", features = ["json", "ws"] }

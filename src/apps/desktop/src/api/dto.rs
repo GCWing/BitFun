@@ -53,6 +53,14 @@ pub struct WorkspaceWorktreeInfoDto {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RelatedPathDto {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceInfoDto {
     pub id: String,
     pub name: String,
@@ -69,6 +77,8 @@ pub struct WorkspaceInfoDto {
     pub identity: Option<WorkspaceIdentityDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub worktree: Option<WorkspaceWorktreeInfoDto>,
+    #[serde(default)]
+    pub related_paths: Vec<RelatedPathDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -134,6 +144,11 @@ impl WorkspaceInfoDto {
                 .worktree
                 .as_ref()
                 .map(WorkspaceWorktreeInfoDto::from_workspace_worktree_info),
+            related_paths: info
+                .related_paths
+                .iter()
+                .map(RelatedPathDto::from_related_path)
+                .collect(),
             connection_id,
             connection_name,
             ssh_host,
@@ -163,6 +178,15 @@ impl WorkspaceWorktreeInfoDto {
             branch: info.branch.clone(),
             main_repo_path: info.main_repo_path.clone(),
             is_main: info.is_main,
+        }
+    }
+}
+
+impl RelatedPathDto {
+    pub fn from_related_path(path: &bitfun_core::service::workspace::RelatedPath) -> Self {
+        Self {
+            path: path.path.clone(),
+            description: path.description.clone(),
         }
     }
 }

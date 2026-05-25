@@ -8,6 +8,7 @@ import AcpAgentsConfig from './AcpAgentsConfig';
 const loadJsonConfigMock = vi.hoisted(() => vi.fn());
 const getClientsMock = vi.hoisted(() => vi.fn());
 const probeClientRequirementsMock = vi.hoisted(() => vi.fn());
+const saveJsonConfigMock = vi.hoisted(() => vi.fn());
 const installClientCliMock = vi.hoisted(() => vi.fn());
 const predownloadClientAdapterMock = vi.hoisted(() => vi.fn());
 const listSavedConnectionsMock = vi.hoisted(() => vi.fn());
@@ -101,7 +102,7 @@ vi.mock('../../api/service-api/ACPClientAPI', () => ({
     probeClientRequirements: probeClientRequirementsMock,
     installClientCli: installClientCliMock,
     predownloadClientAdapter: predownloadClientAdapterMock,
-    saveJsonConfig: vi.fn(),
+    saveJsonConfig: saveJsonConfigMock,
   },
 }));
 
@@ -164,6 +165,9 @@ describe('AcpAgentsConfig', () => {
     }]);
     listSavedConnectionsMock.mockResolvedValue([]);
     probeClientRequirementsMock.mockResolvedValue([]);
+    saveJsonConfigMock.mockImplementation(async () => {
+      window.dispatchEvent(new Event('bitfun:acp-clients-changed'));
+    });
     installClientCliMock.mockResolvedValue(undefined);
     predownloadClientAdapterMock.mockResolvedValue(undefined);
 
@@ -281,6 +285,164 @@ describe('AcpAgentsConfig', () => {
     expect(predownloadClientAdapterMock).toHaveBeenCalledWith({
       clientId: 'codex',
     });
+  });
+
+  it('keeps enabled agents stable when adding another preset', async () => {
+    const healthyProbes = [
+      {
+        id: 'opencode',
+        tool: { name: 'opencode', installed: true },
+        runnable: true,
+        notes: [],
+      },
+      {
+        id: 'claude-code',
+        tool: { name: 'claude', installed: true },
+        adapter: { name: '@zed-industries/claude-code-acp', installed: true },
+        runnable: true,
+        notes: [],
+      },
+      {
+        id: 'codex',
+        tool: { name: 'codex', installed: true },
+        runnable: true,
+        notes: [],
+      },
+    ];
+    probeClientRequirementsMock.mockResolvedValue(healthyProbes);
+    saveJsonConfigMock.mockImplementation(async () => {
+      window.dispatchEvent(new Event('bitfun:acp-clients-changed'));
+      loadJsonConfigMock.mockResolvedValue(JSON.stringify({
+        acpClients: {
+          opencode: {
+            name: 'opencode',
+            command: 'opencode',
+            args: ['acp'],
+            env: {},
+            enabled: true,
+            readonly: false,
+            permissionMode: 'ask',
+          },
+          'claude-code': {
+            name: 'Claude Code',
+            command: 'npx',
+            args: ['--yes', '@zed-industries/claude-code-acp@latest'],
+            env: {},
+            enabled: true,
+            readonly: false,
+            permissionMode: 'ask',
+          },
+          codex: {
+            name: 'Codex',
+            command: 'npx',
+            args: ['--yes', '@zed-industries/codex-acp@latest'],
+            env: {},
+            enabled: true,
+            readonly: false,
+            permissionMode: 'ask',
+          },
+        },
+      }));
+    });
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('registry.enabled');
+
+    const addButtons = Array.from(container.querySelectorAll('button'))
+      .filter(button => button.textContent?.includes('actions.add'));
+    expect(addButtons.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      addButtons[addButtons.length - 1].click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(saveJsonConfigMock).toHaveBeenCalled();
+    expect(container.textContent).toContain('registry.enabled');
+    expect(container.textContent).not.toContain('registry.cliMissing');
+    expect(container.textContent).not.toContain('registry.configInvalid');
+  });
+
+  it('does not downgrade enabled agents on transient probe timeouts during refresh', async () => {
+    probeClientRequirementsMock
+      .mockResolvedValueOnce([
+        {
+          id: 'opencode',
+          tool: { name: 'opencode', installed: true },
+          runnable: true,
+          notes: [],
+        },
+        {
+          id: 'claude-code',
+          tool: { name: 'claude', installed: true },
+          adapter: { name: '@zed-industries/claude-code-acp', installed: true },
+          runnable: true,
+          notes: [],
+        },
+        {
+          id: 'codex',
+          tool: { name: 'codex', installed: true },
+          runnable: true,
+          notes: [],
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'opencode',
+          tool: {
+            name: 'opencode',
+            installed: false,
+            error: 'Timed out while checking command',
+          },
+          runnable: false,
+          notes: [],
+        },
+        {
+          id: 'claude-code',
+          tool: { name: 'claude', installed: true },
+          adapter: { name: '@zed-industries/claude-code-acp', installed: true },
+          runnable: true,
+          notes: [],
+        },
+        {
+          id: 'codex',
+          tool: { name: 'codex', installed: true },
+          runnable: true,
+          notes: [],
+        },
+      ]);
+
+    await act(async () => {
+      root.render(<AcpAgentsConfig />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const refreshButtons = Array.from(container.querySelectorAll('button'))
+      .filter(button => button.textContent?.includes('actions.refresh'));
+    expect(refreshButtons.length).toBeGreaterThan(0);
+
+    await act(async () => {
+      refreshButtons[0].click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('registry.enabled');
+    expect(container.textContent).not.toContain('registry.cliMissing');
   });
 
   it('installs a missing remote preset CLI on that remote server', async () => {

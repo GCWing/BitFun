@@ -3,7 +3,7 @@
 use crate::agentic::events::{AgenticEvent, EventSubscriber};
 use crate::service::token_usage::TokenUsageService;
 use crate::util::errors::BitFunResult;
-use log::{debug, error};
+use log::{debug, warn};
 use std::sync::Arc;
 
 /// Token usage event subscriber
@@ -65,7 +65,7 @@ impl EventSubscriber for TokenUsageSubscriber {
                 )
                 .await
             {
-                error!("Failed to record token usage: {}", e);
+                warn!("Failed to record token usage: {}", e);
             }
         }
 

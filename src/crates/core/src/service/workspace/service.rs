@@ -3,7 +3,7 @@
 //! Provides comprehensive workspace management functionality.
 
 use super::manager::{
-    ScanOptions, WorkspaceIdentity, WorkspaceInfo, WorkspaceKind, WorkspaceManager,
+    RelatedPath, ScanOptions, WorkspaceIdentity, WorkspaceInfo, WorkspaceKind, WorkspaceManager,
     WorkspaceManagerConfig, WorkspaceManagerStatistics, WorkspaceOpenOptions, WorkspaceStatus,
     WorkspaceSummary, WorkspaceType,
 };
@@ -13,7 +13,8 @@ use crate::service::bootstrap::{
     ensure_workspace_gitignore_ignores_bitfun, initialize_workspace_persona_files,
 };
 use crate::service::remote_ssh::workspace_state::{
-    local_workspace_roots_equal, normalize_remote_workspace_path, remote_workspace_stable_id,
+    canonicalize_local_workspace_root, get_remote_workspace_manager, local_workspace_roots_equal,
+    normalize_remote_workspace_path, remote_workspace_stable_id,
 };
 use crate::service::workspace_runtime::{
     try_get_workspace_runtime_service_arc, WorkspaceRuntimeService,
@@ -322,7 +323,10 @@ impl WorkspaceService {
 
         if result.is_ok() {
             if let Err(e) = self.save_workspace_data().await {
-                warn!("Failed to save workspace data after tracking activity: {}", e);
+                warn!(
+                    "Failed to save workspace data after tracking activity: {}",
+                    e
+                );
             }
         }
 
@@ -879,31 +883,204 @@ impl WorkspaceService {
         &self,
         workspace_id: &str,
         updates: WorkspaceInfoUpdates,
-    ) -> BitFunResult<()> {
-        let mut manager = self.manager.write().await;
+    ) -> BitFunResult<WorkspaceInfo> {
+        let WorkspaceInfoUpdates {
+            name,
+            description,
+            tags,
+            related_paths,
+        } = updates;
 
-        if let Some(workspace) = manager.get_workspaces_mut().get_mut(workspace_id) {
-            if let Some(name) = updates.name {
+        let existing_workspace = {
+            let manager = self.manager.read().await;
+            manager
+                .get_workspaces()
+                .get(workspace_id)
+                .cloned()
+                .ok_or_else(|| {
+                    BitFunError::service(format!("Workspace not found: {}", workspace_id))
+                })?
+        };
+
+        let normalized_related_paths = match related_paths {
+            Some(related_paths) => Some(
+                self.normalize_related_paths_for_workspace(&existing_workspace, related_paths)
+                    .await?,
+            ),
+            None => None,
+        };
+
+        let updated_workspace = {
+            let mut manager = self.manager.write().await;
+            let workspace = manager
+                .get_workspaces_mut()
+                .get_mut(workspace_id)
+                .ok_or_else(|| {
+                    BitFunError::service(format!("Workspace not found: {}", workspace_id))
+                })?;
+
+            if let Some(name) = name {
                 workspace.name = name;
             }
 
-            if let Some(description) = updates.description {
+            if let Some(description) = description {
                 workspace.description = Some(description);
             }
 
-            if let Some(tags) = updates.tags {
+            if let Some(tags) = tags {
                 workspace.tags = tags;
             }
 
-            workspace.last_accessed = chrono::Utc::now();
+            if let Some(related_paths) = normalized_related_paths {
+                workspace.related_paths = related_paths;
+            }
 
-            Ok(())
-        } else {
-            Err(BitFunError::service(format!(
-                "Workspace not found: {}",
-                workspace_id
-            )))
+            workspace.last_accessed = chrono::Utc::now();
+            workspace.clone()
+        };
+
+        self.save_workspace_data().await?;
+
+        Ok(updated_workspace)
+    }
+
+    async fn normalize_related_paths_for_workspace(
+        &self,
+        workspace: &WorkspaceInfo,
+        related_paths: Vec<RelatedPath>,
+    ) -> BitFunResult<Vec<RelatedPath>> {
+        let mut normalized = Vec::with_capacity(related_paths.len());
+        let mut seen_paths = HashSet::new();
+
+        match workspace.workspace_kind {
+            WorkspaceKind::Remote => {
+                let connection_id = workspace
+                    .remote_ssh_connection_id()
+                    .ok_or_else(|| {
+                        BitFunError::service(format!(
+                            "Remote workspace is missing connectionId metadata: {}",
+                            workspace.id
+                        ))
+                    })?
+                    .to_string();
+                let remote_manager = get_remote_workspace_manager().ok_or_else(|| {
+                    BitFunError::service(
+                        "Remote workspace manager is unavailable for related path validation"
+                            .to_string(),
+                    )
+                })?;
+                let file_service = remote_manager.get_file_service().await.ok_or_else(|| {
+                    BitFunError::service(
+                        "Remote file service is unavailable for related path validation"
+                            .to_string(),
+                    )
+                })?;
+
+                for related_path in related_paths {
+                    let description =
+                        Self::normalize_related_path_description(related_path.description);
+                    let path = normalize_remote_workspace_path(related_path.path.trim());
+                    if path.is_empty() {
+                        return Err(BitFunError::service(
+                            "Related directory path cannot be empty".to_string(),
+                        ));
+                    }
+                    if !seen_paths.insert(path.clone()) {
+                        continue;
+                    }
+
+                    if !file_service
+                        .exists(&connection_id, &path)
+                        .await
+                        .map_err(|error| {
+                            BitFunError::service(format!(
+                                "Failed to validate remote related directory '{}': {}",
+                                path, error
+                            ))
+                        })?
+                    {
+                        return Err(BitFunError::service(format!(
+                            "Remote related directory does not exist: {}",
+                            path
+                        )));
+                    }
+
+                    if !file_service
+                        .is_dir(&connection_id, &path)
+                        .await
+                        .map_err(|error| {
+                            BitFunError::service(format!(
+                                "Failed to inspect remote related directory '{}': {}",
+                                path, error
+                            ))
+                        })?
+                    {
+                        return Err(BitFunError::service(format!(
+                            "Remote related path is not a directory: {}",
+                            path
+                        )));
+                    }
+
+                    normalized.push(RelatedPath { path, description });
+                }
+            }
+            _ => {
+                for related_path in related_paths {
+                    let description =
+                        Self::normalize_related_path_description(related_path.description);
+                    let raw_path = related_path.path.trim();
+                    if raw_path.is_empty() {
+                        return Err(BitFunError::service(
+                            "Related directory path cannot be empty".to_string(),
+                        ));
+                    }
+
+                    let path_buf = PathBuf::from(raw_path);
+                    let (canonical_path, normalized_key) =
+                        canonicalize_local_workspace_root(&path_buf)
+                            .map_err(BitFunError::service)?;
+
+                    let metadata = tokio::fs::metadata(&canonical_path)
+                        .await
+                        .map_err(|error| {
+                            BitFunError::service(format!(
+                                "Failed to inspect related directory '{}': {}",
+                                canonical_path.display(),
+                                error
+                            ))
+                        })?;
+
+                    if !metadata.is_dir() {
+                        return Err(BitFunError::service(format!(
+                            "Related path is not a directory: {}",
+                            canonical_path.display()
+                        )));
+                    }
+
+                    if !seen_paths.insert(normalized_key) {
+                        continue;
+                    }
+
+                    normalized.push(RelatedPath {
+                        path: canonical_path.to_string_lossy().to_string(),
+                        description,
+                    });
+                }
+            }
         }
+
+        Ok(normalized)
+    }
+
+    fn normalize_related_path_description(description: Option<String>) -> Option<String> {
+        description.and_then(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
     }
 
     /// Imports workspaces in batch.
@@ -1772,6 +1949,7 @@ pub struct WorkspaceInfoUpdates {
     pub name: Option<String>,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
+    pub related_paths: Option<Vec<RelatedPath>>,
 }
 
 /// Batch remove result.
@@ -1859,7 +2037,7 @@ pub fn get_global_workspace_service() -> Option<Arc<WorkspaceService>> {
     GLOBAL_WORKSPACE_SERVICE.get().cloned()
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "product-full"))]
 mod tests {
     use super::*;
     use crate::agentic::persistence::PersistenceManager;
@@ -2127,5 +2305,27 @@ mod tests {
         );
         assert_eq!(tracked.root_path, remote_workspace_root);
         assert!(service.get_opened_workspaces().await.is_empty());
+    }
+
+    #[test]
+    fn normalize_related_path_description_treats_blank_as_none() {
+        assert_eq!(
+            WorkspaceService::normalize_related_path_description(None),
+            None
+        );
+        assert_eq!(
+            WorkspaceService::normalize_related_path_description(Some("".to_string())),
+            None
+        );
+        assert_eq!(
+            WorkspaceService::normalize_related_path_description(Some("   ".to_string())),
+            None
+        );
+        assert_eq!(
+            WorkspaceService::normalize_related_path_description(Some(
+                " Legacy TypeScript implementation ".to_string()
+            )),
+            Some("Legacy TypeScript implementation".to_string())
+        );
     }
 }

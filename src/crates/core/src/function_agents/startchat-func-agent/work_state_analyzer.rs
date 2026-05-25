@@ -1,10 +1,7 @@
 use super::types::*;
 use crate::function_agents::common::AgentResult;
-use crate::function_agents::port_adapters::{
-    CoreFunctionAgentAiAdapter, CoreFunctionAgentGitAdapter,
-};
 use crate::infrastructure::ai::AIClientFactory;
-use bitfun_product_domains::function_agents::ports::FunctionAgentRuntimeFacade;
+use crate::product_domain_runtime::CoreProductDomainRuntime;
 use chrono::{Local, Timelike};
 /**
  * Work state analyzer
@@ -26,9 +23,10 @@ impl WorkStateAnalyzer {
         info!("Analyzing work state: repo_path={:?}", repo_path);
 
         let now = Local::now();
-        let git_adapter = CoreFunctionAgentGitAdapter::default();
-        let ai_adapter = CoreFunctionAgentAiAdapter::new(factory);
-        let facade = FunctionAgentRuntimeFacade::new(&git_adapter, &ai_adapter);
+        let git_adapter = CoreProductDomainRuntime::function_agent_git_adapter();
+        let ai_adapter = CoreProductDomainRuntime::function_agent_ai_adapter(factory);
+        let facade =
+            CoreProductDomainRuntime::function_agent_runtime_facade(&git_adapter, &ai_adapter);
         // Keep the legacy analyzed_at timing in core: assign it after AI analysis completes.
         let mut analysis = facade
             .analyze_work_state(

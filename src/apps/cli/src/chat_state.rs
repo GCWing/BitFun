@@ -859,6 +859,21 @@ impl ChatState {
         });
     }
 
+    /// Add a local assistant message (for rendered reports and other UI-only content).
+    pub fn add_assistant_message(&mut self, content: String) {
+        self.messages.push(ChatMessage {
+            id: uuid::Uuid::new_v4().to_string(),
+            role: MessageRole::Assistant,
+            timestamp: SystemTime::now(),
+            flow_items: vec![FlowItem::Text {
+                content,
+                is_streaming: false,
+            }],
+            is_streaming: false,
+            version: 0,
+        });
+    }
+
     /// Clear all messages (for /clear command)
     pub fn clear_messages(&mut self) {
         self.messages.clear();

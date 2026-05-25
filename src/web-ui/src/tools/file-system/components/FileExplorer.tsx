@@ -7,9 +7,43 @@ import { FileExplorerProps, FileSystemNode, FlatFileNode } from '../types';
 import { flattenFileTree } from '../utils/treeFlattening';
 import { getNewItemParentPath } from '../utils/getNewItemParentPath';
 import { i18nService, useI18n } from '@/infrastructure/i18n';
-import { expandedFoldersContains } from '@/shared/utils/pathUtils';
+import { expandedFoldersContains, pathsEquivalentFs } from '@/shared/utils/pathUtils';
 import { IconButton } from '@/component-library';
 import { filterTreeByPredicate, filterTreeBySearch } from '@/tools/file-explorer';
+import { globalEventBus } from '@/infrastructure/event-bus';
+import { commandExecutor } from '@/shared/context-menu-system/commands/CommandExecutor';
+import { ContextType, type FileNodeContext } from '@/shared/context-menu-system/types/context.types';
+
+function findNodeByPath(nodes: FileSystemNode[], path: string): FileSystemNode | undefined {
+  for (const node of nodes) {
+    if (pathsEquivalentFs(node.path, path)) {
+      return node;
+    }
+    if (node.children) {
+      const found = findNodeByPath(node.children, path);
+      if (found) {
+        return found;
+      }
+    }
+  }
+  return undefined;
+}
+
+function buildFileNodeContext(node: FileSystemNode, workspacePath?: string): FileNodeContext {
+  return {
+    type: node.isDirectory ? ContextType.FOLDER_NODE : ContextType.FILE_NODE,
+    event: new MouseEvent('contextmenu'),
+    targetElement: document.body,
+    position: { x: 0, y: 0 },
+    timestamp: Date.now(),
+    metadata: {},
+    filePath: node.path,
+    fileName: node.name,
+    isDirectory: node.isDirectory,
+    isReadOnly: false,
+    workspacePath,
+  };
+}
 
 const VIRTUAL_SCROLL_THRESHOLD = 100;
 
@@ -289,6 +323,35 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     }
   }, [onRefresh]);
 
+  const handleRenameSelected = useCallback(() => {
+    if (!selectedFile || renamingPath) {
+      return;
+    }
+
+    const node = findNodeByPath(fileTree, selectedFile);
+    if (!node) {
+      return;
+    }
+
+    globalEventBus.emit('file:rename', {
+      path: node.path,
+      name: node.name,
+    });
+  }, [selectedFile, renamingPath, fileTree]);
+
+  const handleDeleteSelected = useCallback(async () => {
+    if (!selectedFile) {
+      return;
+    }
+
+    const node = findNodeByPath(fileTree, selectedFile);
+    if (!node) {
+      return;
+    }
+
+    await commandExecutor.execute('file.delete', buildFileNodeContext(node, workspacePath));
+  }, [selectedFile, fileTree, workspacePath]);
+
   const handleBreadcrumbNavigate = useCallback((path: string) => {
     if (externalOnNodeExpand) {
       externalOnNodeExpand(path, true);
@@ -318,6 +381,20 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     { key: 'N', ctrl: true, shift: true, scope: 'filetree' },
     handleNewFolder,
     { enabled: Boolean(onNewFolder), description: 'keyboard.shortcuts.filetree.newFolder' }
+  );
+  useShortcut(
+    'filetree.rename',
+    { key: 'F2', scope: 'filetree' },
+    handleRenameSelected,
+    { enabled: Boolean(selectedFile) && !renamingPath, description: 'keyboard.shortcuts.filetree.rename' }
+  );
+  useShortcut(
+    'filetree.delete',
+    { key: 'Delete', scope: 'filetree' },
+    () => {
+      void handleDeleteSelected();
+    },
+    { enabled: Boolean(selectedFile), description: 'keyboard.shortcuts.filetree.delete' }
   );
 
   if (filteredFileTree.length === 0) {

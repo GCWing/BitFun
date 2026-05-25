@@ -423,18 +423,16 @@ Arguments:
                 // Ignore workspace for cancel/delete so callers cannot accidentally
                 // scope these actions to the wrong workspace.
                 return match parsed.action {
-                    SessionControlAction::Cancel => self
-                        .validate_mutating_action_target(
-                            SessionControlAction::Cancel,
-                            &parsed,
-                            context,
-                        ),
-                    SessionControlAction::Delete => self
-                        .validate_mutating_action_target(
-                            SessionControlAction::Delete,
-                            &parsed,
-                            context,
-                        ),
+                    SessionControlAction::Cancel => self.validate_mutating_action_target(
+                        SessionControlAction::Cancel,
+                        &parsed,
+                        context,
+                    ),
+                    SessionControlAction::Delete => self.validate_mutating_action_target(
+                        SessionControlAction::Delete,
+                        &parsed,
+                        context,
+                    ),
                     _ => ValidationResult::default(),
                 };
             }
@@ -564,13 +562,14 @@ Arguments:
 
         match params.action {
             SessionControlAction::Create => {
-                let workspace = self.resolve_effective_workspace(
-                    SessionControlAction::Create,
-                    None,
-                    context,
-                    &coordinator,
-                )
-                .await?;
+                let workspace = self
+                    .resolve_effective_workspace(
+                        SessionControlAction::Create,
+                        None,
+                        context,
+                        &coordinator,
+                    )
+                    .await?;
                 let session_name = params
                     .session_name
                     .clone()
@@ -624,13 +623,14 @@ Arguments:
                     BitFunError::tool("session_id is required for cancel".to_string())
                 })?;
                 Self::validate_session_id(session_id).map_err(BitFunError::tool)?;
-                let workspace = self.resolve_effective_workspace(
-                    SessionControlAction::Cancel,
-                    Some(session_id),
-                    context,
-                    &coordinator,
-                )
-                .await?;
+                let workspace = self
+                    .resolve_effective_workspace(
+                        SessionControlAction::Cancel,
+                        Some(session_id),
+                        context,
+                        &coordinator,
+                    )
+                    .await?;
                 let workspace_path = Path::new(&workspace);
                 if self.current_workspace_session(context, &workspace) == Some(session_id) {
                     return Err(BitFunError::tool(
@@ -705,13 +705,14 @@ Arguments:
                     BitFunError::tool("session_id is required for delete".to_string())
                 })?;
                 Self::validate_session_id(session_id).map_err(BitFunError::tool)?;
-                let workspace = self.resolve_effective_workspace(
-                    SessionControlAction::Delete,
-                    Some(session_id),
-                    context,
-                    &coordinator,
-                )
-                .await?;
+                let workspace = self
+                    .resolve_effective_workspace(
+                        SessionControlAction::Delete,
+                        Some(session_id),
+                        context,
+                        &coordinator,
+                    )
+                    .await?;
                 let workspace_path = Path::new(&workspace);
                 if self.current_workspace_session(context, &workspace) == Some(session_id) {
                     return Err(BitFunError::tool(
@@ -741,13 +742,14 @@ Arguments:
                 }])
             }
             SessionControlAction::List => {
-                let workspace = self.resolve_effective_workspace(
-                    SessionControlAction::List,
-                    None,
-                    context,
-                    &coordinator,
-                )
-                .await?;
+                let workspace = self
+                    .resolve_effective_workspace(
+                        SessionControlAction::List,
+                        None,
+                        context,
+                        &coordinator,
+                    )
+                    .await?;
                 let workspace_path = Path::new(&workspace);
                 let sessions = coordinator.list_sessions(workspace_path).await?;
                 let current_session_id = self.current_workspace_session(context, &workspace);

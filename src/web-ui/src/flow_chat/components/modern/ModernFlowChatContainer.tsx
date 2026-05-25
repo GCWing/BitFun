@@ -21,9 +21,11 @@ import { useFlowChatSync } from './useFlowChatSync';
 import { useFlowChatToolActions } from './useFlowChatToolActions';
 import { useFlowChatSearch } from './useFlowChatSearch';
 import { useVirtualItems, useActiveSession, useVisibleTurnInfo, type VisibleTurnInfo } from '../../store/modernFlowChatStore';
-import type { FlowChatConfig, FlowToolItem, Session } from '../../types/flow-chat';
+import type { FlowChatConfig, FlowToolItem, Session, DialogTurn } from '../../types/flow-chat';
 import type { LineRange } from '@/component-library';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import { parsePullRequestUrl } from '@/shared/utils/pullRequestLinks';
+import { createReviewPlatformPullRequestDetailTab } from '@/shared/utils/tabUtils';
 import { isAcpFlowSession } from '../../utils/acpSession';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { openBtwSessionInAuxPane } from '../../services/openBtwSession';
@@ -189,6 +191,20 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     workspacePath,
     onFileViewRequest,
   });
+  const handleHttpLinkClick = useCallback((url: string, _event: React.MouseEvent<HTMLAnchorElement>) => {
+    const pullRequestTarget = parsePullRequestUrl(url);
+    if (!pullRequestTarget) {
+      return false;
+    }
+
+    createReviewPlatformPullRequestDetailTab({
+      workspacePath: activeSession?.workspacePath || workspacePath,
+      pullRequestId: pullRequestTarget.pullRequestId,
+      pullRequestUrl: pullRequestTarget.webUrl,
+      title: `PR #${pullRequestTarget.pullRequestId}`,
+    });
+    return true;
+  }, [activeSession?.workspacePath, workspacePath]);
   const {
     searchQuery,
     onSearchChange,
@@ -214,6 +230,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const contextValue: FlowChatContextValue = useMemo(() => ({
     onFileViewRequest: handleFileViewRequest,
     onTabOpen,
+    onHttpLinkClick: handleHttpLinkClick,
     onOpenVisualization,
     onSwitchToChatPanel,
     onToolConfirm: handleToolConfirm,
@@ -241,6 +258,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   }), [
     handleFileViewRequest,
     onTabOpen,
+    handleHttpLinkClick,
     onOpenVisualization,
     onSwitchToChatPanel,
     handleToolConfirm,
@@ -258,17 +276,29 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchCurrentMatchVirtualIndex,
   ]);
 
+  const resolveLocalCommandHeaderTitle = useCallback((metadata: DialogTurn['userMessage']['metadata']) => {
+    if (metadata?.localCommandKind === 'usage_report') {
+      return t('usage.title');
+    }
+    if (metadata?.localCommandKind === 'goal_pending') {
+      return t('chatInput.goalGenerating');
+    }
+    if (metadata?.localCommandKind === 'goal_verifying') {
+      return t('chatInput.goalVerifying');
+    }
+    return null;
+  }, [t]);
+
   const turnSummaries = useMemo<FlowChatHeaderTurnSummary[]>(() => {
     return (activeSession?.dialogTurns ?? [])
       .filter(turn => !!turn.userMessage)
       .map((turn, index) => ({
         turnId: turn.id,
         turnIndex: index + 1,
-        title: turn.userMessage?.metadata?.localCommandKind === 'usage_report'
-          ? t('usage.title')
-          : turn.userMessage?.content ?? '',
+        title: resolveLocalCommandHeaderTitle(turn.userMessage?.metadata)
+          ?? turn.userMessage?.content ?? '',
       }));
-  }, [activeSession?.dialogTurns, t]);
+  }, [activeSession?.dialogTurns, resolveLocalCommandHeaderTitle]);
 
   const effectiveVisibleTurnInfo = useMemo<VisibleTurnInfo | null>(() => {
     if (!pendingHeaderTurnId) {
@@ -294,11 +324,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       return effectiveVisibleTurnInfo?.userMessage ?? '';
     }
     const turn = activeSession?.dialogTurns.find(item => item.id === turnId);
-    if (turn?.userMessage?.metadata?.localCommandKind === 'usage_report') {
-      return t('usage.title');
+    const localCommandTitle = resolveLocalCommandHeaderTitle(turn?.userMessage?.metadata);
+    if (localCommandTitle) {
+      return localCommandTitle;
     }
     return effectiveVisibleTurnInfo?.userMessage ?? '';
-  }, [activeSession?.dialogTurns, effectiveVisibleTurnInfo?.turnId, effectiveVisibleTurnInfo?.userMessage, t]);
+  }, [activeSession?.dialogTurns, effectiveVisibleTurnInfo?.turnId, effectiveVisibleTurnInfo?.userMessage, resolveLocalCommandHeaderTitle]);
 
   useEffect(() => {
     if (!pendingHeaderTurnId) return;

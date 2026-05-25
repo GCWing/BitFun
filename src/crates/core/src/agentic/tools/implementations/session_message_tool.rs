@@ -422,7 +422,10 @@ Allowed agent types when creating a session:
                 .get("session_name")
                 .and_then(|value| value.as_str())
                 .unwrap_or("new session");
-            format!("Create session {} in {} and send message", session_name, workspace)
+            format!(
+                "Create session {} in {} and send message",
+                session_name, workspace
+            )
         }
     }
 

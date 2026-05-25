@@ -124,8 +124,9 @@ struct FunctionCall {
 pub struct OpenAISSEData {
     #[allow(dead_code)]
     id: String,
+    #[serde(default)]
     #[allow(dead_code)]
-    created: u64,
+    created: Option<u64>,
     #[allow(dead_code)]
     model: String,
     choices: Vec<Choice>,
@@ -436,6 +437,41 @@ mod tests {
         assert_eq!(responses.len(), 1);
         assert_eq!(responses[0].reasoning_content.as_deref(), Some(""));
         assert_eq!(responses[0].finish_reason.as_deref(), Some("stop"));
+    }
+
+    #[test]
+    fn handles_missing_created_in_openai_compatible_chunk() {
+        let raw = r#"{
+            "id": "chatcmpl_test",
+            "object": "chat.completion.chunk",
+            "model": "compatible-model",
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "content": "hello"
+                },
+                "finish_reason": null
+            }],
+            "usage": {
+                "prompt_tokens": 2,
+                "completion_tokens": 1,
+                "total_tokens": 3
+            }
+        }"#;
+
+        let sse_data: OpenAISSEData =
+            serde_json::from_str(raw).expect("compatible openai sse data");
+        let responses = sse_data.into_unified_responses();
+
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0].text.as_deref(), Some("hello"));
+        assert_eq!(
+            responses[0]
+                .usage
+                .as_ref()
+                .map(|usage| usage.total_token_count),
+            Some(3)
+        );
     }
 
     #[test]

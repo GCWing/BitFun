@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import path from 'path-browserify';
 import {
   XCircle,
+  Info,
   GitBranch,
   FileText,
   FileEdit,
@@ -49,6 +50,10 @@ import { useGitState } from '@/tools/git/hooks/useGitState';
 import { ToolCardHeaderActions } from './ToolCardHeaderActions';
 import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
 import { AcpPermissionActions } from './AcpPermissionActions';
+import {
+  displayFileToolGuidanceMessage,
+  isFileToolGuidanceMessage,
+} from './fileToolGuidance';
 import './FileOperationToolCard.scss';
 
 const log = createLogger('FileOperationToolCard');
@@ -213,6 +218,18 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   }, [status, toolItem.toolName, writeContentCharCount]);
   
   const isFailed = status === 'error' || (toolResult && 'success' in toolResult && !toolResult.success);
+  const rawErrorMessage = (() => {
+    if (toolResult && 'error' in toolResult) {
+      return toolResult.error;
+    }
+    if (error) {
+      return error;
+    }
+    return undefined;
+  })();
+  const isFileGuidanceBlocked =
+    (toolItem.toolName === 'Write' || toolItem.toolName === 'Edit')
+    && isFileToolGuidanceMessage(rawErrorMessage);
   const showConfirmationActions = Boolean(
     requiresConfirmation &&
     !userConfirmed &&
@@ -462,17 +479,22 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   ]);
 
   const getErrorMessage = () => {
-    if (toolResult && 'error' in toolResult) {
-      return toolResult.error;
-    }
-    if (error) {
-      return error;
+    if (rawErrorMessage !== undefined) {
+      return rawErrorMessage;
     }
     return t('error.unknown');
   };
 
+  const getDisplayMessage = () => {
+    const message = getErrorMessage();
+    if (isFileGuidanceBlocked) {
+      return displayFileToolGuidanceMessage(message);
+    }
+    return message;
+  };
+
   const getSingleLineErrorMessage = () => {
-    return String(getErrorMessage()).replace(/\s+/g, ' ').trim();
+    return String(getDisplayMessage()).replace(/\s+/g, ' ').trim();
   };
 
   const handleOpenInCodeEditor = useCallback(async () => {
@@ -863,13 +885,23 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     return null;
   };
 
+  const renderGuidanceContent = () => (
+    <div className="guidance-content">
+      <div className="guidance-title">
+        <Info size={14} />
+        <span>{t('toolCards.file.guidanceTitle')}</span>
+      </div>
+      <div className="guidance-message">{getDisplayMessage()}</div>
+    </div>
+  );
+
   const renderErrorContent = () => (
     <div className="error-content">
       <div className="error-title">
         <XCircle size={14} />
         <span>{toolDisplayInfo.name}{t('toolCards.file.failed')}</span>
       </div>
-      <div className="error-message">{getErrorMessage()}</div>
+      <div className="error-message">{getDisplayMessage()}</div>
     </div>
   );
 
@@ -918,7 +950,11 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
     const actionText = isDeleteTool
       ? ''
-      : (isFailed ? `${toolDisplayInfo.name}${t('toolCards.file.failed')}` : `${toolDisplayInfo.name}:`);
+      : (isFailed
+        ? (isFileGuidanceBlocked
+          ? `${toolDisplayInfo.name}${t('toolCards.file.guidanceHint')}`
+          : `${toolDisplayInfo.name}${t('toolCards.file.failed')}`)
+        : `${toolDisplayInfo.name}:`);
 
     return (
       <ToolCardHeader
@@ -933,7 +969,13 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         action={actionText}
       content={
         isFailed ? (
-          <span className="file-error-message-inline">
+          <span
+            className={
+              isFileGuidanceBlocked
+                ? 'file-guidance-message-inline'
+                : 'file-error-message-inline'
+            }
+          >
             {getSingleLineErrorMessage()}
           </span>
         ) : (
@@ -1093,10 +1135,14 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         status={status}
         isExpanded={isCardContentExpanded}
         onClick={handleCardClick}
-        className={`file-operation-card ${isDeleteTool ? 'non-clickable' : ''}`}
+        className={`file-operation-card ${isDeleteTool ? 'non-clickable' : ''} ${isFileGuidanceBlocked ? 'file-operation-card--guidance' : ''}`.trim()}
         header={renderHeader()}
         expandedContent={expandedContent}
-        errorContent={isFailed && isErrorExpanded ? renderErrorContent() : null}
+        errorContent={
+          isFailed && isErrorExpanded
+            ? (isFileGuidanceBlocked ? renderGuidanceContent() : renderErrorContent())
+            : null
+        }
         isFailed={isFailed}
         requiresConfirmation={showConfirmationActions}
         headerExpandAffordance={hasExpandableContent}

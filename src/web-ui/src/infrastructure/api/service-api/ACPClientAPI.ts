@@ -97,10 +97,20 @@ export interface AcpSessionModelOption {
   description?: string;
 }
 
+export interface AcpContextUsage {
+  used: number;
+  size: number;
+  cost?: {
+    amount: number;
+    currency: string;
+  };
+}
+
 export interface AcpSessionOptions {
   currentModelId?: string;
   availableModels: AcpSessionModelOption[];
   modelConfigId?: string;
+  contextUsage?: AcpContextUsage;
 }
 
 export interface SubmitAcpPermissionResponseRequest {

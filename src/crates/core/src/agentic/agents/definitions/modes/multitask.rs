@@ -1,13 +1,17 @@
 //! Multitask Mode
 
 use crate::agentic::agents::{
-    shared_coding_mode_tools, Agent, SHARED_CODING_MODE_PROMPT_TEMPLATE,
+    get_embedded_prompt, shared_coding_mode_tools, Agent, RequestContextPolicy,
+    SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
 use async_trait::async_trait;
 
 pub struct MultitaskMode {
     default_tools: Vec<String>,
 }
+
+const MULTITASK_MODE_FIRST_ENTRY_REMINDER_TEMPLATE: &str = "multitask_mode_first_entry_reminder";
+const MULTITASK_MODE_ONGOING_REMINDER_TEMPLATE: &str = "multitask_mode_ongoing_reminder";
 
 impl Default for MultitaskMode {
     fn default() -> Self {
@@ -22,27 +26,18 @@ impl MultitaskMode {
         }
     }
 
-    fn build_first_entry_reminder(&self) -> String {
-        r#"You are now in Multitask mode.
-
-Treat the task as a parallel work orchestration problem whenever it is beneficial. First decompose the work into orthogonal subtasks or an explicit DAG with clear dependency edges. Then use subagents proactively to execute independent branches in parallel.
-
-Prefer:
-- independent subtasks with minimal overlap
-- clear ownership and deliverables per subagent
-- parallel execution for non-blocking branches
-- background execution for independent subagents whenever possible; prefer the Task tool's `run_in_background` mode instead of blocking on each branch
-- local execution only for the immediate critical path
-
-Do not force parallelism when the task is tiny or tightly coupled, but default to decomposition-first thinking in this mode."#
-            .to_string()
-    }
-
-    fn build_ongoing_reminder(&self) -> String {
-        r#"You are still in Multitask mode.
-
-Continue working with a parallel-first mindset. Prefer orthogonal decomposition, preserve clear dependency edges, and keep using subagents proactively for independent branches whenever parallel execution is beneficial."#
-            .to_string()
+    fn load_reminder_template(
+        &self,
+        template_name: &str,
+    ) -> crate::util::errors::BitFunResult<String> {
+        get_embedded_prompt(template_name)
+            .map(str::to_string)
+            .ok_or_else(|| {
+                crate::util::errors::BitFunError::Agent(format!(
+                    "{} not found in embedded files",
+                    template_name
+                ))
+            })
     }
 }
 
@@ -68,15 +63,23 @@ impl Agent for MultitaskMode {
         SHARED_CODING_MODE_PROMPT_TEMPLATE
     }
 
+    fn request_context_policy(&self) -> RequestContextPolicy {
+        RequestContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
+            .with_workspace_memory_files()
+            .with_project_layout()
+    }
+
     async fn get_system_reminder(
         &self,
         previous_agent_type: Option<&str>,
         _workspace: Option<&crate::agentic::WorkspaceBinding>,
     ) -> crate::util::errors::BitFunResult<String> {
         if previous_agent_type == Some(self.id()) {
-            Ok(self.build_ongoing_reminder())
+            self.load_reminder_template(MULTITASK_MODE_ONGOING_REMINDER_TEMPLATE)
         } else {
-            Ok(self.build_first_entry_reminder())
+            self.load_reminder_template(MULTITASK_MODE_FIRST_ENTRY_REMINDER_TEMPLATE)
         }
     }
 

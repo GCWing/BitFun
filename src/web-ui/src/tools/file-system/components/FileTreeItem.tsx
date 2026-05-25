@@ -4,6 +4,7 @@ import { Input } from '../../../component-library/components/Input';
 import { dragManager } from '../../../shared/services/DragManager';
 import { fileTreeDragSource } from '../../../shared/context-system/drag-drop/FileTreeDragSource';
 import { useI18n } from '@/infrastructure/i18n';
+import { pathsEquivalentFs } from '@/shared/utils/pathUtils';
 import { FileSystemNode } from '../types';
 import { getFileIcon, getFileIconClass } from '../utils/fileIcons';
 import { getCompressionTooltip } from '../utils/pathCompression';
@@ -16,6 +17,7 @@ interface RenameInputProps {
 
 const RenameInput: React.FC<RenameInputProps> = ({ node, onRename, onCancel }) => {
   const [value, setValue] = useState(node.name);
+  const submittedRef = React.useRef(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -36,31 +38,38 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, onRename, onCancel }) =
     return () => clearTimeout(timer);
   }, [node.name, node.isDirectory]);
 
-  const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      const newName = value.trim();
-      if (newName && newName !== node.name) {
-        onRename(newName);
-      } else {
-        onCancel?.();
-      }
+  const commitRename = (nextValue: string) => {
+    if (submittedRef.current) {
       return;
     }
+    submittedRef.current = true;
 
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      onCancel?.();
-    }
-  };
-
-  const handleBlur = () => {
-    const newName = value.trim();
+    const newName = nextValue.trim();
     if (newName && newName !== node.name) {
       onRename(newName);
     } else {
       onCancel?.();
     }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitRename(value);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (!submittedRef.current) {
+        submittedRef.current = true;
+        onCancel?.();
+      }
+    }
+  };
+
+  const handleBlur = () => {
+    commitRename(value);
   };
 
   return (
@@ -118,7 +127,7 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
 
   const isCompressed = node.isCompressed;
   const tooltip = isCompressed ? getCompressionTooltip(node as any) : node.path;
-  const isRenaming = renamingPath === node.path;
+  const isRenaming = renamingPath ? pathsEquivalentFs(renamingPath, node.path) : false;
 
   const handleClick = (event: React.MouseEvent) => {
     if (event.button !== 0) {

@@ -25,11 +25,6 @@ export function getProviderTemplateId(config: ProviderConfigLike): string | unde
 }
 
 export function getProviderDisplayName(config: ProviderConfigLike): string {
-  const inferredTemplate = inferProviderTemplate(config);
-  if (inferredTemplate) {
-    return t(`settings/ai-model:providers.${inferredTemplate.id}.name`);
-  }
-
   const rawName = config.name?.trim() || '';
   const rawModelName = config.model_name?.trim() || '';
   if (rawName && rawModelName) {
@@ -44,7 +39,16 @@ export function getProviderDisplayName(config: ProviderConfigLike): string {
     }
   }
 
-  return rawName || extractProviderSegmentFromBaseUrl(config.base_url) || t('settings/ai-model:providerSelection.customTitle');
+  if (rawName) {
+    return rawName;
+  }
+
+  const inferredTemplate = inferProviderTemplate(config);
+  if (inferredTemplate) {
+    return t(`settings/ai-model:providers.${inferredTemplate.id}.name`);
+  }
+
+  return extractProviderSegmentFromBaseUrl(config.base_url) || t('settings/ai-model:providerSelection.customTitle');
 }
 
 export function getModelDisplayName(config: ProviderConfigLike): string {

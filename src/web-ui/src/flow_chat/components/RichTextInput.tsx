@@ -42,6 +42,7 @@ function getContextDisplayName(context: ContextItem): string {
     case 'file': return context.fileName;
     case 'directory': return context.directoryName;
     case 'code-snippet': return `${context.fileName}:${context.startLine}-${context.endLine}`;
+    case 'pull-request': return context.label;
     case 'image': return context.imageName;
     case 'terminal-command': return context.command;
     case 'git-ref': return context.refValue;
@@ -61,6 +62,7 @@ function getContextTagFormat(context: ContextItem): string {
     case 'file': return `#file:${context.fileName}`;
     case 'directory': return `#dir:${context.directoryName}`;
     case 'code-snippet': return `#code:${context.fileName}:${context.startLine}-${context.endLine}`;
+    case 'pull-request': return `#pr:${context.label.replace(/\s+/g, '_')}`;
     case 'image': return `#img:${context.imageName}`;
     case 'terminal-command': return `#cmd:${context.command}`;
     case 'git-ref': return `#git:${context.refValue}`;
@@ -83,6 +85,14 @@ function getContextFullPath(context: ContextItem): string {
       return context.directoryPath + (context.recursive ? ' (recursive)' : '');
     case 'code-snippet':
       return `${context.filePath} (lines ${context.startLine}-${context.endLine})`;
+    case 'pull-request':
+      return [
+        context.repository,
+        context.remoteId ? `remote:${context.remoteId}` : null,
+        context.pullRequestNumber ? `PR #${context.pullRequestNumber}` : null,
+        context.section,
+        context.sourceUrl,
+      ].filter(Boolean).join(' · ') || context.label;
     case 'image':
       return context.imagePath;
     case 'terminal-command':

@@ -1,10 +1,10 @@
+use once_cell::sync::Lazy;
 /// Theme and style definitions
 use std::collections::{HashMap, HashSet};
 use std::io::IsTerminal;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use once_cell::sync::Lazy;
 use ratatui::style::{Color, Modifier, Style};
 
 #[cfg(unix)]

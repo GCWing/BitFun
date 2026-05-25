@@ -162,6 +162,16 @@ impl ContextCompressor {
         let turns_count = turns.len();
         let turns_tokens: Vec<usize> = turns.iter().map(|turn| turn.tokens).collect();
 
+        // Auto-compression should not collapse the only active dialog turn mid-flight.
+        // Within-turn pressure is handled by tool-result budgeting and emergency truncation.
+        if turns_count == 1 {
+            debug!(
+                "Single-turn session skipped for auto compression: session_id={}",
+                session_id
+            );
+            return Ok((0, turns));
+        }
+
         let token_limit_keep_turns =
             (context_window as f32 * self.config.keep_turns_ratio) as usize;
         let mut turn_index_to_keep =
@@ -972,6 +982,24 @@ mod tests {
         );
 
         assert_eq!(normalized, None);
+    }
+
+    #[tokio::test]
+    async fn preprocess_turns_skips_single_active_turn() {
+        let compressor = ContextCompressor::new(Default::default());
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("First request".to_string()),
+            Message::assistant("First reply".to_string()),
+        ];
+
+        let (turn_index, turns) = compressor
+            .preprocess_turns("session", 8_000, messages)
+            .await
+            .expect("preprocessing succeeds");
+
+        assert_eq!(turn_index, 0);
+        assert_eq!(turns.len(), 1);
     }
 
     #[tokio::test]

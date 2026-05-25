@@ -24,6 +24,7 @@ import { useNurseryStore } from '../nurseryStore';
 import { formatTokenCount } from './useTokenEstimate';
 
 const log = createLogger('TemplateConfigPage');
+const ASSISTANT_MODE_ID = 'Claw';
 
 interface ToolInfo {
   name: string;
@@ -131,7 +132,7 @@ const TemplateConfigPage: React.FC = () => {
 
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
-  const [agenticConfig, setAgenticConfig] = useState<ModeConfigItem | null>(null);
+  const [assistantModeConfig, setAssistantModeConfig] = useState<ModeConfigItem | null>(null);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
   const [mcpServers, setMcpServers] = useState<MCPServerInfo[]>([]);
   const [modeSkills, setModeSkills] = useState<ModeSkillInfo[]>([]);
@@ -142,8 +143,8 @@ const TemplateConfigPage: React.FC = () => {
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
 
   const enabledToolCount = useMemo(
-    () => agenticConfig?.enabled_tools?.length ?? 0,
-    [agenticConfig],
+    () => assistantModeConfig?.enabled_tools?.length ?? 0,
+    [assistantModeConfig],
   );
 
   const skillsEnabled = useMemo(
@@ -181,13 +182,13 @@ const TemplateConfigPage: React.FC = () => {
   );
 
   const builtinToolsEnabled = useMemo(
-    () => builtinTools.filter((tool) => agenticConfig?.enabled_tools?.includes(tool.name)),
-    [builtinTools, agenticConfig],
+    () => builtinTools.filter((tool) => assistantModeConfig?.enabled_tools?.includes(tool.name)),
+    [builtinTools, assistantModeConfig],
   );
 
   const builtinToolsDisabled = useMemo(
-    () => builtinTools.filter((tool) => !agenticConfig?.enabled_tools?.includes(tool.name)),
-    [builtinTools, agenticConfig],
+    () => builtinTools.filter((tool) => !assistantModeConfig?.enabled_tools?.includes(tool.name)),
+    [builtinTools, assistantModeConfig],
   );
 
   // MCP tools grouped by server id
@@ -217,14 +218,14 @@ const TemplateConfigPage: React.FC = () => {
         const [allModels, funcModels, modeConf, tools, skillList, servers] = await Promise.all([
           configManager.getConfig<AIModelConfig[]>('ai.models').catch(() => [] as AIModelConfig[]),
           configManager.getConfig<Record<string, string>>('ai.func_agent_models').catch(() => ({} as Record<string, string>)),
-          configAPI.getModeConfig('agentic').catch(() => null as ModeConfigItem | null),
+          configAPI.getModeConfig(ASSISTANT_MODE_ID).catch(() => null as ModeConfigItem | null),
           invoke<ToolInfo[]>('get_all_tools_info').catch(() => [] as ToolInfo[]),
-          configAPI.getModeSkillConfigs({ modeId: 'agentic' }).catch(() => [] as ModeSkillInfo[]),
+          configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }).catch(() => [] as ModeSkillInfo[]),
           MCPAPI.getServers().catch(() => [] as MCPServerInfo[]),
         ]);
         setModels(allModels ?? []);
         setFuncAgentModels(funcModels ?? {});
-        setAgenticConfig(modeConf);
+        setAssistantModeConfig(modeConf);
         setAvailableTools(tools);
         setModeSkills(skillList ?? []);
         setMcpServers(servers ?? []);
@@ -282,34 +283,34 @@ const TemplateConfigPage: React.FC = () => {
   }, [funcAgentModels, t]);
 
   const handleToolToggle = useCallback(async (toolName: string) => {
-    if (!agenticConfig) return;
+    if (!assistantModeConfig) return;
     setToolsLoading((prev) => ({ ...prev, [toolName]: true }));
-    const current = agenticConfig.enabled_tools ?? [];
+    const current = assistantModeConfig.enabled_tools ?? [];
     const isEnabled = current.includes(toolName);
     const newTools = isEnabled ? current.filter((n) => n !== toolName) : [...current, toolName];
-    const newConfig = { ...agenticConfig, enabled_tools: newTools };
-    setAgenticConfig(newConfig);
+    const newConfig = { ...assistantModeConfig, enabled_tools: newTools };
+    setAssistantModeConfig(newConfig);
     try {
-      await configAPI.setModeConfig('agentic', newConfig);
+      await configAPI.setModeConfig(ASSISTANT_MODE_ID, newConfig);
       const { globalEventBus } = await import('@/infrastructure/event-bus');
       globalEventBus.emit('mode:config:updated');
     } catch (e) {
       log.error('Failed to toggle tool', e);
       notificationService.error(t('notifications.toggleFailed'));
-      setAgenticConfig(agenticConfig);
+      setAssistantModeConfig(assistantModeConfig);
     } finally {
       setToolsLoading((prev) => ({ ...prev, [toolName]: false }));
     }
-  }, [agenticConfig, t]);
+  }, [assistantModeConfig, t]);
 
   const handleResetTools = useCallback(async () => {
     try {
-      await configAPI.resetModeConfig('agentic');
+      await configAPI.resetModeConfig(ASSISTANT_MODE_ID);
       const [modeConf, skills] = await Promise.all([
-        configAPI.getModeConfig('agentic'),
-        configAPI.getModeSkillConfigs({ modeId: 'agentic' }),
+        configAPI.getModeConfig(ASSISTANT_MODE_ID),
+        configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }),
       ]);
-      setAgenticConfig(modeConf);
+      setAssistantModeConfig(modeConf);
       setModeSkills(skills);
       const { globalEventBus } = await import('@/infrastructure/event-bus');
       globalEventBus.emit('mode:config:updated');
@@ -321,24 +322,24 @@ const TemplateConfigPage: React.FC = () => {
   }, [t]);
 
   const handleGroupToggleAll = useCallback(async (toolNames: string[]) => {
-    if (!agenticConfig) return;
-    const current = agenticConfig.enabled_tools ?? [];
+    if (!assistantModeConfig) return;
+    const current = assistantModeConfig.enabled_tools ?? [];
     const allEnabled = toolNames.every((n) => current.includes(n));
     const newTools = allEnabled
       ? current.filter((n) => !toolNames.includes(n))
       : [...new Set([...current, ...toolNames])];
-    const newConfig = { ...agenticConfig, enabled_tools: newTools };
-    setAgenticConfig(newConfig);
+    const newConfig = { ...assistantModeConfig, enabled_tools: newTools };
+    setAssistantModeConfig(newConfig);
     try {
-      await configAPI.setModeConfig('agentic', newConfig);
+      await configAPI.setModeConfig(ASSISTANT_MODE_ID, newConfig);
       const { globalEventBus } = await import('@/infrastructure/event-bus');
       globalEventBus.emit('mode:config:updated');
     } catch (e) {
       log.error('Failed to toggle group', e);
       notificationService.error(t('notifications.toggleFailed'));
-      setAgenticConfig(agenticConfig);
+      setAssistantModeConfig(assistantModeConfig);
     }
-  }, [agenticConfig, t]);
+  }, [assistantModeConfig, t]);
 
   const handleSkillToggle = useCallback(async (skill: ModeSkillInfo) => {
     const loadingKey = skill.key;
@@ -346,11 +347,11 @@ const TemplateConfigPage: React.FC = () => {
     const nextDisabled = skill.effectiveEnabled;
     try {
       await configAPI.setModeSkillDisabled({
-        modeId: 'agentic',
+        modeId: ASSISTANT_MODE_ID,
         skillKey: skill.key,
         disabled: nextDisabled,
       });
-      const updatedSkills = await configAPI.getModeSkillConfigs({ modeId: 'agentic' });
+      const updatedSkills = await configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID });
       setModeSkills(updatedSkills);
       const { globalEventBus } = await import('@/infrastructure/event-bus');
       globalEventBus.emit('mode:config:updated');
@@ -419,7 +420,7 @@ const TemplateConfigPage: React.FC = () => {
   const renderToolList = (tools: ToolInfo[], isMcp: boolean) => (
     <div className="tc-tool-list">
       {tools.map((tool) => {
-        const enabled = agenticConfig?.enabled_tools?.includes(tool.name) ?? false;
+        const enabled = assistantModeConfig?.enabled_tools?.includes(tool.name) ?? false;
         const displayName = isMcp ? getMcpShortName(tool) : tool.name;
         const selected = detail?.type === 'tool' && detail.tool.name === tool.name;
         return (
@@ -536,7 +537,7 @@ const TemplateConfigPage: React.FC = () => {
     mcpServerId?: string,
   ) => {
       const groupEnabled = toolNames.filter(
-      (n) => agenticConfig?.enabled_tools?.includes(n),
+      (n) => assistantModeConfig?.enabled_tools?.includes(n),
     ).length;
     const isCollapsed = collapsedGroups.has(id);
     const allOn = toolNames.length > 0 && groupEnabled === toolNames.length;
@@ -604,7 +605,7 @@ const TemplateConfigPage: React.FC = () => {
     if (detail.type === 'tool') {
       const { tool, isMcp } = detail;
       const displayName = isMcp ? getMcpShortName(tool) : tool.name;
-      const enabled = agenticConfig?.enabled_tools?.includes(tool.name) ?? false;
+      const enabled = assistantModeConfig?.enabled_tools?.includes(tool.name) ?? false;
       return (
         <aside className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
           <div className="tc-template-detail__head tc-template-detail__head--center-line">
@@ -879,8 +880,8 @@ const TemplateConfigPage: React.FC = () => {
                     const serverInfo = mcpServers.find((s) => s.id === serverId);
                     const status = serverInfo?.status ?? (serverTools.length > 0 ? 'Connected' : 'Unknown');
                     const groupId = `mcp_${serverId}`;
-                    const mcpEnabled = serverTools.filter((tool) => agenticConfig?.enabled_tools?.includes(tool.name));
-                    const mcpDisabled = serverTools.filter((tool) => !agenticConfig?.enabled_tools?.includes(tool.name));
+                    const mcpEnabled = serverTools.filter((tool) => assistantModeConfig?.enabled_tools?.includes(tool.name));
+                    const mcpDisabled = serverTools.filter((tool) => !assistantModeConfig?.enabled_tools?.includes(tool.name));
 
                     return (
                       <div key={serverId} className="tc-tool-block">

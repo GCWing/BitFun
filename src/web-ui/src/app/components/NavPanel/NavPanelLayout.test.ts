@@ -48,6 +48,15 @@ describe('NavPanel layout styles', () => {
     expect(sectionHeaderBlock).toContain('margin: 0 $size-gap-1;');
   });
 
+  it('clips collapsible section content when collapsed via grid 0fr', () => {
+    const stylesheet = readNavPanelStylesheet();
+    const collapsibleInnerBlock = extractBlock(stylesheet, '&__collapsible-inner');
+
+    expect(stylesheet).toContain('&.is-collapsed {\n      grid-template-rows: 0fr;');
+    expect(collapsibleInnerBlock).toContain('overflow: hidden;');
+    expect(collapsibleInnerBlock).toContain('min-height: 0;');
+  });
+
   it('uses one shared row-action size for root action buttons', () => {
     const stylesheet = readNavPanelStylesheet();
     const rootBlock = extractBlock(stylesheet, '.bitfun-nav-panel');

@@ -1,6 +1,7 @@
 import {
   expandedFoldersAddEquivalent,
   expandedFoldersDeleteEquivalent,
+  pathsEquivalentFs,
 } from '@/shared/utils/pathUtils';
 import type { FileSystemNode, FileSystemOptions } from '@/tools/file-system/types';
 import type { ExplorerControllerConfig, ExplorerNodeRecord, ExplorerSnapshot } from '../types/explorer';
@@ -136,27 +137,37 @@ export class ExplorerModel {
   }
 
   setDirectoryRefreshing(path: string, refreshing: boolean): void {
-    const node = this.nodes.get(path);
+    const nodeKey = this.resolveNodeKey(path);
+    if (!nodeKey) {
+      return;
+    }
+
+    const node = this.nodes.get(nodeKey);
     if (!node || node.kind !== 'directory') {
       return;
     }
 
     if (refreshing) {
-      this.loadingPaths.add(path);
+      this.loadingPaths.add(nodeKey);
       node.childrenState = 'refreshing';
       node.stale = false;
       node.errorMessage = undefined;
       return;
     }
 
-    this.loadingPaths.delete(path);
+    this.loadingPaths.delete(nodeKey);
     if (node.childrenState === 'refreshing') {
-      node.childrenState = 'resolved';
+      node.childrenState = node.stale ? 'unresolved' : 'resolved';
     }
   }
 
   markDirectoryStale(path: string): void {
-    const node = this.nodes.get(path);
+    const nodeKey = this.resolveNodeKey(path);
+    if (!nodeKey) {
+      return;
+    }
+
+    const node = this.nodes.get(nodeKey);
     if (!node || node.kind !== 'directory') {
       return;
     }
@@ -182,7 +193,12 @@ export class ExplorerModel {
   }
 
   upsertChildren(parentPath: string, children: FileSystemNode[]): void {
-    const parent = this.nodes.get(parentPath);
+    const parentKey = this.resolveNodeKey(parentPath);
+    if (!parentKey) {
+      return;
+    }
+
+    const parent = this.nodes.get(parentKey);
     if (!parent || parent.kind !== 'directory') {
       return;
     }
@@ -192,7 +208,7 @@ export class ExplorerModel {
 
     for (const child of children) {
       const existing = this.nodes.get(child.path);
-      const nextRecord = createNodeRecord(child, parentPath, false, existing);
+      const nextRecord = createNodeRecord(child, parentKey, false, existing);
       this.nodes.set(child.path, nextRecord);
       nextChildIds.push(child.path);
       previousChildIds.delete(child.path);
@@ -216,7 +232,12 @@ export class ExplorerModel {
   }
 
   markDirectoryError(path: string, message: string): void {
-    const node = this.nodes.get(path);
+    const nodeKey = this.resolveNodeKey(path);
+    if (!nodeKey) {
+      return;
+    }
+
+    const node = this.nodes.get(nodeKey);
     if (!node || node.kind !== 'directory') {
       return;
     }
@@ -224,11 +245,60 @@ export class ExplorerModel {
     node.childrenState = 'error';
     node.stale = true;
     node.errorMessage = message;
-    this.loadingPaths.delete(path);
+    this.loadingPaths.delete(nodeKey);
   }
 
   getNode(path: string): ExplorerNodeRecord | undefined {
-    return this.nodes.get(path);
+    const nodeKey = this.resolveNodeKey(path);
+    return nodeKey ? this.nodes.get(nodeKey) : undefined;
+  }
+
+  resolveNodeKey(path: string): string | undefined {
+    if (this.nodes.has(path)) {
+      return path;
+    }
+
+    for (const key of this.nodes.keys()) {
+      if (pathsEquivalentFs(key, path)) {
+        return key;
+      }
+    }
+
+    return undefined;
+  }
+
+  removePath(path: string): boolean {
+    const nodeKey = this.resolveNodeKey(path);
+    if (!nodeKey) {
+      return false;
+    }
+
+    const node = this.nodes.get(nodeKey);
+    if (!node) {
+      return false;
+    }
+
+    if (node.parentId) {
+      const parent = this.nodes.get(node.parentId);
+      if (parent) {
+        parent.childIds = parent.childIds.filter((childId) => childId !== nodeKey);
+      }
+    } else if (node.isRoot) {
+      const rootIndex = this.roots.indexOf(nodeKey);
+      if (rootIndex >= 0) {
+        this.roots.splice(rootIndex, 1);
+      }
+    }
+
+    this.removeSubtree(nodeKey);
+    this.replaceExpandedFolders(expandedFoldersDeleteEquivalent(this.expandedFolders, nodeKey));
+    this.loadingPaths.delete(nodeKey);
+
+    if (this.selectedFile && pathsEquivalentFs(this.selectedFile, nodeKey)) {
+      this.selectedFile = undefined;
+    }
+
+    return true;
   }
 
   getExpandedFolders(): Set<string> {
