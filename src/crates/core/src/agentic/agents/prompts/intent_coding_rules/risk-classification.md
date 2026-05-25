@@ -2,6 +2,16 @@
 
 Intent Coding tasks must classify risk before code edits. Use the lowest level that honestly matches the changed surface.
 
+## Intent Record Requirement
+
+Every Intent Record must include a machine-checkable risk line in `## Metadata`:
+
+- `Risk level: L0`
+- `Risk level: L1`
+- `Risk level: L2`
+- `Risk level: L3`
+- `Risk level: L4`
+
 ## Levels
 
 ### L0 Exploration
@@ -74,7 +84,7 @@ Increase risk when a task touches:
 
 Every Evidence Package must record:
 
-- Final risk level.
+- Final risk level as `Final risk level: L0|L1|L2|L3|L4` in `## Risks`.
 - Why that level was selected.
 - Verification commands run.
 - Verification that was skipped and why.

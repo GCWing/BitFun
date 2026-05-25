@@ -31,6 +31,7 @@ const requiredEvidenceSections = [
 ];
 
 const validRepairStatuses = new Set(['not_needed', 'repaired', 'blocked', 'deferred']);
+const validRiskLevels = new Set(['L0', 'L1', 'L2', 'L3', 'L4']);
 
 let errorCount = 0;
 
@@ -186,6 +187,25 @@ function validateEvidenceRepairLoop(filePath, markdown) {
   }
 }
 
+function validateRiskLevelLine(filePath, markdown, sectionName, label) {
+  const content = sectionContent(markdown, sectionName);
+  if (!content) {
+    return;
+  }
+
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = content.match(new RegExp(`${escapedLabel}\\s*:\\s*(L[0-4])\\b`, 'i'));
+  if (!match) {
+    reportError(`${rel(filePath)} "## ${sectionName}" must include "${label}: L0|L1|L2|L3|L4"`);
+    return;
+  }
+
+  const riskLevel = match[1].toUpperCase();
+  if (!validRiskLevels.has(riskLevel)) {
+    reportError(`${rel(filePath)} has invalid ${label} "${riskLevel}"`);
+  }
+}
+
 function main() {
   // .agent is a runtime artifact directory created by the IntentCoding agent.
   // Its absence is not an error — just means no active Intent Coding task.
@@ -218,7 +238,8 @@ function main() {
       continue;
     }
     intentSlugs.add(slug);
-    validateSections(file, requiredIntentSections);
+    const markdown = validateSections(file, requiredIntentSections);
+    validateRiskLevelLine(file, markdown, 'Metadata', 'Risk level');
   }
 
   const evidenceSlugs = new Set();
@@ -233,6 +254,7 @@ function main() {
     validateEvidenceIntentReference(file, markdown);
     validateEvidenceAcceptedCheckStatuses(file, markdown);
     validateEvidenceRepairLoop(file, markdown);
+    validateRiskLevelLine(file, markdown, 'Risks', 'Final risk level');
   }
 
   for (const slug of intentSlugs) {

@@ -21,11 +21,13 @@ The checker validates structural workflow hygiene:
 
 - Intent Records and Evidence Packages exist and pair 1:1 by task slug.
 - Intent Records contain required MVP sections.
+- Intent Records include a machine-checkable risk level.
 - Evidence Packages contain required MVP sections.
 - Evidence Packages reference existing Intent Records.
 - Intent Records and Evidence Packages are paired by task slug.
 - Evidence Package accepted checks include explicit status markers.
 - Evidence Package repair loops include attempt counts and final repair status.
+- Evidence Package risks include a final risk level.
 
 ## Limits
 
