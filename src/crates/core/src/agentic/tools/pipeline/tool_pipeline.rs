@@ -1172,27 +1172,13 @@ impl ToolPipeline {
 
         let execution_future = tool.call(&task.tool_call.arguments, &tool_context);
 
-        let pipeline_timeout_secs = if tool.manages_own_execution_timeout() {
-            None
-        } else {
-            task.options.timeout_secs
-        };
-
-        let tool_results = match pipeline_timeout_secs {
-            Some(timeout_secs) => {
-                let timeout_duration = Duration::from_secs(timeout_secs);
-                let result = timeout(timeout_duration, execution_future)
-                    .await
-                    .map_err(|_| {
-                        BitFunError::Timeout(format!(
-                            "Tool execution timeout: {}",
-                            task.tool_call.tool_name
-                        ))
-                    })?;
-                result?
-            }
-            None => execution_future.await?,
-        };
+        if let Some(timeout_secs) = task.options.timeout_secs {
+            debug!(
+                "Ignoring configured tool execution timeout: tool_name={}, timeout_secs={}",
+                task.tool_call.tool_name, timeout_secs
+            );
+        }
+        let tool_results = execution_future.await?;
 
         if tool.supports_streaming() && tool_results.len() > 1 {
             self.handle_streaming_results(task, &tool_results).await?;
