@@ -8,8 +8,6 @@ const agentDir = path.join(root, '.agent');
 
 const requiredDirs = [
   '.agent/rules',
-  '.agent/intents',
-  '.agent/evidence',
   '.agent/templates',
 ];
 
@@ -138,12 +136,17 @@ function main() {
   const intentFiles = listMarkdownFiles(path.join(agentDir, 'intents'));
   const evidenceFiles = listMarkdownFiles(path.join(agentDir, 'evidence'));
 
-  if (intentFiles.length === 0) {
-    reportError('.agent/intents has no Intent Records');
-  }
-  if (evidenceFiles.length === 0) {
-    reportError('.agent/evidence has no Evidence Packages');
-  }
+  // Intent Records and Evidence Packages are created at runtime by the agent
+  // when a task is active. Their absence is not an error.
+  if (intentFiles.length === 0 && evidenceFiles.length === 0) {
+    reportInfo('No active Intent Records or Evidence Packages.');
+  } else {
+    if (intentFiles.length === 0) {
+      reportError('.agent/intents has no Intent Records but .agent/evidence has Evidence Packages');
+    }
+    if (evidenceFiles.length === 0) {
+      reportError('.agent/evidence has no Evidence Packages but .agent/intents has Intent Records');
+    }
 
   const intentSlugs = new Set();
   for (const file of intentFiles) {
@@ -178,6 +181,7 @@ function main() {
     if (!intentSlugs.has(slug)) {
       reportError(`Missing Intent Record for evidence-${slug}.md`);
     }
+  }
   }
 
   if (errorCount > 0) {

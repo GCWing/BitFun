@@ -28,33 +28,29 @@ Plain conversation, quick code explanation, or one-off inspection does not need 
 ## Directory Map
 
 - `rules/`: durable constraints and workflow rules. Loaded into agent context at runtime.
-- `templates/`: reusable Markdown templates for Intent Records, Evidence Packages, and other artifacts.
-- `intents/`: per-task **Intent Records** named `intent-YYYYMMDD-short-task-name.md`. These are task-specific delivery artifacts — not global configuration. Each meaningful coding task should produce one before editing code. They are not loaded into agent context automatically; the agent writes them as structured output.
-- `evidence/`: per-task **Evidence Packages** named `evidence-YYYYMMDD-short-task-name.md`. Each pairs 1:1 with an Intent Record and documents what was delivered, verified, and reviewed. They are task delivery artifacts, not runtime dependencies.
+- `templates/`: reusable Markdown templates for Intent Records and Evidence Packages.
 
 `README.md` files under `.agent/` are for humans and are skipped during automatic context injection.
 
-### What goes in `intents/` vs `evidence/`
+### Intent Records and Evidence Packages
 
-| | Intent Record | Evidence Package |
-|---|---|---|
-| **When** | Before coding starts | After verification passes |
-| **Purpose** | Capture intent, scope, accepted checks | Prove delivery and record outcomes |
-| **Loaded at runtime** | No — agent writes it | No — agent writes it |
-| **Lifecycle** | Written per task, committed alongside changes or discarded after merge | Written per task, references its Intent Record |
+When an `IntentCoding` task is active, the agent creates these directories on demand:
 
-Only `rules/` is injected into the agent's workspace context. The `intents/` and `evidence/` directories hold the task-level paper trail that the `agent:check` script validates structurally.
+- `.agent/intents/` — per-task Intent Records named `intent-YYYYMMDD-short-task-name.md`
+- `.agent/evidence/` — per-task Evidence Packages named `evidence-YYYYMMDD-short-task-name.md`
+
+These are task delivery artifacts, not repository scaffolding. They are created and validated at runtime, and can be committed alongside changes or discarded after merge.
 
 ## Task Lifecycle
 
 1. Read relevant repository files and nearest `AGENTS.md`.
 2. Load relevant `.agent/rules` context.
-3. Create or update an Intent Record before editing code.
+3. Create or update an Intent Record before editing code (agent creates `.agent/intents/` on demand).
 4. Ask at most 3 clarification questions when ambiguity is high-risk.
 5. Record risk level, accepted checks/tests, scope, and execution contract.
 6. Make scoped changes.
 7. Run the smallest matching product verification command.
-8. Write an Evidence Package.
+8. Write an Evidence Package (agent creates `.agent/evidence/` on demand).
 9. Run the workflow structure check.
 10. Summarize evidence and any remaining gaps in the final response.
 

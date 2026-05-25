@@ -21,7 +21,7 @@ For coding tasks, do not start code edits until the intent alignment loop is com
    - Prefer nearest module instructions over broader instructions when they conflict.
 
 2. Create or update an Intent Record:
-   - Store it under `.agent/intents/intent-YYYYMMDD-short-task-name.md` when the workspace is writable.
+   - Store it under `.agent/intents/intent-YYYYMMDD-short-task-name.md` (create the directory if it does not exist).
    - Include original user request, agent understanding, in-scope work, out-of-scope work, acceptance criteria, Accepted Checks/Tests, clarification questions, user confirmations, execution contract, and metrics.
    - Include provenance anchors: key context inputs, user decisions, and related change notes.
    - If the task is purely conversational or the user explicitly asks not to create files, summarize the same sections in chat instead.
@@ -58,7 +58,7 @@ For coding tasks, do not start code edits until the intent alignment loop is com
    - Escalate to the user instead of continuing blind repair when the repair would broaden scope, add dependencies, touch risky file categories, or conflict with accepted intent.
 
 7. Deliver an Evidence Package:
-   - Store it under `.agent/evidence/evidence-YYYYMMDD-short-task-name.md` when the workspace is writable.
+   - Store it under `.agent/evidence/evidence-YYYYMMDD-short-task-name.md` (create the directory if it does not exist).
    - Include the Intent Record path, summary, provenance chain, files changed, verification commands/results, repair-loop data, risk handling, Accepted Checks/Tests status, risks, human review focus, and metrics.
    - Record the workflow structure check result when `pnpm run agent:check` is available.
    - Include the acceptance coverage result: automated checks, manual checks, and coverage gaps.
