@@ -3588,27 +3588,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         } = request;
 
         let requested_timeout_seconds = timeout_seconds.filter(|seconds| *seconds > 0);
-        let parent_goal_mode_active = if let Some(parent_info) = subagent_parent_info.as_ref() {
-            matches!(
-                self.load_active_goal_mode(&parent_info.session_id).await,
-                Ok(Some(_))
-            )
-        } else {
-            false
-        };
-        if parent_goal_mode_active {
-            let parent_session_id = subagent_parent_info
-                .as_ref()
-                .map(|info| info.session_id.as_str())
-                .unwrap_or("-");
+        if let Some(seconds) = requested_timeout_seconds {
             debug!(
-                "Subagent timeout disabled by default for active goal mode: agent_type={}, parent_session_id={}",
-                agent_type, parent_session_id
+                "Ignoring requested subagent timeout: agent_type={}, timeout_seconds={}",
+                agent_type, seconds
             );
         }
-        let timeout_seconds =
-            effective_subagent_timeout_seconds(requested_timeout_seconds, parent_goal_mode_active);
-        let timeout_error_message = match timeout_seconds.or(requested_timeout_seconds) {
+        let timeout_seconds = None;
+        let timeout_error_message = match timeout_seconds {
             Some(seconds) => format!(
                 "Subagent '{}' timed out after {} seconds",
                 agent_type, seconds
