@@ -78,8 +78,7 @@ pub fn user_facing_goal_mode_error(error: BitFunError) -> BitFunError {
         other => {
             warn!("Goal mode AI call failed: {other}");
             BitFunError::Validation(
-                "Goal mode AI request failed. Check model configuration and try again."
-                    .to_string(),
+                "Goal mode AI request failed. Check model configuration and try again.".to_string(),
             )
         }
     }
@@ -322,33 +321,35 @@ pub async fn generate_goal_from_context(
 
     let latest_assistant_note = last_assistant_message_text(context_messages)
         .map(|_| {
-            "\nUse the full conversation above, paying special attention to the latest assistant message."
+            "\nUse the full conversation above, using the latest assistant message only to understand current progress and remaining gaps."
                 .to_string()
         })
         .unwrap_or_default();
 
     let system_prompt = format!(
-        "You synthesize a single actionable session goal from the conversation transcript above.\n\
+        "You synthesize a single execution-focused session goal for an autonomous coding agent.\n\
+The goal is a completion contract for finishing the user's concrete request, not a brainstorming prompt, roadmap, or expanded product vision.\n\
 Return ONLY valid JSON with this shape:\n\
 {{\"goalText\":\"...\",\"successCriteria\":[\"...\",\"...\"]}}\n\
 Requirements:\n\
 - {language_instruction}\n\
-- goalText must be concrete and verifiable\n\
-- successCriteria must list 2-5 objective completion checks\n\
+- Derive the goal from the latest explicit user request or user-provided focus; use earlier conversation only as constraints and context\n\
+- Preserve the user's actual intent and scope; do not add optional enhancements, new features, broad research, or speculative follow-up work\n\
+- goalText must be imperative, concrete, and directly executable by the agent\n\
+- goalText must describe the end state the agent should deliver, not the next thinking step\n\
+- successCriteria must list 2-5 objective checks that prove the requested work is complete and landed\n\
+- Include verification criteria when the task implies code, tests, build checks, UI behavior, files, or documentation changes\n\
+- If the user asks for investigation or explanation only, make that exact deliverable the goal instead of inventing implementation work\n\
 - Do not include markdown or commentary"
     );
 
     let final_user_prompt = format!(
         "Based on the full conversation above,{latest_assistant_note}{hint_block}\n\n\
-Synthesize the session goal JSON:"
+Extract the smallest goal that would satisfy the user's request and let the agent stop when it is truly done. Return the session goal JSON:"
     );
 
-    let raw = call_goal_func_agent_with_context(
-        system_prompt,
-        context_messages,
-        final_user_prompt,
-    )
-    .await?;
+    let raw = call_goal_func_agent_with_context(system_prompt, context_messages, final_user_prompt)
+        .await?;
     parse_goal_generation(&raw)
 }
 
@@ -387,18 +388,16 @@ Rules:\n\
         "Verify whether the active session goal has been fully achieved. Return the JSON verdict."
             .to_string();
 
-    let raw = call_goal_func_agent_with_context(
-        system_prompt,
-        context_messages,
-        final_user_prompt,
-    )
-    .await?;
+    let raw = call_goal_func_agent_with_context(system_prompt, context_messages, final_user_prompt)
+        .await?;
     parse_goal_verification(&raw)
 }
 
 fn parse_goal_generation(raw: &str) -> BitFunResult<GoalGenerationResult> {
     let json = extract_json_from_ai_response(raw).ok_or_else(|| {
-        BitFunError::Validation("Goal generation returned an unreadable model response.".to_string())
+        BitFunError::Validation(
+            "Goal generation returned an unreadable model response.".to_string(),
+        )
     })?;
     let mut parsed: GoalGenerationResult = serde_json::from_str(&json).map_err(|error| {
         BitFunError::Validation(format!("Failed to parse goal generation JSON: {error}"))
@@ -467,7 +466,10 @@ mod tests {
         let converted = build_goal_context_ai_messages(&messages);
         assert_eq!(converted.len(), 2);
         assert_eq!(converted[0].content.as_deref(), Some("Implement /goal"));
-        assert_eq!(converted[1].content.as_deref(), Some(long_assistant.as_str()));
+        assert_eq!(
+            converted[1].content.as_deref(),
+            Some(long_assistant.as_str())
+        );
     }
 
     #[test]
@@ -492,9 +494,8 @@ mod tests {
 
     #[test]
     fn user_facing_goal_mode_error_hides_ai_client_details() {
-        let mapped = user_facing_goal_mode_error(BitFunError::AIClient(
-            "provider timeout".to_string(),
-        ));
+        let mapped =
+            user_facing_goal_mode_error(BitFunError::AIClient("provider timeout".to_string()));
         match mapped {
             BitFunError::Validation(message) => {
                 assert!(!message.contains("provider timeout"));
@@ -527,10 +528,9 @@ mod tests {
 
     #[test]
     fn parse_goal_generation_accepts_json() {
-        let parsed = parse_goal_generation(
-            r#"{"goalText":"Fix bug","successCriteria":["Tests pass"]}"#,
-        )
-        .expect("parsed");
+        let parsed =
+            parse_goal_generation(r#"{"goalText":"Fix bug","successCriteria":["Tests pass"]}"#)
+                .expect("parsed");
         assert_eq!(parsed.goal_text, "Fix bug");
         assert_eq!(parsed.success_criteria, vec!["Tests pass".to_string()]);
     }
