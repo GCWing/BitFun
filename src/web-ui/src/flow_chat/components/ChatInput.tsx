@@ -65,6 +65,7 @@ import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { getModeDisplayDescription, getModeDisplayName } from './modeDisplay';
+import { ModePickerOption } from './ModePickerOption';
 import './ChatInput.scss';
 
 const log = createLogger('ChatInput');
@@ -2958,26 +2959,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         <>
                           <div className="bitfun-chat-input__boost-section">
                             {incrementalCodeModes.length > 0 ? (
-                              incrementalCodeModes.map(modeOption => {
-                                const modeDescription = getModeDisplayDescription(t, modeOption);
-                                const modeName = getModeDisplayName(t, modeOption);
-                                return (
-                                  <Tooltip key={modeOption.id} content={modeDescription} placement="left">
-                                    <div
-                                      className={`bitfun-chat-input__mode-option ${modeState.current === modeOption.id ? 'bitfun-chat-input__mode-option--active' : ''}`}
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        requestModeChange(modeOption.id);
-                                      }}
-                                    >
-                                      <span className="bitfun-chat-input__mode-option-name">{modeName}</span>
-                                      {modeState.current === modeOption.id && (
-                                        <span className="bitfun-chat-input__slash-command-current">{t('chatInput.current')}</span>
-                                      )}
-                                    </div>
-                                  </Tooltip>
-                                );
-                              })
+                              incrementalCodeModes.map(modeOption => (
+                                <ModePickerOption
+                                  key={modeOption.id}
+                                  t={t}
+                                  modeOption={modeOption}
+                                  currentMode={modeState.current}
+                                  currentLabel={t('chatInput.current')}
+                                  onSelect={requestModeChange}
+                                />
+                              ))
                             ) : (
                               <div className="bitfun-chat-input__agent-boost-empty bitfun-chat-input__agent-boost-empty--inline">
                                 {t('chatInput.noIncrementalModes')}
