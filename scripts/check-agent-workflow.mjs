@@ -6,16 +6,6 @@ import path from 'node:path';
 const root = process.cwd();
 const agentDir = path.join(root, '.agent');
 
-const requiredDirs = [
-  '.agent/rules',
-  '.agent/templates',
-];
-
-const requiredTemplates = [
-  '.agent/templates/intent-template.md',
-  '.agent/templates/evidence-template.md',
-];
-
 const requiredIntentSections = [
   'Metadata',
   'Original User Request',
@@ -56,10 +46,6 @@ function reportError(message) {
 
 function reportInfo(message) {
   console.log(`[agent:check] ${message}`);
-}
-
-function exists(relativePath) {
-  return fs.existsSync(path.join(root, relativePath));
 }
 
 function readMarkdown(filePath) {
@@ -117,36 +103,27 @@ function validateEvidenceIntentReference(filePath, markdown) {
 }
 
 function main() {
+  // .agent is a runtime artifact directory created by the IntentCoding agent.
+  // Its absence is not an error — just means no active Intent Coding task.
   if (!fs.existsSync(agentDir)) {
-    reportError('.agent directory is missing');
-  }
-
-  for (const dir of requiredDirs) {
-    if (!exists(dir)) {
-      reportError(`${dir} directory is missing`);
-    }
-  }
-
-  for (const template of requiredTemplates) {
-    if (!exists(template)) {
-      reportError(`${template} is missing`);
-    }
+    reportInfo('.agent directory not found — no active Intent Coding task.');
+    process.exit(0);
   }
 
   const intentFiles = listMarkdownFiles(path.join(agentDir, 'intents'));
   const evidenceFiles = listMarkdownFiles(path.join(agentDir, 'evidence'));
 
-  // Intent Records and Evidence Packages are created at runtime by the agent
-  // when a task is active. Their absence is not an error.
   if (intentFiles.length === 0 && evidenceFiles.length === 0) {
     reportInfo('No active Intent Records or Evidence Packages.');
-  } else {
-    if (intentFiles.length === 0) {
-      reportError('.agent/intents has no Intent Records but .agent/evidence has Evidence Packages');
-    }
-    if (evidenceFiles.length === 0) {
-      reportError('.agent/evidence has no Evidence Packages but .agent/intents has Intent Records');
-    }
+    process.exit(0);
+  }
+
+  if (intentFiles.length === 0) {
+    reportError('.agent/intents has no Intent Records but .agent/evidence has Evidence Packages');
+  }
+  if (evidenceFiles.length === 0) {
+    reportError('.agent/evidence has no Evidence Packages but .agent/intents has Intent Records');
+  }
 
   const intentSlugs = new Set();
   for (const file of intentFiles) {
@@ -181,7 +158,6 @@ function main() {
     if (!intentSlugs.has(slug)) {
       reportError(`Missing Intent Record for evidence-${slug}.md`);
     }
-  }
   }
 
   if (errorCount > 0) {

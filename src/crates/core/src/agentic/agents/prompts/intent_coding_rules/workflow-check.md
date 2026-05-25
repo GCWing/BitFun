@@ -11,14 +11,14 @@ pnpm run agent:check
 ## When to Run
 
 - After the Intent Record and Evidence Package have been written or updated.
-- Before the final response for any coding task that changes `.agent/` artifacts.
+- Before the final response for any coding task that changes Intent Record or Evidence Package artifacts.
 - Alongside product verification such as Rust tests, web tests, type-checks, lint, or builds.
 
 ## Scope
 
 The checker validates structural workflow hygiene:
 
-- Required `.agent/` directories and templates exist.
+- Intent Records and Evidence Packages exist and pair 1:1 by task slug.
 - Intent Records contain required MVP sections.
 - Evidence Packages contain required MVP sections.
 - Evidence Packages reference existing Intent Records.

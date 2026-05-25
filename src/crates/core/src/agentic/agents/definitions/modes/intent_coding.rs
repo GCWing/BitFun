@@ -1,9 +1,26 @@
 //! Intent Coding Mode
 
-use crate::agentic::agents::{shared_coding_mode_tools, Agent, RequestContextPolicy};
+use crate::agentic::agents::{
+    get_embedded_prompt, shared_coding_mode_tools, Agent, PromptBuilder, PromptBuilderContext,
+    RequestContextPolicy,
+};
+use crate::util::errors::*;
 use async_trait::async_trait;
 
 const INTENT_CODING_MODE_PROMPT_TEMPLATE: &str = "intent_coding_mode";
+
+// Embedded rules loaded from prompts/intent_coding_rules/
+const EMBEDDED_RULES: &[(&str, &str)] = &[
+    ("accepted-checks", include_str!("../../prompts/intent_coding_rules/accepted-checks.md")),
+    ("architecture", include_str!("../../prompts/intent_coding_rules/architecture.md")),
+    ("coding-style", include_str!("../../prompts/intent_coding_rules/coding-style.md")),
+    ("context-budget", include_str!("../../prompts/intent_coding_rules/context-budget.md")),
+    ("error-classification", include_str!("../../prompts/intent_coding_rules/error-classification.md")),
+    ("provenance-chain", include_str!("../../prompts/intent_coding_rules/provenance-chain.md")),
+    ("risk-classification", include_str!("../../prompts/intent_coding_rules/risk-classification.md")),
+    ("security", include_str!("../../prompts/intent_coding_rules/security.md")),
+    ("workflow-check", include_str!("../../prompts/intent_coding_rules/workflow-check.md")),
+];
 
 pub struct IntentCodingMode {
     default_tools: Vec<String>,
@@ -57,6 +74,39 @@ impl Agent for IntentCodingMode {
             .with_project_layout()
     }
 
+    async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {
+        let prompt_components = PromptBuilder::new(context.clone());
+        let system_prompt_template = get_embedded_prompt(INTENT_CODING_MODE_PROMPT_TEMPLATE)
+            .ok_or_else(|| {
+                BitFunError::Agent(format!(
+                    "{} not found in embedded files",
+                    INTENT_CODING_MODE_PROMPT_TEMPLATE
+                ))
+            })?;
+
+        let mut prompt = prompt_components
+            .build_prompt_from_template(system_prompt_template)
+            .await?;
+
+        // Inject embedded Intent Coding rules as a context section.
+        if !prompt.is_empty() {
+            prompt.push_str("\n\n");
+        }
+        prompt.push_str("## Intent Coding rules\n\n");
+        prompt.push_str(
+            "The following rules are built into the IntentCoding mode. Follow them for every task.\n\n",
+        );
+        for (name, content) in EMBEDDED_RULES {
+            prompt.push_str(&format!(
+                "<document name=\"intent_coding_rules/{}.md\">\n{}\n</document>\n\n",
+                name,
+                content.trim()
+            ));
+        }
+
+        Ok(prompt)
+    }
+
     fn is_readonly(&self) -> bool {
         false
     }
@@ -65,6 +115,7 @@ impl Agent for IntentCodingMode {
 #[cfg(test)]
 mod tests {
     use super::IntentCodingMode;
+    use super::EMBEDDED_RULES;
     use crate::agentic::agents::{get_embedded_prompt, Agent};
 
     #[test]
@@ -87,9 +138,21 @@ mod tests {
 
         assert!(prompt.contains("# Intent Coding workflow"));
         assert!(prompt.contains("Accepted Checks or Accepted Tests"));
-        assert!(prompt.contains(".agent/rules/accepted-checks.md"));
         assert!(prompt.contains("acceptance coverage result"));
         assert!(prompt.contains("pnpm run agent:check"));
         assert!(prompt.contains("Evidence Package"));
+    }
+
+    #[test]
+    fn intent_coding_embeds_all_nine_rules() {
+        let rules: Vec<&str> = EMBEDDED_RULES.iter().map(|(name, _)| *name).collect();
+        assert_eq!(rules.len(), 9);
+        assert!(rules.contains(&"risk-classification"));
+        assert!(rules.contains(&"accepted-checks"));
+        assert!(rules.contains(&"error-classification"));
+        assert!(rules.contains(&"provenance-chain"));
+        for (_name, content) in EMBEDDED_RULES {
+            assert!(!content.is_empty(), "rule content must not be empty");
+        }
     }
 }

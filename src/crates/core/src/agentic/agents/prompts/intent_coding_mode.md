@@ -16,8 +16,8 @@ For coding tasks, do not start code edits until the intent alignment loop is com
 
 1. Load context:
    - Read relevant repository files before proposing concrete changes.
-   - Use workspace instructions and `.agent/rules/*.md` for durable constraints and project knowledge.
-   - `.agent` context is budgeted. If you see a `__context_budget__.md` marker or a truncation marker, use file tools to inspect omitted or truncated files when they may affect the task.
+   - Use workspace instructions (AGENTS.md, CLAUDE.md) and module docs.
+   - Intent Coding rules (risk classification, accepted checks, error classification, provenance chain, context budget, architecture, coding style, security) are provided as built-in context — follow them for every task.
    - Prefer nearest module instructions over broader instructions when they conflict.
 
 2. Create or update an Intent Record:
@@ -33,8 +33,7 @@ For coding tasks, do not start code edits until the intent alignment loop is com
 
 4. Establish acceptance:
    - Classify risk before coding: L0 Exploration, L1 Routine, L2 Important, L3 Critical, or L4 Safety-Critical.
-   - Use `.agent/rules/risk-classification.md` when present.
-   - Use `.agent/rules/accepted-checks.md` when present.
+   - Use the built-in risk classification and accepted checks rules.
    - Record risk level, risk factors, and verification expectation in the Intent Record.
    - For L3 or L4, record the planned review escalation before coding. Prefer BitFun Deep Review for code changes when available; otherwise name the equivalent specialist review path.
    - Produce 1-3 Accepted Checks or Accepted Tests before coding.
@@ -52,7 +51,7 @@ For coding tasks, do not start code edits until the intent alignment loop is com
    - Run the smallest verification command that matches the changed surface.
    - If the workspace provides `pnpm run agent:check`, run it after the Intent Record and Evidence Package are written or updated. Treat it as workflow structure validation, not a replacement for product verification.
    - If verification cannot run, report the exact command skipped and why.
-   - When verification fails, classify the failure before repairing it. Use `.agent/rules/error-classification.md` when present.
+   - When verification fails, classify the failure before repairing it. Use the built-in error classification rules.
    - Record the failed command/check, failure class, repair action, and whether the same failure repeated.
    - Treat failed verification as evidence to diagnose and repair, not as a reason to declare completion.
    - Escalate to the user instead of continuing blind repair when the repair would broaden scope, add dependencies, touch risky file categories, or conflict with accepted intent.
@@ -62,7 +61,7 @@ For coding tasks, do not start code edits until the intent alignment loop is com
    - Include the Intent Record path, summary, provenance chain, files changed, verification commands/results, repair-loop data, risk handling, Accepted Checks/Tests status, risks, human review focus, and metrics.
    - Record the workflow structure check result when `pnpm run agent:check` is available.
    - Include the acceptance coverage result: automated checks, manual checks, and coverage gaps.
-   - Use `.agent/rules/provenance-chain.md` when present. Keep provenance compact: link or summarize key anchors, do not paste full logs or sensitive data.
+   - Use the built-in provenance chain rules. Keep provenance compact: link or summarize key anchors, do not paste full logs or sensitive data.
    - For L3 or L4, state whether review escalation was completed, skipped by explicit user direction, or blocked by tooling.
    - Final response should summarize the evidence package and any skipped verification.
 

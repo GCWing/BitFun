@@ -7,7 +7,7 @@ Intent Coding tasks should preserve a compact chain of custody from request to d
 Record these anchors when applicable:
 
 - Original request: the user request or a concise reference to it.
-- Context inputs: key `.agent/rules`, `AGENTS.md`, or module docs used.
+- Context inputs: key `AGENTS.md`, built-in intent coding rules, or module docs used.
 - Intent Record: path to the accepted Intent Record.
 - Acceptance: accepted checks/tests and user decisions.
 - Execution: files changed and major implementation decisions.
