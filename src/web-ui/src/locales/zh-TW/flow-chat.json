@@ -524,6 +524,7 @@
     "targetBtw": "當前側問",
     "sendingToMain": "主會話：{{title}}",
     "sendingToBtw": "側問會話：{{title}}",
+    "intentCodingEvidenceMissing": "意圖編碼已完成，但未偵測到證據包訊號。交付前請補充或引用 `.agent/evidence/evidence-*.md`。",
     "modeDescriptions": {
       "agentic": "AI 主導執行，自動規劃和完成編碼任務，擁有完整的工具訪問能力",
       "IntentCoding": "意圖對齊編碼：先澄清需求、記錄驗收項，再驗證變更並交付證據",

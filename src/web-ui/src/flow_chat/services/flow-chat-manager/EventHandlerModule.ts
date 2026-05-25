@@ -39,6 +39,7 @@ import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
 import { ACPClientAPI, type AcpPermissionRequestEvent } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { FlowChatContext, DialogTurn, ModelRound, FlowToolItem } from './types';
+import type { Session } from '../../types/flow-chat';
 import {
   getAiErrorPresentation,
   normalizeAiErrorDetail,
@@ -78,6 +79,8 @@ import {
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
+const INTENT_CODING_MODE_ID = 'IntentCoding';
+const INTENT_CODING_EVIDENCE_SIGNAL = /(?:Evidence Package|\.agent\/evidence\/|evidence-[^\s`"')]+\.md)/i;
 
 interface MCPInteractionRequestEvent {
   interactionId: string;
@@ -121,11 +124,61 @@ function resolveDialogTurnDisplayContent(
 
 export const __test_only__ = {
   resolveDialogTurnDisplayContent,
+  dialogTurnHasIntentCodingEvidenceSignal,
+  maybeWarnIntentCodingEvidenceMissing,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
   const activeSessionId = FlowChatStore.getInstance().getState().activeSessionId;
   return sessionId !== activeSessionId || !isAppWindowFocused();
+}
+
+function isIntentCodingSession(session: Session): boolean {
+  return session.mode === INTENT_CODING_MODE_ID || session.config.agentType === INTENT_CODING_MODE_ID;
+}
+
+function itemEvidenceSearchText(item: unknown): string {
+  if (!item || typeof item !== 'object') {
+    return '';
+  }
+
+  const record = item as Record<string, unknown>;
+  const textParts = [
+    typeof record.content === 'string' ? record.content : '',
+    typeof record.toolName === 'string' ? record.toolName : '',
+  ];
+
+  for (const key of ['toolCall', 'toolResult']) {
+    const value = record[key];
+    if (value !== undefined) {
+      try {
+        textParts.push(JSON.stringify(value));
+      } catch {
+        // Ignore non-serializable runtime fields; they are not needed for a soft reminder.
+      }
+    }
+  }
+
+  return textParts.join('\n');
+}
+
+function dialogTurnHasIntentCodingEvidenceSignal(dialogTurn: DialogTurn): boolean {
+  return dialogTurn.modelRounds.some(round =>
+    round.items.some(item => INTENT_CODING_EVIDENCE_SIGNAL.test(itemEvidenceSearchText(item)))
+  );
+}
+
+function maybeWarnIntentCodingEvidenceMissing(session: Session, dialogTurn: DialogTurn): void {
+  if (!isIntentCodingSession(session) || dialogTurnHasIntentCodingEvidenceSignal(dialogTurn)) {
+    return;
+  }
+
+  notificationService.warning(
+    i18nService.t('flow-chat:chatInput.intentCodingEvidenceMissing', {
+      defaultValue: 'Intent Coding finished without an Evidence Package signal. Add or reference `.agent/evidence/evidence-*.md` before delivery.',
+    }),
+    { duration: 6000 },
+  );
 }
 
 function logDroppedDataEvent(
@@ -907,6 +960,7 @@ function finalizeTurnCompletionState(
 
   const dialogTurn = store.getState().sessions.get(sessionId)?.dialogTurns.find(t => t.id === turnId);
   if (dialogTurn) {
+    maybeWarnIntentCodingEvidenceMissing(session, dialogTurn);
     appendPlanDisplayItemsIfNeeded(context, sessionId, turnId, dialogTurn);
   }
 

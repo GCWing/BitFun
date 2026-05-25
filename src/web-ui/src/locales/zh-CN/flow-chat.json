@@ -524,6 +524,7 @@
     "targetBtw": "当前侧问",
     "sendingToMain": "主会话：{{title}}",
     "sendingToBtw": "侧问会话：{{title}}",
+    "intentCodingEvidenceMissing": "意图编码已完成，但未检测到证据包信号。交付前请补充或引用 `.agent/evidence/evidence-*.md`。",
     "modeDescriptions": {
       "agentic": "AI 主导执行，自动规划和完成编码任务，拥有完整的工具访问能力",
       "IntentCoding": "意图对齐编码：先澄清需求、记录验收项，再验证变更并交付证据",

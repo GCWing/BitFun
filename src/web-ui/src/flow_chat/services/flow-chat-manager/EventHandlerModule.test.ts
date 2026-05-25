@@ -13,6 +13,7 @@ import { SessionExecutionEvent, SessionExecutionState } from '../../state-machin
 import { FlowChatStore } from '../../store/FlowChatStore';
 import type { DialogTurn, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
 import type { FlowChatContext } from './types';
+import { notificationService } from '../../../shared/notification-system/services/NotificationService';
 
 vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
   i18nService: {
@@ -306,6 +307,63 @@ describe('formatDialogErrorForNotification', () => {
     expect(formatted.metadata?.aiError?.rawError).toBe(rawError);
     expect(formatted.metadata?.aiError?.diagnostics).toContain('code=invalid_request_error');
     expect(formatted.actions?.map((action) => action.label)).toContain('Copy diagnostics');
+  });
+});
+
+describe('IntentCoding evidence reminder', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('warns when an IntentCoding turn completes without an evidence signal', () => {
+    const session = {
+      ...createFinishingSession(),
+      mode: 'IntentCoding',
+      config: { agentType: 'IntentCoding' },
+    };
+    const turn = createFinishingTurn();
+
+    __test_only__.maybeWarnIntentCodingEvidenceMissing(session, turn);
+
+    expect(notificationService.warning).toHaveBeenCalledWith(
+      expect.stringContaining('intentCodingEvidenceMissing'),
+      { duration: 6000 },
+    );
+  });
+
+  it('does not warn when an IntentCoding turn references an Evidence Package', () => {
+    const session = {
+      ...createFinishingSession(),
+      mode: 'IntentCoding',
+      config: { agentType: 'IntentCoding' },
+    };
+    const turn = {
+      ...createFinishingTurn(),
+      modelRounds: [
+        makeRound('round-1', [{
+          id: 'text-1',
+          type: 'text',
+          content: 'Evidence Package: .agent/evidence/evidence-20260525-task.md',
+          isStreaming: false,
+          timestamp: 1000,
+          status: 'completed',
+        } as any]),
+      ],
+    };
+
+    expect(__test_only__.dialogTurnHasIntentCodingEvidenceSignal(turn)).toBe(true);
+    __test_only__.maybeWarnIntentCodingEvidenceMissing(session, turn);
+
+    expect(notificationService.warning).not.toHaveBeenCalled();
+  });
+
+  it('does not warn for non-IntentCoding sessions', () => {
+    __test_only__.maybeWarnIntentCodingEvidenceMissing(
+      createFinishingSession(),
+      createFinishingTurn(),
+    );
+
+    expect(notificationService.warning).not.toHaveBeenCalled();
   });
 });
 

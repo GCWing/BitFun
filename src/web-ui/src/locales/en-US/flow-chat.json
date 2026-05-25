@@ -530,6 +530,7 @@
     "targetBtw": "Side",
     "sendingToMain": "Main session: {{title}}",
     "sendingToBtw": "Side session: {{title}}",
+    "intentCodingEvidenceMissing": "Intent Coding finished without an Evidence Package signal. Add or reference `.agent/evidence/evidence-*.md` before delivery.",
     "modeDescriptions": {
       "agentic": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
       "IntentCoding": "Intent-aligned coding: clarify requirements, record acceptance checks, verify changes, and deliver evidence",
