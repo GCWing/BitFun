@@ -305,6 +305,16 @@ impl ExecutionEngine {
         )
     }
 
+    /// Whether a partial stream recovery should trigger a continuation round
+    /// instead of treating truncated assistant text as the final answer.
+    ///
+    /// User-initiated cancellation is excluded; all other partial recoveries
+    /// (idle timeout, watchdog timeout, mid-stream errors) may continue.
+    fn should_continue_after_partial_response(reason: &str) -> bool {
+        let lower = reason.to_ascii_lowercase();
+        !lower.contains("cancelled")
+    }
+
     /// Detect periodic tool-signature loops in the trailing window.
     ///
     /// Returns `true` when the last `2 * threshold` rounds contain at most
@@ -1713,6 +1723,7 @@ impl ExecutionEngine {
         let mut loop_detected = false;
         let mut loop_recovery_attempts: usize = 0;
         const MAX_LOOP_RECOVERY_ATTEMPTS: usize = 3;
+        const MAX_PARTIAL_CONTINUATION_ATTEMPTS: usize = 3;
         let mut full_compression_count = 0usize;
         let mut compression_failure_count = 0u32;
 
@@ -1722,6 +1733,7 @@ impl ExecutionEngine {
         // Track thinking-only rescue reminders for observability. This counter
         // is not a stop condition.
         let mut thinking_only_rescue_attempts: usize = 0;
+        let mut partial_continuation_attempts: usize = 0;
 
         // Add detailed logging showing the execution context messages.
         debug!(
@@ -2259,7 +2271,9 @@ impl ExecutionEngine {
             // Otherwise, if the round produced any tool_call, we already continue via
             // `has_more_rounds = true`. The interesting case is `has_more_rounds == false`:
             //
-            // - Model emitted user-visible text  -> final answer, end the turn.
+            // - Model emitted user-visible text  -> final answer, end the turn, unless
+            //   the stream was partially recovered (timeout / interruption) in which
+            //   case inject a continuation reminder and keep going.
             // - Model emitted thinking only      -> stalled mid-reasoning. Inject a
             //   system_reminder asking it to either act (call a tool) or finish
             //   (write the answer), and continue.
@@ -2269,11 +2283,58 @@ impl ExecutionEngine {
                 // fall through to next round so the model can respond to the steering
             } else if !round_result.has_more_rounds {
                 if round_result.had_assistant_text {
-                    debug!(
-                        "Model round {} ended with final answer, reason: {:?}",
-                        round_index, round_result.finish_reason
-                    );
-                    break;
+                    if let Some(ref reason) = round_result.partial_recovery_reason {
+                        if Self::should_continue_after_partial_response(reason) {
+                            partial_continuation_attempts += 1;
+                            if partial_continuation_attempts
+                                <= MAX_PARTIAL_CONTINUATION_ATTEMPTS
+                            {
+                                let reminder = format!(
+                                    "<system_reminder>Your previous assistant response was interrupted mid-stream ({reason}). Continue writing from exactly where you stopped. Do not repeat content that was already delivered; pick up seamlessly and complete the answer.</system_reminder>"
+                                );
+                                let user_msg = Message::user(reminder.clone());
+                                messages.push(user_msg.clone());
+                                if let Err(e) = self
+                                    .session_manager
+                                    .add_message(&context.session_id, user_msg)
+                                    .await
+                                {
+                                    warn!(
+                                        "Failed to persist partial continuation reminder: {}",
+                                        e
+                                    );
+                                }
+                                warn!(
+                                    "Partial stream recovery with assistant text; injecting continuation reminder #{}/{}: turn={}, round={}, reason={}",
+                                    partial_continuation_attempts,
+                                    MAX_PARTIAL_CONTINUATION_ATTEMPTS,
+                                    context.dialog_turn_id,
+                                    round_index,
+                                    reason
+                                );
+                                // Continue into the next round so the model can finish.
+                            } else {
+                                warn!(
+                                    "Partial stream continuation attempts exhausted; accepting truncated answer: turn={}, round={}, reason={}",
+                                    context.dialog_turn_id, round_index, reason
+                                );
+                                finalization_reason = Some("partial_truncated");
+                                break;
+                            }
+                        } else {
+                            debug!(
+                                "Model round {} ended with partial answer after cancellation, reason: {:?}",
+                                round_index, round_result.finish_reason
+                            );
+                            break;
+                        }
+                    } else {
+                        debug!(
+                            "Model round {} ended with final answer, reason: {:?}",
+                            round_index, round_result.finish_reason
+                        );
+                        break;
+                    }
                 } else if round_result.had_thinking_content {
                     thinking_only_rescue_attempts += 1;
                     let reminder = "<system_reminder>The previous round produced internal reasoning only — no tool call and no user-visible response. You MUST now either: (1) call the single tool that best advances the user's task, or (2) write your final answer to the user. Do not produce another round of reasoning without taking action.</system_reminder>".to_string();
@@ -2696,6 +2757,26 @@ mod tests {
         let summary = ExecutionEngine::tool_signature_args_summary(args);
 
         assert_eq!(summary, args);
+    }
+
+    #[test]
+    fn partial_continuation_allowed_for_stream_stall_reasons() {
+        assert!(ExecutionEngine::should_continue_after_partial_response(
+            "Stream processor watchdog timeout (no data received for 45 seconds)"
+        ));
+        assert!(ExecutionEngine::should_continue_after_partial_response(
+            "Stream processing error: SSE stream error"
+        ));
+    }
+
+    #[test]
+    fn partial_continuation_skipped_for_user_cancellation() {
+        assert!(!ExecutionEngine::should_continue_after_partial_response(
+            "Stream processing cancelled after partial output"
+        ));
+        assert!(!ExecutionEngine::should_continue_after_partial_response(
+            "Stream processing cancelled"
+        ));
     }
 
     #[test]

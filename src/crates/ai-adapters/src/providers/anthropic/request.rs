@@ -246,12 +246,14 @@ pub(crate) async fn send_stream(
     );
     let inline_think_in_text = client.config.inline_think_in_text;
     let idle_timeout = client.stream_options.idle_timeout;
+    let ttft_timeout = client.stream_options.ttft_timeout;
 
     execute_sse_request(
         "Anthropic Streaming API",
         &url,
         &request_body,
         max_tries,
+        ttft_timeout,
         || apply_headers(client, client.client.post(&url), &url),
         move |response, tx, tx_raw| {
             tokio::spawn(handle_anthropic_stream(

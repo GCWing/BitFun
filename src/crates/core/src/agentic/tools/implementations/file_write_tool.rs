@@ -1,3 +1,4 @@
+use bitfun_ai_adapters::tool_call_accumulator::strip_write_inline_content_fields;
 use crate::agentic::tools::file_read_state_runtime::{
     assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms,
     get_stored_file_read_state, local_file_modification_time_ms, read_current_file_content,
@@ -10,6 +11,7 @@ use crate::agentic::tools::file_tool_guidance::{
 use crate::agentic::tools::framework::{
     Tool, ToolPathResolution, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::agentic::core::ToolCall;
 use crate::agentic::tools::ToolPathOperation;
 use crate::service::config::types::WriteToolMode;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -234,6 +236,30 @@ impl FileWriteTool {
         })
     }
 
+    fn model_input_schema(context: Option<&ToolUseContext>) -> Value {
+        match Self::write_tool_mode(context) {
+            WriteToolMode::InlineContent => Self::schema_with_content(),
+            WriteToolMode::PlaintextFollowup => Self::schema_without_content(),
+        }
+    }
+
+    /// PlaintextFollowup exposes only `file_path` to the model. Strip any inline
+    /// content the model hallucinates so the follow-up content generation path
+    /// remains the single source of file body text.
+    pub(crate) fn strip_plaintext_followup_inline_content(arguments: &mut Value) {
+        strip_write_inline_content_fields(arguments);
+    }
+
+    pub(crate) fn strip_plaintext_followup_inline_content_from_tool_calls(
+        tool_calls: &mut [ToolCall],
+    ) {
+        for tool_call in tool_calls.iter_mut() {
+            if tool_call.tool_name == "Write" {
+                Self::strip_plaintext_followup_inline_content(&mut tool_call.arguments);
+            }
+        }
+    }
+
     fn inline_description() -> String {
         r#"Writes a file to the local filesystem.
 
@@ -262,7 +288,7 @@ Usage:
 - Keep writes focused. For existing files, prefer Read + targeted Edit calls. Use Write only when you need to replace the entire file or create a new one.
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
-- Do NOT include the file content in the tool call arguments. Only provide file_path. The system will prompt you separately to output the file content as plain text."#
+- Only provide `file_path` in the tool call. The system generates file content in a separate step."#
             .to_string()
     }
 
@@ -338,6 +364,9 @@ Usage:
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
+        // PlaintextFollowup injects `content` in `generate_write_tool_contents` before
+        // pipeline execution. Inline model content is stripped earlier (stream +
+        // round_executor); do not strip again here or system-generated content is lost.
         let file_path = input
             .get("file_path")
             .and_then(|v| v.as_str())
@@ -437,6 +466,7 @@ Usage:
 #[cfg(test)]
 mod tests {
     use super::{FileWriteTool, WRITE_TOOL_MODE_CONTEXT_KEY};
+    use crate::agentic::core::ToolCall;
     use crate::agentic::tools::file_tool_guidance::FILE_TOOL_GUIDANCE_PREFIX;
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
@@ -628,6 +658,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn input_schema_for_model_without_context_omits_content() {
+        let tool = FileWriteTool::new();
+
+        let schema = tool.input_schema_for_model().await;
+
+        assert_eq!(schema["required"], serde_json::json!(["file_path"]));
+        assert!(schema["properties"].get("content").is_none());
+    }
+
+    #[test]
+    fn strip_plaintext_followup_inline_content_removes_inline_body_fields() {
+        let mut arguments = json!({
+            "file_path": "notes.md",
+            "content": "inline body",
+            "contents": "legacy body"
+        });
+
+        FileWriteTool::strip_plaintext_followup_inline_content(&mut arguments);
+
+        assert_eq!(arguments, json!({ "file_path": "notes.md" }));
+    }
+
+    #[test]
+    fn strip_plaintext_followup_inline_content_from_tool_calls_keeps_non_write_calls() {
+        let mut tool_calls = vec![
+            ToolCall {
+                tool_id: "write-1".to_string(),
+                tool_name: "Write".to_string(),
+                arguments: json!({
+                    "file_path": "notes.md",
+                    "content": "inline body"
+                }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+            ToolCall {
+                tool_id: "read-1".to_string(),
+                tool_name: "Read".to_string(),
+                arguments: json!({ "file_path": "notes.md" }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+        ];
+
+        FileWriteTool::strip_plaintext_followup_inline_content_from_tool_calls(&mut tool_calls);
+
+        assert_eq!(
+            tool_calls[0].arguments,
+            json!({ "file_path": "notes.md" })
+        );
+        assert_eq!(
+            tool_calls[1].arguments,
+            json!({ "file_path": "notes.md" })
+        );
+    }
+
+    #[tokio::test]
     async fn inline_mode_schema_requires_content() {
         let tool = FileWriteTool::new();
         let mut custom_data = HashMap::new();
@@ -690,6 +779,27 @@ mod tests {
 
         assert_eq!(written, "new content");
     }
+
+    #[tokio::test]
+    async fn plaintext_followup_executes_system_injected_content() {
+        let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+
+        let tool = FileWriteTool::new();
+        let body = "system generated body";
+        tool.call(
+            &json!({ "file_path": "generated.txt", "content": body }),
+            &local_context(root.clone()),
+        )
+        .await
+        .expect("plaintext followup should write system-injected content");
+
+        let written =
+            std::fs::read_to_string(root.join("generated.txt")).expect("read generated file");
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert_eq!(written, body);
+    }
 }
 
 #[async_trait]
@@ -720,11 +830,12 @@ impl Tool for FileWriteTool {
         Self::schema_without_content()
     }
 
+    async fn input_schema_for_model(&self) -> Value {
+        Self::model_input_schema(None)
+    }
+
     async fn input_schema_for_model_with_context(&self, context: Option<&ToolUseContext>) -> Value {
-        match Self::write_tool_mode(context) {
-            WriteToolMode::InlineContent => Self::schema_with_content(),
-            WriteToolMode::PlaintextFollowup => self.input_schema(),
-        }
+        Self::model_input_schema(context)
     }
 
     fn is_readonly(&self) -> bool {

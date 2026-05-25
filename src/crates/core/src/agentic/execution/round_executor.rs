@@ -17,6 +17,7 @@ use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_result_storage;
 use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
+use bitfun_ai_adapters::types::ReasoningMode;
 use crate::service::config::types::WriteToolMode;
 use crate::service::config::GlobalConfigManager;
 use crate::util::elapsed_ms_u64;
@@ -41,7 +42,7 @@ pub struct RoundExecutor {
 impl RoundExecutor {
     const MAX_STREAM_ATTEMPTS: usize = 10;
     const RETRY_BASE_DELAY_MS: u64 = 500;
-    const WRITE_CONTENT_STREAM_IDLE_TIMEOUT_SECS: u64 = 60;
+    const WRITE_CONTENT_STREAM_IDLE_TIMEOUT_SECS: u64 = 45;
 
     fn has_user_visible_assistant_text(text: &str) -> bool {
         !text.trim().is_empty()
@@ -160,10 +161,26 @@ impl RoundExecutor {
                 Err(e) => {
                     error!("AI request failed: {}", e);
                     let err_msg = e.to_string();
+                    if Self::is_transient_network_error(&err_msg) && attempt_index < max_attempts - 1
+                    {
+                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        warn!(
+                            "Retrying AI request after connection failure: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
+                            context.session_id,
+                            round_id,
+                            attempt_index + 1,
+                            max_attempts,
+                            delay_ms,
+                            err_msg
+                        );
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        attempt_index += 1;
+                        continue;
+                    }
                     if Self::is_transient_network_error(&err_msg) {
                         return Err(BitFunError::AIClient(format!(
-                            "AI stream connection retry budget exhausted: {}",
-                            err_msg
+                            "Stream retry budget exhausted after {} attempts: {}",
+                            max_attempts, err_msg
                         )));
                     }
                     return Err(BitFunError::AIClient(err_msg));
@@ -205,6 +222,10 @@ impl RoundExecutor {
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
+                        strip_write_inline_content: matches!(
+                            Self::write_tool_mode(&context),
+                            WriteToolMode::PlaintextFollowup
+                        ),
                     },
                 )
                 .await
@@ -566,7 +587,15 @@ impl RoundExecutor {
         // plain text wrapped in <bitfun_contents> tags. This avoids having the
         // model emit large file contents inside JSON tool-call arguments, which
         // is a major source of JSON parse failures.
-        let tool_calls = stream_result.tool_calls.clone();
+        let mut tool_calls = stream_result.tool_calls.clone();
+        if matches!(
+            Self::write_tool_mode(&context),
+            WriteToolMode::PlaintextFollowup
+        ) {
+            FileWriteTool::strip_plaintext_followup_inline_content_from_tool_calls(
+                &mut tool_calls,
+            );
+        }
         let tool_calls = if matches!(
             Self::write_tool_mode(&context),
             WriteToolMode::PlaintextFollowup
@@ -973,117 +1002,31 @@ impl RoundExecutor {
                  5. Do NOT output anything outside the <bitfun_contents> tags — no explanations, no commentary, \
                  no thinking blocks, no markdown fences (```), no extra XML wrapper tags.\n\
                  6. The text between the tags must be EXACTLY what gets written to disk — raw file content only.\n\
-                 7. Do NOT output any tool_call XML, JSON tool invocations, or agent framework syntax inside the tags. \
-                 You are not calling a tool here — you are outputting raw file content.\n\
-                 <bitfun_contents>\n",
+                 7. Do NOT call any tools in this turn. Do NOT output tool_call XML, JSON tool invocations, \
+                 function_call blocks, or agent framework syntax inside or outside the tags. \
+                 You are not calling a tool here — you are outputting raw file content only.\n\
+                 8. Do NOT repeat, summarize, or narrate prior tool calls (Read, Bash, Edit, etc.). Start writing the actual file body immediately.\n\
+                 9. Do NOT output `[called tools:` markers, tool parameter JSON, or `<bitfun_contents>` / `</bitfun_contents>` tags — the opening tag is already provided via prefill.",
                 file_path = file_path
             );
 
-            // Strip tool_calls and tool results from history to prevent weak models
-            // from imitating tool-call format inside the generated file content.
-            let mut content_messages: Vec<AIMessage> = ai_messages
-                .iter()
-                .filter_map(|m| {
-                    if m.role == "tool" {
-                        // Drop tool result messages entirely
-                        None
-                    } else if m.tool_calls.is_some() {
-                        // Replace assistant tool-call messages with a plain-text summary
-                        let names = m
-                            .tool_calls
-                            .as_ref()
-                            .unwrap()
-                            .iter()
-                            .map(|tc| tc.name.as_str())
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        Some(AIMessage::assistant(format!("[called tools: {names}]")))
-                    } else {
-                        Some(m.clone())
-                    }
-                })
-                .collect();
-            // Add an assistant prefill to prime the model to output content directly
-            // inside the tags, reducing the chance of preamble text.
-            content_messages.push(AIMessage::user(content_prompt));
-            content_messages.push(AIMessage::assistant("<bitfun_contents>\n".to_string()));
+            let content_messages =
+                Self::build_write_content_messages(ai_messages, &content_prompt);
+            let write_client = ai_client.with_reasoning_mode(ReasoningMode::Disabled);
 
-            // Send the content-generation request (no tools, pure text output)
-            let full_text = match ai_client.send_message_stream(content_messages, None).await {
-                Ok(response) => {
-                    let mut text = String::new();
-                    let mut stream = response.stream;
-                    let watchdog_timeout =
-                        StreamProcessor::derive_watchdog_timeout(ai_client.stream_idle_timeout())
-                            .unwrap_or_else(|| {
-                                Duration::from_secs(Self::WRITE_CONTENT_STREAM_IDLE_TIMEOUT_SECS)
-                            });
-                    use futures::StreamExt;
-                    loop {
-                        if cancel_token.is_cancelled() {
-                            return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
-                        }
+            let full_text = self
+                .stream_write_tool_content(
+                    &write_client,
+                    content_messages,
+                    &file_path,
+                    &tool_id,
+                    context,
+                    round_id,
+                    cancel_token,
+                )
+                .await?;
 
-                        let chunk = match tokio::time::timeout(watchdog_timeout, stream.next())
-                            .await
-                        {
-                            Ok(Some(chunk)) => chunk,
-                            Ok(None) => break,
-                            Err(_) => {
-                                return Err(BitFunError::Timeout(format!(
-                                    "Write content generation timed out for {} after {} seconds without stream progress",
-                                    file_path,
-                                    watchdog_timeout.as_secs()
-                                )));
-                            }
-                        };
-
-                        match chunk {
-                            Ok(resp) => {
-                                let chunk_text = resp.text.unwrap_or_default();
-                                if !chunk_text.is_empty() {
-                                    text.push_str(&chunk_text);
-
-                                    // Emit streaming ParamsPartial so the UI
-                                    // shows a live content preview
-                                    let params = serde_json::json!({
-                                        "file_path": &file_path,
-                                        "content": &text,
-                                    });
-                                    self.emit_event(
-                                        AgenticEvent::ToolEvent {
-                                            session_id: context.session_id.clone(),
-                                            turn_id: context.dialog_turn_id.clone(),
-                                            round_id: round_id.to_string(),
-                                            tool_event: ToolEventData::ParamsPartial {
-                                                tool_id: tool_id.clone(),
-                                                tool_name: "Write".to_string(),
-                                                params: params.to_string(),
-                                            },
-                                        },
-                                        EventPriority::Normal,
-                                    )
-                                    .await;
-                                }
-                            }
-                            Err(e) => {
-                                error!("Error in Write content generation stream: {}", e);
-                                break;
-                            }
-                        }
-                    }
-                    text
-                }
-                Err(e) => {
-                    error!("Write content generation request failed: {}", e);
-                    return Err(BitFunError::AIClient(format!(
-                        "Write content generation failed for {}: {}",
-                        file_path, e
-                    )));
-                }
-            };
-
-            let content = extract_bitfun_contents(&full_text);
+            let content = extract_bitfun_contents_with_options(&full_text, true);
             if content.is_empty() {
                 warn!(
                     "Write content generation returned empty content for file_path={}",
@@ -1143,6 +1086,155 @@ impl RoundExecutor {
         }
 
         Ok(tool_calls)
+    }
+
+    /// Build the message list for Write content generation.
+    ///
+    /// Reuses the exact conversation prefix that was sent to the model for this
+    /// round so tool results, prior assistant tool-call turns, and other
+    /// context stay aligned (including provider-side prefix/KV reuse). Only
+    /// appends the write-content directive and an assistant prefill.
+    fn build_write_content_messages(
+        ai_messages: &[AIMessage],
+        content_prompt: &str,
+    ) -> Vec<AIMessage> {
+        let mut content_messages = ai_messages.to_vec();
+        content_messages.push(AIMessage::user(content_prompt.to_string()));
+        content_messages.push(AIMessage::assistant("<bitfun_contents>\n".to_string()));
+        content_messages
+    }
+
+    async fn stream_write_tool_content(
+        &self,
+        ai_client: &AIClient,
+        content_messages: Vec<AIMessage>,
+        file_path: &str,
+        tool_id: &str,
+        context: &RoundContext,
+        round_id: &str,
+        cancel_token: &CancellationToken,
+    ) -> BitFunResult<String> {
+        let mut attempt_index = 0usize;
+        loop {
+            if cancel_token.is_cancelled() {
+                return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
+            }
+
+            let stream_response = match ai_client
+                .send_message_stream_with_extra_body(
+                    content_messages.clone(),
+                    None,
+                    ai_client.write_content_generation_extra_body(),
+                )
+                .await
+            {
+                Ok(response) => response,
+                Err(e) => {
+                    let err_msg = e.to_string();
+                    if Self::is_transient_network_error(&err_msg)
+                        && attempt_index < Self::MAX_STREAM_ATTEMPTS - 1
+                    {
+                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        warn!(
+                            "Retrying Write content generation after transient error: file_path={}, attempt={}/{}, delay_ms={}, error={}",
+                            file_path,
+                            attempt_index + 1,
+                            Self::MAX_STREAM_ATTEMPTS,
+                            delay_ms,
+                            err_msg
+                        );
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        attempt_index += 1;
+                        continue;
+                    }
+                    error!("Write content generation request failed: {}", err_msg);
+                    return Err(BitFunError::AIClient(format!(
+                        "Write content generation failed for {}: {}",
+                        file_path, err_msg
+                    )));
+                }
+            };
+
+            let mut text = String::new();
+            let mut stream = stream_response.stream;
+            let watchdog_timeout =
+                StreamProcessor::derive_watchdog_timeout(ai_client.stream_idle_timeout())
+                    .unwrap_or_else(|| {
+                        Duration::from_secs(Self::WRITE_CONTENT_STREAM_IDLE_TIMEOUT_SECS)
+                    });
+            use futures::StreamExt;
+            loop {
+                if cancel_token.is_cancelled() {
+                    return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
+                }
+
+                let chunk = match tokio::time::timeout(watchdog_timeout, stream.next()).await {
+                    Ok(Some(chunk)) => chunk,
+                    Ok(None) => return Ok(text),
+                    Err(_) => {
+                        return Err(BitFunError::Timeout(format!(
+                            "Write content generation timed out for {} after {} seconds without stream progress",
+                            file_path,
+                            watchdog_timeout.as_secs()
+                        )));
+                    }
+                };
+
+                match chunk {
+                    Ok(resp) => {
+                        let chunk_text = resp.text.unwrap_or_default();
+                        if chunk_text.is_empty() {
+                            continue;
+                        }
+                        text.push_str(&chunk_text);
+
+                        let preview_content = extract_bitfun_contents_with_options(&text, true);
+                        let params = serde_json::json!({
+                            "file_path": file_path,
+                            "content": &preview_content,
+                        });
+                        self.emit_event(
+                            AgenticEvent::ToolEvent {
+                                session_id: context.session_id.clone(),
+                                turn_id: context.dialog_turn_id.clone(),
+                                round_id: round_id.to_string(),
+                                tool_event: ToolEventData::ParamsPartial {
+                                    tool_id: tool_id.to_string(),
+                                    tool_name: "Write".to_string(),
+                                    params: params.to_string(),
+                                },
+                            },
+                            EventPriority::Normal,
+                        )
+                        .await;
+                    }
+                    Err(e) => {
+                        error!("Error in Write content generation stream: {}", e);
+                        break;
+                    }
+                }
+            }
+
+            if !text.trim().is_empty() {
+                return Ok(text);
+            }
+
+            if attempt_index < Self::MAX_STREAM_ATTEMPTS - 1 {
+                let delay_ms = Self::retry_delay_ms(attempt_index);
+                warn!(
+                    "Retrying Write content generation after empty stream: file_path={}, attempt={}/{}, delay_ms={}",
+                    file_path,
+                    attempt_index + 1,
+                    Self::MAX_STREAM_ATTEMPTS,
+                    delay_ms
+                );
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                attempt_index += 1;
+                continue;
+            }
+
+            return Ok(text);
+        }
     }
 
     async fn write_content_preflight_error(
@@ -1349,24 +1441,31 @@ fn token_details_from_usage(
 
 /// Extract content from `<bitfun_contents>...</bitfun_contents>` tags.
 ///
-/// If the tags are present, returns the text between them (trimmed).
-/// If the tags are not present, returns the full text trimmed (fallback for
-/// models that ignore the tag instruction).
+/// When `prefill_open_tag` is true, the assistant prefill already opened the tag
+/// and streamed tokens are inner file content even if the opening tag is absent.
+#[cfg(test)]
 fn extract_bitfun_contents(text: &str) -> String {
+    extract_bitfun_contents_with_options(text, false)
+}
+
+fn extract_bitfun_contents_with_options(text: &str, prefill_open_tag: bool) -> String {
     const OPEN_TAG: &str = "<bitfun_contents>";
     const CLOSE_TAG: &str = "</bitfun_contents>";
 
-    let raw = if let Some(start) = text.find(OPEN_TAG) {
+    let raw = if let Some(start) = text.rfind(OPEN_TAG) {
         let content_start = start + OPEN_TAG.len();
         if let Some(end) = text[content_start..].find(CLOSE_TAG) {
             &text[content_start..content_start + end]
         } else {
-            // Opening tag found but no closing tag — take everything after the
-            // opening tag (the model may still be streaming or forgot to close).
             &text[content_start..]
         }
+    } else if prefill_open_tag {
+        if let Some(end) = text.find(CLOSE_TAG) {
+            &text[..end]
+        } else {
+            text
+        }
     } else {
-        // No tags at all — return the full text as a fallback
         text
     };
 
@@ -1378,6 +1477,9 @@ fn extract_bitfun_contents(text: &str) -> String {
 fn sanitize_write_content(content: &str) -> String {
     let mut s = content.to_string();
 
+    s = strip_called_tools_artifacts(&s);
+    s = strip_bitfun_content_tags(&s);
+
     // Strip multi-line thinking/reasoning XML blocks (e.g. <think ...>..</think >)
     // These are very common with reasoning models.
     s = strip_thinking_blocks(&s);
@@ -1386,8 +1488,41 @@ fn sanitize_write_content(content: &str) -> String {
     // that some models wrap around file content.
     s = strip_markdown_fences(&s);
 
-    // Trim leading/trailing whitespace left after stripping blocks
     s.trim().to_string()
+}
+
+fn strip_bitfun_content_tags(content: &str) -> String {
+    content
+        .replace("<bitfun_contents>", "")
+        .replace("</bitfun_contents>", "")
+}
+
+fn strip_called_tools_artifacts(content: &str) -> String {
+    let mut result = content.to_string();
+    while let Some(start) = result.find("[called tools:") {
+        let Some(end) = find_called_tools_block_end(&result[start..]) else {
+            break;
+        };
+        result = format!("{}{}", &result[..start], &result[start + end..]);
+    }
+    result
+}
+
+fn find_called_tools_block_end(block: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    for (index, ch) in block.char_indices() {
+        match ch {
+            '[' => depth += 1,
+            ']' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(index + ch.len_utf8());
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Strip thinking-style XML blocks from content. Handles multi-line blocks
@@ -1559,7 +1694,10 @@ fn detect_placeholder_patterns(content: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_bitfun_contents, RoundExecutor, StreamProcessor};
+    use super::{
+        extract_bitfun_contents, extract_bitfun_contents_with_options, RoundExecutor,
+        StreamProcessor,
+    };
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::execution::types::RoundContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
@@ -1773,6 +1911,43 @@ mod tests {
     }
 
     #[test]
+    fn write_content_messages_preserve_full_conversation_prefix() {
+        use bitfun_ai_adapters::types::{Message as AIMessage, ToolCall};
+        use crate::util::types::Message as CoreAIMessage;
+
+        let ai_messages = vec![
+            CoreAIMessage::user("Create the benchmark doc".to_string()),
+            CoreAIMessage::assistant_with_tools(vec![ToolCall {
+                id: "write-1".to_string(),
+                name: "Write".to_string(),
+                arguments: serde_json::json!({ "file_path": "notes.md" }),
+                raw_arguments: None,
+            }]),
+            AIMessage {
+                role: "tool".to_string(),
+                content: Some("file body from Read".to_string()),
+                reasoning_content: None,
+                thinking_signature: None,
+                tool_calls: None,
+                tool_call_id: Some("read-1".to_string()),
+                name: Some("Read".to_string()),
+                is_error: None,
+                tool_image_attachments: None,
+            },
+        ];
+
+        let messages =
+            RoundExecutor::build_write_content_messages(&ai_messages, "Write the full file.");
+
+        assert_eq!(messages.len(), 5);
+        assert!(messages[1].tool_calls.is_some());
+        assert_eq!(messages[2].role, "tool");
+        assert_eq!(messages[3].role, "user");
+        assert_eq!(messages[4].role, "assistant");
+        assert_eq!(messages[4].content.as_deref(), Some("<bitfun_contents>\n"));
+    }
+
+    #[test]
     fn extract_bitfun_contents_with_tags() {
         let text =
             "Some preamble\n<bitfun_contents>\nfn main() {}\n</bitfun_contents>\nSome trailing";
@@ -1795,6 +1970,47 @@ mod tests {
     fn extract_bitfun_contents_empty() {
         let text = "<bitfun_contents></bitfun_contents>";
         assert_eq!(extract_bitfun_contents(text), "");
+    }
+
+    #[test]
+    fn extract_bitfun_contents_prefilled_stream_without_open_tag() {
+        let text = "# Title\n\nBody paragraph.\n";
+        assert_eq!(
+            extract_bitfun_contents_with_options(text, true),
+            "# Title\n\nBody paragraph."
+        );
+    }
+
+    #[test]
+    fn extract_bitfun_contents_prefilled_stream_strips_called_tools_preamble() {
+        let text = concat!(
+            "[called tools: Read with params: {\"file_path\":\"docs/plan.md\"}]",
+            "[called tools: Bash with params: {\"command\":\"cat docs/plan.md\"}]",
+            "<bitfun_contents>\n# Plan\n\n## Section\n"
+        );
+        assert_eq!(
+            extract_bitfun_contents_with_options(text, true),
+            "# Plan\n\n## Section"
+        );
+    }
+
+    #[test]
+    fn extract_bitfun_contents_prefilled_stream_uses_last_open_tag() {
+        let text = concat!(
+            "[called tools: Read with params: {\"file_path\":\"a.md\"}]",
+            "<bitfun_contents>\n# Wrong\n",
+            "<bitfun_contents>\n# Correct\n"
+        );
+        assert_eq!(
+            extract_bitfun_contents_with_options(text, true),
+            "# Correct"
+        );
+    }
+
+    #[test]
+    fn sanitize_strips_called_tools_blocks_without_tags() {
+        let text = "[called tools: Write with params: {\"file_path\":\"a.md\"}]fn main() {}";
+        assert_eq!(extract_bitfun_contents(text), "fn main() {}");
     }
 
     // --- Sanitization tests ---

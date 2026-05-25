@@ -33,11 +33,23 @@ pub struct StreamResponse {
     pub raw_sse_rx: Option<mpsc::UnboundedReceiver<String>>,
 }
 
+/// Default time to wait for the first response headers / stream body to start.
+pub const DEFAULT_STREAM_TTFT_TIMEOUT_SECS: u64 = 30;
+
+/// Default idle time between streamed chunks once the stream has started.
+pub const DEFAULT_STREAM_IDLE_TIMEOUT_SECS: u64 = 45;
+
+/// Minimum TTFT for models with explicit reasoning enabled.
+pub const REASONING_STREAM_TTFT_TIMEOUT_SECS: u64 = 45;
+
 /// Runtime stream behavior shared across provider implementations.
 #[derive(Debug, Clone, Default)]
 pub struct StreamOptions {
     /// Maximum idle time between streamed chunks. `None` means wait indefinitely.
     pub idle_timeout: Option<Duration>,
+    /// Maximum time to wait for HTTP response headers when opening a stream.
+    /// `None` means wait indefinitely.
+    pub ttft_timeout: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +96,36 @@ impl AIClient {
         self.stream_options.idle_timeout
     }
 
+    /// Returns the configured time-to-first-token timeout for opening a stream, if any.
+    pub fn stream_ttft_timeout(&self) -> Option<Duration> {
+        self.stream_options.ttft_timeout
+    }
+
+    /// Clone this client with a different reasoning mode while reusing the HTTP client.
+    pub fn with_reasoning_mode(&self, reasoning_mode: crate::types::ReasoningMode) -> Self {
+        let mut config = self.config.clone();
+        config.reasoning_mode = reasoning_mode;
+        Self {
+            client: self.client.clone(),
+            config,
+            stream_options: self.stream_options.clone(),
+        }
+    }
+
+    /// Provider-specific request overrides for PlaintextFollowup Write content generation.
+    ///
+    /// OpenAI-compatible APIs accept `tool_choice: "none"` to suppress tool calls when
+    /// history still contains prior tool turns. Anthropic/Gemini reject that field.
+    pub fn write_content_generation_extra_body(&self) -> Option<serde_json::Value> {
+        match ApiFormat::parse(&self.config.format) {
+            Ok(ApiFormat::OpenAIChat | ApiFormat::OpenAIResponses) => {
+                Some(serde_json::json!({ "tool_choice": "none" }))
+            }
+            Ok(ApiFormat::Anthropic | ApiFormat::Gemini | ApiFormat::GeminiCodeAssist) => None,
+            Err(_) => None,
+        }
+    }
+
     pub async fn send_message_stream(
         &self,
         messages: Vec<Message>,
@@ -100,7 +142,7 @@ impl AIClient {
         tools: Option<Vec<ToolDefinition>>,
         extra_body: Option<serde_json::Value>,
     ) -> Result<StreamResponse> {
-        let max_tries = 10;
+        let max_tries = SEND_MESSAGE_STREAM_ATTEMPTS;
         match ApiFormat::parse(&self.config.format)? {
             ApiFormat::OpenAIChat => {
                 openai::chat::send_stream(self, messages, tools, extra_body, max_tries).await
@@ -969,5 +1011,20 @@ mod tests {
                 "expected permanent stream error: {msg}"
             );
         }
+    }
+
+    #[test]
+    fn write_content_generation_extra_body_is_openai_only() {
+        let openai = make_test_client("openai", None);
+        assert_eq!(
+            openai.write_content_generation_extra_body(),
+            Some(json!({ "tool_choice": "none" }))
+        );
+
+        let anthropic = make_test_client("anthropic", None);
+        assert_eq!(anthropic.write_content_generation_extra_body(), None);
+
+        let gemini = make_test_client("gemini", None);
+        assert_eq!(gemini.write_content_generation_extra_body(), None);
     }
 }

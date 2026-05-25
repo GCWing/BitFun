@@ -6,7 +6,7 @@
 //! 3. Invalidate cache when configuration changes
 //! 4. Provide global singleton access
 
-use crate::infrastructure::ai::{build_stream_options, AIClient};
+use crate::infrastructure::ai::{build_stream_options_for_model, AIClient};
 use crate::infrastructure::cli_credentials::{
     self, codex::CodexResolver, gemini::GeminiResolver, CredentialResolver,
 };
@@ -189,7 +189,7 @@ impl AIClientFactory {
             None
         };
 
-        let stream_options = build_stream_options(&global_config.ai);
+        let stream_options = build_stream_options_for_model(&global_config.ai, Some(model_config));
         let client = Arc::new(AIClient::new_with_runtime_options(
             ai_config,
             proxy_config,
