@@ -2763,7 +2763,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions,
         } = request;
 
-        let timeout_seconds = timeout_seconds.filter(|seconds| *seconds > 0);
+        let requested_timeout_seconds = timeout_seconds.filter(|seconds| *seconds > 0);
+        if let Some(seconds) = requested_timeout_seconds {
+            debug!(
+                "Ignoring requested subagent timeout: agent_type={}, timeout_seconds={}",
+                agent_type, seconds
+            );
+        }
+        let timeout_seconds = None;
         let timeout_error_message = match timeout_seconds {
             Some(seconds) => format!(
                 "Subagent '{}' timed out after {} seconds",

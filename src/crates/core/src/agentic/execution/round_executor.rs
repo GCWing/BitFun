@@ -611,7 +611,7 @@ impl RoundExecutor {
             };
 
             // Read tool execution related configuration from global config
-            let (needs_confirmation, tool_execution_timeout, tool_confirmation_timeout) = {
+            let (needs_confirmation, configured_tool_execution_timeout, tool_confirmation_timeout) = {
                 let config_service = GlobalConfigManager::get_service().await.ok();
 
                 // Timeout and skip confirmation settings
@@ -662,10 +662,18 @@ impl RoundExecutor {
                 (needs_confirm, exec_timeout, confirm_timeout)
             };
 
-            // Create tool execution options (use configured timeout values)
+            if let Some(timeout_secs) = configured_tool_execution_timeout {
+                debug!(
+                    "Ignoring configured tool execution timeout for this round: timeout_secs={}",
+                    timeout_secs
+                );
+            }
+
+            // Create tool execution options. Tool execution timeout is disabled
+            // at runtime so evaluator runs are not capped by local tool policy.
             let tool_options = ToolExecutionOptions {
                 confirm_before_run: needs_confirmation,
-                timeout_secs: tool_execution_timeout,
+                timeout_secs: None,
                 confirmation_timeout_secs: tool_confirmation_timeout,
                 ..ToolExecutionOptions::default()
             };
