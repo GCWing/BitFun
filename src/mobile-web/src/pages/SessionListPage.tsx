@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import LanguageToggleButton from '../components/LanguageToggleButton';
 import { useI18n } from '../i18n';
-import { RemoteSessionManager, type RecentWorkspaceEntry } from '../services/RemoteSessionManager';
+import { RemoteSessionManager, type RecentWorkspaceEntry, type SessionInfo } from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
 import { useTheme } from '../theme';
 import logoIcon from '../assets/Logo-ICON.png';
@@ -166,6 +166,100 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const [showAssistantPicker, setShowAssistantPicker] = useState(false);
   const [workspaceList, setWorkspaceList] = useState<Array<{ path: string; name: string; last_opened: string }>>([]);
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
+
+  // Search, rename & delete state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [menuSession, setMenuSession] = useState<SessionInfo | null>(null);
+  const [renameTarget, setRenameTarget] = useState<SessionInfo | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<SessionInfo | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const longPressPosRef = useRef({ x: 0, y: 0 });
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const filteredSessions = searchQuery.trim()
+    ? sessions.filter((s) => (s.name || t('sessions.untitledSession')).toLowerCase().includes(searchQuery.toLowerCase()))
+    : sessions;
+
+  // ── Long-press context menu ─────────────────────────────────────
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = undefined;
+    }
+  };
+
+  const handleSessionTouchStart = useCallback((s: SessionInfo, e: React.TouchEvent) => {
+    if (deleting || renaming) return;
+    clearLongPressTimer();
+    longPressPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    longPressTimerRef.current = setTimeout(() => {
+      setMenuSession(s);
+      longPressTimerRef.current = undefined;
+    }, 500);
+  }, [deleting, renaming]);
+
+  const handleSessionTouchMove = useCallback((e: React.TouchEvent) => {
+    const dx = Math.abs(e.touches[0].clientX - longPressPosRef.current.x);
+    const dy = Math.abs(e.touches[0].clientY - longPressPosRef.current.y);
+    if (dx > 10 || dy > 10) {
+      clearLongPressTimer();
+    }
+  }, []);
+
+  const handleSessionTouchEnd = useCallback(() => {
+    clearLongPressTimer();
+  }, []);
+
+  // ── Session actions ─────────────────────────────────────────────
+  const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setActionToast(msg);
+    toastTimerRef.current = setTimeout(() => setActionToast(null), 2500);
+  }, []);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      clearLongPressTimer();
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  const handleRename = useCallback(async () => {
+    if (!renameTarget || !renameValue.trim()) return;
+    setRenaming(true);
+    try {
+      await sessionMgr.renameSession(renameTarget.session_id, renameValue.trim());
+      useMobileStore.getState().updateSessionName(renameTarget.session_id, renameValue.trim());
+      setRenameTarget(null);
+      setMenuSession(null);
+    } catch (e: any) {
+      showToast(e.message || t('sessions.renameFailed'));
+    } finally {
+      setRenaming(false);
+    }
+  }, [renameTarget, renameValue, sessionMgr, showToast, t]);
+
+  const handleDelete = useCallback(async () => {
+    if (!deleteConfirmTarget) return;
+    setDeleting(true);
+    try {
+      await sessionMgr.deleteSession(deleteConfirmTarget.session_id);
+      useMobileStore.getState().removeSession(deleteConfirmTarget.session_id);
+      setDeleteConfirmTarget(null);
+      setMenuSession(null);
+      showToast(t('sessions.deleted'));
+    } catch (e: any) {
+      showToast(e.message || t('sessions.deleteFailed'));
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteConfirmTarget, sessionMgr, showToast, t]);
 
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -691,7 +785,28 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                   <div className="session-list__section-kicker">{t('sessions.recent')}</div>
                   <div className="session-list__section-title">{t('sessions.sessionHistory')}</div>
                 </div>
-                <div className="session-list__section-meta">{t('common.itemCount', { count: sessions.length })}</div>
+                <div className="session-list__section-meta">{t('common.itemCount', { count: filteredSessions.length })}</div>
+              </div>
+
+              {/* Search */}
+              <div className="session-list__search">
+                <svg className="session-list__search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  className="session-list__search-input"
+                  type="search"
+                  placeholder={t('sessions.searchSessions')}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  enterKeyHint="search"
+                />
+                {searchQuery && (
+                  <button className="session-list__search-clear" onClick={() => setSearchQuery('')} aria-label="Clear">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                )}
               </div>
 
               {loading && sessions.length === 0 && (
@@ -700,13 +815,20 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               {!loading && sessions.length === 0 && (
                 <div className="session-list__empty">{t('sessions.noSessions')}</div>
               )}
+              {!loading && sessions.length > 0 && filteredSessions.length === 0 && (
+                <div className="session-list__empty">{t('sessions.emptySearch')}</div>
+              )}
 
               <div className="session-list__cards">
-                {sessions.map((s) => (
+                {filteredSessions.map((s) => (
                   <div
                     key={s.session_id}
-                    className="session-list__item"
+                    className={`session-list__item${menuSession?.session_id === s.session_id ? ' session-list__item--active' : ''}`}
                     onClick={() => onSelectSession(s.session_id, s.name)}
+                    onTouchStart={(e) => handleSessionTouchStart(s, e)}
+                    onTouchMove={handleSessionTouchMove}
+                    onTouchEnd={handleSessionTouchEnd}
+                    onContextMenu={(e) => { e.preventDefault(); setMenuSession(s); }}
                   >
                     <div className={`session-list__item-icon session-list__item-icon--${s.agent_type}`}>
                       <SessionTypeIcon agentType={s.agent_type} />
@@ -729,6 +851,129 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               )}
             </section>
       </div>
+
+      {/* Context Menu Bottom Sheet */}
+      {menuSession && !renameTarget && !deleteConfirmTarget && (
+        <div className="session-list__menu-overlay" onClick={() => setMenuSession(null)}>
+          <div className="session-list__menu-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="session-list__menu-handle" />
+            <div className="session-list__menu-title">
+              {menuSession.name || t('sessions.untitledSession')}
+            </div>
+            <div className="session-list__menu-actions">
+              <button
+                className="session-list__menu-btn"
+                onClick={() => {
+                  setRenameTarget(menuSession);
+                  setRenameValue(menuSession.name || '');
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                <span>{t('sessions.renameSession')}</span>
+              </button>
+              <button
+                className="session-list__menu-btn session-list__menu-btn--danger"
+                onClick={() => setDeleteConfirmTarget(menuSession)}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                <span>{t('sessions.deleteSession')}</span>
+              </button>
+            </div>
+            <button className="session-list__menu-cancel" onClick={() => setMenuSession(null)}>
+              {t('sessions.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rename Modal */}
+      {renameTarget && (
+        <div className="session-list__picker-overlay" onClick={() => !renaming && setRenameTarget(null)}>
+          <div className="session-list__rename-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="session-list__rename-title">{t('sessions.renameTitle')}</h3>
+            <input
+              className="session-list__rename-input"
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder={t('sessions.sessionNamePlaceholder')}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRename();
+                if (e.key === 'Escape') setRenameTarget(null);
+              }}
+            />
+            <div className="session-list__rename-actions">
+              <button
+                className="session-list__rename-btn session-list__rename-btn--cancel"
+                onClick={() => setRenameTarget(null)}
+                disabled={renaming}
+              >
+                {t('sessions.cancel')}
+              </button>
+              <button
+                className="session-list__rename-btn session-list__rename-btn--save"
+                onClick={handleRename}
+                disabled={renaming || !renameValue.trim()}
+              >
+                {renaming ? '...' : t('sessions.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      {deleteConfirmTarget && (
+        <div className="session-list__picker-overlay" onClick={() => !deleting && setDeleteConfirmTarget(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setDeleteConfirmTarget(null);
+            if (e.key === 'Enter' && !deleting) handleDelete();
+          }}>
+          <div className="session-list__confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="session-list__confirm-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <h3 className="session-list__confirm-title">{t('sessions.confirmDelete')}</h3>
+            <p className="session-list__confirm-desc">
+              "{deleteConfirmTarget.name || t('sessions.untitledSession')}"
+              <br />
+              {t('sessions.confirmDeleteDesc')}
+            </p>
+            <div className="session-list__confirm-actions">
+              <button
+                className="session-list__confirm-btn session-list__confirm-btn--cancel"
+                onClick={() => setDeleteConfirmTarget(null)}
+                disabled={deleting}
+              >
+                {t('sessions.cancel')}
+              </button>
+              <button
+                className="session-list__confirm-btn session-list__confirm-btn--danger"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? '...' : t('sessions.deleteSession')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Toast */}
+      {actionToast && (
+        <div className="session-list__toast" role="alert" aria-live="assertive">{actionToast}</div>
+      )}
     </div>
   );
 };

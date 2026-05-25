@@ -331,6 +331,14 @@ export class RemoteSessionManager {
     await this.request({ cmd: 'delete_session', session_id: sessionId });
   }
 
+  async renameSession(sessionId: string, title: string): Promise<void> {
+    await this.request({
+      cmd: 'update_session_title',
+      session_id: sessionId,
+      title,
+    });
+  }
+
   async answerQuestion(toolId: string, answers: any): Promise<void> {
     await this.request({ cmd: 'answer_question', tool_id: toolId, answers });
   }
