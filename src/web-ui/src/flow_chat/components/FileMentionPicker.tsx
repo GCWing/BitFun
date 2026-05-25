@@ -389,6 +389,23 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     }
   }, [isOpen, handleKeyDown]);
 
+  // Close picker when clicking outside
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+
+    // Use mousedown to capture clicks before they trigger other effects (e.g. blur on editor)
+    document.addEventListener('mousedown', handleClickOutside, true);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside, true);
+    };
+  }, [isOpen, onClose]);
+
   useEffect(() => {
     if (containerRef.current && displayItems.length > 0) {
       const container = containerRef.current;
