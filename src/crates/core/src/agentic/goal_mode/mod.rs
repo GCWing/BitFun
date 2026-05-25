@@ -35,6 +35,19 @@ pub fn clear_goal_mode_patch() -> serde_json::Value {
     })
 }
 
+/// In `/goal` mode, subagents start without an active timeout. The requested
+/// timeout is still preserved on the handle so the user can re-enable a limit.
+pub fn effective_subagent_timeout_seconds(
+    timeout_seconds: Option<u64>,
+    parent_goal_mode_active: bool,
+) -> Option<u64> {
+    if parent_goal_mode_active {
+        None
+    } else {
+        timeout_seconds.filter(|seconds| *seconds > 0)
+    }
+}
+
 pub fn message_text(message: &Message) -> Option<String> {
     match &message.content {
         MessageContent::Text(text) => Some(text.clone()),
@@ -440,6 +453,13 @@ fn parse_goal_verification(raw: &str) -> BitFunResult<GoalVerificationResult> {
 mod tests {
     use super::*;
     use crate::agentic::core::Message;
+
+    #[test]
+    fn effective_subagent_timeout_defaults_to_unlimited_in_goal_mode() {
+        assert_eq!(effective_subagent_timeout_seconds(Some(1200), true), None);
+        assert_eq!(effective_subagent_timeout_seconds(Some(1200), false), Some(1200));
+        assert_eq!(effective_subagent_timeout_seconds(None, true), None);
+    }
 
     #[test]
     fn goal_mode_patch_round_trips() {

@@ -43,6 +43,7 @@ export interface ToolTimeoutIndicatorProps {
   completedStatus?: 'success' | 'error' | 'cancelled';
   completedTooltip?: string;
   completedFailureReason?: string;
+  defaultTimeoutDisabled?: boolean;
 }
 
 function renderCompletedDurationIcon(status: ToolTimeoutIndicatorProps['completedStatus']) {
@@ -65,14 +66,10 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
   completedStatus,
   completedTooltip,
   completedFailureReason,
+  defaultTimeoutDisabled = false,
 }) => {
   const { t } = useTranslation('flow-chat');
-  const { elapsedMs, remainingMs } = useLiveElapsedTime(
-    startTime,
-    isRunning,
-    timeoutMs,
-    false,
-  );
+  const remainingMsRef = useRef<number | null>(null);
 
   const {
     isTimeoutDisabled,
@@ -82,7 +79,21 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
     extendTimeout,
     closePopover,
     remainingAtDisable,
-  } = useSubagentTimeoutControl(subagentSessionId, isRunning, timeoutMs, remainingMs);
+  } = useSubagentTimeoutControl(
+    subagentSessionId,
+    isRunning,
+    timeoutMs,
+    remainingMsRef.current,
+    defaultTimeoutDisabled,
+  );
+
+  const { elapsedMs, remainingMs } = useLiveElapsedTime(
+    startTime,
+    isRunning,
+    timeoutMs,
+    isTimeoutDisabled,
+  );
+  remainingMsRef.current = remainingMs;
 
   const popoverRef = useRef<HTMLDivElement>(null);
 

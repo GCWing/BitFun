@@ -501,6 +501,10 @@ impl Tool for TaskTool {
         "Task"
     }
 
+    fn manages_own_execution_timeout(&self) -> bool {
+        true
+    }
+
     async fn description(&self) -> BitFunResult<String> {
         Ok(self.render_description())
     }

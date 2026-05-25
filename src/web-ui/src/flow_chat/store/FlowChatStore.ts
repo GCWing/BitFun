@@ -486,6 +486,29 @@ export class FlowChatStore {
     });
   }
 
+  public setGoalModeActive(sessionId: string, active: boolean): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      if (Boolean(session.goalModeActive) === active) return prev;
+
+      const updatedSession = {
+        ...session,
+        goalModeActive: active,
+        lastActiveAt: Date.now(),
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, updatedSession);
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+  }
+
   public updateSessionModelName(sessionId: string, modelName: string): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);

@@ -22,7 +22,7 @@ describe('AgentAPI', () => {
     expect(invokeMock).toHaveBeenCalledWith('set_subagent_timeout', {
       request: {
         sessionId: 'subagent-session',
-        action: { type: 'Disable' },
+        action: { type: 'Disable', payload: null },
       },
     });
   });

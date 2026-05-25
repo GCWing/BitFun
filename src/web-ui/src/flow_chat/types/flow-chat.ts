@@ -344,6 +344,9 @@ export interface Session {
   /** Logical subagent id / type used to launch this hidden subagent session. */
   subagentType?: string;
 
+  /** Whether `/goal` mode is active for this session. */
+  goalModeActive?: boolean;
+
   /**
    * Lightweight markers for /btw threads created from this session.
    * Stored only on the parent session for quick navigation.

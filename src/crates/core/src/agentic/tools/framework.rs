@@ -370,6 +370,13 @@ pub trait Tool: Send + Sync {
         !self.is_readonly()
     }
 
+    /// Whether this tool manages its own execution timeout (for example via the
+    /// subagent timeout handle) and should not be wrapped by the global tool
+    /// pipeline timeout.
+    fn manages_own_execution_timeout(&self) -> bool {
+        false
+    }
+
     /// Whether to support streaming output
     fn supports_streaming(&self) -> bool {
         false

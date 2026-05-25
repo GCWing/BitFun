@@ -19,6 +19,7 @@ import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import type { ReviewerContext } from '@/shared/services/reviewTeamService';
 import { SubagentProjectionView } from '../subagent/SubagentProjectionView';
 import { getSubagentProjectionState } from '../../utils/subagentProjection';
+import { useSessionGoalModeActive } from '../../hooks/useSessionGoalModeActive';
 import './TaskDetailPanel.scss';
 
 const log = createLogger('TaskDetailPanel');
@@ -171,6 +172,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
   const { t } = useTranslation('flow-chat');
   const { t: tAgents } = useTranslation('scenes/agents');
   const { toolItem: initialToolItem, taskInput, sessionId } = data || {};
+  const defaultTimeoutDisabled = useSessionGoalModeActive(sessionId);
   const parentTaskToolId = initialToolItem?.id;
   const parentTaskToolCallId = initialToolItem?.toolCall?.id;
   const directSubagentSessionId = initialToolItem?.subagentSessionId;
@@ -477,6 +479,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
           }
           showControls={true}
           subagentSessionId={subagentSessionId}
+          defaultTimeoutDisabled={defaultTimeoutDisabled}
           completedDurationMs={taskDurationMs}
           completedStatus={isFailed ? 'error' : status === 'cancelled' ? 'cancelled' : isCompleted ? 'success' : undefined}
           completedFailureReason={isFailed ? getErrorMessage() : undefined}

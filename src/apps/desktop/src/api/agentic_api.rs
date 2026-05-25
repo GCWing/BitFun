@@ -1771,4 +1771,30 @@ mod tests {
         assert_eq!(tool_result.result["exit_code"], 0);
         assert_eq!(tool_result.result_for_assistant, None);
     }
+
+    #[test]
+    fn deserializes_set_subagent_timeout_disable_without_payload_field() {
+        let request: SetSubagentTimeoutRequest = serde_json::from_str(
+            r#"{"sessionId":"subagent-session","action":{"type":"Disable"}}"#,
+        )
+        .expect("disable action without payload should deserialize");
+        assert_eq!(request.session_id, "subagent-session");
+        assert!(matches!(
+            request.action,
+            SetSubagentTimeoutActionDTO::Disable
+        ));
+    }
+
+    #[test]
+    fn deserializes_set_subagent_timeout_disable_with_null_payload() {
+        let request: SetSubagentTimeoutRequest = serde_json::from_str(
+            r#"{"sessionId":"subagent-session","action":{"type":"Disable","payload":null}}"#,
+        )
+        .expect("disable action with null payload should deserialize");
+        assert_eq!(request.session_id, "subagent-session");
+        assert!(matches!(
+            request.action,
+            SetSubagentTimeoutActionDTO::Disable
+        ));
+    }
 }

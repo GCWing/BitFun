@@ -35,6 +35,10 @@ export function handleGoalVerificationFinished(
 
   flowChatStore.removeLocalGoalVerifyingTurn(payload.sessionId);
 
+  if (payload.outcome === 'achieved' || payload.outcome === 'limit_reached') {
+    flowChatStore.setGoalModeActive(payload.sessionId, false);
+  }
+
   switch (payload.outcome) {
     case 'achieved':
       if (messages.achievedMessage) {

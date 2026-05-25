@@ -20,6 +20,7 @@ use crate::agentic::goal_mode::{
     build_goal_kickoff_messages, build_goal_continuation_plan, clear_goal_mode_patch,
     generate_goal_from_context, goal_mode_from_custom_metadata, goal_mode_patch,
     should_skip_goal_verification_for_turn, user_facing_goal_mode_error,
+    effective_subagent_timeout_seconds,
     verify_goal_achievement, wrap_user_input_with_goal_reminder, GoalActivationResult,
     GoalContinuationPlan, GoalModeState, MAX_GOAL_CONTINUATIONS, now_ms,
 };
@@ -3461,8 +3462,30 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions,
         } = request;
 
-        let timeout_seconds = timeout_seconds.filter(|seconds| *seconds > 0);
-        let timeout_error_message = match timeout_seconds {
+        let requested_timeout_seconds = timeout_seconds.filter(|seconds| *seconds > 0);
+        let parent_goal_mode_active = if let Some(parent_info) = subagent_parent_info.as_ref() {
+            matches!(
+                self.load_active_goal_mode(&parent_info.session_id).await,
+                Ok(Some(_))
+            )
+        } else {
+            false
+        };
+        if parent_goal_mode_active {
+            let parent_session_id = subagent_parent_info
+                .as_ref()
+                .map(|info| info.session_id.as_str())
+                .unwrap_or("-");
+            debug!(
+                "Subagent timeout disabled by default for active goal mode: agent_type={}, parent_session_id={}",
+                agent_type, parent_session_id
+            );
+        }
+        let timeout_seconds = effective_subagent_timeout_seconds(
+            requested_timeout_seconds,
+            parent_goal_mode_active,
+        );
+        let timeout_error_message = match timeout_seconds.or(requested_timeout_seconds) {
             Some(seconds) => format!(
                 "Subagent '{}' timed out after {} seconds",
                 agent_type, seconds
@@ -3575,7 +3598,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let timeout_handle = Arc::new(SubagentTimeoutHandle {
             deadline_tx: deadline_tx.clone(),
             session_id: session_id.clone(),
-            original_timeout_seconds: timeout_seconds,
+            original_timeout_seconds: requested_timeout_seconds,
             remaining_at_pause: std::sync::Mutex::new(None),
         });
         {
@@ -3745,7 +3768,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         // Dynamic timeout loop: deadline can be adjusted via watch channel.
         let execution_outcome = loop {
-            let current_deadline = *deadline_rx.borrow();
+            let current_deadline = *deadline_rx.borrow_and_update();
             match current_deadline {
                 Some(expires_at) if Instant::now() >= expires_at => {
                     break SubagentExecutionOutcome::TimedOut;
@@ -4982,6 +5005,27 @@ mod tests {
         assert_eq!(normalize_subagent_max_concurrency(0), 1);
         assert_eq!(normalize_subagent_max_concurrency(5), 5);
         assert_eq!(normalize_subagent_max_concurrency(usize::MAX), 64);
+    }
+
+    #[test]
+    fn subagent_timeout_disable_clears_active_deadline() {
+        use super::SubagentTimeoutAction;
+        use std::sync::Mutex;
+        use tokio::sync::watch;
+        use tokio::time::{Duration, Instant};
+
+        let initial_deadline = Instant::now() + Duration::from_secs(1200);
+        let (deadline_tx, mut deadline_rx) = watch::channel(Some(initial_deadline));
+        let handle = super::SubagentTimeoutHandle {
+            deadline_tx,
+            session_id: "subagent-session".to_string(),
+            original_timeout_seconds: Some(1200),
+            remaining_at_pause: Mutex::new(None),
+        };
+
+        handle.apply_action(SubagentTimeoutAction::Disable);
+
+        assert!(deadline_rx.borrow_and_update().is_none());
     }
 
     #[test]

@@ -1228,7 +1228,13 @@ impl ToolPipeline {
 
         let execution_future = tool.call(&task.tool_call.arguments, &tool_context);
 
-        let tool_results = match task.options.timeout_secs {
+        let pipeline_timeout_secs = if tool.manages_own_execution_timeout() {
+            None
+        } else {
+            task.options.timeout_secs
+        };
+
+        let tool_results = match pipeline_timeout_secs {
             Some(timeout_secs) => {
                 let timeout_duration = Duration::from_secs(timeout_secs);
                 let result = timeout(timeout_duration, execution_future)
@@ -1507,6 +1513,8 @@ impl ToolPipeline {
 mod tests {
     use super::*;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
+    use crate::agentic::tools::framework::Tool;
+    use crate::agentic::tools::implementations::task_tool::TaskTool;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use serde_json::json;
     use std::collections::HashMap;
@@ -1703,5 +1711,11 @@ mod tests {
             result.is_ok(),
             "GetToolSpec duplicate-load validation moved into GetToolSpec itself"
         );
+    }
+
+    #[test]
+    fn task_tool_manages_its_own_execution_timeout() {
+        let task_tool = TaskTool::new();
+        assert!(task_tool.manages_own_execution_timeout());
     }
 }
