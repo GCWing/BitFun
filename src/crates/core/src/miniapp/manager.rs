@@ -9,27 +9,26 @@ use crate::miniapp::types::{
 use crate::product_domain_runtime::CoreProductDomainRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_product_domains::miniapp::customization::{
-    apply_draft_customization_metadata, decline_builtin_update_metadata,
+    MiniAppCustomizationBaseline, MiniAppCustomizationLocalSnapshot, MiniAppCustomizationMetadata,
+    MiniAppPermissionDiff, apply_draft_customization_metadata, decline_builtin_update_metadata,
     declined_builtin_update_needs_local_snapshot, diff_permissions,
     is_current_declined_builtin_update, mark_builtin_update_available_metadata,
-    MiniAppCustomizationBaseline, MiniAppCustomizationLocalSnapshot, MiniAppCustomizationMetadata,
-    MiniAppPermissionDiff,
 };
 use bitfun_product_domains::miniapp::draft::{
-    build_draft_manifest, build_draft_response, MiniAppDraft, MiniAppDraftManifest,
+    MiniAppDraft, MiniAppDraftManifest, build_draft_manifest, build_draft_response,
 };
 use bitfun_product_domains::miniapp::lifecycle::{
-    apply_draft_permission_update_result, apply_draft_source_sync_result, apply_draft_to_active,
-    apply_import_runtime_state, apply_update_patch, build_created_app, build_worker_revision,
-    ensure_runtime_state, prepare_draft_app, workspace_dir_string, MiniAppCreateInput,
-    MiniAppUpdatePatch,
+    MiniAppCreateInput, MiniAppUpdatePatch, apply_draft_permission_update_result,
+    apply_draft_source_sync_result, apply_draft_to_active, apply_update_patch, build_created_app,
+    build_worker_revision, ensure_runtime_state, prepare_draft_app, prepare_imported_meta,
+    workspace_dir_string,
 };
 use bitfun_product_domains::miniapp::ports::{
     MiniAppPortError, MiniAppPortErrorKind, MiniAppRuntimeFacade,
 };
 use bitfun_product_domains::miniapp::storage::{
-    build_import_fallbacks, MiniAppImportLayout, COMPILED_HTML, ESM_DEPS_JSON, META_JSON,
-    PACKAGE_JSON, REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON,
+    COMPILED_HTML, ESM_DEPS_JSON, META_JSON, MiniAppImportLayout, PACKAGE_JSON,
+    REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON, build_import_fallbacks,
 };
 use chrono::Utc;
 use std::collections::HashMap;
@@ -734,9 +733,7 @@ impl MiniAppManager {
 
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().timestamp_millis();
-        meta.id = id.clone();
-        meta.created_at = now;
-        meta.updated_at = now;
+        prepare_imported_meta(&mut meta, &id, now);
 
         let fallbacks = build_import_fallbacks(&id);
         let dest_dir = self.path_manager.miniapp_dir(&id);
@@ -804,10 +801,11 @@ impl MiniAppManager {
             .await
             .map_err(|_e| BitFunError::io("Failed to write placeholder compiled.html"))?;
 
-        let mut app = self.recompile(&id, "dark", workspace_root).await?;
-        apply_import_runtime_state(&mut app);
-        self.storage.save(&app).await?;
-        Ok(app)
+        let app = self.recompile(&id, "dark", workspace_root).await?;
+        self.runtime_facade()
+            .persist_import_runtime_state(app)
+            .await
+            .map_err(map_miniapp_port_error)
     }
 }
 
@@ -1057,10 +1055,12 @@ mod tests {
         .unwrap();
         assert_eq!(package_json["name"], format!("miniapp-{}", imported.id));
         assert_eq!(package_json["dependencies"], serde_json::json!({}));
-        assert!(tokio::fs::read_to_string(app_dir.join(COMPILED_HTML))
-            .await
-            .unwrap()
-            .contains("textContent = 'imported'"));
+        assert!(
+            tokio::fs::read_to_string(app_dir.join(COMPILED_HTML))
+                .await
+                .unwrap()
+                .contains("textContent = 'imported'")
+        );
 
         let _ = tokio::fs::remove_dir_all(import_root).await;
     }

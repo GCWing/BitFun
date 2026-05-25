@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use crate::miniapp::types::{
-    MiniApp, MiniAppAiContext, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource,
+    MiniApp, MiniAppAiContext, MiniAppMeta, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource,
 };
 
 #[derive(Debug, Clone)]
@@ -310,6 +310,12 @@ pub fn apply_import_runtime_state(app: &mut MiniApp) {
     );
 }
 
+pub fn prepare_imported_meta(meta: &mut MiniAppMeta, id: &str, now: i64) {
+    meta.id = id.to_string();
+    meta.created_at = now;
+    meta.updated_at = now;
+}
+
 pub fn build_worker_revision(app: &MiniApp, policy_json: &str) -> String {
     format!(
         "{}::{}::{}",
@@ -321,4 +327,37 @@ pub fn workspace_dir_string(workspace_root: Option<&Path>) -> String {
     workspace_root
         .map(|path| path.to_string_lossy().to_string())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prepare_imported_meta_rehomes_identity_and_timestamps_without_changing_product_fields() {
+        let mut meta = crate::miniapp::types::MiniAppMeta {
+            id: "template-id".to_string(),
+            name: "Imported".to_string(),
+            description: "Imported app".to_string(),
+            icon: "box".to_string(),
+            category: "utility".to_string(),
+            tags: vec!["imported".to_string()],
+            version: 7,
+            created_at: 11,
+            updated_at: 12,
+            permissions: crate::miniapp::types::MiniAppPermissions::default(),
+            ai_context: None,
+            runtime: Default::default(),
+            i18n: None,
+        };
+
+        prepare_imported_meta(&mut meta, "new-id", 1234);
+
+        assert_eq!(meta.id, "new-id");
+        assert_eq!(meta.created_at, 1234);
+        assert_eq!(meta.updated_at, 1234);
+        assert_eq!(meta.name, "Imported");
+        assert_eq!(meta.description, "Imported app");
+        assert_eq!(meta.version, 7);
+    }
 }

@@ -5,8 +5,8 @@
 //! execution until equivalence tests cover a concrete adapter.
 
 use crate::miniapp::lifecycle::{
-    apply_recompile_result, apply_sync_from_fs_result, clear_worker_restart_required_state,
-    mark_deps_installed_state, prepare_rollback_app,
+    apply_import_runtime_state, apply_recompile_result, apply_sync_from_fs_result,
+    clear_worker_restart_required_state, mark_deps_installed_state, prepare_rollback_app,
 };
 use crate::miniapp::runtime::DetectedRuntime;
 use crate::miniapp::types::{MiniApp, MiniAppMeta, MiniAppSource, NpmDep};
@@ -68,7 +68,7 @@ pub trait MiniAppStoragePort: Send + Sync {
     fn load_source(&self, app_id: String) -> MiniAppPortFuture<'_, MiniAppSource>;
     fn save(&self, app: MiniApp) -> MiniAppPortFuture<'_, ()>;
     fn save_version(&self, app_id: String, version: u32, app: MiniApp)
-        -> MiniAppPortFuture<'_, ()>;
+    -> MiniAppPortFuture<'_, ()>;
     fn load_app_storage(&self, app_id: String) -> MiniAppPortFuture<'_, serde_json::Value>;
     fn save_app_storage(
         &self,
@@ -185,5 +185,142 @@ impl<'a> MiniAppRuntimeFacade<'a> {
             .await?;
         self.storage.save(app.clone()).await?;
         Ok(app)
+    }
+
+    pub async fn persist_import_runtime_state(
+        &self,
+        mut app: MiniApp,
+    ) -> MiniAppPortResult<MiniApp> {
+        apply_import_runtime_state(&mut app);
+        self.storage.save(app.clone()).await?;
+        Ok(app)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::miniapp::types::{MiniAppPermissions, MiniAppRuntimeState};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct MemoryStorage {
+        saved: Arc<Mutex<Vec<MiniApp>>>,
+    }
+
+    impl MiniAppStoragePort for MemoryStorage {
+        fn list_app_ids(&self) -> MiniAppPortFuture<'_, Vec<String>> {
+            Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+        }
+
+        fn load(&self, _app_id: String) -> MiniAppPortFuture<'_, MiniApp> {
+            Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+        }
+
+        fn load_meta(
+            &self,
+            _app_id: String,
+        ) -> MiniAppPortFuture<'_, crate::miniapp::types::MiniAppMeta> {
+            Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+        }
+
+        fn load_source(&self, _app_id: String) -> MiniAppPortFuture<'_, MiniAppSource> {
+            Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+        }
+
+        fn save(&self, app: MiniApp) -> MiniAppPortFuture<'_, ()> {
+            let saved = self.saved.clone();
+            Box::pin(async move {
+                saved.lock().unwrap().push(app);
+                Ok(())
+            })
+        }
+
+        fn save_version(
+            &self,
+            _app_id: String,
+            _version: u32,
+            _app: MiniApp,
+        ) -> MiniAppPortFuture<'_, ()> {
+            Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+        }
+
+        fn load_app_storage(&self, _app_id: String) -> MiniAppPortFuture<'_, serde_json::Value> {
+            Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+        }
+
+        fn save_app_storage(
+            &self,
+            _app_id: String,
+            _key: String,
+            _value: serde_json::Value,
+        ) -> MiniAppPortFuture<'_, ()> {
+            Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+        }
+
+        fn delete(&self, _app_id: String) -> MiniAppPortFuture<'_, ()> {
+            Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+        }
+
+        fn list_versions(&self, _app_id: String) -> MiniAppPortFuture<'_, Vec<u32>> {
+            Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+        }
+
+        fn load_version(&self, _app_id: String, _version: u32) -> MiniAppPortFuture<'_, MiniApp> {
+            Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+        }
+    }
+
+    fn imported_app() -> MiniApp {
+        MiniApp {
+            id: "imported".to_string(),
+            name: "Imported".to_string(),
+            description: "Imported app".to_string(),
+            icon: "box".to_string(),
+            category: "utility".to_string(),
+            tags: Vec::new(),
+            version: 7,
+            created_at: 11,
+            updated_at: 12,
+            source: MiniAppSource::default(),
+            compiled_html: "<html></html>".to_string(),
+            permissions: MiniAppPermissions::default(),
+            ai_context: None,
+            runtime: MiniAppRuntimeState::default(),
+            i18n: None,
+        }
+    }
+
+    #[test]
+    fn import_runtime_state_facade_applies_state_and_persists_once() {
+        let storage = MemoryStorage::default();
+        let saved = storage.saved.clone();
+        let facade = MiniAppRuntimeFacade::new(&storage);
+
+        let app = block_on(facade.persist_import_runtime_state(imported_app())).unwrap();
+
+        assert_eq!(app.runtime.source_revision, "src:7:12");
+        assert_eq!(app.runtime.deps_revision, "");
+        assert!(!app.runtime.deps_dirty);
+        assert!(app.runtime.worker_restart_required);
+        assert!(!app.runtime.ui_recompile_required);
+        let saved = saved.lock().unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].id, app.id);
+        assert_eq!(
+            saved[0].runtime.source_revision,
+            app.runtime.source_revision
+        );
+        assert_eq!(saved[0].runtime.deps_revision, app.runtime.deps_revision);
+    }
+
+    fn block_on<T>(future: impl std::future::Future<Output = T>) -> T {
+        let waker = std::task::Waker::noop();
+        let mut context = std::task::Context::from_waker(waker);
+        let mut future = std::pin::pin!(future);
+        match future.as_mut().poll(&mut context) {
+            std::task::Poll::Ready(value) => value,
+            std::task::Poll::Pending => panic!("test future unexpectedly pending"),
+        }
     }
 }

@@ -14,7 +14,7 @@ the product tool runtime.
   remote POSIX path pure contracts, provider-neutral path resolution /
   absolute-path checks, runtime artifact reference assembly, file guidance
   markers, file-read freshness comparison policy, oversized tool-result
-  preview/rendering policy, allowed-list /
+  preview/rendering policy, tool execution result/error/invalid-call presentation policy, allowed-list /
   collapsed-tool execution gate policy, generic/static/dynamic provider contracts, pure
   manifest/exposure helpers, generic contextual prompt-manifest resolver
   contracts, generic catalog snapshot provider contracts, generic GetToolSpec

@@ -7,6 +7,7 @@ pub mod file_guidance;
 pub mod file_read_freshness;
 pub mod framework;
 pub mod input_validator;
+pub mod tool_execution_presentation;
 pub mod tool_result_storage;
 
 pub use bitfun_core_types::ToolImageAttachment;
@@ -58,6 +59,13 @@ pub use framework::{
     validate_get_tool_spec_input, validate_tool_allowed_by_list,
 };
 pub use input_validator::InputValidator;
+pub use tool_execution_presentation::{
+    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, ToolExecutionErrorPresentation,
+    USER_STEERING_INTERRUPTED_MESSAGE, build_invalid_tool_call_error_message,
+    build_tool_execution_error_presentation, build_user_steering_interrupted_presentation,
+    render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
+    truncate_raw_tool_arguments_preview_to, truncate_tool_arguments_preview,
+};
 pub use tool_result_storage::{
     DEFAULT_MAX_TOOL_RESULT_CHARS, MAX_TOOL_RESULTS_PER_ROUND_CHARS, PERSISTED_OUTPUT_CLOSING_TAG,
     PERSISTED_OUTPUT_TAG, PersistedToolOutput, TOOL_RESULT_PREVIEW_CHARS,

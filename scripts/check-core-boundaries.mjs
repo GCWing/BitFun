@@ -573,6 +573,36 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+    patterns: [
+      {
+        regex: /\bfn serialize_result_for_assistant\b/,
+        message:
+          'core tool pipeline must not own provider-neutral assistant result rendering; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bconst TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES\b/,
+        message:
+          'core tool pipeline must not own tool error argument preview limits; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn truncate_arguments_preview\b/,
+        message:
+          'core tool pipeline must not own tool error argument preview rendering; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn truncate_raw_arguments_preview\b/,
+        message:
+          'core tool pipeline must not own raw tool argument preview rendering; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bconst USER_STEERING_INTERRUPTED_MESSAGE\b/,
+        message:
+          'core tool pipeline must not own steering-interrupted result presentation; use bitfun-agent-tools',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/miniapp/manager.rs',
     patterns: [
       {
@@ -2117,6 +2147,49 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/agent-tools/src/tool_execution_presentation.rs',
+    reason:
+      'agent-tools owns provider-neutral tool execution result and error presentation helpers',
+    patterns: [
+      {
+        regex: /\bpub const TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES\b/,
+        message: 'missing tool error argument preview limit contract',
+      },
+      {
+        regex: /\bpub const USER_STEERING_INTERRUPTED_MESSAGE\b/,
+        message: 'missing steering-interrupted assistant message contract',
+      },
+      {
+        regex: /\bpub struct ToolExecutionErrorPresentation\b/,
+        message: 'missing tool execution error presentation DTO',
+      },
+      {
+        regex: /\bpub fn render_tool_result_for_assistant\b/,
+        message: 'missing tool result assistant rendering helper',
+      },
+      {
+        regex: /\bpub fn truncate_tool_arguments_preview\b/,
+        message: 'missing structured tool argument preview helper',
+      },
+      {
+        regex: /\bpub fn truncate_raw_tool_arguments_preview\b/,
+        message: 'missing raw tool argument preview helper',
+      },
+      {
+        regex: /\bpub fn build_tool_execution_error_presentation\b/,
+        message: 'missing tool execution error presentation helper',
+      },
+      {
+        regex: /\bpub fn build_user_steering_interrupted_presentation\b/,
+        message: 'missing steering-interrupted presentation helper',
+      },
+      {
+        regex: /\bpub fn build_invalid_tool_call_error_message\b/,
+        message: 'missing invalid tool call error message helper',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
     reason:
       'core must keep current coordinator port adapters and attachment guard until remote runtime migration is reviewed',
@@ -3231,6 +3304,22 @@ const requiredContentRules = [
         regex: /\bGetToolSpec\b/,
         message: 'missing GetToolSpec gating contract',
       },
+      {
+        regex: /\brender_tool_result_for_assistant\b/,
+        message: 'missing tool result presentation owner delegation',
+      },
+      {
+        regex: /\bbuild_tool_execution_error_presentation\b/,
+        message: 'missing tool execution error presentation owner delegation',
+      },
+      {
+        regex: /\bbuild_user_steering_interrupted_presentation\b/,
+        message: 'missing steering-interrupted presentation owner delegation',
+      },
+      {
+        regex: /\bbuild_invalid_tool_call_error_message\b/,
+        message: 'missing invalid tool call presentation owner delegation',
+      },
     ],
   },
   {
@@ -4025,6 +4114,10 @@ const requiredContentRules = [
         regex: /\bpub fn apply_import_runtime_state\b/,
         message: 'missing MiniApp import runtime state helper',
       },
+      {
+        regex: /\bpub fn prepare_imported_meta\b/,
+        message: 'missing MiniApp imported metadata identity/timestamp helper',
+      },
     ],
   },
   {
@@ -4189,8 +4282,12 @@ const requiredContentRules = [
         message: 'missing product-domain MiniApp import fallback helper use',
       },
       {
-        regex: /\bapply_import_runtime_state\b/,
-        message: 'missing product-domain MiniApp import runtime state helper use',
+        regex: /\bprepare_imported_meta\b/,
+        message: 'missing product-domain MiniApp imported metadata helper use',
+      },
+      {
+        regex: /\bpersist_import_runtime_state\b/,
+        message: 'missing product-domain MiniApp import runtime-state facade delegation',
       },
       {
         regex: /\bstorage\.load_customization_metadata\b/,
@@ -4222,6 +4319,10 @@ const requiredContentRules = [
       {
         regex: /\bpersist_sync_from_fs_result_for_app\b/,
         message: 'missing MiniApp sync-from-fs preloaded snapshot facade path',
+      },
+      {
+        regex: /\bpersist_import_runtime_state\b/,
+        message: 'missing MiniApp import runtime-state facade path',
       },
     ],
   },
@@ -5439,6 +5540,20 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/agent-tools/src/tool_execution_presentation.rs',
+      contracts: [
+        'TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES',
+        'USER_STEERING_INTERRUPTED_MESSAGE',
+        'ToolExecutionErrorPresentation',
+        'render_tool_result_for_assistant',
+        'truncate_tool_arguments_preview',
+        'truncate_raw_tool_arguments_preview',
+        'build_tool_execution_error_presentation',
+        'build_user_steering_interrupted_presentation',
+        'build_invalid_tool_call_error_message',
+      ],
+    },
+    {
       path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
       contracts: [
         'AgentSubmissionPort',
@@ -5700,7 +5815,15 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
-      contracts: ['validate_collapsed_tool_usage', 'unlocked_collapsed_tools', 'GetToolSpec'],
+      contracts: [
+        'validate_collapsed_tool_usage',
+        'unlocked_collapsed_tools',
+        'GetToolSpec',
+        'render_tool_result_for_assistant',
+        'build_tool_execution_error_presentation',
+        'build_user_steering_interrupted_presentation',
+        'build_invalid_tool_call_error_message',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/execution/execution_engine.rs',
@@ -6004,6 +6127,7 @@ function runManifestParserSelfTest() {
         'MiniAppRuntimeFacade',
         'mark_deps_installed_state',
         'persist_sync_from_fs_result_for_app',
+        'persist_import_runtime_state',
       ],
     },
     {
@@ -6039,6 +6163,7 @@ function runManifestParserSelfTest() {
         'apply_recompile_result',
         'apply_sync_from_fs_result',
         'apply_import_runtime_state',
+        'prepare_imported_meta',
       ],
     },
     {
@@ -6088,7 +6213,8 @@ function runManifestParserSelfTest() {
         'REQUIRED_SOURCE_FILES',
         'MiniAppImportLayout',
         'build_import_fallbacks',
-        'apply_import_runtime_state',
+        'prepare_imported_meta',
+        'persist_import_runtime_state',
         'runtime_preflight_preserves_recompile_sync_rollback_and_deps_state',
         'import_from_path_preserves_fallback_files_recompile_and_runtime_state',
       ],

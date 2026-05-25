@@ -15,7 +15,11 @@ use crate::agentic::tools::tool_result_storage;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_tools::{
-    validate_collapsed_tool_usage, validate_tool_allowed_by_list, GET_TOOL_SPEC_TOOL_NAME,
+    GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
+    build_invalid_tool_call_error_message, build_tool_execution_error_presentation,
+    build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
+    truncate_raw_tool_arguments_preview, truncate_tool_arguments_preview,
+    validate_collapsed_tool_usage, validate_tool_allowed_by_list,
 };
 use dashmap::DashMap;
 use futures::future::join_all;
@@ -23,8 +27,8 @@ use log::{debug, error, info, warn};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
-use tokio::sync::{oneshot, RwLock as TokioRwLock};
-use tokio::time::{timeout, Duration};
+use tokio::sync::{RwLock as TokioRwLock, oneshot};
+use tokio::time::{Duration, timeout};
 use tokio_util::sync::CancellationToken;
 
 /// A batch of tool tasks to execute together.
@@ -68,8 +72,8 @@ fn convert_tool_result(
             // structured result through to the model. Summaries like
             // "completed successfully" can hide fields the model needs for the
             // next decision.
-            let assistant_text =
-                result_for_assistant.or_else(|| serialize_result_for_assistant(tool_name, &data));
+            let assistant_text = result_for_assistant
+                .or_else(|| Some(render_tool_result_for_assistant(tool_name, &data)));
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -82,7 +86,7 @@ fn convert_tool_result(
             }
         }
         FrameworkToolResult::Progress { content, .. } => {
-            let assistant_text = serialize_result_for_assistant(tool_name, &content);
+            let assistant_text = Some(render_tool_result_for_assistant(tool_name, &content));
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -95,7 +99,7 @@ fn convert_tool_result(
             }
         }
         FrameworkToolResult::StreamChunk { data, .. } => {
-            let assistant_text = serialize_result_for_assistant(tool_name, &data);
+            let assistant_text = Some(render_tool_result_for_assistant(tool_name, &data));
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -108,19 +112,6 @@ fn convert_tool_result(
             }
         }
     }
-}
-
-fn serialize_result_for_assistant(tool_name: &str, data: &serde_json::Value) -> Option<String> {
-    serde_json::to_string_pretty(data)
-        .or_else(|_| serde_json::to_string(data))
-        .ok()
-        .filter(|text| !text.trim().is_empty())
-        .or_else(|| {
-            Some(format!(
-                "Tool {} returned no serializable result.",
-                tool_name
-            ))
-        })
 }
 
 /// Convert core::ToolResult to framework::ToolResult
@@ -136,37 +127,6 @@ fn elapsed_ms_since(time: SystemTime) -> u64 {
     time.elapsed()
         .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64)
         .unwrap_or(0)
-}
-
-/// Maximum length of `provided_arguments` echoed back to the model in a tool
-/// error result. Larger payloads are truncated with an ellipsis marker so the
-/// signal remains actionable without bloating the prompt.
-const TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES: usize = 1024;
-
-const USER_STEERING_INTERRUPTED_MESSAGE: &str = "Tool execution skipped because the user sent a new steering message for the running turn. Stop the remaining old tool plan and handle the new user message next.";
-
-fn truncate_arguments_preview(value: &serde_json::Value) -> String {
-    let raw = serde_json::to_string(value).unwrap_or_default();
-    if raw.len() <= TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES {
-        return raw;
-    }
-    // Truncate at a UTF-8 char boundary then append an ellipsis marker.
-    let mut cut = TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES;
-    while cut > 0 && !raw.is_char_boundary(cut) {
-        cut -= 1;
-    }
-    format!("{}…[truncated, total {} bytes]", &raw[..cut], raw.len())
-}
-
-fn truncate_raw_arguments_preview(raw: &str) -> String {
-    if raw.len() <= TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES {
-        return raw.to_string();
-    }
-    let mut cut = TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES;
-    while cut > 0 && !raw.is_char_boundary(cut) {
-        cut -= 1;
-    }
-    format!("{}…[truncated, total {} bytes]", &raw[..cut], raw.len())
 }
 
 fn classify_tool_error(error: &BitFunError) -> &'static str {
@@ -189,8 +149,8 @@ fn build_error_execution_result(
             .tool_call
             .raw_arguments
             .as_deref()
-            .map(truncate_raw_arguments_preview)
-            .unwrap_or_else(|| truncate_arguments_preview(&task.tool_call.arguments));
+            .map(truncate_raw_tool_arguments_preview)
+            .unwrap_or_else(|| truncate_tool_arguments_preview(&task.tool_call.arguments));
         (
             task.tool_call.tool_id,
             task.tool_call.tool_name,
@@ -203,28 +163,12 @@ fn build_error_execution_result(
     };
     let error_message = error.to_string();
     let category = classify_tool_error(error);
-
-    let mut result_json = serde_json::json!({
-        "error": error_message,
-        "category": category,
-        "tool_name": tool_name,
-        "message": format!("Tool '{}' failed ({}): {}", tool_name, category, error_message),
-    });
-    if let Some(args_preview) = provided_arguments.as_ref() {
-        result_json["provided_arguments"] = serde_json::Value::String(args_preview.clone());
-    }
-
-    let assistant_text = if let Some(args_preview) = provided_arguments.as_ref() {
-        format!(
-            "Tool '{}' failed ({}): {}\nProvided arguments: {}",
-            tool_name, category, error_message, args_preview
-        )
-    } else {
-        format!(
-            "Tool '{}' failed ({}): {}",
-            tool_name, category, error_message
-        )
-    };
+    let presentation = build_tool_execution_error_presentation(
+        &tool_name,
+        category,
+        &error_message,
+        provided_arguments,
+    );
 
     ToolExecutionResult {
         tool_id: tool_id.clone(),
@@ -232,8 +176,8 @@ fn build_error_execution_result(
         result: ModelToolResult {
             tool_id,
             tool_name,
-            result: result_json,
-            result_for_assistant: Some(assistant_text),
+            result: presentation.result_json,
+            result_for_assistant: Some(presentation.result_for_assistant),
             is_error: true,
             duration_ms: Some(execution_time_ms),
             image_attachments: None,
@@ -260,19 +204,16 @@ fn build_user_steering_interrupted_result(
         (task_id.to_string(), "unknown".to_string(), 0)
     };
 
+    let presentation = build_user_steering_interrupted_presentation(&tool_name);
+
     ToolExecutionResult {
         tool_id: tool_id.clone(),
         tool_name: tool_name.clone(),
         result: ModelToolResult {
             tool_id,
-            tool_name: tool_name.clone(),
-            result: serde_json::json!({
-                "status": "skipped",
-                "category": "user_steering_interrupted",
-                "tool_name": tool_name,
-                "message": USER_STEERING_INTERRUPTED_MESSAGE,
-            }),
-            result_for_assistant: Some(USER_STEERING_INTERRUPTED_MESSAGE.to_string()),
+            tool_name,
+            result: presentation.result_json,
+            result_for_assistant: Some(presentation.result_for_assistant),
             is_error: true,
             duration_ms: Some(execution_time_ms),
             image_attachments: None,
@@ -669,24 +610,13 @@ impl ToolPipeline {
                 .tool_call
                 .raw_arguments
                 .as_deref()
-                .map(truncate_raw_arguments_preview);
-            let error_msg = if tool_name.is_empty() && tool_is_error {
-                "Missing valid tool name and arguments are invalid JSON.".to_string()
-            } else if tool_name.is_empty() {
-                "Missing valid tool name.".to_string()
-            } else if recovered_from_truncation {
-                format!(
-                    "Tool arguments were truncated by the model (likely hit max_tokens). Refusing to execute a partial '{}' call. Increase max_tokens, split the work into smaller calls, or retry.",
-                    tool_name
-                )
-            } else {
-                "Arguments are invalid JSON.".to_string()
-            };
-            let error_msg = if let Some(raw_arguments_preview) = raw_arguments_preview {
-                format!("{error_msg} Raw arguments: {raw_arguments_preview}")
-            } else {
-                error_msg
-            };
+                .map(truncate_raw_tool_arguments_preview);
+            let error_msg = build_invalid_tool_call_error_message(
+                &tool_name,
+                tool_is_error,
+                recovered_from_truncation,
+                raw_arguments_preview,
+            );
 
             self.state_manager
                 .update_state(
@@ -1513,9 +1443,9 @@ impl ToolPipeline {
 mod tests {
     use super::*;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
+    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::tools::framework::Tool;
     use crate::agentic::tools::implementations::task_tool::TaskTool;
-    use crate::agentic::tools::ToolRuntimeRestrictions;
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -1589,12 +1519,14 @@ mod tests {
             result.result.result["provided_arguments"],
             serde_json::Value::String("{\"operation\":\"log\"".to_string())
         );
-        assert!(result
-            .result
-            .result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .contains("Provided arguments: {\"operation\":\"log\""));
+        assert!(
+            result
+                .result
+                .result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .contains("Provided arguments: {\"operation\":\"log\"")
+        );
     }
 
     #[test]
@@ -1657,9 +1589,11 @@ mod tests {
         assert_eq!(context.dialog_turn_id.as_deref(), Some("turn_1"));
         assert_eq!(context.unlocked_collapsed_tools, vec!["WebFetch"]);
         assert!(context.cancellation_token.is_some());
-        assert!(context
-            .runtime_tool_restrictions
-            .is_tool_allowed("WebFetch"));
+        assert!(
+            context
+                .runtime_tool_restrictions
+                .is_tool_allowed("WebFetch")
+        );
         assert!(!context.runtime_tool_restrictions.is_tool_allowed("Bash"));
         assert_eq!(context.custom_data["turn_index"], json!(7));
         assert_eq!(
@@ -1694,9 +1628,10 @@ mod tests {
         let err = ToolPipeline::validate_collapsed_tool_usage(&task)
             .expect_err("collapsed tool should require GetToolSpec unlock");
 
-        assert!(err
-            .to_string()
-            .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}"));
+        assert!(
+            err.to_string()
+                .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}")
+        );
     }
 
     #[test]

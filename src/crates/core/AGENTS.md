@@ -80,9 +80,10 @@ SessionManager → Session → DialogTurn → ModelRound
   JSON parsing policy may live in `bitfun-product-domains`.
 - MiniApp built-in bundle/hash/marker seed-plan and marker wire helpers may
   live in `bitfun-product-domains`. MiniApp create/update/draft/apply pure state
-  transitions and built-in seed meta timestamp policy may also live there; keep
+  transitions, imported metadata stamping, import runtime-state persistence
+  facade, and built-in seed meta timestamp policy may also live there; keep
   bundled asset includes, filesystem writes, marker IO, customization metadata
-  IO, recompile orchestration, worker process runtime, and host dispatch
+  IO, source reads, compile orchestration, worker process runtime, and host dispatch
   execution core-owned until a reviewed migration proves equivalence.
 - Remote-connect wire/tracker/dialog and cancel orchestration plus portable
   file/image contracts, remote file command/response assembly,
@@ -105,10 +106,12 @@ SessionManager → Session → DialogTurn → ModelRound
   runtime artifact reference assembly, path policy root matching, and denial
   text may live in `bitfun-agent-tools`; file guidance markers, file-read
   freshness comparison policy, and oversized tool-result preview/rendering
-  policy may also live there as pure contracts. Keep workspace/runtime root
-  lookup, allowed-root resolution, local canonicalization, remote POSIX
-  containment callbacks, session file-read state storage, tool-result
-  filesystem writes, `BitFunError` mapping, and `ToolUseContext`
+  policy may also live there as pure contracts. Provider-neutral tool result
+  assistant fallback text, error argument preview, invalid-call messages, and
+  steering-interrupted presentation may live there too. Keep workspace/runtime root lookup,
+  allowed-root resolution, local canonicalization, remote POSIX containment
+  callbacks, session file-read state storage, tool-result filesystem writes,
+  `BitFunError` category mapping, and `ToolUseContext`
   runtime/service bindings in core unless a separate migration proves
   equivalence.
 - Product/runtime dependencies that are only used behind those feature gates
