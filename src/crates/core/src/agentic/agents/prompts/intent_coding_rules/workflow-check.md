@@ -14,6 +14,12 @@ For L3/L4 review routing handoff:
 pnpm run agent:review-route -- --evidence .agent/evidence/evidence-YYYYMMDD-task.md
 ```
 
+For session provenance record export:
+
+```bash
+pnpm run agent:provenance-record -- --evidence .agent/evidence/evidence-YYYYMMDD-task.md --session-id <id> --turn-id <id>
+```
+
 ## When to Run
 
 - After the Intent Record and Evidence Package have been written or updated.

@@ -58,6 +58,7 @@ When `Provenance store: session_store` is used:
 - `Session id` and `Turn id` must be concrete values.
 - `Provenance record` must point to a `.bitfun/sessions/...json` record.
 - If the record is present locally, it should match the declared session and turn ids.
+- Use `pnpm run agent:provenance-record -- --evidence <path> --session-id <id> --turn-id <id>` when available to create the session record from an Evidence Package.
 
 When `Provenance store: external` is used, `Provenance record` must identify the
 external record or system of record.
