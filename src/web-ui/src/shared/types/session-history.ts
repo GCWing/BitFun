@@ -104,6 +104,8 @@ export interface IntentAssignment {
   terminalStatus: IntentTerminalStatus;
   assignedAtTurn: number;
   triggerDescription?: string;
+  /** True when this is a synthetic proxy generated from raw evidence rather than a real hidden-intent evaluation. Defaults to false / omitted. */
+  isProxy?: boolean;
 }
 
 export interface IntentTurnEvidence {
