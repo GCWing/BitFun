@@ -9,16 +9,59 @@ use async_trait::async_trait;
 
 const INTENT_CODING_MODE_PROMPT_TEMPLATE: &str = "intent_coding_mode";
 
+struct EmbeddedRule {
+    name: &'static str,
+    purpose: &'static str,
+    content: &'static str,
+}
+
 // Embedded rules loaded from prompts/intent_coding_rules/
-const EMBEDDED_RULES: &[(&str, &str)] = &[
-    ("accepted-checks", include_str!("../../prompts/intent_coding_rules/accepted-checks.md")),
-    ("architecture", include_str!("../../prompts/intent_coding_rules/architecture.md")),
-    ("coding-style", include_str!("../../prompts/intent_coding_rules/coding-style.md")),
-    ("error-classification", include_str!("../../prompts/intent_coding_rules/error-classification.md")),
-    ("provenance-chain", include_str!("../../prompts/intent_coding_rules/provenance-chain.md")),
-    ("risk-classification", include_str!("../../prompts/intent_coding_rules/risk-classification.md")),
-    ("security", include_str!("../../prompts/intent_coding_rules/security.md")),
-    ("workflow-check", include_str!("../../prompts/intent_coding_rules/workflow-check.md")),
+const EMBEDDED_RULES: &[EmbeddedRule] = &[
+    EmbeddedRule {
+        name: "context-compiler",
+        purpose: "declare which durable context inputs are loaded and how task-local context should override them",
+        content: include_str!("../../prompts/intent_coding_rules/context-compiler.md"),
+    },
+    EmbeddedRule {
+        name: "accepted-checks",
+        purpose: "turn aligned intent into accepted checks or tests before implementation",
+        content: include_str!("../../prompts/intent_coding_rules/accepted-checks.md"),
+    },
+    EmbeddedRule {
+        name: "architecture",
+        purpose: "keep changes inside BitFun architecture and platform-boundary guardrails",
+        content: include_str!("../../prompts/intent_coding_rules/architecture.md"),
+    },
+    EmbeddedRule {
+        name: "coding-style",
+        purpose: "preserve local coding style and scoped implementation behavior",
+        content: include_str!("../../prompts/intent_coding_rules/coding-style.md"),
+    },
+    EmbeddedRule {
+        name: "error-classification",
+        purpose: "classify verification failures before repair attempts",
+        content: include_str!("../../prompts/intent_coding_rules/error-classification.md"),
+    },
+    EmbeddedRule {
+        name: "provenance-chain",
+        purpose: "preserve request-to-delivery provenance anchors for review",
+        content: include_str!("../../prompts/intent_coding_rules/provenance-chain.md"),
+    },
+    EmbeddedRule {
+        name: "risk-classification",
+        purpose: "classify task risk and require escalation markers for high-risk work",
+        content: include_str!("../../prompts/intent_coding_rules/risk-classification.md"),
+    },
+    EmbeddedRule {
+        name: "security",
+        purpose: "apply defensive security and sensitive-data constraints",
+        content: include_str!("../../prompts/intent_coding_rules/security.md"),
+    },
+    EmbeddedRule {
+        name: "workflow-check",
+        purpose: "run and interpret the local Intent/Evidence structural checker",
+        content: include_str!("../../prompts/intent_coding_rules/workflow-check.md"),
+    },
 ];
 
 pub struct IntentCodingMode {
@@ -95,11 +138,16 @@ impl Agent for IntentCodingMode {
         prompt.push_str(
             "The following rules are built into the IntentCoding mode. Follow them for every task.\n\n",
         );
-        for (name, content) in EMBEDDED_RULES {
+        prompt.push_str("### Loaded rule manifest\n\n");
+        for rule in EMBEDDED_RULES {
+            prompt.push_str(&format!("- `{}`: {}\n", rule.name, rule.purpose));
+        }
+        prompt.push_str("\n### Loaded rule documents\n\n");
+        for rule in EMBEDDED_RULES {
             prompt.push_str(&format!(
                 "<document name=\"intent_coding_rules/{}.md\">\n{}\n</document>\n\n",
-                name,
-                content.trim()
+                rule.name,
+                rule.content.trim()
             ));
         }
 
@@ -144,9 +192,10 @@ mod tests {
 
     #[test]
     fn intent_coding_embeds_required_rules() {
-        let rules: Vec<&str> = EMBEDDED_RULES.iter().map(|(name, _)| *name).collect();
+        let rules: Vec<&str> = EMBEDDED_RULES.iter().map(|rule| rule.name).collect();
         assert!(!rules.is_empty());
         for name in [
+            "context-compiler",
             "risk-classification",
             "accepted-checks",
             "error-classification",
@@ -158,8 +207,9 @@ mod tests {
         ] {
             assert!(rules.contains(&name), "missing rule: {name}");
         }
-        for (_name, content) in EMBEDDED_RULES {
-            assert!(!content.is_empty(), "rule content must not be empty");
+        for rule in EMBEDDED_RULES {
+            assert!(!rule.purpose.is_empty(), "rule purpose must not be empty");
+            assert!(!rule.content.is_empty(), "rule content must not be empty");
         }
     }
 }
