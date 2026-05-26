@@ -1,7 +1,7 @@
 //! Debug Mode - Evidence-driven debugging mode
 
 use crate::agentic::agents::{
-    get_embedded_prompt, Agent, PromptBuilder, PromptBuilderContext, RequestContextPolicy,
+    get_embedded_prompt, Agent, PromptBuilder, PromptBuilderContext, UserContextPolicy,
 };
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{DebugModeConfig, LanguageDebugTemplate};
@@ -284,8 +284,8 @@ impl Agent for DebugMode {
         DEBUG_MODE_PROMPT_TEMPLATE
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::empty()
+    fn user_context_policy(&self) -> UserContextPolicy {
+        UserContextPolicy::empty()
             .with_workspace_context()
             .with_workspace_instructions()
             .with_workspace_memory_files()

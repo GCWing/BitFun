@@ -1,5 +1,5 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
-use super::request_context::{RequestContextPolicy, RequestContextSection};
+use super::user_context::{UserContextPolicy, UserContextSection};
 use crate::service::agent_memory::{
     build_workspace_agent_memory_prompt, build_workspace_instruction_files_context,
     build_workspace_memory_files_context,
@@ -22,64 +22,64 @@ const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 const PLACEHOLDER_SESSION_ID: &str = "{SESSION_ID}";
-const ADDITIONAL_CONTEXT_PROMPT: &str =
+const USER_CONTEXT_PROMPT: &str =
     "As you answer the user's questions, you can use the following context";
-const SKILL_TOOL_CONTEXT_TITLE: &str = "## Skills available for use with the Skill tool";
-const TASK_TOOL_CONTEXT_TITLE: &str = "## Available agent types for the Task Tool";
-const GET_TOOL_SPEC_CONTEXT_TITLE: &str =
-    "## Collapsed Tools (load full definition via GetToolSpec tool)";
-const ADDITIONAL_TOOLS_PROMPT: &str = r#"Some tools in the tool list are intentionally collapsed.
-Their listed descriptions are short summaries rather than full usage instructions.
+const SKILL_LISTING_TITLE: &str = "# Skill Listing";
+const SKILL_LISTING_GUIDANCE: &str =
+    "The following skills are available for use with the Skill tool:";
+const AGENT_LISTING_TITLE: &str = "# Agent Listing";
+const AGENT_LISTING_GUIDANCE: &str = "Available subagent types for the Task tool:";
+const COLLAPSED_TOOL_LISTING_TITLE: &str =
+    "# Collapsed Tool Listing";
+const COLLAPSED_TOOL_LISTING_GUIDANCE: &str = r#"The folling tools are intentionally collapsed. Their listed descriptions are short summaries rather than full usage instructions.
 Before calling a collapsed tool, call `GetToolSpec` with its exact tool name to read its full definition and input schema.
 After reading the returned spec, call the real tool directly by its own name.
 If a tool spec is already available in the current conversation, do not call `GetToolSpec` for it again."#;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RequestContextToolSections {
-    pub available_skills: Option<String>,
-    pub available_agents: Option<String>,
-    pub collapsed_tools: Option<String>,
+pub struct ToolListingSections {
+    pub skill_listing: Option<String>,
+    pub agent_listing: Option<String>,
+    pub collapsed_tool_listing: Option<String>,
 }
 
-impl RequestContextToolSections {
+impl ToolListingSections {
     pub fn is_empty(&self) -> bool {
-        self.available_skills.is_none()
-            && self.available_agents.is_none()
-            && self.collapsed_tools.is_none()
+        self.skill_listing.is_none()
+            && self.agent_listing.is_none()
+            && self.collapsed_tool_listing.is_none()
     }
 
-    fn render(&self) -> Option<String> {
-        if self.is_empty() {
-            return None;
-        }
+    fn render_skill_listing_reminder(&self) -> Option<String> {
+        self.skill_listing.as_deref().map(|skill_listing| {
+            Self::render_section(
+                SKILL_LISTING_TITLE,
+                skill_listing,
+                Some(SKILL_LISTING_GUIDANCE),
+            )
+        })
+    }
 
-        let mut sections = Vec::new();
-        if let Some(available_skills) = self.available_skills.as_deref() {
-            sections.push(Self::render_section(
-                SKILL_TOOL_CONTEXT_TITLE,
-                available_skills,
-                None,
-            ));
-        }
-        if let Some(available_agents) = self.available_agents.as_deref() {
-            sections.push(Self::render_section(
-                TASK_TOOL_CONTEXT_TITLE,
-                available_agents,
-                None,
-            ));
-        }
-        if let Some(collapsed_tools) = self.collapsed_tools.as_deref() {
-            sections.push(Self::render_section(
-                GET_TOOL_SPEC_CONTEXT_TITLE,
-                collapsed_tools,
-                Some(ADDITIONAL_TOOLS_PROMPT),
-            ));
-        }
+    fn render_agent_listing_reminder(&self) -> Option<String> {
+        self.agent_listing.as_deref().map(|agent_listing| {
+            Self::render_section(
+                AGENT_LISTING_TITLE,
+                agent_listing,
+                Some(AGENT_LISTING_GUIDANCE),
+            )
+        })
+    }
 
-        Some(format!(
-            "# Available Tool Context\n{}",
-            sections.join("\n\n")
-        ))
+    fn render_collapsed_tool_listing_reminder(&self) -> Option<String> {
+        self.collapsed_tool_listing
+            .as_deref()
+            .map(|collapsed_tool_listing| {
+                Self::render_section(
+                    COLLAPSED_TOOL_LISTING_TITLE,
+                    collapsed_tool_listing,
+                    Some(COLLAPSED_TOOL_LISTING_GUIDANCE),
+                )
+            })
     }
 
     fn render_section(title: &str, body: &str, description: Option<&str>) -> String {
@@ -87,6 +87,33 @@ impl RequestContextToolSections {
             Some(description) => format!("{}\n{}\n\n{}", title, description, body.trim()),
             None => format!("{}\n{}", title, body.trim()),
         }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PrependedPromptReminders {
+    pub skill_listing: Option<String>,
+    pub agent_listing: Option<String>,
+    pub collapsed_tool_listing: Option<String>,
+    pub user_context: Option<String>,
+}
+
+impl PrependedPromptReminders {
+    pub fn ordered_reminders(&self) -> Vec<&str> {
+        let mut reminders = Vec::new();
+        if let Some(skill_listing) = self.skill_listing.as_deref() {
+            reminders.push(skill_listing);
+        }
+        if let Some(agent_listing) = self.agent_listing.as_deref() {
+            reminders.push(agent_listing);
+        }
+        if let Some(collapsed_tool_listing) = self.collapsed_tool_listing.as_deref() {
+            reminders.push(collapsed_tool_listing);
+        }
+        if let Some(user_context) = self.user_context.as_deref() {
+            reminders.push(user_context);
+        }
+        reminders
     }
 }
 
@@ -110,8 +137,8 @@ pub struct PromptBuilderContext {
     pub remote_project_layout: Option<String>,
     /// When `Some(false)`, system prompt append Computer use text-only guidance (no screenshot tool output).
     pub supports_image_understanding: Option<bool>,
-    /// Dynamic tool catalogs that are injected through request context instead of tool descriptions.
-    pub request_context_tools: RequestContextToolSections,
+    /// Dynamic tool listings injected outside tool descriptions for cache stability.
+    pub tool_listing_sections: ToolListingSections,
 }
 
 impl PromptBuilderContext {
@@ -128,7 +155,7 @@ impl PromptBuilderContext {
             remote_execution: None,
             remote_project_layout: None,
             supports_image_understanding: None,
-            request_context_tools: RequestContextToolSections::default(),
+            tool_listing_sections: ToolListingSections::default(),
         }
     }
 
@@ -137,8 +164,8 @@ impl PromptBuilderContext {
         self
     }
 
-    pub fn with_request_context_tools(mut self, tools: RequestContextToolSections) -> Self {
-        self.request_context_tools = tools;
+    pub fn with_tool_listing_sections(mut self, sections: ToolListingSections) -> Self {
+        self.tool_listing_sections = sections;
         self
     }
 
@@ -308,24 +335,34 @@ impl PromptBuilder {
         project_layout
     }
 
-    pub async fn build_request_context_reminder(
-        &self,
-        policy: &RequestContextPolicy,
-    ) -> Option<String> {
-        let mut sections = Vec::new();
+    pub fn build_skill_listing_reminder(&self) -> Option<String> {
+        self.context
+            .tool_listing_sections
+            .render_skill_listing_reminder()
+    }
+
+    pub fn build_agent_listing_reminder(&self) -> Option<String> {
+        self.context
+            .tool_listing_sections
+            .render_agent_listing_reminder()
+    }
+
+    pub fn build_collapsed_tool_listing_reminder(&self) -> Option<String> {
+        self.context
+            .tool_listing_sections
+            .render_collapsed_tool_listing_reminder()
+    }
+
+    pub async fn build_user_context_reminder(&self, policy: &UserContextPolicy) -> Option<String> {
         let mut additional_sections = Vec::new();
 
-        if let Some(tool_context) = self.context.request_context_tools.render() {
-            sections.push(tool_context);
-        }
-
-        if policy.includes(RequestContextSection::WorkspaceContext) {
+        if policy.includes(UserContextSection::WorkspaceContext) {
             additional_sections.push(self.get_workspace_context());
         }
 
         if self.context.remote_execution.is_none() {
             let workspace = Path::new(&self.context.workspace_path);
-            if policy.includes(RequestContextSection::WorkspaceInstructions) {
+            if policy.includes(UserContextSection::WorkspaceInstructions) {
                 match build_workspace_instruction_files_context(workspace).await {
                     Ok(Some(prompt)) => additional_sections.push(prompt),
                     Ok(None) => {}
@@ -336,7 +373,7 @@ impl PromptBuilder {
                     ),
                 }
             }
-            if policy.includes(RequestContextSection::WorkspaceMemoryFiles) {
+            if policy.includes(UserContextSection::WorkspaceMemoryFiles) {
                 match build_workspace_memory_files_context(workspace).await {
                     Ok(Some(prompt)) => additional_sections.push(prompt),
                     Ok(None) => {}
@@ -349,26 +386,34 @@ impl PromptBuilder {
             }
         }
 
-        if policy.includes(RequestContextSection::ProjectLayout) {
+        if policy.includes(UserContextSection::ProjectLayout) {
             additional_sections.push(self.get_project_layout());
         }
 
-        if !additional_sections.is_empty() {
-            sections.push(format!(
-                "# Additional Context\n{}\n\n{}",
-                ADDITIONAL_CONTEXT_PROMPT,
+        if additional_sections.is_empty() {
+            None
+        } else {
+            Some(format!(
+                "# User Context\n{}\n\n{}",
+                USER_CONTEXT_PROMPT,
                 additional_sections
                     .into_iter()
                     .map(|section| section.trim().to_string())
                     .collect::<Vec<_>>()
                     .join("\n\n")
-            ));
+            ))
         }
+    }
 
-        if sections.is_empty() {
-            None
-        } else {
-            Some(sections.join("\n\n"))
+    pub async fn build_prepended_reminders(
+        &self,
+        user_context_policy: &UserContextPolicy,
+    ) -> PrependedPromptReminders {
+        PrependedPromptReminders {
+            skill_listing: self.build_skill_listing_reminder(),
+            agent_listing: self.build_agent_listing_reminder(),
+            collapsed_tool_listing: self.build_collapsed_tool_listing_reminder(),
+            user_context: self.build_user_context_reminder(user_context_policy).await,
         }
     }
 
@@ -423,7 +468,7 @@ Output Mermaid in fenced code blocks (```mermaid) so the UI can render them.
     /// Get Claw-specific workspace boundary instruction
     fn get_claw_workspace_instruction(&self) -> String {
         "# Workspace
-Your dedicated operating space is the workspace root shown in the current request context.
+Your dedicated operating space is the workspace root shown in the current user context.
 Prefer doing work inside this workspace and keep it well organized with clear structure, sensible filenames, and minimal clutter.
 Do not read from, modify, create, move, or delete files outside this workspace unless the user has explicitly granted permission for that external action.
 "
@@ -538,58 +583,79 @@ The configured **primary model does not accept image inputs**. When using **`Com
 
 #[cfg(test)]
 mod tests {
+    use super::PrependedPromptReminders;
     use super::PromptBuilder;
     use super::PromptBuilderContext;
-    use super::RequestContextToolSections;
+    use super::ToolListingSections;
     use super::{
-        ADDITIONAL_CONTEXT_PROMPT, GET_TOOL_SPEC_CONTEXT_TITLE, SKILL_TOOL_CONTEXT_TITLE,
-        TASK_TOOL_CONTEXT_TITLE,
+        AGENT_LISTING_TITLE, COLLAPSED_TOOL_LISTING_TITLE, SKILL_LISTING_TITLE, USER_CONTEXT_PROMPT,
     };
-    use crate::agentic::agents::RequestContextPolicy;
+    use crate::agentic::agents::UserContextPolicy;
     use crate::service::workspace::RelatedPath;
 
     #[tokio::test]
-    async fn renders_available_tool_context_before_additional_context() {
-        let tool_sections = RequestContextToolSections {
-            available_skills: Some("<available_skills>\n- pdf\n</available_skills>".to_string()),
-            available_agents: Some(
-                "<available_agents>\n- Explore\n</available_agents>".to_string(),
-            ),
-            collapsed_tools: Some(
+    async fn builds_ordered_prepended_reminders_from_tool_listings_and_user_context() {
+        let tool_sections = ToolListingSections {
+            skill_listing: Some("<available_skills>\n- pdf\n</available_skills>".to_string()),
+            agent_listing: Some("<available_agents>\n- Explore\n</available_agents>".to_string()),
+            collapsed_tool_listing: Some(
                 "<collapsed_tools>\n- WebFetch: Fetch readable web content.\n</collapsed_tools>"
                     .to_string(),
             ),
         };
         let context = PromptBuilderContext::new("E:/workspace", None, None)
-            .with_request_context_tools(tool_sections);
-        let prompt = PromptBuilder::new(context)
-            .build_request_context_reminder(
-                &RequestContextPolicy::empty()
+            .with_tool_listing_sections(tool_sections);
+        let reminders = PromptBuilder::new(context)
+            .build_prepended_reminders(
+                &UserContextPolicy::empty()
                     .with_workspace_context()
                     .with_workspace_instructions(),
             )
-            .await
-            .expect("request context should build");
+            .await;
+        let reminders_for_order = reminders.clone();
+        let ordered_reminders = reminders_for_order.ordered_reminders();
 
-        assert!(prompt.contains("# Available Tool Context"));
-        assert!(prompt.contains(SKILL_TOOL_CONTEXT_TITLE));
-        assert!(prompt.contains(TASK_TOOL_CONTEXT_TITLE));
-        assert!(prompt.contains(GET_TOOL_SPEC_CONTEXT_TITLE));
-        assert!(prompt.contains("<collapsed_tools>"));
-        assert!(prompt.contains("# Additional Context"));
-        assert!(prompt.contains(ADDITIONAL_CONTEXT_PROMPT));
-        assert!(prompt.find("# Available Tool Context") < prompt.find("# Additional Context"));
-        assert!(prompt.contains("Current Working Directory: E:/workspace"));
+        let skill_listing = reminders
+            .skill_listing
+            .expect("skill listing reminder should build");
+        let agent_listing = reminders
+            .agent_listing
+            .expect("agent listing reminder should build");
+        let collapsed_tool_listing = reminders
+            .collapsed_tool_listing
+            .expect("collapsed tool listing reminder should build");
+        let user_context = reminders.user_context.expect("user context should build");
+
+        assert!(skill_listing.contains(SKILL_LISTING_TITLE));
+        assert!(skill_listing.contains("<available_skills>"));
+        assert!(!skill_listing.contains(AGENT_LISTING_TITLE));
+        assert!(agent_listing.contains(AGENT_LISTING_TITLE));
+        assert!(agent_listing.contains("<available_agents>"));
+        assert!(!agent_listing.contains(COLLAPSED_TOOL_LISTING_TITLE));
+        assert!(collapsed_tool_listing.contains(COLLAPSED_TOOL_LISTING_TITLE));
+        assert!(collapsed_tool_listing.contains("<collapsed_tools>"));
+        assert!(user_context.contains("# User Context"));
+        assert!(user_context.contains(USER_CONTEXT_PROMPT));
+        assert!(user_context.contains("Current Working Directory: E:/workspace"));
+        assert_eq!(
+            ordered_reminders,
+            vec![
+                skill_listing.as_str(),
+                agent_listing.as_str(),
+                collapsed_tool_listing.as_str(),
+                user_context.as_str(),
+            ]
+        );
     }
 
     #[tokio::test]
-    async fn omits_request_context_when_policy_and_tool_sections_are_empty() {
+    async fn omits_prepended_reminders_when_policy_and_sections_are_empty() {
         let context = PromptBuilderContext::new("E:/workspace", None, None);
-        let prompt = PromptBuilder::new(context)
-            .build_request_context_reminder(&RequestContextPolicy::empty())
+        let reminders = PromptBuilder::new(context)
+            .build_prepended_reminders(&UserContextPolicy::empty())
             .await;
 
-        assert!(prompt.is_none());
+        assert_eq!(reminders, PrependedPromptReminders::default());
     }
 
     #[test]

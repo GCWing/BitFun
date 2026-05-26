@@ -1,5 +1,5 @@
 use crate::agentic::agents::Agent;
-use crate::agentic::agents::{PromptBuilder, PromptBuilderContext, RequestContextPolicy};
+use crate::agentic::agents::{PromptBuilder, PromptBuilderContext, UserContextPolicy};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::FrontMatterMarkdown;
 use async_trait::async_trait;
@@ -63,8 +63,8 @@ impl Agent for CustomSubagent {
         self.tools.clone()
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::empty()
+    fn user_context_policy(&self) -> UserContextPolicy {
+        UserContextPolicy::empty()
             .with_workspace_context()
             .with_workspace_instructions()
             .with_project_layout()

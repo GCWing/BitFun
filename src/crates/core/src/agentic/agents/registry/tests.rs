@@ -9,7 +9,7 @@ use crate::agentic::agents::registry::types::{
 use crate::agentic::agents::registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy,
 };
-use crate::agentic::agents::{Agent, RequestContextPolicy};
+use crate::agentic::agents::{Agent, UserContextPolicy};
 use crate::service::config::types::AgentSubagentOverrideState;
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -42,8 +42,8 @@ impl Agent for TestAgent {
         "test_agent"
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::empty()
+    fn user_context_policy(&self) -> UserContextPolicy {
+        UserContextPolicy::empty()
     }
 
     fn default_tools(&self) -> Vec<String> {

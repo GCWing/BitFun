@@ -26,7 +26,7 @@ impl SkillTool {
         r#"Execute a skill within the main conversation
 
 <skills_instructions>
-When users ask you to perform tasks, check whether any skills listed in the current request context can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
+When users ask you to perform tasks, check whether any skills listed in the current skill listing can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
 
 How to use skills:
 - Invoke skills using this tool with the skill name only (no arguments)
@@ -37,7 +37,7 @@ How to use skills:
   - `command: "ms-office-suite:pdf"` - invoke using fully qualified name
 
 Important:
-- Only use skills listed in the current request context's <available_skills> section
+- Only use skills listed in the current skill listing's <available_skills> section
 - Do not invoke a skill that is already running
 </skills_instructions>"#
             .to_string()

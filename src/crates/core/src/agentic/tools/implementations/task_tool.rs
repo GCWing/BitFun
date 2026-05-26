@@ -420,7 +420,7 @@ impl TaskTool {
 
 The Task tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.
 
-The current request context includes an <available_agents> section when subagents are available. Use the exact `type` attribute from that section as `subagent_type`.
+The current agent listing includes an <available_agents> section when subagents are available. Use the exact `type` attribute from that section as `subagent_type`.
 
 When using the Task tool, you must specify `subagent_type` as a top-level tool argument to select which agent type to use. Do not put `subagent_type`, `description`, `workspace_path`, `model_id`, or `timeout_seconds` inside the prompt string.
 
@@ -1553,7 +1553,7 @@ mod tests {
     use super::TaskTool;
     use crate::agentic::agents::CustomSubagentConfig;
     use crate::agentic::agents::{
-        get_agent_registry, Agent, AgentCategory, RequestContextPolicy, SubAgentSource,
+        get_agent_registry, Agent, AgentCategory, SubAgentSource, UserContextPolicy,
     };
     use crate::agentic::deep_review::task_adapter as deep_review_task_adapter;
     use crate::agentic::deep_review_policy::{
@@ -1593,8 +1593,8 @@ mod tests {
             "test_prompt_order_agent"
         }
 
-        fn request_context_policy(&self) -> RequestContextPolicy {
-            RequestContextPolicy::empty()
+        fn user_context_policy(&self) -> UserContextPolicy {
+            UserContextPolicy::empty()
         }
 
         fn default_tools(&self) -> Vec<String> {

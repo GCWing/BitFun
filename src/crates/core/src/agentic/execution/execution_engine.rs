@@ -5,8 +5,8 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
-    get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
-    RequestContextToolSections,
+    get_agent_registry, PrependedPromptReminders, PromptBuilder, PromptBuilderContext,
+    RemoteExecutionHints, ToolListingSections,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
@@ -568,10 +568,10 @@ impl ExecutionEngine {
         )
     }
 
-    async fn build_request_context_tool_sections(
+    async fn build_tool_listing_sections(
         manifest: &ResolvedToolManifest,
         tool_context: &crate::agentic::tools::framework::ToolUseContext,
-    ) -> RequestContextToolSections {
+    ) -> ToolListingSections {
         let has_tool_definition = |tool_name: &str| {
             manifest
                 .tool_definitions
@@ -579,18 +579,18 @@ impl ExecutionEngine {
                 .any(|definition| definition.name == tool_name)
         };
 
-        RequestContextToolSections {
-            available_skills: if has_tool_definition("Skill") {
+        ToolListingSections {
+            skill_listing: if has_tool_definition("Skill") {
                 SkillTool::build_available_skills_context_section(Some(tool_context)).await
             } else {
                 None
             },
-            available_agents: if has_tool_definition("Task") {
+            agent_listing: if has_tool_definition("Task") {
                 TaskTool::build_available_agents_context_section(Some(tool_context)).await
             } else {
                 None
             },
-            collapsed_tools: if has_tool_definition("GetToolSpec") {
+            collapsed_tool_listing: if has_tool_definition("GetToolSpec") {
                 GetToolSpecTool::build_collapsed_tools_context_section(
                     &manifest.collapsed_tool_summaries,
                 )
@@ -604,7 +604,7 @@ impl ExecutionEngine {
         context: &ExecutionContext,
         model_name: &str,
         supports_image_understanding: bool,
-        request_context_tools: RequestContextToolSections,
+        tool_listing_sections: ToolListingSections,
     ) -> Option<PromptBuilderContext> {
         let workspace_path = context
             .workspace
@@ -636,7 +636,7 @@ impl ExecutionEngine {
         )
         .with_related_paths(related_paths)
         .with_supports_image_understanding(supports_image_understanding)
-        .with_request_context_tools(request_context_tools);
+        .with_tool_listing_sections(tool_listing_sections);
 
         let Some(workspace) = context.workspace.as_ref() else {
             return Some(base);
@@ -816,7 +816,7 @@ impl ExecutionEngine {
         round_number: usize,
         execution_context_vars: &HashMap<String, String>,
         primary_supports_image_understanding: bool,
-        request_context_reminder: Option<&str>,
+        prepended_reminders: &[&str],
         messages: &[Message],
         reminder_text: &str,
         context_window: usize,
@@ -830,7 +830,7 @@ impl ExecutionEngine {
                 .map(|workspace| workspace.root_path()),
             &context.dialog_turn_id,
             primary_supports_image_understanding,
-            request_context_reminder,
+            prepended_reminders,
         )
         .await?;
         final_ai_messages.push(AIMessage::user(reminder_text.to_string()));
@@ -874,23 +874,19 @@ impl ExecutionEngine {
         workspace_path: Option<&Path>,
         current_turn_id: &str,
         attach_images: bool,
-        prepended_user_context: Option<&str>,
+        prepended_reminders: &[&str],
     ) -> BitFunResult<Vec<AIMessage>> {
         /// Only the last this many **messages** that contain images keep their images for the API.
         const MAX_IMAGE_BEARING_MESSAGE_ROUNDS: usize = 2;
 
         let limits = ImageLimits::for_provider(provider);
 
-        let trimmed_user_context = prepended_user_context.and_then(|text| {
-            let trimmed = text.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed)
-            }
-        });
-        let mut result =
-            Vec::with_capacity(messages.len() + usize::from(trimmed_user_context.is_some()));
+        let trimmed_reminders = prepended_reminders
+            .iter()
+            .map(|text| text.trim())
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>();
+        let mut result = Vec::with_capacity(messages.len() + trimmed_reminders.len());
         let mut attached_image_count = 0usize;
         let first_non_system_index = messages
             .iter()
@@ -906,8 +902,8 @@ impl ExecutionEngine {
 
         for (msg_idx, msg) in messages.iter().enumerate() {
             if !user_context_injected && msg_idx == first_non_system_index {
-                if let Some(user_context) = trimmed_user_context {
-                    result.push(AIMessage::user(render_system_reminder(user_context)));
+                for reminder in &trimmed_reminders {
+                    result.push(AIMessage::user(render_system_reminder(reminder)));
                 }
                 user_context_injected = true;
             }
@@ -1033,8 +1029,8 @@ impl ExecutionEngine {
         }
 
         if !user_context_injected {
-            if let Some(user_context) = trimmed_user_context {
-                result.push(AIMessage::user(render_system_reminder(user_context)));
+            for reminder in trimmed_reminders {
+                result.push(AIMessage::user(render_system_reminder(reminder)));
             }
         }
 
@@ -1662,10 +1658,10 @@ impl ExecutionEngine {
             .as_ref()
             .map(|manifest| manifest.collapsed_tool_names.clone())
             .unwrap_or_default();
-        let request_context_tools = if let Some(manifest) = tool_manifest.as_ref() {
-            Self::build_request_context_tool_sections(manifest, &tool_description_context).await
+        let tool_listing_sections = if let Some(manifest) = tool_manifest.as_ref() {
+            Self::build_tool_listing_sections(manifest, &tool_description_context).await
         } else {
-            RequestContextToolSections::default()
+            ToolListingSections::default()
         };
         let (available_tools, tool_definitions) = if let Some(manifest) = tool_manifest {
             (manifest.allowed_tool_names, Some(manifest.tool_definitions))
@@ -1683,23 +1679,40 @@ impl ExecutionEngine {
             &context,
             &ai_client.config.model,
             primary_supports_image_understanding,
-            request_context_tools,
+            tool_listing_sections,
         )
         .await;
-        let request_context_reminder = if let Some(prompt_context) = prompt_context.as_ref() {
+        let prepended_prompt_reminders = if let Some(prompt_context) = prompt_context.as_ref() {
             PromptBuilder::new(prompt_context.clone())
-                .build_request_context_reminder(&current_agent.request_context_policy())
+                .build_prepended_reminders(&current_agent.user_context_policy())
                 .await
         } else {
-            None
+            PrependedPromptReminders::default()
         };
+        let prepended_reminders = prepended_prompt_reminders.ordered_reminders();
         let system_prompt = current_agent
             .get_system_prompt(prompt_context.as_ref())
             .await?;
         debug!("System prompt built, length: {} bytes", system_prompt.len());
         debug!(
-            "Request context reminder built, length: {} bytes",
-            request_context_reminder
+            "Prepended reminders built: skill_listing_len={} agent_listing_len={} collapsed_tool_listing_len={} user_context_len={}",
+            prepended_prompt_reminders
+                .skill_listing
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .agent_listing
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .collapsed_tool_listing
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .user_context
                 .as_ref()
                 .map(|text| text.len())
                 .unwrap_or(0)
@@ -2003,7 +2016,7 @@ impl ExecutionEngine {
                     .map(|workspace| workspace.root_path()),
                 &context.dialog_turn_id,
                 primary_supports_image_understanding,
-                request_context_reminder.as_deref(),
+                &prepended_reminders,
             )
             .await?;
 
@@ -2286,9 +2299,7 @@ impl ExecutionEngine {
                     if let Some(ref reason) = round_result.partial_recovery_reason {
                         if Self::should_continue_after_partial_response(reason) {
                             partial_continuation_attempts += 1;
-                            if partial_continuation_attempts
-                                <= MAX_PARTIAL_CONTINUATION_ATTEMPTS
-                            {
+                            if partial_continuation_attempts <= MAX_PARTIAL_CONTINUATION_ATTEMPTS {
                                 let reminder = format!(
                                     "<system_reminder>Your previous assistant response was interrupted mid-stream ({reason}). Continue writing from exactly where you stopped. Do not repeat content that was already delivered; pick up seamlessly and complete the answer.</system_reminder>"
                                 );
@@ -2299,10 +2310,7 @@ impl ExecutionEngine {
                                     .add_message(&context.session_id, user_msg)
                                     .await
                                 {
-                                    warn!(
-                                        "Failed to persist partial continuation reminder: {}",
-                                        e
-                                    );
+                                    warn!("Failed to persist partial continuation reminder: {}", e);
                                 }
                                 warn!(
                                     "Partial stream recovery with assistant text; injecting continuation reminder #{}/{}: turn={}, round={}, reason={}",
@@ -2449,7 +2457,7 @@ impl ExecutionEngine {
                         completed_rounds,
                         &execution_context_vars,
                         primary_supports_image_understanding,
-                        request_context_reminder.as_deref(),
+                        &prepended_reminders,
                         &messages,
                         Self::FINALIZE_AFTER_TOOL_USE_REMINDER,
                         context_window,
@@ -2480,7 +2488,7 @@ impl ExecutionEngine {
                             completed_rounds,
                             &execution_context_vars,
                             primary_supports_image_understanding,
-                            request_context_reminder.as_deref(),
+                            &prepended_reminders,
                             &messages,
                             Self::FORCE_TEXT_ONLY_REMINDER,
                             context_window,

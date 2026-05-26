@@ -1,7 +1,7 @@
 //! Multitask Mode
 
 use crate::agentic::agents::{
-    get_embedded_prompt, shared_coding_mode_tools, Agent, RequestContextPolicy,
+    get_embedded_prompt, shared_coding_mode_tools, Agent, UserContextPolicy,
     SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
 use async_trait::async_trait;
@@ -63,8 +63,8 @@ impl Agent for MultitaskMode {
         SHARED_CODING_MODE_PROMPT_TEMPLATE
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::empty()
+    fn user_context_policy(&self) -> UserContextPolicy {
+        UserContextPolicy::empty()
             .with_workspace_context()
             .with_workspace_instructions()
             .with_workspace_memory_files()

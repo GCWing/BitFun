@@ -1,7 +1,7 @@
 //! Agentic Mode
 
 use crate::agentic::agents::{
-    shared_coding_mode_tools, Agent, RequestContextPolicy, SHARED_CODING_MODE_PROMPT_TEMPLATE,
+    shared_coding_mode_tools, Agent, UserContextPolicy, SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
 use async_trait::async_trait;
 pub struct AgenticMode {
@@ -48,8 +48,8 @@ impl Agent for AgenticMode {
         self.default_tools.clone()
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::empty()
+    fn user_context_policy(&self) -> UserContextPolicy {
+        UserContextPolicy::empty()
             .with_workspace_context()
             .with_workspace_instructions()
             .with_workspace_memory_files()

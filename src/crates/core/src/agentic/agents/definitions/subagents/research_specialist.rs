@@ -7,7 +7,7 @@ define_readonly_subagent_with_context_policy!(
     r#"Read-only subagent for **web research**. Has WebSearch (Exa) and WebFetch tools. Use to delegate one focused research role (primary sources, news/timeline, expert analysis, counter-evidence, or competitor profile) so multiple roles can run in parallel without polluting the parent context. The specialist runs 3–5 searches, fetches the most relevant pages, and returns a structured markdown report with claim / URL / direct-quote / authority for each finding. The parent agent is responsible for any file writes — specialists return findings via the Task tool result, they do not write to disk."#,
     "research_specialist_agent",
     &["WebSearch", "WebFetch", "Read"],
-    crate::agentic::agents::RequestContextPolicy::empty()
+    crate::agentic::agents::UserContextPolicy::empty()
         .with_workspace_context()
         .with_workspace_instructions()
 );
