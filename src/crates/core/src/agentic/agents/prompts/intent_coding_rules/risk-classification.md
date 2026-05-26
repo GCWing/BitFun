@@ -84,6 +84,17 @@ Increase risk when a task touches:
 - Multiple modules or public APIs.
 - Areas with recent defects or unclear ownership.
 
+## Checker Suggestion
+
+When an Evidence Package lists changed files, the local workflow checker may
+suggest a risk level from the file paths. This suggestion is advisory and is
+intended to catch likely under-classification, not to replace judgment.
+
+If the recorded final risk level is lower than the suggestion:
+
+- Raise the risk level when the suggestion matches the actual changed behavior.
+- Or keep the lower level and explain why in `## Risks` or `## Human Review Focus`.
+
 ## Evidence Requirement
 
 Every Evidence Package must record:

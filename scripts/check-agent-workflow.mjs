@@ -32,6 +32,13 @@ const requiredEvidenceSections = [
 
 const validRepairStatuses = new Set(['not_needed', 'repaired', 'blocked', 'deferred']);
 const validRiskLevels = new Set(['L0', 'L1', 'L2', 'L3', 'L4']);
+const riskRanks = new Map([
+  ['L0', 0],
+  ['L1', 1],
+  ['L2', 2],
+  ['L3', 3],
+  ['L4', 4],
+]);
 
 let errorCount = 0;
 
@@ -209,8 +216,132 @@ function validateRiskLevelLine(filePath, markdown, sectionName, label) {
   return riskLevel;
 }
 
+function riskRank(riskLevel) {
+  return riskRanks.get(riskLevel) ?? -1;
+}
+
+function maxRiskLevel(left, right) {
+  return riskRank(left) >= riskRank(right) ? left : right;
+}
+
 function isHighRiskLevel(riskLevel) {
   return riskLevel === 'L3' || riskLevel === 'L4';
+}
+
+function normalizeChangedFileLine(line) {
+  const withoutBullet = line.replace(/^\s*[-*]\s+/, '').trim();
+  const backtickMatch = withoutBullet.match(/^`([^`]+)`/);
+  if (backtickMatch) {
+    return backtickMatch[1].trim();
+  }
+
+  return withoutBullet
+    .replace(/^\[[ xX~-]\]\s+/, '')
+    .replace(/^<([^>]+)>.*$/, '$1')
+    .replace(/\s+-\s+.*$/, '')
+    .replace(/\s+--\s+.*$/, '')
+    .replace(/[`:,]$/g, '')
+    .trim();
+}
+
+function extractEvidenceChangedFiles(markdown) {
+  const content = sectionContent(markdown, 'Files Changed');
+  if (!content) {
+    return [];
+  }
+
+  return content
+    .split(/\r?\n/)
+    .filter((line) => /^\s*[-*]\s+\S/.test(line))
+    .map((line) => normalizeChangedFileLine(line))
+    .filter(Boolean);
+}
+
+function pathLooksLikeDocsOnly(normalizedPath) {
+  return (
+    normalizedPath.endsWith('.md') ||
+    normalizedPath.startsWith('docs/') ||
+    normalizedPath.startsWith('.github/pull_request_template')
+  );
+}
+
+function suggestedRiskForPath(filePath) {
+  const normalizedPath = toPosixPath(filePath).toLowerCase();
+
+  if (
+    /\b(sandbox|privilege|credential|secret|keychain|crypto|encrypt|destructive)\b/.test(
+      normalizedPath,
+    ) ||
+    normalizedPath.includes('src/crates/tool-runtime/') ||
+    normalizedPath.includes('src/crates/core/src/agentic/tools/restrictions')
+  ) {
+    return 'L4';
+  }
+
+  if (
+    /\b(auth|authorization|permission|billing|migration|release|signing|deployment)\b/.test(
+      normalizedPath,
+    ) ||
+    normalizedPath.startsWith('.github/workflows/') ||
+    normalizedPath.includes('tauri.conf') ||
+    normalizedPath.includes('src/crates/core/src/agentic/execution/') ||
+    normalizedPath.includes('src/crates/core/src/agentic/tools/') ||
+    normalizedPath.includes('src/crates/core/src/agentic/session/') ||
+    normalizedPath.includes('src/crates/core/src/agentic/persistence/') ||
+    normalizedPath.includes('src/crates/ai-adapters/')
+  ) {
+    return 'L3';
+  }
+
+  if (
+    normalizedPath.includes('src/crates/core/') ||
+    normalizedPath.includes('src/crates/transport/') ||
+    normalizedPath.includes('src/crates/api-layer/') ||
+    normalizedPath.includes('src/crates/services-core/') ||
+    normalizedPath.includes('src/crates/services-integrations/') ||
+    normalizedPath.includes('src/apps/desktop/src/api/') ||
+    normalizedPath.includes('src/web-ui/src/flow_chat/services/') ||
+    normalizedPath.includes('src/web-ui/src/flow_chat/store/') ||
+    normalizedPath.includes('src/web-ui/src/infrastructure/api/') ||
+    /\b(remote|sync|session|persistence)\b/.test(normalizedPath)
+  ) {
+    return 'L2';
+  }
+
+  if (pathLooksLikeDocsOnly(normalizedPath)) {
+    return 'L0';
+  }
+
+  return 'L1';
+}
+
+function suggestRiskForChangedFiles(changedFiles) {
+  if (changedFiles.length === 0) {
+    return null;
+  }
+
+  return changedFiles.reduce(
+    (suggestedRisk, changedFile) => maxRiskLevel(suggestedRisk, suggestedRiskForPath(changedFile)),
+    'L0',
+  );
+}
+
+function reportChangedFileRiskSuggestion(filePath, markdown, recordedRiskLevel) {
+  const changedFiles = extractEvidenceChangedFiles(markdown);
+  const suggestedRiskLevel = suggestRiskForChangedFiles(changedFiles);
+  if (!suggestedRiskLevel) {
+    return;
+  }
+
+  reportInfo(
+    `${rel(filePath)} changed-file risk suggestion: ${suggestedRiskLevel} from ${changedFiles.length} file(s)`,
+  );
+
+  if (recordedRiskLevel && riskRank(recordedRiskLevel) < riskRank(suggestedRiskLevel)) {
+    reportWarn(
+      `${rel(filePath)} records ${recordedRiskLevel}, but changed files suggest ${suggestedRiskLevel}; raise the risk level or document why it is intentionally lower`,
+    );
+  }
 }
 
 function validateHighRiskIntentReviewEscalation(filePath, markdown, riskLevel) {
@@ -290,6 +421,7 @@ function main() {
     validateEvidenceRepairLoop(file, markdown);
     const riskLevel = validateRiskLevelLine(file, markdown, 'Risks', 'Final risk level');
     validateHighRiskEvidenceReviewEscalation(file, markdown, riskLevel);
+    reportChangedFileRiskSuggestion(file, markdown, riskLevel);
   }
 
   for (const slug of intentSlugs) {
