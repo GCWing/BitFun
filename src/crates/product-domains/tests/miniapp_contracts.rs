@@ -2,37 +2,42 @@
 
 use bitfun_product_domains::miniapp::bridge_builder::{build_bridge_script, build_csp_content};
 use bitfun_product_domains::miniapp::builtin::{
+    BUILTIN_INSTALL_MARKER, BUILTIN_PLACEHOLDER_COMPILED_HTML, BuiltinInstallMarker,
+    BuiltinMiniAppBundle, BuiltinSeedAction, BuiltinSeedCheck, LEGACY_BUILTIN_VERSION_MARKER,
     build_builtin_install_marker, build_builtin_package_json, build_builtin_seed_meta,
     builtin_content_hash, builtin_source_files, legacy_builtin_version_marker_content,
     parse_builtin_install_marker, preserved_builtin_created_at, resolve_builtin_seed_action,
     resolve_builtin_seed_check, serialize_builtin_install_marker, should_seed_builtin_app,
-    BuiltinInstallMarker, BuiltinMiniAppBundle, BuiltinSeedAction, BuiltinSeedCheck,
-    BUILTIN_INSTALL_MARKER, BUILTIN_PLACEHOLDER_COMPILED_HTML, LEGACY_BUILTIN_VERSION_MARKER,
 };
 use bitfun_product_domains::miniapp::compiler::compile;
 use bitfun_product_domains::miniapp::customization::{
+    MAX_DECLINED_BUILTIN_UPDATES, MiniAppCustomizationBaseline, MiniAppCustomizationLocalSnapshot,
+    MiniAppCustomizationMetadata, MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind,
     apply_draft_customization_metadata, decline_builtin_update_metadata,
     declined_builtin_update_needs_local_snapshot, is_current_declined_builtin_update,
-    mark_builtin_update_available_metadata, MiniAppCustomizationBaseline,
-    MiniAppCustomizationLocalSnapshot, MiniAppCustomizationMetadata, MiniAppCustomizationOrigin,
-    MiniAppCustomizationOriginKind, MAX_DECLINED_BUILTIN_UPDATES,
+    mark_builtin_update_available_metadata,
 };
 use bitfun_product_domains::miniapp::draft::{
-    build_draft_manifest, build_draft_response, MINIAPP_DRAFT_STATUS_APPLIED,
-    MINIAPP_DRAFT_STATUS_DRAFT,
+    MINIAPP_DRAFT_STATUS_APPLIED, MINIAPP_DRAFT_STATUS_DRAFT, build_draft_manifest,
+    build_draft_response,
 };
-use bitfun_product_domains::miniapp::exporter::{ExportCheckResult, ExportTarget};
+use bitfun_product_domains::miniapp::exporter::{
+    ExportCheckResult, ExportTarget, MISSING_JS_RUNTIME_MESSAGE, build_export_check_result,
+    export_runtime_label,
+};
 use bitfun_product_domains::miniapp::host_routing::{
-    command_basename_allowed, command_basename_for_allowlist, host_allowed_by_allowlist,
-    is_host_primitive,
+    FsAccessMode, command_basename_allowed, command_basename_for_allowlist, fs_method_access_mode,
+    fs_policy_scopes, fs_resolved_path_allowed, host_allowed_by_allowlist, is_host_primitive,
+    shell_exec_cwd, shell_exec_default_env, shell_exec_first_token, shell_exec_input_is_empty,
+    shell_exec_timeout_ms, split_host_method,
 };
 use bitfun_product_domains::miniapp::lifecycle::{
-    apply_draft_permission_update_result, apply_draft_source_sync_result, apply_draft_to_active,
-    apply_import_runtime_state, apply_recompile_result, apply_sync_from_fs_result,
-    apply_update_patch, build_created_app, build_deps_revision, build_runtime_state,
-    build_source_revision, build_worker_revision, clear_worker_restart_required_state,
-    ensure_runtime_state, mark_deps_installed_state, prepare_draft_app, prepare_rollback_app,
-    workspace_dir_string, MiniAppCreateInput, MiniAppUpdatePatch,
+    MiniAppCreateInput, MiniAppUpdatePatch, apply_draft_permission_update_result,
+    apply_draft_source_sync_result, apply_draft_to_active, apply_import_runtime_state,
+    apply_recompile_result, apply_sync_from_fs_result, apply_update_patch, build_created_app,
+    build_deps_revision, build_runtime_state, build_source_revision, build_worker_revision,
+    clear_worker_restart_required_state, ensure_runtime_state, mark_deps_installed_state,
+    prepare_draft_app, prepare_rollback_app, workspace_dir_string,
 };
 use bitfun_product_domains::miniapp::permission_policy::resolve_policy;
 use bitfun_product_domains::miniapp::ports::{
@@ -40,21 +45,24 @@ use bitfun_product_domains::miniapp::ports::{
     MiniAppRuntimeFacade, MiniAppRuntimePort, MiniAppStoragePort,
 };
 use bitfun_product_domains::miniapp::runtime::{
-    candidate_dirs, candidate_executable_path, runtime_lookup_order, version_manager_roots,
-    versioned_executable_candidate, RuntimeKind,
+    DetectedRuntime, RuntimeKind, candidate_dirs, candidate_executable_path, detect_runtime,
+    runtime_lookup_order, version_manager_roots, versioned_executable_candidate,
 };
 use bitfun_product_domains::miniapp::storage::{
-    build_import_fallbacks, build_package_json, parse_npm_dependencies, MiniAppImportLayout,
-    MiniAppStorageLayout, COMPILED_HTML, CUSTOMIZATION_JSON, DRAFTS_CLEANUP_MARKER,
-    DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR, DRAFT_JSON, EMPTY_ESM_DEPENDENCIES_JSON, EMPTY_STORAGE_JSON,
-    ESM_DEPS_JSON, INDEX_HTML, META_JSON, PACKAGE_JSON, PLACEHOLDER_COMPILED_HTML,
+    COMPILED_HTML, CUSTOMIZATION_JSON, DRAFT_JSON, DRAFTS_CLEANUP_MARKER, DRAFTS_CLEANUP_PREFIX,
+    DRAFTS_DIR, EMPTY_ESM_DEPENDENCIES_JSON, EMPTY_STORAGE_JSON, ESM_DEPS_JSON, INDEX_HTML,
+    META_JSON, MiniAppImportLayout, MiniAppStorageLayout, PACKAGE_JSON, PLACEHOLDER_COMPILED_HTML,
     REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, VERSIONS_DIR, WORKER_JS,
+    build_import_fallbacks, build_package_json, parse_npm_dependencies,
 };
 use bitfun_product_domains::miniapp::types::{
     FsPermissions, MiniApp, MiniAppAiContext, MiniAppI18n, MiniAppPermissions, MiniAppRuntimeState,
     MiniAppSource, NetPermissions, NotificationPermissions, NpmDep,
 };
-use bitfun_product_domains::miniapp::worker::{install_command_for_runtime, InstallResult};
+use bitfun_product_domains::miniapp::worker::{
+    InstallDepsPlan, InstallResult, install_command_for_runtime, plan_install_deps,
+    select_lru_worker, worker_idle_timeout_ms, worker_is_idle, worker_pool_at_capacity,
+};
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -389,6 +397,21 @@ fn miniapp_export_and_runtime_dtos_remain_stable() {
     let json = serde_json::to_value(&install).unwrap();
     assert_eq!(json["success"], true);
     assert_eq!(json["stdout"], "ok");
+
+    assert_eq!(export_runtime_label(&RuntimeKind::Bun), "bun");
+    assert_eq!(export_runtime_label(&RuntimeKind::Node), "node");
+    assert_eq!(
+        MISSING_JS_RUNTIME_MESSAGE,
+        "No JS runtime (install Bun or Node.js)"
+    );
+    let missing_runtime = build_export_check_result(None);
+    assert!(!missing_runtime.ready);
+    assert_eq!(missing_runtime.runtime, None);
+    assert_eq!(missing_runtime.missing, vec![MISSING_JS_RUNTIME_MESSAGE]);
+    let detected_runtime = build_export_check_result(Some(&RuntimeKind::Node));
+    assert!(detected_runtime.ready);
+    assert_eq!(detected_runtime.runtime.as_deref(), Some("node"));
+    assert!(detected_runtime.missing.is_empty());
 }
 
 #[test]
@@ -470,6 +493,7 @@ fn miniapp_runtime_search_plan_preserves_common_install_locations() {
     assert!(roots.contains(&home.join(".fnm").join("node-versions")));
 
     assert_eq!(runtime_lookup_order(), &["bun", "node"]);
+    let _detect_runtime: fn() -> Option<DetectedRuntime> = detect_runtime;
     assert_eq!(
         candidate_executable_path(Path::new("/usr/local/bin"), "node"),
         PathBuf::from("/usr/local/bin").join("node")
@@ -495,10 +519,32 @@ fn miniapp_worker_install_command_preserves_runtime_choice() {
     let node_without_pnpm = install_command_for_runtime(&RuntimeKind::Node, false);
     assert_eq!(node_without_pnpm.program, "npm");
     assert_eq!(node_without_pnpm.args, &["install", "--production"]);
+
+    assert_eq!(
+        plan_install_deps(false, &RuntimeKind::Node, true),
+        InstallDepsPlan::SkipMissingPackageJson
+    );
+    assert!(matches!(
+        plan_install_deps(true, &RuntimeKind::Node, true),
+        InstallDepsPlan::Run(command) if command.program == "pnpm"
+    ));
+    assert!(!worker_pool_at_capacity(4));
+    assert!(worker_pool_at_capacity(5));
+    assert!(worker_is_idle(
+        10_000,
+        10_000 - worker_idle_timeout_ms() - 1
+    ));
+    assert_eq!(
+        select_lru_worker([("newer", 20), ("older", 10)]),
+        Some("older".to_string())
+    );
 }
 
 #[test]
 fn miniapp_host_routing_preserves_existing_primitive_and_allowlist_contract() {
+    assert_eq!(split_host_method("fs.readFile"), Some(("fs", "readFile")));
+    assert_eq!(split_host_method("shell"), None);
+
     assert!(is_host_primitive("fs.readFile"));
     assert!(is_host_primitive("shell.exec"));
     assert!(is_host_primitive("os.info"));
@@ -514,6 +560,55 @@ fn miniapp_host_routing_preserves_existing_primitive_and_allowlist_contract() {
     assert_eq!(command_basename_for_allowlist("git.exe"), "git");
     assert_eq!(command_basename_for_allowlist("/usr/bin/git"), "git");
     assert_eq!(command_basename_for_allowlist("CARGO"), "cargo");
+
+    assert_eq!(fs_method_access_mode("readFile"), FsAccessMode::Read);
+    assert_eq!(fs_method_access_mode("writeFile"), FsAccessMode::Write);
+    assert_eq!(fs_method_access_mode("access").policy_key(), None);
+    let policy = serde_json::json!({
+        "fs": {
+            "read": ["/workspace", "/tmp/granted"],
+            "write": ["/workspace/out"]
+        }
+    });
+    assert_eq!(
+        fs_policy_scopes(&policy, FsAccessMode::Read),
+        vec!["/workspace".to_string(), "/tmp/granted".to_string()]
+    );
+    assert!(fs_resolved_path_allowed(
+        Path::new("/workspace/src/main.rs"),
+        [PathBuf::from("/workspace")]
+    ));
+    assert!(!fs_resolved_path_allowed(
+        Path::new("/workspaced/src/main.rs"),
+        [PathBuf::from("/workspace")]
+    ));
+
+    let argv = vec!["git".to_string(), "status".to_string()];
+    assert_eq!(
+        shell_exec_first_token(Some(&argv), "node ignored.js"),
+        "git"
+    );
+    assert_eq!(shell_exec_first_token(None, " cargo test "), "cargo");
+    assert!(shell_exec_input_is_empty(Some(&[]), ""));
+    assert!(!shell_exec_input_is_empty(Some(&argv), ""));
+    assert_eq!(
+        shell_exec_cwd(
+            Some("/explicit"),
+            Some(Path::new("/workspace")),
+            Path::new("/appdata")
+        ),
+        PathBuf::from("/explicit")
+    );
+    assert_eq!(
+        shell_exec_cwd(None, Some(Path::new("/workspace")), Path::new("/appdata")),
+        PathBuf::from("/workspace")
+    );
+    assert_eq!(shell_exec_timeout_ms(None), 30_000);
+    assert_eq!(shell_exec_timeout_ms(Some(8_000)), 8_000);
+    assert_eq!(
+        shell_exec_default_env(),
+        [("GIT_TERMINAL_PROMPT", "0"), ("LC_ALL", "C")]
+    );
 
     assert!(command_basename_allowed(&[], "git"));
     assert!(command_basename_allowed(&["Git".to_string()], "git"));
@@ -811,13 +906,15 @@ fn miniapp_lifecycle_draft_helpers_preserve_manager_contract() {
 
     assert_eq!(permissioned.version, active.version);
     assert_eq!(permissioned.updated_at, 4000);
-    assert!(permissioned
-        .permissions
-        .fs
-        .as_ref()
-        .unwrap()
-        .write
-        .is_some());
+    assert!(
+        permissioned
+            .permissions
+            .fs
+            .as_ref()
+            .unwrap()
+            .write
+            .is_some()
+    );
     assert_eq!(permissioned.runtime.source_revision, "src:3:4000");
     assert!(permissioned.runtime.worker_restart_required);
 
@@ -1439,10 +1536,12 @@ fn miniapp_customization_decline_policy_updates_existing_and_trims_old_records()
         metadata.declined_builtin_updates.len(),
         MAX_DECLINED_BUILTIN_UPDATES
     );
-    assert!(!metadata
-        .declined_builtin_updates
-        .iter()
-        .any(|record| record.source_hash == "hash-v5"));
+    assert!(
+        !metadata
+            .declined_builtin_updates
+            .iter()
+            .any(|record| record.source_hash == "hash-v5")
+    );
 }
 
 fn sample_miniapp_for_lifecycle(source: MiniAppSource) -> MiniApp {
