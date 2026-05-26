@@ -2,7 +2,7 @@
 //!
 //! Provides file tree building, directory scanning, and file search
 
-use crate::util::errors::*;
+use super::error::{FileSystemError, FileSystemResult};
 use log::warn;
 
 use ignore::WalkBuilder;
@@ -350,15 +350,8 @@ impl FileTreeService {
     pub async fn build_tree_with_remote_hint(
         &self,
         root_path: &str,
-        preferred_remote_connection_id: Option<&str>,
+        _preferred_remote_connection_id: Option<&str>,
     ) -> Result<Vec<FileTreeNode>, String> {
-        // For remote workspaces, delegate to get_directory_contents which handles SSH
-        if crate::service::remote_ssh::workspace_state::is_remote_path(root_path).await {
-            return self
-                .get_directory_contents_with_remote_hint(root_path, preferred_remote_connection_id)
-                .await;
-        }
-
         let root_path_buf = PathBuf::from(root_path);
 
         if !root_path_buf.exists() {
@@ -377,34 +370,19 @@ impl FileTreeService {
     pub async fn build_tree_with_stats(
         &self,
         root_path: &str,
-    ) -> BitFunResult<(Vec<FileTreeNode>, FileTreeStatistics)> {
-        // For remote workspaces, return simple directory listing with empty stats
-        if crate::service::remote_ssh::workspace_state::is_remote_path(root_path).await {
-            let nodes = self
-                .get_directory_contents_with_remote_hint(root_path, None)
-                .await
-                .map_err(BitFunError::service)?;
-            let stats = FileTreeStatistics {
-                total_files: nodes.iter().filter(|n| !n.is_directory).count(),
-                total_directories: nodes.iter().filter(|n| n.is_directory).count(),
-                total_size_bytes: 0,
-                max_depth_reached: 0,
-                file_type_counts: HashMap::new(),
-                large_files: Vec::new(),
-                symlinks_count: 0,
-                hidden_files_count: 0,
-            };
-            return Ok((nodes, stats));
-        }
-
+    ) -> FileSystemResult<(Vec<FileTreeNode>, FileTreeStatistics)> {
         let root_path_buf = PathBuf::from(root_path);
 
         if !root_path_buf.exists() {
-            return Err(BitFunError::service("Directory does not exist".to_string()));
+            return Err(FileSystemError::service(
+                "Directory does not exist".to_string(),
+            ));
         }
 
         if !root_path_buf.is_dir() {
-            return Err(BitFunError::service("Path is not a directory".to_string()));
+            return Err(FileSystemError::service(
+                "Path is not a directory".to_string(),
+            ));
         }
 
         let mut visited = HashSet::new();
@@ -428,7 +406,7 @@ impl FileTreeService {
                 &mut stats,
             )
             .await
-            .map_err(BitFunError::service)?;
+            .map_err(FileSystemError::service)?;
 
         Ok((nodes, stats))
     }
@@ -815,50 +793,13 @@ impl FileTreeService {
             .await
     }
 
-    /// `preferred_remote_connection_id`: when set (e.g. from workspace/session), resolves SSH file ops
-    /// without relying on global `active_connection_hint` — required when multiple remotes share the same root path.
+    /// Keeps the legacy signature; core handles remote routing before delegating
+    /// local directory reads to this owner crate.
     pub async fn get_directory_contents_with_remote_hint(
         &self,
         path: &str,
-        preferred_remote_connection_id: Option<&str>,
+        _preferred_remote_connection_id: Option<&str>,
     ) -> Result<Vec<FileTreeNode>, String> {
-        // Check if this path belongs to any registered remote workspace
-        if let Some(entry) =
-            crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
-                path,
-                preferred_remote_connection_id,
-            )
-            .await
-        {
-            if let Some(manager) =
-                crate::service::remote_ssh::workspace_state::get_remote_workspace_manager()
-            {
-                if let Some(file_service) = manager.get_file_service().await {
-                    match file_service.read_dir(&entry.connection_id, path).await {
-                        Ok(entries) => {
-                            let nodes: Vec<FileTreeNode> = entries
-                                .into_iter()
-                                .filter(|e| e.name != "." && e.name != "..")
-                                .map(|e| {
-                                    FileTreeNode::new(
-                                        e.path.clone(),
-                                        e.name.clone(),
-                                        e.path.clone(),
-                                        e.is_dir,
-                                    )
-                                })
-                                .collect();
-                            return Ok(nodes);
-                        }
-                        Err(e) => {
-                            return Err(format!("Failed to read remote directory: {}", e));
-                        }
-                    }
-                }
-            }
-        }
-
-        // Fall back to local filesystem
         let path_buf = PathBuf::from(path);
 
         if !path_buf.exists() {
@@ -993,7 +934,7 @@ impl FileTreeService {
         root_path: &str,
         pattern: &str,
         search_content: bool,
-    ) -> BitFunResult<Vec<FileSearchResult>> {
+    ) -> FileSystemResult<Vec<FileSearchResult>> {
         self.search_files_with_options(root_path, pattern, search_content, false, false, false)
             .await
     }
@@ -1006,7 +947,7 @@ impl FileTreeService {
         case_sensitive: bool,
         use_regex: bool,
         whole_word: bool,
-    ) -> BitFunResult<Vec<FileSearchResult>> {
+    ) -> FileSystemResult<Vec<FileSearchResult>> {
         let filename_outcome = self
             .search_file_names(
                 root_path,
@@ -1050,7 +991,7 @@ impl FileTreeService {
         root_path: &str,
         pattern: &str,
         options: FileNameSearchOptions,
-    ) -> BitFunResult<FileSearchOutcome> {
+    ) -> FileSystemResult<FileSearchOutcome> {
         self.search_file_names_with_progress(root_path, pattern, options, None)
             .await
     }
@@ -1061,11 +1002,13 @@ impl FileTreeService {
         pattern: &str,
         options: FileNameSearchOptions,
         progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
-    ) -> BitFunResult<FileSearchOutcome> {
+    ) -> FileSystemResult<FileSearchOutcome> {
         let root_path_buf = PathBuf::from(root_path);
 
         if !root_path_buf.exists() {
-            return Err(BitFunError::service("Directory does not exist".to_string()));
+            return Err(FileSystemError::service(
+                "Directory does not exist".to_string(),
+            ));
         }
 
         let matcher = Arc::new(Self::compile_search_regex(
@@ -1202,7 +1145,7 @@ impl FileTreeService {
         root_path: &str,
         pattern: &str,
         options: FileContentSearchOptions,
-    ) -> BitFunResult<FileSearchOutcome> {
+    ) -> FileSystemResult<FileSearchOutcome> {
         self.search_file_contents_with_progress(root_path, pattern, options, None)
             .await
     }
@@ -1213,11 +1156,13 @@ impl FileTreeService {
         pattern: &str,
         options: FileContentSearchOptions,
         progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
-    ) -> BitFunResult<FileSearchOutcome> {
+    ) -> FileSystemResult<FileSearchOutcome> {
         let root_path_buf = PathBuf::from(root_path);
 
         if !root_path_buf.exists() {
-            return Err(BitFunError::service("Directory does not exist".to_string()));
+            return Err(FileSystemError::service(
+                "Directory does not exist".to_string(),
+            ));
         }
 
         let matcher = Arc::new(Self::compile_search_regex(
@@ -1351,7 +1296,7 @@ impl FileTreeService {
         case_sensitive: bool,
         use_regex: bool,
         whole_word: bool,
-    ) -> BitFunResult<Regex> {
+    ) -> FileSystemResult<Regex> {
         let search_pattern = if use_regex {
             pattern.to_string()
         } else if whole_word {
@@ -1363,7 +1308,7 @@ impl FileTreeService {
         RegexBuilder::new(&search_pattern)
             .case_insensitive(!case_sensitive)
             .build()
-            .map_err(|error| BitFunError::service(format!("Invalid regex pattern: {}", error)))
+            .map_err(|error| FileSystemError::service(format!("Invalid regex pattern: {}", error)))
     }
 
     fn take_first_chars(text: &str, max_chars: usize) -> String {
@@ -1391,7 +1336,7 @@ impl FileTreeService {
         }
 
         if max_chars <= 1 {
-            return "…".to_string();
+            return "\u{2026}".to_string();
         }
 
         let keep_chars = max_chars - 1;
@@ -1401,7 +1346,7 @@ impl FileTreeService {
             .map(|(index, _)| index)
             .unwrap_or(0);
 
-        format!("…{}", &text[start_index..])
+        format!("\u{2026}{}", &text[start_index..])
     }
 
     fn build_content_match_preview(
@@ -1514,14 +1459,14 @@ impl FileTreeService {
         limit_reached: &Arc<AtomicBool>,
         cancel_flag: Option<&Arc<AtomicBool>>,
         progress_sink: Option<&Arc<dyn FileSearchProgressSink>>,
-    ) -> BitFunResult<()> {
+    ) -> FileSystemResult<()> {
         if should_stop.load(Ordering::Relaxed) || cancellation_requested(cancel_flag) {
             should_stop.store(true, Ordering::Relaxed);
             return Ok(());
         }
 
         let file = File::open(path)
-            .map_err(|error| BitFunError::service(format!("Failed to open file: {}", error)))?;
+            .map_err(|error| FileSystemError::service(format!("Failed to open file: {}", error)))?;
         let reader = BufReader::new(file);
         let mut matched_results = Vec::new();
 
@@ -1531,8 +1476,9 @@ impl FileTreeService {
                 return Ok(());
             }
 
-            let line_bytes = line_result
-                .map_err(|error| BitFunError::service(format!("Failed to read file: {}", error)))?;
+            let line_bytes = line_result.map_err(|error| {
+                FileSystemError::service(format!("Failed to read file: {}", error))
+            })?;
             let line = String::from_utf8_lossy(&line_bytes)
                 .trim_end_matches('\r')
                 .to_string();

@@ -103,6 +103,11 @@ SessionManager → Session → DialogTurn → ModelRound
 - Keep concrete remote SSH runtime code behind `ssh-remote`. No-default builds
   may keep workspace identity helpers and explicit unsupported stubs, but must
   not compile russh-backed SSH/SFTP/terminal/search runtime modules.
+- Generic local filesystem operations, tree/search, listing, and filesystem DTOs
+  live in `bitfun-services-core::filesystem`. Core may keep compatibility
+  re-exports, remote workspace overlay, `BitFunError` mapping, MiniApp
+  filesystem IO, tool-result persistence, `PathManager` binding, and product
+  runtime wiring.
 - Keep no-default `bitfun-core` as a runtime-surface-light facade, not a
   claimed dependency-light build. Full product runtime modules such as agentic,
   MiniApp/function-agent, Git/MCP, remote-connect, review-platform, snapshot,

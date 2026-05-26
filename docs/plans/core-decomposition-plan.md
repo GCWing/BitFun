@@ -988,10 +988,10 @@ cargo check --workspace
 
 **当前安全迁移状态（2026-05-11）：**
 
-- 已迁移到 `bitfun-services-core`：`service::system`、`service::diff`、`util::process_manager`、`service::session::types`、`service::session_usage::{types,classifier,redaction,render}`、`service::token_usage::types`。
+- 已迁移到 `bitfun-services-core`：`service::system`、`service::diff`、`util::process_manager`、`service::session::types`、`service::session_usage::{types,classifier,redaction,render}`、`service::token_usage::types`、通用本地 `infrastructure::filesystem` operations/tree/search/listing 和 `service::filesystem` service facade。
 - `SessionKind` 已移动到 `bitfun-core-types`，core 的 `agentic::core::SessionKind` 与 `service::session::SessionKind` 继续通过 re-export 兼容。
 - 最新主干新增的 Deep Review `deep_review_run_manifest` / `deep_review_cache` 字段已随 `service::session::types` 一起迁移，并保留原有序列化别名与 round-trip 测试；这不是新的 P2 行为变更。
-- `service::config`、`workspace`、`workspace_runtime`、`filesystem`、`runtime`、`i18n`、`bootstrap`、`project_context` 仍保留在 core；继续迁移前需要先确认 `BitFunError`、`PathManager`、workspace/provider ports 的边界方案。
+- `service::config`、`workspace`、`workspace_runtime`、`runtime`、`i18n`、`bootstrap`、`project_context` 仍保留在 core；filesystem 侧的 remote workspace overlay、`BitFunError` 映射、MiniApp filesystem IO、tool-result persistence、PathManager 绑定和产品 runtime 接线仍保留在 core。继续迁移前需要先确认 `PathManager`、workspace/provider ports 和产品持久化边界方案。
 
 **验证：**
 
@@ -1314,6 +1314,7 @@ product-full = ["miniapp", "function-agents"]
 - 2026-05-21 function-agent response-policy update: Git commit-message and Startchat prompt templates, AI response JSON extraction, JSON repair, JSON-string parsers, and domain error mapping now live in `bitfun-product-domains::function_agents`; core still owns AI service calls, Git service adapters, provider acquisition, AI transport errors, and runtime analysis orchestration.
 - 2026-05-25 HR-B update: MiniApp create/update/draft prepare/draft sync/permission update/draft apply/import 的纯 manager state transitions 已移入 `bitfun-product-domains::miniapp::lifecycle` / `MiniAppRuntimeFacade`，imported meta 的 id/timestamp 规则也已归入 product-domain helper；内置 MiniApp seed meta 的 id/timestamp/preserved-created-at 规则已移入 `bitfun-product-domains::miniapp::builtin`。
 - 2026-05-26 HR-B expansion: MiniApp concrete runtime detector owner 已移入 `bitfun-product-domains::miniapp::runtime`，包含 PATH lookup、version-manager directory scan 与 `--version` process check；core `miniapp::runtime_detect` 只保留兼容 facade。core 仍负责 compile 调度、source/storage/path/marker filesystem IO、customization metadata IO、worker process、host dispatch、built-in asset include/seeding/recompile，以及 function-agent Git/AI concrete service 调用。
+- 2026-05-26 filesystem owner update: 通用本地 filesystem operations、tree/search、directory listing、统一 `FileSystemError` 和 service facade 已迁入 `bitfun-services-core::filesystem`；core `infrastructure::filesystem` / `service::filesystem::{types,listing}` 只保留 re-export，core `service::filesystem::FileSystemService` 只保留 remote workspace overlay、legacy `BitFunError` 映射和旧 API 兼容。MiniApp filesystem IO、tool-result persistence、workspace `PathManager` 绑定、remote SSH runtime 和产品持久化接线仍显式 core-owned。
 - boundary check 已补充 product-domain owner anchor：`MiniAppStoragePort` / `MiniAppRuntimePort` 的 core adapter、MiniApp host/customization/builtin 纯 contract、MiniApp manager preflight tests、function-agent Git adapter、prompt/response policy helper 必须存在，防止把 port contract 或 response policy 误读成 storage IO、worker process、host dispatch、customization draft runtime、builtin asset seeding runtime 或 Git/AI service runtime 已完成迁移。
 - miniapp runtime/storage/manager/host dispatch/exporter/builtin 与 function-agent 运行逻辑继续迁移前，需要先确认 agent/tool/provider port 和 Git/AI service 边界。
 

@@ -434,6 +434,21 @@ const ownerCrateFeatureAssemblyRules = [
 
 const facadeOnlyFiles = [
   {
+    path: 'src/crates/core/src/infrastructure/filesystem/mod.rs',
+    importPrefix: 'bitfun_services_core::filesystem',
+    reason: 'core filesystem infrastructure facade must only re-export the services-core owner crate',
+  },
+  {
+    path: 'src/crates/core/src/service/filesystem/listing.rs',
+    importPrefix: 'bitfun_services_core::filesystem',
+    reason: 'core filesystem listing facade must only re-export the services-core owner crate',
+  },
+  {
+    path: 'src/crates/core/src/service/filesystem/types.rs',
+    importPrefix: 'bitfun_services_core::filesystem',
+    reason: 'core filesystem DTO facade must only re-export the services-core owner crate',
+  },
+  {
     path: 'src/crates/core/src/service/git/git_service.rs',
     importPrefix: 'bitfun_services_integrations::git',
     reason: 'core git service facade must only re-export the integrations owner crate',
@@ -511,6 +526,36 @@ const facadeOnlyFiles = [
 ];
 
 const forbiddenContentRules = [
+  {
+    path: 'src/crates/core/src/service/filesystem/service.rs',
+    patterns: [
+      {
+        regex: /\btokio::fs::/,
+        message:
+          'core filesystem service must not own async local filesystem IO; use bitfun-services-core filesystem primitives',
+      },
+      {
+        regex: /\bstd::fs::/,
+        message:
+          'core filesystem service must not own sync local filesystem IO; use bitfun-services-core filesystem primitives',
+      },
+      {
+        regex: /\bignore::WalkBuilder\b/,
+        message:
+          'core filesystem service must not own local file walking/search implementation; use bitfun-services-core filesystem primitives',
+      },
+      {
+        regex: /\bsha2::/,
+        message:
+          'core filesystem service must not own editor-sync hashing implementation; use bitfun-services-core filesystem primitives',
+      },
+      {
+        regex: /\bbase64::/,
+        message:
+          'core filesystem service must not own binary file encoding implementation; use bitfun-services-core filesystem primitives',
+      },
+    ],
+  },
   {
     path: 'src/crates/core/src/miniapp/runtime_detect.rs',
     patterns: [
@@ -1752,6 +1797,52 @@ const forbiddenContentUnderRules = [
 ];
 
 const requiredContentRules = [
+  {
+    path: 'src/crates/services-core/src/filesystem/mod.rs',
+    reason:
+      'services-core filesystem owner must expose local filesystem primitives behind a single module boundary',
+    patterns: [
+      {
+        regex: /mod error;/,
+        message: 'filesystem owner must expose its error boundary',
+      },
+      {
+        regex: /mod operations;/,
+        message: 'filesystem owner must expose local file operation primitives',
+      },
+      {
+        regex: /mod tree;/,
+        message: 'filesystem owner must expose local file tree/search primitives',
+      },
+      {
+        regex: /pub use error::\{FileSystemError, FileSystemResult\};/,
+        message: 'filesystem owner must re-export the unified filesystem error type',
+      },
+      {
+        regex: /pub use service::FileSystemService;/,
+        message: 'filesystem owner must keep the consolidated service facade',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/filesystem/service.rs',
+    reason:
+      'core filesystem service may keep remote-workspace overlay and BitFunError compatibility, but local filesystem owner must remain services-core',
+    patterns: [
+      {
+        regex: /lookup_remote_connection_with_hint/,
+        message: 'core filesystem wrapper must preserve remote workspace connection disambiguation',
+      },
+      {
+        regex: /get_remote_workspace_manager/,
+        message: 'core filesystem wrapper must preserve existing remote file service lookup',
+      },
+      {
+        regex: /map_filesystem_error/,
+        message: 'core filesystem wrapper must map services-core errors at the compatibility boundary',
+      },
+    ],
+  },
   {
     path: 'src/crates/core/Cargo.toml',
     reason:
