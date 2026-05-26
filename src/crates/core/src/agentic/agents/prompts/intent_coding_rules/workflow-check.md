@@ -32,7 +32,7 @@ The checker validates structural workflow hygiene:
 - Evidence Package policy gates include machine-checkable statuses and failure/skipped/blocked handling.
 - Evidence Package risks include a final risk level.
 - L3/L4 Intent Records include a machine-checkable review route.
-- L3/L4 Evidence Packages include review route and escalation status.
+- L3/L4 Evidence Packages include review route, trigger mode, and escalation status.
 - Evidence Package changed files and risk-sensitive Evidence text produce an advisory risk-level suggestion.
 
 ## Limits

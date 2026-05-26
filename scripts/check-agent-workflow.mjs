@@ -36,6 +36,7 @@ const validRepairStatuses = new Set(['not_needed', 'repaired', 'blocked', 'defer
 const validRiskLevels = new Set(['L0', 'L1', 'L2', 'L3', 'L4']);
 const validReviewRoutes = new Set(['deep_review', 'specialist_review', 'manual_review', 'skipped']);
 const validReviewStatuses = new Set(['completed', 'skipped', 'blocked']);
+const validReviewTriggers = new Set(['automatic', 'manual', 'not_available']);
 const validPolicyGateStatuses = new Set([
   'passed',
   'failed',
@@ -567,16 +568,32 @@ function validateHighRiskEvidenceReviewEscalation(filePath, markdown, riskLevel)
   }
 
   const risks = sectionContent(markdown, 'Risks');
+  let route = null;
   const routeMatch = risks.match(/Review route\s*:\s*([a-z_]+)/i);
   if (!routeMatch) {
     reportError(
       `${rel(filePath)} L3/L4 Evidence Package must include "Review route: <route>" in "## Risks"`,
     );
   } else {
-    const route = routeMatch[1].toLowerCase();
+    route = routeMatch[1].toLowerCase();
     if (!validReviewRoutes.has(route)) {
       reportError(
         `${rel(filePath)} has invalid Review route "${route}". Expected one of: ${Array.from(validReviewRoutes).join(', ')}`,
+      );
+    }
+  }
+
+  let trigger = null;
+  const triggerMatch = risks.match(/Review trigger\s*:\s*([a-z_]+)/i);
+  if (!triggerMatch) {
+    reportError(
+      `${rel(filePath)} L3/L4 Evidence Package must include "Review trigger: automatic|manual|not_available" in "## Risks"`,
+    );
+  } else {
+    trigger = triggerMatch[1].toLowerCase();
+    if (!validReviewTriggers.has(trigger)) {
+      reportError(
+        `${rel(filePath)} has invalid Review trigger "${trigger}". Expected one of: ${Array.from(validReviewTriggers).join(', ')}`,
       );
     }
   }
@@ -593,6 +610,28 @@ function validateHighRiskEvidenceReviewEscalation(filePath, markdown, riskLevel)
   if (!validReviewStatuses.has(status)) {
     reportError(
       `${rel(filePath)} has invalid Review escalation status "${status}". Expected one of: ${Array.from(validReviewStatuses).join(', ')}`,
+    );
+  }
+
+  if (route === 'skipped' && status !== 'skipped') {
+    reportError(
+      `${rel(filePath)} uses Review route skipped but Review escalation status is ${status}; expected skipped`,
+    );
+  }
+
+  if (route === 'skipped' && trigger === 'automatic') {
+    reportError(`${rel(filePath)} uses Review route skipped but Review trigger is automatic`);
+  }
+
+  if ((route === 'deep_review' || route === 'specialist_review') && trigger === 'not_available') {
+    reportWarn(
+      `${rel(filePath)} selected ${route} but trigger is not_available; wire this route to a review trigger when the integration is available`,
+    );
+  }
+
+  if ((route === 'deep_review' || route === 'specialist_review') && trigger === 'manual') {
+    reportInfo(
+      `${rel(filePath)} selected ${route} with manual trigger; run the selected review route before merge when practical`,
     );
   }
 

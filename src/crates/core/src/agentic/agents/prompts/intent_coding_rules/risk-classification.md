@@ -107,6 +107,7 @@ Every Evidence Package must record:
 - Verification that was skipped and why.
 - Human review focus for L2 and above.
 - Review route for L3 and L4 as `Review route: deep_review|specialist_review|manual_review|skipped` in `## Risks`.
+- Review trigger for L3 and L4 as `Review trigger: automatic|manual|not_available` in `## Risks`.
 - Review escalation result for L3 and L4 as `Review escalation status: completed|skipped|blocked` in `## Risks`.
 - Review escalation reason for L3 and L4 as `Review escalation reason: <reason>` when escalation is skipped or blocked.
 
@@ -116,5 +117,6 @@ For L3 and L4 tasks:
 
 - Prefer BitFun Deep Review when the changed surface is code and a review session is available.
 - Use equivalent specialist review when Deep Review is unavailable or the task is not code-review shaped.
+- Record whether the review route was triggered automatically, manually, or was not available.
 - Do not claim completion without stating whether review escalation was completed, skipped by explicit user direction, or blocked by tooling.
 - Keep review routing machine-checkable so later automation can trigger the selected route.
