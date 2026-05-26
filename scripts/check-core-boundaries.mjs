@@ -242,6 +242,7 @@ const dependencyProfileRules = [
       'dirs',
       'log',
       'sha2',
+      'which',
       'reqwest',
       'git2',
       'rmcp',
@@ -362,6 +363,7 @@ const optionalDependencyFeatureOwnerRules = [
       { depName: 'dirs', ownerFeatures: ['miniapp'] },
       { depName: 'log', ownerFeatures: ['function-agents'] },
       { depName: 'sha2', ownerFeatures: ['miniapp'] },
+      { depName: 'which', ownerFeatures: ['miniapp'] },
     ],
   },
 ];
@@ -509,6 +511,31 @@ const facadeOnlyFiles = [
 ];
 
 const forbiddenContentRules = [
+  {
+    path: 'src/crates/core/src/miniapp/runtime_detect.rs',
+    patterns: [
+      {
+        regex: /\bCoreMiniAppRuntimeProbe\b/,
+        message:
+          'core MiniApp runtime_detect must remain a compatibility facade; concrete probe owner is product-domains',
+      },
+      {
+        regex: /\bwhich::which\b/,
+        message:
+          'core MiniApp runtime_detect must not own PATH lookup; use product-domain runtime detection',
+      },
+      {
+        regex: /\bcreate_command\b/,
+        message:
+          'core MiniApp runtime_detect must not own version process execution; use product-domain runtime detection',
+      },
+      {
+        regex: /\bstd::fs::read_dir\b/,
+        message:
+          'core MiniApp runtime_detect must not own version-manager directory scanning; use product-domain runtime detection',
+      },
+    ],
+  },
   {
     path: 'src/crates/core/src/agentic/tools/framework.rs',
     patterns: [
@@ -1616,7 +1643,9 @@ const forbiddenContentUnderRules = [
     patterns: [
       {
         regex: /\bCommand::new\(/,
-        message: 'product-domains must not spawn processes; keep process execution in core/adapters',
+        allowPaths: ['src/crates/product-domains/src/miniapp/runtime.rs'],
+        message:
+          'product-domains must not spawn processes outside the reviewed MiniApp runtime detector owner',
       },
       {
         regex: /\bprocess_manager::/,
@@ -4153,12 +4182,48 @@ const requiredContentRules = [
         message: 'missing MiniApp host dispatch entry',
       },
       {
+        regex: /\bsplit_host_method\b/,
+        message: 'missing product-domain MiniApp host method split use',
+      },
+      {
         regex: /\basync fn dispatch_fs\b/,
         message: 'missing MiniApp fs host dispatch',
       },
       {
+        regex: /\bfs_method_access_mode\b/,
+        message: 'missing product-domain MiniApp fs access-mode policy use',
+      },
+      {
+        regex: /\bfs_policy_scopes\b/,
+        message: 'missing product-domain MiniApp fs scope extraction policy use',
+      },
+      {
+        regex: /\bfs_resolved_path_allowed\b/,
+        message: 'missing product-domain MiniApp fs resolved path policy use',
+      },
+      {
         regex: /\basync fn dispatch_shell\b/,
         message: 'missing MiniApp shell host dispatch',
+      },
+      {
+        regex: /\bshell_exec_first_token\b/,
+        message: 'missing product-domain MiniApp shell token policy use',
+      },
+      {
+        regex: /\bshell_exec_input_is_empty\b/,
+        message: 'missing product-domain MiniApp shell empty-input policy use',
+      },
+      {
+        regex: /\bshell_exec_cwd\b/,
+        message: 'missing product-domain MiniApp shell cwd policy use',
+      },
+      {
+        regex: /\bshell_exec_timeout_ms\b/,
+        message: 'missing product-domain MiniApp shell timeout policy use',
+      },
+      {
+        regex: /\bshell_exec_default_env\b/,
+        message: 'missing product-domain MiniApp shell env policy use',
       },
       {
         regex: /\bcommand_basename_allowed\b/,
@@ -4345,11 +4410,39 @@ const requiredContentRules = [
   {
     path: 'src/crates/product-domains/src/miniapp/runtime.rs',
     reason:
-      'product-domains owns MiniApp runtime search-plan contracts while core keeps executable lookup and version process execution',
+      'product-domains owns MiniApp runtime detection, including the reviewed concrete PATH/fs/version probe',
     patterns: [
+      {
+        regex: /\bpub fn detect_runtime\b/,
+        message: 'missing MiniApp concrete runtime detector',
+      },
+      {
+        regex: /\bstruct DefaultMiniAppRuntimeProbe\b/,
+        message: 'missing MiniApp default runtime probe owner',
+      },
+      {
+        regex: /\bwhich::which\b/,
+        message: 'missing MiniApp PATH lookup owner',
+      },
+      {
+        regex: /\bstd::fs::read_dir\b/,
+        message: 'missing MiniApp version-manager directory scan owner',
+      },
+      {
+        regex: /\bcreate_version_command\b/,
+        message: 'missing MiniApp version process command owner',
+      },
       {
         regex: /\bpub fn runtime_lookup_order\b/,
         message: 'missing MiniApp runtime lookup order contract',
+      },
+      {
+        regex: /\bpub trait MiniAppRuntimeProbe\b/,
+        message: 'missing MiniApp runtime probe contract',
+      },
+      {
+        regex: /\bpub fn detect_runtime_with_probe\b/,
+        message: 'missing MiniApp runtime detector facade',
       },
       {
         regex: /\bpub fn candidate_executable_path\b/,
@@ -4362,10 +4455,69 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/product-domains/src/miniapp/worker.rs',
+    reason:
+      'product-domains owns MiniApp worker pool policy and install-deps planning while core keeps worker process execution',
+    patterns: [
+      {
+        regex: /\bpub enum InstallDepsPlan\b/,
+        message: 'missing MiniApp install-deps plan contract',
+      },
+      {
+        regex: /\bpub fn plan_install_deps\b/,
+        message: 'missing MiniApp install-deps planning helper',
+      },
+      {
+        regex: /\bpub fn worker_pool_capacity\b/,
+        message: 'missing MiniApp worker pool capacity policy helper',
+      },
+      {
+        regex: /\bpub fn worker_idle_timeout_ms\b/,
+        message: 'missing MiniApp worker idle timeout policy helper',
+      },
+      {
+        regex: /\bpub fn worker_is_idle\b/,
+        message: 'missing MiniApp worker idle policy helper',
+      },
+      {
+        regex: /\bpub fn select_lru_worker\b/,
+        message: 'missing MiniApp worker LRU selection helper',
+      },
+      {
+        regex: /\binstall_deps_plan_preserves_no_package_noop_and_runtime_commands\b/,
+        message: 'missing MiniApp install-deps planning regression test',
+      },
+      {
+        regex: /\bworker_pool_policy_keeps_existing_capacity_and_idle_timeout_contract\b/,
+        message: 'missing MiniApp worker pool policy regression test',
+      },
+    ],
+  },
+  {
     path: 'src/crates/product-domains/src/miniapp/host_routing.rs',
     reason:
-      'product-domains owns MiniApp host-routing and allowlist string policy while core keeps host execution',
+      'product-domains owns MiniApp host-routing and allowlist decision policy while core keeps host execution',
     patterns: [
+      {
+        regex: /\bpub fn split_host_method\b/,
+        message: 'missing MiniApp host method split helper',
+      },
+      {
+        regex: /\bpub enum FsAccessMode\b/,
+        message: 'missing MiniApp fs access mode contract',
+      },
+      {
+        regex: /\bpub fn fs_method_access_mode\b/,
+        message: 'missing MiniApp fs access mode helper',
+      },
+      {
+        regex: /\bpub fn fs_policy_scopes\b/,
+        message: 'missing MiniApp fs policy scope helper',
+      },
+      {
+        regex: /\bpub fn fs_resolved_path_allowed\b/,
+        message: 'missing MiniApp fs resolved path helper',
+      },
       {
         regex: /\bpub fn command_basename_for_allowlist\b/,
         message: 'missing MiniApp command basename allowlist helper',
@@ -4377,6 +4529,80 @@ const requiredContentRules = [
       {
         regex: /\bpub fn host_allowed_by_allowlist\b/,
         message: 'missing MiniApp host allowlist policy helper',
+      },
+      {
+        regex: /\bpub fn shell_exec_first_token\b/,
+        message: 'missing MiniApp shell first-token policy helper',
+      },
+      {
+        regex: /\bpub fn shell_exec_input_is_empty\b/,
+        message: 'missing MiniApp shell empty-input policy helper',
+      },
+      {
+        regex: /\bpub fn shell_exec_cwd\b/,
+        message: 'missing MiniApp shell cwd policy helper',
+      },
+      {
+        regex: /\bpub fn shell_exec_timeout_ms\b/,
+        message: 'missing MiniApp shell timeout policy helper',
+      },
+      {
+        regex: /\bpub fn shell_exec_default_env\b/,
+        message: 'missing MiniApp shell env policy helper',
+      },
+      {
+        regex: /\bfs_method_access_mode_preserves_access_bypass_and_default_read_contract\b/,
+        message: 'missing MiniApp fs access mode regression test',
+      },
+      {
+        regex: /\bfs_policy_scopes_and_resolved_prefix_check_preserve_path_boundary\b/,
+        message: 'missing MiniApp fs path policy regression test',
+      },
+      {
+        regex: /\bshell_exec_first_token_prefers_argv_over_shell_command_text\b/,
+        message: 'missing MiniApp shell first-token regression test',
+      },
+      {
+        regex: /\bshell_exec_plan_helpers_preserve_defaults_and_precedence\b/,
+        message: 'missing MiniApp shell plan regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/miniapp/exporter.rs',
+    reason:
+      'product-domains owns MiniApp export check result policy while core keeps runtime detection',
+    patterns: [
+      {
+        regex: /\bpub const MISSING_JS_RUNTIME_MESSAGE\b/,
+        message: 'missing MiniApp export missing-runtime message contract',
+      },
+      {
+        regex: /\bpub fn export_runtime_label\b/,
+        message: 'missing MiniApp export runtime label helper',
+      },
+      {
+        regex: /\bpub fn build_export_check_result\b/,
+        message: 'missing MiniApp export check result helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/exporter.rs',
+    reason:
+      'core MiniApp exporter must delegate export check result policy while retaining runtime detection and export skeleton',
+    patterns: [
+      {
+        regex: /\bdetect_runtime\b/,
+        message: 'missing core-owned MiniApp export runtime detection',
+      },
+      {
+        regex: /\bbuild_export_check_result\b/,
+        message: 'missing product-domain MiniApp export check helper use',
+      },
+      {
+        regex: /Export not yet implemented \(skeleton\)/,
+        message: 'missing core-owned MiniApp export skeleton behavior',
       },
     ],
   },
@@ -4823,23 +5049,15 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/miniapp/runtime_detect.rs',
     reason:
-      'core MiniApp runtime detection must use product-domain search-plan helpers while retaining process-backed executable/version checks',
+      'core MiniApp runtime detection must be a compatibility facade over product-domain runtime detection',
     patterns: [
       {
-        regex: /\bruntime_lookup_order\b/,
-        message: 'missing product-domain runtime lookup order use',
+        regex: /\bpub use bitfun_product_domains::miniapp::runtime::\{/,
+        message: 'missing product-domain MiniApp runtime facade re-export',
       },
       {
-        regex: /\bcandidate_executable_path\b/,
-        message: 'missing product-domain candidate executable helper use',
-      },
-      {
-        regex: /\bversioned_executable_candidate\b/,
-        message: 'missing product-domain version-manager executable helper use',
-      },
-      {
-        regex: /\bget_version\b/,
-        message: 'missing core-owned version process execution',
+        regex: /\bdetect_runtime\b/,
+        message: 'missing product-domain detect_runtime facade export',
       },
     ],
   },
@@ -4848,6 +5066,22 @@ const requiredContentRules = [
     reason:
       'core must continue owning MiniApp worker runtime adapter until process/runtime migration is reviewed',
     patterns: [
+      {
+        regex: /\bplan_install_deps\b/,
+        message: 'missing product-domain install-deps plan use',
+      },
+      {
+        regex: /\bworker_is_idle\b/,
+        message: 'missing product-domain worker idle policy use',
+      },
+      {
+        regex: /\bworker_pool_at_capacity\b/,
+        message: 'missing product-domain worker capacity policy use',
+      },
+      {
+        regex: /\bselect_lru_worker\b/,
+        message: 'missing product-domain worker LRU policy use',
+      },
       {
         regex: /\bimpl MiniAppRuntimePort for JsWorkerPool\b/,
         message: 'missing MiniApp runtime port adapter owner',
@@ -5513,7 +5747,7 @@ function runManifestParserSelfTest() {
   const productDomainProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'product-domains',
   );
-  for (const dep of ['dirs', 'log', 'sha2']) {
+  for (const dep of ['dirs', 'log', 'sha2', 'which']) {
     if (!productDomainProfile?.forbiddenNonOptionalDeps.includes(dep)) {
       throw new Error(`product-domains default profile must forbid non-optional ${dep}`);
     }
@@ -5588,6 +5822,16 @@ function runManifestParserSelfTest() {
     if (!productDomainRuntimeRuleText.includes(contract)) {
       throw new Error(`product-domains runtime boundary rule must forbid: ${contract}`);
     }
+  }
+  const productDomainCommandRule = productDomainRuntimeRule.patterns.find((pattern) =>
+    pattern.regex.source.includes('Command::new'),
+  );
+  if (
+    !productDomainCommandRule?.allowPaths?.includes(
+      'src/crates/product-domains/src/miniapp/runtime.rs',
+    )
+  ) {
+    throw new Error('product-domains Command::new exception must stay scoped to MiniApp runtime detection');
   }
   const coreTypesProfile = dependencyProfileRules.find((rule) => rule.crateName === 'core-types');
   if (!coreTypesProfile?.forbiddenNonOptionalDeps.includes('bitfun-ai-adapters')) {
@@ -6275,15 +6519,30 @@ function runManifestParserSelfTest() {
       path: 'src/crates/core/src/miniapp/host_dispatch.rs',
       contracts: [
         'dispatch_host',
+        'split_host_method',
         'dispatch_fs',
+        'fs_method_access_mode',
+        'fs_policy_scopes',
+        'fs_resolved_path_allowed',
         'dispatch_shell',
+        'shell_exec_first_token',
+        'shell_exec_input_is_empty',
+        'shell_exec_cwd',
+        'shell_exec_timeout_ms',
+        'shell_exec_default_env',
         'command_basename_allowed',
         'host_allowed_by_allowlist',
       ],
     },
     {
       path: 'src/crates/core/src/miniapp/js_worker_pool.rs',
-      contracts: ['MiniAppRuntimePort'],
+      contracts: [
+        'MiniAppRuntimePort',
+        'plan_install_deps',
+        'worker_is_idle',
+        'worker_pool_at_capacity',
+        'select_lru_worker',
+      ],
     },
     {
       path: 'src/crates/core/src/function_agents/port_adapters.rs',
@@ -6390,15 +6649,55 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/product-domains/src/miniapp/runtime.rs',
-      contracts: ['runtime_lookup_order', 'candidate_executable_path', 'versioned_executable_candidate'],
+      contracts: [
+        'runtime_lookup_order',
+        'detect_runtime',
+        'DefaultMiniAppRuntimeProbe',
+        'MiniAppRuntimeProbe',
+        'detect_runtime_with_probe',
+        'which::which',
+        'std::fs::read_dir',
+        'create_version_command',
+        'candidate_executable_path',
+        'versioned_executable_candidate',
+      ],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/worker.rs',
+      contracts: [
+        'InstallDepsPlan',
+        'plan_install_deps',
+        'worker_pool_capacity',
+        'worker_idle_timeout_ms',
+        'worker_is_idle',
+        'select_lru_worker',
+      ],
     },
     {
       path: 'src/crates/product-domains/src/miniapp/host_routing.rs',
       contracts: [
+        'split_host_method',
+        'FsAccessMode',
+        'fs_method_access_mode',
+        'fs_policy_scopes',
+        'fs_resolved_path_allowed',
         'command_basename_for_allowlist',
         'command_basename_allowed',
         'host_allowed_by_allowlist',
+        'shell_exec_first_token',
+        'shell_exec_input_is_empty',
+        'shell_exec_cwd',
+        'shell_exec_timeout_ms',
+        'shell_exec_default_env',
       ],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/exporter.rs',
+      contracts: ['MISSING_JS_RUNTIME_MESSAGE', 'export_runtime_label', 'build_export_check_result'],
+    },
+    {
+      path: 'src/crates/core/src/miniapp/exporter.rs',
+      contracts: ['detect_runtime', 'build_export_check_result', 'Export not yet implemented'],
     },
     {
       path: 'src/crates/product-domains/src/miniapp/customization.rs',
@@ -6515,7 +6814,7 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/miniapp/runtime_detect.rs',
-      contracts: ['runtime_lookup_order', 'candidate_executable_path', 'versioned_executable_candidate', 'get_version'],
+      contracts: ['pub use bitfun_product_domains::miniapp::runtime::{', 'detect_runtime'],
     },
   ];
   for (const { path, contracts } of requiredContentContracts) {
@@ -7355,9 +7654,13 @@ function checkForbiddenContentUnder(repoDir, patterns, reason) {
     if (!path.endsWith('.rs')) {
       return;
     }
+    const repoPath = toRepoPath(path);
     const lines = readText(path).split(/\r?\n/);
     lines.forEach((line, index) => {
       for (const pattern of patterns) {
+        if (pattern.allowPaths?.includes(repoPath)) {
+          continue;
+        }
         if (pattern.regex.test(line)) {
           failures.push({
             path,

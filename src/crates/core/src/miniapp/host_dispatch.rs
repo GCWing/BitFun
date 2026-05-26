@@ -25,12 +25,15 @@
 use crate::miniapp::permission_policy::resolve_policy;
 use crate::miniapp::types::MiniAppPermissions;
 use crate::util::errors::{BitFunError, BitFunResult};
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 pub use bitfun_product_domains::miniapp::host_routing::is_host_primitive;
 use bitfun_product_domains::miniapp::host_routing::{
-    command_basename_allowed, command_basename_for_allowlist, host_allowed_by_allowlist,
+    FsAccessMode, command_basename_allowed, command_basename_for_allowlist, fs_method_access_mode,
+    fs_policy_scopes, fs_resolved_path_allowed, host_allowed_by_allowlist, shell_exec_cwd,
+    shell_exec_default_env, shell_exec_first_token, shell_exec_input_is_empty,
+    shell_exec_timeout_ms, split_host_method,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -49,8 +52,7 @@ pub async fn dispatch_host(
     params: Value,
 ) -> BitFunResult<Value> {
     let policy = resolve_policy(perms, app_id, app_data_dir, workspace_dir, granted_paths);
-    let (ns, name) = method
-        .split_once('.')
+    let (ns, name) = split_host_method(method)
         .ok_or_else(|| BitFunError::parse(format!("invalid method: {}", method)))?;
     match ns {
         "fs" => dispatch_fs(&policy, name, &params).await,
@@ -100,27 +102,21 @@ fn canonicalize_best_effort(p: &Path) -> PathBuf {
 /// canonicalization so e.g. `/tmp/foo` on macOS (`/private/tmp/foo`) matches a
 /// `/tmp` scope after both sides resolve symlinks.
 fn path_allowed(policy: &Value, target: &Path, mode: &str) -> bool {
-    let key = if mode == "write" { "write" } else { "read" };
-    let scopes = match policy
-        .get("fs")
-        .and_then(|v| v.get(key))
-        .and_then(|v| v.as_array())
-    {
-        Some(a) => a,
-        None => return false,
+    let access_mode = if mode == "write" {
+        FsAccessMode::Write
+    } else {
+        FsAccessMode::Read
     };
-    let resolved = canonicalize_best_effort(target);
-    for s in scopes {
-        let Some(scope_str) = s.as_str() else {
-            continue;
-        };
-        let scope_path = PathBuf::from(scope_str);
-        let scope_canon = canonicalize_best_effort(&scope_path);
-        if resolved.starts_with(&scope_canon) {
-            return true;
-        }
+    let scopes = fs_policy_scopes(policy, access_mode);
+    if scopes.is_empty() {
+        return false;
     }
-    false
+    let resolved = canonicalize_best_effort(target);
+    let resolved_scopes = scopes
+        .into_iter()
+        .map(PathBuf::from)
+        .map(|scope| canonicalize_best_effort(&scope));
+    fs_resolved_path_allowed(&resolved, resolved_scopes)
 }
 
 fn arg_path(params: &Value, key: &str) -> BitFunResult<PathBuf> {
@@ -148,15 +144,11 @@ async fn dispatch_fs(policy: &Value, name: &str, params: &Value) -> BitFunResult
         .and_then(|v| v.as_str())
         .map(PathBuf::from);
 
-    let needs_write = matches!(
-        name,
-        "writeFile" | "mkdir" | "rm" | "appendFile" | "rename" | "copyFile"
-    );
-
     if let Some(ref p) = path_param {
-        let mode = if needs_write { "write" } else { "read" };
-        if name != "access" && !path_allowed(policy, p, mode) {
-            return Err(deny(format!("Path not allowed: {}", p.display())));
+        if let Some(mode) = fs_method_access_mode(name).policy_key() {
+            if !path_allowed(policy, p, mode) {
+                return Err(deny(format!("Path not allowed: {}", p.display())));
+            }
         }
     }
 
@@ -345,7 +337,7 @@ async fn dispatch_shell(
         .unwrap_or("")
         .trim()
         .to_string();
-    if argv.as_ref().map(|a| a.is_empty()).unwrap_or(true) && command.is_empty() {
+    if shell_exec_input_is_empty(argv.as_deref(), &command) {
         return Err(BitFunError::parse("empty command"));
     }
 
@@ -361,10 +353,7 @@ async fn dispatch_shell(
                 .collect()
         })
         .unwrap_or_default();
-    let first_token = match argv.as_ref() {
-        Some(a) => a.first().map(String::as_str).unwrap_or(""),
-        None => command.split_whitespace().next().unwrap_or(""),
-    };
+    let first_token = shell_exec_first_token(argv.as_deref(), &command);
     let base = command_basename_for_allowlist(first_token);
     if !command_basename_allowed(&allow, &base) {
         return Err(deny(format!("Command not in allowlist: {}", base)));
@@ -372,16 +361,12 @@ async fn dispatch_shell(
 
     // cwd: explicit > workspace > appdata. Mirrors what worker_host.js gives users
     // (where process.cwd() is appDir, but the iframe always passes cwd explicitly).
-    let cwd = params
-        .get("cwd")
-        .and_then(|v| v.as_str())
-        .map(PathBuf::from)
-        .or_else(|| workspace_dir.map(Path::to_path_buf))
-        .unwrap_or_else(|| app_data_dir.to_path_buf());
-    let timeout_ms = params
-        .get("timeout")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(30_000);
+    let cwd = shell_exec_cwd(
+        params.get("cwd").and_then(|v| v.as_str()),
+        workspace_dir,
+        app_data_dir,
+    );
+    let timeout_ms = shell_exec_timeout_ms(params.get("timeout").and_then(|v| v.as_u64()));
 
     let mut cmd = if let Some(argv) = argv.as_ref() {
         let program = resolve_shell_program(&argv[0]);
@@ -407,8 +392,9 @@ async fn dispatch_shell(
     cmd.current_dir(&cwd);
     // Match worker_host.js: never let git prompt for credentials, force C locale so
     // stdout parsing is deterministic.
-    cmd.env("GIT_TERMINAL_PROMPT", "0");
-    cmd.env("LC_ALL", "C");
+    for (key, value) in shell_exec_default_env() {
+        cmd.env(key, value);
+    }
 
     let output = tokio::time::timeout(Duration::from_millis(timeout_ms), cmd.output())
         .await
