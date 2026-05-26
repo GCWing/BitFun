@@ -27,13 +27,26 @@ Valid statuses:
 `failed` gates fail the local workflow checker. `skipped` and `blocked` gates
 must include `reason: <reason>`.
 
-## Baseline Gates
+## Required Gate Profile
 
-Use the smallest relevant set. Prefer these gate identifiers:
+The workflow checker derives a lightweight required gate profile from the
+Evidence Package.
+
+Every Evidence Package must include:
 
 - `scope`: Changes stayed within the accepted Intent Record.
 - `verification`: Required verification commands were run or explicitly skipped.
 - `security`: No secrets, credentials, unsafe auth changes, or malicious behavior were introduced.
+
+Additional required gates:
+
+- `risk_review`: Required for L3/L4 tasks.
+- `dependencies`: Required when dependency manifest or lock files are changed.
+- `platform_boundary`: Required when platform adapter, desktop-only, Tauri, or adapter surfaces are touched.
+- `remote_compatibility`: Required when remote workspace, synchronization, transport, or websocket behavior is touched.
+
+Optional gates can still be included when useful. Prefer these gate identifiers:
+
 - `risk_review`: L3/L4 review routing was completed, skipped, or blocked with evidence.
 - `dependencies`: New dependencies were not introduced without approval.
 - `platform_boundary`: Platform-specific behavior stayed behind adapters.

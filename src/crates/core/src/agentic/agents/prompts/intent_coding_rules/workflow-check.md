@@ -30,7 +30,7 @@ The checker validates structural workflow hygiene:
 - Evidence Package accepted checks include explicit status markers.
 - Evidence Package repair loops include attempt counts and final repair status.
 - Evidence Package provenance chains include machine-checkable store, session, turn, Intent Record, Evidence Package, and durable record anchors.
-- Evidence Package policy gates include machine-checkable statuses and failure/skipped/blocked handling.
+- Evidence Package policy gates include required gate profiles, machine-checkable statuses, and failure/skipped/blocked handling.
 - Evidence Package risks include a final risk level.
 - L3/L4 Intent Records include a machine-checkable review route.
 - L3/L4 Evidence Packages include review route, trigger mode, and escalation status.

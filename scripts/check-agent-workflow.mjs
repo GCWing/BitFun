@@ -407,7 +407,50 @@ function validateEvidenceProvenanceChain(filePath, markdown) {
   }
 }
 
-function validateEvidencePolicyGates(filePath, markdown) {
+function changedFilesInclude(changedFiles, pattern) {
+  return changedFiles.some((changedFile) => pattern.test(toPosixPath(changedFile).toLowerCase()));
+}
+
+function evidenceTextIncludes(markdown, pattern) {
+  return [
+    sectionContent(markdown, 'Summary'),
+    sectionContent(markdown, 'Accepted Checks'),
+    sectionContent(markdown, 'Risks'),
+    sectionContent(markdown, 'Human Review Focus'),
+  ].some((content) => pattern.test(content.toLowerCase()));
+}
+
+function requiredPolicyGatesForEvidence(markdown, riskLevel, changedFiles) {
+  const requiredGates = new Set(['scope', 'verification', 'security']);
+
+  if (isHighRiskLevel(riskLevel)) {
+    requiredGates.add('risk_review');
+  }
+
+  if (
+    changedFilesInclude(changedFiles, /(^|\/)(cargo\.toml|package\.json|pnpm-lock\.yaml)$/)
+  ) {
+    requiredGates.add('dependencies');
+  }
+
+  if (
+    changedFilesInclude(changedFiles, /src\/apps\/desktop\/|tauri|platform|adapter/) ||
+    evidenceTextIncludes(markdown, /\b(platform|adapter|tauri|desktop-only)\b/)
+  ) {
+    requiredGates.add('platform_boundary');
+  }
+
+  if (
+    changedFilesInclude(changedFiles, /remote|sync|transport|websocket/) ||
+    evidenceTextIncludes(markdown, /\b(remote workspace|remote|sync|synchronization)\b/)
+  ) {
+    requiredGates.add('remote_compatibility');
+  }
+
+  return requiredGates;
+}
+
+function validateEvidencePolicyGates(filePath, markdown, riskLevel, changedFiles) {
   const content = sectionContent(markdown, 'Policy Gates');
   if (!content) {
     return;
@@ -423,6 +466,7 @@ function validateEvidencePolicyGates(filePath, markdown) {
     return;
   }
 
+  const gateIds = new Set();
   for (const line of gateLines) {
     const gateMatch = line.match(
       /^[-*]\s+\[([a-z_]+)\]\s+([a-z0-9_.-]+)\s*:\s*(.+)$/i,
@@ -437,6 +481,7 @@ function validateEvidencePolicyGates(filePath, markdown) {
     const status = gateMatch[1].toLowerCase();
     const gateId = gateMatch[2];
     const result = gateMatch[3].trim();
+    gateIds.add(gateId);
 
     if (!validPolicyGateStatuses.has(status)) {
       reportError(
@@ -456,6 +501,12 @@ function validateEvidencePolicyGates(filePath, markdown) {
       reportError(
         `${rel(filePath)} ${status} Policy Gate ${gateId} must include "reason: <reason>"`,
       );
+    }
+  }
+
+  for (const gateId of requiredPolicyGatesForEvidence(markdown, riskLevel, changedFiles)) {
+    if (!gateIds.has(gateId)) {
+      reportError(`${rel(filePath)} is missing required Policy Gate ${gateId}`);
     }
   }
 }
@@ -818,8 +869,9 @@ function main() {
     validateEvidenceAcceptedCheckStatuses(file, markdown);
     validateEvidenceRepairLoop(file, markdown);
     validateEvidenceProvenanceChain(file, markdown);
-    validateEvidencePolicyGates(file, markdown);
     const riskLevel = validateRiskLevelLine(file, markdown, 'Risks', 'Final risk level');
+    const changedFiles = extractEvidenceChangedFiles(markdown);
+    validateEvidencePolicyGates(file, markdown, riskLevel, changedFiles);
     validateHighRiskEvidenceReviewEscalation(file, markdown, riskLevel);
     reportChangedFileRiskSuggestion(file, markdown, riskLevel);
   }
