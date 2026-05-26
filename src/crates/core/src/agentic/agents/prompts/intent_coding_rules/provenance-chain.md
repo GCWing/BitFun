@@ -38,10 +38,22 @@ Do not include:
 
 ## Evidence Requirement
 
-Every Evidence Package should include:
+Every Evidence Package must include a `Provenance Chain` section.
 
-- A `Provenance Chain` section.
-- Links or paths to Intent Record and Evidence Package.
+The section must include these machine-checkable fields:
+
+- `Provenance store: agent_artifact|session_store|external|not_available`
+- `Session id: <id|not_available>`
+- `Turn id: <id|not_available>`
+- `Intent Record: .agent/intents/intent-YYYYMMDD-short-task-name.md`
+- `Evidence Package: .agent/evidence/evidence-YYYYMMDD-short-task-name.md`
+
+Use `not_available` when the current runtime cannot expose a stable session or
+turn identifier. Do not invent identifiers. Prefer `agent_artifact` for the MVP
+when the chain only exists in `.agent`.
+
+The section should also include review-useful anchors:
+
 - Key context inputs.
 - Verification and repair anchors.
 - Human decisions that changed scope, risk, or acceptance.

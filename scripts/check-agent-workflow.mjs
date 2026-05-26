@@ -26,6 +26,7 @@ const requiredEvidenceSections = [
   'Verification',
   'Repair Loop',
   'Accepted Checks',
+  'Provenance Chain',
   'Risks',
   'Human Review Focus',
 ];
@@ -34,6 +35,12 @@ const validRepairStatuses = new Set(['not_needed', 'repaired', 'blocked', 'defer
 const validRiskLevels = new Set(['L0', 'L1', 'L2', 'L3', 'L4']);
 const validReviewRoutes = new Set(['deep_review', 'specialist_review', 'manual_review', 'skipped']);
 const validReviewStatuses = new Set(['completed', 'skipped', 'blocked']);
+const validProvenanceStores = new Set([
+  'agent_artifact',
+  'session_store',
+  'external',
+  'not_available',
+]);
 const riskRanks = new Map([
   ['L0', 0],
   ['L1', 1],
@@ -192,6 +199,59 @@ function validateEvidenceRepairLoop(filePath, markdown) {
   if (!validRepairStatuses.has(status)) {
     reportError(
       `${rel(filePath)} has invalid Final repair status "${status}". Expected one of: ${Array.from(validRepairStatuses).join(', ')}`,
+    );
+  }
+}
+
+function validateEvidenceProvenanceChain(filePath, markdown) {
+  const content = sectionContent(markdown, 'Provenance Chain');
+  if (!content) {
+    return;
+  }
+
+  const storeMatch = content.match(/Provenance store\s*:\s*([a-z_]+)/i);
+  if (!storeMatch) {
+    reportError(
+      `${rel(filePath)} "## Provenance Chain" must include "Provenance store: agent_artifact|session_store|external|not_available"`,
+    );
+  } else {
+    const store = storeMatch[1].toLowerCase();
+    if (!validProvenanceStores.has(store)) {
+      reportError(
+        `${rel(filePath)} has invalid Provenance store "${store}". Expected one of: ${Array.from(validProvenanceStores).join(', ')}`,
+      );
+    }
+  }
+
+  for (const label of ['Session id', 'Turn id']) {
+    if (!new RegExp(`${label}\\s*:\\s*\\S`, 'i').test(content)) {
+      reportError(
+        `${rel(filePath)} "## Provenance Chain" must include "${label}: <id|not_available>"`,
+      );
+    }
+  }
+
+  const intentMatch = content.match(/Intent Record\s*:\s*(\.agent\/intents\/intent-[^\s`)]+\.md)/i);
+  if (!intentMatch) {
+    reportError(
+      `${rel(filePath)} "## Provenance Chain" must include "Intent Record: .agent/intents/intent-*.md"`,
+    );
+  }
+
+  const evidenceMatch = content.match(
+    /Evidence Package\s*:\s*(\.agent\/evidence\/evidence-[^\s`)]+\.md)/i,
+  );
+  if (!evidenceMatch) {
+    reportError(
+      `${rel(filePath)} "## Provenance Chain" must include "Evidence Package: .agent/evidence/evidence-*.md"`,
+    );
+    return;
+  }
+
+  const declaredEvidencePath = toPosixPath(evidenceMatch[1]);
+  if (declaredEvidencePath !== rel(filePath)) {
+    reportError(
+      `${rel(filePath)} declares Evidence Package ${declaredEvidencePath}, but current file is ${rel(filePath)}`,
     );
   }
 }
@@ -468,6 +528,7 @@ function main() {
     validateEvidenceIntentReference(file, markdown);
     validateEvidenceAcceptedCheckStatuses(file, markdown);
     validateEvidenceRepairLoop(file, markdown);
+    validateEvidenceProvenanceChain(file, markdown);
     const riskLevel = validateRiskLevelLine(file, markdown, 'Risks', 'Final risk level');
     validateHighRiskEvidenceReviewEscalation(file, markdown, riskLevel);
     reportChangedFileRiskSuggestion(file, markdown, riskLevel);

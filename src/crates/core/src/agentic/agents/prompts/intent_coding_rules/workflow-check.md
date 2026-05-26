@@ -28,6 +28,7 @@ The checker validates structural workflow hygiene:
 - Intent Records and Evidence Packages are paired by task slug.
 - Evidence Package accepted checks include explicit status markers.
 - Evidence Package repair loops include attempt counts and final repair status.
+- Evidence Package provenance chains include machine-checkable store, session, turn, Intent Record, and Evidence Package anchors.
 - Evidence Package risks include a final risk level.
 - L3/L4 Intent Records include a machine-checkable review route.
 - L3/L4 Evidence Packages include review route and escalation status.
