@@ -2,7 +2,7 @@
 
 use crate::agentic::agents::{
     get_embedded_prompt, shared_coding_mode_tools, Agent, PromptBuilder, PromptBuilderContext,
-    RequestContextPolicy,
+    UserContextPolicy,
 };
 use crate::util::errors::*;
 use async_trait::async_trait;
@@ -113,8 +113,8 @@ impl Agent for IntentCodingMode {
         self.default_tools.clone()
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::empty()
+    fn user_context_policy(&self) -> UserContextPolicy {
+        UserContextPolicy::empty()
             .with_workspace_context()
             .with_workspace_instructions()
             .with_workspace_memory_files()
