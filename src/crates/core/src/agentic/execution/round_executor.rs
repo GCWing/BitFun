@@ -4,6 +4,9 @@
 
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
+use super::write_content_sanitizer::{
+    contains_tool_invocation_artifacts, strip_tool_invocation_artifacts,
+};
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
@@ -41,6 +44,7 @@ pub struct RoundExecutor {
 
 impl RoundExecutor {
     const MAX_STREAM_ATTEMPTS: usize = 10;
+    const MAX_WRITE_CONTENT_QUALITY_ATTEMPTS: usize = 2;
     const RETRY_BASE_DELAY_MS: u64 = 500;
     const WRITE_CONTENT_STREAM_IDLE_TIMEOUT_SECS: u64 = 45;
 
@@ -1000,7 +1004,8 @@ impl RoundExecutor {
                  5. Do NOT output anything outside the <bitfun_contents> tags — no explanations, no commentary, \
                  no thinking blocks, no markdown fences (```), no extra XML wrapper tags.\n\
                  6. The text between the tags must be EXACTLY what gets written to disk — raw file content only.\n\
-                 7. Do NOT call any tools in this turn. Do NOT output tool_call XML, JSON tool invocations, \
+                 7. Do NOT call any tools in this turn. Do NOT output tool_call XML, DSML syntax \
+                 (including `<｜｜DSML｜｜tool_calls>` / `<invoke>` markers), JSON tool invocations, \
                  function_call blocks, or agent framework syntax inside or outside the tags. \
                  You are not calling a tool here — you are outputting raw file content only.\n\
                  8. Do NOT repeat, summarize, or narrate prior tool calls (Read, Bash, Edit, etc.). Start writing the actual file body immediately.\n\
@@ -1011,24 +1016,73 @@ impl RoundExecutor {
             let content_messages = Self::build_write_content_messages(ai_messages, &content_prompt);
             let write_client = ai_client.with_reasoning_mode(ReasoningMode::Disabled);
 
-            let full_text = self
-                .stream_write_tool_content(
-                    &write_client,
-                    content_messages,
-                    &file_path,
-                    &tool_id,
-                    context,
-                    round_id,
-                    cancel_token,
-                )
-                .await?;
+            let content = {
+                let mut content_attempt = 0usize;
+                loop {
+                    let full_text = self
+                        .stream_write_tool_content(
+                            &write_client,
+                            content_messages.clone(),
+                            &file_path,
+                            &tool_id,
+                            context,
+                            round_id,
+                            cancel_token,
+                        )
+                        .await?;
 
-            let content = extract_bitfun_contents_with_options(&full_text, true);
+                    let extracted = extract_bitfun_contents_with_options(&full_text, true);
+                    if extracted.is_empty() {
+                        warn!(
+                            "Write content generation returned empty content for file_path={}",
+                            file_path
+                        );
+                    } else if contains_tool_invocation_artifacts(&extracted) {
+                        if content_attempt + 1 >= Self::MAX_WRITE_CONTENT_QUALITY_ATTEMPTS {
+                            let error = format!(
+                                "Write content generation returned tool-invocation syntax instead of file content for {}. \
+                                 Retry Write after reviewing the target file requirements.",
+                                file_path
+                            );
+                            warn!("{}", error);
+                            self.emit_event(
+                                AgenticEvent::ToolEvent {
+                                    session_id: context.session_id.clone(),
+                                    turn_id: context.dialog_turn_id.clone(),
+                                    round_id: round_id.to_string(),
+                                    tool_event: ToolEventData::Failed {
+                                        tool_id: tool_id.clone(),
+                                        tool_name: "Write".to_string(),
+                                        error,
+                                        duration_ms: None,
+                                        queue_wait_ms: None,
+                                        preflight_ms: None,
+                                        confirmation_wait_ms: None,
+                                        execution_ms: None,
+                                    },
+                                },
+                                EventPriority::High,
+                            )
+                            .await;
+                            break String::new();
+                        }
+
+                        warn!(
+                            "Write content generation returned tool-invocation syntax for file_path={}, retrying ({}/{})",
+                            file_path,
+                            content_attempt + 1,
+                            Self::MAX_WRITE_CONTENT_QUALITY_ATTEMPTS
+                        );
+                        content_attempt += 1;
+                        continue;
+                    }
+
+                    break extracted;
+                }
+            };
+
             if content.is_empty() {
-                warn!(
-                    "Write content generation returned empty content for file_path={}",
-                    file_path
-                );
+                continue;
             }
 
             // Detect strong "omission marker" phrases that indicate the model
@@ -1475,6 +1529,7 @@ fn sanitize_write_content(content: &str) -> String {
     let mut s = content.to_string();
 
     s = strip_called_tools_artifacts(&s);
+    s = strip_tool_invocation_artifacts(&s);
     s = strip_bitfun_content_tags(&s);
 
     // Strip multi-line thinking/reasoning XML blocks (e.g. <think ...>..</think >)
@@ -2053,6 +2108,18 @@ mod tests {
     fn sanitization_strips_reasoning_block() {
         let text = "<bitfun_contents>\n<reasoning>\nAnalyzing code...\n</reasoning>\nfn main() {}\n</bitfun_contents>";
         assert_eq!(extract_bitfun_contents(text), "fn main() {}");
+    }
+
+    #[test]
+    fn sanitization_strips_dsml_tool_invocation_blocks() {
+        let text = concat!(
+            "<｜｜DSML｜｜tool_calls>\n",
+            "<｜｜DSML｜｜invoke name=\"Write\">\n",
+            "<｜｜DSML｜｜parameter name=\"file_path\" string=\"true\">a.ts</｜｜DSML｜｜parameter>\n",
+            "</｜｜DSML｜｜invoke>\n",
+            "</｜｜DSML｜｜tool_calls>"
+        );
+        assert_eq!(extract_bitfun_contents(text), "");
     }
 
     #[test]

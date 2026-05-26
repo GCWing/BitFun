@@ -8,6 +8,9 @@ use crate::agentic::tools::file_read_state_runtime::{
 use crate::agentic::tools::file_tool_guidance::{
     file_tool_guidance_message, is_file_tool_guidance_message,
 };
+use crate::agentic::execution::write_content_sanitizer::{
+    contains_tool_invocation_artifacts, strip_tool_invocation_artifacts,
+};
 use crate::agentic::tools::framework::{
     Tool, ToolPathResolution, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -323,6 +326,19 @@ Usage:
             .get("content")
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
+        let content = strip_tool_invocation_artifacts(content);
+        if content.is_empty() {
+            return Err(BitFunError::tool(Self::write_guidance_message(
+                "Write content is empty after removing tool-invocation syntax. \
+                 Provide the raw file body in the `content` field.",
+            )));
+        }
+        if contains_tool_invocation_artifacts(&content) {
+            return Err(BitFunError::tool(Self::write_guidance_message(
+                "Write content still contains tool-invocation syntax after sanitization. \
+                 Provide raw file content only.",
+            )));
+        }
 
         Self::assert_atomic_write_freshness_if_exists(context, &resolved).await?;
 
@@ -340,7 +356,7 @@ Usage:
                     .await
                     .map_err(|e| BitFunError::tool(format!("Failed to create directory: {}", e)))?;
             }
-            fs::write(&resolved.resolved_path, content)
+            fs::write(&resolved.resolved_path, &content)
                 .await
                 .map_err(|e| {
                     BitFunError::tool(format!(
@@ -351,7 +367,7 @@ Usage:
         }
 
         let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
-        update_file_read_state_after_mutation(context, &resolved, content, timestamp_ms);
+        update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
 
         let result = ToolResult::Result {
             data: json!({
@@ -746,6 +762,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn inline_mode_rejects_tool_invocation_content() {
+        let tool = FileWriteTool::new();
+        let mut custom_data = HashMap::new();
+        custom_data.insert(
+            WRITE_TOOL_MODE_CONTEXT_KEY.to_string(),
+            serde_json::Value::String("inline_content".to_string()),
+        );
+        let context = context_with_custom_data(custom_data);
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "file_path": "notes.md",
+                    "content": "<tool_calls><invoke name=\"Write\"></invoke></tool_calls>"
+                }),
+                Some(&context),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert!(validation
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains("tool-invocation syntax")));
+    }
+
+    #[tokio::test]
     async fn inline_mode_requires_content_during_validation() {
         let tool = FileWriteTool::new();
         let mut custom_data = HashMap::new();
@@ -898,6 +941,22 @@ impl Tool for FileWriteTool {
                 error_code: Some(400),
                 meta: None,
             };
+        }
+
+        if matches!(mode, WriteToolMode::InlineContent) {
+            if let Some(content) = input.get("content").and_then(|v| v.as_str()) {
+                if contains_tool_invocation_artifacts(content) {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(Self::write_guidance_message(
+                            "Write content looks like tool-invocation syntax instead of raw file content. \
+                             Output the file body directly in the `content` field without nested tool calls.",
+                        )),
+                        error_code: Some(400),
+                        meta: Some(json!({ "failure_kind": "guidance" })),
+                    };
+                }
+            }
         }
 
         let large_write_warning = if matches!(mode, WriteToolMode::InlineContent) {
