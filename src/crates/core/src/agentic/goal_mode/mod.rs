@@ -85,6 +85,24 @@ pub fn last_assistant_message_text(messages: &[Message]) -> Option<String> {
         .filter(|text| !text.is_empty())
 }
 
+pub fn ensure_final_response_in_goal_context(
+    mut context_messages: Vec<Message>,
+    final_response: &str,
+    turn_id: &str,
+) -> Vec<Message> {
+    let trimmed_final = final_response.trim();
+    if trimmed_final.is_empty() {
+        return context_messages;
+    }
+
+    let latest_assistant = last_assistant_message_text(&context_messages).unwrap_or_default();
+    if latest_assistant.trim() != trimmed_final {
+        context_messages
+            .push(Message::assistant(final_response.to_string()).with_turn_id(turn_id.to_string()));
+    }
+    context_messages
+}
+
 pub fn user_facing_goal_mode_error(error: BitFunError) -> BitFunError {
     match error {
         BitFunError::Validation(_) | BitFunError::NotFound(_) => error,
@@ -182,28 +200,15 @@ pub fn build_goal_continuation_plan(
     state: &GoalModeState,
     verification: &GoalVerificationResult,
 ) -> GoalContinuationPlan {
-    let gaps = if verification.gaps.is_empty() {
-        "- The goal is not fully complete yet.".to_string()
-    } else {
-        verification
-            .gaps
-            .iter()
-            .map(|gap| format!("- {gap}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-
+    let gaps = verification
+        .gaps
+        .iter()
+        .map(|gap| format!("- {gap}"))
+        .collect::<Vec<_>>()
+        .join("\n");
     let guidance = verification.guidance.trim();
-    let guidance_block = if guidance.is_empty() {
-        "Continue working on the remaining gaps before stopping.".to_string()
-    } else {
-        guidance.to_string()
-    };
 
-    let display_message = format!(
-        "Goal not yet achieved — continuing work on: {}",
-        state.goal_text
-    );
+    let display_message = format!("Goal not yet achieved — continuing work on: {guidance}");
 
     let wrapped_message = {
         let mut envelope = PromptEnvelope::new();
@@ -211,7 +216,7 @@ pub fn build_goal_continuation_plan(
             "Goal verification found the active session goal is NOT yet achieved.\n\
 Goal: {}\n\
 Remaining gaps:\n{gaps}\n\
-Next steps:\n{guidance_block}\n\
+Next steps:\n{guidance}\n\
 Continue working until the goal is fully satisfied. Do not stop early.",
             state.goal_text.trim()
         ));
@@ -326,11 +331,20 @@ pub async fn generate_goal_from_context(
     let lang_code = get_app_language_code().await;
     let language_instruction = short_model_user_language_instruction(lang_code.as_str());
 
+    let has_user_hint = user_hint
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_some();
     let hint_block = user_hint
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(|value| format!("\nUser-provided goal focus: {value}"))
         .unwrap_or_default();
+    let focus_priority = if has_user_hint {
+        "- The user-provided goal focus is the highest-priority target; use the transcript only to recover constraints, current progress, and acceptance criteria\n"
+    } else {
+        "- Derive the goal from the latest explicit user request; use earlier conversation only as constraints and context\n"
+    };
 
     let latest_assistant_note = last_assistant_message_text(context_messages)
         .map(|_| {
@@ -346,7 +360,7 @@ Return ONLY valid JSON with this shape:\n\
 {{\"goalText\":\"...\",\"successCriteria\":[\"...\",\"...\"]}}\n\
 Requirements:\n\
 - {language_instruction}\n\
-- Derive the goal from the latest explicit user request or user-provided focus; use earlier conversation only as constraints and context\n\
+{focus_priority}\
 - Preserve the user's actual intent and scope; do not add optional enhancements, new features, broad research, or speculative follow-up work\n\
 - goalText must be imperative, concrete, and directly executable by the agent\n\
 - goalText must describe the end state the agent should deliver, not the next thinking step\n\
@@ -382,7 +396,7 @@ pub async fn verify_goal_achievement(
     };
 
     let system_prompt = format!(
-        "You verify whether a coding-agent session goal has truly been achieved.\n\
+        "You verify whether a coding-agent session goal has truly been achieved, then produce focused recovery guidance if it has not.\n\
 Active goal: {}\n\
 Success criteria:\n{criteria}\n\
 Use the full conversation transcript above, especially the latest assistant work.\n\
@@ -391,19 +405,65 @@ Return ONLY valid JSON with this shape:\n\
 Rules:\n\
 - achieved=true ONLY when every success criterion is objectively satisfied in the actual work done\n\
 - Be strict: partial progress, plans, or explanations without completed work means achieved=false\n\
-- gaps must list concrete missing items when achieved=false\n\
-- guidance must be actionable next steps for the agent\n\
+- Evaluate the transcript evidence criterion by criterion; distinguish missing proof from missing implementation\n\
+- When achieved=false, gaps is REQUIRED and must list concrete unmet criteria or missing evidence, with enough detail for the agent to act without rediscovering the problem\n\
+- When achieved=false, guidance is REQUIRED; it must NOT restate the goal, and must say what to do next to close the specific gaps\n\
+- guidance must include three compact parts in plain text: first action, why this addresses the gap, and verification to run/check next\n\
+- Name relevant files, checks, commands, UI flows, or artifacts when they are inferable from the transcript\n\
+- When achieved=true, gaps and guidance must both be empty\n\
+- If the previous attempt used a wrong approach, guidance must redirect the approach and explain the correction\n\
+- If verification is the main gap, guidance must name the exact verification needed\n\
 - Do not include markdown or commentary",
         state.goal_text.trim()
     );
 
-    let final_user_prompt =
-        "Verify whether the active session goal has been fully achieved. Return the JSON verdict."
+    let mut final_user_prompt =
+        "Verify whether the active session goal has been fully achieved. If not, return precise recovery guidance for the next agent turn, grounded in the transcript. Return the JSON verdict."
             .to_string();
+    let mut repair_attempt = 0_u32;
 
-    let raw = call_goal_func_agent_with_context(system_prompt, context_messages, final_user_prompt)
+    loop {
+        let raw = call_goal_func_agent_with_context(
+            system_prompt.clone(),
+            context_messages,
+            final_user_prompt.clone(),
+        )
         .await?;
-    parse_goal_verification(&raw)
+        match parse_goal_verification(&raw) {
+            Ok(result) => return Ok(result),
+            Err(BitFunError::Validation(error)) => {
+                repair_attempt = repair_attempt.saturating_add(1);
+                warn!(
+                    "Goal verification returned an invalid verdict; requesting repaired verdict: attempt={}, error={}",
+                    repair_attempt, error
+                );
+                final_user_prompt =
+                    build_goal_verification_repair_prompt(&raw, &error, repair_attempt);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+fn build_goal_verification_repair_prompt(
+    invalid_output: &str,
+    validation_error: &str,
+    attempt: u32,
+) -> String {
+    format!(
+        "The previous goal verification response was invalid, so you must regenerate the full verification verdict from the transcript.\n\
+Repair attempt: {attempt}\n\
+Validation error: {validation_error}\n\
+Previous invalid response:\n{invalid_output}\n\n\
+Return ONLY valid JSON with this exact shape:\n\
+{{\"achieved\":true|false,\"confidence\":0.0,\"gaps\":[\"...\"],\"guidance\":\"...\"}}\n\
+Contract:\n\
+- confidence must be between 0.0 and 1.0\n\
+- if achieved=true, gaps and guidance must both be empty\n\
+- if achieved=false, gaps and guidance are mandatory\n\
+- guidance must include first action, why it addresses the gap, and verification to run/check next\n\
+Re-evaluate the transcript and return the corrected JSON verdict now:"
+    )
 }
 
 fn parse_goal_generation(raw: &str) -> BitFunResult<GoalGenerationResult> {
@@ -446,6 +506,34 @@ fn parse_goal_verification(raw: &str) -> BitFunResult<GoalVerificationResult> {
         .map(|gap| gap.trim().to_string())
         .filter(|gap| !gap.is_empty())
         .collect();
+    if !parsed.confidence.is_finite() || !(0.0..=1.0).contains(&parsed.confidence) {
+        return Err(BitFunError::Validation(
+            "Goal verification returned confidence outside 0.0..=1.0.".to_string(),
+        ));
+    }
+    if parsed.achieved {
+        if !parsed.gaps.is_empty() {
+            return Err(BitFunError::Validation(
+                "Goal verification returned achieved=true with remaining gaps.".to_string(),
+            ));
+        }
+        if !parsed.guidance.is_empty() {
+            return Err(BitFunError::Validation(
+                "Goal verification returned achieved=true with recovery guidance.".to_string(),
+            ));
+        }
+    } else {
+        if parsed.gaps.is_empty() {
+            return Err(BitFunError::Validation(
+                "Goal verification returned achieved=false without concrete gaps.".to_string(),
+            ));
+        }
+        if parsed.guidance.is_empty() {
+            return Err(BitFunError::Validation(
+                "Goal verification returned achieved=false without recovery guidance.".to_string(),
+            ));
+        }
+    }
     Ok(parsed)
 }
 
@@ -457,7 +545,10 @@ mod tests {
     #[test]
     fn effective_subagent_timeout_defaults_to_unlimited_in_goal_mode() {
         assert_eq!(effective_subagent_timeout_seconds(Some(1200), true), None);
-        assert_eq!(effective_subagent_timeout_seconds(Some(1200), false), Some(1200));
+        assert_eq!(
+            effective_subagent_timeout_seconds(Some(1200), false),
+            Some(1200)
+        );
         assert_eq!(effective_subagent_timeout_seconds(None, true), None);
     }
 
@@ -506,6 +597,23 @@ mod tests {
     }
 
     #[test]
+    fn ensure_final_response_in_goal_context_adds_missing_final_response() {
+        let messages = vec![Message::assistant("older".to_string())];
+        let context = ensure_final_response_in_goal_context(messages, "final answer", "turn-1");
+        assert_eq!(
+            last_assistant_message_text(&context).as_deref(),
+            Some("final answer")
+        );
+    }
+
+    #[test]
+    fn ensure_final_response_in_goal_context_does_not_duplicate_latest_response() {
+        let messages = vec![Message::assistant("final answer".to_string())];
+        let context = ensure_final_response_in_goal_context(messages, "final answer", "turn-1");
+        assert_eq!(context.len(), 1);
+    }
+
+    #[test]
     fn skip_verification_for_maintenance_commands() {
         assert!(should_skip_goal_verification_for_turn("/compact", None));
         assert!(should_skip_goal_verification_for_turn("/usage", None));
@@ -543,7 +651,8 @@ mod tests {
         };
         let plan = build_goal_continuation_plan(&state, &verification);
         assert!(plan.wrapped_message.contains("Ship feature"));
-        assert!(plan.display_message.contains("Ship feature"));
+        assert!(plan.display_message.contains("Add tests"));
+        assert!(!plan.display_message.contains("Ship feature"));
     }
 
     #[test]
@@ -563,5 +672,65 @@ mod tests {
         .expect("parsed");
         assert!(!parsed.achieved);
         assert_eq!(parsed.guidance, "Add tests");
+    }
+
+    #[test]
+    fn parse_goal_verification_accepts_clean_achieved_json() {
+        let parsed = parse_goal_verification(
+            r#"{"achieved":true,"confidence":0.9,"gaps":[],"guidance":""}"#,
+        )
+        .expect("parsed");
+        assert!(parsed.achieved);
+        assert!(parsed.gaps.is_empty());
+        assert!(parsed.guidance.is_empty());
+    }
+
+    #[test]
+    fn parse_goal_verification_rejects_confidence_outside_unit_range() {
+        let error = parse_goal_verification(
+            r#"{"achieved":false,"confidence":1.4,"gaps":["Need tests"],"guidance":"Add tests"}"#,
+        )
+        .expect_err("invalid confidence should fail");
+        assert!(error.to_string().contains("confidence outside"));
+    }
+
+    #[test]
+    fn parse_goal_verification_rejects_achieved_with_gaps() {
+        let error = parse_goal_verification(
+            r#"{"achieved":true,"confidence":0.9,"gaps":["Need tests"],"guidance":""}"#,
+        )
+        .expect_err("achieved with gaps should fail");
+        assert!(error
+            .to_string()
+            .contains("achieved=true with remaining gaps"));
+    }
+
+    #[test]
+    fn parse_goal_verification_rejects_achieved_with_guidance() {
+        let error = parse_goal_verification(
+            r#"{"achieved":true,"confidence":0.9,"gaps":[],"guidance":"Run tests next"}"#,
+        )
+        .expect_err("achieved with guidance should fail");
+        assert!(error
+            .to_string()
+            .contains("achieved=true with recovery guidance"));
+    }
+
+    #[test]
+    fn parse_goal_verification_requires_gaps_when_not_achieved() {
+        let error = parse_goal_verification(
+            r#"{"achieved":false,"confidence":0.4,"gaps":[],"guidance":"Add tests"}"#,
+        )
+        .expect_err("missing gaps should fail");
+        assert!(error.to_string().contains("without concrete gaps"));
+    }
+
+    #[test]
+    fn parse_goal_verification_requires_guidance_when_not_achieved() {
+        let error = parse_goal_verification(
+            r#"{"achieved":false,"confidence":0.4,"gaps":["Need tests"],"guidance":""}"#,
+        )
+        .expect_err("missing guidance should fail");
+        assert!(error.to_string().contains("without recovery guidance"));
     }
 }
