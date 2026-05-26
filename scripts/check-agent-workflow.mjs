@@ -139,6 +139,7 @@ const dependencyRiskSignals = [
 
 let errorCount = 0;
 let cachedPolicyConfig = null;
+let cachedRiskMemory = null;
 
 function toPosixPath(value) {
   return value.split(path.sep).join('/');
@@ -194,6 +195,20 @@ function policyConfig() {
   }
 
   return cachedPolicyConfig.value;
+}
+
+function riskMemory() {
+  if (!cachedRiskMemory) {
+    cachedRiskMemory = loadOptionalJsonConfig([
+      '.agent/risk-memory.json',
+      '.bitfun/intent-coding-risk-memory.json',
+    ]);
+    if (cachedRiskMemory.path) {
+      reportInfo(`Loaded Intent Coding risk memory from ${cachedRiskMemory.path}`);
+    }
+  }
+
+  return cachedRiskMemory.value;
 }
 
 function readMarkdown(filePath) {
@@ -819,21 +834,71 @@ function suggestRiskFromSignals(changedFiles, signals) {
   return { level: suggestedRiskLevel, matches };
 }
 
+function suggestRiskFromRecentIncidents(markdown, changedFiles) {
+  const memory = riskMemory();
+  const incidents = Array.isArray(memory.recent_incidents) ? memory.recent_incidents : [];
+  if (incidents.length === 0) {
+    return null;
+  }
+
+  const evidenceText = [
+    sectionContent(markdown, 'Summary'),
+    sectionContent(markdown, 'Accepted Checks'),
+    sectionContent(markdown, 'Risks'),
+    sectionContent(markdown, 'Human Review Focus'),
+  ]
+    .join('\n')
+    .toLowerCase();
+  const matches = [];
+  let suggestedRiskLevel = 'L0';
+
+  for (const incident of incidents) {
+    const level = validRiskLevels.has(String(incident.level).toUpperCase())
+      ? String(incident.level).toUpperCase()
+      : 'L2';
+    const label = incident.label ? String(incident.label) : 'recent incident';
+    const pathContains = incident.path_contains ? String(incident.path_contains) : null;
+    const textContains = incident.text_contains ? String(incident.text_contains).toLowerCase() : null;
+    const pathMatched =
+      pathContains &&
+      changedFiles.some((changedFile) => toPosixPath(changedFile).includes(pathContains));
+    const textMatched = textContains && evidenceText.includes(textContains);
+
+    if (!pathMatched && !textMatched) {
+      continue;
+    }
+
+    suggestedRiskLevel = maxRiskLevel(suggestedRiskLevel, level);
+    matches.push(`${level}:${label}`);
+  }
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  return { level: suggestedRiskLevel, matches };
+}
+
 function reportChangedFileRiskSuggestion(filePath, markdown, recordedRiskLevel) {
   const changedFiles = extractEvidenceChangedFiles(markdown);
   const changedFileRiskLevel = suggestRiskForChangedFiles(changedFiles);
   const evidenceTextSuggestion = suggestRiskForEvidenceText(markdown);
   const ownershipSuggestion = suggestRiskFromSignals(changedFiles, ownershipRiskSignals);
   const dependencySuggestion = suggestRiskFromSignals(changedFiles, dependencyRiskSignals);
+  const recentIncidentSuggestion = suggestRiskFromRecentIncidents(markdown, changedFiles);
   const suggestedRiskLevel = maxRiskLevel(
     maxRiskLevel(changedFileRiskLevel ?? 'L0', evidenceTextSuggestion?.level ?? 'L0'),
-    maxRiskLevel(ownershipSuggestion?.level ?? 'L0', dependencySuggestion?.level ?? 'L0'),
+    maxRiskLevel(
+      maxRiskLevel(ownershipSuggestion?.level ?? 'L0', dependencySuggestion?.level ?? 'L0'),
+      recentIncidentSuggestion?.level ?? 'L0',
+    ),
   );
   if (
     !changedFileRiskLevel &&
     !evidenceTextSuggestion &&
     !ownershipSuggestion &&
-    !dependencySuggestion
+    !dependencySuggestion &&
+    !recentIncidentSuggestion
   ) {
     return;
   }
@@ -855,6 +920,11 @@ function reportChangedFileRiskSuggestion(filePath, markdown, recordedRiskLevel) 
   if (dependencySuggestion) {
     sources.push(
       `${dependencySuggestion.level} from dependency impact (${dependencySuggestion.matches.join(', ')})`,
+    );
+  }
+  if (recentIncidentSuggestion) {
+    sources.push(
+      `${recentIncidentSuggestion.level} from recent incident memory (${recentIncidentSuggestion.matches.join(', ')})`,
     );
   }
 

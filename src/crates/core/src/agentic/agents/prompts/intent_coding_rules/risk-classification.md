@@ -90,8 +90,25 @@ Increase risk when a task touches:
 When an Evidence Package lists changed files or describes risk-sensitive
 behavior, the local workflow checker may suggest a risk level from file paths
 and Evidence text. It also considers selected ownership-sensitive surfaces and
-dependency graph impact files. This suggestion is advisory and is intended to
-catch likely under-classification, not to replace judgment.
+dependency graph impact files. If present, it can also load recent-incident
+memory from `.agent/risk-memory.json` or `.bitfun/intent-coding-risk-memory.json`.
+This suggestion is advisory and is intended to catch likely under-classification,
+not to replace judgment.
+
+Recent-incident memory shape:
+
+```json
+{
+  "recent_incidents": [
+    {
+      "label": "session persistence regression",
+      "level": "L3",
+      "path_contains": "src/crates/core/src/agentic/session/",
+      "text_contains": "persistence"
+    }
+  ]
+}
+```
 
 If the recorded final risk level is lower than the suggestion:
 
