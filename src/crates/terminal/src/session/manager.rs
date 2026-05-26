@@ -286,25 +286,25 @@ impl SessionManager {
                                                     command,
                                                     command_id,
                                                 } => {
-                                                    let _ = event_emitter
-                                                        .emit(TerminalEvent::CommandStarted {
+                                                    let _ = event_emitter.try_emit(
+                                                        TerminalEvent::CommandStarted {
                                                             session_id: session_id.clone(),
                                                             command,
                                                             command_id,
-                                                        })
-                                                        .await;
+                                                        },
+                                                    );
                                                 }
                                                 ShellIntegrationEvent::CommandFinished {
                                                     command_id,
                                                     exit_code,
                                                 } => {
-                                                    let _ = event_emitter
-                                                        .emit(TerminalEvent::CommandFinished {
+                                                    let _ = event_emitter.try_emit(
+                                                        TerminalEvent::CommandFinished {
                                                             session_id: session_id.clone(),
                                                             command_id,
                                                             exit_code: exit_code.unwrap_or(0),
-                                                        })
-                                                        .await;
+                                                        },
+                                                    );
                                                 }
                                                 ShellIntegrationEvent::CwdChanged { cwd } => {
                                                     if let Some(session) =
@@ -312,12 +312,12 @@ impl SessionManager {
                                                     {
                                                         session.update_cwd(cwd.clone());
                                                     }
-                                                    let _ = event_emitter
-                                                        .emit(TerminalEvent::CwdChanged {
+                                                    let _ = event_emitter.try_emit(
+                                                        TerminalEvent::CwdChanged {
                                                             session_id: session_id.clone(),
                                                             cwd,
-                                                        })
-                                                        .await;
+                                                        },
+                                                    );
                                                 }
                                                 _ => {}
                                             }
@@ -395,7 +395,7 @@ impl SessionManager {
                             }
                         };
 
-                        let _ = event_emitter.emit(terminal_event).await;
+                        let _ = event_emitter.try_emit(terminal_event);
                     }
                 }
             }
@@ -579,15 +579,14 @@ impl SessionManager {
             mapping.insert(pty_id, session_id.clone());
         }
 
-        // Emit creation event
-        let _ = self
-            .event_emitter
-            .emit(TerminalEvent::SessionCreated {
-                session_id: session_id.clone(),
-                pid: None,
-                cwd: session.cwd.clone(),
-            })
-            .await;
+        // Lifecycle events are best-effort. Headless exec mode may not drain the
+        // frontend terminal event channel, and session creation must still
+        // return so tools can write commands to the PTY.
+        let _ = self.event_emitter.try_emit(TerminalEvent::SessionCreated {
+            session_id: session_id.clone(),
+            pid: None,
+            cwd: session.cwd.clone(),
+        });
 
         // Return the session
         let sessions = self.sessions.read().await;
@@ -1321,13 +1320,21 @@ impl SessionManager {
         // For primary sessions owner_id == session_id, so unbind(session_id) is sufficient.
         self.binding.unbind(session_id);
 
-        // Emit session destroyed event for frontend
-        let _ = self
+        // Closing a session must not block on frontend/event consumers. In
+        // headless exec mode the bounded terminal event channel can be full
+        // or undrained, and waiting here would keep the completed tool call
+        // from returning to the agent.
+        if let Err(error) = self
             .event_emitter
-            .emit(TerminalEvent::SessionDestroyed {
+            .try_emit(TerminalEvent::SessionDestroyed {
                 session_id: session_id.to_string(),
             })
-            .await;
+        {
+            debug!(
+                "Dropped session destroyed event during close_session: session_id={}, error={}",
+                session_id, error
+            );
+        }
 
         Ok(())
     }
