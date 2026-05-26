@@ -40,6 +40,12 @@ did not request.
 
 Evidence Packages must record key context inputs in `## Context Inputs`.
 
+When available, generate initial context input candidates with:
+
+```bash
+pnpm run agent:context-compile -- --evidence <path>
+```
+
 Use one line per input:
 
 ```text

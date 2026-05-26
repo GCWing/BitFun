@@ -20,6 +20,7 @@
     "i18n:audit": "node scripts/i18n-audit.mjs",
     "fmt:rs": "node scripts/format-changed-rust.mjs",
     "agent:check": "node scripts/check-agent-workflow.mjs",
+    "agent:context-compile": "node scripts/intent-coding-context-compile.mjs",
     "agent:provenance-record": "node scripts/intent-coding-provenance-record.mjs",
     "agent:review-route": "node scripts/intent-coding-review-route.mjs",
     "prebuild": "pnpm run prebuild:web",

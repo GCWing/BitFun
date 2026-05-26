@@ -20,6 +20,12 @@ For session provenance record export:
 pnpm run agent:provenance-record -- --evidence .agent/evidence/evidence-YYYYMMDD-task.md --session-id <id> --turn-id <id>
 ```
 
+For context input candidate generation:
+
+```bash
+pnpm run agent:context-compile -- --evidence .agent/evidence/evidence-YYYYMMDD-task.md
+```
+
 ## When to Run
 
 - After the Intent Record and Evidence Package have been written or updated.
