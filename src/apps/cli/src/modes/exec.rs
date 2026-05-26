@@ -12,11 +12,11 @@ use std::time::Duration;
 
 use bitfun_core::agentic::core::SessionState;
 use bitfun_events::AgenticEvent;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 
-use crate::agent::{agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter, Agent};
+use crate::agent::{Agent, agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter};
 use crate::config::CliConfig;
-use crate::diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind};
+use crate::diagnostics::{ExitContext, ExitKind, emit_exit_diagnostic};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum ExecOutputFormat {
@@ -163,10 +163,16 @@ impl ExecMode {
         let mut total_tool_calls = 0usize;
         let mut subagent_parent_sessions: HashMap<String, String> = HashMap::new();
         let mut terminal_outcome: Option<Result<()>> = None;
+        let mut observed_turn_activity = false;
 
         loop {
-            // Wait for events (efficient, uses Notify internally)
-            event_queue.wait_for_events().await;
+            // Wait for events, but wake periodically so exec mode cannot hang
+            // forever if a terminal event is missed after core has gone idle.
+            tokio::select! {
+                _ = event_queue.wait_for_events() => {}
+                _ = sleep(Duration::from_secs(1)) => {}
+            }
+
             let events = event_queue.dequeue_batch(20).await;
             self.agent.route_internal_events(&events).await;
 
@@ -245,6 +251,8 @@ impl ExecMode {
                     }
                     continue;
                 }
+
+                observed_turn_activity = true;
 
                 match event {
                     AgenticEvent::ModelRoundStarted {
@@ -432,6 +440,46 @@ impl ExecMode {
 
             if terminal_outcome.is_some() {
                 break;
+            }
+
+            if observed_turn_activity {
+                match self
+                    .agent
+                    .coordinator()
+                    .get_session_manager()
+                    .get_session(&session_id)
+                    .map(|session| session.state)
+                {
+                    Some(SessionState::Idle)
+                        if !self.agent.coordinator().has_active_turn(&turn_id) =>
+                    {
+                        tracing::warn!(
+                            "Exec observed idle session without terminal turn event; treating turn as settled: session_id={}, turn_id={}",
+                            session_id,
+                            turn_id
+                        );
+                        println!("\n");
+                        println!("Execution complete");
+                        if total_tool_calls > 0 {
+                            println!("\nTool call statistics: {} tools invoked", total_tool_calls);
+                        }
+                        terminal_outcome = Some(Ok(()));
+                        break;
+                    }
+                    Some(SessionState::Idle) => {}
+                    Some(SessionState::Error { error, .. }) => {
+                        eprintln!("\nExecution failed: {}", error);
+                        emit_exit_diagnostic(
+                            ExitKind::DialogTurnFailed,
+                            &error,
+                            &self.exit_context(Some(&session_id), Some(&turn_id)),
+                        );
+                        terminal_outcome =
+                            Some(Err(anyhow::anyhow!("Execution failed: {}", error)));
+                        break;
+                    }
+                    _ => {}
+                }
             }
         }
 

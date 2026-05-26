@@ -3,18 +3,18 @@ use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::workspace::WorkspaceCommandOptions;
-use crate::infrastructure::events::event_system::get_global_event_system;
 use crate::infrastructure::events::event_system::BackendEvent::{
     ToolExecutionProgress, ToolTerminalReady,
 };
+use crate::infrastructure::events::event_system::get_global_event_system;
 use crate::service::config::global::get_global_config_service;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::event::{ToolExecutionProgressInfo, ToolTerminalReadyInfo};
 use async_trait::async_trait;
 use futures::StreamExt;
-use log::{debug, error, info};
-use serde_json::{json, Value};
+use log::{debug, error, info, warn};
+use serde_json::{Value, json};
 use std::path::Path;
 use std::time::{Duration, Instant};
 use terminal_core::session::SessionSource;
@@ -315,7 +315,7 @@ impl BashTool {
         // Interruption notice
         if timed_out {
             result_string.push_str(
-                "<status type=\"timeout\">Command timed out before completion. Partial output, if any, is included above.</status>",
+                "<status type=\"timeout\">Command timed out before completion. Partial output, if any, is included above. The terminal session was closed so future Bash calls start in a fresh shell.</status>",
             );
         } else if interrupted {
             result_string.push_str(
@@ -800,7 +800,6 @@ Usage notes:
             }
         }
 
-        // Warn if timeout_ms is set; runtime intentionally ignores it.
         if input.get("timeout_ms").is_some() {
             return ValidationResult {
                 result: true,
@@ -1106,7 +1105,10 @@ Usage notes:
             // Check cancellation request
             if let Some(token) = &context.cancellation_token {
                 if token.is_cancelled() && !was_interrupted {
-                    debug!("Bash tool received cancellation request, sending interrupt signal, tool_id: {}", tool_use_id);
+                    debug!(
+                        "Bash tool received cancellation request, sending interrupt signal, tool_id: {}",
+                        tool_use_id
+                    );
                     was_interrupted = true;
                     interrupt_drain_deadline = Some(
                         tokio::time::Instant::now()
@@ -1235,6 +1237,26 @@ Usage notes:
             final_exit_code.unwrap_or(-1),
             final_shell_state.as_deref(),
         );
+
+        if timed_out {
+            if let Err(error) = terminal_api
+                .close_session(terminal_core::CloseSessionRequest {
+                    session_id: primary_session_id.clone(),
+                    immediate: Some(true),
+                })
+                .await
+            {
+                warn!(
+                    "Failed to close timed-out Bash terminal session: session_id={}, tool_id={}, error={}",
+                    primary_session_id, tool_use_id, error
+                );
+            } else {
+                info!(
+                    "Closed timed-out Bash terminal session: session_id={}, tool_id={}",
+                    primary_session_id, tool_use_id
+                );
+            }
+        }
 
         Ok(vec![ToolResult::Result {
             data: result_data,
@@ -1796,12 +1818,36 @@ mod tests {
     }
 
     #[test]
+    fn render_result_tells_model_timeout_closes_terminal_session() {
+        let tool = BashTool::new();
+        let rendered =
+            tool.render_result("session-1", "/repo", "still running", false, true, -1, None);
+
+        assert!(rendered.contains("<status type=\"timeout\">"));
+        assert!(rendered.contains("terminal session was closed"));
+        assert!(rendered.contains("fresh shell"));
+    }
+
+    #[test]
     fn input_schema_accepts_working_directory() {
         let tool = BashTool::new();
         let schema = tool.input_schema();
 
         assert!(schema["properties"].get("working_directory").is_some());
         assert_eq!(schema["additionalProperties"], false);
+    }
+
+    #[test]
+    fn input_schema_documents_ignored_timeout() {
+        let tool = BashTool::new();
+        let schema = tool.input_schema();
+
+        assert_eq!(schema["properties"]["timeout_ms"]["type"], "number");
+        let description = schema["properties"]["timeout_ms"]["description"]
+            .as_str()
+            .expect("timeout description");
+        assert!(description.contains("ignored"));
+        assert!(description.contains("without a tool-imposed timeout"));
     }
 
     #[test]
