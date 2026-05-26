@@ -9,11 +9,11 @@ use crate::agentic::core::{
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::{
-    CachedPromptText, CachedSystemPrompt, EvidenceLedgerCheckpoint, EvidenceLedgerEvent,
+    CachedSystemPrompt, CachedUserContext, EvidenceLedgerCheckpoint, EvidenceLedgerEvent,
     EvidenceLedgerEventStatus, EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState,
     FileReadStateStore, PromptCacheLookup, PromptCachePolicy, PromptCacheScope,
     SessionContextStore, SessionEvidenceLedger, SessionPromptCache, SessionPromptCacheStore,
-    SystemPromptCacheIdentity,
+    SystemPromptCacheIdentity, UserContextCacheIdentity,
 };
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::{
@@ -1205,12 +1205,17 @@ impl SessionManager {
             .await;
     }
 
-    pub async fn cached_user_context(&self, session_id: &str) -> Option<String> {
+    pub async fn cached_user_context(
+        &self,
+        session_id: &str,
+        identity: &UserContextCacheIdentity,
+    ) -> Option<String> {
         self.ensure_prompt_cache_loaded(session_id).await;
-        match self
-            .prompt_cache_store
-            .lookup_user_context(session_id, self.config.prompt_cache_policy.cache_ttl)
-        {
+        match self.prompt_cache_store.lookup_user_context(
+            session_id,
+            identity,
+            self.config.prompt_cache_policy.cache_ttl,
+        ) {
             PromptCacheLookup::Hit(user_context) => Some(user_context),
             PromptCacheLookup::Miss => None,
             PromptCacheLookup::Expired => {
@@ -1224,10 +1229,15 @@ impl SessionManager {
         }
     }
 
-    pub async fn remember_user_context(&self, session_id: &str, user_context: String) {
+    pub async fn remember_user_context(
+        &self,
+        session_id: &str,
+        identity: UserContextCacheIdentity,
+        user_context: String,
+    ) {
         self.ensure_prompt_cache_loaded(session_id).await;
         self.prompt_cache_store
-            .set_user_context(session_id, CachedPromptText::new(user_context));
+            .set_user_context(session_id, CachedUserContext::new(identity, user_context));
         self.persist_prompt_cache_best_effort(session_id, "user_context_cached")
             .await;
     }
@@ -3812,6 +3822,7 @@ mod tests {
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
         PromptCachePolicy, PromptCacheScope, SessionContextStore, SystemPromptCacheIdentity,
+        UserContextCacheIdentity,
     };
     use crate::infrastructure::PathManager;
     use crate::service::config::types::{
@@ -4986,7 +4997,10 @@ mod tests {
             )
             .await
             .expect("session should be created");
-        let identity = SystemPromptCacheIdentity::new("agentic", "template:agentic_mode");
+        let identity = SystemPromptCacheIdentity::new("template:agentic_mode");
+        let user_context_identity = UserContextCacheIdentity::new(
+            "workspace_context|workspace_instructions|workspace_memory_files|project_layout",
+        );
 
         manager
             .remember_system_prompt(
@@ -4996,7 +5010,11 @@ mod tests {
             )
             .await;
         manager
-            .remember_user_context(&session.session_id, "cached user context".to_string())
+            .remember_user_context(
+                &session.session_id,
+                user_context_identity.clone(),
+                "cached user context".to_string(),
+            )
             .await;
 
         let restored_manager = test_manager(persistence_manager);
@@ -5013,7 +5031,7 @@ mod tests {
         );
         assert_eq!(
             restored_manager
-                .cached_user_context(&session.session_id)
+                .cached_user_context(&session.session_id, &user_context_identity)
                 .await,
             Some("cached user context".to_string())
         );
@@ -5037,7 +5055,10 @@ mod tests {
             )
             .await
             .expect("session should be created");
-        let identity = SystemPromptCacheIdentity::new("agentic", "template:agentic_mode");
+        let identity = SystemPromptCacheIdentity::new("template:agentic_mode");
+        let user_context_identity = UserContextCacheIdentity::new(
+            "workspace_context|workspace_instructions|workspace_memory_files|project_layout",
+        );
 
         manager
             .remember_system_prompt(
@@ -5047,7 +5068,11 @@ mod tests {
             )
             .await;
         manager
-            .remember_user_context(&session.session_id, "cached user context".to_string())
+            .remember_user_context(
+                &session.session_id,
+                user_context_identity.clone(),
+                "cached user context".to_string(),
+            )
             .await;
 
         manager
@@ -5068,7 +5093,7 @@ mod tests {
         );
         assert_eq!(
             restored_manager
-                .cached_user_context(&session.session_id)
+                .cached_user_context(&session.session_id, &user_context_identity)
                 .await,
             None
         );
@@ -5111,7 +5136,10 @@ mod tests {
             )
             .await
             .expect("session should be created");
-        let identity = SystemPromptCacheIdentity::new("agentic", "template:agentic_mode");
+        let identity = SystemPromptCacheIdentity::new("template:agentic_mode");
+        let user_context_identity = UserContextCacheIdentity::new(
+            "workspace_context|workspace_instructions|workspace_memory_files|project_layout",
+        );
 
         manager
             .remember_system_prompt(
@@ -5121,7 +5149,11 @@ mod tests {
             )
             .await;
         manager
-            .remember_user_context(&session.session_id, "cached user context".to_string())
+            .remember_user_context(
+                &session.session_id,
+                user_context_identity.clone(),
+                "cached user context".to_string(),
+            )
             .await;
 
         assert_eq!(
@@ -5131,7 +5163,9 @@ mod tests {
             Some("cached system prompt".to_string())
         );
         assert_eq!(
-            manager.cached_user_context(&session.session_id).await,
+            manager
+                .cached_user_context(&session.session_id, &user_context_identity)
+                .await,
             Some("cached user context".to_string())
         );
 
@@ -5161,7 +5195,7 @@ mod tests {
         );
         assert_eq!(
             restored_manager
-                .cached_user_context(&session.session_id)
+                .cached_user_context(&session.session_id, &user_context_identity)
                 .await,
             None
         );

@@ -22,15 +22,26 @@ impl Default for PromptCachePolicy {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SystemPromptCacheIdentity {
-    pub agent_id: String,
-    pub prompt_identity: String,
+    pub scope_key: String,
 }
 
 impl SystemPromptCacheIdentity {
-    pub fn new(agent_id: impl Into<String>, prompt_identity: impl Into<String>) -> Self {
+    pub fn new(scope_key: impl Into<String>) -> Self {
         Self {
-            agent_id: agent_id.into(),
-            prompt_identity: prompt_identity.into(),
+            scope_key: scope_key.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserContextCacheIdentity {
+    pub scope_key: String,
+}
+
+impl UserContextCacheIdentity {
+    pub fn new(scope_key: impl Into<String>) -> Self {
+        Self {
+            scope_key: scope_key.into(),
         }
     }
 }
@@ -82,12 +93,37 @@ impl CachedSystemPrompt {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CachedUserContext {
+    #[serde(flatten)]
+    pub text: CachedPromptText,
+    pub identity: UserContextCacheIdentity,
+}
+
+impl CachedUserContext {
+    pub fn new(identity: UserContextCacheIdentity, content: impl Into<String>) -> Self {
+        Self {
+            text: CachedPromptText::new(content),
+            identity,
+        }
+    }
+
+    pub fn is_usable(
+        &self,
+        identity: &UserContextCacheIdentity,
+        ttl: Option<Duration>,
+        now_ms: u64,
+    ) -> bool {
+        self.identity == *identity && !self.text.is_expired(ttl, now_ms)
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionPromptCache {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub system_prompt: Option<CachedSystemPrompt>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub user_context: Option<CachedPromptText>,
+    pub user_context: Option<CachedUserContext>,
 }
 
 impl SessionPromptCache {
@@ -107,7 +143,7 @@ impl SessionPromptCache {
         if self
             .user_context
             .as_ref()
-            .is_some_and(|entry| entry.is_expired(ttl, now_ms))
+            .is_some_and(|entry| entry.text.is_expired(ttl, now_ms))
         {
             self.user_context = None;
             changed = true;
@@ -208,6 +244,7 @@ impl SessionPromptCacheStore {
     pub fn lookup_user_context(
         &self,
         session_id: &str,
+        identity: &UserContextCacheIdentity,
         ttl: Option<Duration>,
     ) -> PromptCacheLookup {
         let now_ms = current_time_ms();
@@ -217,11 +254,14 @@ impl SessionPromptCacheStore {
             .and_then(|cache| cache.user_context.clone());
 
         match cached_entry {
-            Some(entry) if !entry.is_expired(ttl, now_ms) => PromptCacheLookup::Hit(entry.content),
-            Some(_) => {
+            Some(entry) if entry.is_usable(identity, ttl, now_ms) => {
+                PromptCacheLookup::Hit(entry.text.content)
+            }
+            Some(entry) if entry.text.is_expired(ttl, now_ms) => {
                 self.invalidate(session_id, PromptCacheScope::UserContext);
                 PromptCacheLookup::Expired
             }
+            Some(_) => PromptCacheLookup::Miss,
             None => PromptCacheLookup::Miss,
         }
     }
@@ -240,7 +280,7 @@ impl SessionPromptCacheStore {
         }
     }
 
-    pub fn set_user_context(&self, session_id: &str, entry: CachedPromptText) {
+    pub fn set_user_context(&self, session_id: &str, entry: CachedUserContext) {
         if let Some(mut cache) = self.session_caches.get_mut(session_id) {
             cache.user_context = Some(entry);
         } else {
@@ -284,8 +324,8 @@ fn current_time_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        CachedPromptText, CachedSystemPrompt, PromptCacheLookup, PromptCacheScope,
-        SessionPromptCacheStore, SystemPromptCacheIdentity,
+        CachedSystemPrompt, CachedUserContext, PromptCacheLookup, PromptCacheScope,
+        SessionPromptCacheStore, SystemPromptCacheIdentity, UserContextCacheIdentity,
     };
     use std::time::Duration;
 
@@ -296,7 +336,7 @@ mod tests {
         store.set_system_prompt(
             "session-1",
             CachedSystemPrompt::new(
-                SystemPromptCacheIdentity::new("agentic", "template:agentic_mode"),
+                SystemPromptCacheIdentity::new("template:agentic_mode"),
                 "prompt-a",
             ),
         );
@@ -304,7 +344,7 @@ mod tests {
         assert_eq!(
             match store.lookup_system_prompt(
                 "session-1",
-                &SystemPromptCacheIdentity::new("agentic", "template:agentic_mode"),
+                &SystemPromptCacheIdentity::new("template:agentic_mode"),
                 None,
             ) {
                 PromptCacheLookup::Hit(value) => Some(value),
@@ -315,7 +355,7 @@ mod tests {
         assert!(matches!(
             store.lookup_system_prompt(
                 "session-1",
-                &SystemPromptCacheIdentity::new("debug", "template:debug_mode"),
+                &SystemPromptCacheIdentity::new("template:debug_mode"),
                 None,
             ),
             PromptCacheLookup::Miss
@@ -326,10 +366,20 @@ mod tests {
     fn expired_user_context_is_evicted_on_read() {
         let store = SessionPromptCacheStore::new();
         store.create_session("session-1");
-        store.set_user_context("session-1", CachedPromptText::new("stale context"));
+        store.set_user_context(
+            "session-1",
+            CachedUserContext::new(
+                UserContextCacheIdentity::new("workspace_context|workspace_instructions"),
+                "stale context",
+            ),
+        );
 
         assert!(matches!(
-            store.lookup_user_context("session-1", Some(Duration::from_millis(0))),
+            store.lookup_user_context(
+                "session-1",
+                &UserContextCacheIdentity::new("workspace_context|workspace_instructions"),
+                Some(Duration::from_millis(0)),
+            ),
             PromptCacheLookup::Expired
         ));
         assert!(store
@@ -346,11 +396,17 @@ mod tests {
         store.set_system_prompt(
             "session-1",
             CachedSystemPrompt::new(
-                SystemPromptCacheIdentity::new("agentic", "template:agentic_mode"),
+                SystemPromptCacheIdentity::new("template:agentic_mode"),
                 "prompt-a",
             ),
         );
-        store.set_user_context("session-1", CachedPromptText::new("context"));
+        store.set_user_context(
+            "session-1",
+            CachedUserContext::new(
+                UserContextCacheIdentity::new("workspace_context"),
+                "context",
+            ),
+        );
 
         assert!(store.invalidate("session-1", PromptCacheScope::All));
 

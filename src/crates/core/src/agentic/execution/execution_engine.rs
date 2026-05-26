@@ -707,19 +707,32 @@ impl ExecutionEngine {
         };
 
         let prompt_builder = PromptBuilder::new(prompt_context);
-        let user_context = if let Some(cached_user_context) =
-            self.session_manager.cached_user_context(session_id).await
+        let user_context_identity = current_agent.user_context_cache_identity();
+        let user_context = if let Some(cached_user_context) = self
+            .session_manager
+            .cached_user_context(session_id, &user_context_identity)
+            .await
         {
-            debug!("User context cache hit: session_id={}", session_id);
+            debug!(
+                "User context cache hit: session_id={}, scope_key={}",
+                session_id, user_context_identity.scope_key
+            );
             Some(cached_user_context)
         } else {
-            debug!("User context cache miss: session_id={}", session_id);
+            debug!(
+                "User context cache miss: session_id={}, scope_key={}",
+                session_id, user_context_identity.scope_key
+            );
             let built_user_context = prompt_builder
                 .build_user_context_reminder(&current_agent.user_context_policy())
                 .await;
             if let Some(ref user_context) = built_user_context {
                 self.session_manager
-                    .remember_user_context(session_id, user_context.clone())
+                    .remember_user_context(
+                        session_id,
+                        user_context_identity.clone(),
+                        user_context.clone(),
+                    )
                     .await;
             }
             built_user_context
@@ -751,15 +764,15 @@ impl ExecutionEngine {
             .await
         {
             debug!(
-                "System prompt cache hit: session_id={}, agent_id={}, prompt_identity={}",
-                session_id, identity.agent_id, identity.prompt_identity
+                "System prompt cache hit: session_id={}, scope_key={}",
+                session_id, identity.scope_key
             );
             return Ok(cached_system_prompt);
         }
 
         debug!(
-            "System prompt cache miss: session_id={}, agent_id={}, prompt_identity={}",
-            session_id, identity.agent_id, identity.prompt_identity
+            "System prompt cache miss: session_id={}, scope_key={}",
+            session_id, identity.scope_key
         );
         let system_prompt = current_agent.get_system_prompt(prompt_context).await?;
         self.session_manager

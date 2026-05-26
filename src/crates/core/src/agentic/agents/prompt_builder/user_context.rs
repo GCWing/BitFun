@@ -49,11 +49,34 @@ impl UserContextPolicy {
     pub fn includes(&self, section: UserContextSection) -> bool {
         self.sections.contains(&section)
     }
+
+    pub fn cache_scope_key(&self) -> String {
+        if self.sections.is_empty() {
+            return "empty".to_string();
+        }
+
+        self.sections
+            .iter()
+            .map(UserContextSection::cache_scope_label)
+            .collect::<Vec<_>>()
+            .join("|")
+    }
 }
 
 impl Default for UserContextPolicy {
     fn default() -> Self {
         Self::empty()
+    }
+}
+
+impl UserContextSection {
+    fn cache_scope_label(&self) -> &'static str {
+        match self {
+            Self::WorkspaceContext => "workspace_context",
+            Self::WorkspaceInstructions => "workspace_instructions",
+            Self::WorkspaceMemoryFiles => "workspace_memory_files",
+            Self::ProjectLayout => "project_layout",
+        }
     }
 }
 
@@ -84,5 +107,18 @@ mod tests {
     #[test]
     fn default_policy_is_empty() {
         assert!(UserContextPolicy::default().sections.is_empty());
+    }
+
+    #[test]
+    fn cache_scope_key_preserves_section_order() {
+        let policy = UserContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
+            .with_workspace_memory_files();
+
+        assert_eq!(
+            policy.cache_scope_key(),
+            "workspace_context|workspace_instructions|workspace_memory_files"
+        );
     }
 }

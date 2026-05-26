@@ -10,7 +10,7 @@ mod registry;
 // consecutive `[N]` display IDs after the dialog turn completes.
 pub(crate) mod citation_renumber;
 
-use crate::agentic::session::SystemPromptCacheIdentity;
+use crate::agentic::session::{SystemPromptCacheIdentity, UserContextCacheIdentity};
 use crate::agentic::tools::framework::ToolExposure;
 use crate::agentic::WorkspaceBinding;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -98,13 +98,17 @@ pub trait Agent: Send + Sync + 'static {
 
     fn system_prompt_cache_identity(&self, model_name: Option<&str>) -> SystemPromptCacheIdentity {
         let template_name = self.prompt_template_name(model_name).trim();
-        let prompt_identity = if template_name.is_empty() {
+        let scope_key = if template_name.is_empty() {
             format!("agent:{}", self.id())
         } else {
             format!("template:{}", template_name)
         };
 
-        SystemPromptCacheIdentity::new(self.id(), prompt_identity)
+        SystemPromptCacheIdentity::new(scope_key)
+    }
+
+    fn user_context_cache_identity(&self) -> UserContextCacheIdentity {
+        UserContextCacheIdentity::new(self.user_context_policy().cache_scope_key())
     }
 
     fn system_reminder_template_name(&self) -> Option<&str> {
@@ -178,5 +182,25 @@ pub trait Agent: Send + Sync + 'static {
     /// Whether this agent is read-only (prevents file modifications)
     fn is_readonly(&self) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Agent, AgenticMode, MultitaskMode};
+
+    #[test]
+    fn shared_template_modes_share_system_prompt_cache_identity() {
+        let agentic = AgenticMode::new();
+        let multitask = MultitaskMode::new();
+
+        assert_eq!(
+            agentic.system_prompt_cache_identity(None),
+            multitask.system_prompt_cache_identity(None)
+        );
+        assert_eq!(
+            agentic.user_context_cache_identity(),
+            multitask.user_context_cache_identity()
+        );
     }
 }

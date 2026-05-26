@@ -53,7 +53,7 @@ impl Agent for CustomSubagent {
 
     fn system_prompt_cache_identity(&self, _model_name: Option<&str>) -> SystemPromptCacheIdentity {
         let prompt_hash = hex::encode(Sha256::digest(self.prompt.as_bytes()));
-        SystemPromptCacheIdentity::new(self.id(), format!("custom_prompt_sha256:{prompt_hash}"))
+        SystemPromptCacheIdentity::new(format!("custom_prompt_sha256:{prompt_hash}"))
     }
 
     async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {
