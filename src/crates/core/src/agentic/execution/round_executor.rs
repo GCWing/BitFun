@@ -1736,6 +1736,7 @@ mod tests {
         extract_bitfun_contents, extract_bitfun_contents_with_options, RoundExecutor,
         StreamProcessor,
     };
+    use crate::agentic::core::ToolCall;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::execution::types::RoundContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
@@ -1745,6 +1746,15 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use tokio_util::sync::CancellationToken;
+
+    fn tool_call(tool_id: &str, tool_name: &str, arguments: serde_json::Value) -> ToolCall {
+        ToolCall {
+            tool_id: tool_id.to_string(),
+            tool_name: tool_name.to_string(),
+            arguments,
+            ..Default::default()
+        }
+    }
 
     fn test_round_executor() -> RoundExecutor {
         let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
