@@ -48,6 +48,11 @@ const EMBEDDED_RULES: &[EmbeddedRule] = &[
         content: include_str!("../../prompts/intent_coding_rules/provenance-chain.md"),
     },
     EmbeddedRule {
+        name: "policy-gates",
+        purpose: "record lightweight governance gates before delivery",
+        content: include_str!("../../prompts/intent_coding_rules/policy-gates.md"),
+    },
+    EmbeddedRule {
         name: "risk-classification",
         purpose: "classify task risk and require escalation markers for high-risk work",
         content: include_str!("../../prompts/intent_coding_rules/risk-classification.md"),
@@ -200,6 +205,7 @@ mod tests {
             "accepted-checks",
             "error-classification",
             "provenance-chain",
+            "policy-gates",
             "workflow-check",
             "security",
             "architecture",

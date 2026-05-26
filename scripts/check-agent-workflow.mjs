@@ -27,6 +27,7 @@ const requiredEvidenceSections = [
   'Repair Loop',
   'Accepted Checks',
   'Provenance Chain',
+  'Policy Gates',
   'Risks',
   'Human Review Focus',
 ];
@@ -35,6 +36,13 @@ const validRepairStatuses = new Set(['not_needed', 'repaired', 'blocked', 'defer
 const validRiskLevels = new Set(['L0', 'L1', 'L2', 'L3', 'L4']);
 const validReviewRoutes = new Set(['deep_review', 'specialist_review', 'manual_review', 'skipped']);
 const validReviewStatuses = new Set(['completed', 'skipped', 'blocked']);
+const validPolicyGateStatuses = new Set([
+  'passed',
+  'failed',
+  'skipped',
+  'blocked',
+  'not_applicable',
+]);
 const validProvenanceStores = new Set([
   'agent_artifact',
   'session_store',
@@ -253,6 +261,59 @@ function validateEvidenceProvenanceChain(filePath, markdown) {
     reportError(
       `${rel(filePath)} declares Evidence Package ${declaredEvidencePath}, but current file is ${rel(filePath)}`,
     );
+  }
+}
+
+function validateEvidencePolicyGates(filePath, markdown) {
+  const content = sectionContent(markdown, 'Policy Gates');
+  if (!content) {
+    return;
+  }
+
+  const gateLines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^[-*]\s+/.test(line));
+
+  if (gateLines.length === 0) {
+    reportError(`${rel(filePath)} "## Policy Gates" must list at least one gate`);
+    return;
+  }
+
+  for (const line of gateLines) {
+    const gateMatch = line.match(
+      /^[-*]\s+\[([a-z_]+)\]\s+([a-z0-9_.-]+)\s*:\s*(.+)$/i,
+    );
+    if (!gateMatch) {
+      reportError(
+        `${rel(filePath)} Policy Gate must use "- [status] gate_id: result": ${line}`,
+      );
+      continue;
+    }
+
+    const status = gateMatch[1].toLowerCase();
+    const gateId = gateMatch[2];
+    const result = gateMatch[3].trim();
+
+    if (!validPolicyGateStatuses.has(status)) {
+      reportError(
+        `${rel(filePath)} has invalid Policy Gate status "${status}" for ${gateId}. Expected one of: ${Array.from(validPolicyGateStatuses).join(', ')}`,
+      );
+      continue;
+    }
+
+    if (status === 'failed') {
+      reportError(`${rel(filePath)} Policy Gate ${gateId} failed: ${result}`);
+    }
+
+    if (
+      (status === 'skipped' || status === 'blocked') &&
+      !/\breason\s*[:=]\s*\S/i.test(result)
+    ) {
+      reportError(
+        `${rel(filePath)} ${status} Policy Gate ${gateId} must include "reason: <reason>"`,
+      );
+    }
   }
 }
 
@@ -529,6 +590,7 @@ function main() {
     validateEvidenceAcceptedCheckStatuses(file, markdown);
     validateEvidenceRepairLoop(file, markdown);
     validateEvidenceProvenanceChain(file, markdown);
+    validateEvidencePolicyGates(file, markdown);
     const riskLevel = validateRiskLevelLine(file, markdown, 'Risks', 'Final risk level');
     validateHighRiskEvidenceReviewEscalation(file, markdown, riskLevel);
     reportChangedFileRiskSuggestion(file, markdown, riskLevel);

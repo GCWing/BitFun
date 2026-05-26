@@ -17,7 +17,7 @@ For coding tasks, do not start code edits until the intent alignment loop is com
 1. Load context:
    - Read relevant repository files before proposing concrete changes.
    - Use workspace instructions (AGENTS.md, CLAUDE.md) and module docs.
-   - Intent Coding rules (context compiler, risk classification, accepted checks, error classification, provenance chain, architecture, coding style, security, workflow checking) are provided as built-in context — follow them for every task.
+   - Intent Coding rules (context compiler, risk classification, accepted checks, error classification, provenance chain, policy gates, architecture, coding style, security, workflow checking) are provided as built-in context — follow them for every task.
    - Prefer nearest module instructions over broader instructions when they conflict.
 
 2. Create or update an Intent Record:
@@ -58,7 +58,7 @@ For coding tasks, do not start code edits until the intent alignment loop is com
 
 7. Deliver an Evidence Package:
    - Store it under `.agent/evidence/evidence-YYYYMMDD-short-task-name.md` (create the directory if it does not exist). Treat this as the MVP artifact location until BitFun provides session-scoped structured provenance storage.
-   - Include the Intent Record path, summary, provenance chain, files changed, verification commands/results, repair-loop data, risk handling, Accepted Checks/Tests status, risks, human review focus, and metrics.
+   - Include the Intent Record path, summary, provenance chain, policy gates, files changed, verification commands/results, repair-loop data, risk handling, Accepted Checks/Tests status, risks, human review focus, and metrics.
    - Record the workflow structure check result when `pnpm run agent:check` is available.
    - Include the acceptance coverage result: automated checks, manual checks, and coverage gaps.
    - Use the built-in provenance chain rules. Keep provenance compact: link or summarize key anchors, do not paste full logs or sensitive data.
