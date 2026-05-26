@@ -92,6 +92,9 @@ impl PersistenceManager {
         let source_turns = self
             .load_session_turns(workspace_path, &request.source_session_id)
             .await?;
+        let source_prompt_cache = self
+            .load_prompt_cache(workspace_path, &request.source_session_id)
+            .await?;
 
         if source_turns.is_empty() {
             return Err(BitFunError::Validation(
@@ -161,6 +164,11 @@ impl PersistenceManager {
 
             for turn in &branched_turns {
                 self.save_dialog_turn(workspace_path, turn).await?;
+            }
+
+            if let Some(cache) = source_prompt_cache.as_ref() {
+                self.save_prompt_cache(workspace_path, &target_session_id, cache)
+                    .await?;
             }
 
             let now_ms = SystemTime::now()
@@ -233,6 +241,10 @@ impl PersistenceManager {
 mod tests {
     use super::{PersistenceManager, SessionBranchRequest};
     use crate::agentic::core::{Message, Session, SessionKind};
+    use crate::agentic::session::{
+        CachedSystemPrompt, CachedUserContext, SessionPromptCache, SystemPromptCacheIdentity,
+        UserContextCacheIdentity,
+    };
     use crate::infrastructure::PathManager;
     use crate::service::session::{DialogTurnData, UserMessageData};
     use std::path::{Path, PathBuf};
@@ -336,6 +348,25 @@ mod tests {
             .await
             .expect("snapshot 1 should save");
 
+        let source_prompt_cache = SessionPromptCache {
+            system_prompt: Some(CachedSystemPrompt::new(
+                SystemPromptCacheIdentity::new("template:agentic_mode"),
+                "system prompt",
+            )),
+            user_context: Some(CachedUserContext::new(
+                UserContextCacheIdentity::new("workspace_context|workspace_instructions"),
+                "user context",
+            )),
+        };
+        manager
+            .save_prompt_cache(
+                workspace.path(),
+                &source_session.session_id,
+                &source_prompt_cache,
+            )
+            .await
+            .expect("source prompt cache should save");
+
         let mut source_metadata = manager
             .load_session_metadata(workspace.path(), &source_session.session_id)
             .await
@@ -402,6 +433,13 @@ mod tests {
             &branched_snapshot[0].content,
             crate::agentic::core::MessageContent::Text(text) if text == "snapshot-0"
         ));
+
+        let branched_prompt_cache = manager
+            .load_prompt_cache(workspace.path(), &result.session_id)
+            .await
+            .expect("branched prompt cache load should succeed")
+            .expect("branched prompt cache should exist");
+        assert_eq!(branched_prompt_cache, source_prompt_cache);
 
         let branched_metadata = manager
             .load_session_metadata(workspace.path(), &result.session_id)

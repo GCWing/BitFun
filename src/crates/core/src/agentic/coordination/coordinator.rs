@@ -13,9 +13,7 @@ use crate::agentic::events::{
     AgenticEvent, DeepReviewQueueState, EventPriority, EventQueue, EventRouter, EventSubscriber,
 };
 use crate::agentic::execution::{ContextCompactionOutcome, ExecutionContext, ExecutionEngine};
-use crate::agentic::fork_agent::{
-    ForkAgentContextSnapshot, ForkAgentExecutionRequest, ForkAgentExecutionResult,
-};
+use crate::agentic::fork_agent::ForkAgentContextSnapshot;
 use crate::agentic::goal_mode::{
     build_goal_continuation_plan, build_goal_kickoff_messages, clear_goal_mode_patch,
     effective_subagent_timeout_seconds, ensure_final_response_in_goal_context,
@@ -4248,59 +4246,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await?;
 
         Ok(turn_id)
-    }
-
-    /// Execute a hidden child agent that inherits the parent session's current
-    /// model-visible context.
-    pub async fn execute_fork_agent(
-        &self,
-        request: ForkAgentExecutionRequest,
-        cancel_token: Option<&CancellationToken>,
-    ) -> BitFunResult<ForkAgentExecutionResult> {
-        if request.agent_type.trim().is_empty() {
-            return Err(BitFunError::Validation(
-                "ForkAgentExecutionRequest.agent_type is required".to_string(),
-            ));
-        }
-        if request.description.trim().is_empty() {
-            return Err(BitFunError::Validation(
-                "ForkAgentExecutionRequest.description is required".to_string(),
-            ));
-        }
-        if request.prompt_messages.is_empty() {
-            return Err(BitFunError::Validation(
-                "ForkAgentExecutionRequest.prompt_messages must not be empty".to_string(),
-            ));
-        }
-
-        let inherited_message_count = request.snapshot.inherited_message_count();
-        let prompt_message_count = request.prompt_messages.len();
-        let agent_type = request.agent_type.clone();
-        let session_config = request.child_session_config();
-        let initial_messages = request.composed_initial_messages();
-        let created_by = Some(format!("session-{}", request.snapshot.parent_session_id));
-        let child_result = self
-            .execute_hidden_subagent_internal(
-                HiddenSubagentExecutionRequest {
-                    session_name: format!("Fork: {}", request.description),
-                    agent_type,
-                    session_config,
-                    initial_messages,
-                    created_by,
-                    subagent_parent_info: None,
-                    context: request.context,
-                    runtime_tool_restrictions: request.runtime_tool_restrictions,
-                },
-                cancel_token,
-                None,
-            )
-            .await?;
-
-        Ok(ForkAgentExecutionResult {
-            text: child_result.text,
-            inherited_message_count,
-            prompt_message_count,
-        })
     }
 
     /// Execute subagent task directly

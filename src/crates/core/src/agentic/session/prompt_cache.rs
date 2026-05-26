@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub const PROMPT_CACHE_SCHEMA_VERSION: u32 = 1;
+pub const DEFAULT_PROMPT_CACHE_PERSISTENCE_TTL: Duration = Duration::from_secs(60 * 60 * 24);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptCachePolicy {
@@ -15,7 +16,7 @@ impl Default for PromptCachePolicy {
     fn default() -> Self {
         Self {
             cache_ttl: None,
-            persistence_ttl: None,
+            persistence_ttl: Some(DEFAULT_PROMPT_CACHE_PERSISTENCE_TTL),
         }
     }
 }
@@ -324,10 +325,22 @@ fn current_time_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        CachedSystemPrompt, CachedUserContext, PromptCacheLookup, PromptCacheScope,
-        SessionPromptCacheStore, SystemPromptCacheIdentity, UserContextCacheIdentity,
+        CachedSystemPrompt, CachedUserContext, PromptCacheLookup, PromptCachePolicy,
+        PromptCacheScope, SessionPromptCacheStore, SystemPromptCacheIdentity,
+        UserContextCacheIdentity, DEFAULT_PROMPT_CACHE_PERSISTENCE_TTL,
     };
     use std::time::Duration;
+
+    #[test]
+    fn default_prompt_cache_policy_uses_one_day_persistence_ttl() {
+        let policy = PromptCachePolicy::default();
+
+        assert_eq!(policy.cache_ttl, None);
+        assert_eq!(
+            policy.persistence_ttl,
+            Some(DEFAULT_PROMPT_CACHE_PERSISTENCE_TTL)
+        );
+    }
 
     #[test]
     fn system_prompt_cache_requires_matching_identity() {

@@ -5,9 +5,7 @@
 //! its own rounds, tools, cancellation, and cleanup lifecycle.
 
 use crate::agentic::core::{Message, Session, SessionConfig};
-use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::util::errors::{BitFunError, BitFunResult};
-use std::collections::HashMap;
 
 /// Immutable snapshot of a parent session's runtime context at fork time.
 #[derive(Debug, Clone)]
@@ -50,10 +48,6 @@ impl ForkAgentContextSnapshot {
         })
     }
 
-    pub fn inherited_message_count(&self) -> usize {
-        self.messages.len()
-    }
-
     pub fn build_child_session_config(&self, max_turns_override: Option<usize>) -> SessionConfig {
         let mut config = self.session_config.clone();
         config.workspace_path = Some(self.workspace_path.clone());
@@ -66,42 +60,6 @@ impl ForkAgentContextSnapshot {
         config
     }
 
-    pub fn compose_initial_messages(&self, prompt_messages: &[Message]) -> Vec<Message> {
-        let mut messages = self.messages.clone();
-        messages.extend(prompt_messages.iter().cloned());
-        messages
-    }
-}
-
-/// Semantic fork-agent request.
-#[derive(Debug, Clone)]
-pub struct ForkAgentExecutionRequest {
-    pub snapshot: ForkAgentContextSnapshot,
-    pub agent_type: String,
-    pub description: String,
-    pub prompt_messages: Vec<Message>,
-    pub context: HashMap<String, String>,
-    pub runtime_tool_restrictions: ToolRuntimeRestrictions,
-    pub max_turns: Option<usize>,
-}
-
-impl ForkAgentExecutionRequest {
-    pub fn composed_initial_messages(&self) -> Vec<Message> {
-        self.snapshot
-            .compose_initial_messages(&self.prompt_messages)
-    }
-
-    pub fn child_session_config(&self) -> SessionConfig {
-        self.snapshot.build_child_session_config(self.max_turns)
-    }
-}
-
-/// Result returned by a completed semantic fork-agent run.
-#[derive(Debug, Clone)]
-pub struct ForkAgentExecutionResult {
-    pub text: String,
-    pub inherited_message_count: usize,
-    pub prompt_message_count: usize,
 }
 
 #[cfg(test)]
@@ -122,22 +80,18 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_composes_parent_and_prompt_messages_in_order() {
+    fn snapshot_retains_inherited_messages() {
         let parent = parent_session();
         let inherited = vec![Message::user("hello".to_string())];
-        let prompt = vec![Message::user("fork directive".to_string())];
         let snapshot = ForkAgentContextSnapshot::from_parent_session(&parent, inherited.clone())
             .expect("snapshot");
 
-        let combined = snapshot.compose_initial_messages(&prompt);
-
-        assert_eq!(combined.len(), 2);
+        assert_eq!(snapshot.messages.len(), 1);
         assert!(matches!(
-            combined[0].content,
+            snapshot.messages[0].content,
             crate::agentic::core::MessageContent::Text(_)
         ));
-        assert_eq!(combined[0].id, inherited[0].id);
-        assert_eq!(combined[1].id, prompt[0].id);
+        assert_eq!(snapshot.messages[0].id, inherited[0].id);
     }
 
     #[test]
