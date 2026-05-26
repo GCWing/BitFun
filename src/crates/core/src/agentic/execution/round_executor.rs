@@ -1004,7 +1004,7 @@ impl RoundExecutor {
                  function_call blocks, or agent framework syntax inside or outside the tags. \
                  You are not calling a tool here — you are outputting raw file content only.\n\
                  8. Do NOT repeat, summarize, or narrate prior tool calls (Read, Bash, Edit, etc.). Start writing the actual file body immediately.\n\
-                 9. Do NOT output `[called tools:` markers, tool parameter JSON, or `<bitfun_contents>` / `</bitfun_contents>` tags — the opening tag is already provided via prefill.",
+                 9. Do NOT output `[called tools:` markers, tool parameter JSON, or `<bitfun_contents>` / `</bitfun_contents>` tags — the opening tag is already provided via prefill. Begin with the first byte of the file content immediately after that opening tag.",
                 file_path = file_path
             );
 
@@ -1097,7 +1097,7 @@ impl RoundExecutor {
     ) -> Vec<AIMessage> {
         let mut content_messages = ai_messages.to_vec();
         content_messages.push(AIMessage::user(content_prompt.to_string()));
-        content_messages.push(AIMessage::assistant("<bitfun_contents>\n".to_string()));
+        content_messages.push(AIMessage::assistant("<bitfun_contents>".to_string()));
         content_messages
     }
 
@@ -1941,7 +1941,13 @@ mod tests {
         assert_eq!(messages[2].role, "tool");
         assert_eq!(messages[3].role, "user");
         assert_eq!(messages[4].role, "assistant");
-        assert_eq!(messages[4].content.as_deref(), Some("<bitfun_contents>\n"));
+        assert_eq!(messages[4].content.as_deref(), Some("<bitfun_contents>"));
+        assert!(
+            messages[4]
+                .content
+                .as_deref()
+                .is_some_and(|content| !content.ends_with(char::is_whitespace))
+        );
     }
 
     #[test]

@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "BitFun default capabilities",
-  "windows": ["main", "agent-companion-pet"],
+  "windows": ["main", "agent-companion-pet", "spotlight"],
   "permissions": [
     "log:default",
     "autostart:default",
@@ -105,6 +105,11 @@
     "notification:allow-request-permission",
     "notification:allow-check-permissions",
     "notification:allow-permission-state",
-    "notification:allow-is-permission-granted"
+    "notification:allow-is-permission-granted",
+    "global-shortcut:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-unregister-all",
+    "global-shortcut:allow-is-registered"
   ]
 }

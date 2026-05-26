@@ -17,9 +17,8 @@
     margin-bottom: 0;
     animation: none;
 
-    .flowchat-flow-item--tool-transition,
-    .flowchat-flow-item--tool-active,
-    .flowchat-flow-item--tool-completed {
+    .flowchat-flow-item--tool-transition:not(.flowchat-flow-item--tool-completed),
+    .flowchat-flow-item--tool-active {
       animation: none;
       will-change: auto;
     }

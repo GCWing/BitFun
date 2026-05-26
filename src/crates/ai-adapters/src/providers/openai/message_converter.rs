@@ -63,6 +63,7 @@ impl OpenAIMessageConverter {
                 }
             }
         }
+        Self::trim_final_assistant_trailing_whitespace(&mut input);
 
         let instructions = if instructions.is_empty() {
             None
@@ -74,10 +75,39 @@ impl OpenAIMessageConverter {
     }
 
     pub fn convert_messages(messages: Vec<Message>) -> Vec<Value> {
-        messages
+        let mut messages = messages
             .into_iter()
             .map(Self::convert_single_message)
-            .collect()
+            .collect::<Vec<_>>();
+        Self::trim_final_assistant_trailing_whitespace(&mut messages);
+        messages
+    }
+
+    fn trim_final_assistant_trailing_whitespace(messages: &mut [Value]) {
+        let Some(last) = messages.last_mut() else {
+            return;
+        };
+        if last.get("role").and_then(Value::as_str) != Some("assistant") {
+            return;
+        }
+
+        match last.get_mut("content") {
+            Some(Value::String(text)) => {
+                let trimmed_len = text.trim_end().len();
+                text.truncate(trimmed_len);
+            }
+            Some(Value::Array(items)) => {
+                for item in items.iter_mut().rev() {
+                    let Some(Value::String(last_text)) = item.get_mut("text") else {
+                        continue;
+                    };
+                    let trimmed_len = last_text.trim_end().len();
+                    last_text.truncate(trimmed_len);
+                    break;
+                }
+            }
+            _ => {}
+        }
     }
 
     fn convert_tool_message_to_responses_item(msg: Message) -> Option<Value> {
@@ -545,5 +575,25 @@ mod tests {
         let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
 
         assert_eq!(openai[0]["reasoning_content"], json!(""));
+    }
+
+    #[test]
+    fn trims_trailing_whitespace_from_final_assistant_prefill_for_chat_completions() {
+        let openai = OpenAIMessageConverter::convert_messages(vec![
+            Message::user("Generate the file content.".to_string()),
+            Message::assistant("<bitfun_contents>\n".to_string()),
+        ]);
+
+        assert_eq!(openai[1]["content"], json!("<bitfun_contents>"));
+    }
+
+    #[test]
+    fn trims_trailing_whitespace_from_final_assistant_prefill_for_responses() {
+        let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(vec![
+            Message::user("Generate the file content.".to_string()),
+            Message::assistant("<bitfun_contents>\n".to_string()),
+        ]);
+
+        assert_eq!(input[1]["content"][0]["text"], json!("<bitfun_contents>"));
     }
 }

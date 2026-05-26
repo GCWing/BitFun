@@ -772,6 +772,44 @@ mod tests {
     }
 
     #[test]
+    fn build_anthropic_request_body_maps_enabled_to_adaptive_for_adaptive_models() {
+        let client = AIClient::new(AIConfig {
+            name: "anthropic".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+            request_url: "https://api.anthropic.com/v1/messages".to_string(),
+            api_key: "test-key".to_string(),
+            model: "claude-sonnet-4-6".to_string(),
+            format: "anthropic".to_string(),
+            context_window: 200000,
+            max_tokens: Some(8192),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        });
+
+        let request_body = anthropic::request::build_request_body(
+            &client,
+            &client.config.request_url,
+            None,
+            vec![json!({ "role": "user", "content": [{ "type": "text", "text": "hello" }] })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["thinking"]["type"], "adaptive");
+        assert!(request_body["thinking"].get("budget_tokens").is_none());
+        assert_eq!(request_body["output_config"]["effort"], "medium");
+    }
+
+    #[test]
     fn build_anthropic_request_body_adds_deepseek_reasoning_effort() {
         let client = AIClient::new(AIConfig {
             name: "deepseek".to_string(),
@@ -805,7 +843,45 @@ mod tests {
         );
 
         assert_eq!(request_body["thinking"]["type"], "enabled");
+        assert_eq!(request_body["thinking"]["budget_tokens"], 6144);
         assert_eq!(request_body["output_config"]["effort"], "max");
+    }
+
+    #[test]
+    fn build_anthropic_request_body_enabled_reasoning_always_has_budget_tokens() {
+        let client = AIClient::new(AIConfig {
+            name: "anthropic-proxy".to_string(),
+            base_url: "https://proxy.example.com/anthropic".to_string(),
+            request_url: "https://proxy.example.com/anthropic/v1/messages".to_string(),
+            api_key: "test-key".to_string(),
+            model: "vendor-model-alias".to_string(),
+            format: "anthropic".to_string(),
+            context_window: 200000,
+            max_tokens: Some(4000),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        });
+
+        let request_body = anthropic::request::build_request_body(
+            &client,
+            &client.config.request_url,
+            None,
+            vec![json!({ "role": "user", "content": [{ "type": "text", "text": "hello" }] })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["thinking"]["type"], "enabled");
+        assert_eq!(request_body["thinking"]["budget_tokens"], 3000);
     }
 
     #[test]

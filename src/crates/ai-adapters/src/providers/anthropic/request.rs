@@ -46,12 +46,24 @@ fn anthropic_supports_adaptive_reasoning(model_name: &str) -> bool {
     )
 }
 
-fn anthropic_supports_thinking_budget(model_name: &str) -> bool {
-    model_name.starts_with("claude")
-}
-
 fn default_anthropic_budget_tokens(max_tokens: Option<u32>) -> Option<u32> {
     max_tokens.map(|value| 10_000u32.min(value.saturating_mul(3) / 4))
+}
+
+fn anthropic_adaptive_effort(reasoning_effort: Option<&str>) -> &str {
+    reasoning_effort
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("medium")
+}
+
+fn apply_anthropic_adaptive_reasoning(
+    request_body: &mut serde_json::Value,
+    reasoning_effort: Option<&str>,
+) {
+    request_body["thinking"] = serde_json::json!({ "type": "adaptive" });
+    request_body["output_config"] = serde_json::json!({
+        "effort": anthropic_adaptive_effort(reasoning_effort)
+    });
 }
 
 fn apply_reasoning_fields(
@@ -81,13 +93,16 @@ fn apply_reasoning_fields(
             request_body["thinking"] = serde_json::json!({ "type": "disabled" });
         }
         ReasoningMode::Enabled => {
+            if anthropic_supports_adaptive_reasoning(model_name) {
+                apply_anthropic_adaptive_reasoning(request_body, reasoning_effort);
+                return;
+            }
+
             let mut thinking = serde_json::json!({ "type": "enabled" });
-            if anthropic_supports_thinking_budget(model_name) {
-                if let Some(budget_tokens) =
-                    thinking_budget_tokens.or_else(|| default_anthropic_budget_tokens(max_tokens))
-                {
-                    thinking["budget_tokens"] = serde_json::json!(budget_tokens);
-                }
+            if let Some(budget_tokens) =
+                thinking_budget_tokens.or_else(|| default_anthropic_budget_tokens(max_tokens))
+            {
+                thinking["budget_tokens"] = serde_json::json!(budget_tokens);
             }
             request_body["thinking"] = thinking;
             if is_deepseek_reasoning_target {
@@ -101,12 +116,7 @@ fn apply_reasoning_fields(
         }
         ReasoningMode::Adaptive => {
             if anthropic_supports_adaptive_reasoning(model_name) {
-                request_body["thinking"] = serde_json::json!({ "type": "adaptive" });
-                if let Some(effort) = reasoning_effort.filter(|value| !value.trim().is_empty()) {
-                    request_body["output_config"] = serde_json::json!({
-                        "effort": effort
-                    });
-                }
+                apply_anthropic_adaptive_reasoning(request_body, reasoning_effort);
             } else {
                 warn!(
                     target: "ai::anthropic_stream_request",
@@ -127,6 +137,7 @@ fn apply_reasoning_fields(
     }
 
     if mode != ReasoningMode::Adaptive
+        && !anthropic_supports_adaptive_reasoning(model_name)
         && reasoning_effort.is_some_and(|value| !value.trim().is_empty())
     {
         warn!(
