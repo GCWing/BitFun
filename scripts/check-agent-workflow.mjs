@@ -32,6 +32,8 @@ const requiredEvidenceSections = [
 
 const validRepairStatuses = new Set(['not_needed', 'repaired', 'blocked', 'deferred']);
 const validRiskLevels = new Set(['L0', 'L1', 'L2', 'L3', 'L4']);
+const validReviewRoutes = new Set(['deep_review', 'specialist_review', 'manual_review', 'skipped']);
+const validReviewStatuses = new Set(['completed', 'skipped', 'blocked']);
 const riskRanks = new Map([
   ['L0', 0],
   ['L1', 1],
@@ -350,9 +352,24 @@ function validateHighRiskIntentReviewEscalation(filePath, markdown, riskLevel) {
   }
 
   const metadata = sectionContent(markdown, 'Metadata');
-  if (!/Review escalation\s*:\s*\S/i.test(metadata)) {
+  const routeMatch = metadata.match(/Review escalation\s*:\s*([a-z_]+)/i);
+  if (!routeMatch) {
     reportError(
-      `${rel(filePath)} L3/L4 Intent Record must include "Review escalation: <plan>" in "## Metadata"`,
+      `${rel(filePath)} L3/L4 Intent Record must include "Review escalation: <route>" in "## Metadata"`,
+    );
+    return;
+  }
+
+  const route = routeMatch[1].toLowerCase();
+  if (!validReviewRoutes.has(route)) {
+    reportError(
+      `${rel(filePath)} has invalid Review escalation "${route}". Expected one of: ${Array.from(validReviewRoutes).join(', ')}`,
+    );
+  }
+
+  if (route === 'skipped' && !/Review escalation reason\s*:\s*\S/i.test(metadata)) {
+    reportError(
+      `${rel(filePath)} skipped L3/L4 review escalation must include "Review escalation reason: <reason>" in "## Metadata"`,
     );
   }
 }
@@ -363,9 +380,41 @@ function validateHighRiskEvidenceReviewEscalation(filePath, markdown, riskLevel)
   }
 
   const risks = sectionContent(markdown, 'Risks');
-  if (!/Review escalation status\s*:\s*\S/i.test(risks)) {
+  const routeMatch = risks.match(/Review route\s*:\s*([a-z_]+)/i);
+  if (!routeMatch) {
+    reportError(
+      `${rel(filePath)} L3/L4 Evidence Package must include "Review route: <route>" in "## Risks"`,
+    );
+  } else {
+    const route = routeMatch[1].toLowerCase();
+    if (!validReviewRoutes.has(route)) {
+      reportError(
+        `${rel(filePath)} has invalid Review route "${route}". Expected one of: ${Array.from(validReviewRoutes).join(', ')}`,
+      );
+    }
+  }
+
+  const statusMatch = risks.match(/Review escalation status\s*:\s*([a-z_]+)/i);
+  if (!statusMatch) {
     reportError(
       `${rel(filePath)} L3/L4 Evidence Package must include "Review escalation status: <completed|skipped|blocked>" in "## Risks"`,
+    );
+    return;
+  }
+
+  const status = statusMatch[1].toLowerCase();
+  if (!validReviewStatuses.has(status)) {
+    reportError(
+      `${rel(filePath)} has invalid Review escalation status "${status}". Expected one of: ${Array.from(validReviewStatuses).join(', ')}`,
+    );
+  }
+
+  if (
+    (status === 'skipped' || status === 'blocked') &&
+    !/Review escalation reason\s*:\s*\S/i.test(risks)
+  ) {
+    reportError(
+      `${rel(filePath)} ${status} L3/L4 review escalation must include "Review escalation reason: <reason>" in "## Risks"`,
     );
   }
 }

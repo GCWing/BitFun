@@ -29,7 +29,8 @@ The checker validates structural workflow hygiene:
 - Evidence Package accepted checks include explicit status markers.
 - Evidence Package repair loops include attempt counts and final repair status.
 - Evidence Package risks include a final risk level.
-- L3/L4 Evidence Packages include review escalation status.
+- L3/L4 Intent Records include a machine-checkable review route.
+- L3/L4 Evidence Packages include review route and escalation status.
 - Evidence Package changed files produce an advisory risk-level suggestion.
 
 ## Limits

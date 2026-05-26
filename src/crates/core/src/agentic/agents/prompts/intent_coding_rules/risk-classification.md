@@ -14,7 +14,8 @@ Every Intent Record must include a machine-checkable risk line in `## Metadata`:
 
 For L3 and L4 tasks, the Intent Record must also include:
 
-- `Review escalation: <planned review path>`
+- `Review escalation: deep_review|specialist_review|manual_review|skipped`
+- `Review escalation reason: <reason>` when escalation is skipped.
 
 ## Levels
 
@@ -104,7 +105,9 @@ Every Evidence Package must record:
 - Verification commands run.
 - Verification that was skipped and why.
 - Human review focus for L2 and above.
-- Review escalation result for L3 and L4 as `Review escalation status: <completed|skipped|blocked>` in `## Risks`.
+- Review route for L3 and L4 as `Review route: deep_review|specialist_review|manual_review|skipped` in `## Risks`.
+- Review escalation result for L3 and L4 as `Review escalation status: completed|skipped|blocked` in `## Risks`.
+- Review escalation reason for L3 and L4 as `Review escalation reason: <reason>` when escalation is skipped or blocked.
 
 ## Review Escalation
 
@@ -113,3 +116,4 @@ For L3 and L4 tasks:
 - Prefer BitFun Deep Review when the changed surface is code and a review session is available.
 - Use equivalent specialist review when Deep Review is unavailable or the task is not code-review shaped.
 - Do not claim completion without stating whether review escalation was completed, skipped by explicit user direction, or blocked by tooling.
+- Keep review routing machine-checkable so later automation can trigger the selected route.
