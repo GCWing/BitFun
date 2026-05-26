@@ -232,19 +232,26 @@ function validateEvidenceRepairLoop(filePath, markdown) {
   }
 }
 
+function fieldValue(content, label) {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = content.match(new RegExp(`${escapedLabel}\\s*:\\s*(\\S+)`, 'i'));
+  return match ? match[1].trim() : null;
+}
+
 function validateEvidenceProvenanceChain(filePath, markdown) {
   const content = sectionContent(markdown, 'Provenance Chain');
   if (!content) {
     return;
   }
 
+  let store = null;
   const storeMatch = content.match(/Provenance store\s*:\s*([a-z_]+)/i);
   if (!storeMatch) {
     reportError(
       `${rel(filePath)} "## Provenance Chain" must include "Provenance store: agent_artifact|session_store|external|not_available"`,
     );
   } else {
-    const store = storeMatch[1].toLowerCase();
+    store = storeMatch[1].toLowerCase();
     if (!validProvenanceStores.has(store)) {
       reportError(
         `${rel(filePath)} has invalid Provenance store "${store}". Expected one of: ${Array.from(validProvenanceStores).join(', ')}`,
@@ -252,8 +259,13 @@ function validateEvidenceProvenanceChain(filePath, markdown) {
     }
   }
 
-  for (const label of ['Session id', 'Turn id']) {
-    if (!new RegExp(`${label}\\s*:\\s*\\S`, 'i').test(content)) {
+  const sessionId = fieldValue(content, 'Session id');
+  const turnId = fieldValue(content, 'Turn id');
+  for (const [label, value] of [
+    ['Session id', sessionId],
+    ['Turn id', turnId],
+  ]) {
+    if (!value) {
       reportError(
         `${rel(filePath)} "## Provenance Chain" must include "${label}: <id|not_available>"`,
       );
@@ -281,6 +293,62 @@ function validateEvidenceProvenanceChain(filePath, markdown) {
   if (declaredEvidencePath !== rel(filePath)) {
     reportError(
       `${rel(filePath)} declares Evidence Package ${declaredEvidencePath}, but current file is ${rel(filePath)}`,
+    );
+  }
+
+  const provenanceRecord = fieldValue(content, 'Provenance record');
+  if (store === 'session_store') {
+    if (sessionId === 'not_available' || turnId === 'not_available') {
+      reportError(
+        `${rel(filePath)} uses Provenance store session_store but Session id and Turn id must be concrete values`,
+      );
+    }
+
+    if (!provenanceRecord) {
+      reportError(
+        `${rel(filePath)} uses Provenance store session_store but is missing "Provenance record: .bitfun/sessions/...json"`,
+      );
+      return;
+    }
+
+    const normalizedRecord = toPosixPath(provenanceRecord);
+    if (!normalizedRecord.startsWith('.bitfun/sessions/') || !normalizedRecord.endsWith('.json')) {
+      reportError(
+        `${rel(filePath)} session_store Provenance record must be a .bitfun/sessions/...json path`,
+      );
+      return;
+    }
+
+    const recordPath = path.join(root, normalizedRecord);
+    if (!fs.existsSync(recordPath)) {
+      reportWarn(
+        `${rel(filePath)} declares session_store Provenance record ${normalizedRecord}, but the file is not present in this workspace`,
+      );
+      return;
+    }
+
+    try {
+      const record = JSON.parse(fs.readFileSync(recordPath, 'utf8'));
+      if (record.session_id && record.session_id !== sessionId) {
+        reportError(
+          `${rel(filePath)} session id ${sessionId} does not match Provenance record session_id ${record.session_id}`,
+        );
+      }
+      if (record.turn_id && record.turn_id !== turnId) {
+        reportError(
+          `${rel(filePath)} turn id ${turnId} does not match Provenance record turn_id ${record.turn_id}`,
+        );
+      }
+    } catch (error) {
+      reportError(
+        `${rel(filePath)} failed to parse Provenance record ${normalizedRecord}: ${error.message}`,
+      );
+    }
+  }
+
+  if (store === 'external' && !provenanceRecord) {
+    reportError(
+      `${rel(filePath)} uses Provenance store external but is missing "Provenance record: <external-reference>"`,
     );
   }
 }

@@ -47,10 +47,20 @@ The section must include these machine-checkable fields:
 - `Turn id: <id|not_available>`
 - `Intent Record: .agent/intents/intent-YYYYMMDD-short-task-name.md`
 - `Evidence Package: .agent/evidence/evidence-YYYYMMDD-short-task-name.md`
+- `Provenance record: <path|external-reference|not_available>`
 
 Use `not_available` when the current runtime cannot expose a stable session or
 turn identifier. Do not invent identifiers. Prefer `agent_artifact` for the MVP
 when the chain only exists in `.agent`.
+
+When `Provenance store: session_store` is used:
+
+- `Session id` and `Turn id` must be concrete values.
+- `Provenance record` must point to a `.bitfun/sessions/...json` record.
+- If the record is present locally, it should match the declared session and turn ids.
+
+When `Provenance store: external` is used, `Provenance record` must identify the
+external record or system of record.
 
 The section should also include review-useful anchors:
 
