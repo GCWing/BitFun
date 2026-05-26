@@ -7,6 +7,7 @@ use crate::service::remote_ssh::types::{
     SSHAuthMethod, SSHCommandOptions, SSHCommandResult, SSHConfigEntry, SSHConfigLookupResult,
     SSHConnectionConfig, SSHConnectionResult, SavedConnection, ServerInfo,
 };
+use crate::util::truncate_at_char_boundary;
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use russh::client::{DisconnectReason, Handle, Handler, Msg};
@@ -1396,7 +1397,7 @@ impl SSHConnectionManager {
     ) -> std::result::Result<SSHCommandResult, anyhow::Error> {
         let execution_started_at = Instant::now();
         let command_preview = if command.len() > 160 {
-            format!("{}...", &command[..160])
+            format!("{}...", truncate_at_char_boundary(command, 160))
         } else {
             command.to_string()
         };

@@ -20,6 +20,18 @@ use tracing::{debug, error, info, warn};
 use crate::relay::room::{ConnId, OutboundMessage, ResponsePayload, RoomManager};
 use crate::routes::api::AppState;
 
+fn truncate_preview(text: &str, max_bytes: usize) -> &str {
+    if text.len() <= max_bytes {
+        return text;
+    }
+
+    let mut end = max_bytes;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
 /// Messages received from the desktop via WebSocket.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -120,7 +132,7 @@ fn handle_text_message(
 ) {
     debug!(
         "Received from conn_id={conn_id}: {}",
-        &text[..text.len().min(200)]
+        truncate_preview(text, 200)
     );
     let msg: InboundMessage = match serde_json::from_str(text) {
         Ok(m) => m,
@@ -190,6 +202,18 @@ fn handle_text_message(
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_preview;
+
+    #[test]
+    fn truncate_preview_respects_utf8_boundaries() {
+        let text = format!("{}{}", "a".repeat(199), "你");
+
+        assert_eq!(truncate_preview(&text, 200), "a".repeat(199));
     }
 }
 
