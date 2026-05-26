@@ -89,8 +89,9 @@ Increase risk when a task touches:
 
 When an Evidence Package lists changed files or describes risk-sensitive
 behavior, the local workflow checker may suggest a risk level from file paths
-and Evidence text. This suggestion is advisory and is intended to catch likely
-under-classification, not to replace judgment.
+and Evidence text. It also considers selected ownership-sensitive surfaces and
+dependency graph impact files. This suggestion is advisory and is intended to
+catch likely under-classification, not to replace judgment.
 
 If the recorded final risk level is lower than the suggestion:
 

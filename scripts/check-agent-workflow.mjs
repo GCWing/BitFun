@@ -87,6 +87,55 @@ const evidenceRiskSignals = [
       /\b(persistence|session|remote workspace|synchronization|sync|stream parsing|agent tool execution|cross-module|public api|data loss|concurrency)\b/i,
   },
 ];
+const ownershipRiskSignals = [
+  {
+    level: 'L3',
+    label: 'agent tool ownership surface',
+    contains: 'src/crates/core/src/agentic/tools/',
+  },
+  {
+    level: 'L3',
+    label: 'agent execution ownership surface',
+    contains: 'src/crates/core/src/agentic/execution/',
+  },
+  {
+    level: 'L3',
+    label: 'AI adapter ownership surface',
+    contains: 'src/crates/ai-adapters/',
+  },
+  {
+    level: 'L2',
+    label: 'core product logic ownership surface',
+    contains: 'src/crates/core/',
+  },
+  {
+    level: 'L2',
+    label: 'desktop API ownership surface',
+    contains: 'src/apps/desktop/src/api/',
+  },
+  {
+    level: 'L2',
+    label: 'transport/API ownership surface',
+    pattern: /src\/crates\/(transport|api-layer)\//,
+  },
+];
+const dependencyRiskSignals = [
+  {
+    level: 'L2',
+    label: 'Rust dependency graph impact',
+    pattern: /(^|\/)cargo\.toml$/,
+  },
+  {
+    level: 'L2',
+    label: 'frontend dependency graph impact',
+    pattern: /(^|\/)(package\.json|pnpm-lock\.yaml)$/,
+  },
+  {
+    level: 'L2',
+    label: 'build configuration impact',
+    pattern: /(^|\/)(tsconfig[^/]*\.json|vite\.config\.[jt]s|rust-toolchain[^/]*)$/,
+  },
+];
 
 let errorCount = 0;
 let cachedPolicyConfig = null;
@@ -746,15 +795,46 @@ function suggestRiskForEvidenceText(markdown) {
   return { level: suggestedRiskLevel, matches };
 }
 
+function suggestRiskFromSignals(changedFiles, signals) {
+  const matches = [];
+  let suggestedRiskLevel = 'L0';
+  for (const changedFile of changedFiles) {
+    const normalizedPath = toPosixPath(changedFile).toLowerCase();
+    for (const signal of signals) {
+      const matched =
+        (signal.contains && normalizedPath.includes(signal.contains)) ||
+        (signal.pattern && signal.pattern.test(normalizedPath));
+      if (!matched) {
+        continue;
+      }
+      suggestedRiskLevel = maxRiskLevel(suggestedRiskLevel, signal.level);
+      matches.push(`${signal.level}:${signal.label}`);
+    }
+  }
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  return { level: suggestedRiskLevel, matches };
+}
+
 function reportChangedFileRiskSuggestion(filePath, markdown, recordedRiskLevel) {
   const changedFiles = extractEvidenceChangedFiles(markdown);
   const changedFileRiskLevel = suggestRiskForChangedFiles(changedFiles);
   const evidenceTextSuggestion = suggestRiskForEvidenceText(markdown);
+  const ownershipSuggestion = suggestRiskFromSignals(changedFiles, ownershipRiskSignals);
+  const dependencySuggestion = suggestRiskFromSignals(changedFiles, dependencyRiskSignals);
   const suggestedRiskLevel = maxRiskLevel(
-    changedFileRiskLevel ?? 'L0',
-    evidenceTextSuggestion?.level ?? 'L0',
+    maxRiskLevel(changedFileRiskLevel ?? 'L0', evidenceTextSuggestion?.level ?? 'L0'),
+    maxRiskLevel(ownershipSuggestion?.level ?? 'L0', dependencySuggestion?.level ?? 'L0'),
   );
-  if (!changedFileRiskLevel && !evidenceTextSuggestion) {
+  if (
+    !changedFileRiskLevel &&
+    !evidenceTextSuggestion &&
+    !ownershipSuggestion &&
+    !dependencySuggestion
+  ) {
     return;
   }
 
@@ -765,6 +845,16 @@ function reportChangedFileRiskSuggestion(filePath, markdown, recordedRiskLevel) 
   if (evidenceTextSuggestion) {
     sources.push(
       `${evidenceTextSuggestion.level} from evidence text (${evidenceTextSuggestion.matches.join(', ')})`,
+    );
+  }
+  if (ownershipSuggestion) {
+    sources.push(
+      `${ownershipSuggestion.level} from ownership surface (${ownershipSuggestion.matches.join(', ')})`,
+    );
+  }
+  if (dependencySuggestion) {
+    sources.push(
+      `${dependencySuggestion.level} from dependency impact (${dependencySuggestion.matches.join(', ')})`,
     );
   }
 

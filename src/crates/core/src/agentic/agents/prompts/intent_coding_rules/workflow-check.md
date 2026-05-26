@@ -34,7 +34,7 @@ The checker validates structural workflow hygiene:
 - Evidence Package risks include a final risk level.
 - L3/L4 Intent Records include a machine-checkable review route.
 - L3/L4 Evidence Packages include review route, trigger mode, and escalation status.
-- Evidence Package changed files and risk-sensitive Evidence text produce an advisory risk-level suggestion.
+- Evidence Package changed files, risk-sensitive Evidence text, ownership-sensitive surfaces, and dependency-impact files produce an advisory risk-level suggestion.
 
 ## Limits
 
