@@ -184,7 +184,12 @@ impl FileWriteTool {
         bytes_written: usize,
         status: &str,
         assistant_message: String,
+        content: &str,
     ) -> ToolResult {
+        let result_for_assistant = format!(
+            "{assistant_message}\n\nWritten content:\n<bitfun_contents>\n{content}</bitfun_contents>"
+        );
+
         ToolResult::Result {
             data: json!({
                 "file_path": logical_path,
@@ -192,8 +197,9 @@ impl FileWriteTool {
                 "success": true,
                 "status": status,
                 "message": assistant_message,
+                "content": content,
             }),
-            result_for_assistant: Some(assistant_message),
+            result_for_assistant: Some(result_for_assistant),
             image_attachments: None,
         }
     }
@@ -399,6 +405,7 @@ Usage:
                     "Write skipped because {} already exists with identical content.",
                     resolved.logical_path
                 ),
+                content,
             );
             return Ok(vec![result]);
         }
@@ -457,6 +464,7 @@ Usage:
             content.len(),
             status,
             assistant_message,
+            content,
         );
 
         Ok(vec![result])
@@ -591,10 +599,19 @@ mod tests {
         assert_eq!(data["success"], true);
         assert_eq!(data["bytes_written"], 0);
         assert_eq!(data["status"], "already_exists_same_content");
-        assert!(result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .contains("identical content"));
+        assert_eq!(data["content"], "same content");
+        assert!(
+            result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .contains("identical content")
+        );
+        assert!(
+            result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .contains("<bitfun_contents>\nsame content</bitfun_contents>")
+        );
     }
 
     #[tokio::test]
@@ -621,6 +638,7 @@ mod tests {
             panic!("expected result");
         };
         assert_eq!(data["status"], "overwritten");
+        assert_eq!(data["content"], "new content");
     }
 
     #[tokio::test]
@@ -787,18 +805,34 @@ mod tests {
 
         let tool = FileWriteTool::new();
         let body = "system generated body";
-        tool.call(
-            &json!({ "file_path": "generated.txt", "content": body }),
-            &local_context(root.clone()),
-        )
-        .await
-        .expect("plaintext followup should write system-injected content");
+        let results = tool
+            .call(
+                &json!({ "file_path": "generated.txt", "content": body }),
+                &local_context(root.clone()),
+            )
+            .await
+            .expect("plaintext followup should write system-injected content");
 
         let written =
             std::fs::read_to_string(root.join("generated.txt")).expect("read generated file");
         let _ = std::fs::remove_dir_all(&root);
 
         assert_eq!(written, body);
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
+            panic!("expected result");
+        };
+        assert_eq!(data["content"], body);
+        assert!(
+            result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .contains("<bitfun_contents>\nsystem generated body</bitfun_contents>")
+        );
     }
 }
 
