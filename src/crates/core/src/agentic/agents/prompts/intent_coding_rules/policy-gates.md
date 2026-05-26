@@ -45,6 +45,33 @@ Additional required gates:
 - `platform_boundary`: Required when platform adapter, desktop-only, Tauri, or adapter surfaces are touched.
 - `remote_compatibility`: Required when remote workspace, synchronization, transport, or websocket behavior is touched.
 
+## Optional Policy Config
+
+The checker can load additional gate requirements from:
+
+- `.agent/policy.json`
+- `.bitfun/intent-coding-policy.json`
+
+Supported shape:
+
+```json
+{
+  "required_gates": ["team_review"],
+  "risk_gates": {
+    "L3": ["risk_review"],
+    "L4": ["security_review"]
+  },
+  "path_gates": [
+    { "contains": "src/crates/core/src/agentic/tools/", "gate": "tool_contract" }
+  ],
+  "text_gates": [
+    { "contains": "data deletion", "gate": "data_safety" }
+  ]
+}
+```
+
+Configured gates are additive. They cannot remove built-in required gates.
+
 Optional gates can still be included when useful. Prefer these gate identifiers:
 
 - `risk_review`: L3/L4 review routing was completed, skipped, or blocked with evidence.

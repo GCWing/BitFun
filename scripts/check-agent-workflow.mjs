@@ -89,6 +89,7 @@ const evidenceRiskSignals = [
 ];
 
 let errorCount = 0;
+let cachedPolicyConfig = null;
 
 function toPosixPath(value) {
   return value.split(path.sep).join('/');
@@ -109,6 +110,41 @@ function reportWarn(message) {
 
 function reportInfo(message) {
   console.log(`[agent:check] ${message}`);
+}
+
+function loadOptionalJsonConfig(relativePaths) {
+  for (const relativePath of relativePaths) {
+    const configPath = path.join(root, relativePath);
+    if (!fs.existsSync(configPath)) {
+      continue;
+    }
+
+    try {
+      return {
+        path: relativePath,
+        value: JSON.parse(fs.readFileSync(configPath, 'utf8')),
+      };
+    } catch (error) {
+      reportError(`Failed to parse ${relativePath}: ${error.message}`);
+      return { path: relativePath, value: {} };
+    }
+  }
+
+  return { path: null, value: {} };
+}
+
+function policyConfig() {
+  if (!cachedPolicyConfig) {
+    cachedPolicyConfig = loadOptionalJsonConfig([
+      '.agent/policy.json',
+      '.bitfun/intent-coding-policy.json',
+    ]);
+    if (cachedPolicyConfig.path) {
+      reportInfo(`Loaded Intent Coding policy config from ${cachedPolicyConfig.path}`);
+    }
+  }
+
+  return cachedPolicyConfig.value;
 }
 
 function readMarkdown(filePath) {
@@ -445,6 +481,42 @@ function requiredPolicyGatesForEvidence(markdown, riskLevel, changedFiles) {
     evidenceTextIncludes(markdown, /\b(remote workspace|remote|sync|synchronization)\b/)
   ) {
     requiredGates.add('remote_compatibility');
+  }
+
+  const config = policyConfig();
+  for (const gateId of Array.isArray(config.required_gates) ? config.required_gates : []) {
+    requiredGates.add(String(gateId));
+  }
+
+  const riskGates = config.risk_gates?.[riskLevel];
+  for (const gateId of Array.isArray(riskGates) ? riskGates : []) {
+    requiredGates.add(String(gateId));
+  }
+
+  for (const rule of Array.isArray(config.path_gates) ? config.path_gates : []) {
+    if (!rule?.contains || !rule?.gate) {
+      continue;
+    }
+    if (changedFiles.some((changedFile) => toPosixPath(changedFile).includes(rule.contains))) {
+      requiredGates.add(String(rule.gate));
+    }
+  }
+
+  const evidenceText = [
+    sectionContent(markdown, 'Summary'),
+    sectionContent(markdown, 'Accepted Checks'),
+    sectionContent(markdown, 'Risks'),
+    sectionContent(markdown, 'Human Review Focus'),
+  ]
+    .join('\n')
+    .toLowerCase();
+  for (const rule of Array.isArray(config.text_gates) ? config.text_gates : []) {
+    if (!rule?.contains || !rule?.gate) {
+      continue;
+    }
+    if (evidenceText.includes(String(rule.contains).toLowerCase())) {
+      requiredGates.add(String(rule.gate));
+    }
   }
 
   return requiredGates;
