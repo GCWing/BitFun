@@ -3,11 +3,12 @@
 //! Top-level component that integrates all subsystems and provides a unified interface
 
 use super::{scheduler::DialogSubmissionPolicy, turn_outcome::TurnOutcome};
+use crate::agentic::WorkspaceBinding;
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::core::{
-    has_prompt_markup, Message, MessageContent, ProcessingPhase, PromptEnvelope, Session,
-    SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
+    Message, MessageContent, ProcessingPhase, PromptEnvelope, Session, SessionConfig, SessionKind,
+    SessionState, SessionSummary, TurnStats, has_prompt_markup,
 };
 use crate::agentic::events::{
     AgenticEvent, DeepReviewQueueState, EventEnvelope, EventPriority, EventQueue, EventRouter,
@@ -21,9 +22,8 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{DialogRoundPreemptSource, DialogRoundSteeringSource};
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
-use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
 use crate::agentic::tools::ToolRuntimeRestrictions;
-use crate::agentic::WorkspaceBinding;
+use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
 use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
@@ -33,11 +33,11 @@ use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::sync::OnceLock;
-use tokio::sync::{mpsc, watch, OwnedSemaphorePermit, RwLock, Semaphore};
-use tokio::time::{sleep, Duration, Instant};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use tokio::sync::{OwnedSemaphorePermit, RwLock, Semaphore, mpsc, watch};
+use tokio::time::{Duration, Instant, sleep};
 use tokio_util::sync::CancellationToken;
 
 const MANUAL_COMPACTION_COMMAND: &str = "/compact";
@@ -2067,7 +2067,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             );
                         }
                         Err(e) => {
-                            error!("Failed to set session state to Idle after completion: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                            error!(
+                                "Failed to set session state to Idle after completion: session_id={}, turn_id={}, error={}",
+                                session_id_clone, turn_id_clone, e
+                            );
                         }
                     }
 
@@ -2079,7 +2082,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                 final_response,
                             },
                         )) {
-                            error!("Failed to notify scheduler of turn completion: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                            error!(
+                                "Failed to notify scheduler of turn completion: session_id={}, turn_id={}, error={}",
+                                session_id_clone, turn_id_clone, e
+                            );
                         }
                     }
 
@@ -2109,7 +2115,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             )
                             .await
                         {
-                            error!("Failed to emit DialogTurnCancelled event: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                            error!(
+                                "Failed to emit DialogTurnCancelled event: session_id={}, turn_id={}, error={}",
+                                session_id_clone, turn_id_clone, e
+                            );
                         }
 
                         // Mark the turn as cancelled in persistence so its partial
@@ -2120,7 +2129,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             .cancel_dialog_turn(&session_id_clone, &turn_id_clone)
                             .await
                         {
-                            error!("Failed to cancel dialog turn in persistence: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                            error!(
+                                "Failed to cancel dialog turn in persistence: session_id={}, turn_id={}, error={}",
+                                session_id_clone, turn_id_clone, e
+                            );
                         }
 
                         match session_manager
@@ -2139,7 +2151,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                 );
                             }
                             Err(e) => {
-                                error!("Failed to set session state to Idle after cancellation: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                                error!(
+                                    "Failed to set session state to Idle after cancellation: session_id={}, turn_id={}, error={}",
+                                    session_id_clone, turn_id_clone, e
+                                );
                             }
                         }
 
@@ -2150,7 +2165,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                     turn_id: turn_id_clone.clone(),
                                 },
                             )) {
-                                error!("Failed to notify scheduler of turn cancellation: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                                error!(
+                                    "Failed to notify scheduler of turn cancellation: session_id={}, turn_id={}, error={}",
+                                    session_id_clone, turn_id_clone, e
+                                );
                             }
                         }
 
@@ -2176,14 +2194,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             )
                             .await
                         {
-                            error!("Failed to emit DialogTurnFailed event: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, eq_err);
+                            error!(
+                                "Failed to emit DialogTurnFailed event: session_id={}, turn_id={}, error={}",
+                                session_id_clone, turn_id_clone, eq_err
+                            );
                         }
 
                         if let Err(e) = session_manager
                             .fail_dialog_turn(&session_id_clone, &turn_id_clone, error_text.clone())
                             .await
                         {
-                            error!("Failed to mark dialog turn as failed: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                            error!(
+                                "Failed to mark dialog turn as failed: session_id={}, turn_id={}, error={}",
+                                session_id_clone, turn_id_clone, e
+                            );
                         }
 
                         match session_manager
@@ -2220,7 +2244,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                     error: error_text,
                                 },
                             )) {
-                                error!("Failed to notify scheduler of turn failure: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
+                                error!(
+                                    "Failed to notify scheduler of turn failure: session_id={}, turn_id={}, error={}",
+                                    session_id_clone, turn_id_clone, e
+                                );
                             }
                         }
 
@@ -2410,6 +2437,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         Ok(Some(current_turn_id))
+    }
+
+    /// Check whether a dialog turn still has active execution work.
+    pub fn has_active_turn(&self, dialog_turn_id: &str) -> bool {
+        self.execution_engine.has_active_turn(dialog_turn_id)
     }
 
     /// Delete session
@@ -4057,8 +4089,8 @@ pub fn get_global_coordinator() -> Option<Arc<ConversationCoordinator>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_subagent_max_concurrency, resolve_agent_submission_turn_id,
-        ConversationCoordinator,
+        ConversationCoordinator, normalize_subagent_max_concurrency,
+        resolve_agent_submission_turn_id,
     };
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use bitfun_runtime_ports::{AgentSubmissionRequest, AgentSubmissionSource};
