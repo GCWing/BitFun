@@ -56,6 +56,26 @@ const riskRanks = new Map([
   ['L3', 3],
   ['L4', 4],
 ]);
+const evidenceRiskSignals = [
+  {
+    level: 'L4',
+    label: 'safety-critical security boundary',
+    pattern:
+      /\b(sandbox|privilege escalation|destructive filesystem|cryptography|crypto|keychain|secret|credential|token|private key)\b/i,
+  },
+  {
+    level: 'L3',
+    label: 'critical product or security behavior',
+    pattern:
+      /\b(authentication|authorization|auth|permission|billing|payment|migration|data integrity|release signing|deployment|protocol parsing|encryption)\b/i,
+  },
+  {
+    level: 'L2',
+    label: 'important shared runtime behavior',
+    pattern:
+      /\b(persistence|session|remote workspace|synchronization|sync|stream parsing|agent tool execution|cross-module|public api|data loss|concurrency)\b/i,
+  },
+];
 
 let errorCount = 0;
 
@@ -449,20 +469,66 @@ function suggestRiskForChangedFiles(changedFiles) {
   );
 }
 
+function suggestRiskForEvidenceText(markdown) {
+  const text = [
+    sectionContent(markdown, 'Summary'),
+    sectionContent(markdown, 'Accepted Checks'),
+    sectionContent(markdown, 'Policy Gates'),
+    sectionContent(markdown, 'Risks'),
+    sectionContent(markdown, 'Human Review Focus'),
+  ]
+    .join('\n')
+    .toLowerCase();
+
+  if (!text.trim()) {
+    return null;
+  }
+
+  const matches = [];
+  let suggestedRiskLevel = 'L0';
+  for (const signal of evidenceRiskSignals) {
+    if (signal.pattern.test(text)) {
+      suggestedRiskLevel = maxRiskLevel(suggestedRiskLevel, signal.level);
+      matches.push(`${signal.level}:${signal.label}`);
+    }
+  }
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  return { level: suggestedRiskLevel, matches };
+}
+
 function reportChangedFileRiskSuggestion(filePath, markdown, recordedRiskLevel) {
   const changedFiles = extractEvidenceChangedFiles(markdown);
-  const suggestedRiskLevel = suggestRiskForChangedFiles(changedFiles);
-  if (!suggestedRiskLevel) {
+  const changedFileRiskLevel = suggestRiskForChangedFiles(changedFiles);
+  const evidenceTextSuggestion = suggestRiskForEvidenceText(markdown);
+  const suggestedRiskLevel = maxRiskLevel(
+    changedFileRiskLevel ?? 'L0',
+    evidenceTextSuggestion?.level ?? 'L0',
+  );
+  if (!changedFileRiskLevel && !evidenceTextSuggestion) {
     return;
   }
 
+  const sources = [];
+  if (changedFileRiskLevel) {
+    sources.push(`${changedFileRiskLevel} from ${changedFiles.length} changed file(s)`);
+  }
+  if (evidenceTextSuggestion) {
+    sources.push(
+      `${evidenceTextSuggestion.level} from evidence text (${evidenceTextSuggestion.matches.join(', ')})`,
+    );
+  }
+
   reportInfo(
-    `${rel(filePath)} changed-file risk suggestion: ${suggestedRiskLevel} from ${changedFiles.length} file(s)`,
+    `${rel(filePath)} evidence-aware risk suggestion: ${suggestedRiskLevel}; ${sources.join('; ')}`,
   );
 
   if (recordedRiskLevel && riskRank(recordedRiskLevel) < riskRank(suggestedRiskLevel)) {
     reportWarn(
-      `${rel(filePath)} records ${recordedRiskLevel}, but changed files suggest ${suggestedRiskLevel}; raise the risk level or document why it is intentionally lower`,
+      `${rel(filePath)} records ${recordedRiskLevel}, but evidence suggests ${suggestedRiskLevel}; raise the risk level or document why it is intentionally lower`,
     );
   }
 }
