@@ -22,6 +22,7 @@ const requiredEvidenceSections = [
   'Metadata',
   'Intent Record',
   'Summary',
+  'Context Inputs',
   'Files Changed',
   'Verification',
   'Repair Loop',
@@ -43,6 +44,15 @@ const validPolicyGateStatuses = new Set([
   'skipped',
   'blocked',
   'not_applicable',
+]);
+const validContextInputTypes = new Set([
+  'builtin_rule',
+  'workspace_instruction',
+  'module_doc',
+  'source_file',
+  'user_confirmation',
+  'verification_guidance',
+  'not_available',
 ]);
 const validProvenanceStores = new Set([
   'agent_artifact',
@@ -229,6 +239,50 @@ function validateEvidenceRepairLoop(filePath, markdown) {
     reportError(
       `${rel(filePath)} has invalid Final repair status "${status}". Expected one of: ${Array.from(validRepairStatuses).join(', ')}`,
     );
+  }
+}
+
+function validateEvidenceContextInputs(filePath, markdown) {
+  const content = sectionContent(markdown, 'Context Inputs');
+  if (!content) {
+    return;
+  }
+
+  const contextLines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^[-*]\s+/.test(line));
+
+  if (contextLines.length === 0) {
+    reportError(`${rel(filePath)} "## Context Inputs" must list at least one context input`);
+    return;
+  }
+
+  for (const line of contextLines) {
+    const inputMatch = line.match(/^[-*]\s+\[([a-z_]+)\]\s+([^:]+):\s*(.+)$/i);
+    if (!inputMatch) {
+      reportError(
+        `${rel(filePath)} Context Input must use "- [type] reference: reason": ${line}`,
+      );
+      continue;
+    }
+
+    const inputType = inputMatch[1].toLowerCase();
+    const reference = inputMatch[2].trim();
+    const reason = inputMatch[3].trim();
+
+    if (!validContextInputTypes.has(inputType)) {
+      reportError(
+        `${rel(filePath)} has invalid Context Input type "${inputType}". Expected one of: ${Array.from(validContextInputTypes).join(', ')}`,
+      );
+      continue;
+    }
+
+    if (inputType === 'not_available' && !/\breason\s*[:=]\s*\S/i.test(reason)) {
+      reportError(
+        `${rel(filePath)} not_available Context Input ${reference} must include "reason: <reason>"`,
+      );
+    }
   }
 }
 
@@ -760,6 +814,7 @@ function main() {
     evidenceSlugs.add(slug);
     const markdown = validateSections(file, requiredEvidenceSections);
     validateEvidenceIntentReference(file, markdown);
+    validateEvidenceContextInputs(file, markdown);
     validateEvidenceAcceptedCheckStatuses(file, markdown);
     validateEvidenceRepairLoop(file, markdown);
     validateEvidenceProvenanceChain(file, markdown);

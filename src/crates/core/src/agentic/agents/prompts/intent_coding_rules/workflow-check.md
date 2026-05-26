@@ -26,6 +26,7 @@ The checker validates structural workflow hygiene:
 - Evidence Packages contain required MVP sections.
 - Evidence Packages reference existing Intent Records.
 - Intent Records and Evidence Packages are paired by task slug.
+- Evidence Package context inputs include machine-checkable source types and reasons.
 - Evidence Package accepted checks include explicit status markers.
 - Evidence Package repair loops include attempt counts and final repair status.
 - Evidence Package provenance chains include machine-checkable store, session, turn, Intent Record, Evidence Package, and durable record anchors.

@@ -38,9 +38,34 @@ did not request.
 
 ## Provenance Requirement
 
-Evidence Packages should record key context inputs in `## Provenance Chain`.
-At minimum, mention the built-in Intent Coding rules and any workspace
-instructions or module documents that affected the implementation.
+Evidence Packages must record key context inputs in `## Context Inputs`.
+
+Use one line per input:
+
+```text
+- [builtin_rule] intent_coding_rules/risk-classification.md: risk level selection
+- [workspace_instruction] AGENTS.md: repository verification guidance
+- [module_doc] src/crates/core/AGENTS.md: core ownership rules
+- [source_file] src/crates/core/src/example.rs: matched existing implementation pattern
+- [user_confirmation] chat: confirmed boundary behavior
+- [verification_guidance] AGENTS.md: selected cargo test command
+- [not_available] module_doc: reason: no nearer module guide exists
+```
+
+Valid types:
+
+- `builtin_rule`
+- `workspace_instruction`
+- `module_doc`
+- `source_file`
+- `user_confirmation`
+- `verification_guidance`
+- `not_available`
+
+Use `not_available` only with `reason: <reason>`.
+
+The `## Provenance Chain` section should still link the Intent Record, Evidence
+Package, session/turn anchors, and durable provenance record when available.
 
 ## Future Upgrade Path
 
