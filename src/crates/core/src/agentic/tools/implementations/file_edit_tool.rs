@@ -1,8 +1,8 @@
 use crate::agentic::tools::file_read_state_runtime::{
-    assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms,
-    get_stored_file_read_state, local_file_modification_time_ms,
-    read_current_file_content, read_state_tracking_enabled, update_file_read_state_after_mutation,
-    validate_edit_against_read_state, validate_edit_has_prior_read, FILE_UNEXPECTEDLY_MODIFIED_ERROR,
+    assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms, get_stored_file_read_state,
+    local_file_modification_time_ms, read_current_file_content, read_state_tracking_enabled,
+    update_file_read_state_after_mutation, validate_edit_against_read_state,
+    validate_edit_has_prior_read, FILE_UNEXPECTEDLY_MODIFIED_ERROR,
 };
 use crate::agentic::tools::file_tool_guidance::file_tool_guidance_message;
 use crate::agentic::tools::framework::{
@@ -64,8 +64,7 @@ impl FileEditTool {
     }
 
     fn is_edit_content_guardrail_error(error: &str) -> bool {
-        error.contains("old_string not found in file")
-            || error.contains("`old_string` appears")
+        error.contains("old_string not found in file") || error.contains("`old_string` appears")
     }
 
     async fn edit_read_state_guardrail_error(
@@ -92,15 +91,14 @@ impl FileEditTool {
         let current_mtime_ms = if resolved.uses_remote_workspace_backend() {
             None
         } else {
-            Some(local_file_modification_time_ms(Path::new(&resolved.resolved_path)))
+            Some(local_file_modification_time_ms(Path::new(
+                &resolved.resolved_path,
+            )))
         };
 
-        if let Some(error) = assert_file_not_unexpectedly_modified(
-            read_state.as_ref(),
-            content,
-            current_mtime_ms,
-        )
-        .err()
+        if let Some(error) =
+            assert_file_not_unexpectedly_modified(read_state.as_ref(), content, current_mtime_ms)
+                .err()
         {
             return Err(BitFunError::tool(file_tool_guidance_message(
                 Self::format_edit_freshness_guidance(&resolved.logical_path, error),
@@ -437,7 +435,10 @@ mod tests {
 
     #[tokio::test]
     async fn edit_tool_prompt_matches_claude_style() {
-        let description = FileEditTool::new().description().await.expect("description");
+        let description = FileEditTool::new()
+            .description()
+            .await
+            .expect("description");
 
         assert_eq!(description, EDIT_TOOL_PROMPT);
         assert!(description.contains("You must use your `Read` tool"));
@@ -462,22 +463,18 @@ mod tests {
                 .and_then(Value::as_str),
             Some("The path to the file to modify")
         );
-        assert!(
-            properties
-                .get("old_string")
-                .and_then(|value| value.get("description"))
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .contains("latest Read")
-        );
-        assert!(
-            properties
-                .get("new_string")
-                .and_then(|value| value.get("description"))
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .contains("indentation")
-        );
+        assert!(properties
+            .get("old_string")
+            .and_then(|value| value.get("description"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .contains("latest Read"));
+        assert!(properties
+            .get("new_string")
+            .and_then(|value| value.get("description"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .contains("indentation"));
         assert_eq!(
             properties
                 .get("replace_all")
@@ -507,6 +504,8 @@ mod tests {
         assert!(FileEditTool::is_edit_content_guardrail_error(
             "`old_string` appears 2 times in file, either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.\n"
         ));
-        assert!(!FileEditTool::is_edit_content_guardrail_error("Permission denied"));
+        assert!(!FileEditTool::is_edit_content_guardrail_error(
+            "Permission denied"
+        ));
     }
 }

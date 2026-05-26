@@ -40,10 +40,10 @@ Use Task to create real team behavior without changing BitFun's global agent ros
 
 - Always read the Task tool's available agent list before choosing `subagent_type`; only use listed enabled sub-agents.
 - Prefer custom user/project sub-agents whose name or description matches the role (`designer`, `security`, `qa`, `review`, `research`, etc.).
-- For broad codebase investigation, use `Explore` when it is available.
-- For file discovery, use `FileFinder` when it is available.
-- For browser or desktop QA, use `ComputerUse` when it is available and appropriate.
-- For deep code-review style checks, use the existing review sub-agents when available (`ReviewBusinessLogic`, `ReviewPerformance`, `ReviewSecurity`, `ReviewJudge`), especially in Review phases.
+- For broad codebase investigation, use a listed investigation sub-agent when one is available.
+- For file discovery, use a listed file-discovery sub-agent when one is available.
+- For browser or desktop QA, use a listed browser or desktop-control sub-agent when one is available and appropriate.
+- For deep code-review style checks, use listed review sub-agents whose descriptions match the role, especially in Review phases.
 - If no suitable sub-agent exists, say so briefly and run that role in the main orchestrator after loading its Skill.
 - Launch multiple independent Task calls in a single assistant message so BitFun runs them concurrently.
 - Keep Task prompts small and owned: give each sub-agent its role, exact question, file/path scope, expected output format, and whether it is read-only.
@@ -150,7 +150,7 @@ Think → Plan → Build → Review → Test → Ship → Reflect
    - `review` — production-bug hunt on the diff (always)
    - `cso` — OWASP / STRIDE pass (only if security-sensitive changes)
    - `design-review` — UI audit (only if UI changed)
-3. If existing review sub-agents are available, prefer `ReviewBusinessLogic`, `ReviewPerformance`, and `ReviewSecurity` for independent read-only review tracks, then use `ReviewJudge` as a quality gate when warranted.
+3. If listed review sub-agents are available, prefer the ones whose descriptions match the needed independent read-only review tracks, then use a listed quality-gate or judge sub-agent when warranted.
 4. After all reviewers return, write a **Review Synthesis** block. Tag every finding with its source role and whether it came from a Task sub-agent or main-session role work.
 5. Fix all AUTO-FIX issues immediately. Present ASK items to the user and wait for decisions.
 

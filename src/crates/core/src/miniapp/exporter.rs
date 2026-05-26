@@ -1,7 +1,7 @@
 //! MiniApp export engine — export to Electron or Tauri standalone app (skeleton).
 
 pub use bitfun_product_domains::miniapp::exporter::{
-    ExportCheckResult, ExportOptions, ExportResult, ExportTarget, build_export_check_result,
+    build_export_check_result, ExportCheckResult, ExportOptions, ExportResult, ExportTarget,
 };
 
 use crate::util::errors::{BitFunError, BitFunResult};

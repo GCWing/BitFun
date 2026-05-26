@@ -25,15 +25,15 @@
 use crate::miniapp::permission_policy::resolve_policy;
 use crate::miniapp::types::MiniAppPermissions;
 use crate::util::errors::{BitFunError, BitFunResult};
-use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 pub use bitfun_product_domains::miniapp::host_routing::is_host_primitive;
 use bitfun_product_domains::miniapp::host_routing::{
-    FsAccessMode, command_basename_allowed, command_basename_for_allowlist, fs_method_access_mode,
+    command_basename_allowed, command_basename_for_allowlist, fs_method_access_mode,
     fs_policy_scopes, fs_resolved_path_allowed, host_allowed_by_allowlist, shell_exec_cwd,
     shell_exec_default_env, shell_exec_first_token, shell_exec_input_is_empty,
-    shell_exec_timeout_ms, split_host_method,
+    shell_exec_timeout_ms, split_host_method, FsAccessMode,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 

@@ -17,13 +17,13 @@ use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_result_storage;
 use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
-use bitfun_ai_adapters::types::ReasoningMode;
 use crate::service::config::types::WriteToolMode;
 use crate::service::config::GlobalConfigManager;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
+use bitfun_ai_adapters::types::ReasoningMode;
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -161,7 +161,8 @@ impl RoundExecutor {
                 Err(e) => {
                     error!("AI request failed: {}", e);
                     let err_msg = e.to_string();
-                    if Self::is_transient_network_error(&err_msg) && attempt_index < max_attempts - 1
+                    if Self::is_transient_network_error(&err_msg)
+                        && attempt_index < max_attempts - 1
                     {
                         let delay_ms = Self::retry_delay_ms(attempt_index);
                         warn!(
@@ -592,9 +593,7 @@ impl RoundExecutor {
             Self::write_tool_mode(&context),
             WriteToolMode::PlaintextFollowup
         ) {
-            FileWriteTool::strip_plaintext_followup_inline_content_from_tool_calls(
-                &mut tool_calls,
-            );
+            FileWriteTool::strip_plaintext_followup_inline_content_from_tool_calls(&mut tool_calls);
         }
         let tool_calls = if matches!(
             Self::write_tool_mode(&context),
@@ -942,8 +941,7 @@ impl RoundExecutor {
                 .to_string();
             let tool_id = tc.tool_id.clone();
 
-            if let Some(error) = Self::write_content_preflight_error(context, &file_path).await
-            {
+            if let Some(error) = Self::write_content_preflight_error(context, &file_path).await {
                 debug!(
                     "Skipping Write content generation after preflight failure: file_path={}, error={}",
                     file_path, error
@@ -1010,8 +1008,7 @@ impl RoundExecutor {
                 file_path = file_path
             );
 
-            let content_messages =
-                Self::build_write_content_messages(ai_messages, &content_prompt);
+            let content_messages = Self::build_write_content_messages(ai_messages, &content_prompt);
             let write_client = ai_client.with_reasoning_mode(ReasoningMode::Disabled);
 
             let full_text = self
@@ -1912,8 +1909,8 @@ mod tests {
 
     #[test]
     fn write_content_messages_preserve_full_conversation_prefix() {
-        use bitfun_ai_adapters::types::{Message as AIMessage, ToolCall};
         use crate::util::types::Message as CoreAIMessage;
+        use bitfun_ai_adapters::types::{Message as AIMessage, ToolCall};
 
         let ai_messages = vec![
             CoreAIMessage::user("Create the benchmark doc".to_string()),

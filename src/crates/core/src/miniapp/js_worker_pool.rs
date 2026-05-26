@@ -1,7 +1,7 @@
 //! JS Worker pool — LRU pool, get_or_spawn, call, stop_all, install_deps.
 
 use crate::miniapp::js_worker::JsWorker;
-use crate::miniapp::runtime_detect::{DetectedRuntime, detect_runtime};
+use crate::miniapp::runtime_detect::{detect_runtime, DetectedRuntime};
 use crate::miniapp::types::{NodePermissions, NpmDep};
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_product_domains::miniapp::ports::{
@@ -10,7 +10,7 @@ use bitfun_product_domains::miniapp::ports::{
 };
 pub use bitfun_product_domains::miniapp::worker::InstallResult;
 use bitfun_product_domains::miniapp::worker::{
-    InstallDepsPlan, plan_install_deps, select_lru_worker, worker_is_idle, worker_pool_at_capacity,
+    plan_install_deps, select_lru_worker, worker_is_idle, worker_pool_at_capacity, InstallDepsPlan,
 };
 use serde_json::Value;
 use std::path::PathBuf;

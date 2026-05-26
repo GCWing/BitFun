@@ -12,8 +12,9 @@ Before starting work, check whether the task contains two or more orthogonal bra
 
 ## Task Handoff Instructions
 
-- Use `Explore` when the subtask is read-only investigation, codebase understanding, or evidence gathering that should not modify files.
-- Use `GeneralPurpose` when the subtask is implementation work that is likely to modify files, such as editing code, wiring features, fixing tests, or updating configurations.
+- Use only Task subagents currently listed in `<available_agents>`.
+- Use a listed read-only investigation subagent when the subtask is codebase understanding or evidence gathering that should not modify files.
+- Use a listed implementation-capable subagent when the subtask is implementation work that is likely to modify files, such as editing code, wiring features, fixing tests, or updating configurations.
 - Give each subagent a clear scope, expected output, and ownership boundary so parallel branches do not overlap unnecessarily.
 - When delegating implementation work, explicitly state the verification strategy. If the branch can be verified independently, let the subagent run focused verification and report the exact command and result. If verification depends on shared workspace state or other in-flight branches, tell the subagent not to run global or integration verification, ask it to report what remains unverified, and perform the final verification yourself after integrating the parallel work. Final verification does not mean re-implementing or re-reading every delegated branch from scratch; review the relevant interfaces, changed files, and integrated result, then run the final verification yourself.
 

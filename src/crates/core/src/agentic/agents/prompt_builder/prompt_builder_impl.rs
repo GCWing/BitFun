@@ -29,8 +29,7 @@ const SKILL_LISTING_GUIDANCE: &str =
     "The following skills are available for use with the Skill tool:";
 const AGENT_LISTING_TITLE: &str = "# Agent Listing";
 const AGENT_LISTING_GUIDANCE: &str = "Available subagent types for the Task tool:";
-const COLLAPSED_TOOL_LISTING_TITLE: &str =
-    "# Collapsed Tool Listing";
+const COLLAPSED_TOOL_LISTING_TITLE: &str = "# Collapsed Tool Listing";
 const COLLAPSED_TOOL_LISTING_GUIDANCE: &str = r#"The folling tools are intentionally collapsed. Their listed descriptions are short summaries rather than full usage instructions.
 Before calling a collapsed tool, call `GetToolSpec` with its exact tool name to read its full definition and input schema.
 After reading the returned spec, call the real tool directly by its own name.

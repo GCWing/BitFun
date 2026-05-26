@@ -1008,10 +1008,8 @@ impl RemoteWorkspaceSearchService {
                 local_bundle.sha256,
                 remote_sha256.as_deref().unwrap_or("missing")
             );
-            let temp_remote_binary_path = format!(
-                "{}.upload-{}.tmp",
-                remote_binary_path, local_bundle.sha256
-            );
+            let temp_remote_binary_path =
+                format!("{}.upload-{}.tmp", remote_binary_path, local_bundle.sha256);
             self.remote_file_service
                 .write_file(connection_id, &temp_remote_binary_path, &local_bundle.bytes)
                 .await
@@ -1629,9 +1627,8 @@ fn shell_escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        looks_like_linux_workspace_root, parse_remote_architecture_output,
-        parse_remote_os_output, remote_flashgrep_install_dir,
-        should_retry_remote_scan_fallback_as_files_with_matches,
+        looks_like_linux_workspace_root, parse_remote_architecture_output, parse_remote_os_output,
+        remote_flashgrep_install_dir, should_retry_remote_scan_fallback_as_files_with_matches,
     };
     use crate::service::search::flashgrep::{
         drain_content_length_messages, FileCount, SearchBackend, SearchHit, SearchModeConfig,

@@ -420,20 +420,20 @@ impl TaskTool {
 
 The Task tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.
 
-The current agent listing includes an <available_agents> section when subagents are available. Use the exact `type` attribute from that section as `subagent_type`.
+The current agent listing includes an <available_agents> section when subagents are available. Use only the exact `type` attributes from that section as `subagent_type`. If a subagent is not listed there, it is unavailable for this session even if you remember seeing that subagent in other sessions or examples.
 
 When using the Task tool, you must specify `subagent_type` as a top-level tool argument to select which agent type to use. Do not put `subagent_type`, `description`, `workspace_path`, `model_id`, or `timeout_seconds` inside the prompt string.
 
 When to use the Task tool:
 - Delegate when a specialized subagent or separate context is likely to improve coverage, independence, or parallelism.
 - Use direct tools instead for focused lookups, known paths, single symbols, or code that can be inspected in a few reads/searches.
-- For Explore, prefer it for broad or multi-area exploration where many search/read rounds would otherwise be needed.
+- Prefer the listed subagent whose description best matches the task. If no listed subagent fits, continue with direct tools in the parent session.
 
 Usage notes:
 - Include a short description summarizing what the agent will do.
 - Provide a clear prompt so the agent can work autonomously and return the information you need.
 - If 'workspace_path' is omitted, the task inherits the current workspace by default.
-- Provide 'workspace_path' when the selected agent requires an explicit workspace, such as Explore or FileFinder.
+- Provide 'workspace_path' when the selected agent description or tool error requires an explicit workspace.
 - Use 'model_id' when a caller needs a specific model or model slot for the subagent. Omit it to use the agent default.
 - Use 'timeout_seconds' when you need a hard deadline for the subagent. When omitted, the session execution timeout from settings is used. When provided, the effective timeout is the larger of the requested value and the session execution timeout. Set it to 0 with no configured session execution timeout to disable the timeout.
 - For DeepReview only, set 'retry' to true when re-dispatching a reviewer after that same reviewer returned partial_timeout or an explicit transient capacity failure in the current turn. Retry calls must include retry_coverage with source_packet_id, source_status, covered_files, and a smaller retry_scope_files list. Do not set 'auto_retry' unless this is a backend-owned automatic retry admitted by Review Team settings; model-issued retry decisions should omit it or set it to false. Example retry_coverage: {{ "source_packet_id": "reviewer-123", "source_status": "partial_timeout", "covered_files": ["src/main.rs"], "retry_scope_files": ["src/parser.rs"] }}.
@@ -448,12 +448,12 @@ Example usage:
 
 <example>
 user: "Map how authentication flows through this monorepo"
-assistant: Uses the Task tool with subagent_type="Explore" because this is a broad, multi-area architecture investigation. The prompt asks for a read-only survey, key files, and a concise call-flow summary.
+assistant: Uses the Task tool with a listed read-only investigation subagent because this is a broad, multi-area architecture investigation. The prompt asks for a read-only survey, key files, and a concise call-flow summary.
 </example>
 
 <example>
 user: "Find the files that implement export formatting"
-assistant: Uses the Task tool with subagent_type="FileFinder" because the exact filenames are unknown and semantic file discovery is useful. The parent agent reads the returned files before proposing edits.
+assistant: Uses the Task tool with a listed file-discovery subagent when one is available because the exact filenames are unknown and semantic file discovery is useful. The parent agent reads the returned files before proposing edits.
 </example>"#
             .to_string()
     }
@@ -534,11 +534,11 @@ impl Tool for TaskTool {
                 },
                 "subagent_type": {
                     "type": "string",
-                    "description": "Required top-level agent type id. Use the exact case-sensitive id from the available_agents type attribute, for example Explore, FileFinder, CodeReview, or another listed agent."
+                    "description": "Required top-level agent type id. Use only an exact case-sensitive id from the current available_agents type attributes. Do not use remembered or example agent ids that are absent from available_agents."
                 },
                 "workspace_path": {
                     "type": "string",
-                    "description": "The absolute path of the workspace for this task. If omitted, inherits the current workspace. Explore/FileFinder must provide it explicitly."
+                    "description": "The absolute path of the workspace for this task. If omitted, inherits the current workspace. Provide it when the selected listed subagent requires an explicit workspace."
                 },
                 "model_id": {
                     "type": "string",
@@ -1619,6 +1619,24 @@ mod tests {
         description
             .find(&format!("<agent type=\"{}\">", agent_id))
             .unwrap_or_else(|| panic!("expected agent block for {}", agent_id))
+    }
+
+    #[test]
+    fn task_prompt_guidance_avoids_static_subagent_recommendations() {
+        let description = TaskTool::new().render_description();
+        assert!(description.contains("Use only the exact `type` attributes"));
+        assert!(!description.contains("subagent_type=\"Explore\""));
+        assert!(!description.contains("subagent_type=\"FileFinder\""));
+        assert!(!description.contains("For Explore"));
+        assert!(!description.contains("Explore/FileFinder"));
+
+        let schema = TaskTool::new().input_schema();
+        let subagent_description = schema["properties"]["subagent_type"]["description"]
+            .as_str()
+            .expect("subagent_type description should be a string");
+        assert!(subagent_description.contains("Use only an exact case-sensitive id"));
+        assert!(!subagent_description.contains("Explore"));
+        assert!(!subagent_description.contains("FileFinder"));
     }
 
     #[test]

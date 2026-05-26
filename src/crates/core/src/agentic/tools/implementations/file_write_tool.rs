@@ -1,9 +1,9 @@
-use bitfun_ai_adapters::tool_call_accumulator::strip_write_inline_content_fields;
+use crate::agentic::core::ToolCall;
 use crate::agentic::tools::file_read_state_runtime::{
-    assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms,
-    get_stored_file_read_state, local_file_modification_time_ms, read_current_file_content,
-    read_state_tracking_enabled, update_file_read_state_after_mutation,
-    validate_existing_file_read_before_write, FILE_UNEXPECTEDLY_MODIFIED_ERROR,
+    assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms, get_stored_file_read_state,
+    local_file_modification_time_ms, read_current_file_content, read_state_tracking_enabled,
+    update_file_read_state_after_mutation, validate_existing_file_read_before_write,
+    FILE_UNEXPECTEDLY_MODIFIED_ERROR,
 };
 use crate::agentic::tools::file_tool_guidance::{
     file_tool_guidance_message, is_file_tool_guidance_message,
@@ -11,11 +11,11 @@ use crate::agentic::tools::file_tool_guidance::{
 use crate::agentic::tools::framework::{
     Tool, ToolPathResolution, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::core::ToolCall;
 use crate::agentic::tools::ToolPathOperation;
 use crate::service::config::types::WriteToolMode;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_ai_adapters::tool_call_accumulator::strip_write_inline_content_fields;
 use serde_json::{json, Value};
 use std::path::Path;
 use tokio::fs;
@@ -122,7 +122,9 @@ impl FileWriteTool {
         let current_mtime_ms = if resolved.uses_remote_workspace_backend() {
             None
         } else {
-            Some(local_file_modification_time_ms(Path::new(&resolved.resolved_path)))
+            Some(local_file_modification_time_ms(Path::new(
+                &resolved.resolved_path,
+            )))
         };
 
         assert_file_not_unexpectedly_modified(
@@ -153,8 +155,7 @@ impl FileWriteTool {
             return None;
         }
 
-        if let Some(message) = validate_existing_file_read_before_write(context, resolved).await
-        {
+        if let Some(message) = validate_existing_file_read_before_write(context, resolved).await {
             return Some(Self::write_guidance_message(message));
         }
 
@@ -549,8 +550,8 @@ mod tests {
         let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp workspace");
 
-        let error = FileWriteTool::preflight_write_error(&local_context(root.clone()), "new.txt")
-            .await;
+        let error =
+            FileWriteTool::preflight_write_error(&local_context(root.clone()), "new.txt").await;
 
         let _ = std::fs::remove_dir_all(&root);
 
@@ -600,18 +601,14 @@ mod tests {
         assert_eq!(data["bytes_written"], 0);
         assert_eq!(data["status"], "already_exists_same_content");
         assert_eq!(data["content"], "same content");
-        assert!(
-            result_for_assistant
-                .as_deref()
-                .unwrap_or_default()
-                .contains("identical content")
-        );
-        assert!(
-            result_for_assistant
-                .as_deref()
-                .unwrap_or_default()
-                .contains("<bitfun_contents>\nsame content</bitfun_contents>")
-        );
+        assert!(result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("identical content"));
+        assert!(result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("<bitfun_contents>\nsame content</bitfun_contents>"));
     }
 
     #[tokio::test]
@@ -724,14 +721,8 @@ mod tests {
 
         FileWriteTool::strip_plaintext_followup_inline_content_from_tool_calls(&mut tool_calls);
 
-        assert_eq!(
-            tool_calls[0].arguments,
-            json!({ "file_path": "notes.md" })
-        );
-        assert_eq!(
-            tool_calls[1].arguments,
-            json!({ "file_path": "notes.md" })
-        );
+        assert_eq!(tool_calls[0].arguments, json!({ "file_path": "notes.md" }));
+        assert_eq!(tool_calls[1].arguments, json!({ "file_path": "notes.md" }));
     }
 
     #[tokio::test]
@@ -827,12 +818,10 @@ mod tests {
             panic!("expected result");
         };
         assert_eq!(data["content"], body);
-        assert!(
-            result_for_assistant
-                .as_deref()
-                .unwrap_or_default()
-                .contains("<bitfun_contents>\nsystem generated body</bitfun_contents>")
-        );
+        assert!(result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("<bitfun_contents>\nsystem generated body</bitfun_contents>"));
     }
 }
 

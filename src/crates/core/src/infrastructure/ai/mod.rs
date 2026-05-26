@@ -18,7 +18,7 @@ pub use client_factory::{
     get_global_ai_client_factory, initialize_global_ai_client_factory, AIClientFactory,
 };
 
-use crate::service::config::types::{AIModelConfig, AIConfig, ReasoningMode};
+use crate::service::config::types::{AIConfig, AIModelConfig, ReasoningMode};
 
 pub fn build_stream_options(config: &AIConfig) -> StreamOptions {
     build_stream_options_for_model(config, None)
@@ -28,9 +28,7 @@ pub fn build_stream_options_for_model(
     config: &AIConfig,
     model_config: Option<&AIModelConfig>,
 ) -> StreamOptions {
-    let idle_timeout = config
-        .stream_idle_timeout_secs
-        .map(Duration::from_secs);
+    let idle_timeout = config.stream_idle_timeout_secs.map(Duration::from_secs);
 
     let base_ttft_secs = config
         .stream_ttft_timeout_secs

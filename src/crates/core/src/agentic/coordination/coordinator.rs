@@ -17,12 +17,12 @@ use crate::agentic::fork_agent::{
     ForkAgentContextSnapshot, ForkAgentExecutionRequest, ForkAgentExecutionResult,
 };
 use crate::agentic::goal_mode::{
-    build_goal_kickoff_messages, build_goal_continuation_plan, clear_goal_mode_patch,
-    generate_goal_from_context, goal_mode_from_custom_metadata, goal_mode_patch,
-    should_skip_goal_verification_for_turn, user_facing_goal_mode_error,
+    build_goal_continuation_plan, build_goal_kickoff_messages, clear_goal_mode_patch,
     effective_subagent_timeout_seconds, ensure_final_response_in_goal_context,
-    verify_goal_achievement, wrap_user_input_with_goal_reminder, GoalActivationResult,
-    GoalContinuationPlan, GoalModeState, MAX_GOAL_CONTINUATIONS, now_ms,
+    generate_goal_from_context, goal_mode_from_custom_metadata, goal_mode_patch, now_ms,
+    should_skip_goal_verification_for_turn, user_facing_goal_mode_error, verify_goal_achievement,
+    wrap_user_input_with_goal_reminder, GoalActivationResult, GoalContinuationPlan, GoalModeState,
+    MAX_GOAL_CONTINUATIONS,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
@@ -303,10 +303,8 @@ impl Drop for SubagentExecutionScope {
                 );
             }
 
-            session_manager.reset_session_state_if_processing(
-                &subagent_session_id,
-                &subagent_dialog_turn_id,
-            );
+            session_manager
+                .reset_session_state_if_processing(&subagent_session_id, &subagent_dialog_turn_id);
         });
     }
 }
@@ -1570,18 +1568,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .get_session(session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
         let workspace_path = session.config.workspace_path.as_deref().ok_or_else(|| {
-            BitFunError::Validation(format!(
-                "Session workspace_path is missing: {session_id}"
-            ))
+            BitFunError::Validation(format!("Session workspace_path is missing: {session_id}"))
         })?;
         let metadata = self
             .session_manager
             .load_session_metadata(Path::new(workspace_path), session_id)
             .await?;
-        Ok(
-            goal_mode_from_custom_metadata(metadata.as_ref().and_then(|value| value.custom_metadata.as_ref()))
-                .filter(GoalModeState::is_active),
+        Ok(goal_mode_from_custom_metadata(
+            metadata
+                .as_ref()
+                .and_then(|value| value.custom_metadata.as_ref()),
         )
+        .filter(GoalModeState::is_active))
     }
 
     /// Activate `/goal` mode for a session by synthesizing a goal from context.
@@ -1595,7 +1593,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .get_session(&session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
 
-        if matches!(session.kind, SessionKind::Subagent | SessionKind::EphemeralChild) {
+        if matches!(
+            session.kind,
+            SessionKind::Subagent | SessionKind::EphemeralChild
+        ) {
             return Err(BitFunError::Validation(
                 "Goal mode is only available for main sessions".to_string(),
             ));
@@ -1653,7 +1654,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .get_session(session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
-        if matches!(session.kind, SessionKind::Subagent | SessionKind::EphemeralChild) {
+        if matches!(
+            session.kind,
+            SessionKind::Subagent | SessionKind::EphemeralChild
+        ) {
             return Ok(None);
         }
 
@@ -2790,11 +2794,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
     }
 
-    async fn stop_active_subagent_execution(
-        &self,
-        active: &ActiveSubagentExecution,
-        reason: &str,
-    ) {
+    async fn stop_active_subagent_execution(&self, active: &ActiveSubagentExecution, reason: &str) {
         debug!(
             "Stopping active subagent execution: subagent_session_id={}, subagent_dialog_turn_id={}, parent_session_id={}, parent_dialog_turn_id={}, reason={}",
             active.subagent_session_id,
@@ -2870,10 +2870,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         }
 
-        if let Err(error) = self.session_manager.cancel_dialog_turn(
-            &active.subagent_session_id,
-            &active.subagent_dialog_turn_id,
-        ).await {
+        if let Err(error) = self
+            .session_manager
+            .cancel_dialog_turn(&active.subagent_session_id, &active.subagent_dialog_turn_id)
+            .await
+        {
             warn!(
                 "Failed to persist subagent turn cancellation: subagent_session_id={}, subagent_dialog_turn_id={}, error={}",
                 active.subagent_session_id, active.subagent_dialog_turn_id, error
@@ -3483,10 +3484,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 agent_type, parent_session_id
             );
         }
-        let timeout_seconds = effective_subagent_timeout_seconds(
-            requested_timeout_seconds,
-            parent_goal_mode_active,
-        );
+        let timeout_seconds =
+            effective_subagent_timeout_seconds(requested_timeout_seconds, parent_goal_mode_active);
         let timeout_error_message = match timeout_seconds.or(requested_timeout_seconds) {
             Some(seconds) => format!(
                 "Subagent '{}' timed out after {} seconds",

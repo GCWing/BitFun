@@ -346,14 +346,16 @@ mod tests {
             "parentSessionId": "legacy-parent",
             "preservedKey": "preserved-value"
         }));
-        source_metadata.relationship = Some(serde_json::from_value(serde_json::json!({
-            "kind": "deep_review",
-            "parentSessionId": "structured-parent",
-            "parentRequestId": "structured-request",
-            "parentDialogTurnId": "structured-turn",
-            "parentTurnIndex": 4
-        }))
-        .expect("relationship should deserialize"));
+        source_metadata.relationship = Some(
+            serde_json::from_value(serde_json::json!({
+                "kind": "deep_review",
+                "parentSessionId": "structured-parent",
+                "parentRequestId": "structured-request",
+                "parentDialogTurnId": "structured-turn",
+                "parentTurnIndex": 4
+            }))
+            .expect("relationship should deserialize"),
+        );
         source_metadata.deep_review_run_manifest = Some(serde_json::json!({
             "reviewMode": "deep",
             "coreReviewers": [{ "subagentId": "ReviewBusinessLogic" }]

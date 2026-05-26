@@ -6,7 +6,7 @@
 
 use crate::util::errors::{BitFunError, BitFunResult};
 pub use bitfun_agent_tools::{
-    BITFUN_RUNTIME_URI_PREFIX, ParsedBitFunRuntimeUri, is_bitfun_runtime_uri,
+    is_bitfun_runtime_uri, ParsedBitFunRuntimeUri, BITFUN_RUNTIME_URI_PREFIX,
 };
 use std::path::Path;
 
