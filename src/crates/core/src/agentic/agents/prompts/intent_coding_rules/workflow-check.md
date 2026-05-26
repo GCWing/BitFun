@@ -8,6 +8,12 @@ Intent Coding tasks should run the local workflow structure checker when the wor
 pnpm run agent:check
 ```
 
+For L3/L4 review routing handoff:
+
+```bash
+pnpm run agent:review-route -- --evidence .agent/evidence/evidence-YYYYMMDD-task.md
+```
+
 ## When to Run
 
 - After the Intent Record and Evidence Package have been written or updated.
@@ -34,6 +40,7 @@ The checker validates structural workflow hygiene:
 - Evidence Package risks include a final risk level.
 - L3/L4 Intent Records include a machine-checkable review route.
 - L3/L4 Evidence Packages include review route, trigger mode, and escalation status.
+- L3/L4 review routes can be converted into a review handoff plan.
 - Evidence Package changed files, risk-sensitive Evidence text, ownership-sensitive surfaces, and dependency-impact files produce an advisory risk-level suggestion.
 
 ## Limits

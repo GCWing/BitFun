@@ -119,5 +119,6 @@ For L3 and L4 tasks:
 - Prefer BitFun Deep Review when the changed surface is code and a review session is available.
 - Use equivalent specialist review when Deep Review is unavailable or the task is not code-review shaped.
 - Record whether the review route was triggered automatically, manually, or was not available.
+- Use `pnpm run agent:review-route -- --evidence <path>` when available to produce a review handoff plan for the selected route.
 - Do not claim completion without stating whether review escalation was completed, skipped by explicit user direction, or blocked by tooling.
 - Keep review routing machine-checkable so later automation can trigger the selected route.
