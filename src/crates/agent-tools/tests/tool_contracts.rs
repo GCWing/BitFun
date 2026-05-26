@@ -1,18 +1,7 @@
 use bitfun_agent_tools::{
-    ContextualToolManifestItem, DynamicToolDescriptor, DynamicToolProvider,
-    GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider, StaticToolProvider,
-    StaticToolProviderGroup, ToolCatalogRuntime, ToolCatalogSnapshotProvider, ToolDecorator,
-    ToolDecoratorRef, ToolRegistry, ToolRegistryItem, ToolRuntimeAssembly,
-};
-use bitfun_agent_tools::{
-    DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, GetToolSpecCollapsedToolSummary,
-    GetToolSpecExecutionError, GetToolSpecExecutionPlan, GetToolSpecLoadObservation,
-    GetToolSpecRuntime, InputValidator, PromptVisibleToolManifestItem, ToolContextFacts,
-    ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
-    ToolPathBackend, ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult,
-    ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult, build_bitfun_runtime_uri,
-    build_collapsed_tool_stub_definition, build_get_tool_spec_assistant_detail,
-    build_get_tool_spec_catalog_description, build_get_tool_spec_catalog_description_from_provider,
+    build_bitfun_runtime_uri, build_collapsed_tool_stub_definition,
+    build_get_tool_spec_assistant_detail, build_get_tool_spec_catalog_description,
+    build_get_tool_spec_catalog_description_from_provider,
     build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
     build_get_tool_spec_detail_result, build_get_tool_spec_duplicate_load_hint,
     build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
@@ -30,23 +19,35 @@ use bitfun_agent_tools::{
     resolve_workspace_tool_path, sort_tool_manifest_definitions,
     summarize_get_tool_spec_collapsed_tools, tool_path_is_effectively_absolute,
     validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_tool_allowed_by_list,
+    DynamicMcpToolInfo, DynamicToolInfo, GetToolSpecCollapsedToolSummary,
+    GetToolSpecExecutionError, GetToolSpecExecutionPlan, GetToolSpecLoadObservation,
+    GetToolSpecRuntime, InputValidator, PromptVisibleToolManifestItem, ToolContextFacts,
+    ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
+    ToolPathBackend, ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult,
+    ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult, GET_TOOL_SPEC_TOOL_NAME,
 };
 use bitfun_agent_tools::{
-    FILE_TOOL_GUIDANCE_PREFIX, PERSISTED_OUTPUT_TAG, PersistedToolOutput,
-    TOOL_RESULT_PREVIEW_CHARS, ToolResultPersistenceCandidate, build_persisted_tool_output_message,
-    count_tool_result_lines, file_tool_guidance_message, generate_tool_result_preview,
-    is_file_tool_guidance_message, sanitize_tool_result_file_component,
-    select_tool_result_indices_for_persistence, tool_result_is_persisted_output,
-};
-use bitfun_agent_tools::{
-    FileReadFreshnessFacts, file_read_facts_are_fresh, file_read_facts_content_matches,
-    normalize_tool_file_content,
-};
-use bitfun_agent_tools::{
-    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_STEERING_INTERRUPTED_MESSAGE,
     build_invalid_tool_call_error_message, build_tool_execution_error_presentation,
     build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
     truncate_raw_tool_arguments_preview_to, truncate_tool_arguments_preview,
+    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_STEERING_INTERRUPTED_MESSAGE,
+};
+use bitfun_agent_tools::{
+    build_persisted_tool_output_message, count_tool_result_lines, file_tool_guidance_message,
+    generate_tool_result_preview, is_file_tool_guidance_message,
+    sanitize_tool_result_file_component, select_tool_result_indices_for_persistence,
+    tool_result_is_persisted_output, PersistedToolOutput, ToolResultPersistenceCandidate,
+    FILE_TOOL_GUIDANCE_PREFIX, PERSISTED_OUTPUT_TAG, TOOL_RESULT_PREVIEW_CHARS,
+};
+use bitfun_agent_tools::{
+    file_read_facts_are_fresh, file_read_facts_content_matches, normalize_tool_file_content,
+    FileReadFreshnessFacts,
+};
+use bitfun_agent_tools::{
+    ContextualToolManifestItem, DynamicToolDescriptor, DynamicToolProvider,
+    GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider, StaticToolProvider,
+    StaticToolProviderGroup, ToolCatalogRuntime, ToolCatalogSnapshotProvider, ToolDecorator,
+    ToolDecoratorRef, ToolRegistry, ToolRegistryItem, ToolRuntimeAssembly,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -1089,10 +1090,9 @@ fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
 
     assert_eq!(stub.name, "WebFetch");
     assert!(stub.description.contains("Fetch a URL"));
-    assert!(
-        stub.description
-            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
-    );
+    assert!(stub
+        .description
+        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
     assert_eq!(
         stub.parameters,
         json!({
@@ -1160,11 +1160,9 @@ fn prompt_visible_manifest_builder_preserves_expanded_and_collapsed_contract() {
         definitions[0].parameters["properties"]["command"]["type"],
         json!("string")
     );
-    assert!(
-        definitions[2]
-            .description
-            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
-    );
+    assert!(definitions[2]
+        .description
+        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
 }
 
 #[test]
@@ -1175,12 +1173,10 @@ fn get_tool_spec_contract_preserves_input_schema_and_validation() {
     assert_eq!(schema["additionalProperties"], false);
     assert_eq!(schema["required"], json!(["tool_name"]));
     assert_eq!(schema["properties"]["tool_name"]["type"], "string");
-    assert!(
-        schema["properties"]["tool_name"]["description"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("canonical casing")
-    );
+    assert!(schema["properties"]["tool_name"]["description"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("canonical casing"));
 
     let missing = validate_get_tool_spec_input(&json!({}));
     assert!(!missing.result);
@@ -1370,12 +1366,10 @@ fn get_tool_spec_contract_plans_duplicate_load_without_core_context() {
 
     assert_eq!(data["tool_name"], "WebFetch");
     assert_eq!(data["already_loaded"], true);
-    assert!(
-        result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .contains("already loaded in the current conversation")
-    );
+    assert!(result_for_assistant
+        .as_deref()
+        .unwrap_or_default()
+        .contains("already loaded in the current conversation"));
     assert_eq!(image_attachments, None);
 }
 
@@ -1942,11 +1936,9 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
         .iter()
         .find(|tool| tool.name == "WebFetch")
         .expect("collapsed WebFetch stub");
-    assert!(
-        web_fetch
-            .description
-            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
-    );
+    assert!(web_fetch
+        .description
+        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
     assert_eq!(web_fetch.parameters["additionalProperties"], false);
 }
 
@@ -2236,12 +2228,10 @@ async fn get_tool_spec_provider_execution_returns_duplicate_result_without_detai
 
     assert_eq!(data["tool_name"], "WebFetch");
     assert_eq!(data["already_loaded"], true);
-    assert!(
-        result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .contains("already loaded in the current conversation")
-    );
+    assert!(result_for_assistant
+        .as_deref()
+        .unwrap_or_default()
+        .contains("already loaded in the current conversation"));
     assert_eq!(image_attachments, None);
 }
 
@@ -2354,11 +2344,9 @@ async fn get_tool_spec_runtime_facade_owns_tool_result_vector_adapter_shape() {
         panic!("expected normal detail result");
     };
     assert_eq!(data["tool_name"], "WebFetch");
-    assert!(
-        result_for_assistant
-            .expect("assistant detail")
-            .contains("<description>\nWebFetch description for agentic")
-    );
+    assert!(result_for_assistant
+        .expect("assistant detail")
+        .contains("<description>\nWebFetch description for agentic"));
     assert_eq!(image_attachments, None);
 
     let duplicate_runtime =

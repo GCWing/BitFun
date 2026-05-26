@@ -2011,3 +2011,71 @@ impl ToolResult {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    struct TestTool {
+        name: &'static str,
+        available: bool,
+    }
+
+    #[async_trait]
+    impl ToolRegistryItem for TestTool {
+        fn name(&self) -> &str {
+            self.name
+        }
+
+        async fn description(&self) -> Result<String, String> {
+            Ok(format!("{} description", self.name))
+        }
+
+        fn input_schema(&self) -> Value {
+            json!({
+                "type": "object",
+                "properties": {},
+            })
+        }
+    }
+
+    #[async_trait]
+    impl ContextualToolManifestItem<()> for TestTool {
+        async fn is_available_in_context(&self, _context: &()) -> bool {
+            self.available
+        }
+    }
+
+    #[tokio::test]
+    async fn contextual_manifest_omits_unavailable_tools_from_model_definitions() {
+        let task = Arc::new(TestTool {
+            name: "Task",
+            available: false,
+        });
+        let read = Arc::new(TestTool {
+            name: "Read",
+            available: true,
+        });
+        let tools: Vec<Arc<TestTool>> = vec![task, read];
+        let allowed_tools = vec!["Task".to_string(), "Read".to_string()];
+
+        let manifest = resolve_contextual_tool_manifest(
+            &tools,
+            &allowed_tools,
+            &IndexMap::new(),
+            &(),
+            GET_TOOL_SPEC_TOOL_NAME,
+        )
+        .await;
+
+        assert!(!manifest
+            .tool_definitions
+            .iter()
+            .any(|definition| definition.name == "Task"));
+        assert!(manifest
+            .tool_definitions
+            .iter()
+            .any(|definition| definition.name == "Read"));
+    }
+}
