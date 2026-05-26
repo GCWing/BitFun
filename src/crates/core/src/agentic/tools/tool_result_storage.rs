@@ -516,7 +516,7 @@ mod tests {
         let output_path = context
             .current_workspace_session_tool_result_path("session_1", "bash_1.txt")
             .expect("tool result path");
-        let saved = std::fs::read_to_string(output_path).expect("saved output");
+        let saved = tokio::fs::read_to_string(output_path).await.expect("saved output");
         assert_eq!(saved, full_output);
 
         let _ = std::fs::remove_dir_all(root);
