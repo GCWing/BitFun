@@ -2,10 +2,11 @@
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::session::FileReadState;
-use crate::agentic::tools::framework::{ToolPathResolution, ToolUseContext};
+use crate::agentic::tools::framework::ToolPathResolution;
+use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::util::errors::BitFunResult;
 use bitfun_agent_tools::{
-    FileReadFreshnessFacts, file_read_facts_are_fresh, file_read_facts_content_matches,
+    file_read_facts_are_fresh, file_read_facts_content_matches, FileReadFreshnessFacts,
 };
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -355,9 +356,10 @@ pub fn local_file_modification_time_ms(path: &Path) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agentic::WorkspaceBinding;
     use crate::agentic::session::FileReadState;
-    use crate::agentic::tools::framework::{ToolPathBackend, ToolUseContext};
+    use crate::agentic::tools::framework::ToolPathBackend;
+    use crate::agentic::tools::tool_context_runtime::ToolUseContext;
+    use crate::agentic::WorkspaceBinding;
     use std::collections::HashMap;
     use std::path::PathBuf;
 
@@ -381,40 +383,36 @@ mod tests {
     fn validate_edit_has_prior_read_skips_without_session_id() {
         let context = test_context(None, PathBuf::from("/tmp"));
 
-        assert!(
-            validate_edit_has_prior_read(
-                &context,
-                &ToolPathResolution {
-                    logical_path: "src/main.rs".to_string(),
-                    resolved_path: "src/main.rs".to_string(),
-                    requested_path: "src/main.rs".to_string(),
-                    backend: ToolPathBackend::Local,
-                    runtime_root: None,
-                    runtime_scope: None,
-                }
-            )
-            .is_none()
-        );
+        assert!(validate_edit_has_prior_read(
+            &context,
+            &ToolPathResolution {
+                logical_path: "src/main.rs".to_string(),
+                resolved_path: "src/main.rs".to_string(),
+                requested_path: "src/main.rs".to_string(),
+                backend: ToolPathBackend::Local,
+                runtime_root: None,
+                runtime_scope: None,
+            }
+        )
+        .is_none());
     }
 
     #[test]
     fn validate_edit_has_prior_read_skips_without_coordinator() {
         let context = test_context(Some("session-1"), PathBuf::from("/tmp"));
 
-        assert!(
-            validate_edit_has_prior_read(
-                &context,
-                &ToolPathResolution {
-                    logical_path: "src/main.rs".to_string(),
-                    resolved_path: "src/main.rs".to_string(),
-                    requested_path: "src/main.rs".to_string(),
-                    backend: ToolPathBackend::Local,
-                    runtime_root: None,
-                    runtime_scope: None,
-                }
-            )
-            .is_none()
-        );
+        assert!(validate_edit_has_prior_read(
+            &context,
+            &ToolPathResolution {
+                logical_path: "src/main.rs".to_string(),
+                resolved_path: "src/main.rs".to_string(),
+                requested_path: "src/main.rs".to_string(),
+                backend: ToolPathBackend::Local,
+                runtime_root: None,
+                runtime_scope: None,
+            }
+        )
+        .is_none());
     }
 
     #[test]
@@ -444,15 +442,13 @@ mod tests {
             is_partial_view: false,
         };
 
-        assert!(
-            validate_edit_content_freshness_against_read_state(
-                "src/state.js",
-                &state,
-                "different full file\n",
-                Some(200),
-            )
-            .is_some()
-        );
+        assert!(validate_edit_content_freshness_against_read_state(
+            "src/state.js",
+            &state,
+            "different full file\n",
+            Some(200),
+        )
+        .is_some());
     }
 
     #[test]
@@ -514,15 +510,13 @@ mod tests {
     fn validate_content_freshness_allows_matching_remote_content_without_mtime() {
         let state = read_state("alpha\n", 100);
 
-        assert!(
-            validate_edit_content_freshness_against_read_state(
-                "src/main.rs",
-                &state,
-                "alpha\n",
-                None,
-            )
-            .is_none()
-        );
+        assert!(validate_edit_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "alpha\n",
+            None,
+        )
+        .is_none());
     }
 
     #[test]
@@ -547,44 +541,38 @@ mod tests {
     fn validate_content_freshness_allows_newer_mtime_when_full_read_content_matches() {
         let state = read_state("alpha\n", 100);
 
-        assert!(
-            validate_edit_content_freshness_against_read_state(
-                "src/main.rs",
-                &state,
-                "alpha\n",
-                Some(200),
-            )
-            .is_none()
-        );
+        assert!(validate_edit_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "alpha\n",
+            Some(200),
+        )
+        .is_none());
     }
 
     #[test]
     fn validate_content_freshness_rejects_newer_mtime_when_content_differs() {
         let state = read_state("alpha\n", 100);
 
-        assert!(
-            validate_edit_content_freshness_against_read_state(
-                "src/main.rs",
-                &state,
-                "beta\n",
-                Some(200),
-            )
-            .is_some()
-        );
+        assert!(validate_edit_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "beta\n",
+            Some(200),
+        )
+        .is_some());
     }
 
     #[test]
     fn validate_content_freshness_ignores_older_mtime_even_when_content_differs() {
         let state = read_state("alpha\n", 200);
 
-        assert!(
-            validate_edit_content_freshness_against_read_state(
-                "src/main.rs",
-                &state,
-                "beta\n",
-                Some(100),
-            )
-            .is_none()
-        );
+        assert!(validate_edit_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "beta\n",
+            Some(100),
+        )
+        .is_none());
     }
 }

@@ -6,11 +6,12 @@
 //! remains an equivalent structural boundary rather than a behavior migration.
 
 use crate::agentic::agents::{get_agent_registry, AgentToolPolicyOverrides};
-use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult};
 use crate::agentic::tools::implementations::*;
 use crate::agentic::tools::registry::{
     get_global_tool_registry, ProductToolDecoratorRef, ToolRef, ToolRegistry,
 };
+use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::util::errors::{BitFunError, BitFunResult};
 #[cfg(test)]
 use bitfun_agent_tools::StaticToolProvider;
@@ -260,8 +261,8 @@ mod tests {
         resolve_product_tool_manifest, ProductToolCatalogProvider, ProductToolRuntime,
     };
     use crate::agentic::agents::AgentToolPolicyOverrides;
-    use crate::agentic::tools::framework::ToolUseContext;
     use crate::agentic::tools::registry::create_tool_registry;
+    use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use bitfun_agent_tools::{GetToolSpecCatalogProvider, ToolCatalogSnapshotProvider, ToolResult};
     use serde_json::json;

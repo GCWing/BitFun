@@ -5,16 +5,16 @@
 //! a small preview plus a stable reference to the full content.
 
 use crate::agentic::core::ToolResult;
-use crate::agentic::tools::framework::ToolUseContext;
+use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_tools::{
+    build_persisted_tool_output_message, count_tool_result_lines, generate_tool_result_preview,
+    sanitize_tool_result_file_component, select_tool_result_indices_for_persistence,
+    tool_result_is_persisted_output, PersistedToolOutput, ToolResultPersistenceCandidate,
+    ToolResultStoragePolicy, GET_TOOL_SPEC_TOOL_NAME,
+};
 #[cfg(test)]
 use bitfun_agent_tools::{DEFAULT_MAX_TOOL_RESULT_CHARS, PERSISTED_OUTPUT_TAG};
-use bitfun_agent_tools::{
-    GET_TOOL_SPEC_TOOL_NAME, PersistedToolOutput, ToolResultPersistenceCandidate,
-    ToolResultStoragePolicy, build_persisted_tool_output_message, count_tool_result_lines,
-    generate_tool_result_preview, sanitize_tool_result_file_component,
-    select_tool_result_indices_for_persistence, tool_result_is_persisted_output,
-};
 use log::{debug, warn};
 use std::collections::HashSet;
 use std::path::Path;
@@ -331,8 +331,8 @@ fn tool_result_metadata(result: &ToolResult) -> Vec<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agentic::WorkspaceBinding;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
     use serde_json::json;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -520,27 +520,21 @@ mod tests {
 
         let processed = apply_round_tool_result_budget(vec![read, medium, bash], &context).await;
 
-        assert!(
-            processed[0]
-                .result_for_assistant
-                .as_deref()
-                .unwrap_or_default()
-                .starts_with(PERSISTED_OUTPUT_TAG)
-        );
-        assert!(
-            !processed[1]
-                .result_for_assistant
-                .as_deref()
-                .unwrap_or_default()
-                .starts_with(PERSISTED_OUTPUT_TAG)
-        );
-        assert!(
-            !processed[2]
-                .result_for_assistant
-                .as_deref()
-                .unwrap_or_default()
-                .starts_with(PERSISTED_OUTPUT_TAG)
-        );
+        assert!(processed[0]
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .starts_with(PERSISTED_OUTPUT_TAG));
+        assert!(!processed[1]
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .starts_with(PERSISTED_OUTPUT_TAG));
+        assert!(!processed[2]
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .starts_with(PERSISTED_OUTPUT_TAG));
 
         let session_dir = context
             .current_workspace_session_tool_results_dir("session_1")

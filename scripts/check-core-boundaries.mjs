@@ -541,6 +541,21 @@ const forbiddenContentRules = [
         message: 'core tool framework must not redefine ToolWorkspaceKind; use bitfun-agent-tools',
       },
       {
+        regex: /\bpub struct ToolUseContext\b/,
+        message:
+          'core tool framework must not own ToolUseContext; re-export it from tool_context_runtime',
+      },
+      {
+        regex: /\bcall_with_tool_runtime_hooks\b/,
+        message:
+          'core tool framework must not wire runtime hooks directly; delegate through tool_context_runtime',
+      },
+      {
+        regex: /\bdeep_review_shared_context_measurement_snapshot\b/,
+        message:
+          'core tool framework must not own runtime hook regressions; keep them in tool_context_runtime',
+      },
+      {
         regex: /\bget_global_coordinator\b/,
         message:
           'core tool framework must not own runtime checkpoint coordination; keep it in tool_context_runtime',
@@ -576,6 +591,11 @@ const forbiddenContentRules = [
     path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     patterns: [
       {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'tool pipeline must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+      {
         regex: /\bfn serialize_result_for_assistant\b/,
         message:
           'core tool pipeline must not own provider-neutral assistant result rendering; use bitfun-agent-tools',
@@ -599,6 +619,66 @@ const forbiddenContentRules = [
         regex: /\bconst USER_STEERING_INTERRUPTED_MESSAGE\b/,
         message:
           'core tool pipeline must not own steering-interrupted result presentation; use bitfun-agent-tools',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/file_read_state_runtime.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'file read-state runtime must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_result_storage.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'tool-result storage runtime must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/post_call_hooks.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'post-call hooks must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_adapter.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'tool adapter must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/product_runtime.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'product tool runtime must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/manifest_resolver.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'manifest resolver must import ToolUseContext from tool_context_runtime, not the framework re-export',
       },
     ],
   },
@@ -3259,12 +3339,23 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/tools/framework.rs',
     reason:
-      'core must continue owning ToolUseContext while re-exporting pure exposure contracts until a portable context port is reviewed',
+      'core tool framework must keep compatibility re-exports while ToolUseContext is owned by tool_context_runtime',
     patterns: [
       {
         regex: /\bToolExposure\b/,
         message: 'missing ToolExposure compatibility re-export',
       },
+      {
+        regex: /\bpub use crate::agentic::tools::tool_context_runtime::ToolUseContext\b/,
+        message: 'missing ToolUseContext compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_context_runtime.rs',
+    reason:
+      'core must keep ToolUseContext runtime/service bindings centralized while ToolUseContext and concrete tools remain core-owned',
+    patterns: [
       {
         regex: /\bpub struct ToolUseContext\b/,
         message: 'missing ToolUseContext owner type',
@@ -3272,6 +3363,10 @@ const requiredContentRules = [
       {
         regex: /\bto_tool_context_facts\b/,
         message: 'missing portable ToolUseContext facts projection',
+      },
+      {
+        regex: /\bimpl PortableToolContextProvider for ToolUseContext\b/,
+        message: 'missing portable ToolUseContext facts provider impl',
       },
       {
         regex: /\btool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated\b/,
@@ -3289,13 +3384,6 @@ const requiredContentRules = [
         regex: /\bunlocked_collapsed_tools\b/,
         message: 'missing collapsed-tool unlock state',
       },
-    ],
-  },
-  {
-    path: 'src/crates/core/src/agentic/tools/tool_context_runtime.rs',
-    reason:
-      'core must keep ToolUseContext runtime/service bindings centralized while ToolUseContext and concrete tools remain core-owned',
-    patterns: [
       {
         regex: /\bimpl ToolUseContext\b/,
         message: 'missing ToolUseContext runtime binding owner impl',
@@ -3307,6 +3395,14 @@ const requiredContentRules = [
       {
         regex: /\bcall_with_tool_runtime_hooks\b/,
         message: 'missing tool-call cancellation/post-call hook binding',
+      },
+      {
+        regex: /\bcall_tool_with_runtime_hooks\b/,
+        message: 'missing unified Tool::call runtime hook facade',
+      },
+      {
+        regex: /\bcall_records_deep_review_read_file_measurement_without_touching_result\b/,
+        message: 'missing Deep Review post-call hook regression in runtime owner',
       },
       {
         regex: /\bbuild_tool_use_context_for_task\b/,
@@ -5902,19 +5998,24 @@ function runManifestParserSelfTest() {
       contracts: [
         'ToolExposure',
         'ToolUseContext',
-        'to_tool_context_facts',
-        'tool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated',
-        'customData',
-        'cancellationToken',
-        'unlocked_collapsed_tools',
+        'pub use crate::agentic::tools::tool_context_runtime::ToolUseContext',
       ],
     },
     {
       path: 'src/crates/core/src/agentic/tools/tool_context_runtime.rs',
       contracts: [
+        'pub struct ToolUseContext',
+        'to_tool_context_facts',
+        'impl PortableToolContextProvider for ToolUseContext',
+        'tool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated',
+        'customData',
+        'cancellationToken',
+        'unlocked_collapsed_tools',
         'impl ToolUseContext',
         'record_light_checkpoint',
         'call_with_tool_runtime_hooks',
+        'call_tool_with_runtime_hooks',
+        'call_records_deep_review_read_file_measurement_without_touching_result',
         'build_tool_use_context_for_task',
         'build_tool_description_context',
         'build_write_preflight_context',
