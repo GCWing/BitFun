@@ -257,11 +257,58 @@ impl ContextCompressor {
         trace!("Last todo: {:?}", last_todo);
         let turns_to_keep = turns.split_off(turn_index_to_keep);
 
-        let mut compressed_messages = Vec::new();
+        // ── Append-Only Compression (issue #857 P0) ──────────────────────────────
+        //
+        // Goal: preserve old CompressionBoundaryMarker + CompressionSummary messages
+        // so that the provider-side prefix cache survives across compression events.
+        //
+        // Strategy:
+        //   1. Partition the turns-to-compress into "anchor turns" (turns whose first
+        //      message is a CompressionBoundaryMarker — i.e. output from a previous
+        //      compression cycle) and "history turns" (ordinary dialog rounds).
+        //   2. Pass only the history turns to execute_compression_with_fallback.
+        //      The new summary captures what happened in those history turns; the
+        //      model already sees the old anchors verbatim in the prompt, so there
+        //      is no information loss.
+        //   3. Build the replacement context as:
+        //        [anchor_messages] [new_boundary] [new_summary] [turns_to_keep]
+        //      Old anchor bytes are byte-for-byte identical to the previous API
+        //      call → the provider prefix cache hits on them immediately.
+        //
+        // Note: history messages that were compressed are dropped from the context
+        // store. A `Retired` SemanticKind exists for callers that want to keep them
+        // in the log for debugging, but the default path simply discards them.
+        // ─────────────────────────────────────────────────────────────────────────
+
+        let (anchor_turns, history_turns): (Vec<TurnWithTokens>, Vec<TurnWithTokens>) = turns
+            .into_iter()
+            .partition(|turn| {
+                turn.messages.first().is_some_and(|m| {
+                    m.metadata.semantic_kind
+                        == Some(MessageSemanticKind::CompressionBoundaryMarker)
+                })
+            });
+
+        // Flatten anchor turns into the stable prefix that will head the new context.
+        let anchor_messages: Vec<Message> = anchor_turns
+            .into_iter()
+            .flat_map(|t| t.messages)
+            .collect();
+
+        debug!(
+            "Append-only compression split: session_id={}, anchor_turns_messages={}, history_turns={}",
+            session_id,
+            anchor_messages.len(),
+            history_turns.len(),
+        );
+
+        // anchor_messages forms the head of the new context (stable prefix).
+        let mut compressed_messages: Vec<Message> = anchor_messages;
         let mut has_model_summary = false;
-        if !turns.is_empty() {
+
+        if !history_turns.is_empty() {
             let mut summary_artifact = self
-                .execute_compression_with_fallback(turns, context_window, contract)
+                .execute_compression_with_fallback(history_turns, context_window, contract)
                 .await?;
             if turns_to_keep.is_empty() {
                 self.append_todo_snapshot(&mut summary_artifact, last_todo.clone());
@@ -271,6 +318,11 @@ impl ContextCompressor {
             let (boundary_message, summary_message) = self.create_summary_turn(summary_artifact);
             compressed_messages.push(boundary_message);
             compressed_messages.push(summary_message);
+        } else {
+            debug!(
+                "No history turns to compress (all candidates were anchors): session_id={}",
+                session_id
+            );
         }
 
         if !turns_to_keep.is_empty() {
@@ -1023,5 +1075,126 @@ mod tests {
 
         assert_eq!(manual_turns.len(), 2);
         assert_eq!(manual_turns.len(), passive_turns.len());
+    }
+
+    // ── Append-Only Compression (issue #857 P0) ───────────────────────────────
+
+    /// Build an anchor turn that looks exactly like what a previous compression
+    /// cycle would have produced: a user boundary-marker followed by an assistant
+    /// summary.  This is the turn that must survive subsequent compressions so the
+    /// provider-side prefix cache is preserved.
+    fn anchor_turn() -> TurnWithTokens {
+        let boundary = Message::user(render_system_reminder(
+            "Earlier conversation was compressed.",
+        ))
+        .with_semantic_kind(MessageSemanticKind::CompressionBoundaryMarker);
+        let summary = Message::assistant("Previous session summary.".to_string())
+            .with_semantic_kind(MessageSemanticKind::CompressionSummary);
+        make_turn(vec![boundary, summary])
+    }
+
+    /// When a second compression runs, the old boundary+summary anchor turn must
+    /// appear verbatim at the START of the returned messages so that the bytes
+    /// sent to the AI provider form a stable, monotonically-growing prefix.
+    #[tokio::test]
+    async fn second_compression_preserves_anchor_at_prefix() {
+        let compressor = ContextCompressor::new(Default::default());
+
+        // Simulate state after first compression: [anchor_turn][history_turn]
+        let turns = vec![anchor_turn(), todo_turn()];
+
+        // Compress with turn_index_to_keep=1 → only the anchor turn goes to
+        // the compressor, the history turn is kept as tail.
+        let result = compressor
+            .compress_turns(
+                "session",
+                8000,
+                1,  // keep the history turn, compress only the anchor
+                turns,
+                CompressionTailPolicy::CollapseAll,
+            )
+            .await
+            .expect("compression succeeds");
+
+        // The anchor boundary+summary must appear first (stable prefix).
+        assert!(
+            result.messages.len() >= 2,
+            "expected at least anchor boundary + anchor summary"
+        );
+        assert_eq!(
+            result.messages[0].metadata.semantic_kind,
+            Some(MessageSemanticKind::CompressionBoundaryMarker),
+            "first message must be the old CompressionBoundaryMarker (stable prefix)"
+        );
+        assert_eq!(
+            result.messages[1].metadata.semantic_kind,
+            Some(MessageSemanticKind::CompressionSummary),
+            "second message must be the old CompressionSummary (stable prefix)"
+        );
+    }
+
+    /// If ALL turns going into compression are anchors (nothing to summarise),
+    /// the function must return the anchors unchanged without producing an extra
+    /// boundary/summary pair.
+    #[tokio::test]
+    async fn all_anchor_turns_produces_no_extra_summary() {
+        let compressor = ContextCompressor::new(Default::default());
+
+        let turns = vec![anchor_turn()];
+
+        let result = compressor
+            .compress_turns(
+                "session",
+                8000,
+                1,
+                turns,
+                CompressionTailPolicy::CollapseAll,
+            )
+            .await
+            .expect("compression succeeds");
+
+        // Only the two anchor messages should be present; no new summary added.
+        assert_eq!(
+            result.messages.len(),
+            2,
+            "only the anchor boundary+summary; no extra summary generated"
+        );
+        assert_eq!(
+            result.messages[0].metadata.semantic_kind,
+            Some(MessageSemanticKind::CompressionBoundaryMarker)
+        );
+        assert_eq!(
+            result.messages[1].metadata.semantic_kind,
+            Some(MessageSemanticKind::CompressionSummary)
+        );
+        assert!(!result.has_model_summary);
+    }
+
+    /// On the first compression (no prior anchors), behavior must be identical
+    /// to the previous implementation: produce exactly [boundary, summary].
+    #[tokio::test]
+    async fn first_compression_without_anchors_produces_boundary_and_summary() {
+        let compressor = ContextCompressor::new(Default::default());
+
+        let result = compressor
+            .compress_turns(
+                "session",
+                8000,
+                1,
+                vec![todo_turn()],
+                CompressionTailPolicy::CollapseAll,
+            )
+            .await
+            .expect("compression succeeds");
+
+        assert_eq!(result.messages.len(), 2);
+        assert_eq!(
+            result.messages[0].metadata.semantic_kind,
+            Some(MessageSemanticKind::CompressionBoundaryMarker)
+        );
+        assert_eq!(
+            result.messages[1].metadata.semantic_kind,
+            Some(MessageSemanticKind::CompressionSummary)
+        );
     }
 }

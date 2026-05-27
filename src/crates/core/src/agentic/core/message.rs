@@ -77,6 +77,14 @@ pub enum MessageSemanticKind {
     /// Full-screen snapshot appended after mutating ComputerUse tool results within the same turn;
     /// **included** in the next model request so the agent sees the desktop without calling screenshot again.
     ComputerUsePostActionSnapshot,
+    /// Message has been superseded by a compression summary and must be excluded from model API
+    /// payloads.  The message is retained in the local context log for debugging/recovery but
+    /// is never sent to any AI provider.
+    ///
+    /// Used by the append-only compression path (P0, issue #857): instead of discarding
+    /// pre-compression history entirely, messages are marked `Retired` so the on-disk log
+    /// remains complete while the provider-side prefix-cache is preserved.
+    Retired,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

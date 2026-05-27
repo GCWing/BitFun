@@ -851,6 +851,10 @@ impl ExecutionEngine {
             msg.metadata.semantic_kind.as_ref(),
             Some(MessageSemanticKind::ComputerUseVerificationScreenshot)
                 | Some(MessageSemanticKind::ComputerUsePostActionSnapshot)
+                // Retired messages have been superseded by a compression summary.
+                // They remain in the local context log but must never be sent to the
+                // AI provider (append-only compression, issue #857).
+                | Some(MessageSemanticKind::Retired)
         )
     }
 
