@@ -682,10 +682,34 @@ where
         true
     }
 
+    /// Return the tool description that will be sent to the AI provider.
+    ///
+    /// # Prefix-cache stability contract (issue #857 P1)
+    ///
+    /// The byte output of this method **must be identical** across every round
+    /// of the same session for the same logical tool configuration.  Any
+    /// variation in the returned string invalidates the provider-side prefix
+    /// cache for all bytes that follow the tool-spec block, which can
+    /// significantly increase per-round cost.
+    ///
+    /// Acceptable variation (those that intentionally break the cache):
+    /// - Remote vs local workspace — changes at session start, stable thereafter.
+    /// - Model capability flags (e.g. vision support) — stable per session.
+    /// - User-initiated config changes (theme, write-tool mode) — rare, expected.
+    ///
+    /// Forbidden variation:
+    /// - Timestamps, request IDs, UUIDs, or any non-deterministic data.
+    /// - Session-specific paths that change mid-session.
+    /// - Anything that varies between API calls within the same session.
     async fn description_with_context(&self, _context: &Context) -> Result<String, String> {
         self.description().await
     }
 
+    /// Return the JSON schema sent to the AI provider.
+    ///
+    /// Subject to the same prefix-cache stability contract as
+    /// [`Self::description_with_context`]: output must be byte-stable across
+    /// rounds of the same session for the same tool configuration.
     async fn input_schema_for_model_with_context(&self, _context: &Context) -> Value {
         self.input_schema_for_model().await
     }
