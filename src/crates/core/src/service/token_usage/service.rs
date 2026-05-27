@@ -212,6 +212,9 @@ impl TokenUsageService {
         stats.total_output += record.output_tokens as u64;
         stats.total_cached += record.cached_tokens as u64;
         stats.total_cache_write += record.cache_write_tokens as u64;
+        if record.cached_tokens_available {
+            stats.cache_reported_input_tokens += record.input_tokens as u64;
+        }
         stats.total_tokens += record.total_tokens as u64;
         stats.request_count += 1;
 
@@ -246,6 +249,7 @@ impl TokenUsageService {
                 total_output: 0,
                 total_cached: 0,
                 total_cache_write: 0,
+                cache_reported_input_tokens: 0,
                 total_tokens: 0,
                 request_count: 0,
                 created_at: record.timestamp,
@@ -256,6 +260,9 @@ impl TokenUsageService {
         stats.total_output += record.output_tokens;
         stats.total_cached += record.cached_tokens;
         stats.total_cache_write += record.cache_write_tokens;
+        if record.cached_tokens_available {
+            stats.cache_reported_input_tokens += record.input_tokens;
+        }
         stats.total_tokens += record.total_tokens;
         stats.request_count += 1;
         stats.last_updated = record.timestamp;
@@ -325,6 +332,10 @@ impl TokenUsageService {
             stats.total_input += record.input_tokens as u64;
             stats.total_output += record.output_tokens as u64;
             stats.total_cached += record.cached_tokens as u64;
+            stats.total_cache_write += record.cache_write_tokens as u64;
+            if record.cached_tokens_available {
+                stats.cache_reported_input_tokens += record.input_tokens as u64;
+            }
             stats.total_tokens += record.total_tokens as u64;
             stats.request_count += 1;
             stats.session_ids.insert(record.session_id.clone());
@@ -449,6 +460,7 @@ impl TokenUsageService {
         let mut total_output = 0u64;
         let mut total_cached = 0u64;
         let mut total_cache_write = 0u64;
+        let mut cache_reported_input_tokens = 0u64;
         let mut total_tokens = 0u64;
 
         let mut by_model: HashMap<String, ModelTokenStats> = HashMap::new();
@@ -459,6 +471,9 @@ impl TokenUsageService {
             total_output += record.output_tokens as u64;
             total_cached += record.cached_tokens as u64;
             total_cache_write += record.cache_write_tokens as u64;
+            if record.cached_tokens_available {
+                cache_reported_input_tokens += record.input_tokens as u64;
+            }
             total_tokens += record.total_tokens as u64;
 
             // Aggregate by model
@@ -474,6 +489,9 @@ impl TokenUsageService {
             model_stats.total_output += record.output_tokens as u64;
             model_stats.total_cached += record.cached_tokens as u64;
             model_stats.total_cache_write += record.cache_write_tokens as u64;
+            if record.cached_tokens_available {
+                model_stats.cache_reported_input_tokens += record.input_tokens as u64;
+            }
             model_stats.total_tokens += record.total_tokens as u64;
             model_stats.request_count += 1;
             model_stats.session_ids.insert(record.session_id.clone());
@@ -495,6 +513,7 @@ impl TokenUsageService {
                     total_output: 0,
                     total_cached: 0,
                     total_cache_write: 0,
+                    cache_reported_input_tokens: 0,
                     total_tokens: 0,
                     request_count: 0,
                     created_at: record.timestamp,
@@ -505,6 +524,9 @@ impl TokenUsageService {
             session_stats.total_output += record.output_tokens;
             session_stats.total_cached += record.cached_tokens;
             session_stats.total_cache_write += record.cache_write_tokens;
+            if record.cached_tokens_available {
+                session_stats.cache_reported_input_tokens += record.input_tokens;
+            }
             session_stats.total_tokens += record.total_tokens;
             session_stats.request_count += 1;
 
@@ -526,6 +548,7 @@ impl TokenUsageService {
             total_output,
             total_cached,
             total_cache_write,
+            cache_reported_input_tokens,
             total_tokens,
             by_model,
             by_session,

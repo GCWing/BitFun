@@ -280,35 +280,45 @@ impl ContextCompressor {
         // in the log for debugging, but the default path simply discards them.
         // ─────────────────────────────────────────────────────────────────────────
 
-        let (anchor_turns, history_turns): (Vec<TurnWithTokens>, Vec<TurnWithTokens>) = turns
-            .into_iter()
-            .partition(|turn| {
+        let (anchor_turns, history_turns): (Vec<TurnWithTokens>, Vec<TurnWithTokens>) =
+            turns.into_iter().partition(|turn| {
                 turn.messages.first().is_some_and(|m| {
-                    m.metadata.semantic_kind
-                        == Some(MessageSemanticKind::CompressionBoundaryMarker)
+                    m.metadata.semantic_kind == Some(MessageSemanticKind::CompressionBoundaryMarker)
                 })
             });
 
-        // Flatten anchor turns into the stable prefix that will head the new context.
-        let anchor_messages: Vec<Message> = anchor_turns
-            .into_iter()
-            .flat_map(|t| t.messages)
-            .collect();
+        let anchor_tokens = anchor_turns.iter().map(|turn| turn.tokens).sum::<usize>();
+        let anchor_budget = self.anchor_coalescing_token_budget(context_window);
+        let should_coalesce_anchors = anchor_tokens > anchor_budget && !anchor_turns.is_empty();
 
         debug!(
-            "Append-only compression split: session_id={}, anchor_turns_messages={}, history_turns={}",
+            "Append-only compression split: session_id={}, anchor_turns={}, anchor_tokens={}, anchor_budget={}, coalesce_anchors={}, history_turns={}",
             session_id,
-            anchor_messages.len(),
+            anchor_turns.len(),
+            anchor_tokens,
+            anchor_budget,
+            should_coalesce_anchors,
             history_turns.len(),
         );
 
-        // anchor_messages forms the head of the new context (stable prefix).
-        let mut compressed_messages: Vec<Message> = anchor_messages;
+        let mut turns_to_summarize = history_turns;
+        let mut compressed_messages = Vec::new();
+        if should_coalesce_anchors {
+            debug!(
+                "Coalescing compression anchors because stable prefix exceeded budget: session_id={}, anchor_tokens={}, anchor_budget={}",
+                session_id, anchor_tokens, anchor_budget
+            );
+            turns_to_summarize.splice(0..0, anchor_turns);
+        } else {
+            // Flatten anchor turns into the stable prefix that will head the new context.
+            compressed_messages.extend(anchor_turns.into_iter().flat_map(|t| t.messages));
+        }
+
         let mut has_model_summary = false;
 
-        if !history_turns.is_empty() {
+        if !turns_to_summarize.is_empty() {
             let mut summary_artifact = self
-                .execute_compression_with_fallback(history_turns, context_window, contract)
+                .execute_compression_with_fallback(turns_to_summarize, context_window, contract)
                 .await?;
             if turns_to_keep.is_empty() {
                 self.append_todo_snapshot(&mut summary_artifact, last_todo.clone());
@@ -345,6 +355,10 @@ impl ContextCompressor {
             messages: compressed_messages,
             has_model_summary,
         })
+    }
+
+    fn anchor_coalescing_token_budget(&self, context_window: usize) -> usize {
+        ((context_window as f32 * 0.20) as usize).max(512)
     }
 
     fn create_summary_turn(
@@ -1093,6 +1107,16 @@ mod tests {
         make_turn(vec![boundary, summary])
     }
 
+    fn large_anchor_turn() -> TurnWithTokens {
+        let boundary = Message::user(render_system_reminder(
+            "Earlier conversation was compressed.",
+        ))
+        .with_semantic_kind(MessageSemanticKind::CompressionBoundaryMarker);
+        let summary = Message::assistant("Previous session summary. ".repeat(4_000))
+            .with_semantic_kind(MessageSemanticKind::CompressionSummary);
+        make_turn(vec![boundary, summary])
+    }
+
     /// When a second compression runs, the old boundary+summary anchor turn must
     /// appear verbatim at the START of the returned messages so that the bytes
     /// sent to the AI provider form a stable, monotonically-growing prefix.
@@ -1109,7 +1133,7 @@ mod tests {
             .compress_turns(
                 "session",
                 8000,
-                1,  // keep the history turn, compress only the anchor
+                1, // keep the history turn, compress only the anchor
                 turns,
                 CompressionTailPolicy::CollapseAll,
             )
@@ -1168,6 +1192,43 @@ mod tests {
             Some(MessageSemanticKind::CompressionSummary)
         );
         assert!(!result.has_model_summary);
+    }
+
+    /// Anchor preservation has a budget guard. If old summaries alone grow too
+    /// large, they are coalesced into a fresh summary instead of being kept
+    /// verbatim forever.
+    #[tokio::test]
+    async fn over_budget_anchor_turns_are_coalesced() {
+        let compressor = ContextCompressor::new(Default::default());
+
+        let result = compressor
+            .compress_turns(
+                "session",
+                1_000,
+                1,
+                vec![large_anchor_turn()],
+                CompressionTailPolicy::CollapseAll,
+            )
+            .await
+            .expect("compression succeeds");
+
+        assert_eq!(result.messages.len(), 2);
+        assert_eq!(
+            result.messages[0].metadata.semantic_kind,
+            Some(MessageSemanticKind::CompressionBoundaryMarker)
+        );
+        assert_eq!(
+            result.messages[1].metadata.semantic_kind,
+            Some(MessageSemanticKind::CompressionSummary)
+        );
+        let summary_text = match &result.messages[1].content {
+            crate::agentic::core::MessageContent::Text(text) => text,
+            _ => panic!("expected summary text"),
+        };
+        assert!(
+            summary_text.len() < "Previous session summary. ".repeat(4_000).len(),
+            "coalesced anchor summary should not keep the oversized prefix verbatim"
+        );
     }
 
     /// On the first compression (no prior anchors), behavior must be identical

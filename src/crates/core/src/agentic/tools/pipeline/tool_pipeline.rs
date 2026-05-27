@@ -984,14 +984,11 @@ impl ToolPipeline {
 
                 // The tool call succeeded with arguments that we patched
                 // because the model's output was truncated mid-stream. Tell
-                // the model so it can decide whether the partial write needs
+                // the model so it can decide whether the partial call needs
                 // to be continued or regenerated.
                 if recovered_from_truncation {
                     let original = tool_result.result_for_assistant.unwrap_or_default();
-                    let notice = format!(
-                        "[Your previous {} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file was written with the partial content. The full truncated content — including the exact stopping point — is visible in the `input` of your previous tool_use message, so you do NOT need to read the file again. To finish it, issue ONE Edit call where `old_string` is the final unique substring of your truncated content and `new_string` is that same substring plus the continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens). Do NOT call Read on this file and do NOT rewrite the whole file with Write.]\n\nOriginal tool result follows.\n\n",
-                        tool_name
-                    );
+                    let notice = build_truncation_recovery_notice(&tool_name);
                     tool_result.result_for_assistant = Some(if original.is_empty() {
                         notice.trim_end().to_string()
                     } else {
@@ -1440,6 +1437,34 @@ impl ToolPipeline {
     }
 }
 
+fn is_write_like_recovered_tool(tool_name: &str) -> bool {
+    matches!(tool_name, "Write" | "file_write" | "write_notebook")
+}
+
+fn build_truncation_recovery_notice(tool_name: &str) -> String {
+    if is_write_like_recovered_tool(tool_name) {
+        return format!(
+            "[Your previous {} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file was written with the partial content. The full truncated content, including the exact stopping point, is visible in the `input` of your previous tool_use message, so you do not need to read the file again. To finish it, issue one Edit call where `old_string` is the final unique substring of your truncated content and `new_string` is that same substring plus the continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated and suggest raising max_tokens. Do not call Read on this file and do not rewrite the whole file with Write.]\n\nOriginal tool result follows.\n\n",
+            tool_name
+        );
+    }
+
+    match tool_name {
+        "AskUserQuestion" => format!(
+            "[Your previous {} call was truncated mid-stream by max_tokens and was auto-repaired before execution. The question payload may be incomplete: option text, descriptions, or later questions may be missing. If the user cannot answer clearly or the choices look incomplete, ask again with one fresh, complete AskUserQuestion call.]\n\nOriginal tool result follows.\n\n",
+            tool_name
+        ),
+        "TodoWrite" => format!(
+            "[Your previous {} call was truncated mid-stream by max_tokens and was auto-repaired before execution. Treat the saved todo list as potentially incomplete: a todo item may be cut off or later todos may be missing. On the next round, send one complete TodoWrite call with the full intended list if accuracy matters.]\n\nOriginal tool result follows.\n\n",
+            tool_name
+        ),
+        _ => format!(
+            "[Your previous {} call was truncated mid-stream by max_tokens and was auto-repaired before execution. Treat the tool input as potentially incomplete. If important details may be missing, retry with one fresh complete tool call.]\n\nOriginal tool result follows.\n\n",
+            tool_name
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1550,6 +1575,25 @@ mod tests {
         assert!(assistant_text.contains("\"exit_code\": 1"));
         assert!(assistant_text.contains("\"working_directory\": \"/private/tmp\""));
         assert!(!assistant_text.contains("completed with error"));
+    }
+
+    #[test]
+    fn truncation_recovery_notice_is_tool_specific() {
+        let write_notice = build_truncation_recovery_notice("Write");
+        assert!(write_notice.contains("file was written with the partial content"));
+        assert!(write_notice.contains("Edit call"));
+
+        let ask_notice = build_truncation_recovery_notice("AskUserQuestion");
+        assert!(ask_notice.contains("question payload may be incomplete"));
+        assert!(ask_notice.contains("fresh, complete AskUserQuestion call"));
+        assert!(!ask_notice.contains("file was written"));
+        assert!(!ask_notice.contains("Edit call"));
+
+        let todo_notice = build_truncation_recovery_notice("TodoWrite");
+        assert!(todo_notice.contains("todo list as potentially incomplete"));
+        assert!(todo_notice.contains("complete TodoWrite call"));
+        assert!(!todo_notice.contains("file was written"));
+        assert!(!todo_notice.contains("Edit call"));
     }
 
     #[test]
