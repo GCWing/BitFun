@@ -315,6 +315,7 @@ mod tests {
                 workspace: None,
                 context_vars: HashMap::new(),
                 subagent_parent_info: None,
+                delegation_policy: crate::agentic::subagent_runtime::DelegationPolicy::top_level(),
                 collapsed_tools: Vec::new(),
                 unlocked_collapsed_tools: Vec::new(),
                 allowed_tools: Vec::new(),

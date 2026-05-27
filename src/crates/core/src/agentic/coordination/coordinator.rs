@@ -12,7 +12,9 @@ use crate::agentic::core::{
 use crate::agentic::events::{
     AgenticEvent, DeepReviewQueueState, EventPriority, EventQueue, EventRouter, EventSubscriber,
 };
-use crate::agentic::execution::{ContextCompactionOutcome, ExecutionContext, ExecutionEngine};
+use crate::agentic::execution::{
+    ContextCompactionOutcome, ExecutionContext, ExecutionEngine, ExecutionResult,
+};
 use crate::agentic::fork_agent::ForkAgentContextSnapshot;
 use crate::agentic::goal_mode::{
     build_goal_continuation_plan, build_goal_kickoff_messages, clear_goal_mode_patch,
@@ -26,6 +28,7 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
+use crate::agentic::subagent_runtime::{DelegationPolicy, SubagentContextMode};
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::WorkspaceBinding;
@@ -72,6 +75,19 @@ pub struct SubagentResult {
 pub enum SubagentResultStatus {
     Completed,
     PartialTimeout,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct SubagentExecutionRequest {
+    pub(crate) task_description: String,
+    pub(crate) context_mode: SubagentContextMode,
+    pub(crate) subagent_type: Option<String>,
+    pub(crate) workspace_path: Option<String>,
+    pub(crate) model_id: Option<String>,
+    pub(crate) subagent_parent_info: SubagentParentInfo,
+    pub(crate) context: HashMap<String, String>,
+    /// Execution policy for the child subagent session being launched.
+    pub(crate) delegation_policy: DelegationPolicy,
 }
 
 impl SubagentResult {
@@ -155,15 +171,36 @@ fn build_subagent_session_relationship(
     }
 }
 
+fn fork_subagent_system_reminder() -> String {
+    "<system_reminder>You are now running as a forked subagent. Messages before this reminder were inherited from the parent agent as context. Messages after this reminder are the request for you. Do not call the Task tool to launch another subagent. Use the tools available to complete the task directly.</system_reminder>".to_string()
+}
+
+fn runtime_tool_restrictions_for_delegation_policy(
+    delegation_policy: DelegationPolicy,
+) -> ToolRuntimeRestrictions {
+    let mut restrictions = ToolRuntimeRestrictions::default();
+    if !delegation_policy.allow_subagent_spawn {
+        restrictions.denied_tool_names.insert("Task".to_string());
+        restrictions.denied_tool_messages.insert(
+            "Task".to_string(),
+            "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
+        );
+    }
+    restrictions
+}
+
 struct HiddenSubagentExecutionRequest {
     session_name: String,
     agent_type: String,
     session_config: SessionConfig,
     initial_messages: Vec<Message>,
+    user_input_text: String,
     created_by: Option<String>,
     subagent_parent_info: Option<SubagentParentInfo>,
     context: HashMap<String, String>,
+    delegation_policy: DelegationPolicy,
     runtime_tool_restrictions: ToolRuntimeRestrictions,
+    prompt_cache_source_session_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1291,6 +1328,270 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
     }
 
+    async fn persist_completed_dialog_turn(
+        session_manager: &SessionManager,
+        scheduler_notify_tx: Option<&mpsc::Sender<(String, TurnOutcome)>>,
+        session_id: &str,
+        turn_id: &str,
+        execution_result: &ExecutionResult,
+    ) -> (crate::service::session::TurnStatus, String) {
+        let final_response = match &execution_result.final_message.content {
+            MessageContent::Text(text) => text.clone(),
+            MessageContent::Mixed { text, .. } => text.clone(),
+            _ => String::new(),
+        };
+
+        info!(
+            "Dialog turn completed: session={}, turn={}, rounds={}",
+            session_id, turn_id, execution_result.total_rounds
+        );
+
+        if let Err(error) = session_manager
+            .complete_dialog_turn(
+                session_id,
+                turn_id,
+                final_response.clone(),
+                TurnStats {
+                    total_rounds: execution_result.total_rounds,
+                    total_tools: 0, // TODO: get from execution_result
+                    total_tokens: 0,
+                    duration_ms: 0,
+                },
+            )
+            .await
+        {
+            error!(
+                "Failed to complete dialog turn: session_id={}, turn_id={}, error={}",
+                session_id, turn_id, error
+            );
+        }
+
+        match session_manager
+            .update_session_state_for_turn_if_processing(session_id, turn_id, SessionState::Idle)
+            .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                debug!(
+                    "Skipped setting session Idle after completion for stale turn: session_id={}, turn_id={}",
+                    session_id, turn_id
+                );
+            }
+            Err(error) => {
+                error!(
+                    "Failed to set session state to Idle after completion: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+            }
+        }
+
+        if let Some(tx) = scheduler_notify_tx {
+            if let Err(error) = tx.try_send((
+                session_id.to_string(),
+                TurnOutcome::Completed {
+                    turn_id: turn_id.to_string(),
+                    final_response: final_response.clone(),
+                },
+            )) {
+                error!(
+                    "Failed to notify scheduler of turn completion: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+            }
+        }
+
+        (crate::service::session::TurnStatus::Completed, final_response)
+    }
+
+    async fn persist_cancelled_dialog_turn(
+        event_queue: &EventQueue,
+        session_manager: &SessionManager,
+        scheduler_notify_tx: Option<&mpsc::Sender<(String, TurnOutcome)>>,
+        session_id: &str,
+        turn_id: &str,
+    ) -> crate::service::session::TurnStatus {
+        info!("Dialog turn cancelled: session={}, turn={}", session_id, turn_id);
+
+        // The execution engine only emits DialogTurnCancelled when cancellation is
+        // detected between rounds. If cancellation interrupted streaming mid-round,
+        // no event was emitted. Emit it here unconditionally; duplicates are harmless.
+        if let Err(error) = event_queue
+            .enqueue(
+                AgenticEvent::DialogTurnCancelled {
+                    session_id: session_id.to_string(),
+                    turn_id: turn_id.to_string(),
+                },
+                Some(EventPriority::Critical),
+            )
+            .await
+        {
+            error!(
+                "Failed to emit DialogTurnCancelled event: session_id={}, turn_id={}, error={}",
+                session_id, turn_id, error
+            );
+        }
+
+        if let Err(error) = session_manager.cancel_dialog_turn(session_id, turn_id).await {
+            error!(
+                "Failed to cancel dialog turn in persistence: session_id={}, turn_id={}, error={}",
+                session_id, turn_id, error
+            );
+        }
+
+        match session_manager
+            .update_session_state_for_turn_if_processing(session_id, turn_id, SessionState::Idle)
+            .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                debug!(
+                    "Skipped setting session Idle after cancellation for stale turn: session_id={}, turn_id={}",
+                    session_id, turn_id
+                );
+            }
+            Err(error) => {
+                error!(
+                    "Failed to set session state to Idle after cancellation: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+            }
+        }
+
+        if let Some(tx) = scheduler_notify_tx {
+            if let Err(error) = tx.try_send((
+                session_id.to_string(),
+                TurnOutcome::Cancelled {
+                    turn_id: turn_id.to_string(),
+                },
+            )) {
+                error!(
+                    "Failed to notify scheduler of turn cancellation: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+            }
+        }
+
+        crate::service::session::TurnStatus::Cancelled
+    }
+
+    async fn persist_failed_dialog_turn(
+        event_queue: &EventQueue,
+        session_manager: &SessionManager,
+        scheduler_notify_tx: Option<&mpsc::Sender<(String, TurnOutcome)>>,
+        session_id: &str,
+        turn_id: &str,
+        error: &BitFunError,
+    ) -> crate::service::session::TurnStatus {
+        let error_text = error.to_string();
+        let recoverable = !matches!(error, BitFunError::AIClient(_) | BitFunError::Timeout(_));
+
+        error!("Dialog turn execution failed: {}", error_text);
+
+        if let Err(queue_error) = event_queue
+            .enqueue(
+                AgenticEvent::DialogTurnFailed {
+                    session_id: session_id.to_string(),
+                    turn_id: turn_id.to_string(),
+                    error: error_text.clone(),
+                    error_category: Some(error.error_category()),
+                    error_detail: Some(error.error_detail()),
+                },
+                Some(EventPriority::Critical),
+            )
+            .await
+        {
+            error!(
+                "Failed to emit DialogTurnFailed event: session_id={}, turn_id={}, error={}",
+                session_id, turn_id, queue_error
+            );
+        }
+
+        if let Err(persist_error) = session_manager
+            .fail_dialog_turn(session_id, turn_id, error_text.clone())
+            .await
+        {
+            error!(
+                "Failed to mark dialog turn as failed: session_id={}, turn_id={}, error={}",
+                session_id, turn_id, persist_error
+            );
+        }
+
+        match session_manager
+            .update_session_state_for_turn_if_processing(
+                session_id,
+                turn_id,
+                SessionState::Error {
+                    error: error_text.clone(),
+                    recoverable,
+                },
+            )
+            .await
+        {
+            Ok(true) => {}
+            Ok(false) => {
+                debug!(
+                    "Skipped setting session Error after failure for stale turn: session_id={}, turn_id={}",
+                    session_id, turn_id
+                );
+            }
+            Err(state_error) => {
+                error!(
+                    "Failed to set session state to Error: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, state_error
+                );
+            }
+        }
+
+        if let Some(tx) = scheduler_notify_tx {
+            if let Err(notify_error) = tx.try_send((
+                session_id.to_string(),
+                TurnOutcome::Failed {
+                    turn_id: turn_id.to_string(),
+                    error: error_text,
+                },
+            )) {
+                error!(
+                    "Failed to notify scheduler of turn failure: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, notify_error
+                );
+            }
+        }
+
+        crate::service::session::TurnStatus::Error
+    }
+
+    async fn finalize_persisted_turn_in_workspace_if_needed(
+        session_manager: &SessionManager,
+        session_id: &str,
+        turn_id: &str,
+        turn_index: usize,
+        agent_type: &str,
+        user_input: &str,
+        workspace_path: Option<&str>,
+        resolved_session_storage_path: Option<&std::path::Path>,
+        status: Option<crate::service::session::TurnStatus>,
+        user_message_metadata: Option<serde_json::Value>,
+    ) {
+        if !session_manager.should_persist_session_id(session_id) {
+            return;
+        }
+
+        if let (Some(workspace_path), Some(status)) = (workspace_path, status) {
+            Self::finalize_turn_in_workspace(
+                session_id,
+                turn_id,
+                turn_index,
+                agent_type,
+                user_input,
+                workspace_path,
+                resolved_session_storage_path,
+                status,
+                user_message_metadata,
+            )
+            .await;
+        }
+    }
+
     /// Create a hidden subagent session for internal AI execution.
     /// Unlike `create_session`, this does NOT emit `SessionCreated` to the transport layer,
     /// because hidden child sessions are internal implementation details of the execution engine
@@ -2356,6 +2657,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             workspace: session_workspace,
             context: context_vars,
             subagent_parent_info: None,
+            delegation_policy: DelegationPolicy::top_level(),
             skip_tool_confirmation: submission_policy.skip_tool_confirmation,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services,
@@ -2503,233 +2805,59 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .await
             {
                 Ok(execution_result) => {
-                    let final_response = match &execution_result.final_message.content {
-                        MessageContent::Text(text) => text.clone(),
-                        MessageContent::Mixed { text, .. } => text.clone(),
-                        _ => String::new(),
-                    };
-                    info!(
-                        "Dialog turn completed: session={}, turn={}, rounds={}",
-                        session_id_clone, turn_id_clone, execution_result.total_rounds
-                    );
-
-                    if let Err(e) = session_manager
-                        .complete_dialog_turn(
+                    Some(
+                        Self::persist_completed_dialog_turn(
+                            session_manager.as_ref(),
+                            scheduler_notify_tx.as_ref(),
                             &session_id_clone,
                             &turn_id_clone,
-                            final_response.clone(),
-                            TurnStats {
-                                total_rounds: execution_result.total_rounds,
-                                total_tools: 0, // TODO: get from execution_result
-                                total_tokens: 0,
-                                duration_ms: 0,
-                            },
+                            &execution_result,
                         )
                         .await
-                    {
-                        error!(
-                            "Failed to complete dialog turn: session_id={}, turn_id={}, error={}",
-                            session_id_clone, turn_id_clone, e
-                        );
-                    }
-
-                    match session_manager
-                        .update_session_state_for_turn_if_processing(
-                            &session_id_clone,
-                            &turn_id_clone,
-                            SessionState::Idle,
-                        )
-                        .await
-                    {
-                        Ok(true) => {}
-                        Ok(false) => {
-                            debug!(
-                                "Skipped setting session Idle after completion for stale turn: session_id={}, turn_id={}",
-                                session_id_clone, turn_id_clone
-                            );
-                        }
-                        Err(e) => {
-                            error!("Failed to set session state to Idle after completion: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
-                        }
-                    }
-
-                    if let Some(tx) = &scheduler_notify_tx {
-                        if let Err(e) = tx.try_send((
-                            session_id_clone.clone(),
-                            TurnOutcome::Completed {
-                                turn_id: turn_id_clone.clone(),
-                                final_response,
-                            },
-                        )) {
-                            error!("Failed to notify scheduler of turn completion: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
-                        }
-                    }
-
-                    Some(crate::service::session::TurnStatus::Completed)
+                        .0,
+                    )
                 }
                 Err(e) => {
-                    let is_cancellation = matches!(&e, BitFunError::Cancelled(_));
-
-                    if is_cancellation {
-                        info!(
-                            "Dialog turn cancelled: session={}, turn={}",
-                            session_id_clone, turn_id_clone
-                        );
-
-                        // The execution engine only emits DialogTurnCancelled when
-                        // cancellation is detected between rounds.  If cancellation
-                        // interrupted streaming mid-round, no event was emitted.
-                        // Emit it here unconditionally (duplicates are harmless).
-                        if let Err(e) = event_queue
-                            .enqueue(
-                                AgenticEvent::DialogTurnCancelled {
-                                    session_id: session_id_clone.clone(),
-                                    turn_id: turn_id_clone.clone(),
-                                },
-                                Some(EventPriority::Critical),
-                            )
-                            .await
-                        {
-                            error!("Failed to emit DialogTurnCancelled event: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
-                        }
-
-                        // Mark the turn as cancelled in persistence so its partial
-                        // content appears in historical messages (turns_to_chat_messages
-                        // skips InProgress turns) and the frontend can distinguish a
-                        // cancellation from a normal completion.
-                        if let Err(e) = session_manager
-                            .cancel_dialog_turn(&session_id_clone, &turn_id_clone)
-                            .await
-                        {
-                            error!("Failed to cancel dialog turn in persistence: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
-                        }
-
-                        match session_manager
-                            .update_session_state_for_turn_if_processing(
+                    if matches!(&e, BitFunError::Cancelled(_)) {
+                        Some(
+                            Self::persist_cancelled_dialog_turn(
+                                event_queue.as_ref(),
+                                session_manager.as_ref(),
+                                scheduler_notify_tx.as_ref(),
                                 &session_id_clone,
                                 &turn_id_clone,
-                                SessionState::Idle,
                             )
-                            .await
-                        {
-                            Ok(true) => {}
-                            Ok(false) => {
-                                debug!(
-                                    "Skipped setting session Idle after cancellation for stale turn: session_id={}, turn_id={}",
-                                    session_id_clone, turn_id_clone
-                                );
-                            }
-                            Err(e) => {
-                                error!("Failed to set session state to Idle after cancellation: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
-                            }
-                        }
-
-                        if let Some(tx) = &scheduler_notify_tx {
-                            if let Err(e) = tx.try_send((
-                                session_id_clone.clone(),
-                                TurnOutcome::Cancelled {
-                                    turn_id: turn_id_clone.clone(),
-                                },
-                            )) {
-                                error!("Failed to notify scheduler of turn cancellation: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
-                            }
-                        }
-
-                        Some(crate::service::session::TurnStatus::Cancelled)
+                            .await,
+                        )
                     } else {
-                        let error_text = e.to_string();
-                        error!("Dialog turn execution failed: {}", error_text);
-
-                        let recoverable =
-                            !matches!(&e, BitFunError::AIClient(_) | BitFunError::Timeout(_));
-
-                        if let Err(eq_err) = event_queue
-                            .enqueue(
-                                AgenticEvent::DialogTurnFailed {
-                                    session_id: session_id_clone.clone(),
-                                    turn_id: turn_id_clone.clone(),
-                                    error: error_text.clone(),
-                                    error_category: Some(e.error_category()),
-                                    error_detail: Some(e.error_detail()),
-                                },
-                                Some(EventPriority::Critical),
-                            )
-                            .await
-                        {
-                            error!("Failed to emit DialogTurnFailed event: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, eq_err);
-                        }
-
-                        if let Err(e) = session_manager
-                            .fail_dialog_turn(&session_id_clone, &turn_id_clone, error_text.clone())
-                            .await
-                        {
-                            error!("Failed to mark dialog turn as failed: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
-                        }
-
-                        match session_manager
-                            .update_session_state_for_turn_if_processing(
+                        Some(
+                            Self::persist_failed_dialog_turn(
+                                event_queue.as_ref(),
+                                session_manager.as_ref(),
+                                scheduler_notify_tx.as_ref(),
                                 &session_id_clone,
                                 &turn_id_clone,
-                                SessionState::Error {
-                                    error: error_text.clone(),
-                                    recoverable,
-                                },
+                                &e,
                             )
-                            .await
-                        {
-                            Ok(true) => {}
-                            Ok(false) => {
-                                debug!(
-                                    "Skipped setting session Error after failure for stale turn: session_id={}, turn_id={}",
-                                    session_id_clone, turn_id_clone
-                                );
-                            }
-                            Err(e) => {
-                                error!(
-                                    "Failed to set session state to Error: session_id={}, turn_id={}, error={}",
-                                    session_id_clone, turn_id_clone, e
-                                );
-                            }
-                        }
-
-                        if let Some(tx) = &scheduler_notify_tx {
-                            if let Err(e) = tx.try_send((
-                                session_id_clone.clone(),
-                                TurnOutcome::Failed {
-                                    turn_id: turn_id_clone.clone(),
-                                    error: error_text,
-                                },
-                            )) {
-                                error!("Failed to notify scheduler of turn failure: session_id={}, turn_id={}, error={}", session_id_clone, turn_id_clone, e);
-                            }
-                        }
-
-                        Some(crate::service::session::TurnStatus::Error)
+                            .await,
+                        )
                     }
                 }
             };
 
-            let should_finalize_in_workspace =
-                session_manager.should_persist_session_id(&session_id_clone);
-
-            if should_finalize_in_workspace {
-                if let (Some(ref wp), Some(status)) =
-                    (&session_workspace_path, workspace_turn_status)
-                {
-                    Self::finalize_turn_in_workspace(
-                        &session_id_clone,
-                        &turn_id_clone,
-                        turn_index,
-                        &effective_agent_type_clone,
-                        &user_input_for_workspace,
-                        wp,
-                        session_storage_path_for_finalize.as_deref(),
-                        status,
-                        user_message_metadata_clone,
-                    )
-                    .await;
-                }
-            }
+            Self::finalize_persisted_turn_in_workspace_if_needed(
+                session_manager.as_ref(),
+                &session_id_clone,
+                &turn_id_clone,
+                turn_index,
+                &effective_agent_type_clone,
+                &user_input_for_workspace,
+                session_workspace_path.as_deref(),
+                session_storage_path_for_finalize.as_deref(),
+                workspace_turn_status,
+                user_message_metadata_clone,
+            )
+            .await;
         });
         active_registration.disarm();
 
@@ -2827,57 +2955,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             );
         }
 
-        match self
-            .session_manager
-            .update_session_state_for_turn_if_processing(
-                &active.subagent_session_id,
-                &active.subagent_dialog_turn_id,
-                SessionState::Idle,
-            )
-            .await
-        {
-            Ok(true) => {
-                self.emit_event(AgenticEvent::SessionStateChanged {
-                    session_id: active.subagent_session_id.clone(),
-                    new_state: "idle".to_string(),
-                })
-                .await;
-                if let Err(error) = self
-                    .event_queue
-                    .enqueue(
-                        AgenticEvent::DialogTurnCancelled {
-                            session_id: active.subagent_session_id.clone(),
-                            turn_id: active.subagent_dialog_turn_id.clone(),
-                        },
-                        Some(EventPriority::Critical),
-                    )
-                    .await
-                {
-                    warn!(
-                        "Failed to emit subagent DialogTurnCancelled event: subagent_session_id={}, subagent_dialog_turn_id={}, error={}",
-                        active.subagent_session_id, active.subagent_dialog_turn_id, error
-                    );
-                }
-            }
-            Ok(false) => {}
-            Err(error) => {
-                warn!(
-                    "Failed to set subagent session Idle after stop: subagent_session_id={}, subagent_dialog_turn_id={}, error={}",
-                    active.subagent_session_id, active.subagent_dialog_turn_id, error
-                );
-            }
-        }
-
-        if let Err(error) = self
-            .session_manager
-            .cancel_dialog_turn(&active.subagent_session_id, &active.subagent_dialog_turn_id)
-            .await
-        {
-            warn!(
-                "Failed to persist subagent turn cancellation: subagent_session_id={}, subagent_dialog_turn_id={}, error={}",
-                active.subagent_session_id, active.subagent_dialog_turn_id, error
-            );
-        }
+        Self::persist_cancelled_dialog_turn(
+            self.event_queue.as_ref(),
+            self.session_manager.as_ref(),
+            None,
+            &active.subagent_session_id,
+            &active.subagent_dialog_turn_id,
+        )
+        .await;
 
         self.session_manager.reset_session_state_if_processing(
             &active.subagent_session_id,
@@ -3457,10 +3542,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             agent_type,
             session_config,
             initial_messages,
+            user_input_text,
             created_by,
             subagent_parent_info,
             context,
+            delegation_policy,
             runtime_tool_restrictions,
+            prompt_cache_source_session_id,
         } = request;
 
         let requested_timeout_seconds = timeout_seconds.filter(|seconds| *seconds > 0);
@@ -3575,6 +3663,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
         let session_id = session.session_id.clone();
+        if let Some(source_session_id) = prompt_cache_source_session_id.as_deref() {
+            let copied = self
+                .session_manager
+                .clone_prompt_cache(source_session_id, &session_id)
+                .await;
+            debug!(
+                "Forked prompt cache into subagent session: source_session_id={}, session_id={}, copied={}",
+                source_session_id, session_id, copied
+            );
+        }
+        self.session_manager
+            .replace_context_messages(&session_id, initial_messages.clone())
+            .await;
         self.session_manager
             .persist_session_lineage(
                 &session_id,
@@ -3628,8 +3729,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             return Err(BitFunError::Timeout(timeout_error_message.clone()));
         }
 
-        // Generate unique dialog_turn_id for cancel token management
-        let dialog_turn_id = format!("subagent-{}", uuid::Uuid::new_v4());
+        let turn_index = self.session_manager.get_turn_count(&session_id);
+        let requested_dialog_turn_id = format!("subagent-{}", uuid::Uuid::new_v4());
+        let dialog_turn_id = self
+            .session_manager
+            .start_dialog_turn_with_existing_context(
+                &session_id,
+                agent_type.clone(),
+                user_input_text.clone(),
+                Some(requested_dialog_turn_id),
+                None,
+            )
+            .await?;
         debug!(
             "Generated unique dialog_turn_id for subagent: {}",
             dialog_turn_id
@@ -3653,12 +3764,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id: dialog_turn_id.clone(),
         };
 
-        // Subagent sessions do not go through `start_dialog_turn_internal`, so
-        // they must mark their active turn here. The desktop stop action uses
-        // this state to find the running turn and signal the right cancel token.
         self.session_manager
-            .update_session_state(
+            .update_session_state_for_turn_if_processing(
                 &session_id,
+                &dialog_turn_id,
                 SessionState::Processing {
                     current_turn_id: dialog_turn_id.clone(),
                     phase: ProcessingPhase::Thinking,
@@ -3667,33 +3776,33 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await?;
 
         // Emit DialogTurnStarted after the dedicated linking event.
-        let user_input_text = initial_messages
-            .first()
-            .map(|m| match &m.content {
-                MessageContent::Text(text) => text.clone(),
-                _ => String::new(),
-            })
-            .unwrap_or_default();
         self.emit_event(AgenticEvent::DialogTurnStarted {
             session_id: session_id.clone(),
             turn_id: dialog_turn_id.clone(),
-            turn_index: 0,
-            user_input: user_input_text,
+            turn_index,
+            user_input: user_input_text.clone(),
             original_user_input: None,
             user_message_metadata: None,
         })
         .await;
 
         let subagent_workspace = Self::build_workspace_binding(&session.config).await;
+        let subagent_workspace_path = subagent_workspace
+            .as_ref()
+            .map(|workspace| workspace.root_path_string());
+        let subagent_session_storage_path = subagent_workspace
+            .as_ref()
+            .map(|workspace| workspace.session_storage_path().to_path_buf());
         let subagent_services = Self::build_workspace_services(&subagent_workspace).await;
         let execution_context = ExecutionContext {
             session_id: session_id.clone(),
             dialog_turn_id: dialog_turn_id.clone(),
-            turn_index: 0,
+            turn_index,
             agent_type: agent_type.clone(),
             workspace: subagent_workspace,
             context,
             subagent_parent_info: subagent_parent_info.clone(),
+            delegation_policy,
             // Subagents run autonomously without user interaction; always skip
             // tool confirmation to prevent them from blocking indefinitely on a
             // confirmation channel that nobody will ever respond to.
@@ -3835,6 +3944,32 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             SubagentExecutionOutcome::Completed(join_result) => match join_result {
                 Ok(result) => result,
                 Err(error) => {
+                    let join_error = BitFunError::tool(format!(
+                        "Subagent '{}' failed to join: {}",
+                        agent_type, error
+                    ));
+                    Self::persist_failed_dialog_turn(
+                        self.event_queue.as_ref(),
+                        self.session_manager.as_ref(),
+                        None,
+                        &session_id,
+                        &dialog_turn_id,
+                        &join_error,
+                    )
+                    .await;
+                    Self::finalize_persisted_turn_in_workspace_if_needed(
+                        self.session_manager.as_ref(),
+                        &session_id,
+                        &dialog_turn_id,
+                        turn_index,
+                        &agent_type,
+                        &user_input_text,
+                        subagent_workspace_path.as_deref(),
+                        subagent_session_storage_path.as_deref(),
+                        Some(crate::service::session::TurnStatus::Error),
+                        None,
+                    )
+                    .await;
                     error!(
                         "Subagent execution failed to join: agent_type={}, session={}, error={}",
                         agent_type, session_id, error
@@ -3850,10 +3985,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     registry.remove(&session_id);
 
                     execution_scope.disarm();
-                    return Err(BitFunError::tool(format!(
-                        "Subagent '{}' failed to join: {}",
-                        agent_type, error
-                    )));
+                    return Err(join_error);
                 }
             },
             SubagentExecutionOutcome::Cancelled => {
@@ -3902,6 +4034,28 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         execution_task.abort();
                     }
                 }
+
+                Self::persist_cancelled_dialog_turn(
+                    self.event_queue.as_ref(),
+                    self.session_manager.as_ref(),
+                    None,
+                    &session_id,
+                    &dialog_turn_id,
+                )
+                .await;
+                Self::finalize_persisted_turn_in_workspace_if_needed(
+                    self.session_manager.as_ref(),
+                    &session_id,
+                    &dialog_turn_id,
+                    turn_index,
+                    &agent_type,
+                    &user_input_text,
+                    subagent_workspace_path.as_deref(),
+                    subagent_session_storage_path.as_deref(),
+                    Some(crate::service::session::TurnStatus::Cancelled),
+                    None,
+                )
+                .await;
 
                 if let Err(cleanup_err) = self.cleanup_subagent_resources(&session_id).await {
                     warn!(
@@ -3952,11 +4106,27 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 .await
                 {
                     Ok(Ok(Ok(exec_result))) => {
-                        let response_text = match exec_result.final_message.content {
-                            MessageContent::Mixed { text, .. } => text,
-                            MessageContent::Text(text) => text,
-                            _ => String::new(),
-                        };
+                        let (_status, response_text) = Self::persist_completed_dialog_turn(
+                            self.session_manager.as_ref(),
+                            None,
+                            &session_id,
+                            &dialog_turn_id,
+                            &exec_result,
+                        )
+                        .await;
+                        Self::finalize_persisted_turn_in_workspace_if_needed(
+                            self.session_manager.as_ref(),
+                            &session_id,
+                            &dialog_turn_id,
+                            turn_index,
+                            &agent_type,
+                            &user_input_text,
+                            subagent_workspace_path.as_deref(),
+                            subagent_session_storage_path.as_deref(),
+                            Some(crate::service::session::TurnStatus::Completed),
+                            None,
+                        )
+                        .await;
                         if response_text.trim().is_empty() {
                             None
                         } else {
@@ -4021,6 +4191,30 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     return Ok(partial_result);
                 }
 
+                let timeout_error = BitFunError::Timeout(timeout_error_message.clone());
+                Self::persist_failed_dialog_turn(
+                    self.event_queue.as_ref(),
+                    self.session_manager.as_ref(),
+                    None,
+                    &session_id,
+                    &dialog_turn_id,
+                    &timeout_error,
+                )
+                .await;
+                Self::finalize_persisted_turn_in_workspace_if_needed(
+                    self.session_manager.as_ref(),
+                    &session_id,
+                    &dialog_turn_id,
+                    turn_index,
+                    &agent_type,
+                    &user_input_text,
+                    subagent_workspace_path.as_deref(),
+                    subagent_session_storage_path.as_deref(),
+                    Some(crate::service::session::TurnStatus::Error),
+                    None,
+                )
+                .await;
+
                 if let Err(cleanup_err) = self.cleanup_subagent_resources(&session_id).await {
                     warn!(
                         "Failed to cleanup subagent resources after timeout: session={}, error={}",
@@ -4037,14 +4231,50 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         // cleanup_guard automatically cleans up token on scope exit (via Drop trait)
 
-        // Extract text response
-        let response_text = match result {
-            Ok(exec_result) => match exec_result.final_message.content {
-                MessageContent::Mixed { text, .. } => text,
-                MessageContent::Text(text) => text,
-                _ => String::new(),
-            },
+        // Persist turn lifecycle before cleaning up the hidden subagent runtime.
+        let (workspace_turn_status, response_text) = match result {
+            Ok(exec_result) => Self::persist_completed_dialog_turn(
+                self.session_manager.as_ref(),
+                None,
+                &session_id,
+                &dialog_turn_id,
+                &exec_result,
+            )
+            .await,
             Err(e) => {
+                let turn_status = if matches!(&e, BitFunError::Cancelled(_)) {
+                    Self::persist_cancelled_dialog_turn(
+                        self.event_queue.as_ref(),
+                        self.session_manager.as_ref(),
+                        None,
+                        &session_id,
+                        &dialog_turn_id,
+                    )
+                    .await
+                } else {
+                    Self::persist_failed_dialog_turn(
+                        self.event_queue.as_ref(),
+                        self.session_manager.as_ref(),
+                        None,
+                        &session_id,
+                        &dialog_turn_id,
+                        &e,
+                    )
+                    .await
+                };
+                Self::finalize_persisted_turn_in_workspace_if_needed(
+                    self.session_manager.as_ref(),
+                    &session_id,
+                    &dialog_turn_id,
+                    turn_index,
+                    &agent_type,
+                    &user_input_text,
+                    subagent_workspace_path.as_deref(),
+                    subagent_session_storage_path.as_deref(),
+                    Some(turn_status),
+                    None,
+                )
+                .await;
                 error!(
                     "Subagent execution failed: session={}, error={}",
                     session_id, e
@@ -4063,6 +4293,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 return Err(e);
             }
         };
+        Self::finalize_persisted_turn_in_workspace_if_needed(
+            self.session_manager.as_ref(),
+            &session_id,
+            &dialog_turn_id,
+            turn_index,
+            &agent_type,
+            &user_input_text,
+            subagent_workspace_path.as_deref(),
+            subagent_session_storage_path.as_deref(),
+            Some(workspace_turn_status),
+            None,
+        )
+        .await;
 
         // Clean up subagent session resources after successful execution
         debug!(
@@ -4248,75 +4491,139 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(turn_id)
     }
 
+    async fn resolve_hidden_subagent_execution_request(
+        &self,
+        request: SubagentExecutionRequest,
+    ) -> BitFunResult<HiddenSubagentExecutionRequest> {
+        let task_description = request.task_description.trim().to_string();
+        if task_description.is_empty() {
+            return Err(BitFunError::Validation(
+                "task_description is required when creating a subagent session".to_string(),
+            ));
+        }
+
+        let model_id = request
+            .model_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|model_id| !model_id.is_empty())
+            .map(str::to_string);
+        let created_by = Some(format!(
+            "session-{}",
+            request.subagent_parent_info.session_id
+        ));
+
+        match request.context_mode {
+            SubagentContextMode::Fresh => {
+                let agent_type = request.subagent_type.ok_or_else(|| {
+                    BitFunError::Validation(
+                        "subagent_type is required when context_mode is 'fresh'".to_string(),
+                    )
+                })?;
+                let workspace_path = request.workspace_path.ok_or_else(|| {
+                    BitFunError::Validation(
+                        "workspace_path is required when creating a fresh subagent session"
+                            .to_string(),
+                    )
+                })?;
+
+                Ok(HiddenSubagentExecutionRequest {
+                    session_name: format!("Subagent: {}", task_description),
+                    agent_type,
+                    session_config: Self::build_session_config_for_workspace(
+                        workspace_path,
+                        model_id,
+                    )
+                    .await,
+                    initial_messages: vec![Message::user(task_description.clone())],
+                    user_input_text: task_description,
+                    created_by,
+                    subagent_parent_info: Some(request.subagent_parent_info),
+                    context: request.context,
+                    delegation_policy: request.delegation_policy,
+                    runtime_tool_restrictions: runtime_tool_restrictions_for_delegation_policy(
+                        request.delegation_policy,
+                    ),
+                    prompt_cache_source_session_id: None,
+                })
+            }
+            SubagentContextMode::Fork => {
+                if request.subagent_type.is_some() {
+                    return Err(BitFunError::Validation(
+                        "subagent_type is not allowed when context_mode is 'fork'".to_string(),
+                    ));
+                }
+                if request.workspace_path.is_some() {
+                    return Err(BitFunError::Validation(
+                        "workspace_path is not allowed when context_mode is 'fork'".to_string(),
+                    ));
+                }
+                if model_id.is_some() {
+                    return Err(BitFunError::Validation(
+                        "model_id is not allowed when context_mode is 'fork'".to_string(),
+                    ));
+                }
+
+                let snapshot = self
+                    .capture_fork_agent_context_snapshot(&request.subagent_parent_info.session_id)
+                    .await?;
+                let mut initial_messages = snapshot.messages.clone();
+                initial_messages.push(Message::user(fork_subagent_system_reminder()));
+                initial_messages.push(Message::user(task_description.clone()));
+
+                Ok(HiddenSubagentExecutionRequest {
+                    session_name: format!("Fork: {}", task_description),
+                    agent_type: snapshot.parent_agent_type.clone(),
+                    session_config: snapshot.build_child_session_config(None),
+                    initial_messages,
+                    user_input_text: task_description,
+                    created_by,
+                    subagent_parent_info: Some(request.subagent_parent_info),
+                    context: request.context,
+                    delegation_policy: request.delegation_policy,
+                    runtime_tool_restrictions: runtime_tool_restrictions_for_delegation_policy(
+                        request.delegation_policy,
+                    ),
+                    prompt_cache_source_session_id: Some(snapshot.parent_session_id),
+                })
+            }
+        }
+    }
+
     /// Execute subagent task directly
     /// DialogTurnStarted event not needed for now
     ///
-    /// Parameters:
-    /// - agent_type: Agent type
-    /// - task_description: Task description
-    /// - subagent_parent_info: Parent info (tool call context)
-    /// - context: Additional context
-    /// - cancel_token: Optional cancel token (for async cancellation)
-    /// - model_id: Optional model override for the subagent session
-    ///
     /// Returns SubagentResult with the final text response
-    pub async fn execute_subagent(
+    pub(crate) async fn execute_subagent(
         &self,
-        agent_type: String,
-        task_description: String,
-        subagent_parent_info: SubagentParentInfo,
-        workspace_path: Option<String>,
-        context: Option<HashMap<String, String>>,
+        request: SubagentExecutionRequest,
         cancel_token: Option<&CancellationToken>,
-        model_id: Option<String>,
         timeout_seconds: Option<u64>,
     ) -> BitFunResult<SubagentResult> {
-        let workspace_path = workspace_path.ok_or_else(|| {
-            BitFunError::Validation(
-                "workspace_path is required when creating a subagent session".to_string(),
-            )
-        })?;
-        let model_id = model_id
-            .map(|model_id| model_id.trim().to_string())
-            .filter(|model_id| !model_id.is_empty());
-
         self.execute_hidden_subagent_internal(
-            HiddenSubagentExecutionRequest {
-                session_name: format!("Subagent: {}", task_description),
-                agent_type,
-                session_config: Self::build_session_config_for_workspace(workspace_path, model_id)
-                    .await,
-                initial_messages: vec![Message::user(task_description)],
-                created_by: Some(format!("session-{}", subagent_parent_info.session_id)),
-                subagent_parent_info: Some(subagent_parent_info),
-                context: context.unwrap_or_default(),
-                runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            },
+            self.resolve_hidden_subagent_execution_request(request)
+                .await?,
             cancel_token,
             timeout_seconds,
         )
         .await
     }
 
-    pub async fn start_background_subagent(
+    pub(crate) async fn start_background_subagent(
         &self,
-        agent_type: String,
-        task_description: String,
-        subagent_parent_info: SubagentParentInfo,
-        workspace_path: Option<String>,
-        context: Option<HashMap<String, String>>,
-        model_id: Option<String>,
+        request: SubagentExecutionRequest,
         timeout_seconds: Option<u64>,
     ) -> BitFunResult<BackgroundSubagentStartResult> {
-        let workspace_path = workspace_path.ok_or_else(|| {
+        let request = self
+            .resolve_hidden_subagent_execution_request(request)
+            .await?;
+        let agent_type = request.agent_type.clone();
+        let subagent_parent_info = request.subagent_parent_info.clone().ok_or_else(|| {
             BitFunError::Validation(
-                "workspace_path is required when creating a background subagent session"
+                "subagent_parent_info is required when creating a background subagent session"
                     .to_string(),
             )
         })?;
-        let model_id = model_id
-            .map(|model_id| model_id.trim().to_string())
-            .filter(|model_id| !model_id.is_empty());
         let parent_session = self
             .session_manager
             .get_session(&subagent_parent_info.session_id)
@@ -4330,17 +4637,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let parent_workspace_path = parent_session.config.workspace_path.clone();
         let background_task_id = format!("bg-subagent-{}", uuid::Uuid::new_v4());
         let background_task_id_for_delivery = background_task_id.clone();
-        let request = HiddenSubagentExecutionRequest {
-            session_name: format!("Subagent: {}", task_description),
-            agent_type: agent_type.clone(),
-            session_config: Self::build_session_config_for_workspace(workspace_path, model_id)
-                .await,
-            initial_messages: vec![Message::user(task_description.clone())],
-            created_by: Some(format!("session-{}", subagent_parent_info.session_id)),
-            subagent_parent_info: Some(subagent_parent_info.clone()),
-            context: context.unwrap_or_default(),
-            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-        };
+        let task_description = request.user_input_text.clone();
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::service("Coordinator not initialized".to_string()))?;
         let parent_cancel_token = self

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 impl From<ToolRestrictionError> for BitFunError {
     fn from(error: ToolRestrictionError) -> Self {
-        BitFunError::validation(error.to_string())
+        BitFunError::tool(error.to_string())
     }
 }
 
@@ -82,11 +82,56 @@ mod tests {
         let restrictions = ToolRuntimeRestrictions {
             allowed_tool_names: ["Write", "Edit"].into_iter().map(str::to_string).collect(),
             denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
+            denied_tool_messages: Default::default(),
             path_policy: ToolPathPolicy::default(),
         };
 
         assert!(!restrictions.is_tool_allowed("Write"));
         assert!(restrictions.is_tool_allowed("Edit"));
+    }
+
+    #[test]
+    fn custom_deny_message_overrides_generic_runtime_error() {
+        let restrictions = ToolRuntimeRestrictions {
+            denied_tool_names: ["Task"].into_iter().map(str::to_string).collect(),
+            denied_tool_messages: [(
+                "Task".to_string(),
+                "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+
+        let error = restrictions
+            .ensure_tool_allowed("Task")
+            .expect_err("custom deny message should be used");
+        assert_eq!(
+            error.to_string(),
+            "Recursive subagent delegation is blocked. Use direct tools instead."
+        );
+    }
+
+    #[test]
+    fn tool_restriction_errors_map_to_tool_errors() {
+        let error: BitFunError = ToolRestrictionError::Denied {
+            tool_name: "Task".to_string(),
+            message: Some(
+                "Recursive subagent delegation is blocked. Use direct tools instead."
+                    .to_string(),
+            ),
+        }
+        .into();
+
+        match error {
+            BitFunError::Tool(message) => {
+                assert_eq!(
+                    message,
+                    "Recursive subagent delegation is blocked. Use direct tools instead."
+                )
+            }
+            other => panic!("expected tool error, got {:?}", other),
+        }
     }
 
     #[test]

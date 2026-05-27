@@ -7,6 +7,7 @@
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::deep_review::tool_context;
+use crate::agentic::subagent_runtime::DelegationPolicy;
 use crate::agentic::session::EvidenceLedgerCheckpoint;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{
@@ -62,6 +63,25 @@ pub struct ToolUseContext {
 }
 
 impl ToolUseContext {
+    pub(crate) fn delegation_policy(&self) -> DelegationPolicy {
+        let allow_subagent_spawn = self
+            .custom_data
+            .get("delegation_allow_subagent_spawn")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
+        let nesting_depth = self
+            .custom_data
+            .get("delegation_nesting_depth")
+            .and_then(|value| value.as_u64())
+            .and_then(|value| u8::try_from(value).ok())
+            .unwrap_or(0);
+
+        DelegationPolicy {
+            allow_subagent_spawn,
+            nesting_depth,
+        }
+    }
+
     pub fn workspace_root(&self) -> Option<&Path> {
         self.workspace.as_ref().map(|binding| binding.root_path())
     }
@@ -240,6 +260,15 @@ pub(crate) fn build_write_preflight_context(
 
 fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<String, Value> {
     let mut map = HashMap::new();
+
+    map.insert(
+        "delegation_allow_subagent_spawn".to_string(),
+        serde_json::json!(context.delegation_policy.allow_subagent_spawn),
+    );
+    map.insert(
+        "delegation_nesting_depth".to_string(),
+        serde_json::json!(context.delegation_policy.nesting_depth),
+    );
 
     if let Some(turn_index) = context.context_vars.get("turn_index") {
         if let Ok(n) = turn_index.parse::<u64>() {
@@ -702,6 +731,7 @@ mod context_facts_tests {
             runtime_tool_restrictions: ToolRuntimeRestrictions {
                 allowed_tool_names: BTreeSet::from(["Read".to_string()]),
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
+                denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
             },
             workspace_services: None,
@@ -746,6 +776,7 @@ mod context_facts_tests {
             runtime_tool_restrictions: ToolRuntimeRestrictions {
                 allowed_tool_names: BTreeSet::from(["Read".to_string(), "GetToolSpec".to_string()]),
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
+                denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
             },
             workspace_services: None,
@@ -1251,6 +1282,7 @@ mod context_builder_tests {
         let restrictions = ToolRuntimeRestrictions {
             allowed_tool_names: BTreeSet::from(["Write".to_string()]),
             denied_tool_names: BTreeSet::from(["Delete".to_string()]),
+            denied_tool_messages: Default::default(),
             path_policy: Default::default(),
         };
 
@@ -1333,12 +1365,15 @@ mod task_context_tests {
                     session_id: "parent_session".to_string(),
                     dialog_turn_id: "parent_turn".to_string(),
                 }),
+                delegation_policy:
+                    crate::agentic::subagent_runtime::DelegationPolicy::top_level().spawn_child(),
                 collapsed_tools: vec!["WebFetch".to_string()],
                 unlocked_collapsed_tools: vec!["WebFetch".to_string()],
                 allowed_tools: vec!["WebFetch".to_string()],
                 runtime_tool_restrictions: ToolRuntimeRestrictions {
                     allowed_tool_names: BTreeSet::from(["WebFetch".to_string()]),
                     denied_tool_names: BTreeSet::from(["Bash".to_string()]),
+                    denied_tool_messages: Default::default(),
                     path_policy: Default::default(),
                 },
                 steering_interrupt: None,

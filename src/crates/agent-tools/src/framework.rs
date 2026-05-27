@@ -6,7 +6,7 @@ use bitfun_core_types::ToolImageAttachment;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
@@ -1881,6 +1881,8 @@ pub struct ToolRuntimeRestrictions {
     pub allowed_tool_names: BTreeSet<String>,
     #[serde(default)]
     pub denied_tool_names: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub denied_tool_messages: BTreeMap<String, String>,
     #[serde(default)]
     pub path_policy: ToolPathPolicy,
 }
@@ -1895,6 +1897,7 @@ impl ToolRuntimeRestrictions {
         if self.denied_tool_names.contains(tool_name) {
             return Err(ToolRestrictionError::Denied {
                 tool_name: tool_name.to_string(),
+                message: self.denied_tool_messages.get(tool_name).cloned(),
             });
         }
 
@@ -1910,18 +1913,27 @@ impl ToolRuntimeRestrictions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolRestrictionError {
-    Denied { tool_name: String },
+    Denied {
+        tool_name: String,
+        message: Option<String>,
+    },
     NotAllowed { tool_name: String },
 }
 
 impl fmt::Display for ToolRestrictionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Denied { tool_name } => write!(
-                formatter,
-                "Tool '{}' is denied by runtime restrictions",
-                tool_name
-            ),
+            Self::Denied { tool_name, message } => {
+                if let Some(message) = message.as_deref() {
+                    write!(formatter, "{message}")
+                } else {
+                    write!(
+                        formatter,
+                        "Tool '{}' is denied by runtime restrictions",
+                        tool_name
+                    )
+                }
+            }
             Self::NotAllowed { tool_name } => write!(
                 formatter,
                 "Tool '{}' is not allowed by runtime restrictions",

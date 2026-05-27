@@ -1,7 +1,7 @@
 use crate::agentic::agents::{
     get_agent_registry, AgentInfo, SubagentListScope, SubagentQueryContext,
 };
-use crate::agentic::coordination::get_global_coordinator;
+use crate::agentic::coordination::{get_global_coordinator, SubagentExecutionRequest};
 use crate::agentic::deep_review::task_adapter::{
     self as deep_review_task_adapter, DeepReviewLaunchBatchInfo,
     DeepReviewProviderQueueWaitOutcome, DeepReviewQueueWaitOutcome, DeepReviewQueueWaitSkipReason,
@@ -17,6 +17,7 @@ use crate::agentic::deep_review_policy::{
     DeepReviewRunManifestGate, DeepReviewSubagentRole, DEEP_REVIEW_AGENT_TYPE,
 };
 use crate::agentic::events::DeepReviewQueueStatus;
+use crate::agentic::subagent_runtime::SubagentContextMode;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -45,6 +46,42 @@ impl Default for TaskTool {
 impl TaskTool {
     pub fn new() -> Self {
         Self
+    }
+
+    fn context_mode_from_input(input: &Value) -> BitFunResult<SubagentContextMode> {
+        match input.get("fork_context") {
+            None => Ok(SubagentContextMode::Fresh),
+            Some(value) => {
+                let fork_context = value.as_bool().ok_or_else(|| {
+                    BitFunError::tool("fork_context must be a boolean".to_string())
+                })?;
+                Ok(if fork_context {
+                    SubagentContextMode::Fork
+                } else {
+                    SubagentContextMode::Fresh
+                })
+            }
+        }
+    }
+
+    fn invalid_input(message: impl Into<String>) -> ValidationResult {
+        ValidationResult {
+            result: false,
+            message: Some(message.into()),
+            error_code: None,
+            meta: None,
+        }
+    }
+
+    fn ensure_delegation_allowed(context: &ToolUseContext) -> BitFunResult<()> {
+        let delegation_policy = context.delegation_policy();
+        if delegation_policy.allow_subagent_spawn {
+            return Ok(());
+        }
+
+        Err(BitFunError::tool(
+            "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
+        ))
     }
 
     fn deep_review_packet_id_for_cache(
@@ -420,9 +457,13 @@ impl TaskTool {
 
 The Task tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.
 
-The current agent listing includes an <available_agents> section. Use the exact `type` attribute from that section as `subagent_type`.
+The current agent listing includes an <available_agents> section when subagents are available. Use the exact `type` attribute from that section as `subagent_type` when `fork_context` is false or omitted.
 
-When using the Task tool, you must specify `subagent_type` as a top-level tool argument to select which agent type to use. Do not put `subagent_type`, `description`, `workspace_path`, `model_id`, or `timeout_seconds` inside the prompt string.
+Supported context behaviors:
+- `fork_context=false` (default): start a new subagent context from scratch. You must provide `subagent_type`. In this mode, include the necessary background information in the prompt.
+- `fork_context=true`: start an isolated child session that inherits your current context and tools. Do not provide `subagent_type`, `workspace_path`, or `model_id` in this mode. Here the prompt is a directive: what to do, not what the situation is. Be specific about scope: what's in, what's out, and what another agent is handling. Don't re-explain background.
+
+Do not put `fork_context`, `subagent_type`, `description`, `workspace_path`, `model_id`, or `timeout_seconds` inside the prompt string.
 
 When to use the Task tool:
 - Delegate when a specialized subagent or separate context is likely to improve coverage, independence, or parallelism.
@@ -431,8 +472,10 @@ When to use the Task tool:
 Usage notes:
 - Include a short description summarizing what the agent will do.
 - Provide a clear prompt so the agent can work autonomously and return the information you need.
-- If 'workspace_path' is omitted, the task inherits the current workspace by default.
-- Use 'model_id' when a caller needs a specific model or model slot for the subagent. Omit it to use the agent default.
+- When `fork_context` is false, if 'workspace_path' is omitted, the task inherits the current workspace by default.
+- When `fork_context` is false, provide 'workspace_path' when the selected agent requires an explicit workspace.
+- When `fork_context` is false, use 'model_id' when a caller needs a specific model or model slot for the subagent. Omit it to use the agent default.
+- When `fork_context` is true, the child session reuses the parent session's agent type, workspace, and prompt cache while still running in isolation.
 - Use 'timeout_seconds' when you need a hard deadline for the subagent. When omitted, the session execution timeout from settings is used. When provided, the effective timeout is the larger of the requested value and the session execution timeout. Set it to 0 with no configured session execution timeout to disable the timeout.
 - For DeepReview only, set 'retry' to true when re-dispatching a reviewer after that same reviewer returned partial_timeout or an explicit transient capacity failure in the current turn. Retry calls must include retry_coverage with source_packet_id, source_status, covered_files, and a smaller retry_scope_files list. Do not set 'auto_retry' unless this is a backend-owned automatic retry admitted by Review Team settings; model-issued retry decisions should omit it or set it to false. Example retry_coverage: {{ "source_packet_id": "reviewer-123", "source_status": "partial_timeout", "covered_files": ["src/main.rs"], "retry_scope_files": ["src/parser.rs"] }}.
 - Launch independent agents concurrently when that improves coverage or latency; send parallel Task calls in a single assistant message.
@@ -520,19 +563,24 @@ impl Tool for TaskTool {
                 },
                 "prompt": {
                     "type": "string",
-                    "description": "The task for the agent to perform. Keep it scoped and concise. Do not include top-level Task arguments such as subagent_type inside this string. The 180-line / 16KB guideline is a soft reliability threshold, not a hard cap. For large delegations, split into multiple Task calls with clear ownership, and pass file paths, symbols, constraints, and exact questions instead of pasting large file contents."
+                    "description": "The task for the agent to perform. Keep it scoped and concise. Do not include top-level Task arguments such as fork_context or subagent_type inside this string. The 180-line / 16KB guideline is a soft reliability threshold, not a hard cap. For large delegations, split into multiple Task calls with clear ownership, and pass file paths, symbols, constraints, and exact questions instead of pasting large file contents."
+                },
+                "fork_context": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Optional. Defaults to false. Set true to fork the parent session into an isolated child session that reuses the parent agent type, latest runtime context, and prompt cache. Leave false to launch a specialized fresh subagent chosen by subagent_type."
                 },
                 "subagent_type": {
                     "type": "string",
-                    "description": "Required top-level agent type id."
+                    "description": "Required top-level agent type id when fork_context is false or omitted."
                 },
                 "workspace_path": {
                     "type": "string",
-                    "description": "The absolute path of the workspace for this task. If omitted, inherits the current workspace."
+                    "description": "Only used when fork_context is false. The absolute path of the workspace for this task. If omitted, inherits the current workspace."
                 },
                 "model_id": {
                     "type": "string",
-                    "description": "Optional model ID or model slot alias for this subagent task. Omit it to use the agent default."
+                    "description": "Only used when fork_context is false. Optional model ID or model slot alias for this subagent task. Omit it to use the agent default."
                 },
                 "timeout_seconds": {
                     "type": "integer",
@@ -589,8 +637,7 @@ impl Tool for TaskTool {
             },
             "required": [
                 "description",
-                "prompt",
-                "subagent_type"
+                "prompt"
             ],
             "additionalProperties": false
         })
@@ -601,6 +648,12 @@ impl Tool for TaskTool {
     }
 
     fn is_concurrency_safe(&self, input: Option<&Value>) -> bool {
+        if input
+            .and_then(|value| Self::context_mode_from_input(value).ok())
+            .is_some_and(|mode| mode == SubagentContextMode::Fork)
+        {
+            return false;
+        }
         let subagent_type = input
             .and_then(|v| v.get("subagent_type"))
             .and_then(|v| v.as_str());
@@ -624,10 +677,40 @@ impl Tool for TaskTool {
         let validation = InputValidator::new(input)
             .validate_required("description")
             .validate_required("prompt")
-            .validate_required("subagent_type")
             .finish();
         if !validation.result {
             return validation;
+        }
+
+        let context_mode = match Self::context_mode_from_input(input) {
+            Ok(mode) => mode,
+            Err(error) => return Self::invalid_input(error.to_string()),
+        };
+
+        match context_mode {
+            SubagentContextMode::Fresh => {
+                if input.get("subagent_type").is_none() {
+                    return Self::invalid_input(
+                        "subagent_type is required when fork_context is false or omitted",
+                    );
+                }
+            }
+            SubagentContextMode::Fork => {
+                for field in [
+                    "subagent_type",
+                    "workspace_path",
+                    "model_id",
+                    "retry",
+                    "auto_retry",
+                    "retry_coverage",
+                ] {
+                    if input.get(field).is_some() {
+                        return Self::invalid_input(format!(
+                            "{field} is not allowed when fork_context is true"
+                        ));
+                    }
+                }
+            }
         }
 
         if let Some(prompt) = input.get("prompt").and_then(|value| value.as_str()) {
@@ -676,6 +759,8 @@ impl Tool for TaskTool {
     ) -> BitFunResult<Vec<ToolResult>> {
         let start_time = std::time::Instant::now();
 
+        Self::ensure_delegation_allowed(context)?;
+
         // description is only used for frontend display
         let description = input
             .get("description")
@@ -687,25 +772,40 @@ impl Tool for TaskTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
                 BitFunError::tool(
-                    "Required parameters: subagent_type, prompt, description. Missing prompt"
-                        .to_string(),
+                    "Required parameters: prompt and description. Missing prompt".to_string(),
                 )
             })?
             .to_string();
+        let context_mode = Self::context_mode_from_input(input)?;
 
-        let subagent_type = input
-            .get("subagent_type")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("Required parameters: subagent_type, prompt, description. Missing subagent_type".to_string()))?
-            .to_string();
-        let all_agent_types = self.get_agents_types(Some(context)).await;
-        if !all_agent_types.contains(&subagent_type) {
-            return Err(BitFunError::tool(format!(
-                "subagent_type {} is not valid, must be one of: {}",
-                subagent_type,
-                all_agent_types.join(", ")
-            )));
-        }
+        let subagent_type = match context_mode {
+            SubagentContextMode::Fresh => {
+                let subagent_type = input
+                    .get("subagent_type")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| {
+                        BitFunError::tool(
+                            "subagent_type is required when fork_context is false or omitted"
+                                .to_string(),
+                        )
+                    })?
+                    .to_string();
+                let all_agent_types = self.get_agents_types(Some(context)).await;
+                if !all_agent_types.contains(&subagent_type) {
+                    return Err(BitFunError::tool(format!(
+                        "subagent_type {} is not valid, must be one of: {}",
+                        subagent_type,
+                        all_agent_types.join(", ")
+                    )));
+                }
+                Some(subagent_type)
+            }
+            SubagentContextMode::Fork => None,
+        };
+        let delegate_target_label = match subagent_type.as_deref() {
+            Some(subagent_type) => format!("subagent '{}'", subagent_type),
+            None => "forked subagent".to_string(),
+        };
 
         let requested_workspace_path = input
             .get("workspace_path")
@@ -740,53 +840,78 @@ impl Tool for TaskTool {
         let current_workspace_path = context
             .workspace_root()
             .map(|path| path.to_string_lossy().into_owned());
-        if subagent_type == "Explore" || subagent_type == "FileFinder" {
-            let workspace_path = requested_workspace_path
-                .as_deref()
-                .or(current_workspace_path.as_deref())
-                .ok_or_else(|| {
-                    BitFunError::tool(
-                        "workspace_path is required for Explore/FileFinder agent".to_string(),
-                    )
-                })?;
-
-            if workspace_path.is_empty() {
+        if context_mode == SubagentContextMode::Fork {
+            if requested_workspace_path.is_some() {
                 return Err(BitFunError::tool(
-                    "workspace_path cannot be empty for Explore/FileFinder agent".to_string(),
+                    "workspace_path is not allowed when fork_context is true".to_string(),
+                ));
+            }
+            if model_id.is_some() {
+                return Err(BitFunError::tool(
+                    "model_id is not allowed when fork_context is true".to_string(),
+                ));
+            }
+            if is_retry || requested_auto_retry || input.get("retry_coverage").is_some() {
+                return Err(BitFunError::tool(
+                    "DeepReview retry fields are not allowed when fork_context is true"
+                        .to_string(),
+                ));
+            }
+        }
+        let effective_workspace_path = if let Some(subagent_type) = subagent_type.as_deref() {
+            if subagent_type == "Explore" || subagent_type == "FileFinder" {
+                let workspace_path = requested_workspace_path
+                    .as_deref()
+                    .or(current_workspace_path.as_deref())
+                    .ok_or_else(|| {
+                        BitFunError::tool(
+                            "workspace_path is required for Explore/FileFinder agent".to_string(),
+                        )
+                    })?;
+
+                if workspace_path.is_empty() {
+                    return Err(BitFunError::tool(
+                        "workspace_path cannot be empty for Explore/FileFinder agent".to_string(),
+                    ));
+                }
+
+                // For remote workspaces, skip local filesystem validation - the path
+                // exists on the remote server, not locally.
+                if !context.is_remote() {
+                    let path = std::path::Path::new(&workspace_path);
+                    if !path.exists() {
+                        return Err(BitFunError::tool(format!(
+                            "workspace_path '{}' does not exist",
+                            workspace_path
+                        )));
+                    }
+                    if !path.is_dir() {
+                        return Err(BitFunError::tool(format!(
+                            "workspace_path '{}' is not a directory",
+                            workspace_path
+                        )));
+                    }
+                }
+
+                prompt.push_str(&format!(
+                    "\n\nThe workspace you need to explore: {workspace_path}"
                 ));
             }
 
-            // For remote workspaces, skip local filesystem validation - the path
-            // exists on the remote server, not locally.
-            if !context.is_remote() {
-                let path = std::path::Path::new(&workspace_path);
-                if !path.exists() {
-                    return Err(BitFunError::tool(format!(
-                        "workspace_path '{}' does not exist",
-                        workspace_path
-                    )));
-                }
-                if !path.is_dir() {
-                    return Err(BitFunError::tool(format!(
-                        "workspace_path '{}' is not a directory",
-                        workspace_path
-                    )));
-                }
-            }
-
-            prompt.push_str(&format!(
-                "\n\nThe workspace you need to explore: {workspace_path}"
-            ));
-        }
-        let effective_workspace_path = requested_workspace_path
-            .clone()
-            .or(current_workspace_path)
-            .ok_or_else(|| {
-                BitFunError::tool(
-                    "workspace_path is required when the current workspace is unavailable"
-                        .to_string(),
-                )
-            })?;
+            Some(
+                requested_workspace_path
+                    .clone()
+                    .or(current_workspace_path.clone())
+                    .ok_or_else(|| {
+                        BitFunError::tool(
+                            "workspace_path is required when the current workspace is unavailable"
+                                .to_string(),
+                        )
+                    })?,
+            )
+        } else {
+            None
+        };
 
         let session_id = if let Some(session_id) = &context.session_id {
             session_id.clone()
@@ -826,12 +951,21 @@ impl Tool for TaskTool {
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
 
-        if context
+        let is_deep_review_parent = context
             .agent_type
             .as_deref()
             .map(str::trim)
-            .is_some_and(|agent_type| agent_type == DEEP_REVIEW_AGENT_TYPE)
-        {
+            .is_some_and(|agent_type| agent_type == DEEP_REVIEW_AGENT_TYPE);
+        if context_mode == SubagentContextMode::Fork && is_deep_review_parent {
+            return Err(BitFunError::tool(
+                "fork_context=true is not supported for DeepReview Task calls".to_string(),
+            ));
+        }
+
+        if is_deep_review_parent {
+            let subagent_type = subagent_type.as_deref().ok_or_else(|| {
+                BitFunError::tool("subagent_type is required for DeepReview Task calls".to_string())
+            })?;
             let base_policy = load_default_deep_review_policy().await.map_err(|error| {
                 BitFunError::tool(format!(
                     "Failed to load DeepReview execution policy: {}",
@@ -873,7 +1007,7 @@ impl Tool for TaskTool {
             };
             deep_review_effective_policy = Some(policy.clone());
             let role = policy
-                .classify_subagent(&subagent_type)
+                .classify_subagent(subagent_type)
                 .map_err(|violation| {
                     BitFunError::tool(format!(
                         "DeepReview Task policy violation: {}",
@@ -890,7 +1024,7 @@ impl Tool for TaskTool {
                 .as_ref()
                 .and_then(DeepReviewRunManifestGate::from_value)
             {
-                gate.ensure_active(&subagent_type).map_err(|violation| {
+                gate.ensure_active(subagent_type).map_err(|violation| {
                     BitFunError::tool(format!(
                         "DeepReview Task policy violation: {}",
                         violation.to_tool_error_message()
@@ -904,7 +1038,7 @@ impl Tool for TaskTool {
                 deep_review_retry_scope_files = Some(
                     match Self::ensure_deep_review_retry_coverage(
                         input,
-                        &subagent_type,
+                        subagent_type,
                         run_manifest.as_ref(),
                     ) {
                         Ok(retry_scope_files) => retry_scope_files,
@@ -937,7 +1071,7 @@ impl Tool for TaskTool {
                 }
             }
             let is_readonly = get_agent_registry()
-                .get_subagent_is_readonly(&subagent_type)
+                .get_subagent_is_readonly(subagent_type)
                 .unwrap_or(false);
             if !is_readonly {
                 return Err(BitFunError::tool(format!(
@@ -952,7 +1086,7 @@ impl Tool for TaskTool {
                 )));
             }
             let is_review = get_agent_registry()
-                .get_subagent_is_review(&subagent_type)
+                .get_subagent_is_review(subagent_type)
                 .unwrap_or(false);
             if !is_review {
                 return Err(BitFunError::tool(format!(
@@ -977,7 +1111,7 @@ impl Tool for TaskTool {
                     let cache = DeepReviewIncrementalCache::from_value(cache_value);
                     if cache.matches_manifest(run_manifest.as_ref().unwrap_or(&Value::Null)) {
                         if let Some(packet_id) = Self::deep_review_packet_id_for_cache(
-                            &subagent_type,
+                            subagent_type,
                             description.as_deref(),
                             run_manifest.as_ref(),
                         ) {
@@ -1008,10 +1142,10 @@ impl Tool for TaskTool {
                     let is_optional_reviewer = policy
                         .extra_subagent_ids
                         .iter()
-                        .any(|id| id == &subagent_type);
+                        .any(|id| id == subagent_type);
                     deep_review_is_optional_reviewer = is_optional_reviewer;
                     deep_review_launch_batch_info = Self::deep_review_launch_batch_for_task(
-                        &subagent_type,
+                        subagent_type,
                         description.as_deref(),
                         run_manifest.as_ref(),
                     );
@@ -1032,7 +1166,7 @@ impl Tool for TaskTool {
                                 &session_id,
                                 &dialog_turn_id,
                                 &tool_call_id,
-                                &subagent_type,
+                                subagent_type,
                                 &conc_policy,
                                 is_optional_reviewer,
                                 deep_review_launch_batch_info.as_ref(),
@@ -1050,7 +1184,7 @@ impl Tool for TaskTool {
                                     return Ok(vec![
                                         Self::deep_review_local_capacity_skip_tool_result(
                                             &dialog_turn_id,
-                                            &subagent_type,
+                                            subagent_type,
                                             &conc_policy,
                                             capacity_reason,
                                             skip_reason,
@@ -1082,25 +1216,19 @@ impl Tool for TaskTool {
                         })?;
                 }
             }
-            record_deep_review_task_budget(
-                &dialog_turn_id,
-                &policy,
-                role,
-                &subagent_type,
-                is_retry,
-            )
-            .map_err(|violation| {
-                if is_auto_retry {
-                    record_deep_review_runtime_auto_retry_suppressed(
-                        &dialog_turn_id,
-                        Self::auto_retry_suppression_reason(violation.code),
-                    );
-                }
-                BitFunError::tool(format!(
-                    "DeepReview Task policy violation: {}",
-                    violation.to_tool_error_message()
-                ))
-            })?;
+            record_deep_review_task_budget(&dialog_turn_id, &policy, role, subagent_type, is_retry)
+                .map_err(|violation| {
+                    if is_auto_retry {
+                        record_deep_review_runtime_auto_retry_suppressed(
+                            &dialog_turn_id,
+                            Self::auto_retry_suppression_reason(violation.code),
+                        );
+                    }
+                    BitFunError::tool(format!(
+                        "DeepReview Task policy violation: {}",
+                        violation.to_tool_error_message()
+                    ))
+                })?;
             if is_retry && role == DeepReviewSubagentRole::Reviewer {
                 if is_auto_retry {
                     record_deep_review_runtime_auto_retry(&dialog_turn_id);
@@ -1130,10 +1258,12 @@ impl Tool for TaskTool {
                 }
                 .to_string(),
             );
-            values.insert(
-                "deep_review_subagent_type".to_string(),
-                subagent_type.clone(),
-            );
+            if let Some(subagent_type) = subagent_type.as_ref() {
+                values.insert(
+                    "deep_review_subagent_type".to_string(),
+                    subagent_type.clone(),
+                );
+            }
             values
         });
         let prepared_prompt = prompt;
@@ -1145,24 +1275,29 @@ impl Tool for TaskTool {
             };
             let background_result = coordinator
                 .start_background_subagent(
-                    subagent_type.clone(),
-                    prepared_prompt.clone(),
-                    parent_info,
-                    Some(effective_workspace_path.clone()),
-                    subagent_context.clone(),
-                    model_id.clone(),
+                    SubagentExecutionRequest {
+                        task_description: prepared_prompt.clone(),
+                        context_mode,
+                        subagent_type: subagent_type.clone(),
+                        workspace_path: effective_workspace_path.clone(),
+                        model_id: model_id.clone(),
+                        subagent_parent_info: parent_info,
+                        context: subagent_context.clone().unwrap_or_default(),
+                        delegation_policy: context.delegation_policy().spawn_child(),
+                    },
                     timeout_seconds,
                 )
                 .await?;
             return Ok(vec![ToolResult::Result {
                 data: json!({
+                    "context_mode": context_mode.as_str(),
                     "status": "started",
                     "run_in_background": true,
                     "background_task_id": background_result.background_task_id,
                 }),
                 result_for_assistant: Some(format!(
-                    "Background subagent '{}' started successfully.\n<background_task status=\"started\" id=\"{}\">Its final result will be delivered back automatically to you when it is finished. Do not poll for status updates. If your current path is blocked on this result and there is no other useful local work to do, it is fine to end the current turn.</background_task>",
-                    subagent_type, background_result.background_task_id
+                    "Background {} started successfully.\n<background_task status=\"started\" id=\"{}\">Its final result will be delivered back automatically to you when it is finished. Do not poll for status updates. If your current path is blocked on this result and there is no other useful local work to do, it is fine to end the current turn.</background_task>",
+                    delegate_target_label, background_result.background_task_id
                 )),
                 image_attachments: None,
             }]);
@@ -1170,6 +1305,7 @@ impl Tool for TaskTool {
         let mut provider_capacity_retry_reason: Option<DeepReviewCapacityQueueReason> = None;
         let mut provider_capacity_queue_elapsed_ms = 0_u64;
         let mut provider_capacity_retry_attempts = 0_usize;
+        let deep_review_subagent_id = subagent_type.as_deref().unwrap_or("");
         let result = loop {
             let parent_info = SubagentParentInfo {
                 tool_call_id: tool_call_id.clone(),
@@ -1178,24 +1314,29 @@ impl Tool for TaskTool {
             };
             let subagent_execution_started_at = Instant::now();
             debug!(
-                "TaskTool awaiting subagent result: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, subagent_type={}, timeout_seconds={:?}, workspace_path={}, model_id={:?}",
+                "TaskTool awaiting subagent result: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, context_mode={}, delegate_target={}, timeout_seconds={:?}, workspace_path={:?}, model_id={:?}",
                 session_id,
                 dialog_turn_id,
                 tool_call_id,
-                subagent_type,
+                context_mode.as_str(),
+                delegate_target_label,
                 timeout_seconds,
                 effective_workspace_path,
                 model_id
             );
             let execution_result = coordinator
                 .execute_subagent(
-                    subagent_type.clone(),
-                    prepared_prompt.clone(),
-                    parent_info,
-                    Some(effective_workspace_path.clone()),
-                    subagent_context.clone(),
+                    SubagentExecutionRequest {
+                        task_description: prepared_prompt.clone(),
+                        context_mode,
+                        subagent_type: subagent_type.clone(),
+                        workspace_path: effective_workspace_path.clone(),
+                        model_id: model_id.clone(),
+                        subagent_parent_info: parent_info,
+                        context: subagent_context.clone().unwrap_or_default(),
+                        delegation_policy: context.delegation_policy().spawn_child(),
+                    },
                     context.cancellation_token.as_ref(),
-                    model_id.clone(),
                     timeout_seconds,
                 )
                 .await;
@@ -1203,11 +1344,12 @@ impl Tool for TaskTool {
             match execution_result {
                 Ok(result) => {
                     debug!(
-                        "TaskTool subagent returned: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, subagent_type={}, status={:?}, text_len={}, duration_ms={}, ledger_event_id={:?}",
+                        "TaskTool subagent returned: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, context_mode={}, delegate_target={}, status={:?}, text_len={}, duration_ms={}, ledger_event_id={:?}",
                         session_id,
                         dialog_turn_id,
                         tool_call_id,
-                        subagent_type,
+                        context_mode.as_str(),
+                        delegate_target_label,
                         result.status,
                         result.text.len(),
                         elapsed_ms_u64(subagent_execution_started_at),
@@ -1223,11 +1365,12 @@ impl Tool for TaskTool {
                 }
                 Err(error) => {
                     warn!(
-                        "TaskTool subagent failed: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, subagent_type={}, duration_ms={}, error={}",
+                        "TaskTool subagent failed: parent_session_id={}, dialog_turn_id={}, tool_call_id={}, context_mode={}, delegate_target={}, duration_ms={}, error={}",
                         session_id,
                         dialog_turn_id,
                         tool_call_id,
-                        subagent_type,
+                        context_mode.as_str(),
+                        delegate_target_label,
                         elapsed_ms_u64(subagent_execution_started_at),
                         error
                     );
@@ -1245,7 +1388,7 @@ impl Tool for TaskTool {
                             _ => "",
                         };
                         return Ok(vec![Self::deep_review_cancelled_reviewer_tool_result(
-                            &subagent_type,
+                            deep_review_subagent_id,
                             reason,
                             start_time.elapsed().as_millis(),
                         )]);
@@ -1268,7 +1411,7 @@ impl Tool for TaskTool {
                                     let (data, assistant_message) = Self::deep_review_capacity_skip_result_for_provider_queue_outcome(
                                         reason,
                                         &dialog_turn_id,
-                                        &subagent_type,
+                                        deep_review_subagent_id,
                                         conc_policy,
                                         start_time.elapsed().as_millis(),
                                         provider_capacity_queue_elapsed_ms,
@@ -1282,7 +1425,7 @@ impl Tool for TaskTool {
                                         &session_id,
                                         &dialog_turn_id,
                                         &tool_call_id,
-                                        &subagent_type,
+                                        deep_review_subagent_id,
                                         DeepReviewQueueStatus::CapacitySkipped,
                                         Some(reason),
                                         0,
@@ -1311,7 +1454,7 @@ impl Tool for TaskTool {
                                         &session_id,
                                         &dialog_turn_id,
                                         &tool_call_id,
-                                        &subagent_type,
+                                        deep_review_subagent_id,
                                         conc_policy,
                                         reason,
                                         max_wait_seconds,
@@ -1348,7 +1491,7 @@ impl Tool for TaskTool {
                                                         &session_id,
                                                         &dialog_turn_id,
                                                         &tool_call_id,
-                                                        &subagent_type,
+                                                        deep_review_subagent_id,
                                                         conc_policy,
                                                         deep_review_is_optional_reviewer,
                                                         deep_review_launch_batch_info.as_ref(),
@@ -1366,7 +1509,7 @@ impl Tool for TaskTool {
                                                             return Ok(vec![
                                                                 Self::deep_review_local_capacity_skip_tool_result(
                                                                     &dialog_turn_id,
-                                                                    &subagent_type,
+                                                                    deep_review_subagent_id,
                                                                     conc_policy,
                                                                     capacity_reason,
                                                                     skip_reason,
@@ -1406,7 +1549,7 @@ impl Tool for TaskTool {
                                             let (data, assistant_message) = Self::deep_review_capacity_skip_result_for_provider_queue_outcome(
                                                 reason,
                                                 &dialog_turn_id,
-                                                &subagent_type,
+                                                deep_review_subagent_id,
                                                 conc_policy,
                                                 start_time.elapsed().as_millis(),
                                                 provider_capacity_queue_elapsed_ms,
@@ -1425,7 +1568,7 @@ impl Tool for TaskTool {
                                     Self::deep_review_capacity_skip_result_for_provider_reason(
                                         reason,
                                         &dialog_turn_id,
-                                        &subagent_type,
+                                        deep_review_subagent_id,
                                         conc_policy,
                                         start_time.elapsed().as_millis(),
                                     );
@@ -1437,7 +1580,7 @@ impl Tool for TaskTool {
                                     &session_id,
                                     &dialog_turn_id,
                                     &tool_call_id,
-                                    &subagent_type,
+                                    deep_review_subagent_id,
                                     DeepReviewQueueStatus::CapacitySkipped,
                                     Some(reason),
                                     0,
@@ -1487,7 +1630,7 @@ impl Tool for TaskTool {
         ) {
             let retries_used = crate::agentic::deep_review_policy::deep_review_retries_used(
                 &dialog_turn_id,
-                &subagent_type,
+                deep_review_subagent_id,
             );
             let max_retries = Self::deep_review_retry_guidance_max_retries(
                 deep_review_effective_policy.as_ref(),
@@ -1507,17 +1650,18 @@ impl Tool for TaskTool {
 
         let result_for_assistant = if result.is_partial_timeout() {
             format!(
-                "Subagent '{}' timed out with partial result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>{}",
-                subagent_type, result.text, retry_hint
+                "{} timed out with partial result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>{}",
+                delegate_target_label, result.text, retry_hint
             )
         } else {
             format!(
-                "Subagent '{}' completed successfully with result:\n<result>\n{}\n</result>",
-                subagent_type, result.text
+                "{} completed successfully with result:\n<result>\n{}\n</result>",
+                delegate_target_label, result.text
             )
         };
         let mut data = json!({
             "duration": duration,
+            "context_mode": context_mode.as_str(),
             "status": status
         });
         if result.is_partial_timeout() {
@@ -1549,6 +1693,7 @@ mod tests {
     use crate::agentic::deep_review_policy::{
         DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewSubagentRole,
     };
+    use crate::agentic::subagent_runtime::DelegationPolicy;
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::BitFunError;
@@ -1643,23 +1788,104 @@ mod tests {
     }
 
     #[test]
-    fn task_schema_requires_top_level_subagent_type_and_rejects_extra_fields() {
+    fn task_schema_supports_fork_context_flag() {
         let schema = TaskTool::new().input_schema();
 
         assert_eq!(schema["additionalProperties"], false);
-        assert!(schema["required"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|value| value.as_str() == Some("subagent_type")));
+        assert_eq!(schema["properties"]["fork_context"]["type"], "boolean");
+        assert_eq!(schema["properties"]["fork_context"]["default"], false);
         assert!(schema["properties"]["subagent_type"]["description"]
             .as_str()
             .unwrap()
-            .contains("top-level"));
+            .contains("fork_context is false or omitted"));
         assert!(schema["properties"]["prompt"]["description"]
             .as_str()
             .unwrap()
             .contains("Do not include top-level Task arguments"));
+        assert!(schema.get("allOf").is_none());
+    }
+
+    #[tokio::test]
+    async fn validate_input_requires_subagent_type_when_not_forking() {
+        let validation = TaskTool::new()
+            .validate_input(
+                &json!({
+                    "description": "delegate",
+                    "prompt": "Inspect the repo"
+                }),
+                None,
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert!(validation
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains("subagent_type is required")));
+    }
+
+    #[tokio::test]
+    async fn validate_input_rejects_fork_context_conflicting_fields() {
+        let validation = TaskTool::new()
+            .validate_input(
+                &json!({
+                    "description": "delegate",
+                    "prompt": "Continue with inherited context",
+                    "fork_context": true,
+                    "subagent_type": "Explore"
+                }),
+                None,
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert!(validation
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains("subagent_type is not allowed")));
+    }
+
+    #[tokio::test]
+    async fn call_impl_rejects_nested_subagent_delegation() {
+        let policy = DelegationPolicy::top_level().spawn_child();
+        let context = ToolUseContext {
+            tool_call_id: Some("tool-call-1".to_string()),
+            agent_type: Some("agentic".to_string()),
+            session_id: Some("session-1".to_string()),
+            dialog_turn_id: Some("turn-1".to_string()),
+            workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: HashMap::from([
+                (
+                    "delegation_allow_subagent_spawn".to_string(),
+                    json!(policy.allow_subagent_spawn),
+                ),
+                (
+                    "delegation_nesting_depth".to_string(),
+                    json!(policy.nesting_depth),
+                ),
+            ]),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        };
+
+        let error = TaskTool::new()
+            .call_impl(
+                &json!({
+                    "description": "delegate",
+                    "prompt": "Inspect the repo",
+                    "subagent_type": "Explore"
+                }),
+                &context,
+            )
+            .await
+            .expect_err("nested subagent delegation should be rejected");
+
+        assert!(error
+            .to_string()
+            .contains("Recursive subagent delegation is blocked. Use direct tools instead."));
     }
 
     #[test]

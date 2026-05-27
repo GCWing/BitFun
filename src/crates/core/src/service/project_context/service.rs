@@ -8,7 +8,8 @@ use super::types::{
     CategoryInfo, ContextDocumentStatus, ContextSegment, CustomCategory, DocumentPriority,
     FileConflictAction, ImportedDocument, ProjectContextConfig,
 };
-use crate::agentic::coordination::get_global_coordinator;
+use crate::agentic::coordination::{get_global_coordinator, SubagentExecutionRequest};
+use crate::agentic::subagent_runtime::{DelegationPolicy, SubagentContextMode};
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::service::bootstrap::ensure_workspace_gitignore_ignores_bitfun;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -279,13 +280,17 @@ impl ProjectContextService {
 
         let result = coordinator
             .execute_subagent(
-                "GenerateDoc".to_string(),
-                prompt,
-                subagent_parent_info.clone(),
-                Some(workspace.to_string_lossy().into_owned()),
-                None,
+                SubagentExecutionRequest {
+                    task_description: prompt,
+                    context_mode: SubagentContextMode::Fresh,
+                    subagent_type: Some("GenerateDoc".to_string()),
+                    workspace_path: Some(workspace.to_string_lossy().into_owned()),
+                    model_id: None,
+                    subagent_parent_info: subagent_parent_info.clone(),
+                    context: Default::default(),
+                    delegation_policy: DelegationPolicy::top_level().spawn_child(),
+                },
                 Some(&cancel_token),
-                None,
                 None,
             )
             .await;

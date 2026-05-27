@@ -1242,6 +1242,26 @@ impl SessionManager {
             .await;
     }
 
+    pub async fn clone_prompt_cache(
+        &self,
+        source_session_id: &str,
+        target_session_id: &str,
+    ) -> bool {
+        self.ensure_prompt_cache_loaded(source_session_id).await;
+        let Some(cache) = self.prompt_cache_store.get_cache(source_session_id) else {
+            return false;
+        };
+        if cache.is_empty() {
+            return false;
+        }
+
+        self.prompt_cache_store
+            .replace_cache(target_session_id, cache);
+        self.persist_prompt_cache_best_effort(target_session_id, "prompt_cache_cloned")
+            .await;
+        true
+    }
+
     pub async fn invalidate_prompt_cache(
         &self,
         session_id: &str,
@@ -2766,6 +2786,43 @@ impl SessionManager {
         Ok(turn_id)
     }
 
+    /// Start a new dialog turn when the model-visible user message has already
+    /// been inserted into runtime context by the caller.
+    ///
+    /// This is used by forked/hidden subagent flows that seed inherited context
+    /// before they acquire a concrete dialog turn id. The turn still needs the
+    /// normal persisted lifecycle (turn record, active turn bookkeeping, and
+    /// context snapshot), but must not append a duplicate user message into the
+    /// runtime context cache.
+    pub async fn start_dialog_turn_with_existing_context(
+        &self,
+        session_id: &str,
+        agent_type: String,
+        user_input: String,
+        turn_id: Option<String>,
+        user_message_metadata: Option<serde_json::Value>,
+    ) -> BitFunResult<String> {
+        let turn_id = self
+            .start_persisted_turn(
+                session_id,
+                DialogTurnKind::UserDialog,
+                Some(agent_type),
+                user_input,
+                turn_id,
+                None,
+                ProcessingPhase::Starting,
+                user_message_metadata,
+            )
+            .await?;
+
+        debug!(
+            "Starting dialog turn with existing context: turn_id={}",
+            turn_id
+        );
+
+        Ok(turn_id)
+    }
+
     /// Start a persisted maintenance turn that should not enter model-visible context.
     pub async fn start_maintenance_turn(
         &self,
@@ -3818,7 +3875,10 @@ fn extract_subagent_relationship(
 #[cfg(test)]
 mod tests {
     use super::{SessionManager, SessionManagerConfig};
-    use crate::agentic::core::{Message, ProcessingPhase, Session, SessionConfig, SessionState};
+    use crate::agentic::core::{
+        Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig,
+        SessionState,
+    };
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
         PromptCachePolicy, PromptCacheScope, SessionContextStore, SystemPromptCacheIdentity,
@@ -4538,6 +4598,84 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn start_dialog_turn_with_existing_context_persists_turn_and_snapshot() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(workspace.path_manager()).expect("persistence"));
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Fork child".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        let seeded_messages = vec![
+            Message::user("fork reminder".to_string()),
+            Message::assistant("inherited context".to_string()),
+        ];
+        manager
+            .replace_context_messages(&session.session_id, seeded_messages.clone())
+            .await;
+
+        let turn_id = manager
+            .start_dialog_turn_with_existing_context(
+                &session.session_id,
+                "agentic".to_string(),
+                "delegate task".to_string(),
+                Some("subagent-turn-0".to_string()),
+                None,
+            )
+            .await
+            .expect("turn should start");
+
+        assert_eq!(turn_id, "subagent-turn-0");
+        assert_eq!(
+            manager
+                .get_session(&session.session_id)
+                .expect("session should remain in memory")
+                .dialog_turn_ids,
+            vec!["subagent-turn-0".to_string()]
+        );
+
+        let persisted_turn = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn load should succeed")
+            .expect("turn should exist");
+        assert_eq!(persisted_turn.turn_id, "subagent-turn-0");
+        assert_eq!(persisted_turn.user_message.content, "delegate task");
+
+        let snapshot = persistence_manager
+            .load_turn_context_snapshot(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("snapshot load should succeed")
+            .expect("snapshot should exist");
+        assert_eq!(snapshot.len(), seeded_messages.len());
+        assert!(matches!(snapshot[0].role, MessageRole::User));
+        assert!(matches!(snapshot[1].role, MessageRole::Assistant));
+        assert!(matches!(
+            &snapshot[0].content,
+            MessageContent::Text(text) if text == "fork reminder"
+        ));
+        assert!(matches!(
+            &snapshot[1].content,
+            MessageContent::Text(text) if text == "inherited context"
+        ));
+
+        let runtime_context = manager
+            .get_context_messages(&session.session_id)
+            .await
+            .expect("runtime context should remain readable");
+        assert_eq!(runtime_context.len(), seeded_messages.len());
+    }
+
+    #[tokio::test]
     async fn restore_session_view_preserves_full_visible_tool_result_payload() {
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
@@ -5103,6 +5241,86 @@ mod tests {
                 .await
                 .expect("prompt cache load should succeed"),
             None
+        );
+    }
+
+    #[tokio::test]
+    async fn clone_prompt_cache_copies_runtime_and_persisted_entries() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(workspace.path_manager()).expect("persistence"));
+        let manager = test_manager(persistence_manager.clone());
+        let workspace_path = workspace.path().to_string_lossy().to_string();
+        let source_session = manager
+            .create_session(
+                "Prompt cache source".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace_path.clone()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("source session should be created");
+        let target_session = manager
+            .create_session(
+                "Prompt cache target".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace_path),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("target session should be created");
+        let identity = SystemPromptCacheIdentity::new("template:agentic_mode");
+        let user_context_identity = UserContextCacheIdentity::new(
+            "workspace_context|workspace_instructions|workspace_memory_files|project_layout",
+        );
+
+        manager
+            .remember_system_prompt(
+                &source_session.session_id,
+                identity.clone(),
+                "cached system prompt".to_string(),
+            )
+            .await;
+        manager
+            .remember_user_context(
+                &source_session.session_id,
+                user_context_identity.clone(),
+                "cached user context".to_string(),
+            )
+            .await;
+
+        assert!(
+            manager
+                .clone_prompt_cache(&source_session.session_id, &target_session.session_id)
+                .await
+        );
+        assert_eq!(
+            manager
+                .cached_system_prompt(&target_session.session_id, &identity)
+                .await,
+            Some("cached system prompt".to_string())
+        );
+        assert_eq!(
+            manager
+                .cached_user_context(&target_session.session_id, &user_context_identity)
+                .await,
+            Some("cached user context".to_string())
+        );
+        assert_eq!(
+            persistence_manager
+                .load_prompt_cache(workspace.path(), &target_session.session_id)
+                .await
+                .expect("prompt cache load should succeed")
+                .expect("cloned prompt cache should persist"),
+            persistence_manager
+                .load_prompt_cache(workspace.path(), &source_session.session_id)
+                .await
+                .expect("source prompt cache load should succeed")
+                .expect("source prompt cache should exist")
         );
     }
 

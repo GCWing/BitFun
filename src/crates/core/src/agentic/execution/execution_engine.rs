@@ -934,6 +934,7 @@ impl ExecutionEngine {
             model_name: ai_client.config.model.clone(),
             agent_type,
             context_vars: execution_context_vars.clone(),
+            delegation_policy: context.delegation_policy,
             runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
             steering_interrupt: None,
             cancellation_token: CancellationToken::new(),
@@ -2090,6 +2091,7 @@ impl ExecutionEngine {
                 model_name: ai_client.config.model.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
+                delegation_policy: context.delegation_policy,
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 steering_interrupt: context.round_injection.as_ref().map(|source| {
                     crate::agentic::round_preempt::DialogRoundInjectionInterrupt::new(

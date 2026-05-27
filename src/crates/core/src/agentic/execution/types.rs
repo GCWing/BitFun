@@ -4,6 +4,7 @@ use crate::agentic::core::Message;
 use crate::agentic::round_preempt::{
     DialogRoundInjectionInterrupt, DialogRoundInjectionSource, DialogRoundPreemptSource,
 };
+use crate::agentic::subagent_runtime::DelegationPolicy;
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
@@ -23,6 +24,7 @@ pub struct ExecutionContext {
     pub workspace: Option<WorkspaceBinding>,
     pub context: HashMap<String, String>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
+    pub(crate) delegation_policy: DelegationPolicy,
     pub skip_tool_confirmation: bool,
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Workspace I/O services (filesystem + shell) injected into tools
@@ -53,6 +55,7 @@ pub struct RoundContext {
     pub model_name: String,
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,
+    pub(crate) delegation_policy: DelegationPolicy,
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Cooperative interrupt checked by tool execution so round injections can be
     /// applied after the currently running atomic tool/batch finishes.

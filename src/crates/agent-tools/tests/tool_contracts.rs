@@ -235,6 +235,7 @@ fn runtime_restrictions_keep_allow_deny_semantics_without_core_dependency() {
     let restrictions = ToolRuntimeRestrictions {
         allowed_tool_names: ["Read", "Write"].into_iter().map(str::to_string).collect(),
         denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
+        denied_tool_messages: Default::default(),
         path_policy: Default::default(),
     };
 
@@ -256,6 +257,28 @@ fn runtime_restrictions_keep_allow_deny_semantics_without_core_dependency() {
     assert_eq!(
         not_allowed.to_string(),
         "Tool 'Bash' is not allowed by runtime restrictions"
+    );
+}
+
+#[test]
+fn runtime_restrictions_surface_custom_deny_messages() {
+    let restrictions = ToolRuntimeRestrictions {
+        denied_tool_names: ["Task"].into_iter().map(str::to_string).collect(),
+        denied_tool_messages: [(
+            "Task".to_string(),
+            "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
+        )]
+        .into_iter()
+        .collect(),
+        ..Default::default()
+    };
+
+    let denied = restrictions
+        .ensure_tool_allowed("Task")
+        .expect_err("deny message should be returned");
+    assert_eq!(
+        denied.to_string(),
+        "Recursive subagent delegation is blocked. Use direct tools instead."
     );
 }
 

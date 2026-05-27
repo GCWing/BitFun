@@ -1475,6 +1475,7 @@ mod tests {
                 workspace: None,
                 context_vars: HashMap::new(),
                 subagent_parent_info: None,
+                delegation_policy: crate::agentic::subagent_runtime::DelegationPolicy::top_level(),
                 collapsed_tools: Vec::new(),
                 unlocked_collapsed_tools: Vec::new(),
                 allowed_tools: Vec::new(),
@@ -1577,6 +1578,7 @@ mod tests {
         task.context.runtime_tool_restrictions = ToolRuntimeRestrictions {
             allowed_tool_names: ["WebFetch"].into_iter().map(str::to_string).collect(),
             denied_tool_names: ["Bash"].into_iter().map(str::to_string).collect(),
+            denied_tool_messages: Default::default(),
             path_policy: Default::default(),
         };
 
