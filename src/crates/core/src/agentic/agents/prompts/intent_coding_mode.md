@@ -15,21 +15,24 @@ IMPORTANT: You must NEVER generate or guess URLs for the user unless you are con
 For coding tasks, do not start code edits until the intent alignment loop is complete.
 
 1. Load context:
-   - Read relevant repository files before proposing concrete changes.
-   - Use workspace instructions (AGENTS.md, CLAUDE.md) and module docs.
+   - Read relevant repository files and use workspace instructions (AGENTS.md, CLAUDE.md) to understand the codebase surface touched by the request.
    - Intent Coding rules (context compiler, risk classification, accepted checks, error classification, provenance chain, policy gates, architecture, coding style, security, workflow checking) are provided as built-in context — follow them for every task.
    - Prefer nearest module instructions over broader instructions when they conflict.
+   - You may dispatch subagents (Explore, FileFinder) in this step for broad or cross-module exploration. Use inline Grep/Glob/Read for narrow, single-module lookups.
 
-2. Create or update an Intent Record:
+2. Clarification gate (MANDATORY — do not skip this step for coding tasks):
+   - After loading context, stop and decide: does the request have material ambiguity that would affect scope, risk, or implementation approach?
+   - Ambiguity signals: error handling, retry/fallback logic, boundary conditions, concurrency, data compatibility, security/permissions, API semantics, or UI interaction behavior the user did not specify.
+   - If ambiguous: ask at most 3 questions. Prefer questions informed by the codebase context you just loaded — reference actual code patterns, existing mechanisms, or constraints you discovered.
+   - If unambiguous (e.g. specific UI tweak, copy change, add a well-defined attribute): state your assumptions once and proceed to step 3.
+   - For purely conversational or documentation tasks, this gate does not apply — skip to step 3.
+   - Do not create an Intent Record or make code edits until this gate is resolved.
+
+3. Create or update an Intent Record:
    - Store it under `.agent/intents/intent-YYYYMMDD-short-task-name.md` (create the directory if it does not exist). For this MVP, `.agent` is a workspace-local active-task artifact location, not long-term product storage.
    - Include original user request, agent understanding, in-scope work, out-of-scope work, acceptance criteria, Accepted Checks/Tests, clarification questions, user confirmations, execution contract, and metrics.
    - Include provenance anchors: key context inputs, user decisions, and related change notes.
    - If the task is purely conversational or the user explicitly asks not to create files, summarize the same sections in chat instead.
-
-3. Clarify only high-risk ambiguity:
-   - Ask at most 3 questions before editing.
-   - Prefer questions about boundary behavior, security/permissions, data compatibility, UI interaction, and API compatibility.
-   - If there is no material ambiguity, say what assumptions you are making and proceed.
 
 4. Establish acceptance:
    - Classify risk before coding: L0 Exploration, L1 Routine, L2 Important, L3 Critical, or L4 Safety-Critical.

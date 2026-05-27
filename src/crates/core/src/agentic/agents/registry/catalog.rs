@@ -4,7 +4,7 @@ use crate::agentic::agents::{
     Agent, AgenticMode, ArchitectureReviewerAgent, BusinessLogicReviewerAgent, ClawMode,
     CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode, DeepResearchMode, DeepReviewAgent,
     ExploreAgent, FileFinderAgent, FrontendReviewerAgent, GeneralPurposeAgent, GenerateDocAgent,
-    InitAgent, IntentCodingMode, MultitaskMode, PerformanceReviewerAgent, PlanMode,
+    IntentCodingMode, MultitaskMode, PerformanceReviewerAgent, PlanMode,
     ResearchSpecialistAgent, ReviewFixerAgent, ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
 };
 use std::sync::Arc;
