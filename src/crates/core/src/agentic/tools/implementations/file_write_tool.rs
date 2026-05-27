@@ -298,7 +298,8 @@ Usage:
 - Keep writes focused. For existing files, prefer Read + targeted Edit calls. Use Write only when you need to replace the entire file or create a new one.
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
-- Only provide `file_path` in the tool call. The system generates file content in a separate step."#
+- IMPORTANT — two-step protocol: This tool's schema accepts ONLY `file_path`. Do NOT include a `content` field; any inline content will be discarded. After your tool call, the system automatically issues a separate follow-up request that asks you to output the complete file body inside `<bitfun_contents>` tags, and that text is then written to disk.
+- If the system returns an error saying the content-generation step produced no content, retry the same Write tool call with the same `file_path`. Still do not provide `content` inline."#
             .to_string()
     }
 
@@ -408,7 +409,16 @@ Usage:
         let content = input
             .get("content")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
+            .ok_or_else(|| {
+                BitFunError::tool(Self::write_guidance_message(
+                    "The system's Write content-generation follow-up step did not produce \
+                     any file content. The Write tool uses a two-step protocol: the model \
+                     supplies only `file_path`, and the system generates the file body in a \
+                     separate follow-up request. Please retry the Write tool call with the \
+                     same `file_path`. Do NOT include a `content` argument — the schema \
+                     does not accept it; the system will generate the content again.",
+                ))
+            })?;
 
         let file_already_exists = Self::file_exists(context, &resolved).await;
         if file_already_exists
@@ -830,6 +840,39 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
 
         assert_eq!(written, "new content");
+    }
+
+    #[tokio::test]
+    async fn plaintext_followup_missing_content_returns_two_step_guidance() {
+        let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+
+        let tool = FileWriteTool::new();
+        let error = tool
+            .call(
+                &json!({ "file_path": "generated.txt" }),
+                &local_context(root.clone()),
+            )
+            .await
+            .expect_err("missing content in plaintext-followup mode must error");
+
+        let _ = std::fs::remove_dir_all(&root);
+
+        let message = error.to_string();
+        assert!(
+            !message.contains("content is required"),
+            "should not surface the contradictory 'content is required' message: {message}"
+        );
+        assert!(
+            message.contains("two-step protocol")
+                || message.contains("follow-up")
+                || message.contains("did not produce"),
+            "should explain the two-step Write protocol: {message}"
+        );
+        assert!(
+            message.contains(FILE_TOOL_GUIDANCE_PREFIX),
+            "should be wrapped in file-tool guidance prefix: {message}"
+        );
     }
 
     #[tokio::test]

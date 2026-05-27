@@ -1033,10 +1033,54 @@ impl RoundExecutor {
 
                     let extracted = extract_bitfun_contents_with_options(&full_text, true);
                     if extracted.is_empty() {
+                        let raw_preview = Self::truncate_for_log(&full_text, 1024);
                         warn!(
-                            "Write content generation returned empty content for file_path={}",
-                            file_path
+                            "Write content extraction empty: file_path={}, raw_text_len={}, raw_preview={:?}",
+                            file_path,
+                            full_text.len(),
+                            raw_preview
                         );
+                        if content_attempt + 1 >= Self::MAX_WRITE_CONTENT_QUALITY_ATTEMPTS {
+                            let error = format!(
+                                "Write content generation produced no file content for {} after {} attempts. \
+                                 The follow-up request returned an empty <bitfun_contents> body \
+                                 (raw_text_len={}, all visible text was reasoning/tool-call artifacts that got stripped). \
+                                 Retry the Write tool call (file_path only, no inline content).",
+                                file_path,
+                                Self::MAX_WRITE_CONTENT_QUALITY_ATTEMPTS,
+                                full_text.len()
+                            );
+                            warn!("{}", error);
+                            self.emit_event(
+                                AgenticEvent::ToolEvent {
+                                    session_id: context.session_id.clone(),
+                                    turn_id: context.dialog_turn_id.clone(),
+                                    round_id: round_id.to_string(),
+                                    tool_event: ToolEventData::Failed {
+                                        tool_id: tool_id.clone(),
+                                        tool_name: "Write".to_string(),
+                                        error,
+                                        duration_ms: None,
+                                        queue_wait_ms: None,
+                                        preflight_ms: None,
+                                        confirmation_wait_ms: None,
+                                        execution_ms: None,
+                                    },
+                                },
+                                EventPriority::High,
+                            )
+                            .await;
+                            break String::new();
+                        }
+
+                        warn!(
+                            "Write content generation returned empty content for file_path={}, retrying ({}/{})",
+                            file_path,
+                            content_attempt + 1,
+                            Self::MAX_WRITE_CONTENT_QUALITY_ATTEMPTS
+                        );
+                        content_attempt += 1;
+                        continue;
                     } else if contains_tool_invocation_artifacts(&extracted) {
                         if content_attempt + 1 >= Self::MAX_WRITE_CONTENT_QUALITY_ATTEMPTS {
                             let error = format!(
@@ -1207,6 +1251,7 @@ impl RoundExecutor {
             };
 
             let mut text = String::new();
+            let mut reasoning_chars: usize = 0;
             let mut stream = stream_response.stream;
             let watchdog_timeout =
                 StreamProcessor::derive_watchdog_timeout(ai_client.stream_idle_timeout())
@@ -1214,6 +1259,7 @@ impl RoundExecutor {
                         Duration::from_secs(Self::WRITE_CONTENT_STREAM_IDLE_TIMEOUT_SECS)
                     });
             use futures::StreamExt;
+            let mut stream_natural_end = false;
             loop {
                 if cancel_token.is_cancelled() {
                     return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
@@ -1221,7 +1267,10 @@ impl RoundExecutor {
 
                 let chunk = match tokio::time::timeout(watchdog_timeout, stream.next()).await {
                     Ok(Some(chunk)) => chunk,
-                    Ok(None) => return Ok(text),
+                    Ok(None) => {
+                        stream_natural_end = true;
+                        break;
+                    }
                     Err(_) => {
                         return Err(BitFunError::Timeout(format!(
                             "Write content generation timed out for {} after {} seconds without stream progress",
@@ -1233,6 +1282,9 @@ impl RoundExecutor {
 
                 match chunk {
                     Ok(resp) => {
+                        if let Some(reasoning) = resp.reasoning_content.as_ref() {
+                            reasoning_chars = reasoning_chars.saturating_add(reasoning.len());
+                        }
                         let chunk_text = resp.text.unwrap_or_default();
                         if chunk_text.is_empty() {
                             continue;
@@ -1273,19 +1325,35 @@ impl RoundExecutor {
             if attempt_index < Self::MAX_STREAM_ATTEMPTS - 1 {
                 let delay_ms = Self::retry_delay_ms(attempt_index);
                 warn!(
-                    "Retrying Write content generation after empty stream: file_path={}, attempt={}/{}, delay_ms={}",
+                    "Retrying Write content generation after empty stream: file_path={}, attempt={}/{}, delay_ms={}, natural_end={}, reasoning_chars={}",
                     file_path,
                     attempt_index + 1,
                     Self::MAX_STREAM_ATTEMPTS,
-                    delay_ms
+                    delay_ms,
+                    stream_natural_end,
+                    reasoning_chars
                 );
                 tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                 attempt_index += 1;
                 continue;
             }
 
+            warn!(
+                "Write content generation exhausted stream retries with empty visible text: file_path={}, natural_end={}, reasoning_chars={}",
+                file_path, stream_natural_end, reasoning_chars
+            );
             return Ok(text);
         }
+    }
+
+    /// Truncate a string for diagnostic logging while keeping it valid UTF-8.
+    fn truncate_for_log(text: &str, max_chars: usize) -> String {
+        if text.chars().count() <= max_chars {
+            return text.to_string();
+        }
+        let mut out: String = text.chars().take(max_chars).collect();
+        out.push_str("...[truncated]");
+        out
     }
 
     async fn write_content_preflight_error(
