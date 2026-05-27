@@ -2116,6 +2116,24 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await;
 
         let current_tokens = Self::estimate_context_tokens(&context_messages);
+        let manual_workspace = Self::build_workspace_binding(&session.config).await;
+        let manual_workspace_services = Self::build_workspace_services(&manual_workspace).await;
+        let manual_execution_context = ExecutionContext {
+            session_id: session_id.clone(),
+            dialog_turn_id: turn_id.clone(),
+            turn_index,
+            agent_type: session.agent_type.clone(),
+            workspace: manual_workspace,
+            context: HashMap::new(),
+            subagent_parent_info: None,
+            delegation_policy: DelegationPolicy::top_level(),
+            skip_tool_confirmation: true,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: manual_workspace_services,
+            round_preempt: None,
+            round_injection: None,
+            recover_partial_on_cancel: false,
+        };
         let session_max_tokens = session.config.max_context_tokens;
 
         // Unify context_window: min(model capability, session config)
@@ -2139,13 +2157,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         match self
             .execution_engine
             .compact_session_context(
-                &session_id,
-                &turn_id,
+                session_id.clone(),
+                turn_id.clone(),
+                manual_execution_context,
                 context_messages,
                 current_tokens,
-                context_window,
                 "manual",
-                crate::agentic::session::CompressionTailPolicy::CollapseAll,
             )
             .await
         {

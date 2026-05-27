@@ -20,7 +20,7 @@ use crate::agentic::image_analysis::{
     ImageLimits,
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
-use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
+use crate::agentic::session::{CompressionMode, ContextCompressor, SessionManager};
 use crate::agentic::tools::implementations::{GetToolSpecTool, SkillTool, TaskTool};
 use crate::agentic::tools::{
     resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest, SubagentParentInfo,
@@ -73,6 +73,15 @@ pub struct ContextCompactionOutcome {
     pub has_summary: bool,
     pub summary_source: String,
     pub applied: bool,
+}
+
+struct CompressionRuntimeScaffold {
+    ai_client: Arc<crate::infrastructure::ai::AIClient>,
+    tool_definitions: Option<Vec<ToolDefinition>>,
+    system_prompt_message: Message,
+    prepended_prompt_reminders: PrependedPromptReminders,
+    primary_supports_image_understanding: bool,
+    compression_contract_limit: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -1154,6 +1163,346 @@ impl ExecutionEngine {
         content
     }
 
+    async fn build_compression_request_messages(
+        &self,
+        runtime_messages: &[Message],
+        dialog_turn_id: &str,
+        workspace_path: Option<&Path>,
+        provider: &str,
+        attach_images: bool,
+        prepended_prompt_reminders: &PrependedPromptReminders,
+        contract: Option<&crate::agentic::core::CompressionContract>,
+    ) -> BitFunResult<Vec<AIMessage>> {
+        let prepended_reminders = prepended_prompt_reminders.ordered_reminders();
+        let mut compression_messages = Self::build_ai_messages_for_send(
+            runtime_messages,
+            provider,
+            workspace_path,
+            dialog_turn_id,
+            attach_images,
+            &prepended_reminders,
+        )
+        .await?;
+        compression_messages.push(AIMessage::user(
+            self.context_compressor.build_compact_prompt(contract),
+        ));
+        Ok(compression_messages)
+    }
+
+    async fn request_compression_summary_with_retry(
+        &self,
+        ai_client: Arc<crate::infrastructure::ai::AIClient>,
+        request_messages: Vec<AIMessage>,
+        tool_definitions: Option<Vec<ToolDefinition>>,
+        max_tries: usize,
+    ) -> BitFunResult<String> {
+        let mut last_error = None;
+        let base_wait_time_ms = 500;
+
+        for attempt in 0..max_tries {
+            let result = ai_client
+                .send_message(request_messages.clone(), tool_definitions.clone())
+                .await;
+
+            match result {
+                Ok(response) => {
+                    if response.tool_calls.is_some() {
+                        return Err(BitFunError::AIClient(
+                            "Compression request returned tool calls instead of a summary"
+                                .to_string(),
+                        ));
+                    }
+                    if attempt > 0 {
+                        debug!(
+                            "Compression summary generation succeeded (attempt {}/{})",
+                            attempt + 1,
+                            max_tries
+                        );
+                    }
+                    return Ok(response.text);
+                }
+                Err(err) => {
+                    warn!(
+                        "Compression summary generation failed (attempt {}/{}): {}",
+                        attempt + 1,
+                        max_tries,
+                        err
+                    );
+                    last_error = Some(err);
+
+                    if attempt < max_tries - 1 {
+                        let delay_ms = base_wait_time_ms * (1 << attempt.min(3));
+                        debug!(
+                            "Waiting {}ms before compression summary retry {}...",
+                            delay_ms,
+                            attempt + 2
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    }
+                }
+            }
+        }
+
+        Err(BitFunError::AIClient(format!(
+            "Compression summary generation failed after {} attempts: {}",
+            max_tries,
+            last_error
+                .map(|err| err.to_string())
+                .unwrap_or_else(|| "Unknown error".to_string())
+        )))
+    }
+
+    async fn generate_compression_model_summary(
+        &self,
+        ai_client: Arc<crate::infrastructure::ai::AIClient>,
+        runtime_messages: &[Message],
+        dialog_turn_id: &str,
+        workspace_path: Option<&Path>,
+        tool_definitions: &Option<Vec<ToolDefinition>>,
+        prepended_prompt_reminders: &PrependedPromptReminders,
+        primary_supports_image_understanding: bool,
+        context_window: usize,
+        contract: Option<&crate::agentic::core::CompressionContract>,
+    ) -> BitFunResult<Option<String>> {
+        let request_messages = self
+            .build_compression_request_messages(
+                runtime_messages,
+                dialog_turn_id,
+                workspace_path,
+                &ai_client.config.format,
+                primary_supports_image_understanding,
+                prepended_prompt_reminders,
+                contract,
+            )
+            .await?;
+        let request_tokens =
+            TokenCounter::estimate_request_tokens(&request_messages, tool_definitions.as_deref());
+        let max_request_tokens = self
+            .context_compressor
+            .max_model_request_tokens(context_window);
+        if request_tokens > max_request_tokens {
+            debug!(
+                "Skipping model-based compression because full-prefix request exceeds budget: dialog_turn_id={}, request_tokens={}, max_request_tokens={}",
+                dialog_turn_id,
+                request_tokens,
+                max_request_tokens
+            );
+            return Ok(None);
+        }
+
+        let raw_summary = self
+            .request_compression_summary_with_retry(
+                ai_client,
+                request_messages,
+                tool_definitions.clone(),
+                2,
+            )
+            .await?;
+        let summary =
+            ContextCompressor::normalize_model_summary_output(&raw_summary).ok_or_else(|| {
+                BitFunError::AIClient(
+                    "Model-based compression returned <analysis> without a usable <summary>"
+                        .to_string(),
+                )
+            })?;
+        Ok(Some(summary))
+    }
+
+    async fn resolve_compression_runtime_scaffold(
+        &self,
+        session: &Session,
+        context: &ExecutionContext,
+    ) -> BitFunResult<CompressionRuntimeScaffold> {
+        let agent_registry = get_agent_registry();
+        if let Some(workspace) = context.workspace.as_ref() {
+            agent_registry
+                .load_custom_subagents(workspace.root_path())
+                .await;
+        }
+
+        let current_agent = agent_registry
+            .get_agent(
+                &context.agent_type,
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+            )
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Agent not found: {}", context.agent_type))
+            })?;
+
+        let original_user_input = context
+            .context
+            .get("original_user_input")
+            .cloned()
+            .unwrap_or_default();
+        let model_id = self
+            .resolve_model_id_for_turn(
+                session,
+                &context.agent_type,
+                context.workspace.as_ref(),
+                &original_user_input,
+                context.turn_index,
+            )
+            .await?;
+
+        let ai_client_factory = get_global_ai_client_factory().await.map_err(|e| {
+            BitFunError::AIClient(format!("Failed to get AI client factory: {}", e))
+        })?;
+        let ai_client = ai_client_factory
+            .get_client_resolved(&model_id)
+            .await
+            .map_err(|e| {
+                BitFunError::AIClient(format!(
+                    "Failed to get AI client (model_id={}): {}",
+                    model_id, e
+                ))
+            })?;
+
+        let (resolved_primary_model_id, primary_supports_image_understanding, write_tool_mode) = {
+            let config_service = get_global_config_service().await.ok();
+            if let Some(service) = config_service {
+                let ai_config: crate::service::config::types::AIConfig =
+                    service.get_config(Some("ai")).await.unwrap_or_default();
+
+                let resolved_id = Self::resolve_configured_model_id(&ai_config, &model_id);
+                let model_cfg = ai_config
+                    .models
+                    .iter()
+                    .find(|m| m.id == resolved_id)
+                    .or_else(|| ai_config.models.iter().find(|m| m.name == resolved_id))
+                    .or_else(|| {
+                        ai_config
+                            .models
+                            .iter()
+                            .find(|m| m.model_name == resolved_id)
+                    })
+                    .or_else(|| {
+                        ai_config.models.iter().find(|m| {
+                            m.model_name == ai_client.config.model
+                                && m.provider == ai_client.config.format
+                        })
+                    });
+
+                let supports = model_cfg.is_some_and(|m| {
+                    m.capabilities
+                        .iter()
+                        .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
+                        || matches!(m.category, ModelCategory::Multimodal)
+                });
+
+                (resolved_id, supports, ai_config.write_tool_mode)
+            } else {
+                warn!(
+                    "Config service unavailable, assuming compression model is text-only for image input gating"
+                );
+                (model_id.clone(), false, WriteToolMode::default())
+            }
+        };
+
+        let model_capability_profile = ModelCapabilityProfile::from_resolved_model(
+            &resolved_primary_model_id,
+            &ai_client.config.model,
+        );
+        let is_review_subagent = agent_registry
+            .get_subagent_is_review(&context.agent_type)
+            .unwrap_or(false);
+        let context_profile_policy = ContextProfilePolicy::for_agent_context(
+            &context.agent_type,
+            is_review_subagent,
+            model_capability_profile,
+        );
+
+        let tool_policy = agent_registry
+            .get_agent_tool_policy(
+                &context.agent_type,
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+            )
+            .await;
+        let allowed_tools = tool_policy.allowed_tools.clone();
+        let enable_tools = context
+            .context
+            .get("enable_tools")
+            .and_then(|value| value.parse::<bool>().ok())
+            .unwrap_or(true);
+        let write_tool_mode = if context
+            .context
+            .get("acp_transport")
+            .is_some_and(|value| value == "true")
+        {
+            WriteToolMode::InlineContent
+        } else {
+            write_tool_mode
+        };
+
+        let mut tool_manifest_context_vars = context.context.clone();
+        tool_manifest_context_vars.insert(
+            "write_tool_mode".to_string(),
+            write_tool_mode.as_str().to_string(),
+        );
+
+        let tool_description_context = tool_context_runtime::build_tool_description_context(
+            &context.agent_type,
+            context.workspace.as_ref(),
+            context.workspace_services.as_ref(),
+            primary_supports_image_understanding,
+            &tool_manifest_context_vars,
+        );
+        let tool_manifest = if enable_tools {
+            Some(
+                resolve_tool_manifest(
+                    &allowed_tools,
+                    &tool_policy.exposure_overrides,
+                    &tool_description_context,
+                )
+                .await,
+            )
+        } else {
+            None
+        };
+        let tool_listing_sections = if let Some(manifest) = tool_manifest.as_ref() {
+            Self::build_tool_listing_sections(manifest, &tool_description_context).await
+        } else {
+            ToolListingSections::default()
+        };
+        let tool_definitions = tool_manifest.map(|manifest| manifest.tool_definitions);
+
+        let prompt_context = Self::build_prompt_context(
+            context,
+            &ai_client.config.model,
+            primary_supports_image_understanding,
+            tool_listing_sections,
+        )
+        .await;
+        let prepended_prompt_reminders = self
+            .build_cached_prepended_prompt_reminders(
+                &context.session_id,
+                current_agent.as_ref(),
+                prompt_context.as_ref(),
+            )
+            .await;
+        let system_prompt = self
+            .resolve_cached_system_prompt(
+                &context.session_id,
+                current_agent.as_ref(),
+                prompt_context.as_ref(),
+            )
+            .await?;
+
+        Ok(CompressionRuntimeScaffold {
+            ai_client,
+            tool_definitions,
+            system_prompt_message: Message::system(system_prompt),
+            prepended_prompt_reminders,
+            primary_supports_image_understanding,
+            compression_contract_limit: context_profile_policy.compression_contract_limit,
+        })
+    }
+
     /// Compress context, will emit compression events (Started, Completed, and Failed)
     #[allow(clippy::too_many_arguments)]
     pub async fn compress_messages(
@@ -1161,13 +1510,16 @@ impl ExecutionEngine {
         session_id: &str,
         dialog_turn_id: &str,
         _subagent_parent_info: Option<SubagentParentInfo>,
-        messages: Vec<Message>,
+        runtime_messages: Vec<Message>,
         current_tokens: usize,
         context_window: usize,
+        ai_client: Arc<crate::infrastructure::ai::AIClient>,
         tool_definitions: &Option<Vec<ToolDefinition>>,
         system_prompt_message: Message,
+        prepended_prompt_reminders: &PrependedPromptReminders,
+        primary_supports_image_understanding: bool,
         compression_contract_limit: usize,
-        tail_policy: CompressionTailPolicy,
+        workspace_path: Option<&Path>,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
         let mut session = self
             .session_manager
@@ -1177,13 +1529,11 @@ impl ExecutionEngine {
         // Record start time
         let start_time = std::time::Instant::now();
 
-        let old_messages_len = messages.len();
-        // Preprocess turns
-        let (turn_index_to_keep, turns) = self
+        let old_messages_len = runtime_messages.len();
+        let turns = self
             .context_compressor
-            .preprocess_turns(session_id, context_window, messages)
-            .await?;
-        if turn_index_to_keep == 0 {
+            .collect_turns_for_auto_compression(session_id, runtime_messages.clone())?;
+        if turns.is_empty() {
             return Ok(None);
         }
 
@@ -1209,18 +1559,37 @@ impl ExecutionEngine {
         let compression_contract = self
             .session_manager
             .compression_contract_for_session(session_id, compression_contract_limit);
-        match self
-            .context_compressor
-            .compress_turns_with_contract(
-                session_id,
+        let model_summary = match self
+            .generate_compression_model_summary(
+                ai_client,
+                &runtime_messages,
+                dialog_turn_id,
+                workspace_path,
+                tool_definitions,
+                prepended_prompt_reminders,
+                primary_supports_image_understanding,
                 context_window,
-                turn_index_to_keep,
-                turns,
-                tail_policy,
-                compression_contract,
+                compression_contract.as_ref(),
             )
             .await
         {
+            Ok(summary) => summary,
+            Err(err) => {
+                warn!(
+                    "Model-based compression failed, falling back to structured local compression: {}",
+                    err
+                );
+                None
+            }
+        };
+        match self.context_compressor.compress_turns_with_contract(
+            session_id,
+            context_window,
+            turns,
+            CompressionMode::Auto,
+            compression_contract,
+            model_summary,
+        ) {
             Ok(compression_result) => {
                 self.session_manager
                     .replace_context_messages(session_id, compression_result.messages.clone())
@@ -1313,20 +1682,24 @@ impl ExecutionEngine {
     #[allow(clippy::too_many_arguments)]
     pub async fn compact_session_context(
         &self,
-        session_id: &str,
-        dialog_turn_id: &str,
+        session_id: String,
+        dialog_turn_id: String,
+        context: ExecutionContext,
         messages: Vec<Message>,
         current_tokens: usize,
-        context_window: usize,
         trigger: &str,
-        tail_policy: CompressionTailPolicy,
     ) -> BitFunResult<ContextCompactionOutcome> {
         let mut session = self
             .session_manager
-            .get_session(session_id)
+            .get_session(&session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
         let start_time = std::time::Instant::now();
         let compression_id = format!("compression_{}", uuid::Uuid::new_v4());
+        let scaffold = self
+            .resolve_compression_runtime_scaffold(&session, &context)
+            .await?;
+        let context_window = (scaffold.ai_client.config.context_window as usize)
+            .min(session.config.max_context_tokens);
 
         self.emit_event(
             AgenticEvent::ContextCompressionStarted {
@@ -1344,7 +1717,7 @@ impl ExecutionEngine {
 
         let turns = self
             .context_compressor
-            .collect_all_turns_for_manual_compaction(session_id, messages)?;
+            .collect_all_turns_for_manual_compaction(&session_id, messages.clone())?;
 
         if turns.is_empty() {
             let duration_ms = elapsed_ms_u64(start_time);
@@ -1385,40 +1758,53 @@ impl ExecutionEngine {
             });
         }
 
-        let is_review_subagent = get_agent_registry()
-            .get_subagent_is_review(&session.agent_type)
-            .unwrap_or(false);
-        let model_id = session.config.model_id.as_deref().unwrap_or_default();
-        let context_profile_policy = ContextProfilePolicy::for_agent_context_and_model(
-            &session.agent_type,
-            is_review_subagent,
-            model_id,
-            model_id,
-        );
-        let compression_contract = self.session_manager.compression_contract_for_session(
-            session_id,
-            context_profile_policy.compression_contract_limit,
-        );
-        match self
-            .context_compressor
-            .compress_turns_with_contract(
-                session_id,
+        let mut runtime_messages = vec![scaffold.system_prompt_message.clone()];
+        runtime_messages.extend(messages);
+        let compression_contract = self
+            .session_manager
+            .compression_contract_for_session(&session_id, scaffold.compression_contract_limit);
+        let model_summary = match self
+            .generate_compression_model_summary(
+                scaffold.ai_client.clone(),
+                &runtime_messages,
+                &dialog_turn_id,
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+                &scaffold.tool_definitions,
+                &scaffold.prepended_prompt_reminders,
+                scaffold.primary_supports_image_understanding,
                 context_window,
-                turns.len(),
-                turns,
-                tail_policy,
-                compression_contract,
+                compression_contract.as_ref(),
             )
             .await
         {
+            Ok(summary) => summary,
+            Err(err) => {
+                warn!(
+                    "Model-based manual compaction failed, falling back to structured local compression: {}",
+                    err
+                );
+                None
+            }
+        };
+        match self.context_compressor.compress_turns_with_contract(
+            &session_id,
+            context_window,
+            turns,
+            CompressionMode::Manual,
+            compression_contract,
+            model_summary,
+        ) {
             Ok(compression_result) => {
                 let mut compressed_messages = compression_result.messages;
                 self.session_manager
-                    .replace_context_messages(session_id, compressed_messages.clone())
+                    .replace_context_messages(&session_id, compressed_messages.clone())
                     .await;
                 self.session_manager
                     .invalidate_prompt_cache(
-                        session_id,
+                        &session_id,
                         crate::agentic::session::PromptCacheScope::All,
                         "manual_context_compaction_applied",
                     )
@@ -1428,7 +1814,7 @@ impl ExecutionEngine {
                 let compression_count = session.compression_state.compression_count;
                 let _ = self
                     .session_manager
-                    .update_compression_state(session_id, session.compression_state.clone())
+                    .update_compression_state(&session_id, session.compression_state.clone())
                     .await;
 
                 let duration_ms = elapsed_ms_u64(start_time);
@@ -1993,10 +2379,16 @@ impl ExecutionEngine {
                         messages.clone(),
                         current_tokens,
                         context_window,
+                        ai_client.clone(),
                         &tool_definitions,
                         system_prompt_message.clone(),
+                        &prepended_prompt_reminders,
+                        primary_supports_image_understanding,
                         context_profile_policy.compression_contract_limit,
-                        CompressionTailPolicy::PreserveLiveFrontier,
+                        context
+                            .workspace
+                            .as_ref()
+                            .map(|workspace| workspace.root_path()),
                     )
                     .await
                 {
@@ -2015,7 +2407,7 @@ impl ExecutionEngine {
                         consecutive_compression_failures = 0;
                     }
                     Ok(None) => {
-                        debug!("All turns need to be kept, no compression performed");
+                        debug!("No eligible multi-turn context available for compression");
                         consecutive_compression_failures = 0;
                     }
                     Err(e) => {
